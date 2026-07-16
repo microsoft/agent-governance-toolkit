@@ -1,6 +1,6 @@
 ---
 title: "Dify — AgentMesh Trust Layer Plugin"
-last_reviewed: 2026-03-23
+last_reviewed: 2026-07-16
 owner: agt-maintainers
 ---
 
@@ -46,4 +46,4 @@ In multi-agent workflows, agents need to verify "who" they're communicating with
 
 - [Dify Plugins](https://github.com/langgenius/dify-plugins)
 - [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit)
-- [Plugin Source](https://github.com/microsoft/agent-governance-toolkit/tree/master/integrations/dify-plugin)
+- [Merged Dify Plugin PR](https://github.com/langgenius/dify-plugins/pull/2060)

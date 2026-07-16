@@ -1,6 +1,6 @@
 ---
 title: "Agent SRE Governance -- Version 1.0"
-last_reviewed: 2026-05-17
+last_reviewed: 2026-07-16
 owner: agt-maintainers
 ---
 
@@ -1675,6 +1675,6 @@ historical consumption, not windowed consumption.
 - [AgentMesh Identity and Trust Specification v1.0](./AGENTMESH-IDENTITY-TRUST-1.0.md)
 - [Google SRE Book -- Service Level Objectives](https://sre.google/sre-book/service-level-objectives/)
 - [OpenTelemetry Specification](https://opentelemetry.io/docs/specs/)
-- [Ed25519: High-speed high-security signatures](https://ed25519.cr.yp.to/)
+- [RFC 8032: Edwards-Curve Digital Signature Algorithm](https://www.rfc-editor.org/info/rfc8032/)
 - [SPDX 2.3 Specification](https://spdx.github.io/spdx-spec/v2.3/)
 - [Principles of Chaos Engineering](https://principlesofchaos.org/)
