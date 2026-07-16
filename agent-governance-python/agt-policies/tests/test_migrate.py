@@ -311,6 +311,58 @@ def test_write_backs_up_governance_yaml(tmp_path: Path) -> None:
     assert backup.read_text(encoding="utf-8") == original
 
 
+def test_child_chain_migration_preserves_inherited_parent_governance(
+    tmp_path: Path,
+) -> None:
+    """Migrating a nested chain must not touch parent governance it inherits.
+
+    The resolved chain lists governance.yaml from ``chain_root`` up to the
+    project root. Only files local to ``chain_root`` may be backed up and
+    removed; the shared parent file is migrated by its own chain and would
+    break sibling chains if removed here.
+    """
+    _write_governance(tmp_path / "governance.yaml", rule_name="deny_parent")
+    child = tmp_path / "svc" / "billing"
+    child.mkdir(parents=True)
+    _write_governance(child / "governance.yaml", rule_name="deny_child")
+
+    finding = migrate_mod._migrate_governance_chain(
+        child.resolve(), tmp_path.resolve(), write=True
+    )
+
+    assert finding.error is None, finding.error
+    # Parent governance.yaml (ABOVE chain_root) is untouched.
+    assert (tmp_path / "governance.yaml").is_file()
+    assert not (tmp_path / ".governance.yaml.v4-backup").exists()
+    # The child's own governance.yaml is backed up and removed.
+    assert not (child / "governance.yaml").exists()
+    assert (child / ".governance.yaml.v4-backup").is_file()
+
+
+@pytest.mark.parametrize("link_name", ["policy", "manifest.yaml"])
+def test_governance_chain_refuses_output_symlink(
+    tmp_path: Path, link_name: str
+) -> None:
+    """A broken/relative symlink at the output path must not let the migration
+    write its bundle outside chain_root and delete governance.
+
+    ``Path.exists()`` follows symlinks and returns False for a broken one, so a
+    symlink named ``policy``/``manifest.yaml`` would slip past the overwrite
+    guard; the write would then land through the link (outside the project)
+    while governance is still unlinked, and the migration would report success.
+    """
+    external = tmp_path / "external_target"
+    _write_governance(tmp_path / "governance.yaml")
+    (tmp_path / link_name).symlink_to(external)
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    assert report.governance_chains[0].error is not None
+    assert "refusing to overwrite" in report.governance_chains[0].error
+    assert (tmp_path / "governance.yaml").is_file()
+    assert not external.exists()
+
+
 @pytest.mark.parametrize("existing_name", ["manifest.yaml", "policy"])
 def test_governance_chain_never_overwrites_existing_output(
     tmp_path: Path, existing_name: str
