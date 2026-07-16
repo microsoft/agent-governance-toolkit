@@ -57,7 +57,7 @@ dev = [
     "structlog>=26.1.0,<27.0",
     # Ring tests exercise the hypervisor; mirror the optional extra so
     # `pip install agent-mesh[dev]` brings everything needed for tests.
-    "agent_hypervisor>=5.0.0,<6.0",
+    "agent_hypervisor>=3.7.0,<6.0",
     # TRACE Trust Record emission (ADR-0032)
     "agentrust-trace>=0.2.0,<0.3.0",
 ]

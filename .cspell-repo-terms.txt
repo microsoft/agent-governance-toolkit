@@ -874,3 +874,9 @@ tcpdump
 isascii
 multisink
 writeln
+venvs
+purelib
+platlib
+cpython
+namelist
+dists
