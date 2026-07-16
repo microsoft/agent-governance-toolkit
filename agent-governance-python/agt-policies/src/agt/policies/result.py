@@ -180,7 +180,10 @@ class EvaluationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # ── v4 back-compat surface ────────────────────────────────────
-    allowed: bool = True
+    # Defaults are fail-safe: a bare EvaluationResult() denies rather than
+    # permits, so a construction path that forgets to set a verdict cannot
+    # silently allow an action. Every real construction sets these explicitly.
+    allowed: bool = False
     category: str | None = None
     matched_rule: str | None = None
     public_message: str = ""
@@ -189,7 +192,7 @@ class EvaluationResult(BaseModel):
     audit_entry: dict[str, Any] = Field(default_factory=dict)
 
     # ── v5 verdict surface ────────────────────────────────────────
-    verdict: Verdict = "allow"
+    verdict: Verdict = "deny"
     transform: dict[str, Any] | None = None
     evidence: dict[str, Any] | None = None
     input_identity: str | None = None
