@@ -85,7 +85,7 @@ rules:
       field: output
       operator: matches
       value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription|clinical\\s+data|psychological\\s+(report|assessment))"
-    action: escalate
+    action: block
     priority: 1
     message: "Mauritius DPA 2017 (Special Categories): Health/genetic sensitive data detected — requires lawful basis + legitimate activities + appropriate safeguards (Data Protection Commissioner)"
 
@@ -103,7 +103,7 @@ rules:
       field: output
       operator: matches
       value: "(?i)(racial\\s+origin|ethnic\\s+origin|political\\s+opinion|political\\s+adherence|religious\\s+belief|philosophical\\s+belief|trade\\s+union|sexual\\s+(orientation|practice|preference)|criminal\\s+(proceeding|offence|conviction|record))"
-    action: escalate
+    action: block
     priority: 1
     message: "Mauritius DPA 2017 (Special Categories): Special category personal data detected — requires lawful basis + controller's legitimate activities + appropriate safeguards"
 
@@ -153,7 +153,7 @@ rules:
       field: output
       operator: matches
       value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+mauritius|cross.?border|international\\s+transfer|offshore|foreign\\s+server)"
-    action: escalate
+    action: block
     priority: 1
     message: "Mauritius DPA 2017 (Transfer): Cross-border data transfer detected — proof of appropriate safeguards must be provided to the Commissioner before transfer"
 
@@ -162,7 +162,7 @@ rules:
       field: action
       operator: matches
       value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
-    action: escalate
+    action: block
     priority: 2
     message: "Mauritius DPA 2017 (Transfer): Cross-border data transfer action requires documented safeguards filed with the Commissioner or a valid derogation (consent, contract, public interest)"
 
@@ -175,7 +175,7 @@ rules:
       field: action
       operator: matches
       value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
-    action: escalate
+    action: block
     priority: 2
     message: "Mauritius DPA 2017 (Transfer / Security): Bulk personal data export requires appropriate safeguards filed with Commissioner and documented lawful basis"
 
@@ -184,7 +184,7 @@ rules:
       field: action
       operator: matches
       value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
-    action: escalate
+    action: block
     priority: 2
     message: "Mauritius DPA 2017 (Transfer): Large-volume transfer requires proof of appropriate safeguards filed with Commissioner"
 
@@ -200,7 +200,7 @@ rules:
       field: action
       operator: matches
       value: "auto_approve|auto_reject|automated_credit|algorithmic_decision|auto_score|auto_deny"
-    action: escalate
+    action: block
     priority: 1
     message: "Mauritius DPA 2017 (Collection / Automated Decisions): Automated decision-making including profiling — data subject must be informed of logic, significance and consequences; escalate for transparency compliance"
 

@@ -71,7 +71,7 @@ rules:
       field: output
       operator: matches
       value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription|clinical\\s+data)"
-    action: escalate
+    action: block
     priority: 1
     message: "Rwanda Law 058/2021 Art. 3(2)/10: Health/medical sensitive data detected — requires explicit consent or documented lawful basis (NCSA)"
 
@@ -80,7 +80,7 @@ rules:
       field: output
       operator: matches
       value: "(?i)(race|ethnic\\s+origin|social\\s+origin|political\\s+opinion|religious\\s+belief|philosophical\\s+belief|sexual\\s+(life|orientation)|family\\s+(detail|data)|criminal\\s+(record|conviction))"
-    action: escalate
+    action: block
     priority: 1
     message: "Rwanda Law 058/2021 Art. 3(2)/10: Special category personal data detected — requires specific grounds under Art. 10 (NCSA)"
 
@@ -105,7 +105,7 @@ rules:
       field: output
       operator: matches
       value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+rwanda|cross.?border|international\\s+transfer|offshore|foreign\\s+server)"
-    action: escalate
+    action: block
     priority: 1
     message: "Rwanda Law 058/2021 Art. 48: Cross-border data transfer language detected — destination country adequacy and contractual safeguards (Art. 49) required"
 
@@ -114,7 +114,7 @@ rules:
       field: action
       operator: matches
       value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
-    action: escalate
+    action: block
     priority: 2
     message: "Rwanda Law 058/2021 Art. 48/49: Cross-border data transfer requires adequacy verification and contractual safeguards with NCSA"
 
@@ -145,7 +145,7 @@ rules:
       field: action
       operator: matches
       value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
-    action: escalate
+    action: block
     priority: 2
     message: "Rwanda Law 058/2021 Art. 50: Bulk personal data export — storage location restrictions and minimisation principles require documented lawful basis"
 
@@ -154,7 +154,7 @@ rules:
       field: action
       operator: matches
       value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
-    action: escalate
+    action: block
     priority: 2
     message: "Rwanda Law 058/2021 Art. 48/50: Large-volume transfer requires adequacy verification and NCSA contractual safeguard documentation"
 
@@ -170,7 +170,7 @@ rules:
       field: action
       operator: matches
       value: "auto_approve|auto_reject|automated_credit|algorithmic_decision|auto_score|auto_deny"
-    action: escalate
+    action: block
     priority: 1
     message: "Rwanda Law 058/2021 Art. 21: Automated individual decision-making detected — data subject has right to human review; escalate for oversight"
 
