@@ -1,16 +1,12 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 name: Docs Quality
 
-# Runs lightweight link-validation and frontmatter checks on PRs that
-# touch markdown files. This is the safety net required before the
-# docs/ information-architecture consolidation work (tracked in
-# https://github.com/microsoft/agent-governance-toolkit/issues/2400).
+# Runs link validation and frontmatter checks on PRs that touch the
+# documentation site or its quality tooling.
 #
-# Link checking is strict for new findings: any broken relative link,
-# missing target, or unresolved anchor that is not already on the
-# pre-existing baseline (scripts/docs/.linkcheck-baseline.txt) fails
-# the job. The baseline is the existing-debt allowlist; subsequent
-# consolidation PRs will whittle it down and eventually delete it.
+# Link checking is strict: any broken relative link, missing target, or
+# unresolved anchor fails the job. The baseline file is empty and reserved
+# only for an explicitly approved migration.
 #
 # Frontmatter checking is strict because the published docs corpus has
 # complete title, ownership, and review-date metadata.
