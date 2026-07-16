@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import urllib.parse
 import urllib.request
 from typing import Any, Literal, TypedDict
 
@@ -105,6 +106,10 @@ def local_checkpoint(envelope: ActionEnvelope) -> CheckpointVerdict:
 
 def remote_checkpoint(url: str, envelope: ActionEnvelope) -> CheckpointVerdict:
     """Send an action envelope to a remote checkpoint endpoint."""
+    parsed_url = urllib.parse.urlparse(url)
+    if parsed_url.scheme != "https" or not parsed_url.netloc:
+        raise ValueError("EXTERNAL_CHECKPOINT_URL must be an HTTPS endpoint.")
+
     body = stable_json(envelope).encode("utf-8")
     request = urllib.request.Request(
         url,
