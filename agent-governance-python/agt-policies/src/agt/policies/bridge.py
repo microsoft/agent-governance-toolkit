@@ -119,10 +119,10 @@ def _pattern_to_regex(pattern: Any) -> str:
         if kind_name == "SUBSTRING":
             return re.escape(value)
         if kind_name == "REGEX":
-            validate_re2(value)
+            validate_re2(value, require_opa=True)
             return value
         if kind_name == "GLOB":
-            return glob_to_re2(value)
+            return glob_to_re2(value, require_opa=True)
         raise ValueError(f"unsupported PatternType: {kind!r}")
 
     raise ValueError(f"unsupported blocked_patterns entry: {pattern!r}")

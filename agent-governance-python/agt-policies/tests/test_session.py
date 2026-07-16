@@ -154,6 +154,55 @@ def test_counter_synchronization_never_moves_backwards() -> None:
     assert session.builder.token_count == 9
 
 
+def test_public_builder_view_is_read_only() -> None:
+    """session.builder exposes counter reads and snapshots but blocks mutation,
+    keeping the session the sole writer of budget counters."""
+    session = AdapterRuntimeSession(_Runtime(), agent_id="bot", session_id="s-1")
+    session.record_usage(tokens=5, tool_calls=2)
+
+    view = session.builder
+    # reads and snapshot building still work
+    assert view.tool_call_count == 2
+    assert view.token_count == 5
+    assert view.pre_tool_call(tool_name="lookup", args={})["envelope"]["budgets"][
+        "tool_call_count"
+    ] == 2
+
+    # every counter mutator is refused
+    for mutator in (
+        "record_tool_call",
+        "record_tokens",
+        "record_cost",
+        "record_elapsed",
+        "reset_budgets",
+    ):
+        with pytest.raises(AttributeError):
+            getattr(view, mutator)
+    with pytest.raises(AttributeError):
+        view.tool_call_count = 0
+
+    # the real counters are untouched by the blocked attempts
+    assert session.builder.tool_call_count == 2
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_record_usage_rejects_non_finite_cost_before_charging(bad: float) -> None:
+    """NaN/inf cost must be rejected, not poison the budget counter.
+
+    ``float('nan') < 0`` is False, so a bare sign check accepted NaN; the
+    poisoned counter then never satisfies budgets.rego's ``>=`` limit and the
+    budget silently never fires (fail open).
+    """
+    session = AdapterRuntimeSession(_Runtime(), agent_id="bot", session_id="s-1")
+
+    with pytest.raises(ValueError, match="finite"):
+        session.record_usage(cost_usd=bad)
+    with pytest.raises(ValueError, match="finite"):
+        session.synchronize_counters(cost_usd=bad)
+
+    assert session.builder.cost_usd == 0.0
+
+
 def test_all_intervention_point_helpers_are_reachable() -> None:
     runtime = _Runtime()
     session = AdapterRuntimeSession(runtime, agent_id="bot", session_id="s-1")

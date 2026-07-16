@@ -553,6 +553,11 @@ def _is_local_reference(value: str) -> bool:
 def _resolve_reference(value: str, base_dir: Path) -> str:
     if not _is_relative_reference(value):
         return value
+    # References are resolved relative to base_dir but intentionally NOT confined
+    # to it: a manifest may legitimately point at a shared bundle in a parent or
+    # sibling directory. This assumes manifests are authored by the trusted party
+    # governing their own agents (maintainer decision). If manifests can ever
+    # originate from untrusted sources, add base_dir confinement here.
     return str((base_dir / value).resolve())
 
 
