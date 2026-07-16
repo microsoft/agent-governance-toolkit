@@ -403,6 +403,44 @@ def test_governance_chain_never_overwrites_existing_backup(
     assert not (tmp_path / "policy").exists()
 
 
+def test_chain_migration_write_failure_restores_originals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure mid-write must restore the governance file and leave no output.
+
+    The write path places the manifest and renames each governance file to its
+    ``.v4-backup`` with ``os.replace``, rolling back on failure. Force the backup
+    rename to fail after the manifest is placed: rollback must remove the placed
+    manifest and leave the original governance file untouched (the failed rename
+    is atomic, so the original is intact), restoring the pre-migration state.
+    """
+    gov_yaml = tmp_path / "governance.yaml"
+    _write_governance(gov_yaml, rule_name="deny_yaml")
+    original_yaml = gov_yaml.read_text(encoding="utf-8")
+
+    real_replace = migrate_mod.os.replace
+
+    def flaky_replace(src, dst, *args, **kwargs):
+        if str(dst).endswith(".v4-backup"):
+            raise OSError("simulated backup failure")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(migrate_mod.os, "replace", flaky_replace)
+
+    finding = migrate_mod._migrate_governance_chain(
+        tmp_path.resolve(), tmp_path.resolve(), write=True
+    )
+
+    assert finding.error is not None
+    assert "chain migration failed" in finding.error
+    # The original is intact (its rename failed atomically) and no output survives.
+    assert gov_yaml.is_file()
+    assert gov_yaml.read_text(encoding="utf-8") == original_yaml
+    assert not (tmp_path / "manifest.yaml").exists()
+    assert not (tmp_path / ".governance.yaml.v4-backup").exists()
+    assert not (tmp_path / "policy").exists()
+
+
 def test_write_governance_policy_creates_manifest_per_source(tmp_path: Path) -> None:
     """A GovernancePolicy() call produces policies/<basename>.manifest.yaml."""
     src = tmp_path / "billing_bot.py"

@@ -634,25 +634,29 @@ def _migrate_governance_chain(
                 yaml.safe_dump(manifest, sort_keys=False),
                 encoding="utf-8",
             )
-            linked_backups: list[Path] = []
+            # Use os.replace (atomic rename) rather than os.link so the swap
+            # works on any filesystem, not just hard-link-capable ones (some
+            # Windows volumes and Unix mounts do not support hard links). Each
+            # rename both backs
+            # up and removes the original in one atomic step, so the data always
+            # has exactly one name and a crash cannot lose it. Every path stays
+            # inside chain_root (staging dir and backups), so the rename can
+            # never cross a filesystem boundary.
+            moved_backups: list[tuple[Path, Path]] = []
+            manifest_placed = False
             try:
-                os.link(staged_manifest, manifest_path)
+                os.replace(staged_manifest, manifest_path)
+                manifest_placed = True
                 for gov_file, backup in zip(
                     local_files, backup_paths, strict=True
                 ):
-                    os.link(gov_file, backup)
-                    linked_backups.append(backup)
-                for gov_file in local_files:
-                    gov_file.unlink()
+                    os.replace(gov_file, backup)
+                    moved_backups.append((backup, gov_file))
             except Exception as exc:
-                for gov_file, backup in zip(
-                    local_files, backup_paths, strict=True
-                ):
-                    if not gov_file.exists() and backup.exists():
-                        os.link(backup, gov_file)
-                for backup in linked_backups:
-                    backup.unlink(missing_ok=True)
-                manifest_path.unlink(missing_ok=True)
+                for backup, gov_file in reversed(moved_backups):
+                    os.replace(backup, gov_file)
+                if manifest_placed:
+                    manifest_path.unlink(missing_ok=True)
                 _rmtree_silent(rego_bundle)
                 finding.error = (
                     f"chain migration failed: {type(exc).__name__}: {exc}"
@@ -760,9 +764,13 @@ def _migrate_governance_policy(
             )
             bundle_dir.mkdir()
             bundle_created = True
-            for staged_file in staging_bundle.iterdir():
-                os.link(staged_file, bundle_dir / staged_file.name)
-            os.link(staged_manifest, manifest_path)
+            # Snapshot the entries before moving them, since os.replace mutates
+            # staging_bundle as we iterate. os.replace (atomic rename) keeps this
+            # portable across filesystems that do not support hard links; every
+            # path is under policies_dir, so the rename never crosses a mount.
+            for staged_file in list(staging_bundle.iterdir()):
+                os.replace(staged_file, bundle_dir / staged_file.name)
+            os.replace(staged_manifest, manifest_path)
         except Exception as exc:
             if bundle_created and bundle_dir.exists():
                 shutil.rmtree(bundle_dir)
