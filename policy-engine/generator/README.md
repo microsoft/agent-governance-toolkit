@@ -39,7 +39,7 @@ File based `extends` is confined to the top level manifest root. Keep parent man
 
 The init flow validates the manifest against `schema/manifest.schema.json` from the artifact kit or `spec/schema/manifest.schema.json` from a repository checkout, asks the Python SDK core loader to check semantic manifest constraints, rejects deprecated policy input keys, and uses OPA for Rego syntax and evaluation when `opa` is available. `--strict` makes missing OPA a failure. The generator wheel also carries the manifest schema and the wire request/result schemas under `acs_generator.schema` for artifact-only schema checks.
 
-Services can call `validate_acs_artifacts` with a YAML or JSON manifest string and either one Rego string or a mapping of source names to Rego strings. The `ArtifactValidationResult` contains `ValidationDiagnostic` entries and converts directly to JSON. The result is valid only when the manifest matches the packaged canonical schema and OPA parses every supplied module. A manifest that declares a Rego policy requires at least one supplied Rego module.
+Services can call `validate_acs_artifacts` with a YAML or JSON manifest string and either one Rego string or a dictionary of source names to Rego strings. The `ArtifactValidationResult` contains `ValidationDiagnostic` entries and converts directly to JSON. The result is valid only when the manifest matches the packaged canonical schema and OPA parses every supplied module. A manifest that declares a Rego policy requires at least one supplied Rego module.
 
 ```python
 from acs_generator import validate_acs_artifacts

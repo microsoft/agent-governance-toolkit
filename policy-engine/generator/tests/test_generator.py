@@ -697,19 +697,27 @@ def test_string_validation_api_rejects_non_opa_executable() -> None:
     assert report.diagnostics[0].code == "opa_invalid_executable"
 
 
-def test_string_validation_api_bounds_mapping_iteration() -> None:
-    class EndlessMapping(dict):
-        def items(self):
-            while True:
-                yield "policy.rego", "package valid"
-
+def test_string_validation_api_bounds_module_dictionary() -> None:
     report = validate_acs_artifacts(
         'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
-        EndlessMapping(),
+        {f"policy-{index}.rego": "package valid" for index in range(65)},
     )
 
     assert not report.valid
     assert report.diagnostics[0].code == "rego_module_limit_exceeded"
+
+
+def test_string_validation_api_rejects_custom_dictionary() -> None:
+    class CustomDictionary(dict):
+        pass
+
+    report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        CustomDictionary(),
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "rego_input_invalid"
 
 
 def test_string_validation_api_counts_empty_rego_toward_size_limit(

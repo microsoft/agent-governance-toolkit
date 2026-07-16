@@ -5,7 +5,6 @@ import math
 import re
 import time
 import warnings
-from collections.abc import Mapping
 from importlib import resources
 import shutil
 import subprocess
@@ -282,7 +281,7 @@ class ValidationError(RuntimeError):
 
 def validate_acs_artifacts(
     manifest: str,
-    rego: str | Mapping[str, str],
+    rego: str | dict[str, str],
     *,
     opa_path: str | None = None,
 ) -> ArtifactValidationResult:
@@ -715,11 +714,11 @@ def _append_json_path(path: str, part: str) -> str:
 
 
 def _normalize_rego_modules(
-    rego: str | Mapping[str, str],
+    rego: str | dict[str, str],
 ) -> tuple[list[tuple[str, str]], list[ValidationDiagnostic]]:
     if isinstance(rego, str):
         items: list[tuple[Any, Any]] = [("policy.rego", rego)]
-    elif isinstance(rego, Mapping):
+    elif type(rego) is dict:
         items = []
         for index, item in enumerate(rego.items()):
             if index >= MAX_REGO_MODULES:
@@ -737,7 +736,7 @@ def _normalize_rego_modules(
             ValidationDiagnostic(
                 component="rego",
                 code="rego_input_invalid",
-                message="Rego input must be a string or a mapping of source names to strings.",
+                message="Rego input must be a string or a dictionary of source names to strings.",
                 source="rego",
             )
         ]
