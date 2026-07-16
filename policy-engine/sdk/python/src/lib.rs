@@ -1,8 +1,8 @@
 use agent_control_specification_core::{
-    parse_manifest_yaml_value, validate_manifest_yaml, AnnotatorDispatcher, AnnotatorInvocation,
-    Decision, EnforcementMode, InterventionPoint, InterventionPointRequest,
-    InterventionPointResult, JsonValue, Manifest, PerfTelemetry, PolicyDispatcher,
-    PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
+    parse_manifest_yaml_value, validate_manifest_overlay_yaml, validate_manifest_yaml,
+    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
+    InterventionPointRequest, InterventionPointResult, JsonValue, Manifest, PerfTelemetry,
+    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -88,6 +88,11 @@ fn parse_manifest(py: Python<'_>, manifest: &str) -> PyResult<Py<PyAny>> {
 #[pyfunction]
 fn validate_manifest(manifest: &str) -> PyResult<()> {
     validate_manifest_yaml(manifest).map_err(runtime_error)
+}
+
+#[pyfunction]
+fn validate_manifest_overlay(manifest: &str) -> PyResult<()> {
+    validate_manifest_overlay_yaml(manifest).map_err(runtime_error)
 }
 
 fn annotation_error(error: PyErr) -> RuntimeError {
@@ -403,5 +408,6 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NativeRuntime>()?;
     m.add_function(wrap_pyfunction!(parse_manifest, m)?)?;
     m.add_function(wrap_pyfunction!(validate_manifest, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_manifest_overlay, m)?)?;
     Ok(())
 }

@@ -14,7 +14,11 @@ from typing import Any
 
 import jsonschema
 import yaml
-from agent_control_specification import parse_manifest, validate_manifest
+from agent_control_specification import (
+    parse_manifest,
+    validate_manifest,
+    validate_manifest_overlay,
+)
 
 from .vocabulary import (
     DECISIONS,
@@ -121,8 +125,11 @@ def validate_acs_artifacts(
     elif parsed_manifest is not None:
         schema_diagnostics = _manifest_schema_diagnostics(parsed_manifest)
         diagnostics.extend(schema_diagnostics)
-        if not schema_diagnostics and not _manifest_has_extends(parsed_manifest):
-            semantic_diagnostic = _manifest_semantic_diagnostic(manifest)
+        if not schema_diagnostics:
+            semantic_diagnostic = _manifest_semantic_diagnostic(
+                manifest,
+                overlay=_manifest_has_extends(parsed_manifest),
+            )
             if semantic_diagnostic is not None:
                 diagnostics.append(semantic_diagnostic)
 
@@ -213,9 +220,16 @@ def _parse_manifest_string(
     return parsed, None
 
 
-def _manifest_semantic_diagnostic(manifest: str) -> ValidationDiagnostic | None:
+def _manifest_semantic_diagnostic(
+    manifest: str,
+    *,
+    overlay: bool,
+) -> ValidationDiagnostic | None:
     try:
-        validate_manifest(manifest)
+        if overlay:
+            validate_manifest_overlay(manifest)
+        else:
+            validate_manifest(manifest)
     except RuntimeError as exc:
         return ValidationDiagnostic(
             component="manifest",
@@ -501,7 +515,7 @@ def _validate_rego_modules(
             except subprocess.TimeoutExpired:
                 diagnostics.append(_opa_timeout_diagnostic())
                 break
-            except (OSError, UnicodeError) as exc:
+            except (OSError, UnicodeError, ValueError) as exc:
                 diagnostics.append(
                     ValidationDiagnostic(
                         component="rego",
@@ -539,7 +553,7 @@ def _validate_opa_executable(
         )
     except subprocess.TimeoutExpired:
         return _opa_timeout_diagnostic()
-    except (OSError, UnicodeError) as exc:
+    except (OSError, UnicodeError, ValueError) as exc:
         return ValidationDiagnostic(
             component="rego",
             code="opa_execution_error",

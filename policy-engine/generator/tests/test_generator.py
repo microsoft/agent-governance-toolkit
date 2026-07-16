@@ -625,6 +625,17 @@ def test_string_validation_api_rejects_non_opa_executable() -> None:
     assert report.diagnostics[0].code == "opa_invalid_executable"
 
 
+def test_string_validation_api_rejects_invalid_opa_path() -> None:
+    report = validate_acs_artifacts(
+        MINIMAL_MANIFEST,
+        "package invalid",
+        opa_path="\0",
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "opa_execution_error"
+
+
 def test_string_validation_api_bounds_module_dictionary() -> None:
     report = validate_acs_artifacts(
         MINIMAL_MANIFEST,
@@ -844,6 +855,20 @@ extends:
     )
 
     assert report.valid
+
+
+def test_string_validation_api_rejects_invalid_partial_extends_version() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: banana
+extends:
+  - base.yaml
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_semantic_error"
 
 
 def test_string_validation_api_requires_opa_for_rego(

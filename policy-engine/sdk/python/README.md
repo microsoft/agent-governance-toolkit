@@ -12,7 +12,7 @@ Runnable pieces today:
 
 - dataclasses/enums for `InterventionPointRequest`, `InterventionPointResult`, `Verdict`, intervention points, decisions, and enforcement mode
 - protocols for host-supplied annotator and policy dispatchers
-- `parse_manifest()` and `validate_manifest()` backed by the Rust runtime parser
+- `parse_manifest()`, `validate_manifest()`, and `validate_manifest_overlay()` backed by the Rust runtime parser
 - `AgentControl.evaluate_intervention_point()` delegating to an abstract runtime client
 - `AgentControl.run()` enforcing `input` and `output`
 - `AgentControl.protect_tool()` / `run_tool()` enforcing `pre_tool_call` and `post_tool_call`
@@ -28,7 +28,7 @@ Runnable pieces today:
 
 Adapters are intentionally stateless. Pass ambient per-call data with the reserved keyword `agent_control_snapshot={...}`; it is merged over any default snapshot supplied when creating the wrapper. Unsupported or potentially bypassing methods raise `AdapterUnsupportedError` rather than returning an unguarded path. `guard_mcp_server()` covers MCP tool calls only. MCP resources, prompts, streams, and lifecycle hooks still need package-specific adapters, and known unsupported methods on a wrapped provider are blocked instead of being delegated. `guard_litellm_proxy()` buffers JSON ASGI request/response bodies and streaming chat responses instead of bypassing controls. `AgentControlLiteLLMGuardrail` maps LiteLLM `pre_call` and `post_call` guardrail hooks to ACS input, model, tool, and output intervention points. Install the optional proxy dependency with `pip install "agent-control-specification[litellm-proxy]"`.
 
-Use `parse_manifest(text)` when a host needs the runtime parser's YAML or JSON value before applying another contract such as JSON Schema. Use `validate_manifest(text)` for the typed ACS manifest checks enforced by the Rust core. Both functions use the same `serde_yaml` implementation as runtime construction.
+Use `parse_manifest(text)` when a host needs the runtime parser's YAML or JSON value before applying another contract such as JSON Schema. Use `validate_manifest(text)` for a complete manifest and `validate_manifest_overlay(text)` for resolution-independent checks on a partial manifest with `extends`. All three functions use the same bounded `serde_yaml` implementation as runtime construction.
 
 `guard_litellm_proxy()` targets the LiteLLM proxy server ASGI app and needs the proxy extra. Install real-package tests with `litellm[proxy]`, not bare `litellm`. Pass `litellm.proxy.proxy_server.app` explicitly or let `guard_litellm_proxy(control)` load it lazily. The LiteLLM proxy rejects client supplied `api_base` and credentials unless proxy configuration allows client-side credentials, for example `proxy_server.general_settings["allow_client_side_credentials"] = True` in local tests.
 

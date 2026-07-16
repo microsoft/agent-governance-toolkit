@@ -11,6 +11,7 @@ from agent_control_specification import (
     PerfTelemetry,
     parse_manifest,
     validate_manifest,
+    validate_manifest_overlay,
 )
 
 try:
@@ -91,6 +92,21 @@ metadata:
             validate_manifest(
                 """agent_control_specification_version: 0.3.0-alpha
 agent_control_specification_version: 0.3.1-beta
+"""
+            )
+
+    def test_validate_manifest_overlay_checks_version_without_requiring_points(self):
+        validate_manifest_overlay(
+            """agent_control_specification_version: 0.3.1-beta
+extends:
+  - base.yaml
+"""
+        )
+        with self.assertRaisesRegex(RuntimeError, "unsupported agent_control_specification_version"):
+            validate_manifest_overlay(
+                """agent_control_specification_version: banana
+extends:
+  - base.yaml
 """
             )
 

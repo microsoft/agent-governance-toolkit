@@ -376,6 +376,19 @@ impl Manifest {
     }
 
     pub fn validate(&self) -> Result<(), RuntimeError> {
+        self.validate_overlay()?;
+        if self.intervention_points.is_empty() {
+            return Err(RuntimeError::ManifestInvalid(
+                "at least one intervention point config is required".to_string(),
+            ));
+        }
+        for (intervention_point, config) in &self.intervention_points {
+            validate_point_config(*intervention_point, config, self)?;
+        }
+        Ok(())
+    }
+
+    pub fn validate_overlay(&self) -> Result<(), RuntimeError> {
         let version = self.agent_control_specification_version.trim();
         if version.is_empty() {
             return Err(RuntimeError::ManifestInvalid(
@@ -398,12 +411,6 @@ impl Manifest {
             validate_extends_trust(extends)?;
         }
 
-        if self.intervention_points.is_empty() {
-            return Err(RuntimeError::ManifestInvalid(
-                "at least one intervention point config is required".to_string(),
-            ));
-        }
-
         for (policy_name, policy_config) in &self.policies {
             if policy_name.trim().is_empty() {
                 return Err(RuntimeError::ManifestInvalid(
@@ -423,10 +430,6 @@ impl Manifest {
 
         for (annotator_name, annotator) in &self.annotators {
             validate_annotator_prompt_sources(annotator_name, annotator)?;
-        }
-
-        for (intervention_point, config) in &self.intervention_points {
-            validate_point_config(*intervention_point, config, self)?;
         }
 
         if let Some(approval) = &self.approval {
@@ -451,12 +454,20 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
         RuntimeError::ManifestInvalid("manifest source must not be empty".to_string())
     })?;
     let mut budget = ManifestValueBudget::new(limits);
-    let value = BoundedJsonValueSeed {
+    let parsed = BoundedJsonValueSeed {
         budget: &mut budget,
         depth: 0,
     }
-    .deserialize(document)
-    .map_err(|err| manifest_parse_error(err.to_string()))?;
+    .deserialize(document);
+    let value = match parsed {
+        Ok(value) => value,
+        Err(error) => {
+            if let Some(detail) = budget.limit_error.take() {
+                return Err(RuntimeError::ResourceLimitExceeded(detail));
+            }
+            return Err(RuntimeError::ManifestInvalid(error.to_string()));
+        }
+    };
     if documents.next().is_some() {
         return Err(RuntimeError::ManifestInvalid(
             "manifest source must contain exactly one YAML or JSON document".to_string(),
@@ -476,14 +487,6 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
     Ok(value)
 }
 
-fn manifest_parse_error(detail: String) -> RuntimeError {
-    if detail.contains("exceeds limit") {
-        RuntimeError::ResourceLimitExceeded(detail)
-    } else {
-        RuntimeError::ManifestInvalid(detail)
-    }
-}
-
 pub fn validate_manifest_yaml(input: &str) -> Result<(), RuntimeError> {
     let value = parse_manifest_yaml_value(input)?;
     let manifest: Manifest = serde_json::from_value(value)
@@ -491,10 +494,18 @@ pub fn validate_manifest_yaml(input: &str) -> Result<(), RuntimeError> {
     manifest.validate()
 }
 
+pub fn validate_manifest_overlay_yaml(input: &str) -> Result<(), RuntimeError> {
+    let value = parse_manifest_yaml_value(input)?;
+    let manifest: Manifest = serde_json::from_value(value)
+        .map_err(|err| RuntimeError::ManifestInvalid(err.to_string()))?;
+    manifest.validate_overlay()
+}
+
 struct ManifestValueBudget {
     limits: Limits,
     nodes: usize,
     bytes: usize,
+    limit_error: Option<String>,
 }
 
 impl ManifestValueBudget {
@@ -503,21 +514,25 @@ impl ManifestValueBudget {
             limits,
             nodes: 0,
             bytes: 0,
+            limit_error: None,
         }
     }
 
     fn enter<E: DeError>(&mut self, depth: usize, bytes: usize) -> Result<(), E> {
         if depth > self.limits.max_policy_input_depth {
-            return Err(E::custom(format!(
+            let detail = format!(
                 "manifest JSON nesting depth exceeds limit {}",
                 self.limits.max_policy_input_depth
-            )));
+            );
+            self.limit_error = Some(detail.clone());
+            return Err(E::custom(detail));
         }
         self.nodes += 1;
         if self.nodes > MAX_MANIFEST_PARSE_NODES {
-            return Err(E::custom(format!(
-                "manifest expanded node count exceeds limit {MAX_MANIFEST_PARSE_NODES}"
-            )));
+            let detail =
+                format!("manifest expanded node count exceeds limit {MAX_MANIFEST_PARSE_NODES}");
+            self.limit_error = Some(detail.clone());
+            return Err(E::custom(detail));
         }
         self.add_bytes(bytes)
     }
@@ -525,10 +540,12 @@ impl ManifestValueBudget {
     fn add_bytes<E: DeError>(&mut self, bytes: usize) -> Result<(), E> {
         self.bytes = self.bytes.saturating_add(bytes);
         if self.bytes > self.limits.max_merged_manifest_bytes {
-            return Err(E::custom(format!(
+            let detail = format!(
                 "manifest expanded size exceeds limit {}",
                 self.limits.max_merged_manifest_bytes
-            )));
+            );
+            self.limit_error = Some(detail.clone());
+            return Err(E::custom(detail));
         }
         Ok(())
     }

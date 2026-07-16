@@ -36,6 +36,7 @@ from ._client import (
     RuntimeClient,
     parse_manifest,
     validate_manifest,
+    validate_manifest_overlay,
 )
 from ._orchestration import AgentControl
 from ._telemetry import (
@@ -104,6 +105,7 @@ __all__ = [
     "PolicyDispatcher",
     "parse_manifest",
     "validate_manifest",
+    "validate_manifest_overlay",
     "RunResult",
     "RuntimeClient",
     "TelemetryEvent",
