@@ -37,6 +37,7 @@ MAX_REGO_BYTES = 1_048_576
 MAX_REGO_MODULES = 64
 MAX_DIAGNOSTICS = 100
 MAX_DIAGNOSTIC_TEXT = 4096
+MAX_OPA_OUTPUT_BYTES = 65_536
 MAX_SOURCE_LABEL = 512
 # Core transform-path grammar (see rego_builder._TRANSFORM_PATH_RE): dotted object
 # keys and numeric list indices only; the core rejects string bracket keys.
@@ -425,9 +426,22 @@ def _profile_json_value(
     if depth > MAX_MANIFEST_DEPTH:
         return _manifest_depth_diagnostic(path), None
     if value is None or isinstance(value, (bool, int)):
+        try:
+            expanded_bytes = len(json.dumps(value).encode("utf-8"))
+        except ValueError as exc:
+            return (
+                ValidationDiagnostic(
+                    component="manifest",
+                    code="manifest_value_invalid",
+                    message=f"Manifest integer cannot be represented as JSON. {exc}",
+                    source="manifest",
+                    path=path,
+                ),
+                None,
+            )
         return None, _JsonProfile(
             height=0,
-            expanded_bytes=len(json.dumps(value).encode("utf-8")),
+            expanded_bytes=expanded_bytes,
             expanded_nodes=1,
         )
     if isinstance(value, float):
@@ -899,13 +913,10 @@ def _validate_rego_modules(
                 diagnostics.append(_opa_timeout_diagnostic())
                 break
             try:
-                completed = subprocess.run(
+                completed = _run_opa_command(
                     [opa, "parse", str(path), "--format=json"],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                    text=True,
                     timeout=remaining,
+                    capture_stdout=False,
                 )
             except subprocess.TimeoutExpired:
                 diagnostics.append(_opa_timeout_diagnostic())
@@ -941,12 +952,10 @@ def _validate_opa_executable(
     if remaining <= 0:
         return _opa_timeout_diagnostic()
     try:
-        completed = subprocess.run(
+        completed = _run_opa_command(
             [opa, "version"],
-            check=False,
-            capture_output=True,
-            text=True,
             timeout=remaining,
+            capture_stdout=True,
         )
     except subprocess.TimeoutExpired:
         return _opa_timeout_diagnostic()
@@ -970,6 +979,46 @@ def _validate_opa_executable(
             source="opa",
         )
     return None
+
+
+def _run_opa_command(
+    args: list[str],
+    *,
+    timeout: float,
+    capture_stdout: bool,
+) -> subprocess.CompletedProcess[str]:
+    with (
+        tempfile.TemporaryFile(mode="w+b") as stdout_file,
+        tempfile.TemporaryFile(mode="w+b") as stderr_file,
+    ):
+        completed = subprocess.run(
+            args,
+            check=False,
+            stdout=stdout_file if capture_stdout else subprocess.DEVNULL,
+            stderr=stderr_file,
+            timeout=timeout,
+        )
+        stdout = (
+            completed.stdout
+            if isinstance(completed.stdout, str)
+            else _read_bounded_process_output(stdout_file)
+            if capture_stdout
+            else ""
+        )
+        stderr = (
+            completed.stderr
+            if isinstance(completed.stderr, str)
+            else _read_bounded_process_output(stderr_file)
+        )
+    return subprocess.CompletedProcess(args, completed.returncode, stdout, stderr)
+
+
+def _read_bounded_process_output(output: Any) -> str:
+    output.seek(0)
+    data = output.read(MAX_OPA_OUTPUT_BYTES + 1)
+    truncated = len(data) > MAX_OPA_OUTPUT_BYTES
+    text = data[:MAX_OPA_OUTPUT_BYTES].decode("utf-8", errors="replace")
+    return text + ("..." if truncated else "")
 
 
 def _opa_timeout_diagnostic() -> ValidationDiagnostic:

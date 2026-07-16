@@ -647,6 +647,20 @@ metadata:
     assert report.diagnostics[0].code == "manifest_parse_error"
 
 
+def test_string_validation_api_rejects_unserializable_large_integer() -> None:
+    report = validate_acs_artifacts(
+        f"""
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  value: 0x{"f" * 5000}
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_value_invalid"
+
+
 def test_string_validation_api_bounds_diagnostics_and_snippets() -> None:
     manifest_report = validate_acs_artifacts(
         json.dumps(
@@ -808,6 +822,30 @@ def test_string_validation_api_handles_unstructured_opa_error(
     assert not report.valid
     assert report.diagnostics[0].code == "opa_validation_error"
     assert report.diagnostics[0].message == "not json"
+
+
+def test_string_validation_api_bounds_opa_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("acs_generator.validation.MAX_OPA_OUTPUT_BYTES", 8)
+
+    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        stdout = kwargs.get("stdout")
+        assert hasattr(stdout, "write")
+        stdout.write(b"not-an-opa-version-banner")
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr("acs_generator.validation.subprocess.run", run)
+
+    report = validate_acs_artifacts(
+        MINIMAL_MANIFEST,
+        "package invalid",
+        opa_path="opa",
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "opa_invalid_executable"
+    assert len(report.diagnostics[0].message) < 200
 
 
 def test_string_validation_api_handles_staging_error(
