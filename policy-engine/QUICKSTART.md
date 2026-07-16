@@ -38,7 +38,7 @@ If you are using a standalone ACS artifact kit before packages are published, in
 | Python | `python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b1-*.whl` |
 | Node | `npm install "$ACS_KIT"/artifacts/agent-control-specification-0.3.1-beta.0.tgz "$ACS_KIT"/artifacts/agent-control-specification-linux-x64-gnu-0.3.1-beta.0.tgz "$ACS_KIT"/artifacts/agent-control-specification-opa-linux-x64-0.3.1-beta.0.tgz` |
 | .NET | `dotnet add package AgentControlSpecification --version 0.3.1-beta.0 --source "$ACS_KIT/artifacts"` |
-| Generator | `python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b1-*.whl "$ACS_KIT"/artifacts/acs_generator-0.3.1b1-py3-none-any.whl` |
+| Generator | `python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b1-*.whl "$ACS_KIT"/artifacts/acs_generator-0.4.0b0-py3-none-any.whl` |
 | C ABI | Compile against `"$ACS_KIT"/artifacts/include/agent_control_specification.h` and link or load `"$ACS_KIT"/artifacts/libagent_control_specification_core.so`. |
 
 Python artifact installs may resolve third party wheel dependencies from your configured package index unless the kit also includes a Python dependency wheelhouse. Use `--no-index --find-links "$ACS_KIT/artifacts"` only with kits that contain that dependency closure.

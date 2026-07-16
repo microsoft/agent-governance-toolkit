@@ -25,6 +25,9 @@ classifiers = [
 # tests in tests/test_real_packages.py (skipped when not installed).
 [project.optional-dependencies]
 
+validation = [
+  "jsonschema>=4.0",
+]
 litellm-proxy = [
   "litellm[proxy]>=1.40",
   "fastapi>=0.100",
@@ -60,3 +63,4 @@ realpkg-tests = [
 features = ["pyo3/extension-module", "pyo3/abi3-py311"]
 module-name = "agent_control_specification._native"
 python-source = "."
+include = ["agent_control_specification/schema/*.json"]

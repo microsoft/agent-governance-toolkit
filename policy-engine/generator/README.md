@@ -37,21 +37,9 @@ File based `extends` is confined to the top level manifest root. Keep parent man
 
 ## Validation
 
-The init flow validates the manifest against `schema/manifest.schema.json` from the artifact kit or `spec/schema/manifest.schema.json` from a repository checkout, asks the Python SDK core loader to check semantic manifest constraints, rejects deprecated policy input keys, and uses OPA for Rego syntax and evaluation when `opa` is available. `--strict` makes missing OPA a failure. The generator wheel also carries the manifest schema and the wire request/result schemas under `acs_generator.schema` for artifact-only schema checks.
+The init flow delegates canonical manifest validation to `agent_control_specification.validation`, rejects deprecated generated-policy input keys, evaluates generated Rego with synthetic policy inputs, and validates generated regex patterns against OPA's RE2 implementation. `--strict` makes missing OPA a failure. The SDK wheel carries the manifest schemas. The generator wheel carries the wire request and result schemas under `acs_generator.schema.wire`.
 
-Services can call `validate_acs_artifacts` with a YAML or JSON manifest string and either one Rego string or a dictionary of source names to Rego strings. The `ArtifactValidationResult` contains `ValidationDiagnostic` entries and converts directly to JSON. The native `agent-control-specification` parser reads the manifest with the same `serde_yaml` implementation as the runtime, then the generator applies the packaged canonical schema. The result is valid only when both that schema and OPA parsing accept the supplied artifacts. A manifest that declares a Rego policy requires at least one supplied Rego module.
-
-```python
-from acs_generator import validate_acs_artifacts
-
-report = validate_acs_artifacts(
-    manifest=request.manifest,
-    rego={"payments.rego": request.rego},
-)
-return report.to_dict()
-```
-
-Failures include component and code fields plus the schema path or Rego source, line, column, and a bounded source snippet when available. Manifest source text is limited to 1 MiB. The native parser also enforces the runtime's 64-level JSON depth and 1 MiB parsed-manifest limits before returning data to Python. Rego input is limited to 64 modules and 1 MiB. At most 100 detailed diagnostics are returned before a truncation marker. This is an initial artifact check. Runtime semantic checks such as manifest reference resolution and Rego bundle compilation remain in the SDK core loader and the generator's existing `validate_artifacts` path.
+The generator is a CLI artifact-authoring utility. Services that validate existing manifest and Rego strings should use the Python SDK validation API instead.
 
 Artifact-only kits include a local Node optional OPA package. Install or extract `agent-control-specification-opa-<platform>-<version>.tgz`, then prepend its `bin` directory to `PATH` before running `acs-generate init --strict`.
 

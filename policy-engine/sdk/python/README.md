@@ -30,6 +30,24 @@ Adapters are intentionally stateless. Pass ambient per-call data with the reserv
 
 Use `parse_manifest(text)` when a host needs the runtime parser's YAML or JSON value before applying another contract such as JSON Schema. Use `validate_manifest(text)` for a complete manifest and `validate_manifest_overlay(text)` for resolution-independent checks on a partial manifest with `extends`. All three functions use the same bounded `serde_yaml` implementation as runtime construction.
 
+Install the validation extra when a service needs structured manifest and Rego diagnostics.
+
+```bash
+pip install "agent-control-specification[validation]"
+```
+
+```python
+from agent_control_specification.validation import validate_acs_artifacts
+
+report = validate_acs_artifacts(
+    manifest=request.manifest,
+    rego={"payments.rego": request.rego},
+)
+return report.to_dict()
+```
+
+The validation API applies the packaged canonical JSON Schema after native parsing, runs complete or overlay-specific typed checks, and asks OPA to parse each supplied Rego module. It bounds manifest and Rego input plus returned diagnostics. Rego bundle compilation and runtime evaluation remain separate host or generator checks.
+
 `guard_litellm_proxy()` targets the LiteLLM proxy server ASGI app and needs the proxy extra. Install real-package tests with `litellm[proxy]`, not bare `litellm`. Pass `litellm.proxy.proxy_server.app` explicitly or let `guard_litellm_proxy(control)` load it lazily. The LiteLLM proxy rejects client supplied `api_base` and credentials unless proxy configuration allows client-side credentials, for example `proxy_server.general_settings["allow_client_side_credentials"] = True` in local tests.
 
 `guard_litellm_proxy()` mediates the ASGI request as a model call. It evaluates `pre_model_call` before replaying the request body to the upstream app and evaluates `post_model_call` over the captured upstream response before sending the response to the client. JSON responses and chat-completion SSE responses are buffered before release so `post_model_call` effects can redact or replace the response. Streaming is guarded only for chat-completion paths. Streaming on embeddings, completions, messages, and responses paths raises `AdapterUnsupportedError` before the upstream app runs.
