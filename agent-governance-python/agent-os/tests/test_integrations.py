@@ -998,6 +998,7 @@ class TestLangChainKernelWrap:
             return_value=SimpleNamespace(
                 allowed=True,
                 transform=SimpleNamespace(value=["[REDACTED STREAM]"]),
+                transformed_value=["[REDACTED STREAM]"],
             )
         )
 
@@ -1013,6 +1014,7 @@ class TestLangChainKernelWrap:
             return_value=SimpleNamespace(
                 allowed=True,
                 transform=SimpleNamespace(value="[REDACTED]"),
+                transformed_value="[REDACTED]",
             )
         )
 
@@ -1269,6 +1271,7 @@ class TestOpenAIRunExecution:
             return_value=SimpleNamespace(
                 allowed=True,
                 transform=SimpleNamespace(value="[REDACTED]"),
+                transformed_value="[REDACTED]",
             )
         )
 
@@ -1290,6 +1293,7 @@ class TestOpenAIRunExecution:
             return_value=SimpleNamespace(
                 allowed=True,
                 transform=SimpleNamespace(value=[transformed_event]),
+                transformed_value=[transformed_event],
             )
         )
 
