@@ -59,7 +59,7 @@ def glob_to_re2(pattern: str, *, require_opa: bool = False) -> str:
     """Translate a Python glob to an anchored, RE2-safe regex string."""
     translated = fnmatch.translate(pattern)
     # fnmatch (CPython >= 3.12) wraps '*'/'?' runs in atomic groups '(?>...)'
-    # solely to bound backtracking. RE2 rejects atomic groups, and de-atomising
+    # solely to bound backtracking. RE2 rejects atomic groups, and de-atomizing
     # does not change the matched language for these glob-derived expressions.
     translated = translated.replace("(?>", "(?:")
     if translated.endswith(r"\Z"):

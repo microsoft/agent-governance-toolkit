@@ -230,7 +230,7 @@ def test_bridge_glob_patterns_use_re2_end_anchor_and_enforce(
     assert verdict["decision"] == "deny"
 
 
-def test_bridge_multistar_glob_is_re2_safe_and_enforces(tmp_path: Path) -> None:
+def test_bridge_multi_star_glob_is_re2_safe_and_enforces(tmp_path: Path) -> None:
     """A multi-wildcard glob must not leak fnmatch atomic groups into RE2.
 
     ``fnmatch.translate('*secret*')`` emits ``(?>...)`` on CPython >= 3.12,
