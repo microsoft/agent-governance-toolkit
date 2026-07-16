@@ -47,7 +47,7 @@
     "PolicyAction": {
       "type": "string",
       "description": "Action a policy rule prescribes.",
-      "enum": ["allow", "deny", "audit", "block", "escalate"]
+      "enum": ["allow", "deny", "audit", "block"]
     },
     "DynamicConditionType": {
       "type": "string",

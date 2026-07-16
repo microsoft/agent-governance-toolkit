@@ -39,7 +39,6 @@ class PolicyAction(str, Enum):
     DENY = "deny"
     AUDIT = "audit"
     BLOCK = "block"
-    ESCALATE = "escalate"
 
 
 class DynamicConditionType(str, Enum):
