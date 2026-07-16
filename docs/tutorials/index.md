@@ -1,6 +1,6 @@
 ---
 title: "Tutorials"
-last_reviewed: 2026-06-02
+last_reviewed: 2026-07-16
 owner: agt-maintainers
 ---
 
@@ -26,7 +26,17 @@ For developers adding governance to their first agent.
 3. [Framework Integrations](03-framework-integrations.md) — connect to LangChain, CrewAI, OpenAI, etc.
 4. [Govern an AI Agent](04-audit-and-compliance.md) — full audit trail
 
-### :material-shield-lock: **Path 2: Secure an agent fleet** (60 min)
+### :material-tune-variant: **Path 2: Build an ACS policy host** (50 min)
+
+For platform engineers building adapters, gateways, or custom agent runtimes on
+the canonical AGT 5 decision contract.
+
+1. [Agent Control Specification](55-agent-control-specification.md) — manifests, snapshots, and host enforcement
+2. [OPA / Rego / Cedar](08-opa-rego-cedar-policies.md) — choose the policy backend
+3. [Approval Workflows](38-approval-workflows.md) — route `escalate` verdicts
+4. [OpenTelemetry Integration](40-otel-observability.md) — observe policy decisions
+
+### :material-shield-lock: **Path 3: Secure an agent fleet** (60 min)
 
 For platform teams deploying agents in production.
 
@@ -37,7 +47,7 @@ For platform teams deploying agents in production.
 5. [Security Hardening](25-security-hardening.md) — production best practices
 6. [Multi-Agent Fleet Policies](49-multi-agent-policies.md) — collective enforcement
 
-### :material-clipboard-check: **Path 3: Compliance and audit** (45 min)
+### :material-clipboard-check: **Path 4: Compliance and audit** (45 min)
 
 For teams that need to prove what happened to auditors or regulators.
 
@@ -47,7 +57,7 @@ For teams that need to prove what happened to auditors or regulators.
 4. [SBOM & Signing](26-sbom-and-signing.md) — artifact integrity
 5. [Decision BOM](50-decision-bom.md) — audit artifacts
 
-### :material-chart-line: **Path 4: SRE for agents** (45 min)
+### :material-chart-line: **Path 5: SRE for agents** (45 min)
 
 For SRE teams operating agents at scale.
 

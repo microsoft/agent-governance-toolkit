@@ -1,6 +1,6 @@
 ---
 title: Agent Governance Toolkit
-last_reviewed: 2026-07-15
+last_reviewed: 2026-07-16
 owner: docs-team
 hide:
   - navigation
@@ -15,7 +15,7 @@ hide:
 
 # Ship autonomous agents with enforceable guardrails
 
-<p class="agt-hero-subtitle">Policy enforcement, identity, isolation, and audit for agent actions.<br>One Python install, any framework.</p>
+<p class="agt-hero-subtitle">ACS policy decisions, identity, isolation, and audit for agent actions.<br>Portable controls, enforced by your agent host.</p>
 
 <div class="agt-hero-cta">
   <a class="agt-btn agt-btn-solid" href="quickstart/">Get started</a>
@@ -49,7 +49,7 @@ pip install agent-governance-toolkit[full]
 </div>
 
 <div class="agt-capabilities">
-  <div class="agt-capability"><span class="agt-capability-name">Policy</span><span class="agt-capability-detail">YAML, OPA, Cedar</span></div>
+  <div class="agt-capability"><span class="agt-capability-name">ACS Policy</span><span class="agt-capability-detail">Stateless, fail-closed decisions</span></div>
   <div class="agt-capability"><span class="agt-capability-name">Trust</span><span class="agt-capability-detail">DID, SPIFFE, mTLS</span></div>
   <div class="agt-capability"><span class="agt-capability-name">Runtime</span><span class="agt-capability-detail">Isolation and kill switches</span></div>
   <div class="agt-capability"><span class="agt-capability-name">Evidence</span><span class="agt-capability-detail">Tamper-evident audit</span></div>
@@ -75,9 +75,11 @@ Your AI agents call tools, browse the web, query databases, and delegate to othe
 
 <div class="agt-section" markdown>
 
-## Govern any agent in 2 lines
+## Start with governance in 2 lines
 
-Wrap any tool function with `govern()`. Policy enforcement, audit logging, and denial handling are automatic.
+Wrap any tool function with `govern()` for the fastest integration. This is the
+current AgentMesh convenience API for application teams. Platform hosts and new
+AGT 5 policy integrations should use the ACS path in the next section.
 
 ```python
 from agentmesh.governance import govern
@@ -117,31 +119,78 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
 
 <div class="agt-section" markdown>
 
-## How it works
+## ACS is the policy decision layer
 
-``` mermaid
-flowchart LR
-    A["Agent"] -->|govern| PE
-    subgraph GK [" Agent Governance Toolkit "]
-        direction LR
-        PE["Policy Engine<br>YAML · OPA · Cedar"]
-        ID["Identity<br>SPIFFE · DID · mTLS"]
-        AL["Audit Log<br>Tamper-evident"]
-        PE --> ID --> AL
-    end
-    AL -->|Allowed| T["Tool executes"]
-    PE -->|Denied| D["GovernanceDenied"]
+[Agent Control Specification](packages/agent-control-specification.md), or ACS,
+is the canonical AGT 5 runtime for policy decisions. The host intercepts an
+agent lifecycle event, builds a complete snapshot, asks ACS for a verdict, and
+enforces that verdict before allowing the side effect.
+
+```bash
+pip install agt-policies
 ```
 
-Every layer is optional. Start with policy enforcement and audit logging, then add identity and runtime isolation as your risk profile grows.
+```python
+from agt.policies import SnapshotBuilder
+from agt.policies.runtime import AgtRuntime
+
+runtime = AgtRuntime("manifest.yaml")
+snapshot = SnapshotBuilder(agent_id="researcher", session_id="session-1")
+
+result = runtime.evaluate_intervention_point(
+    "pre_tool_call",
+    snapshot.pre_tool_call(
+        tool_name="send_email",
+        args={"to": "partner@example.net", "body": "Status update"},
+    ),
+)
+
+if not result.allowed:
+    raise PermissionError(result.reason)
+```
+
+ACS returns one of five normalized verdicts: `allow`, `warn`, `deny`,
+`escalate`, or `transform`. It does not execute the tool or retain hidden
+session state. That separation makes the same policy contract portable across
+framework adapters, gateways, and custom agent hosts.
+
+[Run the minimal ACS email-tool example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool)
+or follow the [step-by-step ACS tutorial](tutorials/55-agent-control-specification.md).
 
 </div>
 
 <div class="agt-section" markdown>
 
-## Package families
+## How it works
+
+``` mermaid
+flowchart LR
+    A["Agent framework"] --> H["AGT host or adapter"]
+    H -->|Complete snapshot| ACS["ACS policy decision layer<br>Rego · Cedar · custom"]
+    ACS -->|Normalized verdict| H
+    H -->|Allow or transformed action| T["Tool executes"]
+    H -->|Deny or escalate| B["Block or approval"]
+    ID["Identity and trust"] --> H
+    H --> AL["Tamper-evident audit"]
+    HV["Runtime isolation"] --> T
+```
+
+ACS decides; the host enforces. Identity, audit, and runtime isolation provide
+the surrounding evidence and execution controls without changing the policy
+decision contract.
+
+</div>
+
+<div class="agt-section" markdown>
+
+## Architecture and package families
 
 <div class="agt-cards">
+<a class="agt-card" data-pkg="acs" href="packages/agent-control-specification/">
+<img class="agt-card-icon" src="assets/icons/agent-os.svg" alt="">
+<span class="agt-card-body"><span class="agt-card-title">ACS policy decision layer</span>
+<span class="agt-card-desc">Intervention points, portable manifests, and fail-closed verdicts</span></span>
+</a>
 <a class="agt-card" data-pkg="compliance" href="packages/#python-toolkit">
 <img class="agt-card-icon" src="assets/icons/agent-compliance.svg" alt="">
 <span class="agt-card-body"><span class="agt-card-title">Python Toolkit</span>
@@ -167,11 +216,6 @@ Every layer is optional. Start with policy enforcement and audit logging, then a
 <span class="agt-card-body"><span class="agt-card-title">Protocol Governance</span>
 <span class="agt-card-desc">MCP, A2A, receipts, and trust protocol surfaces</span></span>
 </a>
-<a class="agt-card" data-pkg="acs" href="packages/agent-control-specification/">
-<img class="agt-card-icon" src="assets/icons/agent-os.svg" alt="">
-<span class="agt-card-body"><span class="agt-card-title">Agent Control Specification</span>
-<span class="agt-card-desc">Deterministic, fail-closed policy decisions</span></span>
-</a>
 </div>
 </div>
 
@@ -181,6 +225,7 @@ Every layer is optional. Start with policy enforcement and audit logging, then a
 
 | SDK | Install |
 |-----|---------|
+| [ACS host for Python](packages/agent-control-specification.md#how-agt-python-hosts-call-acs) | `pip install agt-policies` |
 | [Python](packages/index.md) | `pip install agent-governance-toolkit[full]` |
 | [TypeScript](tutorials/20-typescript-sdk.md) | `npm install @microsoft/agent-governance-sdk` |
 | [.NET](packages/dotnet-sdk.md) | `dotnet add package Microsoft.AgentGovernance` |
@@ -193,7 +238,11 @@ Every layer is optional. Start with policy enforcement and audit logging, then a
 
 ## Framework Integrations
 
-Wrap any callable with `govern()`, or install optional adapter extras for LangChain, CrewAI, OpenAI Agents, LangGraph, LlamaIndex, Haystack, PydanticAI, and Google ADK. See the [package guide](packages/index.md#framework-integrations).
+Application teams can wrap a callable with `govern()`. Hosts that need the
+canonical AGT 5 contract use `agt-policies` to build ACS snapshots and enforce
+verdicts at framework lifecycle hooks. Optional adapters cover LangChain,
+CrewAI, OpenAI Agents, LangGraph, LlamaIndex, Haystack, PydanticAI, and Google
+ADK. See the [package guide](packages/index.md#framework-integrations).
 
 </div>
 
@@ -203,6 +252,8 @@ Wrap any callable with `govern()`, or install optional adapter extras for LangCh
 
 | Example | Framework | What it demonstrates |
 |---------|-----------|---------------------|
+| [acs-email-tool](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool) | Framework-neutral ACS host | Snapshot, verdict, transform, deny, and host enforcement |
+| [acs-atr-annotator](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-atr-annotator) | ACS custom policy | Independent threat-rule annotations with fail-closed decisions |
 | [openai-agents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/openai-agents-governed) | OpenAI Agents SDK | Policy-gated tool calls with trust tiers |
 | [crewai-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/crewai-governed) | CrewAI | Multi-agent governance with role-based policies |
 | [smolagents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/smolagents-governed) | HuggingFace smolagents | Lightweight agent governance |

@@ -58,21 +58,17 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 
 ## Quick Start
 
-**Prerequisites:** Python 3.10+
+**Prerequisites:** Python 3.10+ for the convenience wrapper; Python 3.11+ for ACS
 
 ```bash
 pip install agent-governance-toolkit[full]
+pip install agt-policies
 ```
 
-Use the `[full]` extra for the quick-start imports below. The base
-`agent-governance-toolkit` wheel installs the compliance CLI only; the governance
-modules live in the consolidated core distribution. The `agentmesh` quick-start
-import remains the current wrapper API. The `agent_os` `PolicyEvaluator` example
-below is legacy compatibility: importing `agent_os` currently emits a
-`DeprecationWarning` because the old `agent-os-kernel` distribution is deprecated.
-Use `agent-governance-toolkit-core` (or the `[full]` extra that includes it) as
-the replacement distribution, and prefer the AGT 5 `agt-policies`/ACS APIs for
-new policy-engine host code.
+Use the `[full]` extra for the short application wrapper below. Use
+`agt-policies` for new hosts, adapters, gateways, and platform enforcement on
+ACS, the canonical AGT 5 policy decision layer. The current `govern()` wrapper
+does not call ACS, so the two paths remain explicit.
 
 For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
 
@@ -117,34 +113,31 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
   Destructive operations require human approval
 ```
 
-Or use the full `PolicyEvaluator` API for programmatic control:
+Use ACS when you need the portable intervention-point contract:
 
 <details>
-<summary><b>PolicyEvaluator example</b></summary>
+<summary><b>ACS host example</b></summary>
 
 ```python
-from agent_os.policies import (
-    PolicyEvaluator, PolicyDocument, PolicyRule,
-    PolicyCondition, PolicyAction, PolicyOperator, PolicyDefaults
+from agt.policies import SnapshotBuilder
+from agt.policies.runtime import AgtRuntime
+
+runtime = AgtRuntime("manifest.yaml")
+session = SnapshotBuilder(agent_id="researcher", session_id="session-1")
+
+result = runtime.evaluate_intervention_point(
+    "pre_tool_call",
+    session.pre_tool_call(
+        tool_name="send_email",
+        args={"to": "partner@example.net", "body": "Status update"},
+    ),
 )
 
-evaluator = PolicyEvaluator(policies=[PolicyDocument(
-    name="my-policy", version="1.0",
-    defaults=PolicyDefaults(action=PolicyAction.ALLOW),
-    rules=[PolicyRule(
-        name="block-dangerous-tools",
-        condition=PolicyCondition(
-            field="tool_name",
-            operator=PolicyOperator.IN,
-            value=["execute_code", "delete_file"]
-        ),
-        action=PolicyAction.DENY, priority=100,
-    )],
-)])
-
-result = evaluator.evaluate({"tool_name": "web_search"})    # Allowed
-result = evaluator.evaluate({"tool_name": "delete_file"})   # Blocked
+if not result.allowed:
+    raise PermissionError(result.reason)
 ```
+
+[Run the complete ACS email-tool example](examples/acs-email-tool).
 
 </details>
 
@@ -334,6 +327,8 @@ Full list: [Framework Integrations](agent-governance-python/agentmesh-integratio
 
 | Example | Framework | What it demonstrates |
 |---------|-----------|----------------------|
+| [acs-email-tool](examples/acs-email-tool) | Framework-neutral ACS host | Snapshot, verdict, transform, deny, and host enforcement |
+| [acs-atr-annotator](examples/acs-atr-annotator) | ACS custom policy | Independent threat-rule annotations with fail-closed decisions |
 | [openai-agents-governed](examples/openai-agents-governed) | OpenAI Agents SDK | Policy-gated tool calls with trust tiers |
 | [crewai-governed](examples/crewai-governed) | CrewAI | Multi-agent governance with role-based policies |
 | [smolagents-governed](examples/smolagents-governed) | HuggingFace smolagents | Lightweight agent governance |

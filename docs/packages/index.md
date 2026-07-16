@@ -1,6 +1,6 @@
 ---
 title: Packages
-last_reviewed: 2026-07-15
+last_reviewed: 2026-07-16
 owner: docs-team
 ---
 
@@ -18,10 +18,12 @@ toolkit unless you need one specific runtime surface or another language SDK.
 
 The meta-package is the recommended starting point. The `[full]` extra installs
 the core runtime, framework integrations, CLI tools, and protocol surfaces used
-throughout the documentation.
+throughout the convenience-wrapper documentation. Add `agt-policies` when
+building on the canonical AGT 5 ACS host API.
 
 ```bash
 pip install "agent-governance-toolkit[full]"
+pip install agt-policies
 ```
 
 Use a smaller extra when one framework is enough:
@@ -85,15 +87,17 @@ Source: `agent-governance-python/agent-governance-toolkit-protocols`
 
 ## Agent Control Specification
 
-Agent Control Specification, or ACS, is the stateless policy decision runtime.
-Use it when a host needs deterministic intervention-point verdicts without the
-full Python runtime.
+Agent Control Specification, or ACS, is the canonical stateless policy decision
+runtime. AGT hosts normally use `agt-policies`, which resolves manifests, builds
+snapshots, calls ACS, and maps verdicts into host-facing results.
 
 ```bash
-pip install agent-control-specification
+pip install agt-policies
 ```
 
-See the [ACS package guide](agent-control-specification.md).
+Advanced hosts that need the native SDK directly can install
+`agent-control-specification`. See the
+[ACS package guide](agent-control-specification.md).
 
 ## Language SDKs
 

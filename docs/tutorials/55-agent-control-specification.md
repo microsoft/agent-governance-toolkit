@@ -1,6 +1,6 @@
 ---
 title: Agent Control Specification Tutorial
-last_reviewed: 2026-06-02
+last_reviewed: 2026-07-16
 owner: docs-team
 ---
 
@@ -11,6 +11,13 @@ owner: docs-team
 ## What you will build
 
 This tutorial builds a small ACS policy enforcement point around an email tool. The host submits a complete snapshot to ACS before and after the tool call. ACS returns a verdict, and the host enforces it.
+
+!!! tip "Prefer a runnable repository example?"
+    Start with [`examples/acs-email-tool`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool).
+    It demonstrates the canonical AGT host path through `agt-policies`,
+    `SnapshotBuilder`, and `AgtRuntime` without requiring OPA. This tutorial
+    continues with the lower-level ACS SDK and a Rego policy so you can inspect
+    the native manifest and policy-input contract directly.
 
 You will create:
 
@@ -42,6 +49,14 @@ python -m pip install ./sdk/python
 ```
 
 The SDK distribution is named `agent-control-specification`. It builds the native Rust core with maturin when installed from source.
+
+For AGT host and adapter code, install `agt-policies` after the native SDK and
+use its `AgtRuntime` wrapper:
+
+```bash
+cd ..
+python -m pip install -e agent-governance-python/agt-policies
+```
 
 OPA-backed Rego examples require the `opa` CLI on `PATH`.
 
@@ -246,6 +261,8 @@ This is the core ACS safety model: malformed manifests, missing paths, policy di
 
 ## Next steps
 
+- Run the [framework-neutral AGT host example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool).
+- Inspect the [ACS plus ATR annotator example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-atr-annotator).
 - Read the [Agent Control Specification package page](../packages/agent-control-specification.md).
 - Compare Rego and Cedar in [OPA / Rego / Cedar Policies](08-opa-rego-cedar-policies.md).
 - Add human review with [Approval Workflows](38-approval-workflows.md).
