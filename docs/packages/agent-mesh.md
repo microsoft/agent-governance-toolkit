@@ -1,6 +1,6 @@
 ---
 title: "AgentMesh — Public Preview"
-last_reviewed: 2026-06-08
+last_reviewed: 2026-07-16
 owner: agt-maintainers
 ---
 
@@ -320,7 +320,7 @@ pip install -e .
 | [MCP Tool Server](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/01-mcp-tool-server) | Secure MCP server with governance | Rate limiting, output sanitization, audit logs |
 | [Multi-Agent Customer Service](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/02-customer-service) | Customer support automation | Trust handshakes, delegation, A2A |
 | [Healthcare HIPAA](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/03-healthcare-hipaa) | HIPAA-compliant data analysis | Compliance automation, PHI protection, audit logs |
-| [DevOps Automation](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/04-devops-automation) | Just-in-time DevOps credentials | Ephemeral creds, capability scoping |
+| [DevOps Automation](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/04-devops-automation) | Just-in-time DevOps credentials | Ephemeral credentials, capability scoping |
 | [GitHub PR Review](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/05-github-integration) | Code review agent | Output policies, trust decay. Shadow mode has been moved to Agent SRE. |
 
 **Framework integrations:**

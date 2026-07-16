@@ -1,6 +1,6 @@
 ---
 title: "Agent SRE"
-last_reviewed: 2026-06-08
+last_reviewed: 2026-07-16
 owner: agt-maintainers
 ---
 
@@ -561,7 +561,7 @@ Agent SRE tells you *if it was within budget* and *what to do about it*.
 | Example | Description | Command |
 |---|---|---|
 | [Quickstart](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/quickstart.py) | SLO + cost + incident in one script | `python examples/quickstart.py` |
-| [LangChain Monitor](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/langchain_monitor.py) | LangChain RAG agent with SLOs + evals | `python examples/langchain_monitor.py` |
+| [LangChain Monitor](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/langchain_monitor.py) | LangChain RAG agent with SLOs and evaluations | `python examples/langchain_monitor.py` |
 | [Cost Guard](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/cost_guard.py) | Budget enforcement with throttling | `python examples/cost_guard.py` |
 | [Canary Rollout](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/canary_rollout.py) | Preview + staged rollout with manual rollback | `python examples/canary_rollout.py` |
 | [Chaos Test](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/chaos_test.py) | Fault injection and fault impact scoring | `python examples/chaos_test.py` |

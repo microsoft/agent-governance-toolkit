@@ -938,4 +938,23 @@ traceid
 spanid
 parentspanid
 agtsignature
+
+# --- Documentation site and ACS integration terms ---
+AgentRateLimiter
+Bigspin
+Ecommerce
+externalidentity
+fnmatchcase
+Janssen
+KillSwitch
+MCPGateway
+MCPSecurityScanner
+Merchantlife
+PIICRI
+RateLimitMiddleware
+resourceid
+RingBreachDetector
+RingElevationManager
+SpendGuard
+Vercel
 agtsignaturealg
