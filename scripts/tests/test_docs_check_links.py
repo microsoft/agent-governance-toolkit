@@ -137,6 +137,25 @@ def test_escaped_backticks_do_not_hide_links(tmp_path):
     assert report.findings[0].target == "missing.md"
 
 
+def test_backslash_does_not_escape_code_span_closer(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        r"`[hidden](hidden.md)\` [visible](missing.md) `" + "\n",
+    )
+    report = check_links.check(tmp_path)
+    assert report.links_checked == 1
+    assert report.findings[0].target == "missing.md"
+
+
+def test_longer_backtick_run_does_not_close_shorter_code_span(tmp_path):
+    docs = tmp_path / "docs"
+    _write(docs / "a.md", "``[visible](missing.md)```\n")
+    report = check_links.check(tmp_path)
+    assert report.links_checked == 1
+    assert report.findings[0].target == "missing.md"
+
+
 def test_images_are_not_treated_as_links(tmp_path):
     docs = tmp_path / "docs"
     _write(docs / "a.md", "![alt](img.png)")

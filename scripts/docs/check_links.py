@@ -119,12 +119,7 @@ def _strip_inline_code_spans(text: str) -> str:
             while end < len(line) and line[end] == "`":
                 end += 1
             marker = line[index:end]
-            close = end
-            while True:
-                close = line.find(marker, close)
-                if close == -1 or not _is_escaped(line, close):
-                    break
-                close += len(marker)
+            close = _find_code_span_close(line, marker, end)
             if close == -1:
                 index = end
                 continue
@@ -132,6 +127,19 @@ def _strip_inline_code_spans(text: str) -> str:
             index = close + len(marker)
         out.append("".join(chars))
     return "\n".join(out)
+
+
+def _find_code_span_close(line: str, marker: str, start: int) -> int:
+    """Find an exact-length closing backtick run for an inline code span."""
+    close = line.find(marker, start)
+    while close != -1:
+        before_is_backtick = close > 0 and line[close - 1] == "`"
+        after = close + len(marker)
+        after_is_backtick = after < len(line) and line[after] == "`"
+        if not before_is_backtick and not after_is_backtick:
+            return close
+        close = line.find(marker, close + 1)
+    return -1
 
 
 def _slugify_heading(text: str) -> str:
