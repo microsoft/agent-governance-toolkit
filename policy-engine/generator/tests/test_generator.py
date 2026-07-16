@@ -562,6 +562,26 @@ tools:
     assert report.diagnostics[0].code == "manifest_expansion_exceeded"
 
 
+def test_string_validation_api_bounds_alias_expanded_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("acs_generator.validation.MAX_MANIFEST_EXPANDED_BYTES", 256)
+    payload = "x" * 100
+
+    report = validate_acs_artifacts(
+        f"""
+agent_control_specification_version: "0.3.1-beta"
+metadata: &shared
+  payload: "{payload}"
+extends: [*shared, *shared, *shared]
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_expansion_exceeded"
+
+
 def test_string_validation_api_bounds_yaml_source_nodes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

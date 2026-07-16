@@ -31,6 +31,7 @@ APPROVAL_SCHEMA_NAME = "approval.schema.json"
 VALIDATION_DIR_NAME = ".acs_generator_validation"
 MAX_MANIFEST_BYTES = 1_048_576
 MAX_MANIFEST_DEPTH = 64
+MAX_MANIFEST_EXPANDED_BYTES = 4_194_304
 MAX_MANIFEST_EXPANDED_NODES = 1_000_000
 MAX_MANIFEST_SOURCE_NODES = 100_000
 MAX_REGO_BYTES = 1_048_576
@@ -409,6 +410,7 @@ def _validate_manifest_instance(manifest: dict[str, Any]) -> ValidationDiagnosti
 @dataclass(frozen=True)
 class _JsonProfile:
     height: int
+    expanded_bytes: int
     expanded_nodes: int
 
 
@@ -423,10 +425,18 @@ def _profile_json_value(
     if depth > MAX_MANIFEST_DEPTH:
         return _manifest_depth_diagnostic(path), None
     if value is None or isinstance(value, (bool, int)):
-        return None, _JsonProfile(height=0, expanded_nodes=1)
+        return None, _JsonProfile(
+            height=0,
+            expanded_bytes=len(json.dumps(value).encode("utf-8")),
+            expanded_nodes=1,
+        )
     if isinstance(value, float):
         if math.isfinite(value):
-            return None, _JsonProfile(height=0, expanded_nodes=1)
+            return None, _JsonProfile(
+                height=0,
+                expanded_bytes=len(json.dumps(value).encode("utf-8")),
+                expanded_nodes=1,
+            )
         return (
             ValidationDiagnostic(
                 component="manifest",
@@ -451,7 +461,11 @@ def _profile_json_value(
                 ),
                 None,
             )
-        return None, _JsonProfile(height=0, expanded_nodes=1)
+        return None, _JsonProfile(
+            height=0,
+            expanded_bytes=len(json.dumps(value, ensure_ascii=False).encode("utf-8")),
+            expanded_nodes=1,
+        )
     if isinstance(value, dict):
         identity = id(value)
         if identity in active:
@@ -473,6 +487,7 @@ def _profile_json_value(
         active.add(identity)
         try:
             height = 1
+            expanded_bytes = 2
             expanded_nodes = 1
             for key, child in value.items():
                 if not isinstance(key, str):
@@ -509,10 +524,22 @@ def _profile_json_value(
                 if child_diagnostic is not None or child_profile is None:
                     return child_diagnostic, None
                 height = max(height, 1 + child_profile.height)
+                expanded_bytes += (
+                    len(json.dumps(key, ensure_ascii=False).encode("utf-8"))
+                    + child_profile.expanded_bytes
+                    + 2
+                )
                 expanded_nodes += 1 + child_profile.expanded_nodes
-                if expanded_nodes > MAX_MANIFEST_EXPANDED_NODES:
+                if (
+                    expanded_bytes > MAX_MANIFEST_EXPANDED_BYTES
+                    or expanded_nodes > MAX_MANIFEST_EXPANDED_NODES
+                ):
                     return _manifest_expansion_diagnostic(path), None
-            profile = _JsonProfile(height=height, expanded_nodes=expanded_nodes)
+            profile = _JsonProfile(
+                height=height,
+                expanded_bytes=expanded_bytes,
+                expanded_nodes=expanded_nodes,
+            )
             if depth + profile.height > MAX_MANIFEST_DEPTH:
                 return _manifest_depth_diagnostic(path), None
             profiles[identity] = profile
@@ -540,6 +567,7 @@ def _profile_json_value(
         active.add(identity)
         try:
             height = 1
+            expanded_bytes = 2
             expanded_nodes = 1
             for index, child in enumerate(value):
                 child_diagnostic, child_profile = _profile_json_value(
@@ -552,10 +580,18 @@ def _profile_json_value(
                 if child_diagnostic is not None or child_profile is None:
                     return child_diagnostic, None
                 height = max(height, 1 + child_profile.height)
+                expanded_bytes += child_profile.expanded_bytes + 1
                 expanded_nodes += child_profile.expanded_nodes
-                if expanded_nodes > MAX_MANIFEST_EXPANDED_NODES:
+                if (
+                    expanded_bytes > MAX_MANIFEST_EXPANDED_BYTES
+                    or expanded_nodes > MAX_MANIFEST_EXPANDED_NODES
+                ):
                     return _manifest_expansion_diagnostic(path), None
-            profile = _JsonProfile(height=height, expanded_nodes=expanded_nodes)
+            profile = _JsonProfile(
+                height=height,
+                expanded_bytes=expanded_bytes,
+                expanded_nodes=expanded_nodes,
+            )
             if depth + profile.height > MAX_MANIFEST_DEPTH:
                 return _manifest_depth_diagnostic(path), None
             profiles[identity] = profile
@@ -592,8 +628,8 @@ def _manifest_expansion_diagnostic(path: str) -> ValidationDiagnostic:
         component="manifest",
         code="manifest_expansion_exceeded",
         message=(
-            "Manifest YAML aliases expand beyond the "
-            f"{MAX_MANIFEST_EXPANDED_NODES}-node validation limit."
+            "Manifest YAML aliases expand beyond the validation limit of "
+            f"{MAX_MANIFEST_EXPANDED_BYTES} bytes or {MAX_MANIFEST_EXPANDED_NODES} nodes."
         ),
         source="manifest",
         path=path,
