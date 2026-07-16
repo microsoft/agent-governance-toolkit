@@ -4,17 +4,29 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "site/**"
-      - "mkdocs.yml"
+    paths:
+      - "agent-governance-python/agent-governance-toolkit-core/**"
+      - "agent-governance-python/agent-os/**"
+      - "tests/e2e_python/**"
+      - ".github/actions/**"
+      - ".github/workflows/**"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/*.md"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/docs/**"
+      - "!agent-governance-python/agent-os/**/*.md"
+      - "!agent-governance-python/agent-os/**/docs/**"
+      - "!tests/e2e_python/**/*.md"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "site/**"
-      - "mkdocs.yml"
+    paths:
+      - "agent-governance-python/agent-governance-toolkit-core/**"
+      - "agent-governance-python/agent-os/**"
+      - "tests/e2e_python/**"
+      - ".github/actions/**"
+      - ".github/workflows/**"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/*.md"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/docs/**"
+      - "!agent-governance-python/agent-os/**/*.md"
+      - "!agent-governance-python/agent-os/**/docs/**"
+      - "!tests/e2e_python/**/*.md"
   workflow_dispatch: {}
 
 concurrency:
