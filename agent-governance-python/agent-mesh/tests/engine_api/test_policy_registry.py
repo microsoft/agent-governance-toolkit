@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -173,6 +174,19 @@ class TestSave:
         reg = PolicyRegistry(tmp_path)
         with pytest.raises(ValueError, match="Invalid policy id"):
             reg.save(bad_id, _YAML_POLICY, "yaml")
+
+    @pytest.mark.parametrize("escaping", ["../evil.yaml", "../../evil.yaml", "sub/../../evil"])
+    def test_contained_path_rejects_escape(self, tmp_path, escaping):
+        # Defense in depth: even if a filename with separators reached the primitive, the
+        # realpath + prefix barrier rejects anything resolving outside the policy directory.
+        base = os.path.realpath(tmp_path)
+        with pytest.raises(ValueError, match="outside the policy directory"):
+            PolicyRegistry._contained_path(base, escaping)
+
+    def test_contained_path_accepts_child(self, tmp_path):
+        base = os.path.realpath(tmp_path)
+        resolved = PolicyRegistry._contained_path(base, "alpha.yaml")
+        assert resolved == os.path.join(base, "alpha.yaml")
 
     def test_save_removes_cross_format_sibling(self, tmp_path):
         reg = PolicyRegistry(tmp_path)

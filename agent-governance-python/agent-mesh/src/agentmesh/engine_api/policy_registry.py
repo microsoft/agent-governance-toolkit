@@ -185,6 +185,23 @@ class PolicyRegistry:
         record = self._records.get(policy_id)
         return record.to_detail() if record is not None else None
 
+    @staticmethod
+    def _contained_path(base: str, filename: str) -> str:
+        """Resolve ``base/filename`` and guarantee it stays within ``base``.
+
+        ``base`` must already be an :func:`os.path.realpath`. The candidate is resolved the
+        same way and then checked with a normalized ``startswith`` prefix barrier. That
+        realpath-plus-prefix form is the shape CodeQL's ``py/path-injection`` query models as
+        a sanitizer, so the returned string is safe to hand to a filesystem sink. Raises
+        :class:`ValueError` when the resolved path escapes ``base``.
+        """
+        resolved = os.path.realpath(os.path.join(base, filename))
+        if not resolved.startswith(base.rstrip(os.sep) + os.sep):
+            raise ValueError(
+                f"Invalid policy id: '{filename}' resolves outside the policy directory"
+            )
+        return resolved
+
     def save(self, policy_id: str, content: str, fmt: str) -> str:
         """Persist a policy file, re-scan, and return an opaque version token.
 
@@ -199,32 +216,29 @@ class PolicyRegistry:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", policy_id):
             raise ValueError(f"Invalid policy id '{policy_id}'")
 
-        safe_policy_id = policy_id
         suffix = ".yaml" if fmt == "yaml" else ".json"
         with self._lock:
             self._policy_dir.mkdir(parents=True, exist_ok=True)
-            target = self._policy_dir / f"{safe_policy_id}{suffix}"
-            # Defense in depth: the HTTP layer validates ``policy_id`` against a strict
-            # pattern, but guard the primitive too so a future caller cannot escape the
-            # policy directory via separators or ``..`` segments.
-            if target.resolve().parent != self._policy_dir.resolve():
-                raise ValueError(
-                    f"Invalid policy id '{policy_id}': resolves outside the policy directory"
-                )
+            # Resolve the policy root once; every path built below is validated to stay
+            # within it via the realpath + prefix barrier in ``_contained_path`` (defense in
+            # depth beyond the strict id pattern above, and the form CodeQL recognizes as the
+            # sanitizer for these path sinks).
+            base = os.path.realpath(self._policy_dir)
+            target = self._contained_path(base, f"{policy_id}{suffix}")
             # One file per id: drop any sibling stored in another recognized format so saving
             # ``alpha`` as JSON does not leave a stale ``alpha.yaml`` that silently shadows it
             # on the next reload (sorted ``iterdir`` order is otherwise the only tiebreaker).
             for other_suffix in (*_YAML_SUFFIXES, *_JSON_SUFFIXES):
-                sibling = self._policy_dir / f"{safe_policy_id}{other_suffix}"
-                if sibling != target and sibling.exists():
+                sibling = self._contained_path(base, f"{policy_id}{other_suffix}")
+                if sibling != target and os.path.exists(sibling):
                     with contextlib.suppress(OSError):
-                        sibling.unlink()
+                        os.unlink(sibling)
             # Atomic write: write to a temp file in the same directory, then ``os.replace``,
             # so a crash or signal mid-write can never leave a partially written policy file.
             # The temp name carries a ``.tmp`` suffix so a concurrent reload scan skips it.
-            # Use a constant prefix to avoid any user-controlled data in temp path generation.
+            # The prefix is a constant (no user-controlled data in temp path generation).
             fd, tmp_path = tempfile.mkstemp(
-                dir=self._policy_dir, prefix=".policy-write.", suffix=f"{suffix}.tmp"
+                dir=base, prefix=".policy-write.", suffix=f"{suffix}.tmp"
             )
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
