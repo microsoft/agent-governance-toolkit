@@ -25,6 +25,8 @@ export {
 } from './metrics';
 export { McpSecurityScanner, McpThreatType } from './mcp';
 export type { McpScanResult, McpThreat, McpToolDefinition } from './mcp';
+export { McpRuntimeValidator, McpCallThreatType } from './mcp-runtime-validator';
+export type { McpCallValidationResult, McpCallThreat, McpToolCall, McpRuntimeValidatorConfig } from './mcp-runtime-validator';
 export { LifecycleManager, LifecycleState } from './lifecycle';
 export type { LifecycleEvent } from './lifecycle';
 export { ShadowDiscovery } from './discovery';
