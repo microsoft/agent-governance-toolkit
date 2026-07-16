@@ -15,6 +15,9 @@ from acs_generator.llm import OpenAICompatibleLanguageModel
 from acs_generator.validation import validate_artifacts
 
 BASE_OUT = Path("generator/.test-output")
+MINIMAL_MANIFEST = """agent_control_specification_version: "0.3.1-beta"
+metadata: {}
+"""
 
 
 def valid_plan() -> dict:
@@ -412,7 +415,7 @@ helper(left, right) := left
 def test_string_validation_api_rejects_duplicate_manifest_keys() -> None:
     report = validate_acs_artifacts(
         """
-agent_control_specification_version: "0.3.0"
+agent_control_specification_version: "0.3.0-alpha"
 agent_control_specification_version: "0.3.1-beta"
 metadata: {}
 """,
@@ -525,7 +528,7 @@ metadata:
 
 def test_string_validation_api_rechecks_aliases_at_deeper_paths() -> None:
     lines = [
-        'agent_control_specification_version: "0.3.1-beta"',
+        MINIMAL_MANIFEST.splitlines()[0],
         "metadata:",
         "  leaf: &leaf",
         "    child: ok",
@@ -621,7 +624,7 @@ def test_string_validation_api_returns_diagnostics_for_hostile_text() -> None:
     nested = '{"metadata":{"value":' + "[" * 600 + "]" * 600 + "}}"
     manifest_report = validate_acs_artifacts(nested, {})
     rego_report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         json.loads('"package invalid\\n\\ud800"'),
     )
 
@@ -641,7 +644,6 @@ metadata:
         {},
     )
     assert not report.valid
-    assert not report.valid
     assert report.diagnostics[0].code == "manifest_parse_error"
 
 
@@ -656,7 +658,7 @@ def test_string_validation_api_bounds_diagnostics_and_snippets() -> None:
         {},
     )
     rego_report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         "package invalid\nallow if { " + "x" * 10_000 + " := }\n",
     )
 
@@ -688,7 +690,7 @@ intervention_points:
 
 def test_string_validation_api_rejects_non_opa_executable() -> None:
     report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         "package invalid",
         opa_path="/bin/true",
     )
@@ -699,7 +701,7 @@ def test_string_validation_api_rejects_non_opa_executable() -> None:
 
 def test_string_validation_api_bounds_module_dictionary() -> None:
     report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         {f"policy-{index}.rego": "package valid" for index in range(65)},
     )
 
@@ -712,7 +714,7 @@ def test_string_validation_api_rejects_custom_dictionary() -> None:
         pass
 
     report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         CustomDictionary(),
     )
 
@@ -726,7 +728,7 @@ def test_string_validation_api_counts_empty_rego_toward_size_limit(
     monkeypatch.setattr("acs_generator.validation.MAX_REGO_BYTES", 8)
 
     report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         " " * 9,
     )
 
@@ -740,17 +742,17 @@ def test_string_validation_api_counts_empty_rego_toward_size_limit(
         (123, {}, "manifest_input_invalid"),
         ("[]", {}, "manifest_root_invalid"),
         (
-            'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+            MINIMAL_MANIFEST,
             {1: "package invalid"},
             "rego_source_invalid",
         ),
         (
-            'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+            MINIMAL_MANIFEST,
             {"invalid.rego": 1},
             "rego_input_invalid",
         ),
         (
-            'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+            MINIMAL_MANIFEST,
             "",
             "rego_empty",
         ),
@@ -778,7 +780,7 @@ def test_string_validation_api_bounds_opa_timeout(
     monkeypatch.setattr("acs_generator.validation.subprocess.run", run)
 
     report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         "package invalid",
         opa_path="opa",
     )
@@ -798,7 +800,7 @@ def test_string_validation_api_handles_unstructured_opa_error(
     monkeypatch.setattr("acs_generator.validation.subprocess.run", run)
 
     report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         "package invalid",
         opa_path="opa",
     )
@@ -817,7 +819,7 @@ def test_string_validation_api_handles_staging_error(
     )
 
     report = validate_acs_artifacts(
-        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        MINIMAL_MANIFEST,
         "package invalid",
     )
 

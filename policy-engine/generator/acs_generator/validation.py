@@ -211,6 +211,7 @@ _ManifestLoader.add_constructor(_YAML_FLOAT_TAG, _construct_yaml_float)
 _ManifestLoader.add_constructor(_YAML_INT_TAG, _construct_yaml_int)
 _ManifestLoader.add_constructor(_YAML_NULL_TAG, _construct_yaml_null)
 _ManifestLoader.add_constructor(_YAML_TIMESTAMP_TAG, _reject_yaml_timestamp)
+# cspell:ignore omap unhashable
 for _tag in (
     "tag:yaml.org,2002:binary",
     "tag:yaml.org,2002:omap",
