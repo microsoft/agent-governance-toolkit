@@ -582,6 +582,22 @@ extends: [*shared, *shared, *shared]
     assert report.diagnostics[0].code == "manifest_expansion_exceeded"
 
 
+def test_string_validation_api_allows_expansion_at_byte_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("acs_generator.validation.MAX_MANIFEST_EXPANDED_BYTES", 57)
+
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "v"
+metadata: {}
+""",
+        {},
+    )
+
+    assert report.valid
+
+
 def test_string_validation_api_bounds_yaml_source_nodes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

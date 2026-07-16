@@ -489,7 +489,7 @@ def _profile_json_value(
             height = 1
             expanded_bytes = 2
             expanded_nodes = 1
-            for key, child in value.items():
+            for index, (key, child) in enumerate(value.items()):
                 if not isinstance(key, str):
                     return (
                         ValidationDiagnostic(
@@ -527,7 +527,8 @@ def _profile_json_value(
                 expanded_bytes += (
                     len(json.dumps(key, ensure_ascii=False).encode("utf-8"))
                     + child_profile.expanded_bytes
-                    + 2
+                    + 1
+                    + (1 if index else 0)
                 )
                 expanded_nodes += 1 + child_profile.expanded_nodes
                 if (
@@ -580,7 +581,7 @@ def _profile_json_value(
                 if child_diagnostic is not None or child_profile is None:
                     return child_diagnostic, None
                 height = max(height, 1 + child_profile.height)
-                expanded_bytes += child_profile.expanded_bytes + 1
+                expanded_bytes += child_profile.expanded_bytes + (1 if index else 0)
                 expanded_nodes += child_profile.expanded_nodes
                 if (
                     expanded_bytes > MAX_MANIFEST_EXPANDED_BYTES
