@@ -1,6 +1,6 @@
 ---
 title: "OpenAI Swarm — Trust-Verified Handoffs"
-last_reviewed: 2026-03-15
+last_reviewed: 2026-07-16
 owner: agt-maintainers
 ---
 
@@ -85,4 +85,4 @@ swarm/contrib/agentmesh/
 
 - [OpenAI Swarm](https://github.com/openai/swarm)
 - [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit)
-- [CMVK Model](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/cmvk.md)
+- [CMVK Model](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/modules/cmvk/README.md)

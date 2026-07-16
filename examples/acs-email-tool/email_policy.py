@@ -22,7 +22,7 @@ class EmailPolicy:
         recipient = args["to"]
         body = args["body"]
 
-        if recipient.endswith("@example.net"):
+        if recipient.lower().endswith("@example.net"):
             return {
                 "decision": "deny",
                 "reason": "external_recipient_blocked",

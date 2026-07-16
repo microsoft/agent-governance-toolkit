@@ -58,7 +58,7 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 
 ## Quick Start
 
-**Prerequisites:** Python 3.10+ for the convenience wrapper; Python 3.11+ for ACS
+**Prerequisites:** Python 3.11+
 
 ```bash
 pip install agent-governance-toolkit[full]

@@ -50,6 +50,14 @@ def test_policy_denies_external_recipient() -> None:
     assert verdict["reason"] == "external_recipient_blocked"
 
 
+def test_policy_denies_case_insensitive_external_domain() -> None:
+    verdict = EmailPolicy().evaluate(
+        _invocation({"to": "partner@EXAMPLE.NET", "body": "Status update"})
+    )
+    assert verdict["decision"] == "deny"
+    assert verdict["reason"] == "external_recipient_blocked"
+
+
 def test_native_runtime_applies_transform_and_deny() -> None:
     pytest.importorskip("agent_control_specification")
     pytest.importorskip("agt.policies")

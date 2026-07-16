@@ -130,8 +130,9 @@ The Python SDK distribution is named `agent-control-specification` in `policy-en
 ## Trusted by partners
 
 !!! note "Historical name"
-    AgentShield was the former name of ACS. The Bigspin quotation below
-    predates the rename and refers to the same policy decision layer.
+    AgentShield in the Bigspin quotation was the former name used for ACS.
+    It is unrelated to the separate Microsoft Agent Shield integration exposed
+    through `agent_os.integrations.agentshield_adapter`.
 
 <!--
   Replace the placeholder logos, quotes, and attributions below with real,

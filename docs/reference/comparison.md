@@ -1,6 +1,6 @@
 ---
 title: "Competitive Comparison: Agent Governance Toolkit vs. Alternatives"
-last_reviewed: 2026-05-25
+last_reviewed: 2026-07-16
 owner: agt-maintainers
 ---
 
@@ -177,4 +177,4 @@ For production agentic systems, you likely need the Agent Governance Toolkit **p
 
 ---
 
-*See also: [OWASP Compliance Mapping](../compliance/owasp-agentic-top10-architecture.md) · [Architecture Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md#architecture) · [Quick Start](../quickstart.md)*
+*See also: [OWASP Compliance Mapping](../compliance/owasp-agentic-top10-architecture.md) · [Architecture Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md#how-it-works) · [Quick Start](../quickstart.md)*
