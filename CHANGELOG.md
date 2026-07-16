@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **ACS artifact validation API** - added `validate_acs_artifacts` to the independently versioned `acs-generator` package for bounded manifest schema checks and OPA Rego parsing with structured diagnostics.
+- **ACS artifact validation API** - added native `parse_manifest` and `validate_manifest` Python SDK functions backed by the Rust runtime parser, plus `validate_acs_artifacts` in `acs-generator` for canonical schema checks and OPA Rego parsing with structured diagnostics.
 
 ## [5.0.0] - 2026-06-25
 

@@ -29,7 +29,14 @@ from ._adapters import (
     mcp_approval_resolver,
     run_model_call,
 )
-from ._client import AnnotatorDispatcher, NativeRuntimeClient, PolicyDispatcher, RuntimeClient
+from ._client import (
+    AnnotatorDispatcher,
+    NativeRuntimeClient,
+    PolicyDispatcher,
+    RuntimeClient,
+    parse_manifest,
+    validate_manifest,
+)
 from ._orchestration import AgentControl
 from ._telemetry import (
     DEFAULT_OTEL_METER_NAME,
@@ -95,6 +102,8 @@ __all__ = [
     "OtelMetricsTelemetrySink",
     "PerfTelemetry",
     "PolicyDispatcher",
+    "parse_manifest",
+    "validate_manifest",
     "RunResult",
     "RuntimeClient",
     "TelemetryEvent",

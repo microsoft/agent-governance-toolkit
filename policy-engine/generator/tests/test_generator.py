@@ -15,9 +15,19 @@ from acs_generator.llm import OpenAICompatibleLanguageModel
 from acs_generator.validation import validate_artifacts
 
 BASE_OUT = Path("generator/.test-output")
-MINIMAL_MANIFEST = """agent_control_specification_version: "0.3.1-beta"
-metadata: {}
+MANIFEST_HEADER = """agent_control_specification_version: "0.3.1-beta"
 """
+MINIMAL_POLICY = """policies:
+  minimal:
+    type: custom
+    adapter: test
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy:
+      id: minimal
+"""
+MINIMAL_MANIFEST = MANIFEST_HEADER + "metadata: {}\n" + MINIMAL_POLICY
 
 
 def valid_plan() -> dict:
@@ -386,11 +396,7 @@ allow if { value := }
 
 def test_string_validation_api_parses_rego_modules_independently() -> None:
     report = validate_acs_artifacts(
-        """
-agent_control_specification_version: "0.3.1-beta"
-metadata:
-  name: validation-api
-""",
+        MINIMAL_MANIFEST,
         {
             "one.rego": """
 package acs.guard
@@ -424,7 +430,7 @@ metadata: {}
 
     assert not report.valid
     assert report.diagnostics[0].code == "manifest_parse_error"
-    assert "duplicate key" in report.diagnostics[0].message
+    assert "duplicate manifest mapping key" in report.diagnostics[0].message
 
 
 def test_string_validation_api_uses_yaml_12_boolean_keys() -> None:
@@ -449,41 +455,44 @@ intervention_points:
 
 def test_string_validation_api_does_not_coerce_mixed_case_boolean() -> None:
     report = validate_acs_artifacts(
-        """
-agent_control_specification_version: tRuE
-metadata: {}
-""",
+        MINIMAL_MANIFEST.replace("metadata: {}", "metadata:\n  value: tRuE"),
         {},
     )
 
     assert report.valid
 
 
-def test_string_validation_api_rejects_yaml_merge_keys() -> None:
+def test_string_validation_api_uses_runtime_merge_key_semantics() -> None:
     report = validate_acs_artifacts(
-        """
-agent_control_specification_version: "0.3.1-beta"
-metadata:
+        MINIMAL_MANIFEST.replace(
+            "metadata: {}",
+            """metadata:
   base: &base
     name: base
   child:
-    <<: *base
-""",
+    <<: *base""",
+        ),
+        {},
+    )
+
+    assert report.valid
+
+
+def test_string_validation_api_rejects_non_string_mapping_keys() -> None:
+    report = validate_acs_artifacts(
+        MINIMAL_MANIFEST.replace("metadata: {}", "metadata:\n  1: value"),
         {},
     )
 
     assert not report.valid
     assert report.diagnostics[0].code == "manifest_parse_error"
-    assert "merge keys are not supported" in report.diagnostics[0].message
 
 
 @pytest.mark.parametrize("value", ["010", "1_000", "1:2:3"])
 def test_string_validation_api_does_not_apply_yaml_11_numbers(value: str) -> None:
     report = validate_acs_artifacts(
-        f"""
-agent_control_specification_version: "0.3.1-beta"
-metadata: {{}}
-approval:
+        MINIMAL_MANIFEST
+        + f"""approval:
   timeout_seconds: {value}
 """,
         {},
@@ -494,12 +503,10 @@ approval:
 
 
 @pytest.mark.parametrize("value", ["0b1010", "0o12", "0xA"])
-def test_string_validation_api_accepts_yaml_12_prefixed_integer(value: str) -> None:
+def test_string_validation_api_accepts_runtime_prefixed_integer(value: str) -> None:
     report = validate_acs_artifacts(
-        f"""
-agent_control_specification_version: "0.3.1-beta"
-metadata: {{}}
-approval:
+        MINIMAL_MANIFEST
+        + f"""approval:
   timeout_seconds: {value}
 """,
         {},
@@ -508,27 +515,9 @@ approval:
     assert report.valid
 
 
-@pytest.mark.parametrize(
-    "value",
-    ["!!bool nope", "!!int 010", "!!null nope", "!!timestamp not-a-date"],
-)
-def test_string_validation_api_rejects_invalid_explicit_tags(value: str) -> None:
-    report = validate_acs_artifacts(
-        f"""
-agent_control_specification_version: "0.3.1-beta"
-metadata:
-  value: {value}
-""",
-        {},
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].code == "manifest_parse_error"
-
-
 def test_string_validation_api_rechecks_aliases_at_deeper_paths() -> None:
     lines = [
-        MINIMAL_MANIFEST.splitlines()[0],
+        MANIFEST_HEADER.rstrip(),
         "metadata:",
         "  leaf: &leaf",
         "    child: ok",
@@ -539,11 +528,12 @@ def test_string_validation_api_rechecks_aliases_at_deeper_paths() -> None:
         lines.append(f"{indent}n{index}:")
         indent += "  "
     lines.append(f"{indent}*leaf")
+    lines.append(MINIMAL_POLICY)
 
     report = validate_acs_artifacts("\n".join(lines) + "\n", {})
 
     assert not report.valid
-    assert report.diagnostics[0].code == "manifest_depth_exceeded"
+    assert report.diagnostics[0].code == "manifest_resource_limit"
 
 
 def test_string_validation_api_bounds_alias_expansion() -> None:
@@ -551,73 +541,20 @@ def test_string_validation_api_bounds_alias_expansion() -> None:
     tools = "\n".join(
         f"  tool-{index}: {{security_labels: *labels}}" for index in range(1500)
     )
-    manifest = f"""
-agent_control_specification_version: "0.3.1-beta"
-metadata:
+    manifest = (
+        MANIFEST_HEADER
+        + f"""metadata:
   labels: &labels [{labels}]
 tools:
 {tools}
 """
+        + MINIMAL_POLICY
+    )
 
     report = validate_acs_artifacts(manifest, {})
 
     assert not report.valid
-    assert report.diagnostics[0].code == "manifest_expansion_exceeded"
-
-
-def test_string_validation_api_bounds_alias_expanded_bytes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("acs_generator.validation.MAX_MANIFEST_EXPANDED_BYTES", 256)
-    payload = "x" * 100
-
-    report = validate_acs_artifacts(
-        f"""
-agent_control_specification_version: "0.3.1-beta"
-metadata: &shared
-  payload: "{payload}"
-extends: [*shared, *shared, *shared]
-""",
-        {},
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].code == "manifest_expansion_exceeded"
-
-
-def test_string_validation_api_allows_expansion_at_byte_limit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("acs_generator.validation.MAX_MANIFEST_EXPANDED_BYTES", 57)
-
-    report = validate_acs_artifacts(
-        """
-agent_control_specification_version: "v"
-metadata: {}
-""",
-        {},
-    )
-
-    assert report.valid
-
-
-def test_string_validation_api_bounds_yaml_source_nodes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("acs_generator.validation.MAX_MANIFEST_SOURCE_NODES", 8)
-
-    report = validate_acs_artifacts(
-        """
-agent_control_specification_version: "0.3.1-beta"
-metadata:
-  values: [one, two, three, four, five]
-""",
-        {},
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].code == "manifest_parse_error"
-    assert "manifest source exceeds" in report.diagnostics[0].message
+    assert report.diagnostics[0].code == "manifest_resource_limit"
 
 
 def test_string_validation_api_returns_diagnostics_for_hostile_text() -> None:
@@ -629,36 +566,12 @@ def test_string_validation_api_returns_diagnostics_for_hostile_text() -> None:
     )
 
     assert not manifest_report.valid
-    assert manifest_report.diagnostics[0].code == "manifest_parse_error"
+    assert manifest_report.diagnostics[0].code in {
+        "manifest_parse_error",
+        "manifest_resource_limit",
+    }
     assert not rego_report.valid
     assert rego_report.diagnostics[0].code == "rego_encoding_error"
-
-
-def test_string_validation_api_rejects_non_json_yaml_values() -> None:
-    report = validate_acs_artifacts(
-        """
-agent_control_specification_version: "0.3.1-beta"
-metadata:
-  payload: !!binary SGVsbG8=
-""",
-        {},
-    )
-    assert not report.valid
-    assert report.diagnostics[0].code == "manifest_parse_error"
-
-
-def test_string_validation_api_rejects_unserializable_large_integer() -> None:
-    report = validate_acs_artifacts(
-        f"""
-agent_control_specification_version: "0.3.1-beta"
-metadata:
-  value: 0x{"f" * 5000}
-""",
-        {},
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].code == "manifest_value_invalid"
 
 
 def test_string_validation_api_bounds_diagnostics_and_snippets() -> None:
@@ -700,7 +613,6 @@ intervention_points:
 
     assert not report.valid
     assert [diagnostic.code for diagnostic in report.diagnostics] == ["rego_missing"]
-
 
 def test_string_validation_api_rejects_non_opa_executable() -> None:
     report = validate_acs_artifacts(
@@ -921,17 +833,26 @@ approval:
     assert "minimum of 1" in diagnostic.message
 
 
+def test_string_validation_api_accepts_partial_extends_manifest() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+extends:
+  - base.yaml
+""",
+        {},
+    )
+
+    assert report.valid
+
+
 def test_string_validation_api_requires_opa_for_rego(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("acs_generator.validation.shutil.which", lambda name: None)
 
     report = validate_acs_artifacts(
-        """
-agent_control_specification_version: "0.3.1-beta"
-metadata:
-  name: validation-api
-""",
+        MINIMAL_MANIFEST,
         "package acs.guard",
     )
 

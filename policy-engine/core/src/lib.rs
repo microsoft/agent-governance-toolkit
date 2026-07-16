@@ -50,8 +50,8 @@ pub use error::RuntimeError;
 pub use intervention_point::{EnforcementMode, InterventionPoint};
 pub use limits::Limits;
 pub use manifest::{
-    ApprovalOnTimeout, ApprovalResolverConfig, ApprovalSection, InterventionPointConfig, Manifest,
-    ToolConfig,
+    parse_manifest_yaml_value, validate_manifest_yaml, ApprovalOnTimeout, ApprovalResolverConfig,
+    ApprovalSection, InterventionPointConfig, Manifest, ToolConfig,
 };
 #[cfg(feature = "opa")]
 pub use opa::{OpaPolicyDispatcher, OpaRegoRunner};

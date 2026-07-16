@@ -1,7 +1,8 @@
 use agent_control_specification_core::{
-    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, InterventionPointResult, JsonValue, Manifest, PerfTelemetry,
-    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
+    parse_manifest_yaml_value, validate_manifest_yaml, AnnotatorDispatcher, AnnotatorInvocation,
+    Decision, EnforcementMode, InterventionPoint, InterventionPointRequest,
+    InterventionPointResult, JsonValue, Manifest, PerfTelemetry, PolicyDispatcher,
+    PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -75,6 +76,18 @@ fn py_to_json_value(obj: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
 
 fn runtime_error(error: RuntimeError) -> PyErr {
     PyRuntimeError::new_err(error.to_string())
+}
+
+// cspell:ignore pyfunction
+#[pyfunction]
+fn parse_manifest(py: Python<'_>, manifest: &str) -> PyResult<Py<PyAny>> {
+    let value = parse_manifest_yaml_value(manifest).map_err(runtime_error)?;
+    json_value_to_py(py, &value)
+}
+
+#[pyfunction]
+fn validate_manifest(manifest: &str) -> PyResult<()> {
+    validate_manifest_yaml(manifest).map_err(runtime_error)
 }
 
 fn annotation_error(error: PyErr) -> RuntimeError {
@@ -388,5 +401,7 @@ fn url_fetch_limits(
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NativeRuntime>()?;
+    m.add_function(wrap_pyfunction!(parse_manifest, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_manifest, m)?)?;
     Ok(())
 }
