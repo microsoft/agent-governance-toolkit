@@ -13,8 +13,8 @@ owner: docs-team
 This tutorial builds a small ACS policy enforcement point around an email tool. The host submits a complete snapshot to ACS before and after the tool call. ACS returns a verdict, and the host enforces it.
 
 !!! tip "Prefer a runnable repository example?"
-    Start with [`examples/acs-email-tool`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool).
-    It demonstrates the canonical AGT host path through `agt-policies`,
+    Start with `examples/acs-email-tool` in a repository checkout. It
+    demonstrates the canonical AGT host path through `agt-policies`,
     `SnapshotBuilder`, and `AgtRuntime` without requiring OPA. This tutorial
     continues with the lower-level ACS SDK and a Rego policy so you can inspect
     the native manifest and policy-input contract directly.
@@ -261,7 +261,7 @@ This is the core ACS safety model: malformed manifests, missing paths, policy di
 
 ## Next steps
 
-- Run the [framework-neutral AGT host example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool).
+- Run the framework-neutral AGT host example at `examples/acs-email-tool`.
 - Inspect the [ACS plus ATR annotator example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-atr-annotator).
 - Read the [Agent Control Specification package page](../packages/agent-control-specification.md).
 - Compare Rego and Cedar in [OPA / Rego / Cedar Policies](08-opa-rego-cedar-policies.md).

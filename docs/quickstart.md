@@ -141,8 +141,8 @@ The manifest selects the policy and target for `pre_tool_call`. ACS can return
 `allow`, `warn`, `deny`, `escalate`, or `transform`; the host executes, blocks,
 routes approval, or applies the transformed target.
 
-Run the complete [ACS email-tool example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool)
-or follow the [ACS tutorial](tutorials/55-agent-control-specification.md).
+Run `examples/acs-email-tool` from a repository checkout, or follow the
+[ACS tutorial](tutorials/55-agent-control-specification.md).
 
 ## Use with your framework
 

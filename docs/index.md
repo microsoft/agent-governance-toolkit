@@ -154,8 +154,8 @@ ACS returns one of five normalized verdicts: `allow`, `warn`, `deny`,
 session state. That separation makes the same policy contract portable across
 framework adapters, gateways, and custom agent hosts.
 
-[Run the minimal ACS email-tool example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool)
-or follow the [step-by-step ACS tutorial](tutorials/55-agent-control-specification.md).
+Run `examples/acs-email-tool` from a repository checkout, or follow the
+[step-by-step ACS tutorial](tutorials/55-agent-control-specification.md).
 
 </div>
 
@@ -252,7 +252,7 @@ ADK. See the [package guide](packages/index.md#framework-integrations).
 
 | Example | Framework | What it demonstrates |
 |---------|-----------|---------------------|
-| [acs-email-tool](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-email-tool) | Framework-neutral ACS host | Snapshot, verdict, transform, deny, and host enforcement |
+| [acs-email-tool](tutorials/55-agent-control-specification.md) | Framework-neutral ACS host | Runnable source at `examples/acs-email-tool` with snapshot, transform, deny, and host enforcement |
 | [acs-atr-annotator](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-atr-annotator) | ACS custom policy | Independent threat-rule annotations with fail-closed decisions |
 | [openai-agents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/openai-agents-governed) | OpenAI Agents SDK | Policy-gated tool calls with trust tiers |
 | [crewai-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/crewai-governed) | CrewAI | Multi-agent governance with role-based policies |
