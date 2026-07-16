@@ -70,12 +70,12 @@ In this example, users from the operations team are requesting authorization to 
 
 [Policies](policy-stores/multi-issuer) are designed to consider a combination of user claims(role) and contextual data(device information) to `allow` or `deny` the authorization. Both of these inputs are extracted from the tokens.
 
-| User role |      Device info | Action | Result |
-|-----------|------------------|--------|--------|
-| admin     | secure laptop    | write  | allow  |
-| admin     | personal mobile  | write  | deny   |
-| admin     | personal mobile  | read   | allow  |
-| operator  | secure laptop    | write  | deny   |
+| User role | Device info         | Action | Result |
+| --------- | ------------------- | ------ | ------ |
+| admin     | secure laptop       | write  | allow  |
+| admin     | unidentified device | write  | deny   |
+| admin     | personal mobile     | read   | allow  |
+| operator  | secure laptop       | write  | deny   |
 
 ### Tokens to carry the context
 
@@ -116,7 +116,7 @@ These policies effectively implement the following:
 
 ```
 allow-admin-read  : permit Read/ReadData when token role == "admin"
-allow-admin-write : permit Write when token role == "admin" AND device != "mobile"
+allow-admin-write : permit Write when token role == "admin" AND device in {"laptop", "workstation"}
 ```
 
 > Note:

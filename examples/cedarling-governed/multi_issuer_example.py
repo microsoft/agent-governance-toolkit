@@ -146,7 +146,7 @@ evaluator.add_backend(backend)
 # policy-stores/multi-issuer/policies/ against those claims:
 #   allow-admin-read  : permit Read/ReadData when the token role is "admin"
 #   allow-admin-write : permit Write when the token role is "admin" AND the
-#                       token device claim is not "mobile" (insecure)
+#                       token device claim is in the {"laptop", "workstation"} allowlist
 # Anything not permitted is denied by default.
 
 test_cases = [
