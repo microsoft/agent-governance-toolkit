@@ -1,8 +1,6 @@
 # Broken-link baseline for scripts/docs/check_links.py
 # Generated; do not edit by hand except to remove entries
 # as the underlying links are fixed. Format: <source>\t<target>
-docs/ARCHITECTURE.md	../BENCHMARKS.md
-docs/ARCHITECTURE.md	../agent-governance-python/agent-mesh/docs/TRUST-SCORING.md
 docs/BENCHMARKS.md	.github/workflows/benchmarks.yml
 docs/BENCHMARKS.md	agent-governance-python/agent-os/benchmarks/bench_adapters.py
 docs/BENCHMARKS.md	agent-governance-python/agent-os/benchmarks/bench_audit.py
