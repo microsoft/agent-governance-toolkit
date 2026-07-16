@@ -939,3 +939,4 @@ spanid
 parentspanid
 agtsignature
 agtsignaturealg
+GROUPREF
