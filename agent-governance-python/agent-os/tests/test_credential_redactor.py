@@ -356,3 +356,19 @@ def test_scan_and_redact_reports_types_without_raw_secret():
 def test_scan_and_redact_empty_input():
     assert CredentialRedactor.scan_and_redact(None) == ("", [])
     assert CredentialRedactor.scan_and_redact("") == ("", [])
+
+
+@pytest.mark.parametrize(
+    "ssn",
+    [
+        "123-45-6789",   # dash
+        "123 45 6789",   # space
+        "123.45.6789",   # dot
+        "123456789",     # no separator
+    ],
+)
+def test_ssn_detected_across_all_separators(ssn: str):
+    """PII detection must not diverge from integrations/base.py, which broadened
+    the SSN pattern to space/dot/dash/none. Regression for issue #3239."""
+    matches = CredentialRedactor.find_pii_matches(f"employee ssn {ssn} on file")
+    assert any(m.name == "US SSN" and m.matched_text == ssn for m in matches)
