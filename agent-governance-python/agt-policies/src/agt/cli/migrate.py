@@ -549,8 +549,11 @@ def _migrate_governance_chain(
     - calls :func:`resolve_manifest` to produce a flat ACS manifest +
       Rego bundle under ``chain_root/manifest.yaml`` +
       ``chain_root/policy/agt_legacy.rego``;
-    - moves every governance.yaml(.yml) in the discovered chain to
-      ``<file>.v4-backup`` so re-runs do not double-translate.
+    - moves every governance.yaml(.yml) that lives directly in
+      ``chain_root`` to ``<file>.v4-backup`` so re-runs do not
+      double-translate. Parent governance files that the resolved chain
+      inherits from directories ABOVE ``chain_root`` are left untouched;
+      each parent is migrated by its own chain.
 
     On dry-run the rego bundle is materialised inside a temp dir that
     is dropped on return, so the project on disk is untouched.
@@ -558,10 +561,18 @@ def _migrate_governance_chain(
     finding = GovernanceChainFinding(chain_root=chain_root, governance_files=[])
     manifest_path = chain_root / "manifest.yaml"
     rego_bundle = chain_root / "policy"
-    if manifest_path.exists() or rego_bundle.exists():
+    # ``exists()`` follows symlinks and returns False for a broken one, so a
+    # symlink named ``manifest.yaml``/``policy`` (broken or pointing outside
+    # chain_root) would slip past this guard and make the migration write its
+    # bundle through the link — outside the project — while still unlinking the
+    # governance files. Treat any pre-existing path OR symlink as output that
+    # must not be overwritten.
+    manifest_present = manifest_path.exists() or manifest_path.is_symlink()
+    bundle_present = rego_bundle.exists() or rego_bundle.is_symlink()
+    if manifest_present or bundle_present:
         finding.error = (
             "migration output already exists; refusing to overwrite "
-            f"{manifest_path if manifest_path.exists() else rego_bundle}"
+            f"{manifest_path if manifest_present else rego_bundle}"
         )
         return finding
 
@@ -587,9 +598,21 @@ def _migrate_governance_chain(
         Path(p) for p in manifest.get("metadata", {}).get("resolved_from", {}).get("chain", [])
     ]
     finding.governance_files = discovered
+    # Only back up and remove governance files that live directly in this
+    # chain_root. The resolved chain also lists parent governance files ABOVE
+    # chain_root; those declare deny rules that ADR-0014 treats as immutable and
+    # are shared by every sibling chain under the same parent. Each parent file
+    # is migrated by its own chain, so backing it up / unlinking it here would
+    # corrupt sibling chains that inherit from it.
+    chain_root_resolved = chain_root.resolve()
+    local_files = [
+        gov_file
+        for gov_file in discovered
+        if gov_file.parent.resolve() == chain_root_resolved
+    ]
     backup_paths = [
         gov_file.with_name(f".{gov_file.name}.v4-backup")
-        for gov_file in discovered
+        for gov_file in local_files
     ]
     existing_backups = [path for path in backup_paths if path.exists()]
     if existing_backups:
@@ -613,15 +636,15 @@ def _migrate_governance_chain(
             try:
                 os.link(staged_manifest, manifest_path)
                 for gov_file, backup in zip(
-                    discovered, backup_paths, strict=True
+                    local_files, backup_paths, strict=True
                 ):
                     os.link(gov_file, backup)
                     linked_backups.append(backup)
-                for gov_file in discovered:
+                for gov_file in local_files:
                     gov_file.unlink()
             except Exception as exc:
                 for gov_file, backup in zip(
-                    discovered, backup_paths, strict=True
+                    local_files, backup_paths, strict=True
                 ):
                     if not gov_file.exists() and backup.exists():
                         os.link(backup, gov_file)

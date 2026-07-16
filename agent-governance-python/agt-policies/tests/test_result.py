@@ -79,3 +79,12 @@ def test_compatibility_result_converts_to_native_without_v4_fields() -> None:
     assert "allowed" not in native.model_dump()
     assert "public_message" not in native.model_dump()
     assert "audit_entry" not in native.model_dump()
+
+
+def test_bare_evaluation_result_defaults_to_deny() -> None:
+    """A construction path that forgets to set a verdict must fail safe."""
+    result = EvaluationResult()
+
+    assert result.verdict == "deny"
+    assert result.allowed is False
+    assert result.is_allowed() is False

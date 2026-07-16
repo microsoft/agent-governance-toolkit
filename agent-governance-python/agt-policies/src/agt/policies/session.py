@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 import threading
 from collections.abc import Iterable, Mapping
 from typing import Any, Protocol
@@ -23,6 +24,49 @@ class _RuntimeLike(Protocol):
 
     def close(self) -> None:
         """Release resources owned by the runtime."""
+
+
+class _ReadOnlyBuilderView:
+    """Read-only facade over a :class:`SnapshotBuilder`.
+
+    :class:`AdapterRuntimeSession` is the sole writer of a session's budget
+    counters. Callers that read the builder (to inspect counters or mint
+    snapshots) receive this view, which forwards reads and the snapshot
+    builders but refuses the counter mutators, so budget state can only change
+    through the session's own ``record_*`` / ``synchronize_counters`` methods.
+    """
+
+    _BLOCKED_MUTATORS = frozenset(
+        {
+            "record_tool_call",
+            "record_tokens",
+            "record_cost",
+            "record_elapsed",
+            "reset_budgets",
+        }
+    )
+
+    def __init__(self, builder: SnapshotBuilder) -> None:
+        object.__setattr__(self, "_builder", builder)
+
+    def __getattr__(self, name: str) -> Any:
+        if name in _ReadOnlyBuilderView._BLOCKED_MUTATORS:
+            raise AttributeError(
+                f"{name} mutates session budget counters; the owning "
+                "AdapterRuntimeSession is the sole writer — use its "
+                "record_* / synchronize_counters methods"
+            )
+        return getattr(object.__getattribute__(self, "_builder"), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError(
+            "SnapshotBuilder budget state is read-only through the session; "
+            "mutate via AdapterRuntimeSession"
+        )
+
+    def __repr__(self) -> str:
+        inner = object.__getattribute__(self, "_builder")
+        return f"_ReadOnlyBuilderView({inner!r})"
 
 
 class AdapterRuntimeSession:
@@ -75,7 +119,12 @@ class AdapterRuntimeSession:
 
     @property
     def builder(self) -> SnapshotBuilder:
-        return self._builder
+        """Read-only view of the snapshot builder.
+
+        The session owns the budget counters; callers may read them and mint
+        snapshots but must not mutate them here (see :class:`_ReadOnlyBuilderView`).
+        """
+        return _ReadOnlyBuilderView(self._builder)  # type: ignore[return-value]
 
     @property
     def contract(self) -> AdapterManifestContract | None:
@@ -347,8 +396,13 @@ def _validate_non_negative_int(name: str, value: int) -> None:
 
 
 def _validate_non_negative_number(name: str, value: float) -> None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise ValueError(f"{name} must be a non-negative number")
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        raise ValueError(f"{name} must be a non-negative, finite number")
 
 
 __all__ = ["AdapterRuntimeSession"]
