@@ -1,12 +1,14 @@
 use agent_control_specification_core::{
-    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, InterventionPointResult, JsonValue, Manifest, PerfTelemetry,
-    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
+    validate_acs_artifacts, AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode,
+    InterventionPoint, InterventionPointRequest, InterventionPointResult, JsonValue, Manifest,
+    PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use napi::bindgen_prelude::{Env, Error, JsFunction, Promise, Result};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use napi_derive::napi;
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -62,6 +64,23 @@ fn url_fetch_limits(
     let mut limits = agent_control_specification_core::Limits::default();
     if let Some(bytes) = max_bytes {
         limits.max_manifest_url_bytes = bytes as usize;
+    }
+
+    #[napi]
+    #[allow(dead_code)]
+    pub fn validate_artifacts(
+        manifest: String,
+        rego_modules: Value,
+        opa_path: Option<String>,
+    ) -> Result<Value> {
+        let modules: BTreeMap<String, String> = serde_json::from_value(rego_modules)
+            .map_err(|error| Error::from_reason(format!("invalid Rego module map: {error}")))?;
+        serde_json::to_value(validate_acs_artifacts(
+            &manifest,
+            &modules,
+            opa_path.as_deref().map(Path::new),
+        ))
+        .map_err(|error| Error::from_reason(error.to_string()))
     }
     if let Some(timeout) = timeout_ms {
         limits.manifest_url_timeout_ms = timeout as u64;

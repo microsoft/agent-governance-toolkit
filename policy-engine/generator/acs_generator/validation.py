@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from agent_control_specification.validation import validate_manifest_schema
+from agent_control_specification import validate_acs_manifest
 
 from .vocabulary import (
     DECISIONS,
@@ -54,7 +54,7 @@ def validate_artifacts(
     regex_patterns: tuple[str, ...] = (),
 ) -> ValidationResult:
     warnings: list[str] = []
-    _validate_schema(manifest)
+    _validate_schema(manifest_yaml)
     _validate_core(manifest_yaml)
     _reject_deprecated_refs(rego)
     _reject_legacy_effects(rego)
@@ -522,10 +522,10 @@ def _validate_regex_patterns(opa: str, rego: str, regex_patterns: tuple[str, ...
             )
 
 
-def _validate_schema(manifest: dict[str, Any]) -> None:
-    diagnostics = validate_manifest_schema(manifest)
-    if diagnostics:
-        diagnostic = diagnostics[0]
+def _validate_schema(manifest_yaml: str) -> None:
+    result = validate_acs_manifest(manifest_yaml)
+    if not result.valid:
+        diagnostic = result.diagnostics[0]
         raise ValidationError(
             f"manifest schema validation failed at {diagnostic.path or '<root>'}: "
             f"{diagnostic.message}"

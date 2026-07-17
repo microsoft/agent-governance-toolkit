@@ -1,6 +1,6 @@
 [package]
 name = "agent_control_specification_otel"
-version = "0.3.1-beta.0"
+version = "0.3.1-beta.1"
 edition = "2021"
 rust-version = "1.85"
 description = "OpenTelemetry bridge for Agent Control Specification telemetry"
@@ -8,7 +8,7 @@ license = "MIT"
 publish = true
 
 [dependencies]
-agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core" }
+agent_control_specification_core = { version = "0.3.1-beta.1", path = "../../core" }
 opentelemetry = { version = "0.31", features = ["metrics"] }
 
 [dev-dependencies]

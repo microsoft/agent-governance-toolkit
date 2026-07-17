@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
-from importlib import resources
 from pathlib import Path
 
 import pytest
@@ -27,13 +25,19 @@ intervention_points:
 MINIMAL_MANIFEST = MANIFEST_HEADER + "metadata: {}\n" + MINIMAL_POLICY
 
 
-def test_packaged_manifest_schemas_match_canonical_spec() -> None:
-    repo_root = Path(__file__).resolve().parents[3]
-    schema_dir = resources.files("agent_control_specification.schema")
-    for name in ("approval.schema.json", "manifest.schema.json"):
-        packaged = schema_dir.joinpath(name).read_bytes()
-        canonical = (repo_root / "spec" / "schema" / name).read_bytes()
-        assert packaged == canonical
+def test_artifact_validation_matches_shared_parity_corpus() -> None:
+    fixture = (
+        Path(__file__).resolve().parents[3]
+        / "tests"
+        / "parity"
+        / "artifact-validation-cases.json"
+    )
+    corpus = json.loads(fixture.read_text(encoding="utf-8"))
+
+    for case in corpus["cases"]:
+        result = validate_acs_artifacts(case["manifest"], case["rego"])
+        assert result.valid is case["valid"], case["name"]
+        assert [diagnostic.code for diagnostic in result.diagnostics] == case["codes"], case["name"]
 
 
 def test_string_validation_api_returns_json_ready_success() -> None:
@@ -199,7 +203,7 @@ def test_string_validation_api_does_not_apply_yaml_11_numbers(value: str) -> Non
     )
 
     assert not report.valid
-    assert report.diagnostics[0].path == "$.approval.timeout_seconds"
+    assert report.diagnostics[0].path == "/approval/timeout_seconds"
 
 
 @pytest.mark.parametrize("value", ["0b1010", "0o12", "0xA"])
@@ -359,14 +363,10 @@ def test_string_validation_api_rejects_custom_dictionary() -> None:
     assert report.diagnostics[0].code == "rego_input_invalid"
 
 
-def test_string_validation_api_counts_empty_rego_toward_size_limit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("agent_control_specification.validation.MAX_REGO_BYTES", 8)
-
+def test_string_validation_api_counts_empty_rego_toward_size_limit() -> None:
     report = validate_acs_artifacts(
         MINIMAL_MANIFEST,
-        " " * 9,
+        " " * 1_048_577,
     )
 
     assert not report.valid
@@ -381,7 +381,7 @@ def test_string_validation_api_counts_empty_rego_toward_size_limit(
         (
             MINIMAL_MANIFEST,
             {1: "package invalid"},
-            "rego_source_invalid",
+            "rego_input_invalid",
         ),
         (
             MINIMAL_MANIFEST,
@@ -406,123 +406,7 @@ def test_string_validation_api_rejects_malformed_inputs(
     assert expected_code in {diagnostic.code for diagnostic in report.diagnostics}
 
 
-def test_string_validation_api_bounds_opa_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        if args[1] == "version":
-            return subprocess.CompletedProcess(args, 0, "Version: 0.70.0\n", "")
-        raise subprocess.TimeoutExpired(args, timeout=1)
-
-    monkeypatch.setattr("agent_control_specification.validation.subprocess.run", run)
-
-    report = validate_acs_artifacts(
-        MINIMAL_MANIFEST,
-        "package invalid",
-        opa_path="opa",
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].code == "opa_timeout"
-
-
-def test_string_validation_api_handles_unstructured_opa_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        if args[1] == "version":
-            return subprocess.CompletedProcess(args, 0, "Version: 0.70.0\n", "")
-        return subprocess.CompletedProcess(args, 1, None, "not json")
-
-    monkeypatch.setattr("agent_control_specification.validation.subprocess.run", run)
-
-    report = validate_acs_artifacts(
-        MINIMAL_MANIFEST,
-        "package invalid",
-        opa_path="opa",
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].code == "opa_validation_error"
-    assert report.diagnostics[0].message == "not json"
-
-
-def test_string_validation_api_bounds_opa_output(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("agent_control_specification.validation.MAX_OPA_OUTPUT_BYTES", 8)
-
-    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        stdout = kwargs.get("stdout")
-        assert hasattr(stdout, "write")
-        stdout.write(b"not-an-opa-version-banner")
-        return subprocess.CompletedProcess(args, 0)
-
-    monkeypatch.setattr("agent_control_specification.validation.subprocess.run", run)
-
-    report = validate_acs_artifacts(
-        MINIMAL_MANIFEST,
-        "package invalid",
-        opa_path="opa",
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].code == "opa_invalid_executable"
-    assert len(report.diagnostics[0].message) < 200
-
-
-def test_string_validation_api_handles_staging_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "agent_control_specification.validation.tempfile.TemporaryDirectory",
-        lambda **kwargs: (_ for _ in ()).throw(OSError("read only")),
-    )
-
-    report = validate_acs_artifacts(
-        MINIMAL_MANIFEST,
-        "package invalid",
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].code == "rego_staging_error"
-
-
-def test_string_validation_api_legacy_schema_resolver(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import builtins
-
-    real_import = builtins.__import__
-
-    def without_referencing(
-        name: str,
-        globals: object = None,
-        locals: object = None,
-        fromlist: tuple[str, ...] = (),
-        level: int = 0,
-    ) -> object:
-        if name == "referencing":
-            raise ImportError("blocked for fallback test")
-        return real_import(name, globals, locals, fromlist, level)
-
-    monkeypatch.setattr(builtins, "__import__", without_referencing)
-
-    report = validate_acs_artifacts(
-        """
-agent_control_specification_version: "0.3.1-beta"
-metadata: {}
-approval:
-  timeout_seconds: 0
-""",
-        {},
-    )
-
-    assert not report.valid
-    assert report.diagnostics[0].path == "$.approval.timeout_seconds"
-
-
-def test_string_validation_api_resolves_packaged_approval_schema() -> None:
+def test_string_validation_api_resolves_embedded_approval_schema() -> None:
     report = validate_acs_artifacts(
         """
 agent_control_specification_version: "0.3.1-beta"
@@ -538,7 +422,7 @@ approval:
     diagnostic = next(
         diagnostic
         for diagnostic in report.diagnostics
-        if diagnostic.path == "$.approval.timeout_seconds"
+        if diagnostic.path == "/approval/timeout_seconds"
     )
     assert diagnostic.code == "manifest_schema_error"
     assert "minimum of 1" in diagnostic.message
@@ -571,15 +455,12 @@ extends:
     assert report.diagnostics[0].code == "manifest_semantic_error"
 
 
-def test_string_validation_api_requires_opa_for_rego(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("agent_control_specification.validation.shutil.which", lambda name: None)
-
+def test_string_validation_api_reports_missing_opa() -> None:
     report = validate_acs_artifacts(
         MINIMAL_MANIFEST,
         "package acs.guard",
+        opa_path="/does/not/exist/opa",
     )
 
     assert not report.valid
-    assert [diagnostic.code for diagnostic in report.diagnostics] == ["opa_unavailable"]
+    assert [diagnostic.code for diagnostic in report.diagnostics] == ["opa_execution_error"]

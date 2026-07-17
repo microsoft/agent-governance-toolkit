@@ -107,8 +107,8 @@ run = """
 mkdir -p "$RUNNER_TEMP/acs-node-pack"
 npm pack --pack-destination "$RUNNER_TEMP/acs-node-pack"
 node scripts/package-native.mjs --package agent-control-specification-linux-x64-gnu --binary dist/agent-control-specification.linux-x64-gnu.node --pack-destination "$RUNNER_TEMP/acs-node-pack"
-tar -tzf "$RUNNER_TEMP"/acs-node-pack/agent-control-specification-0.3.1-beta.0.tgz | grep -E '^package/dist/native\\.js$'
-tar -tzf "$RUNNER_TEMP"/acs-node-pack/agent-control-specification-linux-x64-gnu-0.3.1-beta.0.tgz | grep -E '^package/agent-control-specification\\.linux-x64-gnu\\.node$'
+tar -tzf "$RUNNER_TEMP"/acs-node-pack/agent-control-specification-0.3.1-beta.1.tgz | grep -E '^package/dist/native\\.js$'
+tar -tzf "$RUNNER_TEMP"/acs-node-pack/agent-control-specification-linux-x64-gnu-0.3.1-beta.1.tgz | grep -E '^package/agent-control-specification\\.linux-x64-gnu\\.node$'
 """
 
 [[workflow.job]]

@@ -8,7 +8,7 @@ version = "0.4.0b0"
 description = "Agentic policy artifact generator for Agent Control Specification"
 requires-python = ">=3.11"
 dependencies = [
-  "agent-control-specification[validation]>=0.3.1b1,<0.4.0",
+  "agent-control-specification>=0.3.1b1,<0.4.0",
   "pyyaml>=6.0",
 ]
 

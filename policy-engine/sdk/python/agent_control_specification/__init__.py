@@ -71,6 +71,12 @@ from ._types import (
     Verdict,
     action_identity,
 )
+from .validation import (
+    ArtifactValidationResult,
+    ValidationDiagnostic,
+    validate_acs_artifacts,
+    validate_acs_manifest,
+)
 
 __all__ = [
     "AdapterUnsupportedError",
@@ -83,6 +89,7 @@ __all__ = [
     "ApprovalOutcome",
     "ApprovalResolution",
     "ApprovalResolver",
+    "ArtifactValidationResult",
     "Decision",
     "DEFAULT_OTEL_METER_NAME",
     "EnforcementMode",
@@ -106,6 +113,8 @@ __all__ = [
     "parse_manifest",
     "validate_manifest",
     "validate_manifest_overlay",
+    "validate_acs_artifacts",
+    "validate_acs_manifest",
     "RunResult",
     "RuntimeClient",
     "TelemetryEvent",
@@ -115,6 +124,7 @@ __all__ = [
     "Transform",
     "UnsupportedFrameworkAdapter",
     "Verdict",
+    "ValidationDiagnostic",
     "action_identity",
     "guard_agent_method",
     "guard_anthropic_client",

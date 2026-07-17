@@ -84,7 +84,7 @@ def test_policy_engine_workflow_packages_acs_artifacts():
     assert "python -m build --no-isolation ./generator" in content
     assert "npm pack --pack-destination" in content
     assert "node scripts/package-native.mjs --package agent-control-specification-linux-x64-gnu" in content
-    assert "agent-control-specification-linux-x64-gnu-0.3.1-beta.0.tgz" in content
+    assert "agent-control-specification-linux-x64-gnu-0.3.1-beta.1.tgz" in content
     assert "dotnet build AgentControlSpecification.sln --configuration Release" in content
     assert "AgentControlSpecificationAllowIncompleteNativePack=true" in content
 

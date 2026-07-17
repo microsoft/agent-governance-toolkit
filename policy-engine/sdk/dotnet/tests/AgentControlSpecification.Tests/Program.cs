@@ -31,6 +31,33 @@ annotators:
 var nativeLibraryPath = Path.Combine(AppContext.BaseDirectory, "libagent_control_specification_core.so");
 Assert(File.Exists(nativeLibraryPath), $"Native library was not copied to test output: {nativeLibraryPath}");
 
+using (var corpus = JsonDocument.Parse(
+    File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "artifact-validation-cases.json"))))
+{
+    foreach (var testCase in corpus.RootElement.GetProperty("cases").EnumerateArray())
+    {
+        var name = testCase.GetProperty("name").GetString()!;
+        var modules = testCase
+            .GetProperty("rego")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetString()!);
+        var validation = ArtifactValidator.Validate(
+            testCase.GetProperty("manifest").GetString()!,
+            modules);
+        var expectedCodes = testCase
+            .GetProperty("codes")
+            .EnumerateArray()
+            .Select(value => value.GetString()!)
+            .ToArray();
+
+        AssertEqual(testCase.GetProperty("valid").GetBoolean(), validation.Valid, $"{name}: valid");
+        AssertEqual(
+            string.Join(",", expectedCodes),
+            string.Join(",", validation.Diagnostics.Select(diagnostic => diagnostic.Code)),
+            $"{name}: diagnostic codes");
+    }
+}
+
 var control = AgentControl.FromNative(BasicHostManifest, new ClassifierAnnotator(), new CustomPolicy());
 var result = await control.EvaluateInputAsync(
     new { text = "Please summarize account 1234." },

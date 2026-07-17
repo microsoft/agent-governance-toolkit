@@ -44,7 +44,7 @@ The generator is a CLI artifact-authoring utility. Services that validate existi
 Artifact-only kits include a local Node optional OPA package. Install or extract `agent-control-specification-opa-<platform>-<version>.tgz`, then prepend its `bin` directory to `PATH` before running `acs-generate init --strict`.
 
 ```bash
-npm install "$ACS_KIT"/artifacts/agent-control-specification-opa-linux-x64-0.3.1-beta.0.tgz
+npm install "$ACS_KIT"/artifacts/agent-control-specification-opa-linux-x64-0.3.1-beta.1.tgz
 PATH="$PWD/node_modules/agent-control-specification-opa-linux-x64/bin:$PATH" \
   acs-generate init --strict --non-interactive --name "Payments Agent" --out build/acs-payments
 ```
