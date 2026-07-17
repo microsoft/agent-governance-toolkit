@@ -19,6 +19,12 @@ registry, and restricts workflow level permissions to ``contents: read``. An
 optional proposal agent may edit the manifest, but it never writes YAML and the
 deterministic ``--check`` job is the gate, so generation stays reproducible and
 reviewable.
+
+The hand authored composite actions under ``.github/actions/*/action.yml`` are
+not produced by this script, but they still pin actions such as setup-python
+or setup-node directly, so ``--check``/``--write`` also validate and sync those
+pins against the same registry. Otherwise they become a second, unreviewed
+place those versions live and can silently drift from it.
 """
 
 from __future__ import annotations
@@ -32,6 +38,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = REPO_ROOT / ".github" / "ci" / "workflows.toml"
 ACTIONS_PATH = REPO_ROOT / ".github" / "ci" / "actions.toml"
+COMPOSITE_ACTIONS_DIR = REPO_ROOT / ".github" / "actions"
 
 OPA_VERSION = "0.70.0"
 OPA_LINUX_AMD64_SHA256 = "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084"
@@ -81,6 +88,78 @@ def _load_actions(path: Path) -> dict[str, str]:
         comment = entry.get("comment")
         registry[key] = f"{uses} # {comment}" if comment else uses
     return registry
+
+
+def _composite_action_files() -> list[Path]:
+    """Hand authored composite actions under .github/actions/*/action.yml.
+
+    These are not produced by this generator, but they still pin actions such
+    as setup-python or setup-node directly, so they must stay in sync with the
+    registry or the pin becomes a second, unreviewed source of truth.
+    """
+    if not COMPOSITE_ACTIONS_DIR.exists():
+        return []
+    return sorted(COMPOSITE_ACTIONS_DIR.glob("*/action.yml"))
+
+
+def _registry_by_action_name(actions: dict[str, str]) -> dict[str, str]:
+    return {value.split("@", 1)[0]: value for value in actions.values()}
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+# Matches a `uses:` step reference with or without a leading `- ` list marker,
+# e.g. "      - uses: actions/checkout@SHA # v1" or "      uses: actions/x@SHA".
+USES_LINE_RE = re.compile(r"^(?P<prefix>\s*(?:-\s+)?uses:\s*)(?P<value>\S.*?)\s*$")
+
+
+def check_composite_action_pins(actions: dict[str, str]) -> list[str]:
+    """Return one message per composite action pin that drifted from the registry."""
+    registry_by_name = _registry_by_action_name(actions)
+    drifted: list[str] = []
+    for path in _composite_action_files():
+        rel = _display_path(path)
+        for line in path.read_text(encoding="utf-8").splitlines():
+            match = USES_LINE_RE.match(line)
+            if not match:
+                continue
+            value = match.group("value")
+            name = value.split("@", 1)[0]
+            canonical = registry_by_name.get(name)
+            if canonical is not None and value != canonical:
+                drifted.append(
+                    f"{rel}: '{name}' pinned to '{value}', registry expects '{canonical}'"
+                )
+    return drifted
+
+
+def sync_composite_action_pins(actions: dict[str, str]) -> list[Path]:
+    """Rewrite composite action `uses:` lines to match the registry. Returns changed files."""
+    registry_by_name = _registry_by_action_name(actions)
+    changed: list[Path] = []
+    for path in _composite_action_files():
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        touched = False
+        for index, line in enumerate(lines):
+            match = USES_LINE_RE.match(line)
+            if not match:
+                continue
+            value = match.group("value")
+            name = value.split("@", 1)[0]
+            canonical = registry_by_name.get(name)
+            if canonical is not None and value != canonical:
+                newline = "\n" if line.endswith("\n") else ""
+                lines[index] = f"{match.group('prefix')}{canonical}{newline}"
+                touched = True
+        if touched:
+            path.write_text("".join(lines), encoding="utf-8")
+            changed.append(path)
+    return changed
 
 
 def _indent(text: str, spaces: int) -> list[str]:
@@ -255,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         outputs = build_outputs()
+        actions = _load_actions(ACTIONS_PATH)
     except GenerationError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -264,6 +344,8 @@ def main(argv: list[str] | None = None) -> int:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
             print(f"wrote {path.relative_to(REPO_ROOT)}")
+        for path in sync_composite_action_pins(actions):
+            print(f"synced {path.relative_to(REPO_ROOT)}")
         return 0
 
     drifted: list[str] = []
@@ -273,6 +355,7 @@ def main(argv: list[str] | None = None) -> int:
             drifted.append(f"{rel} (missing, run --write)")
         elif path.read_text(encoding="utf-8") != content:
             drifted.append(f"{rel} (out of date, run --write)")
+    drifted.extend(check_composite_action_pins(actions))
     if drifted:
         print("error: generated workflows are out of date:", file=sys.stderr)
         for item in drifted:
