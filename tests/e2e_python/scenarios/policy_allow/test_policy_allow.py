@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Healthcare scenario: allow a non-diagnostic visit-note update via policy."""
+"""Healthcare scenario: allow a non-diagnostic visit-note update via ACS policy."""
 
 from __future__ import annotations
 
@@ -8,13 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from agent_os.mute_agent import MuteAgent, MutePolicy
-from agent_os.policies import PolicyDecision
 
 from support import (
+    PolicyDecision,
     ScenarioResult,
     assert_exercised,
     assert_no_raw_secrets,
-    load_policy_evaluator,
+    evaluate_pre_tool_call,
+    load_acs_runtime,
     not_exercised_result,
     select_model,
     tool_schema,
@@ -22,7 +23,7 @@ from support import (
 )
 
 
-POLICY = Path(__file__).with_name("policy.yaml")
+POLICY_DIR = Path(__file__).parent
 
 
 class MockPatientRecords:
@@ -70,8 +71,13 @@ def run_healthcare() -> tuple[
             model.inputs,
         ), records, None
 
-    evaluator = load_policy_evaluator(POLICY)
-    decision = evaluator.evaluate({"tool_name": call.name, **call.arguments})
+    runtime = load_acs_runtime(POLICY_DIR)
+    decision = evaluate_pre_tool_call(
+        runtime,
+        agent_id="clinic-intake-agent",
+        tool_name=call.name,
+        arguments=call.arguments,
+    )
     if decision.allowed:
         records.update_visit_notes(**call.arguments)
     scrubber = MuteAgent(MutePolicy(enabled_builtins=["email", "ssn", "api_key"]))
@@ -80,7 +86,7 @@ def run_healthcare() -> tuple[
         for key, value in call.arguments.items()
     }
     return ScenarioResult(
-        decision=decision.action,
+        decision=decision.verdict,
         executed_tools=[call.name] if decision.allowed else [],
         model_inputs=model.inputs,
         tool_arguments=[safe_arguments],
@@ -95,7 +101,7 @@ def test_healthcare_note_update_is_allowed(artifact_dir: Path) -> None:
     assert result.executed_tools == ["update_visit_notes"]
     assert len(records.note_updates) == 1
     assert policy_decision is not None
-    assert policy_decision.matched_rule == "healthcare.allow-visit-note-update"
+    assert policy_decision.reason == "healthcare.allow-visit-note-update"
 
     write_artifact(result, artifact_dir, "healthcare")
     assert_no_raw_secrets(artifact_dir / "healthcare.json")

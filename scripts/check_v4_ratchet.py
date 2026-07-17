@@ -129,9 +129,6 @@ ALLOWED_V4_FILES: frozenset[str] = frozenset(
 )
 ALLOWED_V4_PREFIXES: tuple[str, ...] = (
     "agent-governance-python/agt-v4-migrate/",
-    # E2E governance tests exercise the current policy API on purpose; they are
-    # inventoried but not ratcheted.
-    "tests/e2e_python/",
 )
 
 EXCLUDE_DIR_NAMES: frozenset[str] = frozenset(

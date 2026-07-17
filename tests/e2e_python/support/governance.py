@@ -4,13 +4,17 @@
 
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agent_os.policies import PolicyDocument, PolicyEvaluator
+from agent_control_specification import AgentControl, Decision, InterventionPoint
 
 from .logging_config import logger, redact_for_log, redact_log_text, truncate_log_text
 from .models import ModelReply, ScenarioResult
+
+MANIFEST_NAME = "acs.manifest.yaml"
 
 
 def tool_schema(name: str, description: str, properties: dict[str, Any]) -> dict[str, Any]:
@@ -28,11 +32,73 @@ def tool_schema(name: str, description: str, properties: dict[str, Any]) -> dict
     }
 
 
-def load_policy_evaluator(policy_path: str | Path) -> PolicyEvaluator:
-    """Load a customer-authored YAML policy (next to the scenario) via the SDK."""
-    document = PolicyDocument.from_yaml(policy_path)
-    return PolicyEvaluator(policies=[document])
+@dataclass(frozen=True)
+class PolicyDecision:
+    """Normalized view of an ACS ``pre_tool_call`` verdict."""
 
+    allowed: bool
+    verdict: str
+    reason: str | None
+
+
+class _RulePolicy:
+    """Host-owned ACS policy dispatcher.
+
+    Applies the single declarative rule carried in the manifest's custom
+    policy ``config`` to the tool call presented at ``pre_tool_call``. Fails
+    closed: any tool that does not match the rule is denied.
+    """
+
+    def evaluate(self, invocation: dict[str, Any]) -> dict[str, Any]:
+        rule = invocation["adapter_config"]["config"]["rule"]
+        tool_name = invocation["input"]["snapshot"]["tool_call"]["name"]
+        if tool_name == rule["tool"]:
+            return {
+                "decision": rule["decision"],
+                "reason": rule["reason"],
+                "message": rule.get("message", ""),
+            }
+        return {
+            "decision": "deny",
+            "reason": "default_deny",
+            "message": f"No ACS rule matches tool {tool_name!r}.",
+        }
+
+
+def load_acs_runtime(policy_dir: str | Path) -> AgentControl:
+    """Build a native ACS runtime for the scenario's ACS manifest.
+
+    The scenario ships a native Agent Control Specification manifest
+    (``acs.manifest.yaml``) that declares the ``pre_tool_call`` intervention
+    point and a host-owned custom policy. This is the same contract a
+    customer would deploy; no legacy policy language is involved.
+    """
+    manifest = (Path(policy_dir) / MANIFEST_NAME).read_text(encoding="utf-8")
+    return AgentControl.from_native(manifest, policy_dispatcher=_RulePolicy())
+
+
+def evaluate_pre_tool_call(
+    control: AgentControl,
+    *,
+    agent_id: str,
+    tool_name: str,
+    arguments: dict[str, Any],
+    session_id: str = "session-1",
+) -> PolicyDecision:
+    """Evaluate a tool call at the ACS ``pre_tool_call`` intervention point."""
+    snapshot = {
+        "tool_call": {"id": f"{session_id}-1", "name": tool_name, "args": arguments},
+        "actor": {"id": agent_id},
+    }
+    result = asyncio.run(
+        control.evaluate_intervention_point(InterventionPoint.PRE_TOOL_CALL, snapshot)
+    )
+    verdict = result.verdict
+    return PolicyDecision(
+        allowed=verdict.decision is Decision.ALLOW,
+        verdict=verdict.decision.name.lower(),
+        reason=verdict.reason,
+    )
 
 
 def not_exercised_result(

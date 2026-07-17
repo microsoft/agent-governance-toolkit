@@ -1,18 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Adtech scenario: deny an out-of-scope live budget mutation via policy."""
+"""Adtech scenario: deny an out-of-scope live budget mutation via ACS policy."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from agent_os.policies import PolicyDecision
-
 from support import (
+    PolicyDecision,
     ScenarioResult,
     assert_exercised,
-    load_policy_evaluator,
+    evaluate_pre_tool_call,
+    load_acs_runtime,
     not_exercised_result,
     select_model,
     tool_schema,
@@ -20,7 +20,7 @@ from support import (
 )
 
 
-POLICY = Path(__file__).with_name("policy.yaml")
+POLICY_DIR = Path(__file__).parent
 
 
 class MockAdPlatform:
@@ -64,12 +64,17 @@ def run_adtech() -> tuple[ScenarioResult, MockAdPlatform, PolicyDecision | None]
             model.inputs,
         ), platform, None
 
-    evaluator = load_policy_evaluator(POLICY)
-    decision = evaluator.evaluate({"tool_name": call.name, **call.arguments})
+    runtime = load_acs_runtime(POLICY_DIR)
+    decision = evaluate_pre_tool_call(
+        runtime,
+        agent_id="adtech-campaign-agent",
+        tool_name=call.name,
+        arguments=call.arguments,
+    )
     if decision.allowed:
         platform.increase_daily_budget(**call.arguments)
     return ScenarioResult(
-        decision=decision.action,
+        decision=decision.verdict,
         executed_tools=[call.name] if decision.allowed else [],
         model_inputs=model.inputs,
         tool_arguments=[call.arguments],
@@ -84,6 +89,6 @@ def test_adtech_budget_mutation_is_denied(artifact_dir: Path) -> None:
     assert result.executed_tools == []
     assert platform.budget_changes == []
     assert policy_decision is not None
-    assert policy_decision.matched_rule == "adtech.deny-live-budget-mutation"
+    assert policy_decision.reason == "adtech.deny-live-budget-mutation"
 
     write_artifact(result, artifact_dir, "adtech")

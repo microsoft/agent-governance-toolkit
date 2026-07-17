@@ -1,18 +1,20 @@
 # Python Governance E2E Tests
 
-These tests exercise five governance scenarios through production `agent_os`
-policy, prompt-injection, redaction, and sandbox APIs. External systems are
-represented by in-memory adtech, healthcare, and intake resources. Each
-policy-driven scenario keeps its YAML policy next to it (e.g.
-`scenarios/policy_deny/test_policy_deny.py` +
-`scenarios/policy_deny/policy.yaml`), parsed by the SDK the way a customer
-would ship it. Four scenarios run against a real local Ollama model; prompt
-injection is intentionally blocked before a model request is made.
+These tests exercise five governance scenarios through production ACS
+(Agent Control Specification), prompt-injection, redaction, and sandbox
+APIs. External systems are represented by in-memory adtech, healthcare, and
+intake resources. Each policy-driven scenario keeps its customer-authored ACS
+manifest next to it (e.g. `scenarios/policy_deny/test_policy_deny.py` +
+`scenarios/policy_deny/acs.manifest.yaml`). The manifest declares the
+`pre_tool_call` intervention point and a host-owned custom policy, and the
+native ACS runtime (`AgentControl.from_native`) evaluates it the way a
+customer would ship it. Four scenarios run against a real local Ollama model;
+prompt injection is intentionally blocked before a model request is made.
 
 | Package | Production boundary | Expected result |
 | --- | --- | --- |
-| `policy_deny` | Adtech tool call evaluated by `PolicyEvaluator` | Deny the live budget mutation; do not call the resource |
-| `policy_allow` | Healthcare tool call evaluated by `PolicyEvaluator` | Allow one non-diagnostic visit-note update |
+| `policy_deny` | Adtech tool call evaluated by the native ACS runtime at `pre_tool_call` | Deny the live budget mutation; do not call the resource |
+| `policy_allow` | Healthcare tool call evaluated by the native ACS runtime at `pre_tool_call` | Allow one non-diagnostic visit-note update |
 | `pii_redaction` | `MuteAgent` before model and tool boundaries | Allow sanitized intake; keep raw values out of inputs, calls, and artifacts |
 | `prompt_injection` | `PromptInjectionDetector` on retrieved content | Deny the poisoned document before Ollama is called |
 | `filesystem_escape` | Model-generated code passed to `ExecutionSandbox` | Raise `SANDBOX_VALIDATION_FAILED`; do not create the outside file |
@@ -22,7 +24,7 @@ injection is intentionally blocked before a model request is made.
 Install Ollama if `ollama` is not already on your `PATH`:
 
 ```bash
-sudo snap install ollama
+curl -fsSL https://ollama.com/install.sh | sh
 ```
 
 Start its server in one terminal:
@@ -40,6 +42,18 @@ ollama pull llama3.1
 CI installs the Ollama version pinned in `.github/workflows/e2e-python.yml`,
 verifies the release archive checksum, and verifies the pulled model digest.
 
+The two policy scenarios evaluate through the native ACS Python SDK. The SDK
+is a PyO3 extension over the Rust core; building it from the in-tree source
+needs a Rust toolchain and a C compiler:
+
+```bash
+# Rust toolchain (for building the ACS SDK from source)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+```
+
+The custom policy runs in-process, so no external policy binary is required.
+
 ## Run
 
 From the repository root:
@@ -49,6 +63,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install \
   -e agent-governance-python/agent-governance-toolkit-core \
+  ./policy-engine/sdk/python \
   pytest pytest-timeout
 AGT_E2E_MODEL=llama3.1 \
 AGT_E2E_MODEL_ATTEMPTS=3 \
