@@ -5,6 +5,40 @@ entries appear first.
 
 ---
 
+## MerkleAuditChain now records a canonical, reproducible Merkle root
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-governance-python` (`agentmesh.governance.audit`):
+  `MerkleAuditChain.add_entry`, `MerkleAuditChain.get_root_hash`,
+  `AuditLog.export` (`merkle_root` / `chain_root` fields), and Merkle inclusion
+  proofs from `MerkleAuditChain.get_proof`.
+
+**What changed:**
+
+The incremental tree builder padded interior levels with the leaf sentinel
+`'0' * 64` rather than the empty-subtree constant `E(k)` (where `E(0) = '0' * 64`
+and `E(k+1) = SHA-256(E(k) || E(k))`). The recorded root therefore diverged from
+a from-scratch rebuild of the same leaves for most chain sizes (22 of the first
+32: n = 5, 6, 9-14, 17-30, and so on), so an exported `merkle_root` could not be
+reproduced by a verifier that rebuilt the tree. Interior padding now uses `E(k)`,
+so the incremental root, a from-scratch rebuild, and an independent textbook
+recomputation all agree, and the update stays O(log n) per append.
+
+**Impact / required action:**
+
+For the affected chain sizes the exported `merkle_root` (and the corresponding
+inclusion proofs) now differ from values produced by earlier releases. Consumers
+who archived `AuditLog.export()` output as compliance evidence will see a
+mismatch when re-verifying old exports against a current build. Re-export and
+re-anchor any archived roots, or pin the prior version to verify pre-existing
+evidence. Entry hashes and the linear `previous_hash` chain (`verify_chain`) are
+unchanged.
+
+---
+
 ## acs-generator is now a CLI-only package
 
 **Date:** TBD (next `acs-generator` release)

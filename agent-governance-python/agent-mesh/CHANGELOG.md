@@ -5,6 +5,19 @@ All notable changes to AgentMesh will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `MerkleAuditChain` now records a canonical, reproducible Merkle root. The
+  incremental `add_entry` padded interior tree levels with the leaf sentinel
+  `'0' * 64` instead of the empty-subtree constant `E(k)`, so the recorded root
+  diverged from a from-scratch rebuild for most chain sizes (22 of the first 32)
+  and an exported `merkle_root` could not be reproduced by an independent
+  verifier. Interior padding now uses `E(k)`, keeping the update O(log n) per
+  append. Exported `merkle_root` values change for the affected sizes; see
+  `BREAKING_CHANGES.md`.
+
 ## [1.0.0-alpha.1] - 2026-02-01
 
 ### Added

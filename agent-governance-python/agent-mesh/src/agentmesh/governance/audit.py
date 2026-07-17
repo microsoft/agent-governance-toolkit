@@ -279,21 +279,36 @@ class MerkleAuditChain:
         self._entries: list[AuditEntry] = []
         self._tree: list[list[MerkleNode]] = []
         self._root_hash: Optional[str] = None
+        # E(k): the Merkle hash of a fully zero-padded subtree of height k.
+        # E(0) is the zero-leaf sentinel; E(k+1) = SHA-256(E(k) || E(k)).
+        # Grown lazily by _empty_subtree_hash().
+        self._empty_hashes: list[str] = ['0' * 64]
+
+    def _empty_subtree_hash(self, level: int) -> str:
+        """Return E(level): the canonical hash of an all-zero subtree of that height.
+
+        Interior padding must use E(level), not the leaf sentinel E(0). Padding an
+        interior level with a bare '0'*64 makes the incremental root diverge from a
+        from-scratch rebuild (which pads at the leaf level and hashes the zeros
+        upward), so an exported ``merkle_root`` could not be reproduced by a verifier.
+        """
+        while len(self._empty_hashes) <= level:
+            prev = self._empty_hashes[-1]
+            self._empty_hashes.append(hashlib.sha256((prev + prev).encode()).hexdigest())
+        return self._empty_hashes[level]
 
     def add_entry(self, entry: AuditEntry) -> None:
-        """Add an entry and rebuild the Merkle tree over all entries.
+        """Add an entry and update the Merkle tree incrementally.
 
-        The tree is rebuilt from every leaf via :meth:`_rebuild_tree`, so the
-        root recorded here is byte-identical to an independent recomputation
-        over the same entries. The previous incremental update padded
-        *interior* tree levels with singleton zero nodes, whereas
-        :meth:`_rebuild_tree` pads at the *leaf* level and hashes the zero
-        padding upward. Those two constructions produced different roots once
-        a real leaf's authentication path reached an interior padding node
-        (first observable at five entries), so an exported ``merkle_root``
-        could not be reproduced by a verifier rebuilding the tree from the
-        same leaves. Rebuilding on each append keeps the live root and a
-        from-scratch verification in agreement for every entry count.
+        Interior padding uses the empty-subtree constant :meth:`_empty_subtree_hash`
+        (E(k)) rather than a bare ``'0' * 64`` sentinel at every level. The former
+        code padded interior levels with E(0), so the incremental root diverged from
+        a from-scratch rebuild (which pads at the leaf level and hashes the zeros
+        upward) as soon as a real leaf's authentication path reached an interior
+        padding node (first observable at five entries). With E(k) padding the
+        incremental construction converges on the same canonical root as
+        :meth:`_rebuild_tree`, so an exported ``merkle_root`` is reproducible by a
+        verifier, while the update stays O(log n) per append.
         """
         # Set previous hash
         if self._entries:
@@ -304,11 +319,67 @@ class MerkleAuditChain:
 
         self._entries.append(entry)
 
-        # Rebuild the tree so the stored root matches an independent
-        # recomputation over the same leaves (see docstring). A full rebuild
-        # is O(n) per append; audit volumes make this negligible next to a
-        # non-reproducible tamper-evidence root.
-        self._rebuild_tree()
+        new_leaf = MerkleNode(
+            hash=entry.entry_hash,
+            is_leaf=True,
+            entry_id=entry.entry_id,
+        )
+
+        n = len(self._entries)
+
+        if n == 1:
+            # First entry — initialize tree
+            self._tree = [[new_leaf]]
+            self._root_hash = new_leaf.hash
+            return
+
+        # Check if we need to expand the tree capacity
+        capacity = len(self._tree[0])
+        if n > capacity:
+            # Double capacity: pad each level with its own empty-subtree
+            # constant E(level), then add a new root level.
+            for level_idx in range(len(self._tree)):
+                self._tree[level_idx].extend(
+                    [MerkleNode(hash=self._empty_subtree_hash(level_idx))
+                     for _ in range(len(self._tree[level_idx]))]
+                )
+            # Add new root level. The old root's sibling is an all-zero subtree
+            # at the old top level; the new level's spare slot is one higher.
+            old_root = self._tree[-1][0]
+            empty_sibling = MerkleNode(hash=self._empty_subtree_hash(len(self._tree) - 1))
+            combined = old_root.hash + empty_sibling.hash
+            new_root = MerkleNode(
+                hash=hashlib.sha256(combined.encode()).hexdigest(),
+                left_child=old_root.hash,
+                right_child=empty_sibling.hash,
+            )
+            self._tree.append([new_root, MerkleNode(hash=self._empty_subtree_hash(len(self._tree)))])
+
+        # Place new leaf
+        leaf_idx = n - 1
+        self._tree[0][leaf_idx] = new_leaf
+
+        # Update path from leaf to root
+        idx = leaf_idx
+        for level_idx in range(len(self._tree) - 1):
+            parent_idx = idx // 2
+            left_idx = parent_idx * 2
+            right_idx = left_idx + 1
+
+            left = self._tree[level_idx][left_idx]
+            right = self._tree[level_idx][right_idx] if right_idx < len(self._tree[level_idx]) else left
+
+            combined = left.hash + right.hash
+            parent_hash = hashlib.sha256(combined.encode()).hexdigest()
+
+            self._tree[level_idx + 1][parent_idx] = MerkleNode(
+                hash=parent_hash,
+                left_child=left.hash,
+                right_child=right.hash,
+            )
+            idx = parent_idx
+
+        self._root_hash = self._tree[-1][0].hash if self._tree else None
 
     def _rebuild_tree(self) -> None:
         """Rebuild Merkle tree from entries (full rebuild, used for verification)."""
@@ -332,13 +403,15 @@ class MerkleAuditChain:
 
         self._tree = [leaves]
 
-        # Build tree bottom-up
+        # Build tree bottom-up. Leaves are padded to a power of two above, so
+        # every level has an even length and each node always has a right
+        # sibling; no odd-duplication fallback is needed.
         current_level = leaves
         while len(current_level) > 1:
             next_level = []
             for i in range(0, len(current_level), 2):
                 left = current_level[i]
-                right = current_level[i + 1] if i + 1 < len(current_level) else left
+                right = current_level[i + 1]
 
                 combined = left.hash + right.hash
                 parent_hash = hashlib.sha256(combined.encode()).hexdigest()

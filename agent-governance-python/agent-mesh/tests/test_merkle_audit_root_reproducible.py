@@ -29,25 +29,57 @@ def _entry(i: int) -> AuditEntry:
     )
 
 
-def _rebuilt_root(chain: MerkleAuditChain) -> str | None:
-    """Independently recompute the root from the recorded entries."""
-    chain._rebuild_tree()
-    return chain.get_root_hash()
+def _textbook_merkle_root(leaf_hashes: list[str]) -> str | None:
+    """Independent, pure-hashlib textbook Merkle root (zero-leaf padded to a
+    power of two).
+
+    Deliberately shares no code with :class:`MerkleAuditChain`, so the
+    reproducibility assertions cannot pass by comparing the implementation with
+    itself.
+    """
+    if not leaf_hashes:
+        return None
+    level = list(leaf_hashes)
+    while len(level) & (len(level) - 1) != 0:
+        level.append('0' * 64)
+    while len(level) > 1:
+        level = [
+            hashlib.sha256((level[i] + level[i + 1]).encode()).hexdigest()
+            for i in range(0, len(level), 2)
+        ]
+    return level[0]
 
 
 class TestMerkleRootReproducible:
-    def test_incremental_root_matches_rebuild_for_every_size(self):
-        # Spans the first two capacity doublings and the sizes that diverged
-        # before the fix (5, 6, 9).
-        for n in range(1, 17):
+    def test_incremental_root_matches_independent_recompute(self):
+        # The incremental root must equal a from-scratch textbook recomputation
+        # over the same leaves, across several capacity doublings and every size
+        # that diverged before the fix (5, 6, 9-14, 17-30).
+        for n in range(1, 33):
             chain = MerkleAuditChain()
             for i in range(n):
                 chain.add_entry(_entry(i))
             incremental = chain.get_root_hash()
-            rebuilt = _rebuilt_root(chain)
-            assert incremental == rebuilt, (
-                f"n={n}: incremental root {incremental} != rebuilt root {rebuilt}"
+            independent = _textbook_merkle_root([e.entry_hash for e in chain._entries])
+            assert incremental == independent, (
+                f"n={n}: incremental root {incremental} != independent recompute {independent}"
             )
+
+    def test_incremental_root_matches_full_rebuild(self):
+        # The incremental construction and the from-scratch _rebuild_tree are
+        # separate code paths that must converge on the same canonical root.
+        for n in (5, 6, 9, 13, 16, 20):
+            chain = MerkleAuditChain()
+            for i in range(n):
+                chain.add_entry(_entry(i))
+            incremental = chain.get_root_hash()
+            chain._rebuild_tree()
+            assert chain.get_root_hash() == incremental, f"n={n}: rebuild disagrees with incremental"
+
+    def test_empty_chain_root_is_none(self):
+        chain = MerkleAuditChain()
+        assert chain.get_root_hash() is None
+        assert _textbook_merkle_root([]) is None
 
     def test_five_entries_is_the_minimal_reproducer(self):
         chain = MerkleAuditChain()
@@ -59,8 +91,8 @@ class TestMerkleRootReproducible:
         for entry in list(chain._entries):
             fresh.add_entry(entry)
         assert fresh.get_root_hash() == recorded
-        # And a from-scratch rebuild over the recorded entries must agree.
-        assert _rebuilt_root(chain) == recorded
+        # And an independent recompute over the recorded entries must agree.
+        assert _textbook_merkle_root([e.entry_hash for e in chain._entries]) == recorded
 
     def test_inclusion_proofs_verify_against_recorded_root(self):
         chain = MerkleAuditChain()
@@ -81,4 +113,4 @@ class TestMerkleRootReproducible:
         # Corrupt a stored leaf hash; a verifier that recomputes the root must
         # observe a different value, i.e. tampering remains detectable.
         chain._entries[1].entry_hash = hashlib.sha256(b"tampered").hexdigest()
-        assert _rebuilt_root(chain) != recorded
+        assert _textbook_merkle_root([e.entry_hash for e in chain._entries]) != recorded
