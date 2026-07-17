@@ -17,9 +17,9 @@ entries appear first.
 
 **What changed:**
 
-`acs-generator` `0.4.0b0` no longer re-exports implementation classes from its
-package initializer. The package remains the `acs` and `acs-generate` command
-line artifact generator. Reusable artifact validation moved to
+The next `acs-generator` release no longer re-exports implementation classes
+from its package initializer. The package remains the `acs` and `acs-generate`
+command line artifact generator. Reusable artifact validation moved to
 `agent_control_specification.validation`.
 
 **Why:**

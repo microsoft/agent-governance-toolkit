@@ -1,6 +1,6 @@
 {
   "name": "agent-control-specification-linux-arm64-gnu",
-  "version": "0.3.1-beta.1",
+  "version": "0.3.1-beta.0",
   "description": "Native Agent Control Specification Node.js binding for linux/arm64 glibc.",
   "license": "MIT",
   "os": ["linux"],

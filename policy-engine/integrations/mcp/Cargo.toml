@@ -1,6 +1,6 @@
 [package]
 name = "agent_control_specification_mcp"
-version = "0.3.1-beta.1"
+version = "0.3.1-beta.0"
 edition = "2021"
 rust-version = "1.85"
 publish = false
@@ -10,7 +10,7 @@ description = "rmcp server tool-call guard backed by Agent Control Specification
 doctest = false
 
 [dependencies]
-agent_control_specification = { version = "0.3.1-beta.1", path = "../../sdk/rust" }
+agent_control_specification = { version = "0.3.1-beta.0", path = "../../sdk/rust" }
 rmcp = "1.7"
 serde_json = "1"
 

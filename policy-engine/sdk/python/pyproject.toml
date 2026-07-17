@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "agent-control-specification"
-version = "0.3.1b1"
+version = "0.3.1b0"
 description = "Thin Python SDK surface for the stateless Agent Control Specification runtime"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,6 +24,7 @@ classifiers = [
 # Optional real-framework packages exercised by the gated integration
 # tests in tests/test_real_packages.py (skipped when not installed).
 [project.optional-dependencies]
+
 litellm-proxy = [
   "litellm[proxy]>=1.40",
   "fastapi>=0.100",

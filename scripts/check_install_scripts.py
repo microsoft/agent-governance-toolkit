@@ -56,7 +56,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from functools import lru_cache
 from pathlib import PurePosixPath
 
 import _supply_chain_common as common
@@ -261,39 +260,6 @@ def fetch_install_scripts(package: str, version: str) -> dict[str, str] | None:
     return {k: v for k, v in scripts.items() if k in LIFECYCLE_KEYS and isinstance(v, str) and v.strip()}
 
 
-@lru_cache(maxsize=1)
-def _local_workspace_packages() -> dict[tuple[str, str], dict[str, str]]:
-    """Return install scripts for exact-version packages defined at HEAD.
-
-    Coordinated first-party release PRs bump optional native packages before
-    those versions exist in npm. Those are not external dependency adoption,
-    but their checked-in package manifests still need the same lifecycle-script
-    audit rather than a registry 404.
-    """
-    packages: dict[tuple[str, str], dict[str, str]] = {}
-    paths = common.run_git(["ls-tree", "-r", "--name-only", "HEAD"]).splitlines()
-    for path in paths:
-        if _basename(path) != "package.json":
-            continue
-        manifest = common.load_json_at("HEAD", path)
-        if not isinstance(manifest, dict):
-            continue
-        name = manifest.get("name")
-        version = manifest.get("version")
-        if not isinstance(name, str) or not isinstance(version, str):
-            continue
-        if not common.is_safe_name(name) or not common.is_safe_version(version):
-            continue
-        scripts = manifest.get("scripts")
-        scripts = scripts if isinstance(scripts, dict) else {}
-        packages[(name, version)] = {
-            key: value
-            for key, value in scripts.items()
-            if key in LIFECYCLE_KEYS and isinstance(value, str) and value.strip()
-        }
-    return packages
-
-
 # --------------------------- CLI / main ---------------------------
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -376,18 +342,13 @@ def main_with_args(argv: list[str]) -> int:
             )
             continue
 
-        local_packages = _local_workspace_packages()
-        if (pkg, ver) in local_packages:
-            scripts = local_packages[(pkg, ver)]
-            print(f"  LOCAL: auditing checked-in {pkg}@{ver} package manifest")
-        else:
-            try:
-                scripts = fetch_install_scripts(pkg, ver)
-            except LookupError as e:
-                findings.append(
-                    f"  HARD FAIL: {pkg}@{ver} not found in npm registry — {e}  [{source}]"
-                )
-                continue
+        try:
+            scripts = fetch_install_scripts(pkg, ver)
+        except LookupError as e:
+            findings.append(
+                f"  HARD FAIL: {pkg}@{ver} not found in npm registry — {e}  [{source}]"
+            )
+            continue
 
         if scripts is None:
             findings.append(

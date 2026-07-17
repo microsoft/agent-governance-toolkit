@@ -1,6 +1,6 @@
 {
   "name": "agent-control-specification",
-  "version": "0.3.1-beta.1",
+  "version": "0.3.1-beta.0",
   "description": "Thin Node.js SDK surface for the stateless Agent Control Specification runtime",
   "license": "MIT",
   "repository": {
@@ -38,16 +38,16 @@
     "tsconfig.json"
   ],
   "optionalDependencies": {
-    "agent-control-specification-linux-x64-gnu": "0.3.1-beta.1",
-    "agent-control-specification-linux-arm64-gnu": "0.3.1-beta.1",
-    "agent-control-specification-darwin-x64": "0.3.1-beta.1",
-    "agent-control-specification-darwin-arm64": "0.3.1-beta.1",
-    "agent-control-specification-win32-x64-msvc": "0.3.1-beta.1",
-    "agent-control-specification-opa-linux-x64": "0.3.1-beta.1",
-    "agent-control-specification-opa-linux-arm64": "0.3.1-beta.1",
-    "agent-control-specification-opa-darwin-x64": "0.3.1-beta.1",
-    "agent-control-specification-opa-darwin-arm64": "0.3.1-beta.1",
-    "agent-control-specification-opa-win32-x64": "0.3.1-beta.1"
+    "agent-control-specification-linux-x64-gnu": "0.3.1-beta.0",
+    "agent-control-specification-linux-arm64-gnu": "0.3.1-beta.0",
+    "agent-control-specification-darwin-x64": "0.3.1-beta.0",
+    "agent-control-specification-darwin-arm64": "0.3.1-beta.0",
+    "agent-control-specification-win32-x64-msvc": "0.3.1-beta.0",
+    "agent-control-specification-opa-linux-x64": "0.3.1-beta.0",
+    "agent-control-specification-opa-linux-arm64": "0.3.1-beta.0",
+    "agent-control-specification-opa-darwin-x64": "0.3.1-beta.0",
+    "agent-control-specification-opa-darwin-arm64": "0.3.1-beta.0",
+    "agent-control-specification-opa-win32-x64": "0.3.1-beta.0"
   },
   "scripts": {
     "vendor:opa": "node scripts/fetch-opa.mjs",
