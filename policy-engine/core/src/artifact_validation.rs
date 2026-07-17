@@ -679,6 +679,68 @@ intervention_points:
             .any(|diagnostic| diagnostic.code == "manifest_semantic_error"));
     }
 
+    #[test]
+    fn manifest_schema_preserves_extends_composition_contract() {
+        let valid = [
+            r#"agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: composition-root
+extends:
+  - layers/base.yaml
+  - url: https://example.test/remote.yaml
+    sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+"#,
+            r#"agent_control_specification_version: 0.3.1-beta
+extends:
+  - base/manifest.yaml
+annotators:
+  overlay:
+    type: classifier
+intervention_points:
+  input:
+    annotations:
+      overlay:
+        from: $policy_target.text
+"#,
+        ];
+        for manifest in valid {
+            let result = validate_acs_manifest(manifest);
+            assert!(result.valid, "{:?}", result.diagnostics);
+        }
+
+        let invalid = [
+            "agent_control_specification_version: 0.3.1-beta\n",
+            "agent_control_specification_version: 0.3.1-beta\nextends: [http://example.test/base.yaml]\n",
+            r#"agent_control_specification_version: 0.3.1-beta
+extends:
+  - url: https://example.test/base.yaml
+    integrity: sha256-abc
+    sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+"#,
+            r#"agent_control_specification_version: 0.3.1-beta
+extends:
+  - base/manifest.yaml
+annotators:
+  overlay:
+    type: classifier
+intervention_points:
+  input:
+    annotations:
+      review_signal:
+        from: $policy_target.text
+        annotator: overlay
+"#,
+        ];
+        for manifest in invalid {
+            let result = validate_acs_manifest(manifest);
+            assert!(!result.valid, "{manifest}");
+            assert!(result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "manifest_schema_error"));
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn applies_one_timeout_budget_across_all_rego_modules() {
