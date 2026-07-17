@@ -97,6 +97,21 @@ Rule-based policy engine with wildcard and condition matching.
 | `(*PolicyEngine).LoadRego(options)` | Register an OPA/Rego backend |
 | `(*PolicyEngine).LoadCedar(options)` | Register a Cedar backend |
 
+### Approval Chains (`approval_*.go`)
+
+Action-bound, fail-closed approval chains for `require_approval` decisions.
+
+| Type / Function | Description |
+|---|---|
+| `ActionBinding` | Captures the exact operation, target, agent, subject, and parameters being approved |
+| `ApprovalStore`, `NewInMemoryApprovalStore()` | Persist request lifecycle, chain entries, resolutions, and one-time consumption state |
+| `NewApprovalCoordinator(chain, ...options)` | Create an ordered approval-chain coordinator |
+| `(*ApprovalCoordinator).OpenRequest(binding)` | Open an approval request without collecting approver entries |
+| `(*ApprovalCoordinator).SubmitEntry(requestID, stage, vote)` | Append an approver entry and resolve when required stages are satisfied |
+| `(*ApprovalCoordinator).ValidateForExecution(requestID, binding)` | Revalidate digest, policy version, chain version, tamper evidence, and consume before execution |
+| `NewWebhookApprover(url, ...options)` | Create a versioned webhook approval transport |
+| `WithApprovalCoordinator(coordinator)` | Route client `require_approval` decisions through an approval chain |
+
 ### External Policy Backends (`policy_backends.go`)
 
 OPA/Rego and Cedar support with fail-closed evaluation paths.
