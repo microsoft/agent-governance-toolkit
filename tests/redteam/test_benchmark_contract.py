@@ -9,6 +9,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -109,6 +110,48 @@ class BenchmarkContractTests(unittest.TestCase):
             self.benchmark.ContractError, "unexpected fields.*payload"
         ):
             self.benchmark.validate_scenarios(scenarios)
+
+    def test_missing_and_malformed_scenario_files_fail_with_structured_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(
+                self.benchmark.ContractError, "scenario file not found"
+            ):
+                self.benchmark.load_scenarios(root / "missing.json")
+
+            malformed = root / "malformed.json"
+            malformed.write_text("[{", encoding="utf-8")
+            with self.assertRaisesRegex(
+                self.benchmark.ContractError, "invalid scenario JSON"
+            ):
+                self.benchmark.load_scenarios(malformed)
+
+    def test_live_url_is_rejected_by_metadata_hygiene(self):
+        with self.assertRaisesRegex(self.benchmark.HygieneError, "live URL"):
+            self.benchmark.ensure_hygiene(
+                {"title": "See https://example.invalid/live"}, source="planted-url"
+            )
+
+    def test_duplicate_scenario_id_is_rejected(self):
+        scenarios = self.benchmark.load_scenarios(SCENARIOS)
+        scenarios[1]["id"] = scenarios[0]["id"]
+
+        with self.assertRaisesRegex(
+            self.benchmark.ContractError, "duplicate scenario id"
+        ):
+            self.benchmark.validate_scenarios(scenarios)
+
+    def test_unknown_trap_and_mismatched_control_are_rejected(self):
+        cases = (
+            ("trap_class", "Unknown Trap", "trap_class is unknown"),
+            ("control_id", "mock:wrong-boundary", "tool/control does not match"),
+        )
+        for field, value, error in cases:
+            with self.subTest(field=field):
+                scenarios = self.benchmark.load_scenarios(SCENARIOS)
+                scenarios[0][field] = value
+                with self.assertRaisesRegex(self.benchmark.ContractError, error):
+                    self.benchmark.validate_scenarios(scenarios)
 
     def test_missing_class_kind_cell_is_rejected(self):
         scenarios = self.benchmark.load_scenarios(SCENARIOS)[:-1]
@@ -288,11 +331,15 @@ class BenchmarkContractTests(unittest.TestCase):
             self.assertFalse((out_path / "report.json").exists())
 
     def test_smoke_script_runs_front_to_end(self):
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("Bash is required for the smoke wrapper")
         completed = subprocess.run(
-            ["bash", str(SMOKE)],
+            [bash, f"./{SMOKE.name}"],
             check=False,
             capture_output=True,
             text=True,
+            cwd=BENCHMARK_DIR,
         )
 
         self.assertEqual(0, completed.returncode, completed.stderr)
