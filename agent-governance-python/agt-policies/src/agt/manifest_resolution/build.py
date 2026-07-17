@@ -328,7 +328,10 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "eq":
         return f"{indent}{accessor} == {literal}"
     if operator == "ne":
-        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v != {literal}"
+        # No `_v != null` guard: a missing field (accessor -> null) IS
+        # "not equal" to any non-null value, so it must satisfy a deny
+        # rule built on `ne` rather than fail the rule body (#3297).
+        return f"{indent}_v := {accessor}\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
     if operator == "lt":
@@ -340,7 +343,10 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "in":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
     if operator == "not_in":
-        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not _v in {literal}"
+        # Same reasoning as `ne`: a missing field is not a member of the
+        # set, so it must satisfy `not_in` rather than fail closed on
+        # the null guard (#3297).
+        return f"{indent}_v := {accessor}\n{indent}not _v in {literal}"
     if operator == "exists":
         return f"{indent}{accessor} != null"
     if operator == "contains":

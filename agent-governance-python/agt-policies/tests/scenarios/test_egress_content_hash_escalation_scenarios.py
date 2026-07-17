@@ -238,3 +238,102 @@ def test_tampered_content_hash_denied(tmp_path: Path) -> None:
     )
     assert result.is_deny
     assert result.reason == "deny_unknown_tool_hash"
+
+
+def test_missing_content_hash_denied(tmp_path: Path) -> None:
+    """A call that omits content_hash entirely must not bypass the `ne`
+    gate. Omission is trivial for a caller to do and must not be
+    treated as an implicit match (#3297)."""
+    snap = pre_tool_call_snapshot(
+        agent_id="coder",
+        tool_name="execute_code",
+        args={"code": "print('hello')"},
+    )
+    result = run_scenario(
+        workspace_root=tmp_path,
+        governance_yaml={"governance.yaml": _content_hash_governance()},
+        intervention_point="pre_tool_call",
+        snapshot=snap,
+    )
+    assert result.is_deny
+    assert result.reason == "deny_unknown_tool_hash"
+
+
+# ── Region allowlist (not_in) ───────────────────────────────────────
+
+
+def _region_allowlist_governance() -> dict:
+    """Deny calls whose declared region falls outside the allowlist. A
+    call that omits region entirely must not bypass the gate."""
+    return {
+        "rules": [
+            {
+                "name": "deny_region_not_allowlisted",
+                "condition": {
+                    "field": "tool_call.args.region",
+                    "operator": "not_in",
+                    "value": ["us-east", "us-west"],
+                },
+                "action": "deny",
+                "priority": 100,
+                "message": "region is not on the allowlist",
+            }
+        ],
+        "tools": {"transfer_data": {"clearance": "restricted"}},
+        "intervention_points": {
+            "pre_tool_call": {
+                "policy_target": "$.tool_call.args",
+                "policy_target_kind": "tool_args",
+                "tool_name_from": "$.tool_call.name",
+                "policy": {"id": "agt_legacy_rules"},
+            }
+        },
+    }
+
+
+def test_region_in_allowlist_passes(tmp_path: Path) -> None:
+    snap = pre_tool_call_snapshot(
+        agent_id="etl",
+        tool_name="transfer_data",
+        args={"region": "us-east"},
+    )
+    result = run_scenario(
+        workspace_root=tmp_path,
+        governance_yaml={"governance.yaml": _region_allowlist_governance()},
+        intervention_point="pre_tool_call",
+        snapshot=snap,
+    )
+    assert result.is_allow
+
+
+def test_region_outside_allowlist_denied(tmp_path: Path) -> None:
+    snap = pre_tool_call_snapshot(
+        agent_id="etl",
+        tool_name="transfer_data",
+        args={"region": "eu-west"},
+    )
+    result = run_scenario(
+        workspace_root=tmp_path,
+        governance_yaml={"governance.yaml": _region_allowlist_governance()},
+        intervention_point="pre_tool_call",
+        snapshot=snap,
+    )
+    assert result.is_deny
+    assert result.reason == "deny_region_not_allowlisted"
+
+
+def test_region_missing_denied(tmp_path: Path) -> None:
+    """Omitting region entirely must not bypass the not_in gate (#3297)."""
+    snap = pre_tool_call_snapshot(
+        agent_id="etl",
+        tool_name="transfer_data",
+        args={},
+    )
+    result = run_scenario(
+        workspace_root=tmp_path,
+        governance_yaml={"governance.yaml": _region_allowlist_governance()},
+        intervention_point="pre_tool_call",
+        snapshot=snap,
+    )
+    assert result.is_deny
+    assert result.reason == "deny_region_not_allowlisted"
