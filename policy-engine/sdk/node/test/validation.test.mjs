@@ -11,8 +11,8 @@ const fixtureUrl = new URL("../../../tests/parity/artifact-validation-cases.json
 const corpus = JSON.parse(await readFile(fixtureUrl, "utf8"));
 
 for (const fixture of corpus.cases) {
-  test(`artifact validation parity ${fixture.name}`, () => {
-    const result = validateArtifacts(fixture.manifest, fixture.rego);
+  test(`artifact validation parity ${fixture.name}`, async () => {
+    const result = await validateArtifacts(fixture.manifest, fixture.rego);
     assert.equal(result.valid, fixture.valid);
     assert.deepEqual(
       result.diagnostics.map((diagnostic) => diagnostic.code),

@@ -828,18 +828,7 @@ pub unsafe extern "C" fn acs_validate_artifacts(
                     snippet: None,
                 }],
             };
-            return match serde_json::to_value(result) {
-                Ok(value) => json_to_c(&value),
-                Err(error) => {
-                    unsafe {
-                        write_err(
-                            err,
-                            &format!("failed to serialize validation limit result: {error}"),
-                        )
-                    };
-                    std::ptr::null_mut()
-                }
-            };
+            return unsafe { validation_result_to_c(&result, err) };
         }
         let modules: BTreeMap<String, String> = match serde_json::from_str(rego_modules_json) {
             Ok(modules) => modules,
@@ -850,19 +839,27 @@ pub unsafe extern "C" fn acs_validate_artifacts(
         };
         let opa_path = unsafe { cstr_to_str(opa_path) }.map(Path::new);
         let result = crate::validate_acs_artifacts(manifest_yaml, &modules, opa_path);
-        match serde_json::to_string(&result) {
-            Ok(json) => cstring_lossy(&json).into_raw(),
-            Err(error) => {
-                unsafe {
-                    write_err(
-                        err,
-                        &format!("failed to serialize validation result: {error}"),
-                    )
-                };
-                std::ptr::null_mut()
-            }
-        }
+        unsafe { validation_result_to_c(&result, err) }
     })
+}
+
+#[cfg(feature = "opa")]
+unsafe fn validation_result_to_c(
+    result: &crate::ArtifactValidationResult,
+    err: *mut *mut c_char,
+) -> *mut c_char {
+    match serde_json::to_string(result) {
+        Ok(json) => cstring_lossy(&json).into_raw(),
+        Err(error) => {
+            unsafe {
+                write_err(
+                    err,
+                    &format!("failed to serialize validation result: {error}"),
+                )
+            };
+            std::ptr::null_mut()
+        }
+    }
 }
 
 /// Free a Rust-allocated string returned by ACS. Null-safe.

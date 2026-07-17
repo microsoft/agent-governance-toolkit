@@ -92,7 +92,7 @@ version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification_core",
  "pyo3",
- "pyo3-build-config 0.28.3",
+ "pyo3-build-config",
  "serde_json",
 ]
 
@@ -2197,18 +2197,9 @@ dependencies = [
  "libc",
  "once_cell",
  "portable-atomic",
- "pyo3-build-config 0.29.0",
+ "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
-]
-
-[[package]]
-name = "pyo3-build-config"
-version = "0.28.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e368e7ddfdeb98c9bca7f8383be1648fd84ab466bf2bc015e94008db6d35611e"
-dependencies = [
- "target-lexicon",
 ]
 
 [[package]]
@@ -2227,7 +2218,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca85c467da1bbc8d866eea5deff9cf29ea5f7785054a17da36e65bda9c05845b"
 dependencies = [
  "libc",
- "pyo3-build-config 0.29.0",
+ "pyo3-build-config",
 ]
 
 [[package]]

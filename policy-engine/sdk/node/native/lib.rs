@@ -65,23 +65,6 @@ fn url_fetch_limits(
     if let Some(bytes) = max_bytes {
         limits.max_manifest_url_bytes = bytes as usize;
     }
-
-    #[napi]
-    #[allow(dead_code)]
-    pub fn validate_artifacts(
-        manifest: String,
-        rego_modules: Value,
-        opa_path: Option<String>,
-    ) -> Result<Value> {
-        let modules: BTreeMap<String, String> = serde_json::from_value(rego_modules)
-            .map_err(|error| Error::from_reason(format!("invalid Rego module map: {error}")))?;
-        serde_json::to_value(validate_acs_artifacts(
-            &manifest,
-            &modules,
-            opa_path.as_deref().map(Path::new),
-        ))
-        .map_err(|error| Error::from_reason(error.to_string()))
-    }
     if let Some(timeout) = timeout_ms {
         limits.manifest_url_timeout_ms = timeout as u64;
     }
@@ -89,6 +72,26 @@ fn url_fetch_limits(
         limits.max_manifest_url_redirects = redirects as usize;
     }
     limits
+}
+
+#[napi]
+pub async fn validate_artifacts(
+    manifest: String,
+    rego_modules: Value,
+    opa_path: Option<String>,
+) -> Result<Value> {
+    let modules: BTreeMap<String, String> = serde_json::from_value(rego_modules)
+        .map_err(|error| Error::from_reason(format!("invalid Rego module map: {error}")))?;
+    tokio::task::spawn_blocking(move || {
+        serde_json::to_value(validate_acs_artifacts(
+            &manifest,
+            &modules,
+            opa_path.as_deref().map(Path::new),
+        ))
+        .map_err(|error| Error::from_reason(error.to_string()))
+    })
+    .await
+    .map_err(|error| Error::from_reason(format!("artifact validation task failed: {error}")))?
 }
 
 struct JsAnnotatorDispatcher(ThreadsafeFunction<String, ErrorStrategy::CalleeHandled>);

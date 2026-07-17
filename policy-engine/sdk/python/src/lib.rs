@@ -105,8 +105,9 @@ fn validate_artifacts(
     rego_modules: BTreeMap<String, String>,
     opa_path: Option<String>,
 ) -> PyResult<Py<PyAny>> {
+    let opa_path = opa_path.map(std::path::PathBuf::from);
     let result =
-        validate_artifacts_core(manifest, &rego_modules, opa_path.as_deref().map(Path::new));
+        py.detach(|| validate_artifacts_core(manifest, &rego_modules, opa_path.as_deref()));
     let value =
         serde_json::to_value(result).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
     json_value_to_py(py, &value)

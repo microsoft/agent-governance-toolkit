@@ -45,7 +45,7 @@ export function validateArtifacts(
   manifest: string,
   rego: string | Record<string, string>,
   opaPath?: string,
-): ArtifactValidationResult {
+): Promise<ArtifactValidationResult> {
   const modules = typeof rego === "string" ? { "policy.rego": rego } : rego;
   const resolvedOpaPath = configureOpaPath(opaPath);
   const validate = (
@@ -54,7 +54,7 @@ export function validateArtifacts(
         manifestText: string,
         regoModules: Record<string, string>,
         configuredOpaPath?: string,
-      ) => ArtifactValidationResult;
+      ) => Promise<ArtifactValidationResult>;
     }
   ).validateArtifacts;
   return validate(manifest, modules, resolvedOpaPath ?? opaPath);

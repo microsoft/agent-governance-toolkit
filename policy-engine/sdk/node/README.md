@@ -26,7 +26,7 @@ Validate authored manifest and Rego strings without constructing a runtime:
 ```js
 const { validateArtifacts } = require("agent-control-specification");
 
-const validation = validateArtifacts(manifestYaml, {
+const validation = await validateArtifacts(manifestYaml, {
   "policy.rego": regoSource,
 });
 ```

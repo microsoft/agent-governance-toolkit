@@ -4,6 +4,7 @@
 use agent_control_specification::{validate_acs_artifacts, OpaRegoRunner};
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::env;
 use std::path::Path;
 
 #[derive(Deserialize)]
@@ -23,6 +24,12 @@ struct Case {
 #[test]
 fn artifact_validation_matches_shared_parity_corpus() {
     if !OpaRegoRunner::from_environment().is_available() {
+        if env::var("AGENT_CONTROL_REQUIRE_OPA").as_deref() == Ok("1") {
+            panic!("AGENT_CONTROL_REQUIRE_OPA=1 but the 'opa' executable is not available");
+        }
+        eprintln!(
+            "skipping OPA-dependent test; set AGENT_CONTROL_REQUIRE_OPA=1 to fail when OPA is missing"
+        );
         return;
     }
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
