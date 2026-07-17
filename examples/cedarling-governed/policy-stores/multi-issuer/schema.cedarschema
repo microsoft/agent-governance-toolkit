@@ -1,9 +1,7 @@
 namespace AGT {
   type Url = {"host": String, "path": String, "protocol": String};
   entity Agent = {};
-  entity Resource = {
-    device?: String,
-  };
+  entity Resource = {};
   entity Access_Token = {
     sub?: String,
     iss?: Janssen::TrustedIssuer,
@@ -31,7 +29,6 @@ namespace Janssen {
   entity TrustedIssuer = {"issuer_entity_id": AGT::Url};
 }
 type Context = {
-  device?: String,
   tokens: {
     janssen_access_token?: AGT::Access_Token,
     total_token_count: Long
