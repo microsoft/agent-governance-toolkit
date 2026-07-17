@@ -58,15 +58,15 @@ jobs:
       - name: Pull and verify ATR package
         id: atr
         env:
-          # Pinned SHA-512 for agent-threat-rules@2.0.12 tarball published on
+          # Pinned SHA-512 for agent-threat-rules@3.5.6 tarball published on
           # the npm registry. If the registry republishes the same version with
           # different bytes (compromise / typosquat / overwrite), the integrity
           # check below fails and the workflow aborts. Update this value
           # together with the version bump above. Obtain a fresh value via:
           #   curl -s https://registry.npmjs.org/agent-threat-rules/<ver> \
           #     | jq -r .dist.integrity
-          ATR_VERSION: "2.0.12"
-          ATR_INTEGRITY: "sha512-+9voboBnYRUx6E9PijhL1lgMBznoolkmS2sQ1Y9QFpGWIrVD50ekjSYmrduS+2ISSs676+tRA/v8V5b8qrn9uQ=="
+          ATR_VERSION: "3.5.6"
+          ATR_INTEGRITY: "sha512-0TdoziKVJ0g5MhuSUCy1kzmlYKXti6qIMjWC802/0PBplYZVe7ktbqGbRN6ZxsVh9kKwiwnl77lRlC5YUKprlg=="
         run: |
           set -euo pipefail
           # Fetch the registry metadata, pin the tarball URL by version, and
