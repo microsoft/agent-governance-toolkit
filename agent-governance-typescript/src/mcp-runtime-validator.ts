@@ -108,7 +108,7 @@ const DESTRUCTIVE_PATTERNS: RegExp[] = [
   /\breboot\b/i,
   /\bmkfs\b/i,
   /\bdd\s+if=/i,
-  /:(){ :\|:\& };:/,
+  /:\(\)\s*\{\s*:\|:\&\s*\};:/,  // Fixed: properly escaped fork bomb
 ];
 
 /** Credential patterns (API keys, tokens, passwords). */
@@ -206,46 +206,66 @@ export class McpRuntimeValidator {
   ): void {
     for (const [key, value] of Object.entries(args)) {
       const paramPath = parentPath ? `${parentPath}.${key}` : key;
+      this.scanValue(paramPath, value, threats);
+    }
+  }
 
-      if (value === null || value === undefined) continue;
+  /** Recursively scan any value (object, array, or primitive). */
+  private scanValue(
+    paramPath: string,
+    value: unknown,
+    threats: McpCallThreat[],
+  ): void {
+    if (value === null || value === undefined) return;
 
-      if (typeof value === 'object' && !Array.isArray(value)) {
-        this.scanArguments(value as Record<string, unknown>, threats, paramPath);
-        continue;
-      }
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      this.scanArguments(value as Record<string, unknown>, threats, paramPath);
+      return;
+    }
 
-      if (Array.isArray(value)) {
-        for (let i = 0; i < value.length; i++) {
-          const elementPath = `${paramPath}[${i}]`;
-          const element = value[i];
-          if (typeof element === 'object' && element !== null && !Array.isArray(element)) {
-            this.scanArguments(element as Record<string, unknown>, threats, elementPath);
-          } else if (typeof element === 'string') {
-            this.scanStringValue(elementPath, element, threats);
-          }
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        const elementPath = `${paramPath}[${i}]`;
+        const element = value[i];
+        // Recurse into nested objects
+        if (typeof element === 'object' && element !== null && !Array.isArray(element)) {
+          this.scanArguments(element as Record<string, unknown>, threats, elementPath);
         }
-        continue;
+        // Recurse into nested arrays (fix for array-in-array bypass)
+        else if (Array.isArray(element)) {
+          this.scanValue(`${elementPath}`, element, threats);
+        }
+        // Scan string elements (pass isArrayElement=true for broader checks)
+        else if (typeof element === 'string') {
+          this.scanStringValue(elementPath, element, threats, true);
+        }
       }
+      return;
+    }
 
-      if (typeof value === 'string') {
-        this.scanStringValue(paramPath, value, threats);
-      }
+    if (typeof value === 'string') {
+      this.scanStringValue(paramPath, value, threats);
     }
   }
 
   /** Run all threat checks on a single string value. */
-  private scanStringValue(paramPath: string, value: string, threats: McpCallThreat[]): void {
+  private scanStringValue(paramPath: string, value: string, threats: McpCallThreat[], isArrayElement = false): void {
     const leafKey = paramPath.includes('.')
       ? paramPath.split('.').pop()!.replace(/\[\d+\]$/, '')
       : paramPath.replace(/\[\d+\]$/, '');
 
     this.checkParameterOverflow(paramPath, value, threats);
 
-    if (FILE_PATH_PARAM_NAMES.test(leafKey)) {
+    // For array elements, check path/SSRF patterns regardless of key name
+    // since array elements are positional and don't have meaningful param names
+    const checkPathBased = FILE_PATH_PARAM_NAMES.test(leafKey) || isArrayElement;
+    const checkUrlBased = URL_PARAM_NAMES.test(leafKey) || isArrayElement;
+
+    if (checkPathBased) {
       this.checkPathTraversal(paramPath, value, threats);
     }
 
-    if (URL_PARAM_NAMES.test(leafKey)) {
+    if (checkUrlBased) {
       this.checkSSRF(paramPath, value, threats);
     }
 
