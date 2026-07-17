@@ -1,7 +1,0 @@
-# Allow outbound only to the internal analytics domain; deny everything else.
-# Loaded via agent_os.egress_policy.EgressPolicy(default_action="deny").
-rules:
-  - domain: "*.internal.example"
-    ports: [443]
-    protocol: tcp
-    action: allow

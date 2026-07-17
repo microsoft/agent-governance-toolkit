@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from agent_control_specification import AgentControl, Decision, InterventionPoint
 
@@ -45,24 +47,65 @@ class _RulePolicy:
     """Host-owned ACS policy dispatcher.
 
     Applies the single declarative rule carried in the manifest's custom
-    policy ``config`` to the tool call presented at ``pre_tool_call``. Fails
-    closed: any tool that does not match the rule is denied.
+    policy ``config`` to the intervention-point snapshot. Each rule declares a
+    ``kind`` (defaulting to ``tool_name``) that selects the matcher below.
+    Fails closed: an unknown rule kind or an unmatched tool is denied.
     """
 
     def evaluate(self, invocation: dict[str, Any]) -> dict[str, Any]:
         rule = invocation["adapter_config"]["config"]["rule"]
-        tool_name = invocation["input"]["snapshot"]["tool_call"]["name"]
+        snapshot = invocation["input"]["snapshot"]
+        kind = rule.get("kind", "tool_name")
+        matcher = getattr(self, f"_eval_{kind}", None)
+        if matcher is None:
+            return _deny(f"Unknown ACS rule kind {kind!r}.")
+        return matcher(rule, snapshot)
+
+    def _eval_tool_name(
+        self, rule: dict[str, Any], snapshot: dict[str, Any]
+    ) -> dict[str, Any]:
+        tool_name = snapshot["tool_call"]["name"]
         if tool_name == rule["tool"]:
             return {
                 "decision": rule["decision"],
                 "reason": rule["reason"],
                 "message": rule.get("message", ""),
             }
-        return {
-            "decision": "deny",
-            "reason": "default_deny",
-            "message": f"No ACS rule matches tool {tool_name!r}.",
-        }
+        return _deny(f"No ACS rule matches tool {tool_name!r}.")
+
+    def _eval_arg_allowlist(
+        self, rule: dict[str, Any], snapshot: dict[str, Any]
+    ) -> dict[str, Any]:
+        call = snapshot["tool_call"]
+        if call["name"] != rule["tool"]:
+            return _deny(f"No ACS rule matches tool {call['name']!r}.")
+        value = call.get("args", {}).get(rule["arg"])
+        host = urlparse(value).hostname if isinstance(value, str) else None
+        allowed = host is not None and any(
+            fnmatch(host, pattern) for pattern in rule["allow_hosts"]
+        )
+        return _branch(rule, "allow" if allowed else "deny")
+
+    def _eval_content_scan(
+        self, rule: dict[str, Any], snapshot: dict[str, Any]
+    ) -> dict[str, Any]:
+        content = snapshot.get("tool_result", {}).get("content", "")
+        lowered = content.lower() if isinstance(content, str) else ""
+        poisoned = any(marker.lower() in lowered for marker in rule["markers"])
+        return _branch(rule, "deny" if poisoned else "allow")
+
+
+def _deny(message: str) -> dict[str, Any]:
+    return {"decision": "deny", "reason": "default_deny", "message": message}
+
+
+def _branch(rule: dict[str, Any], decision: str) -> dict[str, Any]:
+    branch = rule[decision]
+    return {
+        "decision": decision,
+        "reason": branch["reason"],
+        "message": branch.get("message", ""),
+    }
 
 
 def load_acs_runtime(policy_dir: str | Path) -> AgentControl:
@@ -83,15 +126,43 @@ def evaluate_pre_tool_call(
     agent_id: str,
     tool_name: str,
     arguments: dict[str, Any],
+    extra_snapshot: dict[str, Any] | None = None,
     session_id: str = "session-1",
 ) -> PolicyDecision:
     """Evaluate a tool call at the ACS ``pre_tool_call`` intervention point."""
-    snapshot = {
+    snapshot: dict[str, Any] = {
         "tool_call": {"id": f"{session_id}-1", "name": tool_name, "args": arguments},
         "actor": {"id": agent_id},
     }
+    if extra_snapshot:
+        snapshot.update(extra_snapshot)
+    return _evaluate(control, InterventionPoint.PRE_TOOL_CALL, snapshot)
+
+
+def evaluate_post_tool_call(
+    control: AgentControl,
+    *,
+    agent_id: str,
+    tool_name: str,
+    result: str,
+    session_id: str = "session-1",
+) -> PolicyDecision:
+    """Evaluate a tool result at the ACS ``post_tool_call`` intervention point."""
+    snapshot: dict[str, Any] = {
+        "tool_call": {"id": f"{session_id}-1", "name": tool_name, "args": {}},
+        "tool_result": {"content": result},
+        "actor": {"id": agent_id},
+    }
+    return _evaluate(control, InterventionPoint.POST_TOOL_CALL, snapshot)
+
+
+def _evaluate(
+    control: AgentControl,
+    intervention_point: InterventionPoint,
+    snapshot: dict[str, Any],
+) -> PolicyDecision:
     result = asyncio.run(
-        control.evaluate_intervention_point(InterventionPoint.PRE_TOOL_CALL, snapshot)
+        control.evaluate_intervention_point(intervention_point, snapshot)
     )
     verdict = result.verdict
     return PolicyDecision(

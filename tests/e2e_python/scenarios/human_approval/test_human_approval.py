@@ -2,27 +2,27 @@
 # Licensed under the MIT License.
 """Human-approval scenario: a high-risk action escalates before executing.
 
-This scenario is deterministic and does not require a model. It drives the
-production ``agent_os`` escalation manager: a high-blast-radius action is
-gated behind human approval, the approve path executes the action exactly
-once, and the reject path blocks it. Both paths leave an escalation audit
-trail.
+This scenario is deterministic and does not require a model. The ACS
+``pre_tool_call`` intervention point escalates a high-blast-radius deletion to
+a human approver instead of allowing or denying it outright. The host resolves
+the escalation: the approve path executes the action exactly once, the reject
+path blocks it, and both paths leave an escalation audit trail.
 """
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
-from agent_os.escalation import (
-    EscalationManager,
-    EscalationPolicy,
-    EscalationRequest,
+from support import (
+    PolicyDecision,
+    ScenarioResult,
+    evaluate_pre_tool_call,
+    load_acs_runtime,
+    write_artifact,
 )
 
-from support import ScenarioResult, write_artifact
 
-
+POLICY_DIR = Path(__file__).parent
 HIGH_RISK_ACTION = "delete_production_dataset"
 DATASET_ID = "prod-events"
 
@@ -35,67 +35,61 @@ class MockDataStore:
         self.deletions.append(dataset_id)
 
 
-def _build_manager(approve: bool) -> EscalationManager:
-    policy = EscalationPolicy(
-        actions_requiring_approval=[HIGH_RISK_ACTION],
-        timeout_seconds=5,
-        default_on_timeout="deny",
-    )
-
-    async def handler(request: EscalationRequest) -> None:
-        if approve:
-            manager.approve(
-                request.request_id, decided_by="oncall", reason="verified backup"
-            )
-        else:
-            manager.deny(
-                request.request_id, decided_by="oncall", reason="no backup on file"
-            )
-
-    manager = EscalationManager(policy, approval_handler=handler)
-    return manager
-
-
 def run_human_approval(
     approve: bool,
-) -> tuple[ScenarioResult, MockDataStore, EscalationManager]:
+) -> tuple[ScenarioResult, MockDataStore, list[dict[str, str]], PolicyDecision]:
     store = MockDataStore()
-    manager = _build_manager(approve)
-
-    decision = asyncio.run(
-        manager.request_approval(
-            agent_id="cleanup-agent",
-            action=HIGH_RISK_ACTION,
-            context={"dataset_id": DATASET_ID},
-            reason="quarterly cleanup",
-        )
+    runtime = load_acs_runtime(POLICY_DIR)
+    decision = evaluate_pre_tool_call(
+        runtime,
+        agent_id="cleanup-agent",
+        tool_name=HIGH_RISK_ACTION,
+        arguments={"dataset_id": DATASET_ID},
     )
-    if decision.approved:
+
+    audit_trail: list[dict[str, str]] = []
+    approved = False
+    if decision.verdict == "escalate":
+        audit_trail.append(
+            {"event_type": "escalated", "reason": decision.reason or ""}
+        )
+        approved = approve
+        audit_trail.append(
+            {
+                "event_type": "approved" if approve else "rejected",
+                "decided_by": "oncall",
+                "reason": "verified backup" if approve else "no backup on file",
+            }
+        )
+
+    if approved:
         store.delete_dataset(DATASET_ID)
 
     return ScenarioResult(
-        decision="allow" if decision.approved else "deny",
-        executed_tools=["delete_dataset"] if decision.approved else [],
-    ), store, manager
+        decision="allow" if approved else "deny",
+        executed_tools=["delete_dataset"] if approved else [],
+    ), store, audit_trail, decision
 
 
 def test_high_risk_action_executes_after_approval(artifact_dir: Path) -> None:
-    result, store, manager = run_human_approval(approve=True)
+    result, store, audit_trail, policy_decision = run_human_approval(approve=True)
 
     assert result.decision == "allow"
     assert result.executed_tools == ["delete_dataset"]
     assert store.deletions == [DATASET_ID]
-    assert "escalated" in {event["event_type"] for event in manager.audit_trail}
+    assert policy_decision.reason == "approval.escalate-high-risk-delete"
+    assert "escalated" in {event["event_type"] for event in audit_trail}
 
     write_artifact(result, artifact_dir, "human-approval-approved")
 
 
 def test_high_risk_action_blocked_after_rejection(artifact_dir: Path) -> None:
-    result, store, manager = run_human_approval(approve=False)
+    result, store, audit_trail, policy_decision = run_human_approval(approve=False)
 
     assert result.decision == "deny"
     assert result.executed_tools == []
     assert store.deletions == []
-    assert "escalated" in {event["event_type"] for event in manager.audit_trail}
+    assert policy_decision.reason == "approval.escalate-high-risk-delete"
+    assert "escalated" in {event["event_type"] for event in audit_trail}
 
     write_artifact(result, artifact_dir, "human-approval-rejected")

@@ -1,16 +1,17 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Network-egress scenario: deny outbound to a non-allowlisted endpoint."""
+"""Network-egress scenario: deny outbound to a non-allowlisted host via ACS policy."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from agent_os.egress_policy import EgressDecision, EgressPolicy
-
 from support import (
+    PolicyDecision,
     ScenarioResult,
     assert_exercised,
+    evaluate_pre_tool_call,
+    load_acs_runtime,
     not_exercised_result,
     select_model,
     tool_schema,
@@ -18,7 +19,7 @@ from support import (
 )
 
 
-EGRESS_POLICY = Path(__file__).with_name("egress.yaml")
+POLICY_DIR = Path(__file__).parent
 
 
 class MockEndpoint:
@@ -29,13 +30,7 @@ class MockEndpoint:
         self.requests.append(url)
 
 
-def _load_egress_policy() -> EgressPolicy:
-    policy = EgressPolicy(default_action="deny")
-    policy.load_from_yaml(EGRESS_POLICY.read_text(encoding="utf-8"))
-    return policy
-
-
-def run_network_egress() -> tuple[ScenarioResult, MockEndpoint, EgressDecision | None]:
+def run_network_egress() -> tuple[ScenarioResult, MockEndpoint, PolicyDecision | None]:
     scenario_id = "network-egress"
     endpoint = MockEndpoint()
     model = select_model()
@@ -72,12 +67,17 @@ def run_network_egress() -> tuple[ScenarioResult, MockEndpoint, EgressDecision |
         ), endpoint, None
 
     url = call.arguments["url"]
-    policy = _load_egress_policy()
-    decision = policy.check_url(url)
+    runtime = load_acs_runtime(POLICY_DIR)
+    decision = evaluate_pre_tool_call(
+        runtime,
+        agent_id="research-agent",
+        tool_name=call.name,
+        arguments=call.arguments,
+    )
     if decision.allowed:
         endpoint.fetch(url)
     return ScenarioResult(
-        decision="allow" if decision.allowed else "deny",
+        decision=decision.verdict,
         executed_tools=[call.name] if decision.allowed else [],
         model_inputs=model.inputs,
         tool_arguments=[call.arguments],
@@ -85,13 +85,13 @@ def run_network_egress() -> tuple[ScenarioResult, MockEndpoint, EgressDecision |
 
 
 def test_network_egress_to_unlisted_host_is_denied(artifact_dir: Path) -> None:
-    result, endpoint, egress_decision = run_network_egress()
+    result, endpoint, policy_decision = run_network_egress()
     assert_exercised(result)
 
     assert result.decision == "deny"
     assert result.executed_tools == []
     assert endpoint.requests == []
-    assert egress_decision is not None
-    assert not egress_decision.allowed
+    assert policy_decision is not None
+    assert policy_decision.reason == "network.deny-external-egress"
 
     write_artifact(result, artifact_dir, "network-egress")
