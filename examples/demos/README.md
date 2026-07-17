@@ -51,14 +51,14 @@ The demo also runs against a local, OpenAI-compatible server such as
 [Ollama](https://ollama.com) — no paid keys or secrets required. The OpenAI
 client picks up `OPENAI_BASE_URL` automatically, so pointing it at Ollama is
 just two environment variables. This is the mode used by CI, which exercises the
-governance stack against **Meta Llama 3.2 3B**:
+governance stack against **Meta Llama 3.1**:
 
 ```bash
 ollama serve &
-ollama pull llama3.2:3b
+ollama pull llama3.1
 export OPENAI_BASE_URL="http://127.0.0.1:11434/v1"
 export OPENAI_API_KEY="ollama"   # placeholder; Ollama ignores it
-python examples/demos/maf_governance_demo.py --model llama3.2:3b
+python examples/demos/maf_governance_demo.py --model llama3.1
 ```
 
 ## Running
