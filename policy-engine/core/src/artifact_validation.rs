@@ -29,6 +29,7 @@ const MAX_DIAGNOSTIC_TEXT: usize = 4096;
 const MAX_SOURCE_LABEL: usize = 512;
 const MAX_OPA_OUTPUT_BYTES: usize = 65_536;
 
+/// One structured validation failure from the manifest or a Rego module.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidationDiagnostic {
     pub component: String,
@@ -65,6 +66,7 @@ impl ValidationDiagnostic {
     }
 }
 
+/// The bounded validation outcome shared by every language SDK.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArtifactValidationResult {
     pub valid: bool,
@@ -89,6 +91,7 @@ impl ArtifactValidationResult {
     }
 }
 
+/// Validates ACS manifest text and supplied Rego modules without constructing a runtime.
 pub fn validate_acs_artifacts(
     manifest: &str,
     rego_modules: &BTreeMap<String, String>,
@@ -114,6 +117,7 @@ pub fn validate_acs_artifacts(
     ArtifactValidationResult::from_diagnostics(diagnostics)
 }
 
+/// Validates ACS manifest text without requiring Rego policy sources.
 pub fn validate_acs_manifest(manifest: &str) -> ArtifactValidationResult {
     let (_, diagnostics) = validate_manifest_source(manifest);
     ArtifactValidationResult::from_diagnostics(diagnostics)
