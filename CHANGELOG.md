@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Go SDK context accumulation governance** — added workflow-scoped context envelopes, data classification labels, aggregation-rule evaluation with unknown-combination escalation, constrain-as-obligations policy mapping, and grow-only restriction inheritance for delegation parity with the Python implementation (#3084).
+
 ## [5.0.0] - 2026-06-25
 
 ### Changed
