@@ -62,6 +62,7 @@ from .openai import (
     _runner_policy_target_and_executor,
 )
 from .anthropic import guard_anthropic_client
+from .foundry import guard_azure_ai_agents, guard_foundry_agent
 
 __all__ = [
     "AdapterUnsupportedError",
@@ -80,7 +81,9 @@ __all__ = [
     "guard_agent_method",
     "guard_anthropic_client",
     "guard_autogen_agent",
+    "guard_azure_ai_agents",
     "guard_crewai_crew",
+    "guard_foundry_agent",
     "guard_langchain_runnable",
     "guard_langchain_tool",
     "guard_litellm_proxy",

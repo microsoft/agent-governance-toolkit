@@ -4,7 +4,7 @@
 Hypervisor Integration Tests
 
 End-to-end tests validating the full hypervisor lifecycle:
-session creation → agent join → saga execution → audit → termination → GC.
+session creation → agent join → saga execution → audit → termination.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from hypervisor import (
     StepState,
 )
 from hypervisor.audit.delta import VFSChange
-from hypervisor.liability.vouching import VouchingError
 from hypervisor.models import ActionDescriptor
 
 # ---------------------------------------------------------------------------
@@ -147,60 +146,6 @@ class TestRingEnforcementIntegration:
         # Reversibility registry detects non-reversible actions.
         # Verify the registry flags it correctly.
         assert session.reversibility.has_non_reversible_actions() is True
-
-
-# ---------------------------------------------------------------------------
-# Sponsorship + Penalty Integration
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.integration
-class TestVouchingSlashingIntegration:
-    """Test sponsorship with exposure limits and penalty cascades."""
-
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        self.hv = Hypervisor()
-        self.session_id = "test-session"
-
-    def test_vouch_and_compute_eff_score(self):
-        self.hv.vouching.vouch("did:mesh:high", "did:mesh:low", self.session_id, 0.9, bond_pct=0.3)
-        eff_score = self.hv.vouching.compute_eff_score(
-            "did:mesh:low", self.session_id, 0.4, risk_weight=0.5
-        )
-        # Public Preview: no sponsor boost, eff_score = vouchee_sigma
-        assert eff_score == 0.4
-        assert eff_score <= 1.0
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    def test_max_exposure_prevents_over_bonding(self):
-        """Agent cannot bond more than max_exposure of their σ."""
-        # Default max_exposure = 0.80
-        self.hv.vouching.vouch("did:mesh:high", "did:mesh:a", self.session_id, 0.9, bond_pct=0.5)
-        # Already bonded 0.45, max = 0.72 (80% of 0.9), remaining = 0.27
-        with pytest.raises(VouchingError, match="exceed max exposure"):
-            self.hv.vouching.vouch(
-                "did:mesh:high", "did:mesh:b", self.session_id, 0.9, bond_pct=0.5
-            )
-
-    def test_slash_cascades_to_voucher(self):
-        """Public Preview: penalty logs but doesn't apply penalties."""
-        self.hv.vouching.vouch("did:mesh:high", "did:mesh:low", self.session_id, 0.9, bond_pct=0.3)
-        agent_scores = {"did:mesh:high": 0.9, "did:mesh:low": 0.5}
-        result = self.hv.slashing.slash(
-            "did:mesh:low", self.session_id, 0.5, 0.5, "policy_violation", agent_scores
-        )
-        # Public Preview: no penalties applied
-        assert agent_scores["did:mesh:low"] == 0.5  # unchanged
-        assert agent_scores["did:mesh:high"] == 0.9  # unchanged
-        assert len(result.voucher_clips) == 0
-
-    def test_release_bonds_on_session_terminate(self):
-        self.hv.vouching.vouch("did:mesh:high", "did:mesh:low", self.session_id, 0.9)
-        released = self.hv.vouching.release_session_bonds(self.session_id)
-        assert released == 1
-        exposure = self.hv.vouching.get_total_exposure("did:mesh:high", self.session_id)
-        assert exposure == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +277,7 @@ class TestSagaIntegration:
         assert saga.state == SagaState.COMPLETED
 
     async def test_saga_escalation_on_compensation_failure(self):
-        """Failed compensation escalates to Joint Liability penalty."""
+        """Failed compensation escalates for manual intervention."""
         session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         saga = session.saga.create_saga(session.sso.session_id)
 
@@ -429,51 +374,6 @@ class TestAuditTrailIntegration:
 
 
 # ---------------------------------------------------------------------------
-# GC Integration
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.integration
-class TestGCIntegration:
-    """Test garbage collection with real VFS and delta engines."""
-
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        self.hv = Hypervisor()
-
-    async def test_gc_purges_vfs_on_terminate(self):
-        """Termination triggers GC that purges VFS state."""
-        session = await self.hv.create_session(
-            config=SessionConfig(enable_audit=True),
-            creator_did="did:mesh:admin",
-        )
-        sid = session.sso.session_id
-        await self.hv.join_session(sid, "did:mesh:a", sigma_raw=0.8)
-        await self.hv.activate_session(sid)
-
-        # Write files to VFS
-        session.sso.vfs.write("/report.md", "data", agent_did="did:mesh:a")
-        session.sso.vfs.write("/notes.md", "more", agent_did="did:mesh:a")
-        assert session.sso.vfs.file_count >= 2
-
-        # Terminate
-        await self.hv.terminate_session(sid)
-
-        # GC should have purged VFS
-        assert self.hv.gc.is_purged(sid)
-        assert len(self.hv.gc.history) == 1
-
-    def test_gc_tracks_purged_sessions(self):
-        gc = self.hv.gc
-        gc.collect(session_id="s1")
-        gc.collect(session_id="s2")
-        assert gc.purged_session_count == 2
-        assert gc.is_purged("s1")
-        assert gc.is_purged("s2")
-        assert not gc.is_purged("s3")
-
-
-# ---------------------------------------------------------------------------
 # Edge Cases & Security
 # ---------------------------------------------------------------------------
 
@@ -507,14 +407,3 @@ class TestEdgeCases:
         await self.hv.join_session(sid, "did:mesh:b", sigma_raw=0.7)
         with pytest.raises(Exception):
             await self.hv.join_session(sid, "did:mesh:c", sigma_raw=0.6)
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    async def test_vouching_exposure_limit_across_sessions(self):
-        """Max exposure protects an agent's total bonded reputation."""
-        # Sponsor agent has σ=0.9, max_exposure=0.80 → limit 0.72
-        self.hv.vouching.vouch("did:mesh:v", "did:mesh:a", "s1", 0.9, bond_pct=0.4)
-        # Bonded 0.36 in s1. Next sponsor: 0.4*0.9 = 0.36 → total 0.72 = exactly at limit
-        self.hv.vouching.vouch("did:mesh:v", "did:mesh:b", "s1", 0.9, bond_pct=0.4)
-        # Any more should fail
-        with pytest.raises(VouchingError, match="exceed max exposure"):
-            self.hv.vouching.vouch("did:mesh:v", "did:mesh:c", "s1", 0.9, bond_pct=0.1)

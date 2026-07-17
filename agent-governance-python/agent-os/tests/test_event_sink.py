@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Tests for GovernanceEventSink SPI."""
 
-import threading
 import time
 
 import pytest
@@ -11,9 +10,12 @@ from agent_os.event_sink import (
     GovernanceEvent,
     GovernanceEventKind,
     GovernanceEventProcessor,
+    GovernanceEventSigner,
     GovernanceEventSink,
     GovernanceEventSinkBase,
+    OTLPGovernanceSink,
     SinkExportResult,
+    StdoutGovernanceSink,
 )
 
 
@@ -211,6 +213,75 @@ class TestGovernanceEventProcessor:
         assert proc._worker is not None
         proc.shutdown(timeout_ms=1000)
 
+    def test_accounting_reconciles_happy_path(self):
+        sink = RecordingSink()
+        proc = GovernanceEventProcessor(schedule_delay_ms=5000)
+        proc.add_sink(sink)
+        for _ in range(50):
+            proc.on_event(GovernanceEvent())
+        proc.force_flush(timeout_ms=2000)
+        proc.shutdown(timeout_ms=2000)
+
+        assert proc.submitted_count == 50
+        assert proc.delivered_count == 50
+        assert proc.failed_count == 0
+        assert proc.dropped_count == 0
+        assert (
+            proc.submitted_count
+            == proc.delivered_count + proc.failed_count + proc.dropped_count
+        )
+
+    def test_failing_sink_events_counted_not_silently_lost(self):
+        """TASK defect 3, flipped: a FAILURE sink must not silently lose events."""
+        sink = RecordingSink(result=SinkExportResult.FAILURE)
+        proc = GovernanceEventProcessor(schedule_delay_ms=5000)
+        proc.add_sink(sink)
+        for _ in range(50):
+            proc.on_event(GovernanceEvent())
+        proc.force_flush(timeout_ms=2000)
+        proc.shutdown(timeout_ms=2000)
+
+        assert proc.submitted_count == 50
+        assert proc.delivered_count == 0
+        assert proc.failed_count == 50
+        assert (
+            proc.submitted_count
+            == proc.delivered_count + proc.failed_count + proc.dropped_count
+        )
+
+    def test_dropped_sink_result_counted_as_dropped_not_failed(self):
+        """A sink that intentionally DROPS a batch is bucketed as dropped, not failed."""
+        sink = RecordingSink(result=SinkExportResult.DROPPED)
+        proc = GovernanceEventProcessor(schedule_delay_ms=5000)
+        proc.add_sink(sink)
+        for _ in range(10):
+            proc.on_event(GovernanceEvent())
+        proc.force_flush(timeout_ms=2000)
+        proc.shutdown(timeout_ms=2000)
+
+        assert proc.submitted_count == 10
+        assert proc.delivered_count == 0
+        assert proc.failed_count == 0
+        assert proc.dropped_count == 10
+        assert (
+            proc.submitted_count
+            == proc.delivered_count + proc.failed_count + proc.dropped_count
+        )
+
+    def test_post_shutdown_submissions_counted_as_dropped(self):
+        sink = RecordingSink()
+        proc = GovernanceEventProcessor(schedule_delay_ms=50)
+        proc.add_sink(sink)
+        proc.shutdown(timeout_ms=1000)
+
+        proc.on_event(GovernanceEvent())
+        assert proc.submitted_count == 1
+        assert proc.dropped_count == 1
+        assert (
+            proc.submitted_count
+            == proc.delivered_count + proc.failed_count + proc.dropped_count
+        )
+
 
 class TestAuditBackendSinkAdapter:
     def test_bridges_to_audit_backend(self):
@@ -255,3 +326,161 @@ class TestAuditBackendSinkAdapter:
         adapter = AuditBackendSinkAdapter(BrokenBackend())
         result = adapter.emit([GovernanceEvent()])
         assert result == SinkExportResult.FAILURE
+
+
+class TestCloudEventExport:
+    def test_required_cloudevents_attributes_present(self):
+        event = GovernanceEvent(
+            kind=GovernanceEventKind.POLICY_VIOLATION,
+            agent_id="agent-1",
+            action="db_query",
+            decision="deny",
+        )
+        ce = event.to_cloudevent(source="/agent-os/test")
+        # CloudEvents 1.0 required attributes (the defect: these were missing).
+        assert ce["specversion"] == "1.0"
+        assert ce["id"] == event.event_id
+        assert ce["source"] == "/agent-os/test"
+        # Agent OS uses its own producer namespace, not ai.agentmesh.* (ADR-0021
+        # reserves that for the mesh producer).
+        assert ce["type"] == "ai.agentos.policy.violation"
+        assert ce["type"].startswith("ai.agentos.")
+        assert ce["datacontenttype"] == "application/json"
+        assert ce["data"]["action"] == "db_query"
+
+    def test_attributes_cannot_shadow_authoritative_fields(self):
+        # A free-form attribute key must NOT override the real event field in a
+        # signed CloudEvent — otherwise a valid signature covers a forged record.
+        event = GovernanceEvent(
+            kind=GovernanceEventKind.POLICY_VIOLATION,
+            agent_id="real-agent",
+            action="delete",
+            decision="deny",
+            attributes={"decision": "allow", "agent_id": "forged", "note": "keep"},
+        )
+        ce = event.to_cloudevent(source="/s")
+        assert ce["data"]["decision"] == "deny"
+        assert ce["data"]["agent_id"] == "real-agent"
+        # Non-colliding custom attributes are still carried.
+        assert ce["data"]["note"] == "keep"
+
+    def test_source_defaults_and_requires_non_empty(self):
+        # Derived from agent_id when no explicit source is given.
+        ce = GovernanceEvent(agent_id="a7").to_cloudevent()
+        assert ce["source"] == "/agent-os/agent/a7"
+        # Unsafe URI characters in agent_id are percent-encoded in the source.
+        ce2 = GovernanceEvent(agent_id="a b/c").to_cloudevent()
+        assert " " not in ce2["source"]
+        # Fail closed when nothing can be resolved.
+        with pytest.raises(ValueError):
+            GovernanceEvent().to_cloudevent()
+
+    def test_to_dict_unchanged_backward_compat(self):
+        # to_dict() stays the flat legacy shape (AuditBackendSinkAdapter relies on it).
+        d = GovernanceEvent().to_dict()
+        assert "specversion" not in d
+        assert "event_id" in d and "kind" in d and "occurred_at" in d
+
+
+class TestGovernanceEventSigner:
+    def test_sign_verify_round_trip(self):
+        signer = GovernanceEventSigner(GovernanceEventSigner.generate_key())
+        ce = GovernanceEvent(agent_id="a1").to_cloudevent(source="/s", signer=signer)
+        assert ce["agtsignaturealg"] == "HMAC-SHA256"
+        assert isinstance(ce["agtsignature"], str)
+        assert signer.verify(ce) is True
+
+    def test_tampered_data_fails_verification(self):
+        signer = GovernanceEventSigner(GovernanceEventSigner.generate_key())
+        ce = GovernanceEvent(agent_id="a1").to_cloudevent(source="/s", signer=signer)
+        ce["data"]["action"] = "tampered"
+        assert signer.verify(ce) is False
+
+    def test_tampered_algorithm_fails_verification(self):
+        signer = GovernanceEventSigner(GovernanceEventSigner.generate_key())
+        ce = GovernanceEvent(agent_id="a1").to_cloudevent(source="/s", signer=signer)
+        ce["agtsignaturealg"] = "NONE"
+        assert signer.verify(ce) is False
+
+    def test_short_key_rejected(self):
+        with pytest.raises(ValueError):
+            GovernanceEventSigner(b"short-key")
+
+
+class TestStdoutGovernanceSink:
+    def test_emits_signed_cloudevent_json_line(self):
+        import io
+        import json as _json
+
+        stream = io.StringIO()
+        signer = GovernanceEventSigner(GovernanceEventSigner.generate_key())
+        sink = StdoutGovernanceSink(source="/agent-os/x", signer=signer, stream=stream)
+
+        result = sink.emit([GovernanceEvent(agent_id="a1"), GovernanceEvent(agent_id="a2")])
+        assert result == SinkExportResult.SUCCESS
+
+        lines = [ln for ln in stream.getvalue().splitlines() if ln]
+        assert len(lines) == 2
+        ce = _json.loads(lines[0])
+        assert ce["specversion"] == "1.0"
+        assert signer.verify(ce) is True
+
+    def test_non_serializable_attribute_does_not_abort_batch(self):
+        # A non-JSON-native attribute value (e.g. datetime) must not fail the
+        # whole batch — json serialization uses default=str, matching the repo's
+        # AuditEntry.to_json convention.
+        import io
+        from datetime import datetime, timezone
+
+        stream = io.StringIO()
+        sink = StdoutGovernanceSink(source="/agent-os/x", stream=stream)
+        result = sink.emit([
+            GovernanceEvent(agent_id="a1", attributes={"ts": datetime.now(timezone.utc)}),
+            GovernanceEvent(agent_id="a2"),
+        ])
+        assert result == SinkExportResult.SUCCESS
+        assert len([ln for ln in stream.getvalue().splitlines() if ln]) == 2
+
+
+class TestOTLPGovernanceSink:
+    def test_disabled_backend_reports_dropped_not_delivered(self):
+        # When the OTel backend is a no-op (opentelemetry absent), nothing is
+        # exported, so emit reports DROPPED (not SUCCESS) — the processor must not
+        # credit un-exported events as delivered.
+        class _DisabledBackend:
+            enabled = False
+
+            def write(self, entry):
+                raise AssertionError("write must not be called when disabled")
+
+            def flush(self):
+                pass
+
+        sink = OTLPGovernanceSink(source="/agent-os/x", backend=_DisabledBackend())
+        result = sink.emit([GovernanceEvent(agent_id="a1")])
+        assert result == SinkExportResult.DROPPED
+
+    def test_forwards_cloudevent_and_searchable_metadata(self):
+        written = []
+
+        class _CapturingBackend:
+            enabled = True
+
+            def write(self, entry):
+                written.append(entry)
+
+            def flush(self):
+                pass
+
+        sink = OTLPGovernanceSink(source="/agent-os/x", backend=_CapturingBackend())
+        result = sink.emit([
+            GovernanceEvent(agent_id="a1", action="run", severity="warning", resource="db")
+        ])
+        assert result == SinkExportResult.SUCCESS
+        assert len(written) == 1
+        md = written[0].metadata
+        assert "cloudevent" in md
+        # Searchable fields promoted alongside the envelope (OTelLogsBackend turns
+        # each into an agt.audit.meta.* attribute).
+        assert md["severity"] == "warning"
+        assert md["resource"] == "db"

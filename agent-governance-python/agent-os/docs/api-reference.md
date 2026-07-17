@@ -579,6 +579,9 @@ Thread-safe health checker for K8s readiness/liveness probes.
 ```python
 from agent_os.health import HealthChecker, HealthStatus, ComponentHealth
 
+# By default the built-in policy_engine and audit_backend checks are
+# auto-registered. Pass an audit_backend to make the audit check HEALTHY,
+# or register_builtins=False for a bare checker.
 checker = HealthChecker(version="1.3.1")
 checker.register_check("database", lambda: ComponentHealth(
     name="database",
@@ -591,13 +594,17 @@ report = checker.check_ready()    # Readiness probe
 report = checker.check_live()     # Liveness probe (lightweight)
 
 print(report.to_dict())
-print(report.is_healthy())  # True
-print(report.is_ready())    # True (not UNHEALTHY)
+# With no audit_backend configured, audit_backend reports DEGRADED, so:
+print(report.is_healthy())  # False (DEGRADED)
+print(report.is_ready())    # True (DEGRADED is still ready; not UNHEALTHY)
 ```
+
+A checker with **no** registered components fails closed and aggregates to
+`UNHEALTHY` (an empty report never claims healthy).
 
 | Method | Signature | Returns | Description |
 |--------|-----------|---------|-------------|
-| `__init__` | `(version: str = "1.0.0")` | — | Create checker |
+| `__init__` | `(version: str = "1.0.0", *, register_builtins: bool = True, audit_backend: object \| None = None)` | — | Create checker; auto-registers built-in `policy_engine`/`audit_backend` checks unless `register_builtins=False` |
 | `register_check` | `(name: str, check_fn: Callable)` | `None` | Register a named health check (thread-safe) |
 | `check_health` | `()` | `HealthReport` | Run all checks and return full report |
 | `check_ready` | `()` | `HealthReport` | Readiness probe (same as full check) |

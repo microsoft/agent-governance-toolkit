@@ -1,0 +1,79 @@
+# agt-policies - India Regulatory Pack
+# SEBI - Cyber Resilience (CSCRF) and AI/ML Responsibility Policy
+#
+# Regulatory reference: SEBI CSCRF Circular SEBI/HO/ITD-1/ITD_CSC_EXT/P/CIR/2024/113 (20 Aug 2024);
+#   SEBI (Intermediaries) Amendment Regulations 2025 (10 Feb 2025)
+# Enforcing authority: Securities and Exchange Board of India (SEBI)
+# Status: CSCRF + Feb-2025 AI/ML amendment are binding. SEBI June-2025 AI/ML guidelines are DRAFT/consultation.
+#
+# Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+#
+# Key obligations enforced:
+#   Feb 2025 amendment    Regulated Entity solely responsible for AI/ML output
+#   CSCRF 2024            Immutable India-retained audit logging; incident reporting; VAPT/audit
+#   June 2025 guidelines  DRAFT/consultation (advisory)
+#
+# Rego reference implementation: rego/sebi-governance.rego (NOT loaded at runtime)
+
+version: "1.0"
+name: sebi-governance
+description: >
+  SEBI CSCRF 2024 + Feb-2025 AI/ML responsibility amendment compliance policy for AI agents at
+  SEBI-regulated entities. Enforces non-disclaimable AI-output accountability, immutable in-India
+  audit logging, and incident reporting; SEBI June-2025 AI/ML guidelines logged as draft.
+
+metadata:
+  source_regulation: "SEBI CSCRF Circular SEBI/HO/ITD-1/ITD_CSC_EXT/P/CIR/2024/113 (20 Aug 2024); SEBI (Intermediaries) Amendment Regulations 2025 (10 Feb 2025)"
+  jurisdiction: "IN"
+  enforcing_authority: "Securities and Exchange Board of India (SEBI)"
+
+rules:
+  - name: sebi-ai-output-disclaim-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(not\\s+responsible|disclaim\\s+liability|no\\s+human\\s+accountab).{0,40}(ai|ml|model)\\s+(output|decision)"
+    action: deny
+    priority: 100
+    message: "SEBI Amendment 10 Feb 2025: a regulated entity using AI/ML is solely responsible for investor protection, data security, and the AI output; liability cannot be disclaimed and human accountability is required"
+
+  - name: sebi-audit-log-tamper-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(disable_audit_log|delete_audit_log|make_log_mutable|store_audit_log_offshore)$"
+    action: block
+    priority: 95
+    message: "SEBI CSCRF 2024: maintain immutable, India-retained audit logging with continuous SOC monitoring"
+
+  - name: sebi-incident-report-suppression-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify)|suppress|delay).{0,30}(cyber\\s+)?(incident|breach)"
+    action: deny
+    priority: 95
+    message: "SEBI CSCRF 2024: cyber incidents must be reported to SEBI and the relevant CERT within mandated timelines"
+
+  - name: sebi-vapt-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(deploy_to_production|release_system)$"
+    action: audit
+    priority: 70
+    message: "SEBI CSCRF 2024: periodic VAPT and cyber audit, data classification, and access control are required for regulated entities"
+
+  - name: sebi-ai-ml-governance-advisory-audit
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)deploy.{0,20}(ai|ml)\\s+model.{0,20}(securities|trading|investor)"
+    action: audit
+    priority: 40
+    message: "ADVISORY (draft, SEBI Consultation Paper 20 Jun 2025): board-approved AI governance, model explainability, human-in-the-loop, and fallback plans are proposed; consultation only, not yet binding"
+
+defaults:
+  action: audit
+  max_tokens: 8000
+  max_tool_calls: 25

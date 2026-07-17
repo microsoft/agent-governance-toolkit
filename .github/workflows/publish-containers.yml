@@ -136,7 +136,7 @@ jobs:
       - name: Build and push
         if: steps.check.outputs.skip != 'true'
         id: build
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -151,7 +151,7 @@ jobs:
 
       - name: Attest build provenance
         if: steps.check.outputs.skip != 'true' && (github.event_name == 'release' || github.event.inputs.dry_run == 'false')
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}
           subject-digest: ${{ steps.build.outputs.digest }}

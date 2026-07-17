@@ -352,4 +352,13 @@ impl NativeRuntime {
                 .map_err(|err| Error::from_reason(format!("evaluate: join: {err}")))?;
         result_to_value(result)
     }
+
+    /// Resolved `policy_id` and configured annotator names per intervention
+    /// point, from the merged manifest. The host SDK telemetry layer reads this
+    /// once at construction so events are labelled on every constructor,
+    /// including `fromUrl` and `fromManifestChain`.
+    #[napi]
+    pub fn policy_labels(&self) -> Value {
+        self.runtime.policy_labels()
+    }
 }

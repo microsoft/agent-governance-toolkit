@@ -120,8 +120,8 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
   - [フレームワーククイックスタート](../../examples/quickstart/) | [統合提案](../../docs/proposals/)
 - **完全な OWASP カバレッジ**: Agentic Top 10 リスクの 10/10 を対応済み、各 ASI カテゴリに専用のコントロールを提供
   - [OWASP コンプライアンス](../../docs/compliance/owasp-agentic-top10-architecture.md) | [競合比較](../../docs/COMPARISON.md)
-- **CI/CD 向け GitHub Actions**: PR ワークフローのための自動セキュリティスキャンとガバナンスアテステーション
-  - [セキュリティスキャン Action](../../action/security-scan/) | [ガバナンスアテステーション Action](../../action/governance-attestation/)
+- **CI/CD 向け GitHub Actions**: Agent Governance Verify による CI/CD でのガバナンス検証
+  - [Agent Governance Verify Action](../../action/)
 
 ### 💬 **フィードバックをお待ちしています！**
 

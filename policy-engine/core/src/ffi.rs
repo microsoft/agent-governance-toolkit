@@ -751,6 +751,29 @@ pub unsafe extern "C" fn acs_runtime_evaluate(
     })
 }
 
+/// Resolved `policy_id` and configured annotator names per intervention point,
+/// from the merged manifest, as a JSON string owned by the caller (free with
+/// `acs_free_string`). The .NET SDK telemetry layer reads this once at
+/// construction so events are labelled on every constructor, including
+/// `FromManifestChain`.
+///
+/// # Safety
+/// `r` must be null or a runtime pointer returned by ACS that has not been
+/// freed. `err` must be null or a valid pointer to a `*mut c_char`.
+#[no_mangle]
+pub unsafe extern "C" fn acs_runtime_policy_labels(
+    r: *const AcsRuntime,
+    err: *mut *mut c_char,
+) -> *mut c_char {
+    ffi_guard!(ptr_with_err, err, {
+        let Some(runtime) = (unsafe { r.as_ref() }) else {
+            unsafe { write_err(err, "null runtime") };
+            return std::ptr::null_mut();
+        };
+        json_to_c(&runtime.runtime.policy_labels())
+    })
+}
+
 /// Free an ACS runtime. Null-safe.
 ///
 /// # Safety

@@ -253,6 +253,29 @@ class TestInvokeTool:
         assert "Insufficient trust score" in call.error
 
     @pytest.mark.asyncio
+    async def test_zero_min_trust_score_admits_any(
+        self, server: TrustGatedMCPServer
+    ) -> None:
+        """A tool registered with min_trust_score=0 has no trust floor.
+
+        Regression for the falsy-default bug: ``min_trust_score or
+        self.min_trust_score`` replaced an explicit 0 with the server default
+        (300), so a 0-floor tool wrongly rejected a score-0 caller. The 0 must
+        be honored so any caller passes this tool's trust gate.
+        """
+        server.register_tool("open", _echo_handler, min_trust_score=0)
+        assert server._tools["open"].min_trust_score == 0
+        call = await server.invoke_tool(
+            tool_name="open",
+            arguments={"msg": "hi"},
+            caller_did="did:mesh:zero",
+            caller_trust_score=0,
+        )
+        assert call.success is True
+        assert call.error is None
+        assert call.trust_verified is True
+
+    @pytest.mark.asyncio
     async def test_reject_missing_capability(self, server: TrustGatedMCPServer) -> None:
         server.register_tool("sql", _sql_handler, required_capability="use:sql")
         call = await server.invoke_tool(

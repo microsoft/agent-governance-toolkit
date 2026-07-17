@@ -253,7 +253,7 @@ Each agent's session context and customer data extracts are scoped to a per-DID 
 
 - **`RingBreachDetector`**: WARNING (1-ring gap, e.g., order-status-agent attempting a Ring 1 refund API call), HIGH (2-ring gap), CRITICAL (3-ring gap). HIGH and CRITICAL trigger automatic kill
 - **`KillSwitch`**: automatic triggers for `RING_BREACH` (HIGH/CRITICAL), `RATE_LIMIT`, and `BEHAVIORAL_DRIFT`. **GDPR deferral exception**: if gdpr-compliance-agent holds an active Article 17 deletion in progress (deletion plan approved, execution underway), kill is deferred up to 120 seconds — a mid-execution kill would leave customer data partially erased across 11 systems with no saga compensation path, creating a GDPR Article 17 violation worse than the breach itself. The deletion completes, then the agent is terminated and the privacy team is notified.
-- **`QuarantineManager`**: preferred response for returns-and-refund-agent anomalies (trust 720, closest to the 700 human-oversight threshold) — isolates the agent while in-flight refund sagas are handed to human reviewers
+- **`KillSwitch`**: preferred response for returns-and-refund-agent anomalies when execution must stop immediately while in-flight refund sagas are handed to human reviewers
 
 #### Side-Channel Attack Mitigations
 
@@ -393,7 +393,7 @@ Detection mechanisms:
 
 Immediate mitigation steps (target: <5 minutes from detection to containment):
 1. Disable the GCP Secret Manager secret version for the affected agent — propagates to all agents holding a cached public key within <2 seconds via Secret Manager event notification
-2. Quarantine the affected agent via `QuarantineManager` — preferred over kill switch for GDPR continuity: if compromise is detected during an active Article 17 deletion, quarantine preserves in-flight saga state for human review rather than leaving data partially erased across 11 systems
+2. Use `KillSwitch` with saga handoff for the affected agent: if compromise is detected during an active Article 17 deletion, in-flight saga work is handed to human review rather than leaving data partially erased across 11 systems
 3. Issue a DID deactivation event in AgentMesh — all peer agents reject delegations from the deactivated DID within one heartbeat cycle (~5 seconds); pending customer tickets routed to human escalation queue automatically
 4. Provision a new Ed25519 keypair in GCP Cloud HSM, generate a new DID, and re-register the agent — requires privacy team lead and security officer dual approval; if gdpr-compliance-agent is the affected agent, assess whether any in-progress GDPR deletion was compromised and notify affected customers under GDPR Article 33 (72-hour DPA breach notification window)
 
