@@ -281,7 +281,20 @@ class MerkleAuditChain:
         self._root_hash: Optional[str] = None
 
     def add_entry(self, entry: AuditEntry) -> None:
-        """Add an entry and update the Merkle tree incrementally."""
+        """Add an entry and rebuild the Merkle tree over all entries.
+
+        The tree is rebuilt from every leaf via :meth:`_rebuild_tree`, so the
+        root recorded here is byte-identical to an independent recomputation
+        over the same entries. The previous incremental update padded
+        *interior* tree levels with singleton zero nodes, whereas
+        :meth:`_rebuild_tree` pads at the *leaf* level and hashes the zero
+        padding upward. Those two constructions produced different roots once
+        a real leaf's authentication path reached an interior padding node
+        (first observable at five entries), so an exported ``merkle_root``
+        could not be reproduced by a verifier rebuilding the tree from the
+        same leaves. Rebuilding on each append keeps the live root and a
+        from-scratch verification in agreement for every entry count.
+        """
         # Set previous hash
         if self._entries:
             entry.previous_hash = self._entries[-1].entry_hash
@@ -291,64 +304,11 @@ class MerkleAuditChain:
 
         self._entries.append(entry)
 
-        new_leaf = MerkleNode(
-            hash=entry.entry_hash,
-            is_leaf=True,
-            entry_id=entry.entry_id,
-        )
-
-        n = len(self._entries)
-
-        if n == 1:
-            # First entry — initialize tree
-            self._tree = [[new_leaf]]
-            self._root_hash = new_leaf.hash
-            return
-
-        # Check if we need to expand the tree capacity
-        capacity = len(self._tree[0])
-        if n > capacity:
-            # Double capacity: pad leaves with empty nodes, add new tree level
-            for level_idx in range(len(self._tree)):
-                self._tree[level_idx].extend(
-                    [MerkleNode(hash="0" * 64) for _ in range(len(self._tree[level_idx]))]
-                )
-            # Add new root level
-            old_root = self._tree[-1][0]
-            empty_node = MerkleNode(hash="0" * 64)
-            combined = old_root.hash + empty_node.hash
-            new_root = MerkleNode(
-                hash=hashlib.sha256(combined.encode()).hexdigest(),
-                left_child=old_root.hash,
-                right_child=empty_node.hash,
-            )
-            self._tree.append([new_root, MerkleNode(hash="0" * 64)])
-
-        # Place new leaf
-        leaf_idx = n - 1
-        self._tree[0][leaf_idx] = new_leaf
-
-        # Update path from leaf to root
-        idx = leaf_idx
-        for level_idx in range(len(self._tree) - 1):
-            parent_idx = idx // 2
-            left_idx = parent_idx * 2
-            right_idx = left_idx + 1
-
-            left = self._tree[level_idx][left_idx]
-            right = self._tree[level_idx][right_idx] if right_idx < len(self._tree[level_idx]) else left
-
-            combined = left.hash + right.hash
-            parent_hash = hashlib.sha256(combined.encode()).hexdigest()
-
-            self._tree[level_idx + 1][parent_idx] = MerkleNode(
-                hash=parent_hash,
-                left_child=left.hash,
-                right_child=right.hash,
-            )
-            idx = parent_idx
-
-        self._root_hash = self._tree[-1][0].hash if self._tree else None
+        # Rebuild the tree so the stored root matches an independent
+        # recomputation over the same leaves (see docstring). A full rebuild
+        # is O(n) per append; audit volumes make this negligible next to a
+        # non-reproducible tamper-evidence root.
+        self._rebuild_tree()
 
     def _rebuild_tree(self) -> None:
         """Rebuild Merkle tree from entries (full rebuild, used for verification)."""
