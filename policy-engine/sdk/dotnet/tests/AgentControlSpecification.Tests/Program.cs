@@ -58,6 +58,28 @@ using (var corpus = JsonDocument.Parse(
     }
 }
 
+const string ValidOverlayManifest = """
+agent_control_specification_version: 0.3.1-beta
+extends: [base.yaml]
+""";
+var embeddedNullValidation = ArtifactValidator.Validate(
+    ValidOverlayManifest + "\0not: [valid",
+    new Dictionary<string, string>());
+Assert(!embeddedNullValidation.Valid, "embedded null manifest input must fail validation.");
+AssertEqual(
+    "manifest_parse_error",
+    embeddedNullValidation.Diagnostics.Single().Code,
+    "embedded null manifest input must not be truncated by native string marshalling.");
+var embeddedNullOpaPathValidation = ArtifactValidator.Validate(
+    ValidOverlayManifest,
+    new Dictionary<string, string> { ["policy.rego"] = "package p" },
+    "opa\0unexpected");
+Assert(!embeddedNullOpaPathValidation.Valid, "embedded null OPA path must fail validation.");
+AssertEqual(
+    "opa_execution_error",
+    embeddedNullOpaPathValidation.Diagnostics.Single().Code,
+    "embedded null OPA path must not execute a truncated path.");
+
 var control = AgentControl.FromNative(BasicHostManifest, new ClassifierAnnotator(), new CustomPolicy());
 var result = await control.EvaluateInputAsync(
     new { text = "Please summarize account 1234." },

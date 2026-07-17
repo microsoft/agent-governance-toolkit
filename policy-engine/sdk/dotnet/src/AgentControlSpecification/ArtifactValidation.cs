@@ -32,10 +32,24 @@ public static class ArtifactValidator
         string? opaPath = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
+        if (manifest.IndexOf('\0') >= 0)
+        {
+            return InvalidInput(
+                "manifest",
+                "manifest_parse_error",
+                "Manifest input contains an embedded null character.");
+        }
+        var modules = regoModules ?? new Dictionary<string, string>();
+        if (modules.Count > 0 && opaPath?.IndexOf('\0') >= 0)
+        {
+            return InvalidInput(
+                "rego",
+                "opa_execution_error",
+                "OPA path contains an embedded null character.",
+                "opa");
+        }
         NativeEnvironment.SyncOpaEnvironment();
-        var modulesJson = JsonSerializer.Serialize(
-            regoModules ?? new Dictionary<string, string>(),
-            JsonOptions);
+        var modulesJson = JsonSerializer.Serialize(modules, JsonOptions);
         var result = NativeMethods.AcsValidateArtifacts(manifest, modulesJson, opaPath, out var err);
         if (result == IntPtr.Zero)
         {
@@ -52,6 +66,17 @@ public static class ArtifactValidator
         {
             NativeMethods.AcsFreeString(result);
         }
+    }
+
+    private static ArtifactValidationResult InvalidInput(
+        string component,
+        string code,
+        string message,
+        string? source = null)
+    {
+        return new ArtifactValidationResult(
+            false,
+            [new ValidationDiagnostic(component, code, message, source ?? component)]);
     }
 
     private static string? ReadAndFreeError(IntPtr error)

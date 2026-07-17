@@ -30,6 +30,15 @@
       "codes": [
         "manifest_semantic_error"
       ]
+    },
+    {
+      "name": "embedded_null_manifest",
+      "manifest": "agent_control_specification_version: 0.3.1-beta\nextends: [base.yaml]\n\u0000not: [valid",
+      "rego": {},
+      "valid": false,
+      "codes": [
+        "manifest_parse_error"
+      ]
     }
   ]
 }
