@@ -123,7 +123,11 @@ profile agt-sandbox flags=(attach_disconnected,mediate_deleted) {
 
   # Deny exec from writable directories to block copy-and-exec attacks.
   # An attacker copying a denied binary to /tmp or /workspace cannot
-  # execute it from there.
-  deny /tmp/**       mrx,
-  deny /workspace/** mrx,
+  # execute it from there. mx (not mrx): r would also deny read of these
+  # tmpfs-backed dirs (/workspace is the container working_dir + tmpfs
+  # mount, /tmp is tmpfs under read_only_fs=True — see provider.py),
+  # which kills the sandbox outright wherever the profile enforces. m
+  # alone already closes the ld.so PROT_EXEC-mmap vector.
+  deny /tmp/**       mx,
+  deny /workspace/** mx,
 }

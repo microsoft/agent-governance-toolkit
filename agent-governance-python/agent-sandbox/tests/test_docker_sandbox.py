@@ -2535,6 +2535,14 @@ class TestAppArmorProfileLoaded:
 class TestAppArmorProfileSelection:
     """_create_container picks agt-sandbox when loaded, docker-default otherwise."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_fallback_warning_throttle(self):
+        from agent_sandbox.docker_provider import provider as provider_module
+
+        provider_module._fallback_apparmor_warned = False
+        yield
+        provider_module._fallback_apparmor_warned = False
+
     def _make_raw_provider(self):
         with patch(
             "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",

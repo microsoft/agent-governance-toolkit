@@ -160,12 +160,18 @@ def _apparmor_profile_loaded(name: str) -> bool:
     return False
 
 
+_fallback_apparmor_warned = False
+
+
 def _fallback_apparmor_profile() -> str:
-    logger.warning(
-        "agt-sandbox AppArmor profile not loaded in enforce mode; "
-        "falling back to docker-default. Run "
-        "'sudo apparmor_parser -r -W agt-sandbox' to enable kernel-level enforcement."
-    )
+    global _fallback_apparmor_warned
+    if not _fallback_apparmor_warned:
+        logger.warning(
+            "agt-sandbox AppArmor profile not loaded in enforce mode; "
+            "falling back to docker-default. Run "
+            "'sudo apparmor_parser -r -W agt-sandbox' to enable kernel-level enforcement."
+        )
+        _fallback_apparmor_warned = True
     return "docker-default"
 
 
