@@ -1,0 +1,33 @@
+name: Red-team evidence benchmark
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/redteam-benchmark.yml'
+      - 'tests/redteam/benchmark/**'
+      - 'tests/redteam/test_benchmark_contract.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/redteam-benchmark.yml'
+      - 'tests/redteam/benchmark/**'
+      - 'tests/redteam/test_benchmark_contract.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redteam-evidence-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Run deterministic smoke benchmark
+        run: bash tests/redteam/benchmark/run-smoke.sh
+
+      - name: Run benchmark contract tests
+        run: python -m unittest discover -s tests/redteam -p 'test_benchmark_contract.py' -v
