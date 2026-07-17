@@ -995,3 +995,117 @@ def test_resolution_error_message_includes_reason_string() -> None:
     err = ResolutionError.path_traversal("detail-x")
     assert "runtime_error:resolution_path_traversal" in str(err)
     assert "detail-x" in str(err)
+
+
+# ── #3297: negative operators must fail closed in deny rules ──────────
+#
+# A field accessor resolves a missing field to `null` (object.get(..., null)),
+# so the `_v != null` guard emitted before a comparison makes an absent field
+# fail the match. For `ne`/`not_in` in a *deny* rule that is fail-open: the deny
+# is bypassed by omitting the field. The guard must be dropped for `deny` (so an
+# absent field fires the deny) and kept for `allow` (so an absent field does not
+# fire an allow, which would itself be fail-open).
+
+
+def _op_clause(operator: str, action: str) -> str:
+    from agt.manifest_resolution.build import _rego_field_accessor, _rego_op_clause
+
+    accessor = _rego_field_accessor("tool_call.field")
+    return _rego_op_clause(operator, accessor, "X", action)
+
+
+@pytest.mark.parametrize("operator", ["ne", "not_in"])
+def test_negative_operator_deny_drops_null_guard(operator: str) -> None:
+    # deny: missing field (null) must fire the rule -> no `_v != null` guard
+    assert "_v != null" not in _op_clause(operator, "deny")
+
+
+@pytest.mark.parametrize("operator", ["ne", "not_in"])
+def test_negative_operator_allow_keeps_null_guard(operator: str) -> None:
+    # allow: missing field must NOT fire the rule (else fail-open) -> guard kept
+    assert "_v != null" in _op_clause(operator, "allow")
+
+
+@pytest.mark.parametrize("operator", ["gt", "gte", "lt", "lte", "in", "contains"])
+def test_positive_operators_keep_null_guard_regardless_of_action(operator: str) -> None:
+    # positive operators are unaffected by #3297 and keep their guard for both actions
+    assert "_v != null" in _op_clause(operator, "deny")
+    assert "_v != null" in _op_clause(operator, "allow")
+
+
+def test_deny_negative_operator_missing_field_fires_deny_branch() -> None:
+    # end-to-end at the render level: a deny `ne` on a pinned field renders a
+    # match body that an absent field (null) satisfies, so the deny branch fires.
+    from agt.manifest_resolution.build import _render_rego
+
+    rego = _render_rego(
+        [
+            {
+                "name": "pin",
+                "action": "deny",
+                "condition": {
+                    "field": "tool_call.content_hash",
+                    "operator": "ne",
+                    "value": "sha256:REGISTERED",
+                },
+            }
+        ]
+    )
+    match_body = rego.split("_match_0 if {", 1)[1].split("}", 1)[0]
+    assert "_v != null" not in match_body
+    assert '_v != "sha256:REGISTERED"' in match_body
+
+
+# ── #3297: field accessor must yield null for a missing INTERMEDIATE segment ──
+#
+# The former chained `object.get(object.get(snapshot, "a", null), "b", null)`
+# returns *undefined* when `a` is missing (object.get on a null parent), which
+# silently failed the match and left a second fail-open path for deny rules,
+# reachable by omitting a parent object. The array-path accessor resolves any
+# missing segment to the `null` default.
+
+
+def test_field_accessor_uses_array_path() -> None:
+    from agt.manifest_resolution.build import _rego_field_accessor
+
+    acc = _rego_field_accessor("tool_call.args.region")
+    # single object.get over an array path, not a chain of nested object.get calls
+    assert acc == 'object.get(input.snapshot, ["tool_call", "args", "region"], null)'
+    assert acc.count("object.get") == 1
+
+
+def test_field_accessor_still_rejects_injection() -> None:
+    from agt.manifest_resolution.build import _rego_field_accessor
+
+    assert _rego_field_accessor("tool_call.bad-part") is None
+    assert _rego_field_accessor("a.b[0]") is None
+
+
+def test_field_accessor_empty_field_is_snapshot_root() -> None:
+    from agt.manifest_resolution.build import _rego_field_accessor
+
+    assert _rego_field_accessor("") == "input.snapshot"
+
+
+def test_deny_negative_operator_missing_intermediate_still_fires() -> None:
+    # end-to-end at render level: a deny `not_in` on a nested field renders a
+    # match body whose accessor yields null when the PARENT is absent, so the
+    # deny still fires (no chained-object.get undefined hole).
+    from agt.manifest_resolution.build import _render_rego
+
+    rego = _render_rego(
+        [
+            {
+                "name": "region",
+                "action": "deny",
+                "condition": {
+                    "field": "tool_call.args.region",
+                    "operator": "not_in",
+                    "value": ["US", "EU"],
+                },
+            }
+        ]
+    )
+    match_body = rego.split("_match_0 if {", 1)[1].split("}", 1)[0]
+    assert 'object.get(input.snapshot, ["tool_call", "args", "region"], null)' in match_body
+    assert "_v != null" not in match_body

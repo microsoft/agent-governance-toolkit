@@ -229,7 +229,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         message = str(rule.get("message", ""))
 
         accessor = _rego_field_accessor(field)
-        op_clause = _rego_op_clause(operator, accessor, value) if accessor is not None else None
+        op_clause = _rego_op_clause(operator, accessor, value, action) if accessor is not None else None
         if op_clause is None:
             # Unsupported operators or invalid field paths MUST fail
             # closed. Render an always-matching deny rule so evaluation
@@ -306,28 +306,47 @@ def _rego_field_accessor(field: str) -> str | None:
     parts = [p for p in field.split(".") if p]
     if not parts:
         return "input.snapshot"
-    # Use chained object.get with a sentinel undefined value so each
-    # level fails closed when the field is absent.
-    expr = "input.snapshot"
     for part in parts:
         # Validate the part is a simple identifier; reject anything
         # weird to avoid Rego injection from policy authors.
         if not part.replace("_", "").isalnum():
             return None
-        expr = f"object.get({expr}, {json.dumps(part)}, null)"
-    return expr
+    # Single array-path lookup so ANY missing segment (leaf or intermediate)
+    # resolves to the `null` default. The former chained form,
+    # `object.get(object.get(snapshot, "a", null), "b", null)`, returns *undefined*
+    # when an intermediate segment is missing, because `object.get(null, ...)` is
+    # undefined rather than the default; that left a missing intermediate as an
+    # unbound value that silently failed the match (a second fail-open path for
+    # deny rules, reachable by omitting a parent object). The array path keeps a
+    # missing field a `null` sentinel for every operator. See #3297.
+    path = ", ".join(json.dumps(part) for part in parts)
+    return f"object.get(input.snapshot, [{path}], null)"
 
 
-def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
+def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "allow") -> Optional[str]:
     """Render the body of a `_match[i]` rule for a given operator.
 
     Returns None for unsupported operators; the caller turns the rule into a fail-closed deny.
+
+    ``action`` is the owning rule's action ("deny"/"allow"/...). It only affects
+    the negative operators ``ne`` and ``not_in``. Field accessors resolve a
+    missing field to ``null`` (``object.get(..., null)``), so the ``_v != null``
+    guard makes an absent field *fail the match*. For a ``deny`` rule that is
+    fail-open: a caller bypasses the rule by omitting the field. An absent field
+    genuinely is "not equal to" the pinned value and "not in" the allowlist, so a
+    ``deny`` on a negative operator MUST fire when the field is missing; the guard
+    is therefore dropped for ``deny``. It is kept for any other action, because an
+    ``allow`` (or other non-deny) rule firing on a missing field would itself be
+    fail-open. See microsoft/agent-governance-toolkit#3297.
     """
     literal = json.dumps(value)
     indent = "    "
     if operator == "eq":
         return f"{indent}{accessor} == {literal}"
     if operator == "ne":
+        if action == "deny":
+            # Missing field (null) != literal -> fires the deny (fail closed).
+            return f"{indent}_v := {accessor}\n{indent}_v != {literal}"
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
@@ -340,6 +359,9 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "in":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
     if operator == "not_in":
+        if action == "deny":
+            # Missing field (null) is not in the allowlist -> fires the deny (fail closed).
+            return f"{indent}_v := {accessor}\n{indent}not _v in {literal}"
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not _v in {literal}"
     if operator == "exists":
         return f"{indent}{accessor} != null"
