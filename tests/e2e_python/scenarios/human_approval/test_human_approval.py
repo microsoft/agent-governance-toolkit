@@ -36,7 +36,7 @@ class MockDataStore:
 
 
 def run_human_approval(
-    approve: bool,
+    human_approval: bool,
 ) -> tuple[ScenarioResult, MockDataStore, list[dict[str, str]], PolicyDecision]:
     store = MockDataStore()
     runtime = load_acs_runtime(POLICY_DIR)
@@ -53,12 +53,12 @@ def run_human_approval(
         audit_trail.append(
             {"event_type": "escalated", "reason": decision.reason or ""}
         )
-        approved = approve
+        approved = human_approval
         audit_trail.append(
             {
-                "event_type": "approved" if approve else "rejected",
+                "event_type": "approved" if human_approval else "rejected",
                 "decided_by": "oncall",
-                "reason": "verified backup" if approve else "no backup on file",
+                "reason": "verified backup" if human_approval else "no backup on file",
             }
         )
 
@@ -72,7 +72,7 @@ def run_human_approval(
 
 
 def test_high_risk_action_executes_after_approval(artifact_dir: Path) -> None:
-    result, store, audit_trail, policy_decision = run_human_approval(approve=True)
+    result, store, audit_trail, policy_decision = run_human_approval(human_approval=True)
 
     assert result.decision == "allow"
     assert result.executed_tools == ["delete_dataset"]
@@ -84,7 +84,7 @@ def test_high_risk_action_executes_after_approval(artifact_dir: Path) -> None:
 
 
 def test_high_risk_action_blocked_after_rejection(artifact_dir: Path) -> None:
-    result, store, audit_trail, policy_decision = run_human_approval(approve=False)
+    result, store, audit_trail, policy_decision = run_human_approval(human_approval=False)
 
     assert result.decision == "deny"
     assert result.executed_tools == []

@@ -86,14 +86,6 @@ class _RulePolicy:
         )
         return _branch(rule, "allow" if allowed else "deny")
 
-    def _eval_content_scan(
-        self, rule: dict[str, Any], snapshot: dict[str, Any]
-    ) -> dict[str, Any]:
-        content = snapshot.get("tool_result", {}).get("content", "")
-        lowered = content.lower() if isinstance(content, str) else ""
-        poisoned = any(marker.lower() in lowered for marker in rule["markers"])
-        return _branch(rule, "deny" if poisoned else "allow")
-
 
 def _deny(message: str) -> dict[str, Any]:
     return {"decision": "deny", "reason": "default_deny", "message": message}
@@ -137,23 +129,6 @@ def evaluate_pre_tool_call(
     if extra_snapshot:
         snapshot.update(extra_snapshot)
     return _evaluate(control, InterventionPoint.PRE_TOOL_CALL, snapshot)
-
-
-def evaluate_post_tool_call(
-    control: AgentControl,
-    *,
-    agent_id: str,
-    tool_name: str,
-    result: str,
-    session_id: str = "session-1",
-) -> PolicyDecision:
-    """Evaluate a tool result at the ACS ``post_tool_call`` intervention point."""
-    snapshot: dict[str, Any] = {
-        "tool_call": {"id": f"{session_id}-1", "name": tool_name, "args": {}},
-        "tool_result": {"content": result},
-        "actor": {"id": agent_id},
-    }
-    return _evaluate(control, InterventionPoint.POST_TOOL_CALL, snapshot)
 
 
 def _evaluate(

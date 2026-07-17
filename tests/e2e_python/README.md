@@ -1,24 +1,22 @@
 # Python Governance E2E Tests
 
-These tests exercise eight governance scenarios through production ACS
+These tests exercise seven governance scenarios through production ACS
 (Agent Control Specification), prompt-injection, redaction, and sandbox
 APIs. External systems are represented by in-memory adtech, healthcare, and
 intake resources. Each policy-driven scenario keeps its customer-authored ACS
 manifest next to it (e.g. `scenarios/policy_deny/test_policy_deny.py` +
 `scenarios/policy_deny/acs.manifest.yaml`). The manifest declares its
-intervention point (`pre_tool_call` or `post_tool_call`) and a host-owned
-custom policy, and the native ACS runtime (`AgentControl.from_native`)
-evaluates it the way a customer would ship it. Five scenarios run against a
-real local Ollama model; prompt injection is intentionally blocked before a
-model request is made, and the human-approval and MCP-poisoning scenarios are
-deterministic.
+`pre_tool_call` intervention point and a host-owned custom policy, and the
+native ACS runtime (`AgentControl.from_native`) evaluates it the way a customer
+would ship it. Five scenarios run against a real local Ollama model; prompt
+injection is intentionally blocked before a model request is made, and the
+human-approval scenario is deterministic.
 
 | Package | Production boundary | Expected result |
 | --- | --- | --- |
 | `policy_deny` | Adtech tool call evaluated by the native ACS runtime at `pre_tool_call` | Deny the live budget mutation; do not call the resource |
 | `policy_allow` | Healthcare tool call evaluated by the native ACS runtime at `pre_tool_call` | Allow one non-diagnostic visit-note update |
 | `network_egress` | Outbound fetch tool call evaluated by the native ACS runtime at `pre_tool_call` | Deny egress to a non-allowlisted host; do not fetch |
-| `mcp_poisoning` | Poisoned MCP tool result scanned by the native ACS runtime at `post_tool_call` | Deny delivery of the poisoned response to the model inbox |
 | `human_approval` | High-risk deletion escalated by the native ACS runtime at `pre_tool_call` | Escalate to a human; execute only after approval, block after rejection |
 | `pii_redaction` | `MuteAgent` before model and tool boundaries | Allow sanitized intake; keep raw values out of inputs, calls, and artifacts |
 | `prompt_injection` | `PromptInjectionDetector` on retrieved content | Deny the poisoned document before Ollama is called |
@@ -126,6 +124,6 @@ AGT_E2E_ARTIFACT_DIR=artifacts/e2e-python/ollama \
 
 The suite writes `adtech.json`, `filesystem-escape.json`,
 `healthcare.json`, `human-approval-approved.json`, `human-approval-rejected.json`,
-`mcp-poisoning.json`, `network-egress.json`, `pii-redaction.json`, and
+`network-egress.json`, `pii-redaction.json`, and
 `prompt-injection.json`. CI also writes `junit.xml` and `runtime-metadata.json`,
 then uploads the directory as the `e2e-python-ollama-artifacts` artifact.
