@@ -57,6 +57,21 @@ class BenchmarkContractTests(unittest.TestCase):
             contract["$defs"]["report"]["properties"]["certification_claim"]["const"]
         )
 
+    def test_schema_fields_match_python_contract_constants(self):
+        contract = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        field_contracts = {
+            "scenario": self.benchmark.SCENARIO_FIELDS,
+            "tool_trace": self.benchmark.TRACE_FIELDS,
+            "result": self.benchmark.RESULT_FIELDS,
+            "report": self.benchmark.REPORT_FIELDS,
+        }
+
+        for definition, python_fields in field_contracts.items():
+            with self.subTest(definition=definition):
+                schema = contract["$defs"][definition]
+                self.assertEqual(python_fields, frozenset(schema["properties"]))
+                self.assertEqual(python_fields, frozenset(schema["required"]))
+
     def test_smoke_scenarios_cover_each_trap_class_and_scenario_kind(self):
         scenarios = self.benchmark.load_scenarios(SCENARIOS)
 

@@ -14,6 +14,9 @@ The fixture contains exactly 24 metadata-only scenarios: one canonical attack,
 one evasion attack, one hard-benign case, and one near miss for each of six trap
 classes.
 
+`detection_verdict` is declared scenario metadata in this phase; generating it
+with a real detector, including detector catches on evasion rows, is phase-two work.
+
 | Trap class | Surface |
 |---|---|
 | Content Injection | Content read from documents, browser state, or tool results |
