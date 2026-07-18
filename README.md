@@ -123,7 +123,7 @@ Or use the full `PolicyEvaluator` API for programmatic control:
 <summary><b>PolicyEvaluator example</b></summary>
 
 ```python
-from agent_os.policies import (
+from agent_governance.policies import (
     PolicyEvaluator, PolicyDocument, PolicyRule,
     PolicyCondition, PolicyAction, PolicyOperator, PolicyDefaults
 )
