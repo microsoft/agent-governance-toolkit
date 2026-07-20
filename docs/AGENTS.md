@@ -57,35 +57,34 @@ PR that touches markdown. It enforces two checks:
 | Check | Script | Mode |
 |-------|--------|------|
 | Relative link validation | [scripts/docs/check_links.py](../scripts/docs/check_links.py) | **strict** — broken links fail CI |
-| Frontmatter validation | [scripts/docs/check_frontmatter.py](../scripts/docs/check_frontmatter.py) | **warn-only** for now; flipped to strict in the IA capstone PR |
+| Frontmatter validation | [scripts/docs/check_frontmatter.py](../scripts/docs/check_frontmatter.py) | **strict** — missing title, review date, or owner fails CI |
 
 Run them locally before opening a PR:
 
 ```bash
 python scripts/docs/check_links.py
-python scripts/docs/check_frontmatter.py
+python scripts/docs/check_frontmatter.py --strict
 ```
 
 The link checker uses a baseline allowlist at
 [scripts/docs/.linkcheck-baseline.txt](../scripts/docs/.linkcheck-baseline.txt)
-recording broken links that pre-date this gate. New findings outside the
-baseline fail CI. As docs IA work fixes existing entries, remove the
-matching lines from the baseline — never add new entries by hand. To
-regenerate after a sanctioned bulk fix:
+for exceptional migrations. The baseline is currently empty, and new broken
+links fail CI. Never add entries by hand. To regenerate after a sanctioned
+bulk repair:
 
 ```bash
 python scripts/docs/check_links.py --update-baseline
 ```
 
-### Required frontmatter (target state)
+### Required frontmatter
 
 New and edited docs pages should include:
 
 ```yaml
 ---
 title: Page Title
-last_reviewed: 2026-05-19   # ISO date, YYYY-MM-DD
-owner: docs-team            # team or maintainer handle
+last_reviewed: 2026-07-15   # ISO date, YYYY-MM-DD
+owner: agt-maintainers      # team or maintainer handle
 ---
 ```
 

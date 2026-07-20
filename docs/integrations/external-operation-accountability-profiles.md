@@ -1,3 +1,9 @@
+---
+title: "External Operation-Accountability Profiles"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # External Operation-Accountability Profiles

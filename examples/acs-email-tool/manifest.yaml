@@ -1,0 +1,20 @@
+agent_control_specification_version: "0.3.0-alpha-agt"
+metadata:
+  name: acs-email-tool
+  version: "0.1.0"
+extends: []
+policies:
+  email_policy:
+    type: custom
+    adapter: email_policy
+intervention_points:
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: email_policy
+tools:
+  send_email:
+    clearance: internal
+

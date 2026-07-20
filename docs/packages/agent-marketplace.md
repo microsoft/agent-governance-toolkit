@@ -1,3 +1,9 @@
+---
+title: "Agent Marketplace"
+last_reviewed: 2026-04-20
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # Agent Marketplace
@@ -7,7 +13,7 @@
 *Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)*
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agentmesh-marketplace)](https://pypi.org/project/agentmesh-marketplace/)
 
@@ -86,4 +92,4 @@ Agent Marketplace is one of 7 packages in the Agent Governance Toolkit:
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE).
+MIT — see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE).

@@ -1,3 +1,9 @@
+---
+title: "Guide: Progressive Governance — Start Simple, Add Layers"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # Guide: Progressive Governance — Start Simple, Add Layers
 
 > **Applies to:** All AGT packages · **Time:** 15 minutes · **Prerequisites:** None
@@ -74,7 +80,7 @@ decision = evaluator.evaluate({"action": "read_file", "path": "/data/public/repo
 ```
 
 > 💡 **Generate policies instantly** with `agent-os policy generate --template strict`.
-> See [Policy Generator CLI](../../agent-governance-python/agent-os/src/agent_os/cli/cmd_policy_gen.py).
+> See [Policy Generator CLI](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/src/agent_os/cli/cmd_policy_gen.py).
 
 ---
 
@@ -169,7 +175,7 @@ result = safe_agent(action="transfer_funds", amount=10000)
 
 ## Next Steps
 
-- [60-Second Quickstart](../../examples/quickstart/govern_in_60_seconds.py)
+- [60-Second Quickstart](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/quickstart/govern_in_60_seconds.py)
 - [Policy Engine Tutorial](01-policy-engine.md)
 - [Trust & Identity Tutorial](02-trust-and-identity.md)
 - [Agent Discovery Tutorial](29-agent-discovery.md)

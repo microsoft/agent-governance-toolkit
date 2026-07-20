@@ -1,3 +1,9 @@
+---
+title: "Docker Sandbox Isolation Design"
+last_reviewed: 2026-05-15
+owner: agt-maintainers
+---
+
 # Docker Sandbox Isolation Design
 
 | Field       | Value                         |

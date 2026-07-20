@@ -1,3 +1,9 @@
+---
+title: "Supplemental: MCP Governance Policies"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Supplemental: MCP Governance Policies
 
 This guide moves one layer outward to **Model Context Protocol (MCP)**, where
@@ -35,7 +41,7 @@ what gets logged for audit.
 
 ## The MCP Proxy
 
-[`@microsoft/agentmesh-mcp-proxy`](../../../agent-governance-python/agent-mesh/packages/mcp-proxy/README.md)
+[`@microsoft/agentmesh-mcp-proxy`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/packages/mcp-proxy/README.md)
 sits **between the agent and the original MCP server**. The proxy intercepts
 requests and either forwards or blocks the call.
 
@@ -59,7 +65,7 @@ That makes the proxy the enforcement point in front of the MCP server.
 
 ## Policy YAML format
 
-Use [`standard.yaml`](../../../agent-governance-python/agent-mesh/packages/mcp-proxy/policies/standard.yaml)
+Use [`standard.yaml`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/packages/mcp-proxy/policies/standard.yaml)
 as the reference shape. Proxy policies are intentionally small: a header, a list
 of rules, and optional schema fields for rate limiting.
 
@@ -199,7 +205,7 @@ remains useful when you want an explicit global CLI limit.
 
 The detailed evidence lives in
 [`docs/compliance/owasp-llm-top10-mapping.md`](../../compliance/owasp-llm-top10-mapping.md)
-and [`../../../docs/compliance/owasp-agentic-top10-architecture.md`](../../../docs/compliance/owasp-agentic-top10-architecture.md). For MCP governance,
+and [`../../../docs/compliance/owasp-agentic-top10-architecture.md`](../../compliance/owasp-agentic-top10-architecture.md). For MCP governance,
 the practical alignment looks like this:
 
 | OWASP risk | How proxy policies help |
@@ -225,9 +231,9 @@ blocks risky tool calls before they reach the server.
 For some environments, allow/deny rules are not enough. You also want to know
 *who* is asking. This repo has two related Python packages:
 
-- [`mcp-trust-proxy`](../../../agent-governance-python/agentmesh-integrations/mcp-trust-proxy/README.md)
+- [`mcp-trust-proxy`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agentmesh-integrations/mcp-trust-proxy/README.md)
   is the inline trust-gating layer.
-- [`mcp-trust-server`](../../../agent-governance-python/agent-mesh/packages/mcp-trust-server/README.md)
+- [`mcp-trust-server`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/packages/mcp-trust-server/README.md)
   is an MCP server that exposes trust-management tools such as `check_trust`,
   `get_trust_score`, `establish_handshake`, and `verify_delegation`.
 
@@ -262,9 +268,9 @@ Use `mcp-trust-server` alongside that when you want trust operations over MCP.
 
 ## Next steps
 
-1. Read [`enterprise.yaml`](../../../agent-governance-python/agent-mesh/packages/mcp-proxy/policies/enterprise.yaml).
+1. Read [`enterprise.yaml`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/packages/mcp-proxy/policies/enterprise.yaml).
 2. Review [`docs/compliance/owasp-llm-top10-mapping.md`](../../compliance/owasp-llm-top10-mapping.md)
-   and [`../../../docs/compliance/owasp-agentic-top10-architecture.md`](../../../docs/compliance/owasp-agentic-top10-architecture.md).
+   and [`../../../docs/compliance/owasp-agentic-top10-architecture.md`](../../compliance/owasp-agentic-top10-architecture.md).
 3. Start with `standard`, then move to `strict` or custom rules.
 
 ---

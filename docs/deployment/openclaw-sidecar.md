@@ -1,3 +1,9 @@
+---
+title: "Securing OpenClaw with the Agent Governance Toolkit"
+last_reviewed: 2026-06-10
+owner: agt-maintainers
+---
+
 # Securing OpenClaw with the Agent Governance Toolkit
 
 Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a sidecar on Azure Kubernetes Service (AKS) for prompt injection detection, governance API access, and action auditing.
@@ -5,12 +11,12 @@ Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a si
 > [!WARNING]
 > **Known limitations — read before deploying:**
 > - OpenClaw does **not** natively call the governance sidecar. Your orchestration layer must call the sidecar HTTP API explicitly before executing tools.
-> - The docker-compose example in this doc is for illustration. For a working local demo, use [`examples/demos/openclaw-governed/`](../../examples/demos/openclaw-governed/).
+> - The docker-compose example in this doc is for illustration. For a working local demo, use [`examples/demos/openclaw-governed/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/demos/openclaw-governed).
 > - See [Roadmap](#roadmap) for the full list of unimplemented features.
 
 > **Container images** are not yet published to a public registry. Build from source and push to your own registry (see [Build the Sidecar Image](#1-build-the-governance-sidecar-image)).
 
-> **See also:** [Deployment Overview](README.md) | [AKS Deployment](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) | [OpenShell Integration](../integrations/openshell.md)
+> **See also:** [Deployment Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) | [AKS Deployment](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/deployment/azure.md) | [OpenShell Integration](../integrations/openshell.md)
 
 ---
 
@@ -21,8 +27,7 @@ Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a si
 - [Prerequisites](#prerequisites)
 - [Quick Start with Docker Compose](#quick-start-with-docker-compose)
 - [Production Deployment on AKS](#production-deployment-on-aks)
-- [Governance Policies for OpenClaw](#governance-policies-for-openclaw)
-- [Monitoring and SLOs](#monitoring-and-slos)
+- [Monitoring and SLOs](#monitoring)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -73,13 +78,13 @@ OpenClaw is a powerful autonomous agent capable of executing code, calling APIs,
 - Docker and Docker Compose (for local development)
 - Azure CLI with AKS credentials (for production)
 - Helm 3.x (for AKS deployment)
-- An AKS cluster (see [AKS setup guide](../../agent-governance-python/agent-mesh/docs/deployment/azure.md#aks-cluster-setup))
+- An AKS cluster (see [AKS setup guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/deployment/azure.md#aks-cluster-setup))
 
 ---
 
 ## Quick Start with Docker Compose
 
-A working local demo is available at [`examples/demos/openclaw-governed/`](../../examples/demos/openclaw-governed/):
+A working local demo is available at [`examples/demos/openclaw-governed/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/demos/openclaw-governed):
 
 ```bash
 cd examples/demos/openclaw-governed
@@ -275,7 +280,7 @@ kubectl exec -n openclaw-governed deploy/openclaw-governed -c openclaw -- \
 
 ### What About the AgentMesh Helm Chart?
 
-The [AgentMesh Helm chart](../../agent-governance-python/agent-mesh/charts/agentmesh/) deploys the **full 4-component enterprise architecture** (API Gateway, Trust Engine, Policy Server, Audit Collector). That is a different deployment model — use it when you need a centralized governance control plane serving multiple agents.
+The [AgentMesh Helm chart](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/charts/agentmesh) deploys the **full 4-component enterprise architecture** (API Gateway, Trust Engine, Policy Server, Audit Collector). That is a different deployment model — use it when you need a centralized governance control plane serving multiple agents.
 
 For the **OpenClaw sidecar** pattern (one governance instance per agent pod), use the plain Kubernetes manifests above. This is simpler, requires no external dependencies (no PostgreSQL, no Redis), and works immediately.
 
@@ -383,7 +388,7 @@ pip install agent-governance-toolkit[full]
 python -m agent_os.server --host 127.0.0.1 --port 8081
 ```
 
-A smoke test script is available at [`examples/demos/openclaw-governed/test-sidecar.sh`](../../examples/demos/openclaw-governed/test-sidecar.sh) — it tests all 8 API endpoints.
+A smoke test script is available at [`examples/demos/openclaw-governed/test-sidecar.sh`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/demos/openclaw-governed/test-sidecar.sh) — it tests all 8 API endpoints.
 
 ---
 
@@ -460,7 +465,7 @@ env:
 
 ## Next Steps
 
-- [Full AKS deployment guide](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) for enterprise features (managed identity, Key Vault, HA)
-- [Agent SRE documentation](../../agent-governance-python/agent-sre/README.md) for SLO configuration
-- [AgentMesh identity](../../agent-governance-python/agent-mesh/README.md) for multi-agent scenarios with OpenClaw
-- [Chaos engineering templates](../../agent-governance-python/agent-sre/README.md) for testing governance under failure conditions
+- [Full AKS deployment guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/deployment/azure.md) for enterprise features (managed identity, Key Vault, HA)
+- [Agent SRE documentation](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/README.md) for SLO configuration
+- [AgentMesh identity](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/README.md) for multi-agent scenarios with OpenClaw
+- [Chaos engineering templates](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/README.md) for testing governance under failure conditions

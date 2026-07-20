@@ -1,3 +1,9 @@
+---
+title: "Tutorial 30 — Agent Lifecycle Management: Birth to Retirement"
+last_reviewed: 2026-04-10
+owner: agt-maintainers
+---
+
 # Tutorial 30 — Agent Lifecycle Management: Birth to Retirement
 
 > **Package:** `agentmesh-platform` · **Time:** 20 minutes · **Prerequisites:** Python 3.11+

@@ -1,3 +1,9 @@
+---
+title: "Performance Benchmarks"
+last_reviewed: 2026-06-11
+owner: agt-maintainers
+---
+
 # Performance Benchmarks
 
 > **Last updated:** March 2026 · **Toolkit version:** 2.1.0 · **Python:** 3.13 · **OS:** Windows 11 (AMD64)
@@ -5,7 +11,7 @@
 > All benchmarks use `time.perf_counter()` with 10,000 iterations (unless noted).
 > Numbers are from a development workstation — CI runs on `ubuntu-latest` GitHub-hosted runners.
 
-> **Scope:** This document covers **latency and throughput** for AGT's enforcement path. For security / red-team metrics (Attack Success Rate, jailbreak robustness), see [Security & Red-Team Benchmarks](#security--red-team-benchmarks) below. AGT does not yet publish its own ASR benchmark and instead references external, reproducible sources.
+> **Scope:** This document covers **latency and throughput** for AGT's enforcement path. For security / red-team metrics (Attack Success Rate, jailbreak robustness), see [Security & Red-Team Benchmarks](#security-red-team-benchmarks) below. AGT does not yet publish its own ASR benchmark and instead references external, reproducible sources.
 
 ## TL;DR
 
@@ -37,7 +43,7 @@ Measures `PolicyEvaluator.evaluate()` — the core enforcement path every agent 
 
 **Key takeaway:** Rule count scales linearly. Even with 100 rules, p99 is under 0.11 ms. YAML loading is a cold-start cost (once per deployment, not per action).
 
-Source: [`agent-governance-python/agent-os/benchmarks/bench_policy.py`](agent-governance-python/agent-os/benchmarks/bench_policy.py)
+Source: [`agent-governance-python/agent-os/benchmarks/bench_policy.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/benchmarks/bench_policy.py)
 
 ## 2. Kernel Enforcement
 
@@ -60,7 +66,7 @@ Measures `StatelessKernel.execute()` — the full enforcement path including pol
 
 **Key takeaway:** Throughput is **stable at ~47K ops/sec** from 50 to 1,000 concurrent agents — no degradation at scale. The deny path is slightly faster than allow (no downstream execution). Circuit breaker overhead is negligible (sub-microsecond).
 
-Source: [`agent-governance-python/agent-os/benchmarks/bench_kernel.py`](agent-governance-python/agent-os/benchmarks/bench_kernel.py)
+Source: [`agent-governance-python/agent-os/benchmarks/bench_kernel.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/benchmarks/bench_kernel.py)
 
 ## 3. Audit System
 
@@ -75,7 +81,7 @@ Measures audit entry creation, querying, and serialization — the observability
 
 **Key takeaway:** Audit writes add ~2 µs per action. Querying 10K entries takes ~0.7 ms (in-memory scan). For production deployments, external append-only stores (e.g., OpenTelemetry export) are recommended for large-scale query workloads.
 
-Source: [`agent-governance-python/agent-os/benchmarks/bench_audit.py`](agent-governance-python/agent-os/benchmarks/bench_audit.py)
+Source: [`agent-governance-python/agent-os/benchmarks/bench_audit.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/benchmarks/bench_audit.py)
 
 ## 4. Framework Adapter Overhead
 
@@ -98,7 +104,7 @@ Measures the governance check overhead per framework adapter — the cost added 
 
 **Key takeaway:** All adapters add **< 0.02 ms** (p99) per tool call. This is 3–4 orders of magnitude below a typical LLM API round-trip (200–2000 ms). The governance layer is invisible to end users.
 
-Source: [`agent-governance-python/agent-os/benchmarks/bench_adapters.py`](agent-governance-python/agent-os/benchmarks/bench_adapters.py)
+Source: [`agent-governance-python/agent-os/benchmarks/bench_adapters.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/benchmarks/bench_adapters.py)
 
 ## 5. Agent SRE (Reliability Engineering)
 
@@ -116,7 +122,7 @@ Measures chaos engineering, SLO enforcement, and observability primitives.
 
 **Key takeaway:** SRE operations are sub-120 µs at p99. SLI recording (the hot path for every action) is ~2.4 µs. These can run alongside every agent action without measurable impact.
 
-Source: [`agent-governance-python/agent-sre/benchmarks/`](agent-governance-python/agent-sre/benchmarks/)
+Source: [`agent-governance-python/agent-sre/benchmarks/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-sre/benchmarks)
 
 ## 6. Memory Footprint
 
@@ -175,7 +181,7 @@ print(json.dumps(result, indent=2))
 
 ### CI Integration
 
-Benchmarks run automatically on every release via the [`benchmarks.yml`](.github/workflows/benchmarks.yml) workflow. Results are uploaded as workflow artifacts for comparison across releases.
+Benchmarks run automatically on every release via the [`benchmarks.yml`](https://github.com/microsoft/agent-governance-toolkit/blob/main/.github/workflows/benchmarks.yml) workflow. Results are uploaded as workflow artifacts for comparison across releases.
 
 ## Comparison Context
 
@@ -205,7 +211,7 @@ The governance layer adds less overhead than a single Redis read and is **10,000
 
 ## Security & Red-Team Benchmarks
 
-AGT includes a standalone prompt-injection evaluation fixture at [`benchmarks/prompt-injection/`](../benchmarks/prompt-injection/) with methodology notes in [`docs/benchmarks/prompt-injection-evaluation.md`](benchmarks/prompt-injection-evaluation.md).
+AGT includes a standalone prompt-injection evaluation fixture at [`benchmarks/prompt-injection/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/benchmarks/prompt-injection) with methodology notes in [`docs/benchmarks/prompt-injection-evaluation.md`](benchmarks/prompt-injection-evaluation.md).
 The fixture is evaluation-only: it does not change runtime behavior, introduce a detector, or publish production detector-performance claims.
 
 AGT does **not** currently publish an in-house Attack Success Rate (ASR) benchmark for its enforcement layer. We intentionally avoid quoting unsourced violation-rate percentages. Instead, we point users to reproducible external sources for the security side of the conversation:

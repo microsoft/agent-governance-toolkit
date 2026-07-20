@@ -1,3 +1,9 @@
+---
+title: "2026-06-12 - PolicyEvaluator Backend Error Fail-Closed"
+last_reviewed: 2026-06-13
+owner: agt-maintainers
+---
+
 # 2026-06-12 - PolicyEvaluator Backend Error Fail-Closed
 
 PR: to be linked after filing

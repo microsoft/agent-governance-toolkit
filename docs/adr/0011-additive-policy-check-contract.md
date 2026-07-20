@@ -1,3 +1,9 @@
+---
+title: "ADR 0011: Additive Policy Check Contract"
+last_reviewed: 2026-05-10
+owner: agt-maintainers
+---
+
 # ADR 0011: Additive Policy Check Contract
 
 - Status: proposed

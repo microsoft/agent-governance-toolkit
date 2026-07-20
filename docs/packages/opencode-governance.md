@@ -1,4 +1,6 @@
 ---
+last_reviewed: 2026-05-29
+owner: agt-maintainers
 title: OpenCode CLI governance package
 description: AGT in-process plugin for the OpenCode CLI — enforce policy on prompts, tools, and tool output.
 ---
@@ -95,4 +97,4 @@ A minimal review-heavy policy:
 ## Tutorials and examples
 
 - [Tutorial: govern an OpenCode CLI session](../tutorials/54-opencode-cli-governance.md)
-- [`examples/opencode-agt`](../../examples/opencode-agt/README.md)
+- [`examples/opencode-agt`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/opencode-agt/README.md)

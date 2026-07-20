@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit Threat Model"
+last_reviewed: 2026-05-27
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit Threat Model
 
 This document summarizes the security threat model for the Agent Governance

@@ -1,3 +1,9 @@
+---
+title: "Hands-on Lab Guide — Introduction to AI Agent Governance"
+last_reviewed: 2026-04-19
+owner: agt-maintainers
+---
+
 # Hands-on Lab Guide — Introduction to AI Agent Governance
 
 > **Duration:** 3 × 20 min labs · **Level:** Beginner–Intermediate

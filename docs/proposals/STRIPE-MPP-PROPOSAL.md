@@ -1,3 +1,9 @@
+---
+title: "Proposal: Stripe Machine Payments Protocol Integration"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Proposal: Stripe Machine Payments Protocol Integration
 
 **Status:** 📋 Planned — Research complete, implementation not started  
@@ -37,4 +43,3 @@ Human → VADP Delegation (spend ≤ $X) → Agent Wallet → Stripe MPP Session
 ## References
 
 - [Stripe MPP](https://stripe.com/payments/mpp)
-- [Agent Internet Research](../../research/docs/2026-03-21-agent-internet-economy.md)

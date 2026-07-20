@@ -1,10 +1,16 @@
+---
+title: "Agentic SpendGuard + AGT Integration"
+last_reviewed: 2026-05-19
+owner: agt-maintainers
+---
+
 # Agentic SpendGuard + AGT Integration
 
 > **Status: community-contributed third-party integration.** Maintained
 > upstream at <https://github.com/m24927605/agentic-spendguard>. SpendGuard
 > ships as an alpha (`pip install --pre 'spendguard-sdk[agt]'`); the AGT/SpendGuard
 > audit-chain reconciler is on the SpendGuard roadmap, not yet shipped.
-> Worked example: [`examples/spendguard-composite/`](../../examples/spendguard-composite/).
+> Worked example: [`examples/spendguard-composite/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/spendguard-composite).
 
 This document describes how the Agent Governance Toolkit (AGT) composes with
 [Agentic SpendGuard](https://github.com/m24927605/agentic-spendguard), an
@@ -96,7 +102,7 @@ async with SpendGuardClient(
 ```
 
 A working end-to-end example with all three deny/allow paths is in
-[`examples/spendguard-composite/`](../../examples/spendguard-composite/).
+[`examples/spendguard-composite/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/spendguard-composite).
 
 ## How SpendGuard Maps to AGT's Architecture Layers
 
@@ -185,7 +191,7 @@ works for both chains.
 ## Related
 
 - AGT integration upstream (this doc): [`docs/integrations/spendguard-integration.md`](spendguard-integration.md)
-- Working example: [`examples/spendguard-composite/`](../../examples/spendguard-composite/)
+- Working example: [`examples/spendguard-composite/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/spendguard-composite)
 - SpendGuard repo: <https://github.com/m24927605/agentic-spendguard>
 - SpendGuard's own AGT integration guide (for SpendGuard users adding AGT):
   <https://github.com/m24927605/agentic-spendguard/blob/main/docs/site/docs/integrations/agt.md>

@@ -1,3 +1,9 @@
+---
+title: "Tutorial 10 — Plugin Marketplace"
+last_reviewed: 2026-05-11
+owner: agt-maintainers
+---
+
 # Tutorial 10 — Plugin Marketplace
 
 > **Package:** `agentmesh-marketplace` · **Time:** 25 minutes · **Prerequisites:** Python 3.11+

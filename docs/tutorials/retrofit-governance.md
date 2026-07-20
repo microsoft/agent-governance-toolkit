@@ -1,3 +1,9 @@
+---
+title: "Guide: Retrofit Governance onto an Existing Agent"
+last_reviewed: 2026-05-10
+owner: agt-maintainers
+---
+
 # Guide: Retrofit Governance onto an Existing Agent
 
 > **Package:** `agent-os-kernel` · **Time:** 10 minutes · **Prerequisites:** Python 3.10+, existing agent

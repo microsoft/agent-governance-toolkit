@@ -1,3 +1,9 @@
+---
+title: "Tutorial 08 — OPA/Rego & Cedar Policy Backends"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # Tutorial 08 — OPA/Rego & Cedar Policy Backends
 
 > **Package:** `agent-os-kernel` · **Time:** 35 minutes · **Prerequisites:** Python 3.10+

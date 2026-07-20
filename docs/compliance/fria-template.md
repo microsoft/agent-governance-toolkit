@@ -1,3 +1,9 @@
+---
+title: "Fundamental Rights Impact Assessment (FRIA) Template"
+last_reviewed: 2026-04-25
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Fundamental Rights Impact Assessment (FRIA) Template

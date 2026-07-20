@@ -1,3 +1,9 @@
+---
+title: "Tutorial 11 Saga Orchestration"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 # Tutorial 11 Saga Orchestration
 
 > **Package:** `agent-hypervisor` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
@@ -16,7 +22,7 @@
 
 **Multi-step agent transactions with compensating actions and reverse-order rollback.**
 
-See also: [Execution Sandboxing (Tutorial 06)](./06-execution-sandboxing.md) | [Observability & Tracing (Tutorial 13)](./13-observability-and-tracing.md) | [Agent Runtime README](../../agent-governance-python/agent-runtime/README.md)
+See also: [Execution Sandboxing (Tutorial 06)](./06-execution-sandboxing.md) | [Observability & Tracing (Tutorial 13)](./13-observability-and-tracing.md) | [Agent Runtime README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-runtime/README.md)
 
 ---
 
@@ -26,7 +32,7 @@ See also: [Execution Sandboxing (Tutorial 06)](./06-execution-sandboxing.md) | [
 2. [Installation](#2-installation)
 3. [Quick Start: A 3-Step Saga with Compensation](#3-quick-start-a-3-step-saga-with-compensation)
 4. [SagaOrchestrator](#4-sagaorchestrator)
-5. [Saga & Step State Machines](#5-saga--step-state-machines)
+5. [Saga & Step State Machines](#5-saga-step-state-machines)
 6. [Compensating Transactions](#6-compensating-transactions)
 7. [Error Handling](#7-error-handling)
 8. [Integration with Execution Rings](#8-integration-with-execution-rings)

@@ -1,3 +1,9 @@
+---
+title: "Introduction to AI Agent Governance — Slide Deck"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # Introduction to AI Agent Governance — Slide Deck
 
 > **22 slides · 2-hour workshop**
@@ -508,9 +514,9 @@ Run compliance checks in your CI/CD pipeline:
 **Contribute:**
 
 - Open issues and PRs at [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- Read [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines
+- Read [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for guidelines
 
 **Community:**
 
-- Questions? [SUPPORT.md](../../SUPPORT.md)
+- Questions? [SUPPORT.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SUPPORT.md)
 - Share what you build! Tag `#AgentGovernanceToolkit` on social media

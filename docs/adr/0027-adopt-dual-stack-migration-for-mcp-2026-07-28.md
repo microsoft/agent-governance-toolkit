@@ -1,3 +1,9 @@
+---
+title: "ADR 0027: Adopt a dual-stack migration for MCP 2026-07-28"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # ADR 0027: Adopt a dual-stack migration for MCP `2026-07-28`
 
 - Status: proposed

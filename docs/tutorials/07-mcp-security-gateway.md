@@ -1,3 +1,9 @@
+---
+title: "Tutorial 07 — MCP Security Gateway"
+last_reviewed: 2026-07-07
+owner: agt-maintainers
+---
+
 # Tutorial 07 — MCP Security Gateway
 
 > **Package:** `agent-os-kernel` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
@@ -33,14 +39,14 @@ Both ship in `agent-os-kernel` and work together or independently.
 | Section | Topic |
 |---------|-------|
 | [Quick Start](#quick-start) | Scan an MCP config for threats in 5 lines |
-| [MCPGateway](#mcpgateway--runtime-tool-filtering) | Allow/deny filtering and the evaluation pipeline |
-| [MCPSecurityScanner](#mcpsecurityscanner--static-analysis) | Detect poisoning, rug pulls, and protocol attacks |
+| [MCPGateway](#mcpgateway-runtime-tool-filtering) | Allow/deny filtering and the evaluation pipeline |
+| [MCPSecurityScanner](#mcpsecurityscanner-static-analysis) | Detect poisoning, rug pulls, and protocol attacks |
 | [Threat Types](#threat-types) | All 6 threat types with examples |
 | [Parameter Sanitisation](#parameter-sanitisation) | Block dangerous patterns in tool arguments |
 | [Human-in-the-Loop Approval](#human-in-the-loop-approval) | Approval workflows for sensitive tools |
 | [Structured Audit Logging](#structured-audit-logging) | Every tool invocation logged |
-| [Response Scanning](#response-scanning--piicri-detection) | Scan tool responses for PII, credentials, and injection |
-| [CLI — `mcp-scan`](#cli--mcp-scan) | `scan`, `fingerprint`, and `report` commands |
+| [Response Scanning](#response-scanning-piicri-detection) | Scan tool responses for PII, credentials, and injection |
+| [CLI — `mcp-scan`](#cli-mcp-scan) | `scan`, `fingerprint`, and `report` commands |
 | [Integration with Policy Engine](#integration-with-the-policy-engine) | Cross-reference Tutorial 01 |
 
 ---

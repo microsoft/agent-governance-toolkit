@@ -1,3 +1,9 @@
+---
+title: "Tutorial 35: Policy Composition — Enterprise Governance Layers"
+last_reviewed: 2026-04-23
+owner: agt-maintainers
+---
+
 # Tutorial 35: Policy Composition — Enterprise Governance Layers
 
 > **Time**: 15 minutes · **Level**: Intermediate · **Prerequisites**: Tutorial 01 (policy basics)

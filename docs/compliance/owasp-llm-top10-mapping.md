@@ -1,3 +1,9 @@
+---
+title: "OWASP Top 10 for LLM Applications — Coverage Mapping"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # OWASP Top 10 for LLM Applications — Coverage Mapping
 
 > **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
@@ -438,7 +444,7 @@ These are defense-in-depth signals, not primary mitigations.
 
 ## Relationship to OWASP Agentic Top 10
 
-This document covers the **OWASP Top 10 for LLM Applications (2025)** — risks specific to LLM-powered applications. The toolkit also maps against the **OWASP Top 10 for Agentic Applications (2026)** in [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md), which covers agent-specific risks (goal hijack, rogue agents, cascading failures, etc.).
+This document covers the **OWASP Top 10 for LLM Applications (2025)** — risks specific to LLM-powered applications. The toolkit also maps against the **OWASP Top 10 for Agentic Applications (2026)** in [`../../docs/compliance/owasp-agentic-top10-architecture.md`](./owasp-agentic-top10-architecture.md), which covers agent-specific risks (goal hijack, rogue agents, cascading failures, etc.).
 
 Several risks overlap between the two lists:
 

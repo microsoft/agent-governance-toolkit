@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit v3.0.0"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit v3.0.0
 
 > [!IMPORTANT]
@@ -70,4 +76,4 @@ pip install --upgrade agent-governance-toolkit==3.0.0
 
 ## Full Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes since v2.3.0.
+See [CHANGELOG.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md) for the complete list of changes since v2.3.0.

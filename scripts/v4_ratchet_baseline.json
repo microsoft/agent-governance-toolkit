@@ -1,9 +1,8 @@
 {
-  "grand_total": 3796,
+  "grand_total": 3785,
   "package_totals": {
     "BREAKING_CHANGES.md": 1,
     "CHANGELOG.md": 2,
-    "README.md": 5,
     "agent-governance-dotnet/src": 1,
     "agent-governance-golang/README.md": 1,
     "agent-governance-golang/examples": 2,
@@ -38,7 +37,6 @@
     "docs/operations": 1,
     "docs/packages": 2,
     "docs/proposals": 94,
-    "docs/quickstart.md": 6,
     "docs/releases": 1,
     "docs/security": 24,
     "docs/specs": 75,
@@ -68,10 +66,6 @@
       "PolicyAction": 1
     },
     "CHANGELOG.md": {
-      "PolicyDocument": 2
-    },
-    "README.md": {
-      "PolicyAction": 3,
       "PolicyDocument": 2
     },
     "agent-governance-dotnet/src/AgentGovernance.Extensions.Microsoft.Agents/README.md": {
@@ -1199,11 +1193,6 @@
       "discover_policies": 3,
       "governance.yaml": 15
     },
-    "docs/quickstart.md": {
-      "PolicyAction": 3,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
     "docs/releases/RELEASE_NOTES_v3.6.0.md": {
       "PolicyAction": 1
     },
@@ -1810,7 +1799,7 @@
       "PatternType": 1,
       "PolicyAction": 1,
       "PolicyCheckResult": 1,
-      "PolicyDocument": 1,
+      "PolicyDocument": 2,
       "PolicyInterceptor": 1,
       "ViolationCategory": 1,
       "get_runtime_bridge": 1,
@@ -1830,8 +1819,8 @@
       "resolution_root": 2
     },
     "scripts/v4_ratchet_baseline.json": {
-      "GovernancePolicy": 201,
-      "PolicyDocument": 99,
+      "GovernancePolicy": 202,
+      "PolicyDocument": 100,
       "v4_policy_document_file": 1
     }
   },

@@ -1,28 +1,120 @@
+---
+title: Packages
+last_reviewed: 2026-07-16
+owner: docs-team
+---
+
 # Packages
 
-AGT is a multi-language monorepo with Python packages, language SDKs, developer
-tool integrations, ACS packages, and container images. The authoritative package
-identity and migration table is [`../package-migration.md`](../package-migration.md).
+AGT ships a small set of canonical package families. Start with the Python
+toolkit unless you need one specific runtime surface or another language SDK.
 
-AGT is proposed for AAIF hosting in `aaif/project-proposals#19`. Microsoft-origin
-package names remain current compatibility names until registry ownership and
-foundation package identities are finalized.
+!!! important "Public Preview"
+    Package APIs may change before general availability. Prefer the canonical
+    names below for new projects; older component names remain compatibility
+    packages during migration.
 
-## Canonical package families
+## Python toolkit
 
-| Family | Purpose | Source |
+The meta-package is the recommended starting point. The `[full]` extra installs
+the core runtime, framework integrations, CLI tools, and protocol surfaces used
+throughout the convenience-wrapper documentation. Add `agt-policies` when
+building on the canonical AGT 5 ACS host API.
+
+```bash
+pip install "agent-governance-toolkit[full]"
+pip install agt-policies
+```
+
+Use a smaller extra when one framework is enough:
+
+```bash
+pip install "agent-governance-toolkit[langchain]"
+pip install "agent-governance-toolkit[crewai]"
+pip install "agent-governance-toolkit[openai-agents]"
+```
+
+Source: `agent-governance-python/agent-compliance`
+
+## Python core
+
+`agent-governance-toolkit-core` contains policy, trust, identity, audit, and
+runtime primitives. It is the current distribution behind the legacy
+`agent_os`, `agentmesh`, runtime, and hypervisor compatibility imports.
+
+```bash
+pip install agent-governance-toolkit-core
+```
+
+Source: `agent-governance-python/agent-governance-toolkit-core`
+
+## Framework integrations
+
+`agent-governance-toolkit-integrations` packages optional adapters without
+forcing every framework dependency into the core installation.
+
+```bash
+pip install "agent-governance-toolkit-integrations[langchain]"
+pip install "agent-governance-toolkit-integrations[crewai,openai-agents]"
+```
+
+Available extras include LangChain, CrewAI, OpenAI Agents, LangGraph,
+LlamaIndex, Haystack, PydanticAI, Google ADK, Cedarling, and OpenShell.
+
+Source: `agent-governance-python/agent-governance-toolkit-integrations`
+
+## CLI and operations
+
+`agent-governance-toolkit-cli` contains operator commands, SRE and
+observability tooling, sandbox integrations, and MCP trust services.
+
+```bash
+pip install agent-governance-toolkit-cli
+```
+
+Source: `agent-governance-python/agent-governance-toolkit-cli`
+
+## Protocol governance
+
+`agent-governance-toolkit-protocols` contains governance surfaces for MCP, A2A,
+trust protocols, and verifiable MCP receipts.
+
+```bash
+pip install agent-governance-toolkit-protocols
+```
+
+Source: `agent-governance-python/agent-governance-toolkit-protocols`
+
+## Agent Control Specification
+
+Agent Control Specification, or ACS, is the canonical stateless policy decision
+runtime. AGT hosts normally use `agt-policies`, which resolves manifests, builds
+snapshots, calls ACS, and maps verdicts into host-facing results.
+
+```bash
+pip install agt-policies
+```
+
+Advanced hosts that need the native SDK directly can install
+`agent-control-specification`. See the
+[ACS package guide](agent-control-specification.md).
+
+## Language SDKs
+
+| SDK | Install | Source |
 |---|---|---|
-| Python meta-package | Full AGT install and extras | `agent-governance-python/agent-compliance` |
-| Python core | Policy engine, trust, audit, identity, runtime core | `agent-governance-python/agent-governance-toolkit-core` |
-| Python integrations | Framework adapters | `agent-governance-python/agent-governance-toolkit-integrations` |
-| Python CLI | Operator CLI, sandbox, SRE, MCP trust tooling | `agent-governance-python/agent-governance-toolkit-cli` |
-| Python protocols | Protocol governance surfaces | `agent-governance-python/agent-governance-toolkit-protocols` |
-| ACS | Stateless policy decision runtime and SDKs | `policy-engine/` |
-| TypeScript SDK | Agent governance SDK and developer tooling packages | `agent-governance-typescript/`, `agent-governance-*cli/` |
-| .NET SDK | .NET governance SDK and extensions | `agent-governance-dotnet/` |
-| Rust SDK | `agentmesh`, `agentmesh-mcp`, ACS Rust crates | `agent-governance-rust/`, `policy-engine/` |
-| Go SDK | Go governance SDK | `agent-governance-golang/` |
-| OCI images | Runtime/service containers | `.github/workflows/publish-containers.yml` |
+| TypeScript | `npm install @microsoft/agent-governance-sdk` | `agent-governance-typescript/` |
+| .NET | `dotnet add package Microsoft.AgentGovernance` | `agent-governance-dotnet/` |
+| Rust | `cargo add agentmesh` | `agent-governance-rust/agentmesh/` |
+| Rust MCP | `cargo add agentmesh-mcp` | `agent-governance-rust/agentmesh-mcp/` |
+| Go | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` | `agent-governance-golang/` |
+
+## Other shipped surfaces
+
+Standalone Python packages, developer-tool integrations, ACS SDKs, and OCI
+images remain separate where consolidation would obscure their lifecycle or
+consumer. The authoritative identity and migration map is
+[`../package-migration.md`](../package-migration.md).
 
 ## Status labels
 
@@ -37,7 +129,12 @@ foundation package identities are finalized.
 Package pages should use these labels when a capability is not part of the
 canonical core release.
 
-## Migration
+## Compatibility and migration
+
+Legacy distributions such as `agent-os-kernel`, `agentmesh-platform`,
+`agentmesh-runtime`, `agent-sre`, and `agent-hypervisor` are not recommended for
+new projects. Their compatibility pages remain available because existing
+imports and installations still need migration guidance.
 
 Use [`../package-migration.md`](../package-migration.md) before changing package
 names, install snippets, release workflow matrices, or registry metadata.

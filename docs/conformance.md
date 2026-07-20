@@ -1,3 +1,9 @@
+---
+title: "AGT Conformance"
+last_reviewed: 2026-06-15
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # AGT Conformance
@@ -185,7 +191,7 @@ To register as AGT-conformant:
 | Test evidence | CI run or artifact showing all suite tests passing |
 | Production or pilot | At least one deployment (evaluation counts) |
 | Maintainer contact | Named individual reachable via GitHub |
-| Security disclosure | Acknowledge [SECURITY.md](../SECURITY.md) responsible disclosure process |
+| Security disclosure | Acknowledge [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) responsible disclosure process |
 
 ### Advanced claims — additional requirements
 
@@ -259,5 +265,5 @@ When specifications advance to v2.0, existing v1.0 claims remain valid for the s
 - [TESTING\_GUIDE.md](TESTING_GUIDE.md) — how to use the test suite end-to-end
 - [Integration Tiers](integration-tiers.md) — governance depth at Tier 0 (sidecar), Tier 1 (SDK), and Tier 2 (deep hooks)
 - [CSA ATF Conformance Assessment](compliance/atf-conformance-assessment.md) — AGT's self-assessment against the CSA Agentic Trust Framework (25/25 requirements, Senior maturity)
-- [Specifications](specs/) — the normative specs each requirement references
+- [Specifications](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/specs) — the normative specs each requirement references
 - [ADOPTERS.md](ADOPTERS.md) — full adopter registry

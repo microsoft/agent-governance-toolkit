@@ -1,3 +1,9 @@
+---
+title: "Security Design Notes: Context Accumulation Governance (v1)"
+last_reviewed: 2026-06-17
+owner: agt-maintainers
+---
+
 # Security Design Notes: Context Accumulation Governance (v1)
 
 **Date:** 2026-06-03

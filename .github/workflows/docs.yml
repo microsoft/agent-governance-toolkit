@@ -3,22 +3,22 @@ name: Deploy docs to GitHub Pages
 # This workflow rebuilds the MkDocs site and deploys to GitHub Pages.
 # The `paths:` filter keeps the build cheap by only firing on changes to
 # inputs that affect the rendered output:
-#   - site/**                — extra static assets copied into the build
-#   - mkdocs.yml             — site config (nav, theme, plugins)
-#   - docs/**                — the actual markdown sources
-#   - .github/workflows/docs.yml — this workflow file itself, so changes
-#                                  to the build/deploy logic still trigger
-#                                  a rebuild even when no doc content moved
+#   - mkdocs.yml             - site config (nav, theme, plugins)
+#   - docs/**                - markdown, styles, scripts, and assets
+#   - agent-governance-python/requirements/ci-docs.txt
+#                              - pinned documentation build dependencies
+#   - .github/workflows/docs.yml
+#                              - build and deployment logic
 # A change anywhere else (e.g. Python source, Dockerfile) will not rebuild
-# the docs site, which is the intended trade-off — docs are derived from
+# the docs site, which is the intended trade-off. Docs are derived from
 # this narrow input set, not from the full repository.
 on:
   push:
     branches: [main]
     paths:
-      - 'site/**'
       - 'mkdocs.yml'
       - 'docs/**'
+      - 'agent-governance-python/requirements/ci-docs.txt'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -36,7 +36,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:

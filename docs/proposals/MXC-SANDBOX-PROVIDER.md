@@ -1,3 +1,9 @@
+---
+title: "MXC Sandbox Provider Design"
+last_reviewed: 2026-06-12
+owner: agt-maintainers
+---
+
 # MXC Sandbox Provider Design
 
 | Field        | Value                                              |

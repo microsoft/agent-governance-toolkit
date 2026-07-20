@@ -1,3 +1,9 @@
+---
+title: "Tutorial 45: Shift-Left Governance"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 45: Shift-Left Governance

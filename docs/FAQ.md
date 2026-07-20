@@ -1,3 +1,9 @@
+---
+title: "Frequently Asked Questions"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Frequently Asked Questions
@@ -5,7 +11,7 @@
 Technical Q&A for customers, partners, and evaluators of the Agent Governance
 Toolkit.
 
-> **See also:** [Quick Start](quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](../docs/compliance/owasp-agentic-top10-architecture.md)
+> **See also:** [Quick Start](quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](./compliance/owasp-agentic-top10-architecture.md)
 
 ---
 
@@ -14,7 +20,7 @@ Toolkit.
 1. [What is the relationship between AGT and the Foundry Control Plane?](#1-what-is-the-relationship-between-agt-and-the-foundry-control-plane)
 2. [Is the Agent Mesh sidecar only intercepting network-related agent actions?](#2-is-the-agent-mesh-sidecar-only-intercepting-network-related-agent-actions)
 3. [What is the practical impact of the different SDK integration types?](#3-what-is-the-practical-impact-of-the-different-sdk-integration-types)
-4. [How many SDKs are actually supported — 12 or 6?](#4-how-many-sdks-are-actually-supported--12-or-6)
+4. [How many SDKs are actually supported — 12 or 6?](#4-how-many-sdks-are-actually-supported-12-or-6)
 5. [Can an agent identity be linked to Entra IDs?](#5-can-an-agent-identity-be-linked-to-entra-ids)
 6. [If I update a policy at runtime, do I need to restart the agent?](#6-if-i-update-a-policy-at-runtime-do-i-need-to-restart-the-agent)
 7. [What is the Microsoft product integration roadmap?](#7-what-is-the-microsoft-product-integration-roadmap)
@@ -514,7 +520,7 @@ Key controls:
 
 **Short answer:** Any agent type. AGT is framework-agnostic and vendor-independent by design — the core packages (`agent-os-kernel`, `agentmesh-platform`, etc.) have zero vendor dependencies.
 
-It works with Azure AI Foundry, AWS Bedrock, Google ADK, LangChain, CrewAI, AutoGen, OpenAI Agents, OpenClaw, and 20+ other frameworks. See the full list in the [README](../README.md#framework-support).
+It works with Azure AI Foundry, AWS Bedrock, Google ADK, LangChain, CrewAI, AutoGen, OpenAI Agents, OpenClaw, and 20+ other frameworks. See the full list in the [README](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md#framework-support).
 
 ### How It Works
 
@@ -620,7 +626,7 @@ DLP won't catch any of these because there's no sensitive content to flag. AGT's
 
 ### Where They Overlap
 
-Both can block prompt injection. DLP uses content classifiers; AGT uses a dedicated [PromptInjectionDetector](../agent-governance-python/agent-os/src/agent_os/prompt_injection.py) with 7 attack-type detection. In practice you'd want both layers — DLP for data classification + AGT for action governance.
+Both can block prompt injection. DLP uses content classifiers; AGT uses a dedicated [PromptInjectionDetector](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/src/agent_os/prompt_injection.py) with 7 attack-type detection. In practice you'd want both layers — DLP for data classification + AGT for action governance.
 
 ### Bottom Line
 
@@ -703,4 +709,4 @@ See [Tutorial 40 — OTel Observability](tutorials/40-otel-observability.md) for
 | DeepWiki | https://deepwiki.com/microsoft/agent-governance-toolkit |
 | OWASP Agentic Top 10 | https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ |
 | Quick Start Guide | [quickstart.md](quickstart.md) |
-| Deployment Guides | [docs/deployment/](deployment/) |
+| Deployment Guides | [docs/deployment/](./deployment/index.md) |

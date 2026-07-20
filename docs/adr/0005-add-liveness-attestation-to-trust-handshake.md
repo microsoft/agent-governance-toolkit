@@ -1,3 +1,9 @@
+---
+title: "ADR 0005: Add liveness attestation to TrustHandshake"
+last_reviewed: 2026-04-12
+owner: agt-maintainers
+---
+
 # ADR 0005: Add liveness attestation to TrustHandshake
 
 - Status: proposed

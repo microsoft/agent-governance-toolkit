@@ -1,3 +1,9 @@
+---
+title: "Proposal: Folder-Level Governance Policy Scoping"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Proposal: Folder-Level Governance Policy Scoping
 
 > **Status:** Draft
@@ -306,4 +312,4 @@ Child policies explicitly name their parent (like TypeScript `tsconfig.json`). *
 - [EditorConfig Specification](https://editorconfig.org/)
 - [Azure Policy Inheritance](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/assignment-structure)
 - [AWS SCP Evaluation](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html)
-- [AGT PolicyEvaluator source](../agent-governance-python/agent-os/src/agent_os/policies/evaluator.py)
+- [AGT PolicyEvaluator source](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/src/agent_os/policies/evaluator.py)

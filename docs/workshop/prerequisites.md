@@ -1,3 +1,9 @@
+---
+title: "Prerequisites — Introduction to AI Agent Governance Workshop"
+last_reviewed: 2026-04-19
+owner: agt-maintainers
+---
+
 # Prerequisites — Introduction to AI Agent Governance Workshop
 
 > Share this file with participants **at least 48 hours before** the session.

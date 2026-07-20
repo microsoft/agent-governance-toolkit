@@ -1,3 +1,9 @@
+---
+title: "Maintainers"
+last_reviewed: 2026-05-29
+owner: agt-maintainers
+---
+
 # Maintainers
 
 Current maintainers of the Agent Governance Toolkit.
@@ -16,7 +22,7 @@ Current maintainers of the Agent Governance Toolkit.
 - Review and approve pull requests within 5 business days
 - Triage and respond to security vulnerabilities (MSRC coordination)
 - Manage releases, signing (ESRP), and package publishing
-- Enforce the [Governance](GOVERNANCE.md) and [Contributing](../CONTRIBUTING.md) policies
+- Enforce the [Governance](GOVERNANCE.md) and [Contributing](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) policies
 - Maintain CI/CD pipelines and infrastructure
 
 ## Becoming a Maintainer

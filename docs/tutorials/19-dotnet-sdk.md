@@ -1,3 +1,9 @@
+---
+title: "Tutorial 19 — .NET package (Microsoft.AgentGovernance)"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 # Tutorial 19 — .NET package (Microsoft.AgentGovernance)
 
 > **Package:** `Microsoft.AgentGovernance` · **Time:** 30 minutes · **Prerequisites:** .NET 8.0+
@@ -16,7 +22,7 @@ beyond YamlDotNet**.
 > \* *Version current as of this revision. Always check the latest stable
 > release on [NuGet.org](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 > before pinning, and cross-reference
-> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](../../agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj)
+> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj)
 > when building from source.*
 
 ---
@@ -58,7 +64,7 @@ Or add it to your `.csproj` directly:
 > revision. Before copy-pasting, check the latest published version on
 > [NuGet.org](https://www.nuget.org/packages/Microsoft.AgentGovernance) and
 > the in-repo source of truth at
-> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](../../agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj).
+> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj).
 > The same applies to the companion extension packages below.
 
 The package targets `net8.0` and has a single dependency — `YamlDotNet` for
@@ -1266,7 +1272,7 @@ tutorials for deeper conceptual coverage:
    ```
 
 6. **Read the OWASP coverage** — The
-   [.NET package README](../../agent-governance-dotnet/README.md) maps
+   [.NET package README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/README.md) maps
    each OWASP Agentic AI Top 10 risk to the package's mitigation.
 
 7. **Explore build-time enforcement** — The .NET SDK enforces nullable

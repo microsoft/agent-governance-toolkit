@@ -1,3 +1,9 @@
+---
+title: "Modern Agent Architecture & the Agent Governance Toolkit (AGT)"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Modern Agent Architecture & the Agent Governance Toolkit (AGT)
 
 > **Audience:** Technical decision-makers evaluating governance for enterprise AI agent deployments

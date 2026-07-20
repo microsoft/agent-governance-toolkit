@@ -1,3 +1,9 @@
+---
+title: "Tutorial 18 — Compliance Verification & Attestation"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Tutorial 18 — Compliance Verification & Attestation
 
 > **Package:** `agent-governance-toolkit` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
@@ -953,7 +959,7 @@ else:
         print(f"   - {c.control_id}: {c.name}")
 ```
 
-For the full OWASP mapping with detailed mitigations, see [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md).
+For the full OWASP mapping with detailed mitigations, see [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../compliance/owasp-agentic-top10-architecture.md).
 
 ---
 
@@ -1092,7 +1098,7 @@ Badge: ![Governance](https://img.shields.io/badge/governance-100%25-brightgreen)
 
 - **[Tutorial 02 — Trust & Identity](02-trust-and-identity.md)** — Agent identity (`AgentIdentity`), trust scoring, and DID credentials that underpin ASI-05 and ASI-07 controls
 - **[Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md)** — `AuditChain` tamper-evident logging and `ComplianceEngine` behavioral monitoring (ASI-06, ASI-10)
-- **[OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)** — Full OWASP Agentic Top 10 mapping with per-risk mitigation details
+- **[OWASP Compliance Mapping](../compliance/owasp-agentic-top10-architecture.md)** — Full OWASP Agentic Top 10 mapping with per-risk mitigation details
 
 ---
 

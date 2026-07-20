@@ -1,3 +1,9 @@
+---
+title: "MCP Ecosystem — Governance Server & Registry"
+last_reviewed: 2026-03-23
+owner: agt-maintainers
+---
+
 # MCP Ecosystem — Governance Server & Registry
 
 **Submissions:**

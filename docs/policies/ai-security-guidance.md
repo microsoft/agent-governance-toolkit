@@ -1,8 +1,14 @@
+---
+title: "AI-assisted contributions to security-sensitive code"
+last_reviewed: 2026-04-30
+owner: agt-maintainers
+---
+
 # AI-assisted contributions to security-sensitive code
 
 This document provides guidance for contributors using AI development tools when
 working on security-sensitive areas of the Agent Governance Toolkit. It supplements
-the AI contribution policy in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+the AI contribution policy in [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).
 
 ## Scope
 
@@ -99,5 +105,5 @@ Maintainers may:
 ## Reporting security issues
 
 If you discover a security vulnerability while using AI tools on this codebase,
-follow the reporting process in [SECURITY.md](../../SECURITY.md). Do not disclose
+follow the reporting process in [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md). Do not disclose
 vulnerability details in public issues, PRs, or AI tool conversations.

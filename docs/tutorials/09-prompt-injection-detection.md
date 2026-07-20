@@ -1,3 +1,9 @@
+---
+title: "Tutorial 09 — Prompt Injection Detection & Input Security"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Tutorial 09 — Prompt Injection Detection & Input Security
 
 > **Package:** `agent-os-kernel` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+

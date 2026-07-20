@@ -1,3 +1,9 @@
+---
+title: "Chapter 4: Conditional Policies"
+last_reviewed: 2026-04-11
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. -->
 <!-- Licensed under the MIT License. -->
 

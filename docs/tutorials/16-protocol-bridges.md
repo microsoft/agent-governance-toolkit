@@ -1,3 +1,9 @@
+---
+title: "Tutorial 16 — Protocol Bridges (A2A, MCP, IATP)"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 # Tutorial 16 — Protocol Bridges (A2A, MCP, IATP)
 
 > **Package:** `agentmesh-platform` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
@@ -40,14 +46,14 @@ The Agent Governance Toolkit ships three bridge components:
 
 | Section | Topic |
 |---------|-------|
-| [Quick Start](#2-quick-start--mcp-proxy-with-trust-gating) | Proxy an MCP server with trust scoring in 10 lines |
+| [Quick Start](#2-quick-start-mcp-proxy-with-trust-gating) | Proxy an MCP server with trust scoring in 10 lines |
 | [MCP Protocol Bridge](#3-mcp-protocol-bridge) | Trust-gated tool exposure, per-tool policies, filtering |
 | [A2A Protocol Bridge](#4-a2a-protocol-bridge) | Agent Cards, task envelopes, skill-based routing |
-| [IATP](#5-iatp--inter-agent-trust-protocol) | Ed25519 handshakes, attestation records, gRPC services |
+| [IATP](#5-iatp-inter-agent-trust-protocol) | Ed25519 handshakes, attestation records, gRPC services |
 | [Trusted Agent Cards](#6-trusted-agent-cards) | Cryptographically signed agent metadata |
 | [Trust Gating](#7-trust-gating) | Threshold-based access control across protocols |
 | [Multi-Protocol Orchestration](#8-multi-protocol-orchestration) | Agents communicating via different protocols |
-| [CLI — agentmesh proxy](#9-cli--agentmesh-proxy) | Command-line MCP proxy with governance |
+| [CLI — agentmesh proxy](#9-cli-agentmesh-proxy) | Command-line MCP proxy with governance |
 | [Cross-References](#10-cross-references) | Links to related tutorials |
 
 ---

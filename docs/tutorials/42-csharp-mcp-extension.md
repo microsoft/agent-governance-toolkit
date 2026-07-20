@@ -1,3 +1,9 @@
+---
+title: "Tutorial 42 — C# MCP extension (Microsoft.AgentGovernance.Extensions.ModelContextProtocol)"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 # Tutorial 42 — C# MCP extension (`Microsoft.AgentGovernance.Extensions.ModelContextProtocol`)
 
 > **Package:** `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` · **Time:** 20 minutes · **Prerequisites:** .NET 8.0+, familiarity with the official Model Context Protocol C# SDK
@@ -17,12 +23,12 @@ be sanitized before they go back to the client.
 | Section | Topic |
 |---------|-------|
 | [Installation](#installation) | Add the MCP governance extension to a .NET server |
-| [Step 1 - Create a policy file](#step-1---create-a-policy-file) | Define the MCP rules you want enforced |
-| [Step 2 - Register the governed server](#step-2---register-the-governed-server) | Attach governance to `AddMcpServer()` |
-| [Step 3 - Register tools](#step-3---register-tools) | Add MCP tools that are wrapped automatically |
-| [Step 4 - Understand runtime behavior](#step-4---understand-runtime-behavior) | See what `WithGovernance(...)` changes |
-| [Step 5 - Tune the options](#step-5---tune-the-options) | Adjust startup scanning, response sanitization, and fallback handling |
-| [Step 6 - Use authenticated agent IDs](#step-6---use-authenticated-agent-ids) | Map callers to policy identities |
+| [Step 1 - Create a policy file](#step-1-create-a-policy-file) | Define the MCP rules you want enforced |
+| [Step 2 - Register the governed server](#step-2-register-the-governed-server) | Attach governance to `AddMcpServer()` |
+| [Step 3 - Register tools](#step-3-register-tools) | Add MCP tools that are wrapped automatically |
+| [Step 4 - Understand runtime behavior](#step-4-understand-runtime-behavior) | See what `WithGovernance(...)` changes |
+| [Step 5 - Tune the options](#step-5-tune-the-options) | Adjust startup scanning, response sanitization, and fallback handling |
+| [Step 6 - Use authenticated agent IDs](#step-6-use-authenticated-agent-ids) | Map callers to policy identities |
 | [Next steps](#next-steps) | Related tutorials and package docs |
 
 ---

@@ -1,3 +1,9 @@
+---
+title: "Azure Sandbox Isolation Design"
+last_reviewed: 2026-05-15
+owner: agt-maintainers
+---
+
 # Azure Sandbox Isolation Design
 
 | Field       | Value                                |

@@ -1,3 +1,9 @@
+---
+title: "Tutorial 23 — Multi-Agent Delegation Chains"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 23 — Multi-Agent Delegation Chains
@@ -23,7 +29,7 @@ that enforce the principle of least privilege across multi-agent systems.
 | [Delegation Depth Tracking](#delegation-depth-tracking) | Tracking how many hops from the root authority |
 | [Scope Chain Verification](#scope-chain-verification) | Validating the entire delegation chain |
 | [Cross-Agent Trust Propagation](#cross-agent-trust-propagation) | How trust flows through delegation |
-| [Full Example](#full-example-manager--researcher--reader) | Manager → Researcher → Data Reader pipeline |
+| [Full Example](#full-example-manager-researcher-reader) | Manager → Researcher → Data Reader pipeline |
 | [Identity Registry](#identity-registry) | Managing and revoking delegated identities |
 | [Cross-Reference](#cross-reference) | Related tutorials |
 

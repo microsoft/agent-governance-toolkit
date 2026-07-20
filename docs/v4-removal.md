@@ -1,3 +1,9 @@
+---
+title: "v4 policy-language removal"
+last_reviewed: 2026-07-15
+owner: agt-maintainers
+---
+
 # v4 policy-language removal
 
 AGT is removing the legacy v4 policy language so the ACS (v5) policy layer

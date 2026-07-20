@@ -1,3 +1,9 @@
+---
+title: "Agent OS — Public Preview"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # Agent OS — Public Preview
@@ -5,7 +11,7 @@
 **A kernel architecture for governing autonomous AI agents**
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
@@ -17,7 +23,7 @@
 
 > 📦 **Install the full stack:** `pip install agent-governance-toolkit[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-example) • [Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs) • [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode) • [Examples](examples/) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
+[Quick Start](#quick-example) • [Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs) • [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode) • [Examples](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
 
 <br/>
 
@@ -237,7 +243,7 @@ async def chat(message: str, conversation_id: str = "default") -> str:
 # Outputs are checked against content policies; violations trigger SIGSTOP
 ```
 
-See [examples/](examples/) for 20+ runnable demos including SQL agents, GitHub reviewers, and compliance bots.
+See [examples/](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples) for 20+ runnable demos including SQL agents, GitHub reviewers, and compliance bots.
 </details>
 
 ---
@@ -403,17 +409,17 @@ agent-governance-python/agent-os/
 
 | Module | Layer | PyPI Package | Description | Status |
 |--------|-------|-------------|-------------|--------|
-| [`primitives`](../../agent-governance-python/agent-primitives/) | 1 | `agent-primitives` | Base failure types, severity levels | ✅ Stable |
-| [`cmvk`](modules/cmvk/) | 1 | `cmvk` | Verification, drift detection | ✅ Stable |
-| [`emk`](modules/emk/) | 1 | `emk` | Episodic memory kernel (append-only ledger) | ✅ Stable |
-| [`caas`](modules/caas/) | 1 | `caas-core` | Context-as-a-Service, RAG pipeline | ✅ Stable |
-| [`amb`](modules/amb/) | 2 | `amb-core` | Agent message bus (async pub/sub) | ✅ Stable |
-| [`iatp`](modules/iatp/) | 2 | `inter-agent-trust-protocol` | Sidecar trust protocol, typed IPC pipes | ✅ Stable |
-| [`atr`](modules/atr/) | 2 | `agent-tool-registry` | Tool registry with LLM schema generation | ✅ Stable |
-| [`control-plane`](modules/control-plane/) | 3 | `agent-control-plane` | **THE KERNEL** — Policy engine, signals, VFS | ✅ Stable |
-| [`observability`](modules/observability/) | 3 | `agent-os-observability` | Prometheus metrics + OpenTelemetry tracing | ⚠️ No tests |
-| [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
-| [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
+| [`primitives`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-primitives) | 1 | `agent-primitives` | Base failure types, severity levels | ✅ Stable |
+| [`cmvk`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/cmvk) | 1 | `cmvk` | Verification, drift detection | ✅ Stable |
+| [`emk`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/emk) | 1 | `emk` | Episodic memory kernel (append-only ledger) | ✅ Stable |
+| [`caas`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/caas) | 1 | `caas-core` | Context-as-a-Service, RAG pipeline | ✅ Stable |
+| [`amb`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/amb) | 2 | `amb-core` | Agent message bus (async pub/sub) | ✅ Stable |
+| [`iatp`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/iatp) | 2 | `inter-agent-trust-protocol` | Sidecar trust protocol, typed IPC pipes | ✅ Stable |
+| [`atr`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/atr) | 2 | `agent-tool-registry` | Tool registry with LLM schema generation | ✅ Stable |
+| [`control-plane`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/control-plane) | 3 | `agent-control-plane` | **THE KERNEL** — Policy engine, signals, VFS | ✅ Stable |
+| [`observability`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/observability) | 3 | `agent-os-observability` | Prometheus metrics + OpenTelemetry tracing | ⚠️ No tests |
+| [`nexus`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/nexus) | — | *Not published* | Trust exchange network | 🔬 Prototype |
+| [`mcp-kernel-server`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/mcp-kernel-server) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
 | [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Saga Orchestrator, Delta Audit** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
 
 ---
@@ -493,13 +499,13 @@ summary_hash = await rt.terminate_session(session.sso.session_id)
 
 | Extension | Description | Status |
 |-----------|-------------|--------|
-| [`mcp-server`](extensions/mcp-server/) | ⭐ **MCP Server** — Works with Claude, Copilot, Cursor (`npx agentos-mcp-server`) | ✅ Published (v1.0.1) |
-| [`vscode`](../../agent-governance-typescript/agent-os-vscode/) | VS Code extension with real-time policy checks, enterprise features | ✅ Published (v1.0.1) |
-| [`copilot`](extensions/copilot/) | GitHub Copilot extension (Vercel/Docker deployment) | ✅ Published |
-| [`jetbrains`](extensions/jetbrains/) | IntelliJ, PyCharm, WebStorm plugin (Kotlin) | ✅ Built |
-| [`cursor`](extensions/cursor/) | Cursor IDE extension (Composer integration) | ✅ Built (v0.1.0) |
-| [`chrome`](extensions/chrome/) | Chrome extension for GitHub, Jira, AWS, GitLab | ✅ Built |
-| [`github-cli`](extensions/github-cli/) | `gh agent-os` CLI extension | ⚠️ Basic |
+| [`mcp-server`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/extensions/mcp-server) | ⭐ **MCP Server** — Works with Claude, Copilot, Cursor (`npx agentos-mcp-server`) | ✅ Published (v1.0.1) |
+| [`vscode`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript/agent-os-vscode) | VS Code extension with real-time policy checks, enterprise features | ✅ Published (v1.0.1) |
+| [`copilot`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/extensions/copilot) | GitHub Copilot extension (Vercel/Docker deployment) | ✅ Published |
+| [`jetbrains`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/extensions/jetbrains) | IntelliJ, PyCharm, WebStorm plugin (Kotlin) | ✅ Built |
+| [`cursor`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/extensions/cursor) | Cursor IDE extension (Composer integration) | ✅ Built (v0.1.0) |
+| [`chrome`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/extensions/chrome) | Chrome extension for GitHub, Jira, AWS, GitLab | ✅ Built |
+| [`github-cli`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/extensions/github-cli) | `gh agent-os` CLI extension | ⚠️ Basic |
 
 ---
 
@@ -636,7 +642,7 @@ governed = OpenAIAgentsSDKKernel().wrap(agent)
 
 > **Note:** These adapters use lazy interception — they don't require the target framework to be installed until you call `.wrap()`.
 
-See [integrations documentation](docs/integrations.md) for full details.
+See [integrations documentation](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/integrations.md) for full details.
 
 ### Integration Comparison
 
@@ -659,9 +665,9 @@ The `examples/` directory contains demos at various levels:
 
 | Demo | Description | Command |
 |------|-------------|---------|
-| [demo-app](examples/demo-app/) | Uses the stateless API (most reliable) | `cd examples/demo-app && python demo.py` |
-| [hello-world](examples/hello-world/) | Minimal example | `cd examples/hello-world && python agent.py` |
-| [quickstart](examples/quickstart/) | Quick intro | `cd examples/quickstart && python my_first_agent.py` |
+| [demo-app](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/demo-app) | Uses the stateless API (most reliable) | `cd examples/demo-app && python demo.py` |
+| [hello-world](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/hello-world) | Minimal example | `cd examples/hello-world && python agent.py` |
+| [quickstart](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/quickstart) | Quick intro | `cd examples/quickstart && python my_first_agent.py` |
 
 ### Domain Examples (Self-Contained)
 
@@ -669,19 +675,19 @@ These examples are self-contained and don't require external Agent OS imports:
 
 | Demo | Description |
 |------|-------------|
-| [healthcare-hipaa](examples/healthcare-hipaa/) | HIPAA-compliant agent |
-| [customer-service](examples/customer-service/) | Customer support agent |
-| [legal-review](examples/legal-review/) | Legal document analysis |
-| [crewai-safe-mode](examples/crewai-safe-mode/) | CrewAI with safety wrappers |
+| [healthcare-hipaa](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/healthcare-hipaa) | HIPAA-compliant agent |
+| [customer-service](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/customer-service) | Customer support agent |
+| [legal-review](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/legal-review) | Legal document analysis |
+| [crewai-safe-mode](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/crewai-safe-mode) | CrewAI with safety wrappers |
 
 ### Production Demos (with Docker + Observability)
 
 | Demo | Description | Command |
 |------|-------------|---------|
-| [carbon-auditor](examples/carbon-auditor/) | Multi-model verification | `cd examples/carbon-auditor && docker-compose up` |
-| [grid-balancing](examples/grid-balancing/) | Multi-agent coordination | `cd examples/grid-balancing && docker-compose up` |
-| [defi-sentinel](examples/defi-sentinel/) | Real-time attack detection | `cd examples/defi-sentinel && docker-compose up` |
-| [pharma-compliance](examples/pharma-compliance/) | Document analysis | `cd examples/pharma-compliance && docker-compose up` |
+| [carbon-auditor](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/carbon-auditor) | Multi-model verification | `cd examples/carbon-auditor && docker-compose up` |
+| [grid-balancing](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/grid-balancing) | Multi-agent coordination | `cd examples/grid-balancing && docker-compose up` |
+| [defi-sentinel](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/defi-sentinel) | Real-time attack detection | `cd examples/defi-sentinel && docker-compose up` |
+| [pharma-compliance](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/pharma-compliance) | Document analysis | `cd examples/pharma-compliance && docker-compose up` |
 
 Each production demo includes:
 - **Grafana dashboard** on port 300X
@@ -899,39 +905,36 @@ Add to your config file:
 
 **Features:** 10 tools for agent creation, policy enforcement, compliance checking (SOC 2, GDPR, HIPAA), human-in-the-loop approvals, and audit logging.
 
-See [MCP server documentation](extensions/mcp-server/README.md) for full details.
+See [MCP server documentation](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/extensions/mcp-server/README.md) for full details.
 
 ---
 
 ## Documentation
 
 ### Tutorials
-- [5-Minute Quickstart](docs/tutorials/5-minute-quickstart.md) — Get running fast
-- [30-Minute Deep Dive](docs/tutorials/30-minute-deep-dive.md) — Comprehensive walkthrough
-- [Building Your First Governed Agent](docs/tutorials/first-governed-agent.md) — Complete tutorial
-- [Using Message Bus Adapters](docs/tutorials/message-bus-adapters.md) — Connect agents
-- [Creating Custom Tools](docs/tutorials/custom-tools.md) — Build safe tools
-- [Cheatsheet](docs/cheatsheet.md) — Quick reference
+- [5-Minute Quickstart](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/tutorials/5-minute-quickstart.md) — Get running fast
+- [30-Minute Deep Dive](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/tutorials/30-minute-deep-dive.md) — Comprehensive walkthrough
+- [Building Your First Governed Agent](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/tutorials/first-governed-agent.md) — Complete tutorial
+- [Using Message Bus Adapters](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/tutorials/message-bus-adapters.md) — Connect agents
+- [Creating Custom Tools](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/tutorials/custom-tools.md) — Build safe tools
+- [Cheatsheet](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/cheatsheet.md) — Quick reference
 
 ### Interactive Notebooks
 
 | Notebook | Description | Time |
 |----------|-------------|------|
-| [Hello Agent OS](agent-governance-python/notebooks/01-hello-agent-os.ipynb) | Your first governed agent | 5 min |
-| [Episodic Memory](agent-governance-python/notebooks/02-episodic-memory-demo.ipynb) | Agent memory that persists | 15 min |
-| [Time-Travel Debugging](agent-governance-python/notebooks/03-time-travel-debugging.ipynb) | Replay and debug decisions | 20 min |
-| [Verification](agent-governance-python/notebooks/04-verification.ipynb) | Detect hallucinations | 15 min |
-| [Multi-Agent Coordination](agent-governance-python/notebooks/05-multi-agent-coordination.ipynb) | Trust between agents | 20 min |
-| [Policy Engine](agent-governance-python/notebooks/06-policy-engine.ipynb) | Deep dive into policies | 15 min |
+| [Policy Enforcement 101](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/notebooks/01_policy_enforcement_101.ipynb) | Govern tool calls with policy | 10 min |
+| [MCP Security Proxy](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/notebooks/02_mcp_security_proxy.ipynb) | Mediate MCP traffic | 15 min |
+| [Multi-Agent Governance](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/notebooks/03_multi_agent_governance.ipynb) | Coordinate governed agents | 20 min |
+| [LangChain AgentMesh Chatbot](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/notebooks/04_langchain_agentmesh_chatbot.ipynb) | Add trust-aware framework integration | 20 min |
+| [Citadel Foundry Governance](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/notebooks/05_citadel_foundry_governance.ipynb) | Apply governance in an Azure Foundry flow | 20 min |
 
 ### Reference
-- [Quickstart Guide](docs/quickstart.md) — 60 seconds to first agent
-- [Framework Integrations](docs/integrations.md) — LangChain, OpenAI, etc.
-- [Kernel Internals](docs/kernel-internals.md) — How the kernel works
-- [Architecture Overview](docs/quickstart.md) — Getting started
-- [Kernel Internals](docs/kernel-internals.md) — How the kernel works
-- [RFC-003: Agent Signals](docs/rfcs/RFC-003-Agent-Signals.md) — POSIX-style signals
-- [RFC-004: Agent Primitives](docs/rfcs/RFC-004-Agent-Primitives.md) — Core primitives
+- [Quickstart Guide](../quickstart.md) — 60 seconds to first agent
+- [Framework Integrations](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/integrations.md) — LangChain, OpenAI, etc.
+- [Kernel Internals](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/kernel-internals.md) — How the kernel works
+- [Architecture Overview](../quickstart.md) — Getting started
+- [Kernel Internals](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/kernel-internals.md) — How the kernel works
 
 ---
 
@@ -1153,7 +1156,7 @@ pytest
 
 ## License
 
-MIT — See [LICENSE](LICENSE)
+MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 
 ---
 
@@ -1161,6 +1164,6 @@ MIT — See [LICENSE](LICENSE)
 
 **Exploring kernel concepts for AI agent safety.**
 
-[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](docs/)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](../index.md)
 
 </div>

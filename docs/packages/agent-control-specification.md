@@ -1,6 +1,6 @@
 ---
 title: Agent Control Specification
-last_reviewed: 2026-06-02
+last_reviewed: 2026-07-16
 owner: docs-team
 ---
 
@@ -8,7 +8,7 @@ owner: docs-team
 
 **Stateless, deterministic, fail-closed policy decisions for agent security**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Rust](https://img.shields.io/badge/core-Rust-orange.svg)](https://www.rust-lang.org/)
 
 !!! important "Public Preview"
@@ -94,21 +94,45 @@ The Rust core emits structured telemetry through a `TelemetrySink`. Telemetry is
 
 ## Where it lives in AGT
 
-ACS is vendored into [`policy-engine/`](../../policy-engine/) as the AGT 5.0 policy layer and is now AGT-owned source. It is the decision-runtime core that backs policy evaluation. Agent OS remains the kernel and host layer that calls into ACS and enforces the verdicts.
+ACS is vendored into [`policy-engine/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine) as the AGT 5.0 policy layer and is now AGT-owned source. It is the decision-runtime core that backs policy evaluation. AGT hosts and adapters call it through `agt-policies`; the Agent OS compatibility bridge preserves existing integration behavior while routing new host code toward ACS.
+
+## How AGT Python hosts call ACS
+
+`agt-policies` is the canonical Python host package for ACS. It gives adapters
+and gateways the AGT-facing pieces that do not belong in the stateless engine:
+
+- governance manifest discovery and resolution
+- complete intervention-point snapshots
+- the synchronous `AgtRuntime` host wrapper
+- result mapping for `allow`, `warn`, `deny`, `escalate`, and `transform`
+- compatibility bridging for existing Agent OS integrations
+
+```bash
+pip install agt-policies
+```
+
+Use `agent-control-specification` directly only when you need the native ACS SDK
+without the AGT host conventions.
 
 ## SDKs and specification
 
 | Surface | Path |
 | --- | --- |
-| Python SDK | [`policy-engine/sdk/python/`](../../policy-engine/sdk/python/) |
-| Node.js SDK | [`policy-engine/sdk/node/`](../../policy-engine/sdk/node/) |
-| .NET SDK | [`policy-engine/sdk/dotnet/`](../../policy-engine/sdk/dotnet/) |
-| Rust SDK | [`policy-engine/sdk/rust/`](../../policy-engine/sdk/rust/) |
-| Normative specification | [`policy-engine/spec/SPECIFICATION.md`](../../policy-engine/spec/SPECIFICATION.md) |
+| AGT Python host | [`agent-governance-python/agt-policies/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agt-policies) |
+| Python SDK | [`policy-engine/sdk/python/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/python) |
+| Node.js SDK | [`policy-engine/sdk/node/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/node) |
+| .NET SDK | [`policy-engine/sdk/dotnet/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/dotnet) |
+| Rust SDK | [`policy-engine/sdk/rust/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/rust) |
+| Normative specification | [`policy-engine/spec/SPECIFICATION.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/SPECIFICATION.md) |
 
 The Python SDK distribution is named `agent-control-specification` in `policy-engine/sdk/python/pyproject.toml` and is built with maturin from the vendored source.
 
 ## Trusted by partners
+
+!!! note "Historical name"
+    AgentShield in the Bigspin quotation was the former name used for ACS.
+    It is unrelated to the separate Microsoft Agent Shield integration exposed
+    through `agent_os.integrations.agentshield_adapter`.
 
 <!--
   Replace the placeholder logos, quotes, and attributions below with real,

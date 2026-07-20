@@ -1,3 +1,9 @@
+---
+title: "Tutorial 22 — Go module (agentmesh)"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 22 — Go module (`agentmesh`)

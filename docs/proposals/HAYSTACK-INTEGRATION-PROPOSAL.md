@@ -1,3 +1,9 @@
+---
+title: "Proposal: Haystack Integration"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Proposal: Haystack Integration
 
 **Status:** ✅ Shipped — Integration package implemented, upstream collaboration active  
@@ -63,4 +69,4 @@ This ensures components function as regular Python classes even without Haystack
 
 - [Haystack SuperComponents docs](https://docs.haystack.deepset.ai/docs/supercomponents)
 - [Contributing guide](https://github.com/deepset-ai/haystack-core-integrations/blob/main/CONTRIBUTING.md)
-- [Package README](../../agent-governance-python/agentmesh-integrations/haystack-agentmesh/README.md)
+- [Package README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agentmesh-integrations/haystack-agentmesh/README.md)

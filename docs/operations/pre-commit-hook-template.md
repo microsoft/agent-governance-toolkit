@@ -1,3 +1,9 @@
+---
+title: "Pre-Commit Hook Rollout Template"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Pre-Commit Hook Rollout Template
 
 > Drop-in configuration for enforcing AGT governance checks at commit time.

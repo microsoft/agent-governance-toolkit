@@ -1,3 +1,9 @@
+---
+title: "Independence & Dependency Policy"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 <!--
   MIT License — Copyright (c) Microsoft Corporation.
 -->

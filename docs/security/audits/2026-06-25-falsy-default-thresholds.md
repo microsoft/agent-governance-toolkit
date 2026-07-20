@@ -1,3 +1,9 @@
+---
+title: "2026-06-25 - Falsy-default thresholds (agent-mesh)"
+last_reviewed: 2026-06-30
+owner: agt-maintainers
+---
+
 # 2026-06-25 - Falsy-default thresholds (agent-mesh)
 
 PR: microsoft/agent-governance-toolkit#3184

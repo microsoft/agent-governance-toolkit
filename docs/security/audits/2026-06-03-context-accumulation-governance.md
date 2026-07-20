@@ -1,3 +1,9 @@
+---
+title: "2026-06-03 - Context Accumulation Governance (v1)"
+last_reviewed: 2026-06-17
+owner: agt-maintainers
+---
+
 # 2026-06-03 - Context Accumulation Governance (v1)
 
 PR: feat: govern accumulated context across delegated agent workflows (#2800)

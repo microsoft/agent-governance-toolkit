@@ -1,3 +1,9 @@
+---
+title: "🚀 10分で始めるクイックスタートガイド"
+last_reviewed: 2026-06-10
+owner: agt-maintainers
+---
+
 # 🚀 10分で始めるクイックスタートガイド
 
 ゼロからガバナンスされたAIエージェントを10分以内に構築できます。
@@ -215,14 +221,14 @@ agent-governance integrity --manifest integrity.json
 
 | 内容 | リンク |
 |------|--------|
-| 完全なAPIリファレンス (Python) | [agent-governance-python/agent-os/README.md](../../agent-governance-python/agent-os/README.md) |
-| TypeScript パッケージ ドキュメント | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
-| .NET パッケージ ドキュメント | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
-| OWASP カバレッジマップ | [../../docs/compliance/owasp-agentic-top10-architecture.md](../../docs/compliance/owasp-agentic-top10-architecture.md) |
-| フレームワーク統合 | [agent-governance-python/agent-os/src/agent_os/integrations/](../../agent-governance-python/agent-os/src/agent_os/integrations/) |
-| サンプルアプリケーション | [agent-governance-python/agent-os/examples/](../../agent-governance-python/agent-os/examples/) |
-| コントリビュートガイド | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
-| 変更履歴 | [CHANGELOG.md](../../CHANGELOG.md) |
+| 完全なAPIリファレンス (Python) | [agent-governance-python/agent-os/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/README.md) |
+| TypeScript パッケージ ドキュメント | [agent-governance-typescript/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-typescript/README.md) |
+| .NET パッケージ ドキュメント | [agent-governance-dotnet/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/README.md) |
+| OWASP カバレッジマップ | [../../docs/compliance/owasp-agentic-top10-architecture.md](../compliance/owasp-agentic-top10-architecture.md) |
+| フレームワーク統合 | [agent-governance-python/agent-os/src/agent_os/integrations/](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/src/agent_os/integrations) |
+| サンプルアプリケーション | [agent-governance-python/agent-os/examples/](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples) |
+| コントリビュートガイド | [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) |
+| 変更履歴 | [CHANGELOG.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md) |
 
 ---
 

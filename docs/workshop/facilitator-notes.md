@@ -1,3 +1,9 @@
+---
+title: "Facilitator Notes — Introduction to AI Agent Governance"
+last_reviewed: 2026-04-19
+owner: agt-maintainers
+---
+
 # Facilitator Notes — Introduction to AI Agent Governance
 
 > For facilitator use only. Keep this tab open alongside the slide deck.
@@ -140,7 +146,7 @@ it's not officially supported.
 **Q: How do I handle secrets / API keys in policies?**
 
 A: Never hardcode secrets. Use environment variables and reference them in policy
-YAML as `${ENV_VAR_NAME}`. See [SECURITY.md](../../SECURITY.md).
+YAML as `${ENV_VAR_NAME}`. See [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md).
 
 ---
 
@@ -149,5 +155,5 @@ YAML as `${ENV_VAR_NAME}`. See [SECURITY.md](../../SECURITY.md).
 - [ ] Collect feedback (1-minute written form or quick show-of-hands on value/difficulty).
 - [ ] Share the GitHub repo link and encourage participants to star it.
 - [ ] Point advanced participants at the full tutorial series in
-      [docs/tutorials/README.md](../tutorials/README.md).
+      [docs/tutorials/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/tutorials/README.md).
 - [ ] File any bugs or content improvements found during the session as GitHub issues.
