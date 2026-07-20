@@ -60,3 +60,22 @@ The manifest is built in-process so the Azure endpoint comes from the environmen
 and the API key is referenced by name (`api_key_env`), never written to disk. In
 production load a committed manifest with `AgentControl.from_path(...)` or a
 pinned remote one with `AgentControl.from_url(...)`.
+
+## Host-side telemetry export (`telemetry.py`)
+
+Shows the pure-Python telemetry layer. A single governed `control.run()` emits
+one redaction-safe `TelemetryEvent` per intervention point to a `MultiSink` that
+fans out to a JSON Lines audit sink, an in-memory sink, and, when
+`opentelemetry` is installed, an `OtelMetricsTelemetrySink` that exports the same
+`acs_intervention_*` metrics as the Rust `agent_control_specification_otel` crate.
+Unlike the other examples it needs no Azure credentials and no third-party
+framework, only the native binding, so it runs as a self-contained smoke test.
+
+```bash
+cd policy-engine/sdk/python/examples/real_packages
+python telemetry.py
+```
+
+The printed JSON Lines carry decision, reason code, policy id, duration, and
+action identity only. The governed input and output payloads never appear, which
+is the redaction invariant the sink layer guarantees.

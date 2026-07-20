@@ -1,0 +1,91 @@
+# agt-policies - India Regulatory Pack
+# DPDP Act 2023 + DPDP Rules 2025 - Personal Data Protection Policy
+#
+# Regulatory reference: Digital Personal Data Protection Act 2023 (Act 22 of 2023) + DPDP Rules 2025 (notified 14 Nov 2025)
+# Enforcing authority: Data Protection Board of India (MeitY)
+# Status: In force, phased - full enforcement 13 May 2027
+#
+# Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+# Perform your own compliance assessment with qualified advisors before deploying.
+#
+# Key obligations enforced:
+#   s.6        Consent (free, specific, informed, unambiguous)
+#   s.8(7)     Erasure when consent withdrawn or purpose served
+#   s.8(5)     Reasonable security safeguards
+#   s.8(6)+R7  Breach notification (Board + Data Principals; 72h detailed report)
+#   s.10+R13   Significant Data Fiduciary: algorithmic due diligence, DPIA, annual audit
+#   s.16       Cross-border transfer (negative list; currently empty)
+#
+# Rego reference implementation: rego/dpdp-data-protection.rego (NOT loaded at runtime)
+
+version: "1.0"
+name: dpdp-data-protection
+description: >
+  DPDP Act 2023 + DPDP Rules 2025 compliance policy for AI agents processing personal data of
+  Indian Data Principals. Enforces consent, purpose limitation, security safeguards,
+  breach-notification non-suppression, SDF algorithmic due diligence, and cross-border review.
+
+metadata:
+  source_regulation: "Digital Personal Data Protection Act 2023 (Act 22 of 2023); DPDP Rules 2025 - ss. 6, 8, 10, 16"
+  jurisdiction: "IN"
+  enforcing_authority: "Data Protection Board of India (MeitY)"
+
+rules:
+  - name: dpdp-consent-required-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(process_personal_data|store_pii|share_pii|profile_user)$"
+    action: block
+    priority: 95
+    message: "DPDP s.6: processing personal data requires free, specific, informed, unambiguous consent with a logged purpose"
+
+  - name: dpdp-purpose-limitation-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(reuse|repurpose|secondary\\s+use).{0,40}(personal\\s+data|pii)"
+    action: block
+    priority: 90
+    message: "DPDP s.6(1) and s.8(7): personal data may be used only for the consented purpose; erase when consent is withdrawn or the purpose is served"
+
+  - name: dpdp-security-safeguards-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(store|transmit|log).{0,30}(personal\\s+data|pii).{0,30}(unencrypted|plaintext|clear\\s*text)"
+    action: block
+    priority: 90
+    message: "DPDP s.8(5): reasonable security safeguards (encryption, access control) are mandatory for personal data"
+
+  - name: dpdp-breach-suppression-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(the\\s+)?(breach|notification)|delay\\s+breach\\s+(report|notification))"
+    action: deny
+    priority: 100
+    message: "DPDP s.8(6) and Rule 7: agent cannot suppress or delay breach notification to the Data Protection Board and affected Data Principals (72h detailed report)"
+
+  - name: dpdp-sdf-algorithmic-due-diligence-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(deploy_model|run_automated_decision|profile_personal_data)$"
+    action: audit
+    priority: 70
+    message: "DPDP Rule 13 (Significant Data Fiduciary, if notified): verify algorithms/AI tools do not endanger Data Principal rights; DPIA plus annual independent audit required"
+
+  - name: dpdp-crossborder-transfer-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(transfer_personal_data|export_pii|send_to_external)$"
+    action: audit
+    priority: 75
+    message: "DPDP s.16: cross-border transfer permitted unless destination is on the Central Government restriction list (none notified as of 2026); sectoral localization (RBI/SEBI) is stricter and overrides"
+
+defaults:
+  action: audit
+  max_tokens: 8000
+  max_tool_calls: 25

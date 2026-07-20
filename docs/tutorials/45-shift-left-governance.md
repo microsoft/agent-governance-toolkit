@@ -7,8 +7,8 @@
 Catch governance violations before they reach production. This tutorial walks
 through every layer of AGT's shift-left story: from pre-commit hooks that
 validate policy files on your laptop, through PR-time gates that enforce
-attestation and dependency review, to CI/CD checks that run security scans,
-binary analysis, and supply chain verification on every build.
+dependency review and secret scanning, to CI/CD checks that run governance
+verification, binary analysis, and supply chain verification on every build.
 
 > **Scope:** commit-time, PR-time, CI/build-time, and release-time governance
 > **Tools:** pre-commit hooks, GitHub Actions, GitHub CI workflows
@@ -23,8 +23,8 @@ binary analysis, and supply chain verification on every build.
 | [Why Shift-Left?](#why-shift-left) | The case for catching violations before runtime |
 | [Commit-Time](#commit-time-pre-commit-hooks) | Pre-commit hooks for policy and plugin validation |
 | [PR-Time: Contributor Reputation](#pr-time-contributor-reputation) | Automated screening for coordinated inauthentic behavior |
-| [PR-Time](#pr-time-gates) | Governance attestation, dependency review, secret scanning |
-| [CI/Build-Time](#cibuild-time-checks) | Governance verify, policy validation, security scans, binary analysis |
+| [PR-Time](#pr-time-gates) | Dependency review, secret scanning, supply chain checks |
+| [CI/Build-Time](#cibuild-time-checks) | Governance verify, policy validation, static analysis, binary analysis |
 | [Language-Specific Build Checks](#language-specific-build-time-enforcement) | .NET, TypeScript, Python build-time enforcement |
 | [Release-Time](#release-time-gates) | SBOM generation, artifact signing, attestation |
 | [Reference Architecture](#reference-architecture) | How all the pieces fit together |
@@ -44,15 +44,14 @@ Shift-left governance moves checks earlier in the development lifecycle:
   Commit        PR           CI/Build        Release        Runtime
     │            │              │               │              │
     ▼            ▼              ▼               ▼              ▼
-```
   Contributor   Commit        PR           CI/Build        Release        Runtime
      │            │            │              │               │              │
      ▼            ▼            ▼              ▼               ▼              ▼
   ┌──────┐  ┌──────┐  ┌─────────┐  ┌────────────┐  ┌───────────┐  ┌──────────┐
-  │reputa│  │ pre- │  │ attest  │  │ governance │  │ SBOM +    │  │ policy   │
-  │tion  │  │commit│  │ + dep   │  │ verify +   │  │ signing + │  │ engine + │
-  │check │  │hooks │  │ review  │  │ CodeQL +   │  │ provenance│  │ trust +  │
-  │      │  │      │  │ + scans │  │ BinSkim    │  │           │  │ audit    │
+  │author│  │ pre- │  │ dep +   │  │ governance │  │ SBOM +    │  │ policy   │
+  │screen│  │commit│  │ secret  │  │ verify +   │  │ signing + │  │ engine + │
+  │check │  │hooks │  │ scans   │  │ CodeQL +   │  │ provenance│  │ trust +  │
+  │      │  │      │  │         │  │ BinSkim    │  │           │  │ audit    │
   └──────┘  └──────┘  └─────────┘  └────────────┘  └───────────┘  └──────────┘
     Earliest feedback                                        Most comprehensive
 ```
@@ -216,48 +215,13 @@ jobs:
 
 ## PR-Time Gates
 
-When code reaches a pull request, three independent workflows enforce
-governance before merge.
+When code reaches a pull request, independent workflows enforce governance
+before merge.
 
-### §2.1 Governance Attestation
-
-The **Governance Attestation** action (`action/governance-attestation/`)
-validates that PR authors have completed a 7-section attestation checklist
-covering security, privacy, CELA, responsible AI, accessibility, release
-readiness, and org-specific launch gates.
-
-```yaml
-# .github/workflows/pr-governance.yml
-name: PR Governance
-on:
-  pull_request:
-    types: [opened, edited, synchronize]
-
-jobs:
-  attestation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: microsoft/agent-governance-toolkit/action/governance-attestation@main
-        with:
-          required-sections: |
-            1) Security review
-            2) Privacy review
-            3) CELA review
-            4) Responsible AI review
-            5) Accessibility review
-            6) Release Readiness / Safe Deployment
-            7) Org-specific Launch Gates
-```
-
-The action outputs:
-- `status`: pass or fail
-- `errors`: list of missing sections
-- `sections-found`: JSON mapping of sections to checkbox counts
-
-### §2.2 Dependency Review
+### §2.1 Dependency Review
 
 AGT's dependency review workflow blocks PRs that introduce dependencies with
-known CVEs or disallowed licences:
+known CVEs or disallowed licenses:
 
 ```yaml
 # From .github/workflows/dependency-review.yml
@@ -273,9 +237,9 @@ known CVEs or disallowed licences:
 
 This runs on every PR that touches dependency manifests and flags:
 - Dependencies with moderate+ CVEs
-- Dependencies with licences not on the allow list
+- Dependencies with licenses not on the allow list
 
-### §2.3 Secret Scanning
+### §2.2 Secret Scanning
 
 The secret scanning workflow (`secret-scanning.yml`) runs on every PR to `main`
 and weekly on schedule. It combines:
@@ -284,7 +248,7 @@ and weekly on schedule. It combines:
 2. **High-entropy string scanning** for API keys, GitHub tokens, AWS keys,
    and Slack tokens using regex patterns
 
-### §2.4 Supply Chain Checks
+### §2.3 Supply Chain Checks
 
 The supply chain check workflow (`supply-chain-check.yml`) runs when dependency
 manifests change and enforces:
@@ -292,7 +256,7 @@ manifests change and enforces:
 - **Exact version pinning**: no `^` or `~` version ranges in `package.json`
 - **Lockfile presence**: every package with dependencies must have a lockfile
 
-### §2.5 Quality Gates
+### §2.4 Quality Gates
 
 The quality gates workflow (`quality-gates.yml`) runs on every PR and blocks
 merge if:
@@ -348,23 +312,7 @@ The `command` input supports four modes:
 | `policy-evaluate` | Evaluates a specific policy against a context |
 | `all` | Runs governance-verify, then marketplace-verify and policy-evaluate if paths are provided |
 
-### §3.2 Security Scan Action
-
-The **Security Scan** action (`action/security-scan/`) scans directories for
-secrets, CVEs, and dangerous code patterns:
-
-```yaml
-- uses: microsoft/agent-governance-toolkit/action/security-scan@main
-  with:
-    paths: 'plugins/ scripts/'
-    min-severity: high           # block on critical or high findings
-    exemptions-file: .security-exemptions.json
-```
-
-Outputs include `findings-count`, `blocking-count`, and full `findings` in JSON
-format, making it easy to integrate with dashboards or notification systems.
-
-### §3.3 Policy Validation Workflow
+### §3.2 Policy Validation Workflow
 
 The policy validation workflow (`policy-validation.yml`) triggers when any YAML
 file or the policy engine source changes. It:
@@ -375,13 +323,13 @@ file or the policy engine source changes. It:
 
 This ensures that policy file changes don't break the policy engine.
 
-### §3.4 CodeQL and Static Analysis
+### §3.3 CodeQL and Static Analysis
 
 AGT uses CodeQL for semantic static analysis of Python and TypeScript code.
 The CodeQL workflow (`codeql.yml`) runs on pushes and PRs, uploading SARIF
 results to GitHub's security tab.
 
-### §3.5 Dependency Confusion Scan
+### §3.4 Dependency Confusion Scan
 
 A dedicated CI job runs `scripts/check_dependency_confusion.py --strict` on
 every build. This checks that:
@@ -389,7 +337,7 @@ every build. This checks that:
 - Internal package names don't collide with public PyPI/npm packages
 - Notebook `pip install` commands only reference registered packages
 
-### §3.6 Workflow Security Audit
+### §3.5 Workflow Security Audit
 
 When GitHub Actions workflow files change, a workflow security job scans for:
 
@@ -397,7 +345,7 @@ When GitHub Actions workflow files change, a workflow security job scans for:
 - Overly permissive permissions
 - Unpinned action references
 
-### §3.7 .NET Binary Analysis (BinSkim)
+### §3.6 .NET Binary Analysis (BinSkim)
 
 For the .NET SDK, the CI pipeline runs Microsoft BinSkim binary analysis on
 compiled assemblies:
@@ -494,26 +442,22 @@ Here is how all the shift-left governance layers compose into a single pipeline:
 ```
 Developer Machine          GitHub PR              CI Pipeline              Release
 ─────────────────          ─────────              ───────────              ───────
-pre-commit hooks           Governance             Main CI                  SBOM
-├─ validate-policy         attestation            ├─ lint (ruff, ESLint)   ├─ SPDX
-├─ validate-plugin         ├─ 7-section           ├─ build (.NET, TS,      ├─ CycloneDX
-│  -manifest               │  checklist           │  Rust, Go, Python)     │
-├─ evaluate-plugin         │                      ├─ test (all SDKs)       Signing
-│  -policy                 Dependency review      ├─ governance-verify     ├─ Sigstore
-├─ agt-validate            ├─ CVE check           ├─ policy-validation     ├─ provenance
-├─ agt-doctor (pre-push)   ├─ licence check       ├─ CodeQL / SAST        │
+pre-commit hooks           Dependency review      Main CI                  SBOM
+├─ validate-policy         ├─ CVE check           ├─ lint (ruff, ESLint)   ├─ SPDX
+├─ validate-plugin         ├─ license check       ├─ build (.NET, TS,      ├─ CycloneDX
+│  -manifest               │                      │  Rust, Go, Python)     │
+├─ evaluate-plugin         Secret scanning        ├─ test (all SDKs)       Signing
+│  -policy                 ├─ Gitleaks            ├─ governance-verify     ├─ Sigstore
+├─ agt-validate            ├─ entropy scan        ├─ policy-validation     ├─ provenance
+├─ agt-doctor (pre-push)   │                      ├─ CodeQL / SAST        │
 ├─ detect-secrets          │                      ├─ BinSkim (.NET)       Provenance
-├─ no-stubs                Secret scanning        ├─ dependency-scan       ├─ SLSA
-├─ no-custom-crypto        ├─ Gitleaks            ├─ workflow-security     ├─ SBOM
-                           ├─ entropy scan        │                        │  attestation
+├─ no-stubs                Supply chain check     ├─ dependency-scan       ├─ SLSA
+├─ no-custom-crypto        ├─ version pinning     ├─ workflow-security     ├─ SBOM
+                           ├─ lockfile presence   │                        │  attestation
                            │                      ├─ ci-complete gate      │
-                           Supply chain check     │  (required status      Scorecard
-                           ├─ version pinning     │   check)               └─ OpenSSF
-                           ├─ lockfile presence   │
-                           │                      Security scan action
-                           Quality gates          ├─ secrets
-                           ├─ no stubs            ├─ CVEs
-                           ├─ no crypto           ├─ dangerous patterns
+                           Quality gates          │  (required status      Scorecard
+                           ├─ no stubs            │   check)               └─ OpenSSF
+                           ├─ no crypto
                            ├─ security audit
                            ├─ dep audit trail
 ```
@@ -556,8 +500,6 @@ enforcing that nothing that ran has failed.
 |-----------|----------|
 | Pre-commit hooks | `.pre-commit-hooks.yaml` |
 | Governance Verify action | `action/action.yml` |
-| Security Scan action | `action/security-scan/action.yml` |
-| Governance Attestation action | `action/governance-attestation/action.yml` |
 | Policy validation workflow | `.github/workflows/policy-validation.yml` |
 | Secret scanning workflow | `.github/workflows/secret-scanning.yml` |
 | Dependency review workflow | `.github/workflows/dependency-review.yml` |
@@ -580,7 +522,7 @@ enforcing that nothing that ran has failed.
   [rollout template](../operations/pre-commit-hook-template.md)
 - **Add the Governance Verify action** to your CI pipeline for automated
   compliance checks
-- **Enable dependency review** to catch CVE and licence issues at PR time
+- **Enable dependency review** to catch CVE and license issues at PR time
 - **Read Tutorial 25** ([Security Hardening](25-security-hardening.md)) for
   deeper coverage of CodeQL, fuzzing, and Scorecard
 - **Read Tutorial 26** ([SBOM & Signing](26-sbom-and-signing.md)) for

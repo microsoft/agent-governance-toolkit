@@ -498,7 +498,6 @@ with delegated authority.
 | TypeScript package overview | [Tutorial 20 — TypeScript package](./20-typescript-sdk.md) |
 | Rust crate delegation | [Tutorial 21 — Rust crate](./21-rust-sdk.md) |
 | Policy evaluation | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
-| Liability & attribution | [Tutorial 12 — Liability & Attribution](./12-liability-and-attribution.md) |
 
 ---
 
@@ -521,5 +520,3 @@ with delegated authority.
 - **Implement time-limited delegation** with `expiresAt` for temporary access
 - **Use the `IdentityRegistry`** to track all agents and enable cascade
   revocation
-- **Read Tutorial 12** ([Liability & Attribution](./12-liability-and-attribution.md))
-  to understand how delegated actions are attributed

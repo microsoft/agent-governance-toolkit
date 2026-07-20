@@ -95,7 +95,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **SLO engine**: Continuous compliance monitoring with error budget tracking
 - **OpenTelemetry export**: TraceExporter + MetricsExporter for full observability
 - **Agent Runtime RingEnforcer**: Trust-score-based demotion; automatic sandbox for untrusted agents
-- **QuarantineManager**: Agent isolation with forensic data preservation
+- **KillSwitch**: Agent termination with audit evidence and saga handoff support
 - **CostGuard**: Budget enforcement (throttle at 85%, kill at 95%)
 
 ## Architecture
@@ -123,7 +123,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **GitHub (Agent SRE)**: https://github.com/microsoft/agent-governance-toolkit
 - **GitHub (Agent Runtime)**: https://github.com/microsoft/agent-governance-toolkit
 - **Governance Docs**: https://github.com/microsoft/agent-governance-toolkit
-- **OWASP Mapping**: https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/owasp-agentic-top10-mapping.md
+- **OWASP Mapping**: https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/owasp-agentic-top10-mapping.md
 
 ## Maintainers
 
