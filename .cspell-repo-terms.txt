@@ -927,6 +927,12 @@ tcpdump
 isascii
 multisink
 writeln
+venvs
+purelib
+platlib
+cpython
+namelist
+dists
 
 # --- CloudEvents / signed audit-event terms ---
 cloudevent
