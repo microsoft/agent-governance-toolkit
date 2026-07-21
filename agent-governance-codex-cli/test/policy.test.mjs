@@ -199,3 +199,66 @@ test("bundled policy load failures block prompt submission in enforce mode", asy
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("evaluatePreToolUse denies /proc/self/environ reads (secret-read hardening, #3295)", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-codex-proc-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  // Path-rule form: the /proc/self and /proc/thread-self fail-open is now closed.
+  for (const filePath of ["/proc/1234/environ", "/proc/self/environ", "/proc/thread-self/environ"]) {
+    const result = await evaluatePreToolUse(state, {
+      tool_name: "Read",
+      tool_input: { file_path: filePath },
+      session_id: "proc-read",
+    });
+    assert.equal(
+      result.hookSpecificOutput?.permissionDecision,
+      "deny",
+      `expected deny for Read ${filePath}`,
+    );
+  }
+
+  // Command-pattern form: Codex routes reads through the shell, so cat must also deny.
+  const bash = await evaluatePreToolUse(state, {
+    tool_name: "Bash",
+    tool_input: { command: "cat /proc/self/environ" },
+    session_id: "proc-bash",
+  });
+  assert.equal(bash.hookSpecificOutput?.permissionDecision, "deny");
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("evaluatePreToolUse denies destructive rm and reviews build-artifact cleanup (recursive-delete hardening, #3251)", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-codex-rm-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of ["rm -rf /tmp/important", "rm -rf ~", "rm -fr /var"]) {
+    const result = await evaluatePreToolUse(state, {
+      tool_name: "Bash",
+      tool_input: { command },
+      session_id: "rm-deny",
+    });
+    assert.equal(
+      result.hookSpecificOutput?.permissionDecision,
+      "deny",
+      `expected deny for: ${command}`,
+    );
+  }
+
+  // Build-artifact cleanup should not hard-deny (falls through to review).
+  for (const command of ["rm -rf node_modules", "rm -rf dist"]) {
+    const result = await evaluatePreToolUse(state, {
+      tool_name: "Bash",
+      tool_input: { command },
+      session_id: "rm-safe",
+    });
+    assert.notEqual(
+      result.hookSpecificOutput?.permissionDecision,
+      "deny",
+      `expected non-deny for: ${command}`,
+    );
+  }
+
+  await rm(root, { recursive: true, force: true });
+});

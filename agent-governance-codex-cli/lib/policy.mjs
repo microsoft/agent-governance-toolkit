@@ -402,7 +402,7 @@ function createCommandPatternBackend(policy) {
         if (!matchedPattern) {
           continue;
         }
-        if (shouldBypassBlockedCommandRule(rule, commandText)) {
+        if (shouldBypassBlockedCommandRule(rule, commandText, toolName)) {
           continue;
         }
 
@@ -876,9 +876,9 @@ function createMinimalFallbackPolicy() {
   };
 }
 
-function shouldBypassBlockedCommandRule(rule, commandText) {
+function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
   if (rule.id === "recursive-delete") {
-    return isSafeCleanupCommand(commandText);
+    return !hasRecursiveDelete(commandText, toolName) || isSafeCleanupCommand(commandText, toolName);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);
@@ -886,25 +886,46 @@ function shouldBypassBlockedCommandRule(rule, commandText) {
   return false;
 }
 
-function isSafeCleanupCommand(commandText) {
-  if (containsCommandControlOperator(commandText)) {
-    return false;
-  }
-
+function getRmCommandDetails(commandText, toolName) {
   const tokens = tokenizeCommand(commandText);
   const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|ri|rd|del)$/i.test(stripCommandToken(token)),
+    /^(rm|remove-item|ri|rd|del)$/i.test(normalizeCommandNameToken(token)),
   );
   if (commandIndex === -1) {
-    return false;
+    return undefined;
   }
 
+  const commandName = normalizeCommandNameToken(tokens[commandIndex]).toLowerCase();
+  const parsesUnixShortOptions = commandName === "rm" && !isPowerShellTool(toolName);
+  let recursive = false;
+  let force = false;
   const candidateTargets = [];
   for (const token of tokens.slice(commandIndex + 1)) {
     const normalizedToken = stripCommandToken(token);
-    if (!normalizedToken || normalizedToken.startsWith("-")) {
+    if (!normalizedToken) {
       continue;
     }
+    if (normalizedToken.startsWith("-")) {
+      const normalizedFlag = normalizedToken.toLowerCase();
+      if (
+        normalizedFlag === "--recursive" ||
+        isPowerShellRecursiveParameter(normalizedFlag)
+      ) {
+        recursive = true;
+      } else if (normalizedFlag === "--force" || isPowerShellForceParameter(normalizedFlag)) {
+        force = true;
+      } else if (parsesUnixShortOptions && isUnixRmShortOptionCluster(normalizedFlag)) {
+        recursive ||= /r/i.test(normalizedFlag);
+        force ||= /f/i.test(normalizedFlag);
+      }
+      continue;
+    }
+    if (/^\/[a-z]+$/i.test(normalizedToken)) {
+      recursive ||= /s/i.test(normalizedToken);
+      force ||= /[fq]/i.test(normalizedToken);
+      continue;
+    }
+
     for (const part of normalizedToken.split(",")) {
       const cleaned = normalizeCommandPathToken(part);
       if (cleaned) {
@@ -913,7 +934,58 @@ function isSafeCleanupCommand(commandText) {
     }
   }
 
+  return {
+    force,
+    recursive,
+    targets: candidateTargets,
+  };
+}
+
+function hasRecursiveDelete(commandText, toolName) {
+  // A recursive delete is destructive whether or not a force flag is present, so
+  // the deny decision intentionally does not require force. The `force` detail is
+  // still parsed for completeness and future messaging.
+  const details = getRmCommandDetails(commandText, toolName);
+  return Boolean(details?.recursive);
+}
+
+function isSafeCleanupCommand(commandText, toolName) {
+  if (containsCommandControlOperator(commandText)) {
+    return false;
+  }
+
+  const details = getRmCommandDetails(commandText, toolName);
+  const candidateTargets = details?.targets ?? [];
   return candidateTargets.length > 0 && candidateTargets.every(isSafeCleanupTarget);
+}
+
+function isPowerShellTool(toolName) {
+  return /\b(?:powershell|pwsh)\b/i.test(String(toolName ?? ""));
+}
+
+function isPowerShellRecursiveParameter(flag) {
+  if (!/^-[a-z]+$/i.test(flag) || flag.startsWith("--")) {
+    return false;
+  }
+  const parameterName = flag.slice(1).toLowerCase();
+  return parameterName === "recursive" || "recurse".startsWith(parameterName);
+}
+
+function isPowerShellForceParameter(flag) {
+  if (!/^-[a-z]+$/i.test(flag) || flag.startsWith("--")) {
+    return false;
+  }
+  const parameterName = flag.slice(1).toLowerCase();
+  return parameterName.length >= 2 && "force".startsWith(parameterName);
+}
+
+function isUnixRmShortOptionCluster(flag) {
+  // Match any single-dash short-option cluster (letters only) rather than an
+  // allow-list of known letters. An allow-list fails open: an unrecognized letter
+  // such as the `x` in `rm -rfx foo` would discard the
+  // whole cluster and hide the recursive/force flags it contains. Matching all
+  // letter clusters fails safe instead.
+  return /^-[a-z]+$/i.test(flag);
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
@@ -921,15 +993,35 @@ function isSafeEnvTemplateReadCommand(commandText) {
     return false;
   }
 
-  const sensitiveTokens = tokenizeCommand(commandText)
-    .map(stripCommandToken)
-    .filter(Boolean)
-    .filter((token) => token.includes(".env"));
+  const tokens = tokenizeCommand(commandText).map(stripCommandToken).filter(Boolean);
+  // For copy/move commands the final path argument is a write destination, not a
+  // read, so scaffolding a real .env from a template (`cp .env.example .env`) must
+  // not be classified as reading the sensitive destination.
+  const readTokens = dropCopyDestinationToken(tokens);
+  const sensitiveTokens = readTokens.filter((token) => token.includes(".env"));
 
   return (
     sensitiveTokens.length > 0 &&
     sensitiveTokens.every((token) => SAFE_ENV_TEMPLATE_NAME.test(getLastPathSegment(token)))
   );
+}
+
+function dropCopyDestinationToken(tokens) {
+  const commandName = getLastPathSegment(String(tokens[0] ?? "")).toLowerCase();
+  if (!/^(cp|mv|install)$/.test(commandName)) {
+    return tokens;
+  }
+  // With an explicit target-directory option (`-t DIR` / `--target-directory`)
+  // the destination is that option's argument, not the trailing token, so every
+  // remaining path is a source and nothing should be dropped.
+  if (tokens.some((token) => /^(?:-t|--target-directory)(?:=|$)/i.test(token))) {
+    return tokens;
+  }
+  const lastPathIndex = tokens.reduce(
+    (acc, token, index) => (index === 0 || token.startsWith("-") ? acc : index),
+    -1,
+  );
+  return lastPathIndex < 0 ? tokens : tokens.filter((_, index) => index !== lastPathIndex);
 }
 
 export function evaluateDirectResourceAccess(policy, context) {
@@ -1116,6 +1208,13 @@ function tokenizeCommand(commandText) {
 
 function stripCommandToken(token) {
   return String(token ?? "").replace(/^['"]|['"]$/g, "");
+}
+
+function normalizeCommandNameToken(token) {
+  // Strip surrounding quotes and any leading shell grouping/substitution
+  // delimiters so a command glued to punctuation is still recognized, e.g.
+  // `rm ... ` (backtick substitution), {rm ...;} (brace group), $(rm ...).
+  return stripCommandToken(token).replace(/^[`({$]+/, "");
 }
 
 function normalizeCommandPathToken(token) {

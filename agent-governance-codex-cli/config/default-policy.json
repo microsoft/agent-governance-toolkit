@@ -36,7 +36,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "\\brm\\b[\\s\\S]*\\b-rf\\b",
+          "source": "(^|[\\s;&|(){`])(?:rm|remove-item|ri|rd|del)\\b",
           "flags": "i"
         }
       ]
@@ -72,7 +72,11 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "\\b(cat|less|more|head|tail|sed|awk)\\b[^\\n\\r]*(\\.env(\\.[\\w-]+)?|id_rsa|id_ed25519|~/.ssh|/\\.ssh/|/\\.aws/|/\\.azure/|/\\.config/gcloud|/\\.config/gh/hosts\\.yml|/\\.docker/config\\.json|/\\.kube/config|/\\.netrc|/\\.git-credentials|/\\.npmrc|/\\.pypirc|secrets?\\.json)",
+          "source": "\\b(cat|less|more|head|tail|sed|awk|nl|tac|xxd|od|hexdump|strings|base64|base32|cut|rev|cp|mv|install|dd|tee|grep|rg)\\b[^\\n\\r]*(\\.env(\\.[\\w-]+)?|id_rsa|id_ed25519|~/.ssh|/\\.ssh/|/\\.aws/|/\\.azure/|/\\.config/gcloud|/\\.config/gh/hosts\\.yml|/\\.docker/config\\.json|/\\.kube/config|/\\.netrc|/\\.git-credentials|/\\.npmrc|/\\.pypirc|secrets?\\.json|/proc/(?:\\d+|self|thread-self)/environ)",
+          "flags": "i"
+        },
+        {
+          "source": "(?:^|[\\s;&|(])(?:<|source\\b)\\s+['\"]?(?:\\S*/)?(\\.env(\\.[\\w-]+)?|id_rsa|id_ed25519|/\\.ssh/|/\\.aws/|/\\.azure/|/\\.netrc|/\\.git-credentials|/\\.npmrc|/\\.pypirc|secrets?\\.json|/proc/(?:\\d+|self|thread-self)/environ)",
           "flags": "i"
         },
         {
@@ -80,7 +84,7 @@
           "flags": "i"
         },
         {
-          "source": "\\bprintenv\\b|\\benv\\s*(?:$|\\|)",
+          "source": "\\bprintenv\\b|(?:^|[\\s;&|(])env\\b\\s*(?:$|[|>])|\\bdeclare\\s+-x\\b\\s*(?:$|[|>])|\\bexport\\s+-p\\b|(?:^|[\\s;&|(])set\\b\\s*(?:$|[|>])",
           "flags": "i"
         },
         {
@@ -107,7 +111,7 @@
             "flags": "i"
           },
           {
-            "source": "(^|/)proc/\\d+/environ$",
+            "source": "(^|/)proc/(?:\\d+|self|thread-self)/environ$",
             "flags": "i"
           }
         ],
