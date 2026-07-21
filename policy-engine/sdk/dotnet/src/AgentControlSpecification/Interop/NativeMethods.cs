@@ -86,6 +86,11 @@ internal static partial class NativeMethods
         [MarshalAs(UnmanagedType.LPUTF8Str)] string requestJson,
         out IntPtr err);
 
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "acs_runtime_policy_labels")]
+    internal static extern IntPtr AcsRuntimePolicyLabels(
+        IntPtr runtime,
+        out IntPtr err);
+
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "acs_runtime_free")]
     internal static extern void AcsRuntimeFree(IntPtr runtime);
 

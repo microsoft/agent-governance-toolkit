@@ -27,7 +27,6 @@ class SharedSessionObject:
     - SessionID: UUID bound to a DID
     - ConsistencyMode: Strong (consensus) or Eventual (gossip)
     - StateSubstrate: A VFS representing the shared world
-    - LiabilityMatrix: Registry of who sponsors for whom
 
     Lifecycle: created → handshaking → active → terminating → archived
     """

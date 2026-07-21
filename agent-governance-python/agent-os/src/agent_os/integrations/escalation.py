@@ -166,8 +166,15 @@ class InMemoryApprovalQueue(ApprovalBackend):
     def approve(self, request_id: str, approver: str = "") -> bool:
         with self._lock:
             req = self._requests.get(request_id)
-            if req is None or req.decision != EscalationDecision.PENDING:
+            if req is None:
                 return False
+            if not approver.strip():
+                return False
+            if any(a == approver for a, _, _ in req.votes):
+                return False
+            req.votes.append((approver, "ALLOW", datetime.now(timezone.utc)))
+            if req.decision != EscalationDecision.PENDING:
+                return True
             req.decision = EscalationDecision.ALLOW
             req.resolved_by = approver
             req.resolved_at = datetime.now(timezone.utc)
@@ -179,8 +186,15 @@ class InMemoryApprovalQueue(ApprovalBackend):
     def deny(self, request_id: str, approver: str = "") -> bool:
         with self._lock:
             req = self._requests.get(request_id)
-            if req is None or req.decision != EscalationDecision.PENDING:
+            if req is None:
                 return False
+            if not approver.strip():
+                return False
+            if any(a == approver for a, _, _ in req.votes):
+                return False
+            req.votes.append((approver, "DENY", datetime.now(timezone.utc)))
+            if req.decision != EscalationDecision.PENDING:
+                return True
             req.decision = EscalationDecision.DENY
             req.resolved_by = approver
             req.resolved_at = datetime.now(timezone.utc)

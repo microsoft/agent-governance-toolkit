@@ -30,24 +30,8 @@ ALL_EXPORTS = [
     "VFSEdit",
     "VFSPermissionError",
     "VectorClock",
-    "VectorClockManager",
     "CausalViolationError",
-    "IntentLockManager",
-    "LockIntent",
-    "LockContentionError",
-    "DeadlockError",
     "IsolationLevel",
-    # Liability
-    "VouchRecord",
-    "VouchingEngine",
-    "SlashingEngine",
-    "LiabilityMatrix",
-    "CausalAttributor",
-    "AttributionResult",
-    "QuarantineManager",
-    "QuarantineReason",
-    "LiabilityLedger",
-    "LedgerEntryType",
     # Rings
     "RingEnforcer",
     "ActionClassifier",
@@ -63,16 +47,8 @@ ALL_EXPORTS = [
     "SagaTimeoutError",
     "SagaState",
     "StepState",
-    "FanOutOrchestrator",
-    "FanOutPolicy",
-    "CheckpointManager",
-    "SemanticCheckpoint",
-    "SagaDSLParser",
-    "SagaDefinition",
     # Audit
     "DeltaEngine",
-    "CommitmentEngine",
-    "EphemeralGC",
     # Verification
     "TransactionHistoryVerifier",
     # Observability
@@ -144,20 +120,6 @@ def test_instantiate_vector_clock():
     assert vc is not None
 
 
-def test_instantiate_vector_clock_manager():
-    from agent_runtime import VectorClockManager
-
-    mgr = VectorClockManager()
-    assert mgr is not None
-
-
-def test_instantiate_intent_lock_manager():
-    from agent_runtime import IntentLockManager
-
-    mgr = IntentLockManager()
-    assert mgr is not None
-
-
 def test_enum_consistency_mode():
     from agent_runtime import ConsistencyMode
 
@@ -186,13 +148,6 @@ def test_enum_isolation_level():
     assert len(IsolationLevel.__members__) > 0
 
 
-def test_enum_quarantine_reason():
-    from agent_runtime import QuarantineReason
-
-    assert hasattr(QuarantineReason, "__members__")
-    assert len(QuarantineReason.__members__) > 0
-
-
 def test_enum_breach_severity():
     from agent_runtime import BreachSeverity
 
@@ -205,13 +160,6 @@ def test_enum_event_type():
 
     assert hasattr(EventType, "__members__")
     assert len(EventType.__members__) > 0
-
-
-def test_enum_ledger_entry_type():
-    from agent_runtime import LedgerEntryType
-
-    assert hasattr(LedgerEntryType, "__members__")
-    assert len(LedgerEntryType.__members__) > 0
 
 
 def test_enum_saga_state():
@@ -244,8 +192,6 @@ def test_exception_classes_are_exceptions():
     """Error / exception symbols should be subclasses of Exception."""
     from agent_runtime import (
         CausalViolationError,
-        DeadlockError,
-        LockContentionError,
         RateLimitExceeded,
         SagaTimeoutError,
         VFSPermissionError,
@@ -253,8 +199,6 @@ def test_exception_classes_are_exceptions():
 
     for exc_cls in [
         CausalViolationError,
-        DeadlockError,
-        LockContentionError,
         RateLimitExceeded,
         SagaTimeoutError,
         VFSPermissionError,

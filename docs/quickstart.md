@@ -8,6 +8,16 @@ Get from zero to governed AI agents in under 5 minutes.
 pip install agent-governance-toolkit[full]
 ```
 
+Use the `[full]` extra for these examples. The base `agent-governance-toolkit`
+wheel installs the compliance CLI only; the governance modules shown below come
+from the consolidated core distribution. The `agentmesh` examples remain the
+current wrapper API. The advanced `agent_os.policies` example is legacy
+compatibility: importing `agent_os` currently emits a `DeprecationWarning`
+because the old `agent-os-kernel` distribution is deprecated. Use
+`agent-governance-toolkit-core` (or the `[full]` extra that includes it) as the
+replacement distribution, and prefer the AGT 5 `agt-policies`/ACS APIs for new
+policy-engine host code.
+
 !!! info "Other languages"
     **TypeScript:** `npm install @microsoft/agent-governance-sdk` ·
     **.NET:** `dotnet add package Microsoft.AgentGovernance` ·

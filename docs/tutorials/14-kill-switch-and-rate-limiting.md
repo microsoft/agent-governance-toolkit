@@ -136,7 +136,6 @@ print(list(KillReason))
 | `RATE_LIMIT` | `"rate_limit"` | Agent exceeded rate limits repeatedly |
 | `RING_BREACH` | `"ring_breach"` | Agent attempted actions above its ring level |
 | `MANUAL` | `"manual"` | Human operator triggered the kill |
-| `QUARANTINE_TIMEOUT` | `"quarantine_timeout"` | Agent was quarantined and didn't recover |
 | `SESSION_TIMEOUT` | `"session_timeout"` | Session exceeded its `max_duration_seconds` |
 
 ### 3.2 Kill with In-Flight Saga Steps
@@ -830,7 +829,7 @@ Every elevation denial includes a structured reason and remediation guidance:
 | `INVALID_TARGET` | Target ring is not higher-privilege | Request a lower-numbered ring |
 | `RING_0_FORBIDDEN` | Ring 0 cannot be requested via API | Requires SRE Witness attestation |
 | `INSUFFICIENT_TRUST` | Agent's trust score too low | Improve trust through successful operations |
-| `NO_SPONSORSHIP` | No Ring 0/1 agent vouched for this | Get sponsorship from privileged agent |
+| `DUPLICATE` | An active elevation already exists | Reuse or revoke the existing elevation |
 | `EXPIRED_TTL` | TTL exceeded maximum (3600s) | Submit new request with valid TTL |
 
 ### 7.4 Validation Rules

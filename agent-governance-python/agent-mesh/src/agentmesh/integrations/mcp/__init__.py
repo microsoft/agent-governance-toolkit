@@ -147,7 +147,10 @@ class TrustGatedMCPServer:
             description: Tool description (max 1000 chars, stripped of control chars)
             input_schema: JSON Schema for inputs
             required_capability: Capability needed to invoke
-            min_trust_score: Minimum trust score (overrides server default)
+            min_trust_score: Minimum trust score (overrides server default).
+                ``None`` uses the server's ``min_trust_score``. An explicit
+                ``0`` means no trust floor (any caller passes this tool's gate)
+                and is honored as given, not coerced to the default.
             require_human_sponsor: Require direct human sponsor
         """
         # P05: Sanitize tool description — truncate and strip control characters
@@ -166,7 +169,7 @@ class TrustGatedMCPServer:
             handler=handler,
             input_schema=input_schema or {},
             required_capability=required_capability,
-            min_trust_score=min_trust_score or self.min_trust_score,
+            min_trust_score=self.min_trust_score if min_trust_score is None else min_trust_score,
             require_human_sponsor=require_human_sponsor,
         )
         logger.info(f"Registered tool '{name}' with capability requirement: {required_capability}")
@@ -225,21 +228,22 @@ class TrustGatedMCPServer:
         client_capabilities: List[str],
         required: str,
     ) -> bool:
-        """Check if client has required capability (with wildcard support)."""
+        """Check if client has required capability.
+
+        Delegates to :func:`agentmesh.trust.capability.capability_scope_matches`
+        so MCP tool gating uses the same scope semantics as the core
+        capability matcher (exact, trailing-wildcard, colon-boundary, and
+        full-qualifier component matching), rather than a divergent
+        exact/wildcard-only check.
+        """
         if not required:
             return True
 
-        for cap in client_capabilities:
-            # Exact match
-            if cap == required:
-                return True
-            # Wildcard match (e.g., "use:*" matches "use:sql")
-            if cap.endswith(":*"):
-                prefix = cap[:-1]  # "use:"
-                if required.startswith(prefix):
-                    return True
+        from agentmesh.trust.capability import capability_scope_matches
 
-        return False
+        return any(
+            capability_scope_matches(cap, required) for cap in client_capabilities
+        )
 
     async def invoke_tool(
         self,

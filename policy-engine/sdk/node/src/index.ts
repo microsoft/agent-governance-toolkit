@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import * as native from "../native.js";
 import {
   AgentControlBlockedError,
@@ -7,6 +8,12 @@ import {
   transformedOr,
 } from "./adapter-helpers";
 import { configureOpaPath } from "./integrations/opa-binary";
+import {
+  coerceTelemetrySink,
+  labelsFromClient,
+  TelemetryEvent,
+  type TelemetrySink,
+} from "./telemetry";
 
 export { AgentControlBlockedError, AgentControlInterruptionError, AgentControlSuspendedError };
 
@@ -176,6 +183,7 @@ export interface RuntimeClient {
 
 type NativeRuntime = {
   evaluate(request: Record<string, JsonValue>): Promise<Record<string, JsonValue>>;
+  policyLabels(): Record<string, JsonValue>;
 };
 
 type NativeRuntimeCallback = (err: Error | null, argsJson: string) => Promise<string>;
@@ -273,15 +281,41 @@ export class NativeRuntimeClient implements RuntimeClient {
     });
     return mapResult(raw);
   }
+
+  /**
+   * Resolved policyId and configured annotator names per intervention point,
+   * from the native runtime's merged manifest. The host telemetry layer reads
+   * this once at construction so events are labelled on every constructor,
+   * including fromUrl and fromManifestChain.
+   */
+  policyLabels(): Record<string, JsonValue> {
+    return this.runtime.policyLabels();
+  }
 }
 
 export class AgentControl {
   private readonly runtimeClient: RuntimeClient;
   private readonly approvalResolver: ApprovalResolver | undefined;
+  private readonly telemetrySink: TelemetrySink | undefined;
+  private policyIdIndex: Record<string, string> = {};
+  private annotatorIndex: Record<string, string[]> = {};
 
-  constructor(runtimeClient: RuntimeClient, approvalResolver?: ApprovalResolver) {
+  constructor(
+    runtimeClient: RuntimeClient,
+    approvalResolver?: ApprovalResolver,
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
+  ) {
     this.runtimeClient = runtimeClient;
     this.approvalResolver = approvalResolver;
+    this.telemetrySink = coerceTelemetrySink(telemetrySink);
+    // policyId and annotators come from the runtime client's merged manifest via
+    // policyLabels, so they are populated on every native-backed constructor,
+    // including fromUrl and fromManifestChain. A custom client without
+    // policyLabels yields empty indexes (policyId null, annotators fall back to
+    // executed annotation keys on the result).
+    const indexes = labelsFromClient(runtimeClient);
+    this.policyIdIndex = indexes.policyIds;
+    this.annotatorIndex = indexes.annotators;
   }
 
   static fromNative(
@@ -290,10 +324,12 @@ export class AgentControl {
     policyDispatcher?: PolicyDispatcher,
     approvalResolver?: ApprovalResolver,
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
     return new AgentControl(
       new NativeRuntimeClient(manifest, annotatorDispatcher, policyDispatcher, perfTelemetry),
       approvalResolver,
+      telemetrySink,
     );
   }
 
@@ -303,12 +339,14 @@ export class AgentControl {
     policyDispatcher?: PolicyDispatcher,
     approvalResolver?: ApprovalResolver,
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
     return new AgentControl(
       new NativeRuntimeClient(path, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
         NativeRuntimeClass.fromPath(path, annotator, policy, perfTelemetry),
       ),
       approvalResolver,
+      telemetrySink,
     );
   }
 
@@ -324,6 +362,7 @@ export class AgentControl {
       timeoutMs?: number;
       maxRedirects?: number;
     },
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
     return new AgentControl(
       new NativeRuntimeClient(url, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
@@ -339,6 +378,7 @@ export class AgentControl {
         ),
       ),
       approvalResolver,
+      telemetrySink,
     );
   }
 
@@ -348,12 +388,14 @@ export class AgentControl {
     policyDispatcher?: PolicyDispatcher,
     approvalResolver?: ApprovalResolver,
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
     return new AgentControl(
       new NativeRuntimeClient("", annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
         NativeRuntimeClass.fromManifestChain(manifests, annotator, policy, perfTelemetry),
       ),
       approvalResolver,
+      telemetrySink,
     );
   }
 
@@ -362,7 +404,36 @@ export class AgentControl {
     snapshot: Record<string, JsonValue>,
     mode: EnforcementMode = EnforcementMode.Enforce,
   ): Promise<InterventionPointResult> {
-    return this.runtimeClient.evaluateInterventionPoint({ interventionPoint, snapshot, mode });
+    const startedAt = this.telemetrySink === undefined ? 0 : performance.now();
+    const result = await this.runtimeClient.evaluateInterventionPoint({ interventionPoint, snapshot, mode });
+    this.emitTelemetry(interventionPoint, mode, result, startedAt);
+    return result;
+  }
+
+  private emitTelemetry(
+    interventionPoint: InterventionPoint,
+    mode: EnforcementMode,
+    result: InterventionPointResult,
+    startedAt: number,
+  ): void {
+    const sink = this.telemetrySink;
+    if (sink === undefined) {
+      return;
+    }
+    const pointKey = String(interventionPoint);
+    try {
+      const event = TelemetryEvent.fromResult(
+        interventionPoint,
+        mode,
+        result,
+        performance.now() - startedAt,
+        this.policyIdIndex[pointKey] ?? null,
+        this.annotatorIndex[pointKey],
+      );
+      sink.emit(event);
+    } catch (error) {
+      console.warn(`Telemetry failed while building or emitting a ${pointKey} event. Verdict is unaffected.`, error);
+    }
   }
 
   async enforce(
@@ -728,6 +799,23 @@ function makeToolCall(toolName: string, args: JsonValue, toolCallId: string | un
 
 export * from "./adapters";
 export * from "./streaming";
+export {
+  DEFAULT_OTEL_METER_NAME,
+  InMemoryTelemetrySink,
+  JsonStdoutTelemetrySink,
+  MultiSink,
+  OtelMetricsTelemetrySink,
+  TelemetryEvent,
+  TelemetryEventType,
+  errorClassFor,
+  safeReasonCode,
+} from "./telemetry";
+export type {
+  OtelMetricsTelemetrySinkOptions,
+  TelemetryEventFields,
+  TelemetryEventObject,
+  TelemetrySink,
+} from "./telemetry";
 export * from "./integrations/ghcp";
 export * from "./integrations/opa-binary";
 export * from "./integrations/bootstrap";

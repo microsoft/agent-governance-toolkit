@@ -44,8 +44,7 @@ guides.
 |---|----------|-------------------|---------|
 | 05 | [Agent Reliability (SRE)](05-agent-reliability.md) | SLOs, error budgets, circuit breakers, chaos testing | `agent-governance-toolkit-sre` |
 | 06 | [Execution Sandboxing](06-execution-sandboxing.md) | 4-tier privilege rings, resource limits, termination control | `agent-governance-toolkit-runtime` |
-| 11 | [Saga Orchestration](11-saga-orchestration.md) | Multi-step transactions, DSL, fan-out, compensating actions | `agent-governance-toolkit-runtime` |
-| 12 | [Liability & Attribution](12-liability-and-attribution.md) | Vouching, slashing, causal attribution, quarantine | `agent-governance-toolkit-runtime` |
+| 11 | [Saga Orchestration](11-saga-orchestration.md) | Multi-step transactions with compensating actions | `agent-governance-toolkit-runtime` |
 | 14 | [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency termination, rate limiting, ring elevation | `agent-governance-toolkit-runtime` |
 | 51 | [Cost Governance](51-cost-governance.md) | Tiered budgets, auto-throttle, kill switch, anomaly detection, cost optimization | `agent-governance-toolkit-sre` |
 
@@ -194,9 +193,8 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 3. [23 — Delegation Chains](23-delegation-chains.md) → scope narrowing and delegation
 4. [16 — Protocol Bridges](16-protocol-bridges.md) → cross-protocol communication
 5. [11 — Saga Orchestration](11-saga-orchestration.md) → multi-step workflows
-6. [12 — Liability & Attribution](12-liability-and-attribution.md) → who's responsible
-7. [17 — Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) → dynamic trust
-8. [24 — Cost & Token Budgets](24-cost-and-token-budgets.md) → control agent spend
+6. [17 — Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) → dynamic trust
+7. [24 — Cost & Token Budgets](24-cost-and-token-budgets.md) → control agent spend
 
 ### 🔎 "I need to find all agents in my org"
 

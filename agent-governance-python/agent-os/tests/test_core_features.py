@@ -201,7 +201,15 @@ class TestAuditLogQuery:
 class TestHealthReExport:
     def test_import_from_health_module(self) -> None:
         from agent_os.health import HealthChecker, HealthStatus
-        checker = HealthChecker(version="test")
+
+        class _AuditBackend:
+            def write(self, entry) -> None:
+                pass
+
+            def flush(self) -> None:
+                pass
+
+        checker = HealthChecker(version="test", audit_backend=_AuditBackend())
         report = checker.check_health()
         assert report.status == HealthStatus.HEALTHY
 

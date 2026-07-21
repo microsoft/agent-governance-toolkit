@@ -277,7 +277,8 @@ class MCPGateway:
         applies the gateway's ``response_policy``:
 
         - **BLOCK**: deny the response if any threat is found.
-        - **SANITIZE**: strip injection tags but block credential/PII leaks.
+        - **SANITIZE**: strip injection tags and redact credentials; block PII
+          and exfiltration leaks (which cannot be safely removed).
         - **LOG**: allow the response but record all threats in the audit log.
 
         Args:
@@ -340,10 +341,11 @@ class MCPGateway:
                 action="logged",
             )
         elif self._response_policy == ResponsePolicy.SANITIZE:
-            # Sanitize strips injection tags only. Credential and PII leaks
-            # are still blocked because sanitize_response cannot safely
-            # remove arbitrary secret/PII spans from prose.
-            hard_block_categories = {"credential_leak", "pii_leak", "data_exfiltration"}
+            # Sanitize strips injection tags and redacts credentials. PII and
+            # exfiltration URLs cannot be safely removed from prose, so they are
+            # still hard-blocked. Credential leaks are no longer a hard block:
+            # sanitize_response now redacts them.
+            hard_block_categories = {"pii_leak", "data_exfiltration"}
             has_hard_block = any(
                 t.category in hard_block_categories for t in scan_result.threats
             )
@@ -357,14 +359,27 @@ class MCPGateway:
                     action="blocked",
                 )
             else:
-                sanitized, _ = self._response_scanner.sanitize_response(text, tool_name)
-                decision = MCPResponseDecision(
-                    allowed=True,
-                    reason=f"Response sanitized — {len(scan_result.threats)} threat(s) stripped",
-                    content=sanitized,
-                    threats=threat_dicts,
-                    action="sanitized",
-                )
+                sanitized, removed = self._response_scanner.sanitize_response(text, tool_name)
+                # Fail closed if sanitization errored or left a credential behind,
+                # so relaxing the credential hard-block above can never leak.
+                sanitize_failed = any(t.category == "error" for t in removed)
+                residual_credential = CredentialRedactor.contains_credentials(sanitized)
+                if sanitize_failed or residual_credential:
+                    decision = MCPResponseDecision(
+                        allowed=False,
+                        reason="Response blocked — sanitization incomplete (fail closed)",
+                        content=None,
+                        threats=threat_dicts,
+                        action="blocked",
+                    )
+                else:
+                    decision = MCPResponseDecision(
+                        allowed=True,
+                        reason=f"Response sanitized — {len(scan_result.threats)} threat(s) stripped",
+                        content=sanitized,
+                        threats=threat_dicts,
+                        action="sanitized",
+                    )
         else:
             # BLOCK (default)
             categories = {t.category for t in scan_result.threats}

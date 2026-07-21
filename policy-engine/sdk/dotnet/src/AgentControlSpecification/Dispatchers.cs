@@ -27,7 +27,7 @@ public interface IAgentControlRuntime
         CancellationToken cancellationToken = default);
 }
 
-public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposable
+public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IPolicyLabelSource, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -114,6 +114,28 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
     }
 
     public void Dispose() => handle.Dispose();
+
+    /// <summary>
+    /// Read the per intervention point telemetry labels (policy id and annotator
+    /// names) resolved from the fully merged manifest by the native core. Used to
+    /// seed the host telemetry index for every constructor, including the
+    /// manifest-chain and path constructors where no manifest text is parsed here.
+    /// </summary>
+    public PolicyLabelMap PolicyLabels()
+    {
+        var result = NativeMethods.AcsRuntimePolicyLabels(handle.DangerousGetPointer(), out var err);
+        ThrowIfNativeFailed(result, err, "read ACS policy labels");
+        try
+        {
+            var json = Marshal.PtrToStringUTF8(result)
+                ?? throw new InvalidOperationException("ACS native policy_labels returned a null or non-UTF8 result string.");
+            return PolicyLabelMap.FromJson(json);
+        }
+        finally
+        {
+            NativeMethods.AcsFreeString(result);
+        }
+    }
 
     private static AcsRuntimeHandle BuildRuntime(
         string manifest,
