@@ -947,3 +947,7 @@ addoption
 addinivalue
 getoption
 asdict
+
+# --- Docker / BuildKit toolchain terms ---
+moby
+buildkit
