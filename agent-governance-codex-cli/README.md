@@ -9,7 +9,6 @@ This package is the **production install surface** for Agent Governance Toolkit 
 It installs AGT governance into Codex's lifecycle hooks and uses:
 
 - Codex hooks for deterministic session, prompt, and pre-tool governance
-- a bundled MCP server for operator-facing AGT inspection tools
 - the AGT TypeScript SDK for policy evaluation, prompt defense, and MCP threat scanning
 
 > **Status — proposed upstream.** This package is proposed for the main AGT repository via
@@ -122,8 +121,8 @@ npm install
 npm test
 ```
 
-The governance core (`lib/policy.mjs`, `lib/audit.mjs`, `lib/poisoning.mjs`,
-`server/agt-mcp.mjs`) is adapted from `agent-governance-claude-code`, mirroring how the
+The governance core (`lib/policy.mjs`, `lib/audit.mjs`, `lib/poisoning.mjs`) is
+adapted from `agent-governance-claude-code`, mirroring how the
 OpenCode package was derived from it. Only host identity — surface name, agent id, config
 paths, and the `AGT_CODEX_*` environment variables — is rebranded for Codex; the
 governance logic is unchanged.

@@ -1,11 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-// Codex adapter: control flow is identical to the Codex shim because
+// Codex adapter: control flow is identical to the Claude Code shim because
 // Codex adopted the same hook payload and response schema. The only
 // host-specific concern is where AGT state lives — Codex sessions anchor to
-// CODEX_HOME rather than ~/.codex, so we default the policy and audit paths
-// there unless the caller has already overridden them.
+// CODEX_HOME (default ~/.codex) rather than Claude Code's ~/.claude, so we
+// default the policy and audit paths there unless the caller has overridden them.
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readHookInput, writeHookOutput } from "./common.mjs";

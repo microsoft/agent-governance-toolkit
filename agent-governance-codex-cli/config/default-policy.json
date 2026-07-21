@@ -8,9 +8,7 @@
     "allowedTools": [
       "Read",
       "Glob",
-      "Grep",
-      "mcp__agt_governance__agt_policy_status",
-      "mcp__agt_governance__agt_policy_check_text"
+      "Grep"
     ],
     "blockedTools": [],
     "defaultEffect": "review",

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 // Codex adapter: see pre-tool-use.mjs for why only the state paths differ
-// from the Codex shim.
+// from the Claude Code shim.
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readHookInput, writeHookOutput } from "./common.mjs";

@@ -8,12 +8,11 @@
     "config/",
     "hooks/",
     "lib/",
-    "server/",
     "README.md"
   ],
   "scripts": {
     "build": "npm run check",
-    "check": "node --check ./hooks/common.mjs && node --check ./hooks/session-start.mjs && node --check ./hooks/user-prompt-submit.mjs && node --check ./hooks/pre-tool-use.mjs && node --check ./lib/audit.mjs && node --check ./lib/poisoning.mjs && node --check ./lib/policy.mjs && node --check ./server/agt-mcp.mjs && node --check ./bin/agt-codex.mjs && node --test ./test/*.test.mjs",
+    "check": "node --check ./hooks/common.mjs && node --check ./hooks/session-start.mjs && node --check ./hooks/user-prompt-submit.mjs && node --check ./hooks/pre-tool-use.mjs && node --check ./lib/audit.mjs && node --check ./lib/poisoning.mjs && node --check ./lib/policy.mjs && node --check ./bin/agt-codex.mjs && node --test ./test/*.test.mjs",
     "test": "node --test ./test/*.test.mjs"
   },
   "keywords": [
