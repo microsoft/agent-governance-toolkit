@@ -455,7 +455,11 @@ class RelayServer:
 
         elif frame_type == "ack":
             msg_id = frame.get("id")
-            if msg_id:
+            # ``id`` is untrusted JSON and is used as a dict key inside the
+            # inbox; require a non-empty string so a value of another type
+            # (e.g. a list or object) cannot raise inside acknowledge() and tear
+            # down the connection. Legitimate message ids are always strings.
+            if isinstance(msg_id, str) and msg_id:
                 # Access control (spec 12.3): only the message's recipient may
                 # acknowledge/delete it. Pass this connection's connect-time,
                 # DID-PoP-verified identity so the store refuses acks for

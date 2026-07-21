@@ -457,6 +457,50 @@ class TestRelayServer:
 
         assert inbox.message_count == 0
 
+    def test_ack_with_non_string_id_is_ignored(self):
+        """Robustness: an ``ack`` frame whose ``id`` is not a string (untrusted
+        JSON can carry any type) must be ignored rather than passed to the
+        inbox, where a list/object id would raise and tear down the connection.
+        A queued message survives such malformed acks, and a well-formed ack on
+        the same connection still works — proving the connection was not torn
+        down.
+        """
+        server = RelayServer()
+        inbox = server._inbox
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")  # recipient
+
+        inbox.store(StoredMessage(
+            message_id="robust-1",
+            sender_did=alice_did,
+            recipient_did=bob_did,
+            payload=json.dumps({
+                "v": 1, "type": "message",
+                "from": alice_did, "to": bob_did,
+                "id": "robust-1", "ciphertext": "for-bob",
+            }),
+        ))
+        assert inbox.message_count == 1
+
+        client = TestClient(server.app)
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+            # Bob receives his own pending message on connect.
+            msg = ws_bob.receive_json()
+            assert msg["id"] == "robust-1"
+            # Malformed ack ids that must NOT crash the handler or delete
+            # anything: a list and an object are non-hashable dict keys, an int
+            # is the wrong type, and an empty string is falsy.
+            ws_bob.send_json({"v": 1, "type": "ack", "id": ["robust-1"]})
+            ws_bob.send_json({"v": 1, "type": "ack", "id": {"k": "robust-1"}})
+            ws_bob.send_json({"v": 1, "type": "ack", "id": 123})
+            ws_bob.send_json({"v": 1, "type": "ack", "id": ""})
+            # A well-formed ack on the SAME connection still works — this only
+            # succeeds if the connection survived every malformed frame above.
+            ws_bob.send_json({"v": 1, "type": "ack", "id": "robust-1"})
+
+        assert inbox.message_count == 0
+
     def test_pending_message_survives_disconnect_before_ack(self):
         """Regression: previously _deliver_pending acknowledged immediately
         after send_json, so a recipient that received the frame but
