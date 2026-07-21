@@ -122,6 +122,11 @@ _SIGNALS: dict[IntentCategory, list[tuple]] = {
         (r"\bremove\s+(all|every|entire)\b", 0.75, "remove-all pattern"),
         (r"\bformat\s+(disk|drive|partition)\b", 0.9, "disk format"),
         (r"\bALTER\s+TABLE\b.*\bDROP\b", 0.8, "ALTER TABLE DROP column"),
+        (
+            r"\b(tüm|bütün)\s+(kayıtları|verileri|tabloları)\s+(sil|temizle|yok\s+et)\b",
+            0.8,
+            "Turkish bulk data deletion",
+        ),
     ],
     IntentCategory.DATA_EXFILTRATION: [
         (r"\bSELECT\s+\*\s+FROM\b.*\bINTO\s+OUTFILE\b", 0.9, "SQL dump to file"),
@@ -131,6 +136,12 @@ _SIGNALS: dict[IntentCategory, list[tuple]] = {
         (r"\bpg_dump\b", 0.7, "database dump tool"),
         (r"\bmysqldump\b", 0.7, "MySQL dump tool"),
         (r"\b(wget|curl)\s+.*\|\s*", 0.6, "piped download"),
+        (
+            r"\b(tüm|bütün)\s+(verileri|kayıtları)\s+(harici|dış)\s+"
+            r"(?:bir\s+)?(?:sunucuya|depoya)\s+(aktar|gönder|yükle)\b",
+            0.8,
+            "Turkish external data transfer",
+        ),
     ],
     IntentCategory.PRIVILEGE_ESCALATION: [
         (r"\bGRANT\s+(ALL|SUPERUSER|ADMIN)\b", 0.9, "SQL GRANT elevated"),
@@ -142,6 +153,12 @@ _SIGNALS: dict[IntentCategory, list[tuple]] = {
         (r"\bALTER\s+USER\b.*\bSUPERUSER\b", 0.9, "make superuser"),
         (r"\bsu\s+-\b", 0.7, "switch user root"),
         (r"\bpasswd\b", 0.5, "password change"),
+        (
+            r"\b(yönetici|süper\s*kullanıcı|root)\s+"
+            r"(yetkisi|yetkilerini|erişimi)\s+(ver|tanı)\b",
+            0.8,
+            "Turkish privileged access grant",
+        ),
     ],
     IntentCategory.SYSTEM_MODIFICATION: [
         (r"\brm\s+-rf\b", 0.95, "recursive force delete"),
@@ -152,6 +169,11 @@ _SIGNALS: dict[IntentCategory, list[tuple]] = {
         (r"\biptables\s+.*\bDROP\b", 0.8, "firewall drop rule"),
         (r"\bregistry\s*(delete|modify)\b", 0.7, "Windows registry modification"),
         (r"\bformat\s+[A-Z]:\b", 0.9, "format drive"),
+        (
+            r"\b(sistemi|sunucuyu)\s+(kapat|yeniden\s+başlat|durdur)\b",
+            0.8,
+            "Turkish system power or service action",
+        ),
     ],
     IntentCategory.CODE_EXECUTION: [
         (r"\b(exec|eval)\s*\(", 0.8, "dynamic code execution"),
@@ -160,6 +182,11 @@ _SIGNALS: dict[IntentCategory, list[tuple]] = {
         (r"\b__import__\b", 0.7, "dynamic import"),
         (r"\bcompile\s*\(", 0.5, "compile code"),
         (r"\bpickle\.loads\b", 0.7, "unsafe deserialization"),
+        (
+            r"\b(kodu|komutu)\s+(çalıştır|yürüt)\b",
+            0.8,
+            "Turkish code or command execution",
+        ),
     ],
     IntentCategory.NETWORK_ACCESS: [
         (r"\b(fetch|requests\.get|requests\.post|urllib)\b", 0.4, "HTTP request"),

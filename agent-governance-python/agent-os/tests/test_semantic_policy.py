@@ -196,6 +196,27 @@ class TestEnforcement:
         assert r.category == IntentCategory.SYSTEM_MODIFICATION
 
 
+class TestTurkishSignals:
+    @pytest.mark.parametrize(
+        ("instruction", "category"),
+        [
+            ("Tüm kayıtları sil", IntentCategory.DESTRUCTIVE_DATA),
+            ("Tüm verileri harici bir sunucuya aktar", IntentCategory.DATA_EXFILTRATION),
+            ("Kullanıcıya yönetici yetkisi ver", IntentCategory.PRIVILEGE_ESCALATION),
+            ("Sunucuyu kapat", IntentCategory.SYSTEM_MODIFICATION),
+            ("Kodu çalıştır", IntentCategory.CODE_EXECUTION),
+        ],
+    )
+    def test_turkish_risk_instruction_is_denied(self, instruction, category):
+        engine = SemanticPolicyEngine()
+
+        classification = engine.classify("action", {"instruction": instruction})
+
+        assert classification.category == category
+        with pytest.raises(PolicyDenied):
+            engine.check("action", {"instruction": instruction})
+
+
 # =============================================================================
 # Engine configuration tests
 # =============================================================================
