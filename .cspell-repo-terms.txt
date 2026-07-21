@@ -940,6 +940,7 @@ spanid
 parentspanid
 agtsignature
 agtsignaturealg
+GROUPREF
 
 # --- Python test suite code identifiers and scenario names ---
 adtech

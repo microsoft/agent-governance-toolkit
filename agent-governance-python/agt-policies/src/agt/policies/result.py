@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Verdict = Literal["allow", "warn", "deny", "escalate", "transform"]
 
@@ -34,6 +34,100 @@ _PERMITTING_VERDICTS = frozenset({"allow", "warn", "transform"})
 
 # Generic engine fallback message that carries no host-actionable detail.
 _GENERIC_BLOCK_MESSAGE = "Request blocked by Agent Control Specification."
+
+
+class TransformResult(BaseModel):
+    """Materialized transform returned by ACS."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    value: Any
+    applied_value: Any | None = None
+
+
+class EvidenceResult(BaseModel):
+    """Opaque proof artifact and verification pointers returned by ACS."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    artefact: Any
+    verification_pointers: dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyAuditRecord(BaseModel):
+    """Versioned restricted audit envelope for a native evaluation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    schema_version: Literal["agt.policy_evaluation.v1"] = Field(
+        default="agt.policy_evaluation.v1", alias="schema"
+    )
+    verdict: Verdict
+    reason_code: str = ""
+    message: str = ""
+    intervention_point: str = ""
+    transform: TransformResult | None = None
+    evidence: EvidenceResult | None = None
+    result_labels: tuple[str, ...] = ()
+    input_identity: str | None = None
+    enforced_identity: str | None = None
+
+
+class PolicyEvaluation(BaseModel):
+    """Native v5 result for one intervention-point evaluation.
+
+    The ACS result does not currently expose ``policy_id`` or ``rule_id``.
+    Callers must not infer either value from ``reason_code``. Policy identity
+    remains telemetry metadata until the engine carries it on
+    ``InterventionPointResult``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    verdict: Verdict
+    reason_code: str = ""
+    message: str = ""
+    intervention_point: str = ""
+    transform: TransformResult | None = None
+    evidence: EvidenceResult | None = None
+    result_labels: tuple[str, ...] = ()
+    input_identity: str | None = None
+    enforced_identity: str | None = None
+
+    @field_validator("reason_code", mode="before")
+    @classmethod
+    def namespace_reason_code(cls, value: Any) -> str:
+        reason = str(value or "")
+        if not reason or ":" in reason:
+            return reason
+        return f"policy:{reason}"
+
+    def is_allowed(self) -> bool:
+        """Return whether the host may continue without approval."""
+        return self.verdict in _PERMITTING_VERDICTS
+
+    def audit_record(self) -> dict[str, Any]:
+        """Return the versioned v5 audit payload for this evaluation."""
+        return PolicyAuditRecord(
+            verdict=self.verdict,
+            reason_code=self.reason_code,
+            message=self.message,
+            intervention_point=self.intervention_point,
+            transform=self.transform,
+            evidence=self.evidence,
+            result_labels=self.result_labels,
+            input_identity=self.input_identity,
+            enforced_identity=self.enforced_identity,
+        ).model_dump(mode="json", by_alias=True, exclude_none=True)
+
+    def public_error_message(self) -> str:
+        """Return a stable message that does not expose policy or user detail."""
+        if self.verdict == "escalate":
+            return "Request requires policy approval."
+        if self.reason_code.startswith("runtime_error:"):
+            return "Policy evaluation failed closed."
+        return "Request blocked by policy."
 
 
 def _friendly_public_message(reason: str, verdict: str, original: str) -> str:
@@ -86,7 +180,10 @@ class EvaluationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # ── v4 back-compat surface ────────────────────────────────────
-    allowed: bool = True
+    # Defaults are fail-safe: a bare EvaluationResult() denies rather than
+    # permits, so a construction path that forgets to set a verdict cannot
+    # silently allow an action. Every real construction sets these explicitly.
+    allowed: bool = False
     category: str | None = None
     matched_rule: str | None = None
     public_message: str = ""
@@ -95,12 +192,42 @@ class EvaluationResult(BaseModel):
     audit_entry: dict[str, Any] = Field(default_factory=dict)
 
     # ── v5 verdict surface ────────────────────────────────────────
-    verdict: Verdict = "allow"
+    verdict: Verdict = "deny"
     transform: dict[str, Any] | None = None
     evidence: dict[str, Any] | None = None
     input_identity: str | None = None
     enforced_identity: str | None = None
     message: str = ""
+
+    @classmethod
+    def from_native(cls, result: PolicyEvaluation) -> "EvaluationResult":
+        """Build the temporary bridge result from the native contract."""
+        reason = result.reason_code
+        if reason.startswith("policy:"):
+            reason = reason.removeprefix("policy:")
+        audit = result.audit_record()
+        audit["reason"] = reason
+        return cls(
+            allowed=result.is_allowed(),
+            public_message=result.message,
+            detail=result.message,
+            reason=reason,
+            audit_entry=audit,
+            verdict=result.verdict,
+            transform=(
+                result.transform.model_dump(mode="python", exclude_none=True)
+                if result.transform is not None
+                else None
+            ),
+            evidence=(
+                result.evidence.model_dump(mode="python", exclude_none=True)
+                if result.evidence is not None
+                else None
+            ),
+            input_identity=result.input_identity,
+            enforced_identity=result.enforced_identity,
+            message=result.message,
+        )
 
     def is_allowed(self) -> bool:
         """True for verdicts that permit the action (``allow``/``warn``/``transform``).
@@ -110,6 +237,38 @@ class EvaluationResult(BaseModel):
         caller constructs the result with only the v5 verdict set.
         """
         return self.verdict in _PERMITTING_VERDICTS
+
+    def to_native(self) -> PolicyEvaluation:
+        """Return the native v5 contract without compatibility fields."""
+        transform = (
+            TransformResult.model_validate(self.transform)
+            if self.transform is not None
+            else None
+        )
+        evidence = (
+            EvidenceResult.model_validate(self.evidence)
+            if self.evidence is not None
+            else None
+        )
+        raw_labels = self.audit_entry.get("result_labels", ())
+        labels = (
+            tuple(str(label) for label in raw_labels)
+            if isinstance(raw_labels, (list, tuple))
+            else ()
+        )
+        return PolicyEvaluation(
+            verdict=self.verdict,
+            reason_code=self.reason,
+            message=self.message,
+            intervention_point=str(
+                self.audit_entry.get("intervention_point", "")
+            ),
+            transform=transform,
+            evidence=evidence,
+            result_labels=labels,
+            input_identity=self.input_identity,
+            enforced_identity=self.enforced_identity,
+        )
 
     def to_v4_check_result(self) -> Any:
         """Return a v4 ``PolicyCheckResult`` populated from this result.
@@ -188,4 +347,11 @@ class EvaluationResult(BaseModel):
         )
 
 
-__all__ = ["EvaluationResult", "Verdict"]
+__all__ = [
+    "EvaluationResult",
+    "EvidenceResult",
+    "PolicyAuditRecord",
+    "PolicyEvaluation",
+    "TransformResult",
+    "Verdict",
+]

@@ -5,26 +5,25 @@
 import pytest
 
 from agent_os.exceptions import (
+    AdapterNotFoundError,
+    AdapterTimeoutError,
     AgentOSError,
-    PolicyError,
-    PolicyViolationError,
-    PolicyDeniedError,
-    PolicyTimeoutError,
     BudgetError,
     BudgetExceededError,
     BudgetWarningError,
+    ConfigurationError,
+    CredentialExpiredError,
     IdentityError,
     IdentityVerificationError,
-    CredentialExpiredError,
     IntegrationError,
-    AdapterNotFoundError,
-    AdapterTimeoutError,
-    ConfigurationError,
     InvalidPolicyError,
     MissingConfigError,
+    PolicyDeniedError,
+    PolicyError,
+    PolicyTimeoutError,
+    PolicyViolationError,
     RateLimitError,
 )
-
 
 # --- Hierarchy tests ---
 
@@ -125,6 +124,49 @@ class TestToDict:
         ts = err.to_dict()["timestamp"]
         assert "T" in ts
         assert len(ts) >= 19  # minimum: 2024-01-01T00:00:00
+
+
+class TestNativePolicyViolation:
+    """Native policy evaluations produce structured host errors."""
+
+    class _Evaluation:
+        message = "Tool blocked"
+        reason_code = "policy:blocked_tool"
+
+        def is_allowed(self):
+            return False
+
+        def audit_record(self):
+            return {
+                "schema": "agt.policy_evaluation.v1",
+                "verdict": "deny",
+                "reason_code": self.reason_code,
+                "intervention_point": "pre_tool_call",
+                "message": self.message,
+            }
+
+        def public_error_message(self):
+            return "Request blocked by policy."
+
+    def test_from_evaluation_result_preserves_v5_audit_contract(self):
+        result = self._Evaluation()
+
+        err = PolicyViolationError.from_evaluation_result(result)
+
+        assert str(err) == "Request blocked by policy."
+        assert "Tool blocked" not in str(err)
+        assert err.details["message"] == "Tool blocked"
+        assert err.evaluation_result is result
+        assert err.check_result is None
+        assert err.details["schema"] == "agt.policy_evaluation.v1"
+        assert err.details["reason_code"] == "policy:blocked_tool"
+
+    def test_from_evaluation_result_rejects_permitting_verdict(self):
+        result = self._Evaluation()
+        result.is_allowed = lambda: True
+
+        with pytest.raises(ValueError, match="permitting"):
+            PolicyViolationError.from_evaluation_result(result)
 
 
 # --- Details propagation ---
