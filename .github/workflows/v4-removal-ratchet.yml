@@ -1,0 +1,31 @@
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+name: v4 Removal Ratchet
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  v4-ratchet:
+    name: v4 policy-language ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned lint and test tooling
+        run: |
+          pip install --require-hashes --no-cache-dir -r agent-governance-python/requirements/ci-lint.txt
+          pip install --require-hashes --no-cache-dir -r agent-governance-python/requirements/ci-test.txt
+      - name: Gate against the committed baseline
+        run: python scripts/check_v4_ratchet.py
+      - name: Unit tests for the ratchet
+        run: python -m pytest scripts/tests/test_check_v4_ratchet.py -q
+      - name: Lint the ratchet script
+        run: ruff check scripts/check_v4_ratchet.py scripts/tests/test_check_v4_ratchet.py --select E,F,W --ignore E501
