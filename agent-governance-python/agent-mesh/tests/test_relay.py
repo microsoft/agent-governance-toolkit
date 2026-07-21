@@ -193,6 +193,82 @@ class TestRelayServer:
 
         assert server.stats["messages_routed"] == 1
 
+    def test_spoofed_from_is_dropped(self):
+        """Security hardening: the relay drops a message whose body ``from``
+        does not match the connect-time, DID-PoP-verified sender identity, so a
+        connected peer cannot emit messages attributed to a DID it does not
+        own. Proven by sending a mismatched-``from`` frame followed by a legit
+        one and asserting the recipient's first (and only) delivered frame is
+        the legit one.
+        """
+        server = RelayServer()
+        client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
+        victim_did = _did_for("victim")  # a DID Alice does NOT own
+
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+
+            with client.websocket_connect("/ws") as ws_alice:
+                ws_alice.send_json(_connect_frame("alice"))
+
+                # Spoof: Alice's authenticated connection emits a frame naming
+                # a `from` she does not own. Must be dropped by the relay.
+                ws_alice.send_json({
+                    "v": 1, "type": "message",
+                    "from": victim_did, "to": bob_did,
+                    "id": "spoof-001", "ciphertext": "forged",
+                })
+                # Legit follow-up from Alice's real identity.
+                ws_alice.send_json({
+                    "v": 1, "type": "message",
+                    "from": alice_did, "to": bob_did,
+                    "id": "legit-001", "ciphertext": "genuine",
+                })
+
+                # Bob's first delivered frame must be the legit one — the
+                # spoofed frame never arrives.
+                msg = ws_bob.receive_json()
+                assert msg["id"] == "legit-001"
+                assert msg["from"] == alice_did
+
+        assert server.stats["messages_routed"] == 1
+
+    def test_spoofed_knock_from_is_dropped(self):
+        """Security hardening: the same ``from``-binding applies to KNOCK
+        frames, which are routed through the same relay path as messages.
+        """
+        server = RelayServer()
+        client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
+        victim_did = _did_for("victim")
+
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+
+            with client.websocket_connect("/ws") as ws_alice:
+                ws_alice.send_json(_connect_frame("alice"))
+
+                # Spoofed KNOCK claiming to originate from the victim DID.
+                ws_alice.send_json({
+                    "v": 1, "type": "knock",
+                    "from": victim_did, "to": bob_did,
+                    "id": "knock-spoof", "intent": {"action": "delegate_task"},
+                })
+                # Legit KNOCK from Alice's real identity.
+                ws_alice.send_json({
+                    "v": 1, "type": "knock",
+                    "from": alice_did, "to": bob_did,
+                    "id": "knock-legit", "intent": {"action": "delegate_task"},
+                })
+
+                msg = ws_bob.receive_json()
+                assert msg["type"] == "knock"
+                assert msg["id"] == "knock-legit"
+                assert msg["from"] == alice_did
+
     def test_message_stored_when_offline(self):
         """Message stored when recipient is offline."""
         server = RelayServer()

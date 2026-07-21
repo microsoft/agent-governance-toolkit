@@ -474,6 +474,25 @@ class RelayServer:
 
     async def _handle_message(self, sender_did: str, frame: dict) -> None:
         """Route a message to recipient — deliver live or store offline."""
+        # Security hardening: bind the frame-body ``from`` to the connect-time,
+        # DID-PoP-verified identity of THIS connection. The relay authenticates
+        # *which mailbox a socket owns* at connect (_verify_connect_pop); this
+        # additionally ensures the ``from`` a peer writes into a message/knock
+        # body matches that verified identity, so a connected peer cannot emit
+        # frames attributed to a DID it does not own. Only enforced when DID PoP
+        # is required (the secure default); when AGENTMESH_RELAY_ALLOW_UNAUTHED_DID
+        # disables PoP, sender_did itself is unverified, so the check adds no
+        # security.
+        claimed_from = frame.get("from")
+        if _REQUIRE_DID_POP and claimed_from is not None and claimed_from != sender_did:
+            logger.warning(
+                "Dropping %s frame with mismatched 'from'=%s from authenticated sender %s",
+                frame.get("type"),
+                claimed_from,
+                sender_did,
+            )
+            return
+
         recipient_did = frame.get("to")
         message_id = frame.get("id")
 

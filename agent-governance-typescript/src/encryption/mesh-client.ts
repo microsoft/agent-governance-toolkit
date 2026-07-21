@@ -789,8 +789,28 @@ export class MeshClient {
     let payload: unknown;
     let isPlaintext = false;
 
-    if (frame.plaintext || this.isPlaintextPeer(from)) {
-      // Legacy plaintext
+    // Security hardening: whether an inbound message is treated as legacy
+    // plaintext is decided solely from the receiver's own operator
+    // configuration (`plaintextPeers`, via isPlaintextPeer(from)). The wire
+    // frame also carries a `plaintext` boolean, but it is sender-controlled and
+    // must not select this branch — trusting it would let the sender skip
+    // X3DH / Double Ratchet / AEAD verification and be attributed an arbitrary
+    // `from` DID. Gate on isPlaintextPeer only; a peer that is not explicitly
+    // allow-listed for plaintext always takes the encrypted path below and is
+    // dropped if it cannot be cryptographically authenticated.
+    if (this.isPlaintextPeer(from)) {
+      // Legacy plaintext — only for operator-allowlisted peers, and only while
+      // no encrypted session has been negotiated with that peer. If a live
+      // channel already exists, an inbound "plaintext" frame would be a
+      // downgrade of that session, so it is dropped: a peer with an established
+      // encrypted session is never silently downgraded to the no-crypto path,
+      // even if it is also allow-listed for plaintext.
+      if (this.sessions.get(from)?.channel) {
+        for (const h of this.errorHandlers) {
+          try { h("frame", from, "plaintext frame for a peer with an established encrypted session — dropping (downgrade attempt)"); } catch { /* swallow */ }
+        }
+        return;
+      }
       payload = JSON.parse(atob(frame.ciphertext as string));
       isPlaintext = true;
     } else {
@@ -813,7 +833,17 @@ export class MeshClient {
         return;
       }
 
-      const header = frame.header as Record<string, unknown>;
+      const header = frame.header as Record<string, unknown> | undefined;
+      if (!header || typeof header.dh !== "string") {
+        // Security hardening: an encrypted `message` frame must carry a ratchet
+        // header. A frame that reaches this branch without one is malformed for
+        // an encrypted peer and is dropped cleanly instead of throwing out of
+        // the receive path.
+        for (const h of this.errorHandlers) {
+          try { h("decrypt", from, "encrypted message missing ratchet header — dropping"); } catch { /* swallow */ }
+        }
+        return;
+      }
       const encrypted: EncryptedMessage = {
         header: {
           dhPublicKey: this.base64ToUint8(header.dh as string),
