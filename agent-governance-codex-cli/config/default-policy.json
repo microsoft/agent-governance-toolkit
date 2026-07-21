@@ -6,19 +6,14 @@
   "minimumPromptDefenseGrade": "B",
   "toolPolicies": {
     "allowedTools": [
-      "Read",
-      "Glob",
-      "Grep"
+      "view_image"
     ],
     "blockedTools": [],
     "defaultEffect": "review",
     "reviewTools": [
       "Bash",
-      "WebFetch",
-      "WebSearch",
-      "Write",
-      "Edit",
-      "MultiEdit"
+      "apply_patch",
+      "webrun"
     ]
   },
   "additionalContext": [
