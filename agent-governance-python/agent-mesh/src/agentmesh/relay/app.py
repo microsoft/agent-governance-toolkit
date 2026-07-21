@@ -27,8 +27,11 @@ logger = logging.getLogger(__name__)
 _RELAY_TOKEN: str | None = os.environ.get("AGENTMESH_RELAY_TOKEN")
 if not _RELAY_TOKEN:
     logger.warning(
-        "AGENTMESH_RELAY_TOKEN is not set — the relay will accept "
-        "unauthenticated connections.  Set this env var in production."
+        "AGENTMESH_RELAY_TOKEN is not set — the relay will not require a "
+        "shared-secret token. DID proof-of-possession is still enforced by "
+        "default (disable only via AGENTMESH_RELAY_ALLOW_UNAUTHED_DID); set "
+        "AGENTMESH_RELAY_TOKEN or Entra verification to additionally restrict "
+        "which authenticated identities may connect."
     )
 
 # Phase 6.c — optional Entra-signed JWT verification for the connect
@@ -452,8 +455,17 @@ class RelayServer:
 
         elif frame_type == "ack":
             msg_id = frame.get("id")
-            if msg_id:
-                self._inbox.acknowledge(msg_id)
+            # ``id`` is untrusted JSON and is used as a dict key inside the
+            # inbox; require a non-empty string so a value of another type
+            # (e.g. a list or object) cannot raise inside acknowledge() and tear
+            # down the connection. Legitimate message ids are always strings.
+            if isinstance(msg_id, str) and msg_id:
+                # Access control (spec 12.3): only the message's recipient may
+                # acknowledge/delete it. Pass this connection's connect-time,
+                # DID-PoP-verified identity so the store refuses acks for
+                # messages addressed to a different agent — preventing an ack
+                # spray from deleting another agent's queued messages.
+                self._inbox.acknowledge(msg_id, sender_did)
 
         elif frame_type == "heartbeat":
             conn = self._connections.get(sender_did)
@@ -474,6 +486,31 @@ class RelayServer:
 
     async def _handle_message(self, sender_did: str, frame: dict) -> None:
         """Route a message to recipient — deliver live or store offline."""
+        # Security hardening: bind the frame-body ``from`` to the connect-time,
+        # DID-PoP-verified identity of THIS connection. The relay authenticates
+        # *which mailbox a socket owns* at connect (_verify_connect_pop); this
+        # additionally ensures the ``from`` a peer writes into a message/knock
+        # body matches that verified identity, so a connected peer cannot emit
+        # frames attributed to a DID it does not own. Only enforced when DID PoP
+        # is required (the secure default); when AGENTMESH_RELAY_ALLOW_UNAUTHED_DID
+        # disables PoP, sender_did itself is unverified, so the check adds no
+        # security.
+        claimed_from = frame.get("from")
+        if _REQUIRE_DID_POP:
+            if claimed_from is not None and claimed_from != sender_did:
+                logger.warning(
+                    "Dropping %s frame with mismatched 'from'=%s from authenticated sender %s",
+                    frame.get("type"),
+                    claimed_from,
+                    sender_did,
+                )
+                return
+            # Stamp the connect-time, DID-PoP-verified identity onto the frame so
+            # every stored/forwarded frame carries an authenticated ``from`` —
+            # even one that omitted it. Compliant senders already set ``from`` to
+            # their own DID, so this is a no-op for them.
+            frame["from"] = sender_did
+
         recipient_did = frame.get("to")
         message_id = frame.get("id")
 

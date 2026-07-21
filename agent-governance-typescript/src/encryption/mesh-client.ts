@@ -789,12 +789,42 @@ export class MeshClient {
     let payload: unknown;
     let isPlaintext = false;
 
-    if (frame.plaintext || this.isPlaintextPeer(from)) {
-      // Legacy plaintext
+    // Security hardening: whether an inbound message is treated as legacy
+    // plaintext is decided solely from the receiver's own operator
+    // configuration (`plaintextPeers`, via isPlaintextPeer(from)). The wire
+    // frame also carries a `plaintext` boolean, but it is sender-controlled and
+    // must not select this branch — trusting it would let the sender skip
+    // X3DH / Double Ratchet / AEAD verification and be attributed an arbitrary
+    // `from` DID. Gate on isPlaintextPeer only; a peer that is not explicitly
+    // allow-listed for plaintext always takes the encrypted path below and is
+    // dropped if it cannot be cryptographically authenticated.
+    if (this.isPlaintextPeer(from) && !this.sessions.get(from)?.channel) {
+      // Legacy plaintext — taken ONLY for an operator-allow-listed peer that has
+      // no negotiated encrypted session. Once a live channel exists for the peer
+      // we deliberately fall through to the encrypted path instead of handling
+      // the frame as plaintext: a genuine encrypted frame is decrypted via the
+      // ratchet, while a plaintext / headerless downgrade frame fails closed on
+      // the missing-ratchet-header check below. This keeps downgrade protection
+      // (an established session is never silently downgraded to no-crypto) while
+      // no longer black-holing legitimate encrypted traffic from a peer that is
+      // also allow-listed for plaintext.
       payload = JSON.parse(atob(frame.ciphertext as string));
       isPlaintext = true;
     } else {
       // Encrypted
+      const header = frame.header as Record<string, unknown> | undefined;
+      if (!header || typeof header.dh !== "string") {
+        // Security hardening: an encrypted `message` frame must carry a ratchet
+        // header. Validate this BEFORE the pre-KNOCK buffering path below so a
+        // malformed / headerless frame — which can never be decrypted — is
+        // dropped immediately, instead of occupying pre-KNOCK buffer capacity
+        // until TTL eviction and only failing closed when the buffer is drained.
+        for (const h of this.errorHandlers) {
+          try { h("decrypt", from, "encrypted message missing ratchet header — dropping"); } catch { /* swallow */ }
+        }
+        return;
+      }
+
       const session = this.sessions.get(from);
       if (!session?.channel) {
         // Gap-G4 (vendored agentmesh-sdk patch #16): pre-KNOCK message buffer.
@@ -813,7 +843,6 @@ export class MeshClient {
         return;
       }
 
-      const header = frame.header as Record<string, unknown>;
       const encrypted: EncryptedMessage = {
         header: {
           dhPublicKey: this.base64ToUint8(header.dh as string),

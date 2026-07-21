@@ -5,6 +5,24 @@ All notable changes to AgentMesh will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **AgentMesh transport message authentication.** `MeshClient` no longer lets a
+  sender-supplied `plaintext` wire flag select the legacy no-crypto receive path;
+  whether an inbound message is treated as plaintext is decided solely by the
+  receiver's own `plaintextPeers` configuration. A live encrypted session can no
+  longer be downgraded to plaintext, and an encrypted frame that is missing its
+  ratchet header is now dropped before the pre-KNOCK buffer instead of being
+  buffered until TTL eviction.
+- **Relay sender-identity binding.** The relay binds the frame `from` field to the
+  connection's cryptographically verified DID identity for message and knock
+  frames, so a connected peer can no longer emit frames under another agent's DID.
+- **Relay acknowledgement ownership.** `InboxStore.acknowledge` enforces recipient
+  ownership (spec §12.3): a peer may only acknowledge and delete messages addressed
+  to its own verified DID, preventing one agent from deleting another's queued mail.
+
 ## [1.0.0-alpha.1] - 2026-02-01
 
 ### Added

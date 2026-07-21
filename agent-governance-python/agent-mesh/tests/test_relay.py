@@ -95,6 +95,23 @@ class TestInboxStore:
         assert store.fetch_pending("b") == []
         assert store.acknowledge("ack-1") is False  # already gone
 
+    def test_acknowledge_rejects_non_recipient(self):
+        """Access control (spec 12.3): only the message's recipient may
+        acknowledge/delete it. A different caller is refused and the message
+        survives — closing the ack-spray deletion primitive.
+        """
+        store = InMemoryInboxStore()
+        store.store(StoredMessage(
+            message_id="own-1", sender_did="a", recipient_did="bob", payload="{}",
+        ))
+        # A non-recipient cannot delete Bob's message.
+        assert store.acknowledge("own-1", "mallory") is False
+        assert store.message_count == 1
+        assert store.fetch_pending("bob")[0].message_id == "own-1"
+        # The real recipient can.
+        assert store.acknowledge("own-1", "bob") is True
+        assert store.message_count == 0
+
     def test_cleanup_expired(self):
         store = InMemoryInboxStore(ttl=timedelta(seconds=0))
         msg = StoredMessage(message_id="exp-1", sender_did="a", recipient_did="b", payload="{}")
@@ -193,6 +210,113 @@ class TestRelayServer:
 
         assert server.stats["messages_routed"] == 1
 
+    def test_spoofed_from_is_dropped(self):
+        """Security hardening: the relay drops a message whose body ``from``
+        does not match the connect-time, DID-PoP-verified sender identity, so a
+        connected peer cannot emit messages attributed to a DID it does not
+        own. Proven by sending a mismatched-``from`` frame followed by a legit
+        one and asserting the recipient's first (and only) delivered frame is
+        the legit one.
+        """
+        server = RelayServer()
+        client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
+        victim_did = _did_for("victim")  # a DID Alice does NOT own
+
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+
+            with client.websocket_connect("/ws") as ws_alice:
+                ws_alice.send_json(_connect_frame("alice"))
+
+                # Spoof: Alice's authenticated connection emits a frame naming
+                # a `from` she does not own. Must be dropped by the relay.
+                ws_alice.send_json({
+                    "v": 1, "type": "message",
+                    "from": victim_did, "to": bob_did,
+                    "id": "spoof-001", "ciphertext": "forged",
+                })
+                # Legit follow-up from Alice's real identity.
+                ws_alice.send_json({
+                    "v": 1, "type": "message",
+                    "from": alice_did, "to": bob_did,
+                    "id": "legit-001", "ciphertext": "genuine",
+                })
+
+                # Bob's first delivered frame must be the legit one — the
+                # spoofed frame never arrives.
+                msg = ws_bob.receive_json()
+                assert msg["id"] == "legit-001"
+                assert msg["from"] == alice_did
+
+        assert server.stats["messages_routed"] == 1
+
+    def test_spoofed_knock_from_is_dropped(self):
+        """Security hardening: the same ``from``-binding applies to KNOCK
+        frames, which are routed through the same relay path as messages.
+        """
+        server = RelayServer()
+        client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
+        victim_did = _did_for("victim")
+
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+
+            with client.websocket_connect("/ws") as ws_alice:
+                ws_alice.send_json(_connect_frame("alice"))
+
+                # Spoofed KNOCK claiming to originate from the victim DID.
+                ws_alice.send_json({
+                    "v": 1, "type": "knock",
+                    "from": victim_did, "to": bob_did,
+                    "id": "knock-spoof", "intent": {"action": "delegate_task"},
+                })
+                # Legit KNOCK from Alice's real identity.
+                ws_alice.send_json({
+                    "v": 1, "type": "knock",
+                    "from": alice_did, "to": bob_did,
+                    "id": "knock-legit", "intent": {"action": "delegate_task"},
+                })
+
+                msg = ws_bob.receive_json()
+                assert msg["type"] == "knock"
+                assert msg["id"] == "knock-legit"
+                assert msg["from"] == alice_did
+
+    def test_missing_from_is_stamped_with_authenticated_identity(self):
+        """Hygiene: a frame that omits ``from`` is stamped with the connect-time,
+        DID-PoP-verified sender identity before it is forwarded/stored, so
+        downstream consumers always observe an authenticated ``from`` rather than
+        an absent one.
+        """
+        server = RelayServer()
+        client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
+
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+
+            with client.websocket_connect("/ws") as ws_alice:
+                ws_alice.send_json(_connect_frame("alice"))
+
+                # Alice sends a message with NO ``from`` field.
+                ws_alice.send_json({
+                    "v": 1, "type": "message",
+                    "to": bob_did,
+                    "id": "nofrom-001", "ciphertext": "genuine",
+                })
+
+                msg = ws_bob.receive_json()
+                assert msg["id"] == "nofrom-001"
+                # Relay stamped Alice's authenticated identity onto the frame.
+                assert msg["from"] == alice_did
+
+        assert server.stats["messages_routed"] == 1
+
     def test_message_stored_when_offline(self):
         """Message stored when recipient is offline."""
         server = RelayServer()
@@ -286,6 +410,94 @@ class TestRelayServer:
             assert msg["id"] == "ack-test"
             # Recipient explicitly acks — only then is it removed.
             ws.send_json({"v": 1, "type": "ack", "id": "ack-test"})
+
+        assert inbox.message_count == 0
+
+    def test_ack_from_non_recipient_is_ignored(self):
+        """Security hardening: an ``ack`` frame only deletes a message when it
+        comes from that message's recipient. A connected peer cannot delete
+        another agent's queued messages by spraying acks for their ids. Proven
+        by having a non-recipient ack a victim's queued message and asserting
+        it survives and is still delivered to the victim.
+        """
+        server = RelayServer()
+        inbox = server._inbox
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")          # the victim / real recipient
+        mallory_did = _did_for("mallory")  # an unrelated connected peer
+
+        # A message is queued for Bob while he is offline.
+        inbox.store(StoredMessage(
+            message_id="victim-msg-1",
+            sender_did=alice_did,
+            recipient_did=bob_did,
+            payload=json.dumps({
+                "v": 1, "type": "message",
+                "from": alice_did, "to": bob_did,
+                "id": "victim-msg-1", "ciphertext": "for-bob-only",
+            }),
+        ))
+        assert inbox.message_count == 1
+
+        client = TestClient(server.app)
+        # Mallory authenticates as her OWN DID and tries to delete Bob's msg.
+        with client.websocket_connect("/ws") as ws_mallory:
+            ws_mallory.send_json(_connect_frame("mallory"))
+            ws_mallory.send_json({"v": 1, "type": "ack", "id": "victim-msg-1"})
+
+        # The message survives Mallory's ack — she is not the recipient.
+        assert inbox.message_count == 1
+
+        # Bob connects and still receives his message, then legitimately acks.
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+            msg = ws_bob.receive_json()
+            assert msg["id"] == "victim-msg-1"
+            ws_bob.send_json({"v": 1, "type": "ack", "id": "victim-msg-1"})
+
+        assert inbox.message_count == 0
+
+    def test_ack_with_non_string_id_is_ignored(self):
+        """Robustness: an ``ack`` frame whose ``id`` is not a string (untrusted
+        JSON can carry any type) must be ignored rather than passed to the
+        inbox, where a list/object id would raise and tear down the connection.
+        A queued message survives such malformed acks, and a well-formed ack on
+        the same connection still works — proving the connection was not torn
+        down.
+        """
+        server = RelayServer()
+        inbox = server._inbox
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")  # recipient
+
+        inbox.store(StoredMessage(
+            message_id="robust-1",
+            sender_did=alice_did,
+            recipient_did=bob_did,
+            payload=json.dumps({
+                "v": 1, "type": "message",
+                "from": alice_did, "to": bob_did,
+                "id": "robust-1", "ciphertext": "for-bob",
+            }),
+        ))
+        assert inbox.message_count == 1
+
+        client = TestClient(server.app)
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+            # Bob receives his own pending message on connect.
+            msg = ws_bob.receive_json()
+            assert msg["id"] == "robust-1"
+            # Malformed ack ids that must NOT crash the handler or delete
+            # anything: a list and an object are non-hashable dict keys, an int
+            # is the wrong type, and an empty string is falsy.
+            ws_bob.send_json({"v": 1, "type": "ack", "id": ["robust-1"]})
+            ws_bob.send_json({"v": 1, "type": "ack", "id": {"k": "robust-1"}})
+            ws_bob.send_json({"v": 1, "type": "ack", "id": 123})
+            ws_bob.send_json({"v": 1, "type": "ack", "id": ""})
+            # A well-formed ack on the SAME connection still works — this only
+            # succeeds if the connection survived every malformed frame above.
+            ws_bob.send_json({"v": 1, "type": "ack", "id": "robust-1"})
 
         assert inbox.message_count == 0
 

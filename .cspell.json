@@ -87,7 +87,13 @@
     "SCITT",
     "Dayos",
     "Provedit",
-    "Nobulex"
+    "Nobulex",
+    "acks",
+    "nofrom",
+    "onclose",
+    "Microtask",
+    "headerless",
+    "realpeerrealpeerrealpeerreal"
   ],
   "ignorePaths": [
     "**/node_modules/**",
