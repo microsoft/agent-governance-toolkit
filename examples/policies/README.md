@@ -10,12 +10,6 @@ Each file in this directory is a self-contained policy configuration that demons
 2. **Copy** the file into your own project (or reference it by path) and edit the rules, thresholds, and matchers to fit your requirements.
 3. **Load** the policy into an agent workflow via the governance runtime. The [Quickstart](../quickstart/) shows runnable end-to-end examples that consume policies from this directory.
 
-Example:
-
-```bash
-scripts/check-policy.sh --action "web_search" --tokens 1500 --policy examples/policies/sql-safety.yaml
-```
-
 ## Policy Packs
 
 Multi-file policy libraries for specific regulatory or enterprise scenarios. Each pack has its own README with file listings, usage, and jurisdiction details.
