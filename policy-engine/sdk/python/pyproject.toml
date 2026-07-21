@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "agent-control-specification"
-version = "0.3.1b0"
+version = "0.3.1b1"
 description = "Thin Python SDK surface for the stateless Agent Control Specification runtime"
 readme = "README.md"
 requires-python = ">=3.11"

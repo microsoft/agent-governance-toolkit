@@ -1133,6 +1133,17 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        with:
+          # Use the daemon's built-in BuildKit (docker driver) instead of the
+          # default docker-container driver. The container driver boots a
+          # moby/buildkit image pulled from Docker Hub (registry-1.docker.io),
+          # which intermittently times out on GitHub-hosted runners:
+          #   Error response from daemon: Get "https://registry-1.docker.io/v2/":
+          #   context deadline exceeded
+          # This job only runs `docker compose up --build`, which does not need
+          # the container driver's advanced features (multi-platform, gha cache),
+          # so the docker driver avoids the Hub pull and the associated flake.
+          driver: docker
 
       - name: Run documented contributor flow
         run: |

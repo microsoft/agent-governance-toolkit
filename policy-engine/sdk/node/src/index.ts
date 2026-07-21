@@ -25,6 +25,41 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
+export interface ValidationDiagnostic {
+  component: string;
+  code: string;
+  message: string;
+  source: string;
+  path?: string;
+  line?: number;
+  column?: number;
+  snippet?: string;
+}
+
+export interface ArtifactValidationResult {
+  valid: boolean;
+  diagnostics: ValidationDiagnostic[];
+}
+
+export function validateArtifacts(
+  manifest: string,
+  rego: string | Record<string, string>,
+  opaPath?: string,
+): Promise<ArtifactValidationResult> {
+  const modules = typeof rego === "string" ? { "policy.rego": rego } : rego;
+  const resolvedOpaPath = configureOpaPath(opaPath);
+  const validate = (
+    native as unknown as {
+      validateArtifacts: (
+        manifestText: string,
+        regoModules: Record<string, string>,
+        configuredOpaPath?: string,
+      ) => Promise<ArtifactValidationResult>;
+    }
+  ).validateArtifacts;
+  return validate(manifest, modules, resolvedOpaPath ?? opaPath);
+}
+
 export const InterventionPoint = Object.freeze({
   AgentStartup: "agent_startup",
   Input: "input",

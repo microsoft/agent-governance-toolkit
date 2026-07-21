@@ -1,11 +1,14 @@
 use agent_control_specification_core::{
-    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, InterventionPointResult, JsonValue, Manifest, PerfTelemetry,
-    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
+    parse_manifest_yaml_value, validate_acs_artifacts as validate_artifacts_core,
+    validate_acs_manifest as validate_manifest_artifact_core, validate_manifest_overlay_yaml,
+    validate_manifest_yaml, AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode,
+    InterventionPoint, InterventionPointRequest, InterventionPointResult, JsonValue, Manifest,
+    PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -75,6 +78,47 @@ fn py_to_json_value(obj: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
 
 fn runtime_error(error: RuntimeError) -> PyErr {
     PyRuntimeError::new_err(error.to_string())
+}
+
+// cspell:ignore pyfunction
+#[pyfunction]
+fn parse_manifest(py: Python<'_>, manifest: &str) -> PyResult<Py<PyAny>> {
+    let value = parse_manifest_yaml_value(manifest).map_err(runtime_error)?;
+    json_value_to_py(py, &value)
+}
+
+#[pyfunction]
+fn validate_manifest(manifest: &str) -> PyResult<()> {
+    validate_manifest_yaml(manifest).map_err(runtime_error)
+}
+
+#[pyfunction]
+fn validate_manifest_overlay(manifest: &str) -> PyResult<()> {
+    validate_manifest_overlay_yaml(manifest).map_err(runtime_error)
+}
+
+#[pyfunction]
+#[pyo3(signature = (manifest, rego_modules, opa_path = None))]
+fn validate_artifacts(
+    py: Python<'_>,
+    manifest: &str,
+    rego_modules: BTreeMap<String, String>,
+    opa_path: Option<String>,
+) -> PyResult<Py<PyAny>> {
+    let opa_path = opa_path.map(std::path::PathBuf::from);
+    let result =
+        py.detach(|| validate_artifacts_core(manifest, &rego_modules, opa_path.as_deref()));
+    let value =
+        serde_json::to_value(result).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    json_value_to_py(py, &value)
+}
+
+#[pyfunction]
+fn validate_manifest_artifact(py: Python<'_>, manifest: &str) -> PyResult<Py<PyAny>> {
+    let result = validate_manifest_artifact_core(manifest);
+    let value =
+        serde_json::to_value(result).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    json_value_to_py(py, &value)
 }
 
 fn annotation_error(error: PyErr) -> RuntimeError {
@@ -388,5 +432,10 @@ fn url_fetch_limits(
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NativeRuntime>()?;
+    m.add_function(wrap_pyfunction!(parse_manifest, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_manifest, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_manifest_overlay, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_artifacts, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_manifest_artifact, m)?)?;
     Ok(())
 }

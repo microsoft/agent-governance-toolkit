@@ -5,6 +5,39 @@ entries appear first.
 
 ---
 
+## acs-generator is now a CLI-only package
+
+**Date:** TBD (next `acs-generator` release)
+
+**Affected:**
+
+- `acs-generator` top-level Python imports such as `GenerationEngine`,
+  `GenerationError`, `FakeLanguageModel`, `LanguageModel`, and
+  `OpenAICompatibleLanguageModel`
+
+**What changed:**
+
+`acs-generator` `0.4.0b0` no longer re-exports implementation classes from its
+package initializer. The package remains the `acs` and `acs-generate` command
+line artifact generator. Reusable artifact validation moved to
+`agent_control_specification.validation`.
+
+**Why:**
+
+The generator is an authoring CLI, not the owner of reusable runtime-facing
+APIs. Keeping validation in the Python SDK gives API consumers one supported
+surface and prevents the generator package from becoming a second SDK.
+
+**How to migrate:**
+
+- Replace `from acs_generator import validate_acs_artifacts` with
+  `from agent_control_specification.validation import validate_acs_artifacts`.
+- Invoke generation through `acs` or `acs-generate`. Code that imported
+  generator implementation classes must move to the CLI or maintain its own
+  integration with the internal modules.
+
+---
+
 ## MuteAgentValidator now runs capability validators consistently and honors strict_mode
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)

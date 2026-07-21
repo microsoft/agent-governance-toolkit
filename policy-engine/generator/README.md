@@ -37,7 +37,9 @@ File based `extends` is confined to the top level manifest root. Keep parent man
 
 ## Validation
 
-The init flow validates the manifest against `schema/manifest.schema.json` from the artifact kit or `spec/schema/manifest.schema.json` from a repository checkout, asks the Python SDK core loader to check semantic manifest constraints, rejects deprecated policy input keys, and uses OPA for Rego syntax and evaluation when `opa` is available. `--strict` makes missing OPA a failure. The generator wheel also carries the manifest schema and the wire request/result schemas under `acs_generator.schema` for artifact-only schema checks.
+The init flow delegates canonical manifest validation to `agent_control_specification.validation`, rejects deprecated generated-policy input keys, evaluates generated Rego with synthetic policy inputs, and validates generated regex patterns against OPA's RE2 implementation. `--strict` makes missing OPA a failure. The SDK wheel carries the manifest schemas. The generator wheel carries the wire request and result schemas under `acs_generator.schema.wire`.
+
+The generator is a CLI artifact-authoring utility. Services that validate existing manifest and Rego strings should use the Python SDK validation API instead.
 
 Artifact-only kits include a local Node optional OPA package. Install or extract `agent-control-specification-opa-<platform>-<version>.tgz`, then prepend its `bin` directory to `PATH` before running `acs-generate init --strict`.
 

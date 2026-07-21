@@ -8,10 +8,10 @@ from importlib import resources
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
 
-from acs_generator import FakeLanguageModel, GenerationEngine, GenerationError
+from acs_generator.engine import GenerationEngine, GenerationError
 from acs_generator.llm import OpenAICompatibleLanguageModel
+from acs_generator.llm import FakeLanguageModel
 from acs_generator.validation import validate_artifacts
 
 BASE_OUT = Path("generator/.test-output")
@@ -146,8 +146,7 @@ def test_generator_package_includes_wire_schemas() -> None:
 
 def test_packaged_schemas_match_canonical_spec_schemas() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    pairs = [("spec/schema/manifest.schema.json", "generator/acs_generator/schema/manifest.schema.json")]
-    pairs.extend(
+    pairs = [
         (
             f"spec/schema/wire/{name}",
             f"generator/acs_generator/schema/wire/{name}",
@@ -160,77 +159,10 @@ def test_packaged_schemas_match_canonical_spec_schemas() -> None:
             "snapshot.schema.json",
             "verdict.schema.json",
         )
-    )
+    ]
 
     for canonical, packaged in pairs:
         assert (repo_root / packaged).read_bytes() == (repo_root / canonical).read_bytes(), packaged
-
-
-def test_manifest_schema_matches_extends_composition_contract() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
-    with (repo_root / "spec/schema/manifest.schema.json").open("r", encoding="utf-8") as handle:
-        schema = json.load(handle)
-
-    validator = Draft202012Validator(schema)
-    extends_only = {
-        "agent_control_specification_version": "0.3.1-beta",
-        "metadata": {"name": "composition root"},
-        "extends": ["layers/base.yaml", {"url": "https://example.test/remote.yaml", "sha256": "a" * 64}],
-    }
-    validator.validate(extends_only)
-
-    for invalid in (
-        {"agent_control_specification_version": "0.3.1-beta"},
-        {"agent_control_specification_version": "0.3.1-beta", "extends": ["http://example.test/base.yaml"]},
-        {
-            "agent_control_specification_version": "0.3.1-beta",
-            "extends": [{"url": "http://example.test/base.yaml"}],
-        },
-        {
-            "agent_control_specification_version": "0.3.1-beta",
-            "extends": [
-                {
-                    "url": "https://example.test/base.yaml",
-                    "integrity": "sha256-abc",
-                    "sha256": "a" * 64,
-                }
-            ],
-        },
-    ):
-        with pytest.raises(Exception):
-            validator.validate(invalid)
-
-    annotation_only_overlay = {
-        "agent_control_specification_version": "0.3.1-beta",
-        "extends": ["base/manifest.yaml"],
-        "annotators": {"overlay": {"type": "classifier"}},
-        "intervention_points": {
-            "input": {
-                "annotations": {
-                    "overlay": {"from": "$policy_target.text"},
-                },
-            },
-        },
-    }
-    validator.validate(annotation_only_overlay)
-
-    annotation_alias_overlay = {
-        "agent_control_specification_version": "0.3.1-beta",
-        "extends": ["base/manifest.yaml"],
-        "annotators": {"overlay": {"type": "classifier"}},
-        "intervention_points": {
-            "input": {
-                "annotations": {
-                    "review_signal": {
-                        "from": "$policy_target.text",
-                        "annotator": "overlay",
-                    },
-                },
-            },
-        },
-    }
-    with pytest.raises(Exception):
-        validator.validate(annotation_alias_overlay)
 
 
 def test_empty_annotation_from_defaults_to_policy_target() -> None:
@@ -324,7 +256,8 @@ def test_package_imports_without_credentials_or_network(monkeypatch: pytest.Monk
     monkeypatch.delenv("ACS_GENERATOR_API_KEY", raising=False)
     import acs_generator
 
-    assert acs_generator.FakeLanguageModel
+    assert acs_generator.__name__ == "acs_generator"
+    assert not hasattr(acs_generator, "GenerationEngine")
 
 
 def test_init_cli_generates_guided_artifact_shape(capsys: pytest.CaptureFixture[str]) -> None:

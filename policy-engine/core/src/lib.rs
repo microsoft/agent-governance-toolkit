@@ -1,6 +1,8 @@
 pub type JsonValue = serde_json::Value;
 
 pub mod annotation;
+#[cfg(feature = "opa")]
+pub mod artifact_validation;
 pub mod cedar;
 mod constants;
 pub use constants::reserved_reason;
@@ -36,6 +38,10 @@ pub mod verdict;
 pub use annotation::{
     AnnotationConfig, AnnotatorConfig, AnnotatorDispatcher, AnnotatorInvocation, AnnotatorType,
 };
+#[cfg(feature = "opa")]
+pub use artifact_validation::{
+    validate_acs_artifacts, validate_acs_manifest, ArtifactValidationResult, ValidationDiagnostic,
+};
 #[cfg(feature = "cedar")]
 pub use cedar::CedarBuiltinDispatcher;
 pub use cedar::{
@@ -50,6 +56,7 @@ pub use error::RuntimeError;
 pub use intervention_point::{EnforcementMode, InterventionPoint};
 pub use limits::Limits;
 pub use manifest::{
+    parse_manifest_yaml_value, validate_manifest_overlay_yaml, validate_manifest_yaml,
     ApprovalOnTimeout, ApprovalResolverConfig, ApprovalSection, InterventionPointConfig, Manifest,
     ToolConfig,
 };
