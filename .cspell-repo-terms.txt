@@ -939,3 +939,37 @@ spanid
 parentspanid
 agtsignature
 agtsignaturealg
+
+# --- West/North Africa regulatory policy terms ---
+# British spellings used in GDPR-modelled African data protection laws
+minimisation
+Minimisation
+pseudonymisation
+Pseudonymisation
+# Ghana
+Ghanaian
+NIA
+DPC
+# Rwanda
+Rwandan
+Kigali
+Gazetted
+gazetted
+NCSA
+NIDA
+RISA
+# Egypt
+Governorate
+governorate
+Cybercrimes
+cybercrimes
+PDPC
+PDPL
+MCIT
+# Mauritius (no new abbreviations beyond PDPC)
+# Shared currency / country codes used in messages
+GHA
+RWF
+EGP
+MUR
+YYMMDD

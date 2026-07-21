@@ -1,0 +1,228 @@
+# agt-policies-africa
+# Egypt Personal Data Protection — Governance Policy
+#
+# Regulatory reference: Personal Data Protection Law No. 151 of 2020
+#                       (Published: Official Gazette No. 29 bis, 15 July 2020)
+#                       Executive Regulations: Ministerial Decree No. 816/2025
+# Enforcing authority: Personal Data Protection Centre (PDPC)
+#                      Under the Ministry of Communications & Information Technology (MCIT)
+#                      https://pdp.mcit.gov.eg
+#
+# Key obligations covered:
+#   Art. 1    — Sensitive data definition: health, genetic, biometric, financial,
+#               religious beliefs, political views, criminal records, children's data
+#               (Note: financial data and children's data as sensitive = unique in Africa)
+#   Art. 2    — Data subject rights: access, consent withdrawal, correction,
+#               processing limitation, breach notification, objection
+#   Art. 3    — Conditions for processing children's data
+#   Art. 4    — Sensitive data processing restrictions (explicit consent / Art. 5 exceptions)
+#   Art. 5    — Exceptions: security/defence, legal proceedings, medical necessity
+#   Art. 6    — Lawful basis: consent, contract, legal obligation, legitimate interest
+#   Art. 7    — Breach notification: 72 hours to PDPC; 3 days to data subjects
+#   Art. 8    — Data Protection Officer (DPO) mandatory for all controllers
+#   Arts. 14-15 — Cross-border transfer restrictions (equivalent protection required)
+#   Art. 19   — PDPC establishment as public economic authority under MCIT
+#   Art. 26   — Licensing/registration with PDPC required before processing
+#   Anti-Cybercrimes Law No. 175/2018 Art. 25 — Security obligations (technical +
+#               organisational measures); 6 months–1 year + EGP 50,000–100,000 penalty
+#
+# Egypt National ID: 14-digit format
+#   [2|3][YYMMDD][Governorate code 2 digits][Sequential 4 digits][Check digit]
+#   '2' prefix = born 1900s; '3' prefix = born 2000s
+#   Exposure constitutes a breach under Art. 7 (72h PDPC notification)
+#
+# Penalties: Up to EGP 5,000,000 fine + imprisonment for violations
+#            DPO failure, unlicensed processing: EGP 500,000–2,000,000
+#
+# ⚠️  Egypt's PDPC is relatively new (est. 2020). Adequacy list is not yet published.
+#     Cross-border transfer rules apply to all transfers outside Egypt pending adequacy
+#     determinations under Arts. 14-15. Monitor PDPC for regulatory guidance updates.
+# ⚠️  This is a community-maintained governance starter policy.
+#     Not a certified legal compliance instrument.
+
+version: "1.0"
+name: egypt-pdpl
+description: >
+  Egypt personal data protection governance policy for AI agents processing Egyptian
+  personal data. Based on Personal Data Protection Law No. 151/2020 enforced by
+  the Personal Data Protection Centre (PDPC) under MCIT. Covers sensitive data
+  controls (Art. 1/4 — unique: financial data and children's data are sensitive
+  categories), cross-border transfer restrictions (Arts. 14-15), 72-hour breach
+  notification to PDPC (Art. 7), mandatory DPO (Art. 8), licensing requirement
+  (Art. 26), and Egypt National ID (14-digit format) protection.
+
+rules:
+
+  # =========================================================================
+  # Breach Notification — Art. 7
+  # 72 hours to PDPC; 3 working days to affected data subjects.
+  # AI agents must not suppress, delay, or advise against breach reporting.
+  # =========================================================================
+
+  - name: egypt-breach-suppression
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+(report|notification))"
+    action: deny
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 7: Agent cannot suppress breach notifications — PDPC must be notified within 72 hours and data subjects within 3 working days"
+
+  # =========================================================================
+  # Sensitive Personal Data — Art. 1 + Art. 4
+  # Egypt's sensitive data definition is broader than most African DPAs:
+  # health/mental health, genetic, biometric, FINANCIAL, religious beliefs,
+  # political views, criminal records, AND children's data.
+  # Financial data and children's data as sensitive categories are unique in Africa.
+  # Processing requires explicit consent or Art. 5 exceptions (security/legal/medical).
+  # =========================================================================
+
+  - name: egypt-health-data-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription|clinical\\s+data|psychological\\s+(assessment|report|status))"
+    action: block
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 1/4: Health/medical/genetic sensitive data detected — requires explicit consent or Art. 5 exception (PDPC)"
+
+  - name: egypt-biometric-data-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(fingerprint|facial\\s+recognition|retina|iris\\s+scan|voice\\s+print|biometric\\s+(template|hash|data))"
+    action: deny
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 1/4: Biometric sensitive data detected — must not be transmitted; triggers 72h breach notification to PDPC (Art. 7)"
+
+  - name: egypt-financial-sensitive-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(account\\s+(balance|statement|number)|credit\\s+(score|report|history)|loan\\s+(default|history|status)|salary\\s+(slip|detail)|tax\\s+(return|record)|financial\\s+(statement|profile|data))"
+    action: block
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 1/4: Financial data is sensitive under Egyptian law — requires explicit consent or documented lawful basis (unique provision in Africa)"
+
+  - name: egypt-special-category-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(religious\\s+belief|political\\s+(view|opinion)|criminal\\s+(record|conviction|offence)|ethnic\\s+origin|race|sexual\\s+(orientation|life))"
+    action: block
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 1/4: Special category personal data detected — requires explicit consent or Art. 5 exception (PDPC)"
+
+  - name: egypt-children-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(child(ren)?'?s?\\s+(data|record|profile|information)|minor\\s+(data|record|profile)|under(\\s+|-)(18|sixteen|eighteen)|student\\s+(record|data|profile)|guardian\\s+consent)"
+    action: block
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 1/3: Children's data is classified as sensitive — requires parental/guardian consent and explicit lawful basis (PDPC)"
+
+  # =========================================================================
+  # Egypt National ID — 14-digit format
+  # Format: [2|3][YYMMDD][Governorate 2 digits][Sequential 4 digits][Check digit]
+  # '2' = born 1900s; '3' = born 2000s
+  # Example: 29801011234567 (male born 1998-01-01 in Cairo)
+  # Exposure triggers Art. 7 breach notification obligations.
+  # =========================================================================
+
+  - name: egypt-national-id-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(egypt(ian)?\\s+(national\\s+)?(id|identity|card)|national\\s+id\\s+(no|number|#)|رقم\\s+قومي)[\\s:=]{0,5}[23][0-9]{13}"
+    action: deny
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 1/7: Egyptian National ID (14-digit) detected in agent output — blocked; triggers 72h PDPC breach notification requirement"
+
+  # =========================================================================
+  # Cross-Border Data Transfers — Arts. 14-15
+  # Art. 14: Transfer prohibited unless destination country has equivalent protection
+  # Art. 15: Exceptions — explicit consent, vital interest, legal necessity, contract
+  # PDPC adequacy list pending — all transfers outside Egypt require PDPC approval
+  # or explicit documented consent under Art. 15 derogations.
+  # =========================================================================
+
+  - name: egypt-cross-border-language-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+egypt|cross.?border|international\\s+transfer|offshore|foreign\\s+server)"
+    action: block
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 14: Cross-border data transfer language detected — equivalent protection in destination country or PDPC approval required"
+
+  - name: egypt-cross-border-action
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: block
+    priority: 2
+    message: "Egypt PDPL No. 151/2020 Arts. 14-15: Cross-border data transfer requires PDPC approval or documented Art. 15 derogation (consent, vital interest, legal necessity)"
+
+  # =========================================================================
+  # Data Minimisation / Bulk Export
+  # =========================================================================
+
+  - name: egypt-bulk-data-export
+    condition:
+      field: action
+      operator: matches
+      value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
+    action: block
+    priority: 2
+    message: "Egypt PDPL No. 151/2020 Art. 6: Bulk personal data export requires documented lawful basis and PDPC accountability"
+
+  - name: egypt-large-record-export
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: block
+    priority: 2
+    message: "Egypt PDPL No. 151/2020 Arts. 14-15: Large-volume personal data transfer requires PDPC approval or documented derogation"
+
+  # =========================================================================
+  # Licensing — Art. 26
+  # All data controllers must be licensed with PDPC before processing.
+  # Agents that facilitate or advise unlicensed processing must escalate.
+  # =========================================================================
+
+  - name: egypt-unlicensed-processing
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(process(ing)?\\s+(without|skip|bypass|ignore).{0,30}(licen(s|c)e|PDPC|permit|registr)|no\\s+need\\s+(to\\s+)?(register|licen(s|c)e|notify\\s+PDPC))"
+    action: deny
+    priority: 1
+    message: "Egypt PDPL No. 151/2020 Art. 26: Agent cannot advise bypassing PDPC licensing — all controllers must be licensed before processing personal data (up to EGP 2,000,000 penalty)"
+
+  # =========================================================================
+  # Data Subject Rights — Art. 2
+  # Rights: access, consent withdrawal, correction, processing limitation,
+  #         breach notification, objection.
+  # All personal data access and modification by agent must be logged.
+  # =========================================================================
+
+  - name: egypt-pii-access-audit
+    condition:
+      field: action
+      operator: matches
+      value: "read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii"
+    action: audit
+    priority: 3
+    message: "Egypt PDPL No. 151/2020 Art. 2: Personal data access logged — data subject access rights and PDPC accountability requirement"
+
+  - name: egypt-pii-modification-audit
+    condition:
+      field: action
+      operator: matches
+      value: "update_user|modify_profile|patch_account|edit_customer|change_personal|delete_user|erase_data"
+    action: audit
+    priority: 3
+    message: "Egypt PDPL No. 151/2020 Art. 2: Personal data modification/erasure logged — data subject rights (correction, deletion) and PDPC accountability requirement"
