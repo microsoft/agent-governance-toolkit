@@ -262,3 +262,65 @@ test("evaluatePreToolUse denies destructive rm and reviews build-artifact cleanu
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("recursive-delete hardening matches PowerShell and shell-quoted invocations (#3251)", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-codex-rm-matrix-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of [
+    "Remove-Item -Recurse -Force /tmp/build",   // PowerShell recursive delete
+    "ri -r -fo /tmp/build",                      // PowerShell ri alias, clustered flags
+    "echo `rm -rf /tmp/x`",                      // backtick invocation
+    "{ rm -rf /tmp/x; }",                        // brace group
+    "(rm -rf /tmp/x)",                           // subshell
+  ]) {
+    const result = await evaluatePreToolUse(state, {
+      tool_name: "Bash",
+      tool_input: { command },
+      session_id: "rm-matrix",
+    });
+    assert.equal(
+      result.hookSpecificOutput?.permissionDecision,
+      "deny",
+      `expected deny for: ${command}`,
+    );
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("secret-read hardening covers source/redirect reads and allows .env templates (#3295)", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-codex-secret-matrix-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of [
+    "source .env",       // sourcing a secret file
+    "cat < id_rsa",      // redirect-read of a private key
+    "read k < .env",     // redirect-read of .env
+  ]) {
+    const result = await evaluatePreToolUse(state, {
+      tool_name: "Bash",
+      tool_input: { command },
+      session_id: "secret-matrix",
+    });
+    assert.equal(
+      result.hookSpecificOutput?.permissionDecision,
+      "deny",
+      `expected deny for: ${command}`,
+    );
+  }
+
+  // Copying a .env *template* must not be treated as a secret read.
+  const template = await evaluatePreToolUse(state, {
+    tool_name: "Bash",
+    tool_input: { command: "cp .env.example .env" },
+    session_id: "secret-matrix",
+  });
+  assert.notEqual(
+    template.hookSpecificOutput?.permissionDecision,
+    "deny",
+    "copying a .env template should not be denied",
+  );
+
+  await rm(root, { recursive: true, force: true });
+});
