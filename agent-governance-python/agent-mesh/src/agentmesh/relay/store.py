@@ -44,8 +44,16 @@ class InboxStore(Protocol):
         """Fetch all pending messages for a recipient, oldest first."""
         ...
 
-    def acknowledge(self, message_id: str) -> bool:
-        """Delete a message by ID. Returns True if existed."""
+    def acknowledge(
+        self, message_id: str, recipient_did: str | None = None
+    ) -> bool:
+        """Delete a message by ID.
+
+        When ``recipient_did`` is supplied, the message is deleted only if it
+        is addressed to that recipient (spec 12.3: only the *recipient* may
+        acknowledge). Returns True if a message was deleted; False if the id is
+        unknown or the caller is not the message's recipient.
+        """
         ...
 
     def cleanup_expired(self) -> int:
@@ -83,11 +91,20 @@ class InMemoryInboxStore:
                     result.append(msg)
             return sorted(result, key=lambda m: m.stored_at)
 
-    def acknowledge(self, message_id: str) -> bool:
+    def acknowledge(
+        self, message_id: str, recipient_did: str | None = None
+    ) -> bool:
         with self._lock:
-            msg = self._messages.pop(message_id, None)
+            msg = self._messages.get(message_id)
             if msg is None:
                 return False
+            # Access control (spec 12.3): only the message's own recipient may
+            # acknowledge/delete it. When a recipient DID is supplied and does
+            # not match, refuse — this stops one agent's ack from deleting a
+            # message queued for a different agent.
+            if recipient_did is not None and msg.recipient_did != recipient_did:
+                return False
+            self._messages.pop(message_id, None)
             ids = self._by_recipient.get(msg.recipient_did, [])
             if message_id in ids:
                 ids.remove(message_id)

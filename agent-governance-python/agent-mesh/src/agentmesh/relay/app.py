@@ -27,8 +27,11 @@ logger = logging.getLogger(__name__)
 _RELAY_TOKEN: str | None = os.environ.get("AGENTMESH_RELAY_TOKEN")
 if not _RELAY_TOKEN:
     logger.warning(
-        "AGENTMESH_RELAY_TOKEN is not set — the relay will accept "
-        "unauthenticated connections.  Set this env var in production."
+        "AGENTMESH_RELAY_TOKEN is not set — the relay will not require a "
+        "shared-secret token. DID proof-of-possession is still enforced by "
+        "default (disable only via AGENTMESH_RELAY_ALLOW_UNAUTHED_DID); set "
+        "AGENTMESH_RELAY_TOKEN or Entra verification to additionally restrict "
+        "which authenticated identities may connect."
     )
 
 # Phase 6.c — optional Entra-signed JWT verification for the connect
@@ -453,7 +456,12 @@ class RelayServer:
         elif frame_type == "ack":
             msg_id = frame.get("id")
             if msg_id:
-                self._inbox.acknowledge(msg_id)
+                # Access control (spec 12.3): only the message's recipient may
+                # acknowledge/delete it. Pass this connection's connect-time,
+                # DID-PoP-verified identity so the store refuses acks for
+                # messages addressed to a different agent — preventing an ack
+                # spray from deleting another agent's queued messages.
+                self._inbox.acknowledge(msg_id, sender_did)
 
         elif frame_type == "heartbeat":
             conn = self._connections.get(sender_did)

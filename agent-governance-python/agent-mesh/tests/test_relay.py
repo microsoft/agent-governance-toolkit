@@ -95,6 +95,23 @@ class TestInboxStore:
         assert store.fetch_pending("b") == []
         assert store.acknowledge("ack-1") is False  # already gone
 
+    def test_acknowledge_rejects_non_recipient(self):
+        """Access control (spec 12.3): only the message's recipient may
+        acknowledge/delete it. A different caller is refused and the message
+        survives — closing the ack-spray deletion primitive.
+        """
+        store = InMemoryInboxStore()
+        store.store(StoredMessage(
+            message_id="own-1", sender_did="a", recipient_did="bob", payload="{}",
+        ))
+        # A non-recipient cannot delete Bob's message.
+        assert store.acknowledge("own-1", "mallory") is False
+        assert store.message_count == 1
+        assert store.fetch_pending("bob")[0].message_id == "own-1"
+        # The real recipient can.
+        assert store.acknowledge("own-1", "bob") is True
+        assert store.message_count == 0
+
     def test_cleanup_expired(self):
         store = InMemoryInboxStore(ttl=timedelta(seconds=0))
         msg = StoredMessage(message_id="exp-1", sender_did="a", recipient_did="b", payload="{}")
@@ -362,6 +379,50 @@ class TestRelayServer:
             assert msg["id"] == "ack-test"
             # Recipient explicitly acks — only then is it removed.
             ws.send_json({"v": 1, "type": "ack", "id": "ack-test"})
+
+        assert inbox.message_count == 0
+
+    def test_ack_from_non_recipient_is_ignored(self):
+        """Security hardening: an ``ack`` frame only deletes a message when it
+        comes from that message's recipient. A connected peer cannot delete
+        another agent's queued messages by spraying acks for their ids. Proven
+        by having a non-recipient ack a victim's queued message and asserting
+        it survives and is still delivered to the victim.
+        """
+        server = RelayServer()
+        inbox = server._inbox
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")          # the victim / real recipient
+        mallory_did = _did_for("mallory")  # an unrelated connected peer
+
+        # A message is queued for Bob while he is offline.
+        inbox.store(StoredMessage(
+            message_id="victim-msg-1",
+            sender_did=alice_did,
+            recipient_did=bob_did,
+            payload=json.dumps({
+                "v": 1, "type": "message",
+                "from": alice_did, "to": bob_did,
+                "id": "victim-msg-1", "ciphertext": "for-bob-only",
+            }),
+        ))
+        assert inbox.message_count == 1
+
+        client = TestClient(server.app)
+        # Mallory authenticates as her OWN DID and tries to delete Bob's msg.
+        with client.websocket_connect("/ws") as ws_mallory:
+            ws_mallory.send_json(_connect_frame("mallory"))
+            ws_mallory.send_json({"v": 1, "type": "ack", "id": "victim-msg-1"})
+
+        # The message survives Mallory's ack — she is not the recipient.
+        assert inbox.message_count == 1
+
+        # Bob connects and still receives his message, then legitimately acks.
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+            msg = ws_bob.receive_json()
+            assert msg["id"] == "victim-msg-1"
+            ws_bob.send_json({"v": 1, "type": "ack", "id": "victim-msg-1"})
 
         assert inbox.message_count == 0
 
