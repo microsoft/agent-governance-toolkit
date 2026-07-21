@@ -350,3 +350,61 @@ class TestQuorumResolution:
         assert queue.deny(req.request_id, approver="   ") is False
         retrieved = queue.get_decision(req.request_id)
         assert len(retrieved.votes) == 0
+
+
+class TestQuorumWaitsFullTimeout:
+    """Regression coverage for #3186.
+
+    ``resolve()`` woke as soon as the *first* quorum vote's event fired
+    and ran the quorum check exactly once, falling through to
+    ``default_action`` instead of waiting out the rest of
+    ``timeout_seconds`` for additional votes. (Line numbers in the
+    original issue report -- escalation.py:176, :424-431 -- refer to
+    the file as it stood before this fix; see ``resolve()`` and the new
+    ``wait_for_quorum()`` below for the current locations.)
+
+    ``TestQuorumResolution`` above (landed with #3126's vote-tracking fix)
+    doesn't exercise this: its quorum-met case uses a single-vote quorum
+    (``required_approvals=1``) and its timeout case never sends a second
+    vote at all, so neither ever exercises a second, later vote arriving
+    within the timeout window. This class adds that missing case.
+    """
+
+    def test_resolve_waits_for_a_late_second_vote_instead_of_defaulting_early(self):
+        queue = InMemoryApprovalQueue()
+        handler = EscalationHandler(
+            backend=queue,
+            timeout_seconds=2,
+            default_action=DefaultTimeoutAction.DENY,
+            quorum=QuorumConfig(required_approvals=2, required_denials=1),
+        )
+        request = handler.escalate("agent-1", "deploy", "needs review")
+
+        def cast_votes():
+            time.sleep(0.1)
+            queue.approve(request.request_id, approver="reviewer-1")
+            time.sleep(0.3)
+            queue.approve(request.request_id, approver="reviewer-2")
+
+        t = threading.Thread(target=cast_votes)
+        t.start()
+        started = time.monotonic()
+        decision = handler.resolve(request.request_id)
+        elapsed = time.monotonic() - started
+        t.join()
+        # Bug #3186: resolve() woke on reviewer-1's vote at t=0.1s, found
+        # quorum (2) unmet with only 1 vote, and fell straight through to
+        # default_action (DENY) instead of waiting out the remaining
+        # ~1.9s of its 2s timeout for reviewer-2's vote at t=0.4s.
+        assert decision == EscalationDecision.ALLOW
+        # A decision-only assertion isn't enough: approve()/deny() only
+        # fire the wake-up event on the vote that first sets req.decision.
+        # A resolve()/wait_for_quorum() fix with no matching fix there
+        # would still land on ALLOW, but only by blocking for the entire
+        # timeout_seconds and re-checking votes at the deadline, exactly
+        # the unresponsiveness #3186 exists to eliminate. Asserting on
+        # elapsed time is what actually catches that regression.
+        assert elapsed < 1.0, (
+            f"resolved in {elapsed:.3f}s -- expected a prompt wake-up near "
+            f"reviewer-2's vote at ~0.4s, not a wait out to the 2s timeout"
+        )
