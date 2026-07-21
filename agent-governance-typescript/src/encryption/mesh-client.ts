@@ -815,6 +815,19 @@ export class MeshClient {
       isPlaintext = true;
     } else {
       // Encrypted
+      const header = frame.header as Record<string, unknown> | undefined;
+      if (!header || typeof header.dh !== "string") {
+        // Security hardening: an encrypted `message` frame must carry a ratchet
+        // header. Validate this BEFORE the pre-KNOCK buffering path below so a
+        // malformed / headerless frame — which can never be decrypted — is
+        // dropped immediately, instead of occupying pre-KNOCK buffer capacity
+        // until TTL eviction and only failing closed when the buffer is drained.
+        for (const h of this.errorHandlers) {
+          try { h("decrypt", from, "encrypted message missing ratchet header — dropping"); } catch { /* swallow */ }
+        }
+        return;
+      }
+
       const session = this.sessions.get(from);
       if (!session?.channel) {
         // Gap-G4 (vendored agentmesh-sdk patch #16): pre-KNOCK message buffer.
@@ -833,17 +846,6 @@ export class MeshClient {
         return;
       }
 
-      const header = frame.header as Record<string, unknown> | undefined;
-      if (!header || typeof header.dh !== "string") {
-        // Security hardening: an encrypted `message` frame must carry a ratchet
-        // header. A frame that reaches this branch without one is malformed for
-        // an encrypted peer and is dropped cleanly instead of throwing out of
-        // the receive path.
-        for (const h of this.errorHandlers) {
-          try { h("decrypt", from, "encrypted message missing ratchet header — dropping"); } catch { /* swallow */ }
-        }
-        return;
-      }
       const encrypted: EncryptedMessage = {
         header: {
           dhPublicKey: this.base64ToUint8(header.dh as string),

@@ -87,6 +87,7 @@ interface MeshClientInternals {
     }
   >;
   knockAccepted: Set<string>;
+  preKnockBuffer: Map<string, unknown[]>;
 }
 
 function internals(client: MeshClient): MeshClientInternals {
@@ -250,5 +251,42 @@ describe("MeshClient plaintext-downgrade / sender-spoof hardening", () => {
     await tick();
 
     expect(received).toHaveLength(0);
+  });
+
+  // Copilot review follow-up (mesh-client.ts): a malformed / headerless
+  // "encrypted" frame that arrives before a session/KNOCK exists must be
+  // dropped at the ratchet-header check, NOT parked in the pre-KNOCK buffer.
+  // Otherwise an unauthenticated sender could consume per-peer buffer capacity
+  // (preKnockBufferSize) with frames it can never decrypt until TTL eviction,
+  // and the frame would only fail closed when the buffer is later drained.
+  test("headerless encrypted frame is dropped before pre-KNOCK buffering, not buffered", async () => {
+    // preKnockBufferSize > 0 => buffering is enabled; the fix must still refuse
+    // to buffer a frame that carries no ratchet header.
+    const client = makeClient({ preKnockBufferSize: 5 });
+    const errors: Array<{ kind: string; from: string; detail: string }> = [];
+    client.onError((kind, from, detail) => errors.push({ kind, from, detail }));
+
+    await client.connect();
+
+    const peer = "did:mesh:cccccccccccccccccccccccccccccccc";
+    // Encrypted (no plaintext flag), no session, no KNOCK — and NO `header`.
+    const frame: Record<string, unknown> = {
+      v: 1,
+      type: "message",
+      from: peer,
+      to: SELF_DID,
+      id: "headerless-1",
+      ts: new Date().toISOString(),
+      ciphertext: btoa(JSON.stringify({ x: 1 })),
+    };
+    lastMockWs!.simulateFrame(frame);
+    await tick();
+
+    // Dropped immediately with the ratchet-header error...
+    expect(
+      errors.some((e) => e.kind === "decrypt" && e.from === peer && /ratchet header/.test(e.detail)),
+    ).toBe(true);
+    // ...and NOT parked in the pre-KNOCK buffer.
+    expect(internals(client).preKnockBuffer.has(peer)).toBe(false);
   });
 });
