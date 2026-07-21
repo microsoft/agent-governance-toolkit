@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "acs-generator"
-version = "0.3.1b0"
+version = "0.4.0b0"
 description = "Agentic policy artifact generator for Agent Control Specification"
 requires-python = ">=3.11"
 dependencies = [
-  "jsonschema>=4.0",
+  "agent-control-specification>=0.3.1b1,<0.4.0",
   "pyyaml>=6.0",
 ]
 
@@ -23,7 +23,6 @@ acs = "acs_generator.cli:main"
 packages = ["acs_generator", "acs_generator.schema", "acs_generator.schema.wire"]
 
 [tool.setuptools.package-data]
-"acs_generator.schema" = ["*.json"]
 "acs_generator.schema.wire" = ["*.schema.json"]
 
 [tool.pytest.ini_options]

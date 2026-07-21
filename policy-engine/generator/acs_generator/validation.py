@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from importlib import resources
 import shutil
 import subprocess
 import tempfile
@@ -10,8 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import jsonschema
 import yaml
+from agent_control_specification import validate_acs_manifest
 
 from .vocabulary import (
     DECISIONS,
@@ -21,11 +20,7 @@ from .vocabulary import (
 )
 
 OPA_TIMEOUT_SECONDS = 10
-SCHEMA_PACKAGE = "acs_generator.schema"
-SCHEMA_NAME = "manifest.schema.json"
 VALIDATION_DIR_NAME = ".acs_generator_validation"
-# Core transform-path grammar (see rego_builder._TRANSFORM_PATH_RE): dotted object
-# keys and numeric list indices only; the core rejects string bracket keys.
 _TRANSFORM_PATH_RE = re.compile(r"^\$policy_target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$")
 
 
@@ -59,7 +54,7 @@ def validate_artifacts(
     regex_patterns: tuple[str, ...] = (),
 ) -> ValidationResult:
     warnings: list[str] = []
-    _validate_schema(manifest)
+    _validate_schema(manifest_yaml)
     _validate_core(manifest_yaml)
     _reject_deprecated_refs(rego)
     _reject_legacy_effects(rego)
@@ -527,14 +522,14 @@ def _validate_regex_patterns(opa: str, rego: str, regex_patterns: tuple[str, ...
             )
 
 
-def _validate_schema(manifest: dict[str, Any]) -> None:
-    with resources.files(SCHEMA_PACKAGE).joinpath(SCHEMA_NAME).open("r", encoding="utf-8") as handle:
-        schema = json.load(handle)
-    try:
-        jsonschema.validate(manifest, schema)
-    except jsonschema.ValidationError as exc:
-        path = ".".join(str(part) for part in exc.absolute_path) or "<root>"
-        raise ValidationError(f"manifest schema validation failed at {path}: {exc.message}") from exc
+def _validate_schema(manifest_yaml: str) -> None:
+    result = validate_acs_manifest(manifest_yaml)
+    if not result.valid:
+        diagnostic = result.diagnostics[0]
+        raise ValidationError(
+            f"manifest schema validation failed at {diagnostic.path or '<root>'}: "
+            f"{diagnostic.message}"
+        )
 
 
 def _validate_core(manifest_yaml: str) -> None:

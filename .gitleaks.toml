@@ -43,6 +43,9 @@ useDefault = true
 
     # AgentMesh integration test suites (fake tokens, JWTs in test data)
     '''agent-governance-python/agentmesh-integrations/.*/tests/.*''',
+
+    # Python governance E2E suite (fake PII/secrets to exercise redaction)
+    '''tests/e2e_python/.*''',
   ]
   regexes = [
     '''ghp_secret123''',

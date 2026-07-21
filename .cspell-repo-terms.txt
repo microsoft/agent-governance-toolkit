@@ -107,6 +107,7 @@ contentsource
 contenttype
 contextlib
 contoso
+Convs
 coro
 Cpus
 crds
@@ -940,3 +941,15 @@ parentspanid
 agtsignature
 agtsignaturealg
 GROUPREF
+
+# --- Python test suite code identifiers and scenario names ---
+adtech
+junitxml
+addoption
+addinivalue
+getoption
+asdict
+
+# --- Docker / BuildKit toolchain terms ---
+moby
+buildkit

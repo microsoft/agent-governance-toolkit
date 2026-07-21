@@ -1,12 +1,4 @@
-"""Hybrid ACS policy artifact generator."""
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
-from .engine import GenerationEngine, GenerationError
-from .llm import FakeLanguageModel, LanguageModel, OpenAICompatibleLanguageModel
-
-__all__ = [
-    "FakeLanguageModel",
-    "GenerationEngine",
-    "GenerationError",
-    "LanguageModel",
-    "OpenAICompatibleLanguageModel",
-]
+"""Command-line ACS policy artifact generator."""

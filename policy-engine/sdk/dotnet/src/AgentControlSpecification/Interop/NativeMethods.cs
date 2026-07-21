@@ -94,6 +94,17 @@ internal static partial class NativeMethods
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "acs_runtime_free")]
     internal static extern void AcsRuntimeFree(IntPtr runtime);
 
+    [LibraryImport(
+        NativeLibraryName,
+        EntryPoint = "acs_validate_artifacts",
+        StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial IntPtr AcsValidateArtifacts(
+        string manifestYaml,
+        string regoModulesJson,
+        string? opaPath,
+        out IntPtr err);
+
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "acs_free_string")]
     internal static extern void AcsFreeString(IntPtr value);
 }

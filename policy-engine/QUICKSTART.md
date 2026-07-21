@@ -35,10 +35,10 @@ If you are using a standalone ACS artifact kit before packages are published, in
 | SDK | Artifact-only install |
 | --- | --- |
 | Rust | Extract `agent_control_specification_core-*.crate`, `agent_control_specification-*.crate`, and any integration crates you need such as `agent_control_specification_openai-*.crate`, `agent_control_specification_mcp-*.crate`, or `agent_control_specification_rig-*.crate`, then add `[patch.crates-io]` entries pointing to the extracted directories. |
-| Python | `python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b0-*.whl` |
+| Python | `python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b1-*.whl` |
 | Node | `npm install "$ACS_KIT"/artifacts/agent-control-specification-0.3.1-beta.0.tgz "$ACS_KIT"/artifacts/agent-control-specification-linux-x64-gnu-0.3.1-beta.0.tgz "$ACS_KIT"/artifacts/agent-control-specification-opa-linux-x64-0.3.1-beta.0.tgz` |
 | .NET | `dotnet add package AgentControlSpecification --version 0.3.1-beta.0 --source "$ACS_KIT/artifacts"` |
-| Generator | `python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b0-*.whl "$ACS_KIT"/artifacts/acs_generator-0.3.1b0-py3-none-any.whl` |
+| Generator | `python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b1-*.whl "$ACS_KIT"/artifacts/acs_generator-0.4.0b0-py3-none-any.whl` |
 | C ABI | Compile against `"$ACS_KIT"/artifacts/include/agent_control_specification.h` and link or load `"$ACS_KIT"/artifacts/libagent_control_specification_core.so`. |
 
 Python artifact installs may resolve third party wheel dependencies from your configured package index unless the kit also includes a Python dependency wheelhouse. Use `--no-index --find-links "$ACS_KIT/artifacts"` only with kits that contain that dependency closure.
@@ -234,7 +234,7 @@ For an artifact-only kit, validate the installed package from a temporary host p
 | SDK | Artifact-only smoke check |
 | --- | --- |
 | Rust | `mkdir crates && for c in agent_control_specification_core agent_control_specification agent_control_specification_openai agent_control_specification_mcp agent_control_specification_rig; do tar -xzf "$ACS_KIT"/artifacts/$c-0.3.1-beta.0.crate -C crates 2>/dev/null || true; done`, then point `[patch.crates-io]` at the extracted `crates/<name>-0.3.1-beta.0` directories before `cargo check` |
-| Python | `python -m venv .venv && .venv/bin/python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b0-*.whl && .venv/bin/python -c "import agent_control_specification as acs; print(acs.AgentControl)"` |
+| Python | `python -m venv .venv && .venv/bin/python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b1-*.whl && .venv/bin/python -c "import agent_control_specification as acs; print(acs.AgentControl)"` |
 | Node | `npm init -y && npm install "$ACS_KIT"/artifacts/agent-control-specification-0.3.1-beta.0.tgz "$ACS_KIT"/artifacts/agent-control-specification-linux-x64-gnu-0.3.1-beta.0.tgz "$ACS_KIT"/artifacts/agent-control-specification-opa-linux-x64-0.3.1-beta.0.tgz && node -e "const acs=require('agent-control-specification'); console.log(typeof acs.AgentControl)"` |
 | .NET | `dotnet new console -n AcsSmoke && cd AcsSmoke && dotnet add package AgentControlSpecification --version 0.3.1-beta.0 --source "$ACS_KIT/artifacts" && dotnet build` |
 
