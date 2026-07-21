@@ -939,3 +939,21 @@ spanid
 parentspanid
 agtsignature
 agtsignaturealg
+
+# --- UK regulatory policy terms ---
+DUAA
+PRIN
+PECR
+DSPT
+Caldicott
+SYSC
+Organisations
+vulnerabilit
+foreseeably
+DPIA
+dpia
+minimisation
+ukgdpr
+organisational
+Minimisation
+IDTA

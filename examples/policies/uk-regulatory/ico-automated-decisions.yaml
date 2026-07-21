@@ -1,0 +1,131 @@
+# agt-policies-uk
+# UK GDPR Arts. 22A–22D — Automated Decision-Making Policy
+#
+# Regulatory reference: UK GDPR Arts. 22A–22D (substituted by DUAA 2025 s.80, in force 5 Feb 2026);
+#   ICO draft guidance on automated decision-making and profiling (consultation closed 29 May 2026)
+# Enforcing authority: Information Commissioner's Office (ICO)
+# Status: Binding (Arts. 22A–22D); ICO ADM guidance draft (final expected summer 2026)
+#
+# Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+# Perform your own compliance assessment with qualified advisors before deploying.
+#
+# Key obligations encoded:
+#   Art. 22A  Solely automated decisions with legal or similarly significant effects
+#   Art. 22B  Restrictions on automated decision-making using special category data
+#   Art. 22C  Safeguards: information, representations, human intervention, contest
+#   Art. 35    DPIA for high-risk processing (including agentic orchestration chains)
+#
+# Agentic AI note (ICO tech futures / March 2026 recruitment statement): safeguards apply at
+# every pipeline step that takes a solely automated significant decision, not only the final output.
+#
+# Rego reference implementation: rego/ico-automated-decisions.rego (NOT loaded at runtime)
+
+version: "1.0"
+name: ico-automated-decisions
+description: >
+  UK GDPR automated decision-making policy for AI agents. Enforces Art. 22C safeguards
+  (transparency, representations, human intervention, contest) for solely automated
+  significant decisions, including multi-agent orchestration steps.
+
+metadata:
+  source_regulation: "UK GDPR Arts. 22A–22D (DUAA 2025 s.80); ICO ADM guidance (draft, 2026)"
+  jurisdiction: "GB"
+  enforcing_authority: "Information Commissioner's Office (ICO)"
+
+rules:
+
+  # =========================================================================
+  # Art. 22C — Safeguard: Information about the decision
+  # =========================================================================
+
+  - name: adm-withhold-explanation-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+explain|no\\s+explanation|withhold\\s+(the\\s+)?(reason|rationale)|hide\\s+how\\s+(the\\s+)?decision|refuse\\s+to\\s+explain)"
+    action: deny
+    priority: 1
+    message: "UK GDPR Art. 22C(1): individuals must receive decision-specific information explaining how and why the outcome was reached"
+
+  # =========================================================================
+  # Art. 22C — Safeguard: Representations and human intervention
+  # =========================================================================
+
+  - name: adm-block-human-review-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(no\\s+human\\s+(review|intervention|oversight)|refuse\\s+human\\s+review|cannot\\s+request\\s+human|deny\\s+human\\s+intervention|automated\\s+only\\s+—\\s+no\\s+appeal)"
+    action: deny
+    priority: 1
+    message: "UK GDPR Art. 22C(2)-(3): individuals must be able to make representations and obtain genuine human intervention with authority to change the outcome"
+
+  - name: adm-block-contest-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(cannot\\s+contest|no\\s+(right\\s+to\\s+)?(appeal|challenge)|final\\s+decision\\s+—\\s+no\\s+recourse|waive\\s+(the\\s+)?right\\s+to\\s+contest)"
+    action: deny
+    priority: 1
+    message: "UK GDPR Art. 22C(4): individuals must be able to contest the decision through an accessible process"
+
+  # =========================================================================
+  # Art. 22A — Solely Automated Significant Decisions
+  # =========================================================================
+
+  - name: adm-significant-decision-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(run_automated_decision|automated_credit_decision|automated_hiring_decision|automated_eligibility|profile_for_decision|deploy_scoring_model)$"
+    action: audit
+    priority: 2
+    message: "UK GDPR Art. 22A: solely automated decision with legal or similarly significant effect — verify Art. 22C safeguards and lawful basis are in place"
+
+  - name: adm-recruitment-decision-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(reject\\s+(the\\s+)?(candidate|applicant)|hire\\s+decision|shortlist|score\\s+(the\\s+)?(candidate|applicant)).{0,40}(automated|without\\s+human|ai\\s+only)"
+    action: block
+    priority: 2
+    message: "ICO March 2026: automated recruitment decisions are in scope of Art. 22A — review safeguards and human oversight before proceeding"
+
+  # =========================================================================
+  # Art. 22A — Agentic orchestration (multi-step ADM)
+  # =========================================================================
+
+  - name: adm-agentic-delegation-audit
+    condition:
+      field: action
+      operator: matches
+      value: "delegate_decision|spawn_sub_agent|orchestrate_agent|chain_automated_step"
+    action: audit
+    priority: 2
+    message: "UK GDPR Art. 22A (agentic AI): each orchestration step that takes a solely automated significant decision must meet Art. 22C safeguards and Art. 28 processor contracts"
+
+  # =========================================================================
+  # Art. 9 + 22A — Special category data in ADM (stricter conditions)
+  # =========================================================================
+
+  - name: adm-special-category-deny
+    condition:
+      field: action
+      operator: matches
+      value: "^(automated_decision_on_health|automated_decision_on_biometric|automated_decision_on_special_category)$"
+    action: deny
+    priority: 1
+    message: "UK GDPR Art. 22B: automated decisions based on special category data require explicit consent or legal authorisation — human review alone is insufficient"
+
+  # =========================================================================
+  # Art. 35 — DPIA for high-risk ADM
+  # =========================================================================
+
+  - name: adm-dpia-required-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(deploy_model|deploy_agent|launch_automated_system|scale_automated_decisions)$"
+    action: audit
+    priority: 3
+    message: "UK GDPR Art. 35: data protection impact assessment required before deploying high-risk automated decision-making (including agentic orchestration)"

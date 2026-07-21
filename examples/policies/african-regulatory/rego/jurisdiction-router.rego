@@ -10,7 +10,7 @@
 #   1. Universal agent safety controls — apply to ALL agents regardless of country
 #      (prompt_injection, pii_leakage, tool_permissions, human_approval, model_routing)
 #   2. Jurisdiction-specific regulatory packs — apply based on customer_country
-#      (cbn, bvn_nin, ndpa, nfiu for NG; kdpa for KE; popia for ZA)
+#      (cbn, bvn_nin, ndpa, nfiu for NG; kdpa for KE; popia for ZA; dpdp, certin, rbi, sebi, aadhaar for IN; uk_gdpr, ico_adm, fca_conduct for GB)
 #
 # Input schema expected:
 #   {
@@ -51,6 +51,7 @@ jurisdiction_policies := {
 	"TZ": {"tanzania_pdpa"},
 	"ET": {"ethiopia_pdp"},
 	"IN": {"dpdp", "certin", "rbi", "sebi", "aadhaar"},
+	"GB": {"uk_gdpr", "ico_adm", "fca_conduct"},
 }
 
 # ── Policy pack → OPA query path ─────────────────────────────────
@@ -70,6 +71,9 @@ policy_queries := {
 	"rbi": "data.agt_policies_india.rbi.decision",
 	"sebi": "data.agt_policies_india.sebi.decision",
 	"aadhaar": "data.agt_policies_india.aadhaar.decision",
+	"uk_gdpr": "data.agt_policies_uk.uk_gdpr.decision",
+	"ico_adm": "data.agt_policies_uk.ico_adm.decision",
+	"fca_conduct": "data.agt_policies_uk.fca_conduct.decision",
 	"prompt_injection": "data.agt_policies_agent.prompt_injection.decision",
 	"pii_leakage": "data.agt_policies_agent.pii_leakage.decision",
 	"tool_permissions": "data.agt_policies_agent.tool_permissions.decision",

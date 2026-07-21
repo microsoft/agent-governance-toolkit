@@ -1,0 +1,112 @@
+# agt-policies-uk
+# FCA Principles-Based AI Governance Policy
+#
+# Regulatory reference: FCA Handbook PRIN (Principles for Businesses); Consumer Duty (PRIN 2A);
+#   Senior Managers and Certification Regime (SM&CR); FCA AI Update 2024
+# Enforcing authority: Financial Conduct Authority (FCA)
+# Status: Binding (existing principles-based framework); FCA has no AI-specific binding rules
+#   as of 2026 — Mills Review reporting summer 2026; AI good/poor practice publication expected 2026
+#
+# Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+# Perform your own compliance assessment with qualified advisors before deploying.
+#
+# Key obligations encoded (principles-based, not AI-specific statute):
+#   PRIN 2A     Consumer Duty — good outcomes, fair value, appropriate support
+#   SM&CR       Senior manager accountability for AI risks and customer outcomes
+#   SYSC        Systems and controls for AI-influenced customer journeys
+#
+# Rego reference implementation: rego/fca-financial-conduct.rego (NOT loaded at runtime)
+
+version: "1.0"
+name: fca-financial-conduct
+description: >
+  FCA principles-based governance policy for AI agents in UK financial services.
+  Enforces Consumer Duty outcome checks, SM&CR accountability signals, and audit
+  requirements for AI-influenced pricing, eligibility, and customer communications.
+
+metadata:
+  source_regulation: "FCA Handbook PRIN (incl. PRIN 2A Consumer Duty); SM&CR; FCA AI Update 2024"
+  jurisdiction: "GB"
+  enforcing_authority: "Financial Conduct Authority (FCA)"
+  regulatory_status: "principles-based — no AI-specific binding rules as of 2026"
+
+rules:
+
+  # =========================================================================
+  # PRIN 2A — Consumer Duty: Good Outcomes
+  # =========================================================================
+
+  - name: fca-consumer-harm-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(mislead\\s+(the\\s+)?customer|hide\\s+(fees|charges|risks)|exploit\\s+vulnerabilit|target\\s+vulnerable\\s+customer|dark\\s+pattern|push\\s+unsuitable\\s+product)"
+    action: deny
+    priority: 1
+    message: "FCA Consumer Duty (PRIN 2A): agent cannot propose actions that foreseeably harm customers or obscure material information"
+
+  - name: fca-fair-value-bypass-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(skip\\s+fair\\s+value|bypass\\s+value\\s+assessment|no\\s+need\\s+to\\s+(check|assess)\\s+(fair\\s+)?value|ignore\\s+consumer\\s+duty)"
+    action: deny
+    priority: 1
+    message: "FCA Consumer Duty (PRIN 2A.4): firms must ensure products and services provide fair value — agent cannot bypass value assessment"
+
+  # =========================================================================
+  # SM&CR — Senior Manager Accountability
+  # =========================================================================
+
+  - name: fca-accountability-delegation-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(the\\s+ai\\s+(decides|is\\s+responsible)|algorithm\\s+accountable|no\\s+senior\\s+manager\\s+(needed|required)|delegate\\s+accountability\\s+to\\s+(the\\s+)?(model|ai|algorithm))"
+    action: deny
+    priority: 1
+    message: "FCA SM&CR: senior managers remain accountable for AI risks and outcomes — delegating to an algorithm does not transfer regulatory responsibility"
+
+  # =========================================================================
+  # AI-Influenced Customer Journeys — Audit
+  # =========================================================================
+
+  - name: fca-pricing-decision-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(set_price|adjust_rate|calculate_premium|score_creditworthiness|determine_eligibility)$"
+    action: audit
+    priority: 2
+    message: "FCA Consumer Duty: AI-influenced pricing or eligibility decision — document testing for fairness, suitability, and foreseeable harm"
+
+  - name: fca-customer-communication-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(send_financial_advice|generate_customer_communication|draft_product_recommendation|create_marketing_content)$"
+    action: audit
+    priority: 2
+    message: "FCA Consumer Duty: AI-generated customer communication — verify clarity, accuracy, and alignment with target customer information needs"
+
+  - name: fca-third-party-ai-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(invoke_external_ai|call_third_party_model|use_vendor_ai|deploy_critical_third_party_ai)$"
+    action: audit
+    priority: 2
+    message: "FCA operational resilience / outsourcing: third-party AI component — map to governance, testing, and critical third-party risk requirements"
+
+  # =========================================================================
+  # Agentic / Autonomous Trading — Block without approval
+  # =========================================================================
+
+  - name: fca-autonomous-trading-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(autonomous_trade|execute_trade_without_approval|self_directed_trading|agent_place_order)$"
+    action: block
+    priority: 1
+    message: "FCA market conduct: autonomous agent trading requires documented governance, testing, and senior manager approval before execution"
