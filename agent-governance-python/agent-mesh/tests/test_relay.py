@@ -286,6 +286,37 @@ class TestRelayServer:
                 assert msg["id"] == "knock-legit"
                 assert msg["from"] == alice_did
 
+    def test_missing_from_is_stamped_with_authenticated_identity(self):
+        """Hygiene: a frame that omits ``from`` is stamped with the connect-time,
+        DID-PoP-verified sender identity before it is forwarded/stored, so
+        downstream consumers always observe an authenticated ``from`` rather than
+        an absent one.
+        """
+        server = RelayServer()
+        client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
+
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+
+            with client.websocket_connect("/ws") as ws_alice:
+                ws_alice.send_json(_connect_frame("alice"))
+
+                # Alice sends a message with NO ``from`` field.
+                ws_alice.send_json({
+                    "v": 1, "type": "message",
+                    "to": bob_did,
+                    "id": "nofrom-001", "ciphertext": "genuine",
+                })
+
+                msg = ws_bob.receive_json()
+                assert msg["id"] == "nofrom-001"
+                # Relay stamped Alice's authenticated identity onto the frame.
+                assert msg["from"] == alice_did
+
+        assert server.stats["messages_routed"] == 1
+
     def test_message_stored_when_offline(self):
         """Message stored when recipient is offline."""
         server = RelayServer()

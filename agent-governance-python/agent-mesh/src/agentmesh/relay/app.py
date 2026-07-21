@@ -492,14 +492,20 @@ class RelayServer:
         # disables PoP, sender_did itself is unverified, so the check adds no
         # security.
         claimed_from = frame.get("from")
-        if _REQUIRE_DID_POP and claimed_from is not None and claimed_from != sender_did:
-            logger.warning(
-                "Dropping %s frame with mismatched 'from'=%s from authenticated sender %s",
-                frame.get("type"),
-                claimed_from,
-                sender_did,
-            )
-            return
+        if _REQUIRE_DID_POP:
+            if claimed_from is not None and claimed_from != sender_did:
+                logger.warning(
+                    "Dropping %s frame with mismatched 'from'=%s from authenticated sender %s",
+                    frame.get("type"),
+                    claimed_from,
+                    sender_did,
+                )
+                return
+            # Stamp the connect-time, DID-PoP-verified identity onto the frame so
+            # every stored/forwarded frame carries an authenticated ``from`` —
+            # even one that omitted it. Compliant senders already set ``from`` to
+            # their own DID, so this is a no-op for them.
+            frame["from"] = sender_did
 
         recipient_did = frame.get("to")
         message_id = frame.get("id")
