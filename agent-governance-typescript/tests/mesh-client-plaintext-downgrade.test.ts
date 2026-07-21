@@ -97,14 +97,22 @@ function internals(client: MeshClient): MeshClientInternals {
 /**
  * Inject a fully-established encrypted session for `peerDid` — a live channel
  * plus knockAccepted — simulating a peer with a negotiated X3DH + Double
- * Ratchet session. The channel's receive() throws if the ratchet is ever
- * consulted, so a silent plaintext downgrade is provable by its non-invocation.
+ * Ratchet session. By default the channel's receive() throws if the ratchet is
+ * ever consulted, so a silent plaintext downgrade is provable by its
+ * non-invocation. Pass `receiveImpl` to simulate a working ratchet (returns the
+ * decrypted bytes) when the test needs to assert that a genuine encrypted frame
+ * is decrypted rather than dropped.
  */
-function injectEncryptedSession(client: MeshClient, peerDid: string): { receiveInvoked: () => boolean } {
+function injectEncryptedSession(
+  client: MeshClient,
+  peerDid: string,
+  receiveImpl?: (message: unknown) => Uint8Array,
+): { receiveInvoked: () => boolean } {
   let invoked = false;
   const channel: FakeChannel = {
-    receive: () => {
+    receive: (message: unknown) => {
       invoked = true;
+      if (receiveImpl) return receiveImpl(message);
       throw new Error("ratchet channel.receive() must not be invoked for a forged plaintext frame");
     },
   };
@@ -129,6 +137,20 @@ function plaintextFrame(from: string, payload: unknown): Record<string, unknown>
     ts: new Date().toISOString(),
     ciphertext: btoa(JSON.stringify(payload)),
     plaintext: true,
+  };
+}
+
+/** A well-formed encrypted `message` frame carrying a ratchet header. */
+function encryptedFrame(from: string, payload: unknown): Record<string, unknown> {
+  return {
+    v: 1,
+    type: "message",
+    from,
+    to: SELF_DID,
+    id: "enc-1",
+    ts: new Date().toISOString(),
+    header: { dh: btoa("dh-public-key"), pn: 0, n: 0 },
+    ciphertext: btoa(JSON.stringify(payload)),
   };
 }
 
@@ -197,7 +219,10 @@ describe("MeshClient plaintext-downgrade / sender-spoof hardening", () => {
   });
 
   // Defense-in-depth: even a peer that IS operator-allow-listed for plaintext
-  // must not be downgraded once an encrypted session exists.
+  // must not be downgraded once an encrypted session exists. The plaintext /
+  // headerless frame now falls through to the encrypted path and fails closed
+  // on the missing-ratchet-header check, so it is dropped and the ratchet is
+  // never consulted.
   test("allow-listed plaintext peer with a live encrypted session: plaintext frame is dropped", async () => {
     const peer = "did:agentmesh:peer-a";
     const client = makeClient({ plaintextPeers: [peer] });
@@ -215,7 +240,38 @@ describe("MeshClient plaintext-downgrade / sender-spoof hardening", () => {
 
     expect(received).toHaveLength(0);
     expect(session.receiveInvoked()).toBe(false);
-    expect(errors).toContainEqual({ kind: "frame" });
+    // Dropped on the encrypted path's ratchet-header check (fail-closed).
+    expect(errors).toContainEqual({ kind: "decrypt" });
+  });
+
+  // Copilot review follow-up (mesh-client.ts:816): a peer that is allow-listed
+  // for plaintext AND has a live encrypted session must still be able to receive
+  // genuine encrypted frames — the plaintext branch must not black-hole them.
+  // The frame carries a ratchet header, so it flows through to the ratchet and
+  // is delivered as an encrypted (isPlaintext=false) message.
+  test("allow-listed plaintext peer with a live encrypted session: valid encrypted frame is decrypted, not dropped", async () => {
+    const peer = "did:agentmesh:peer-a";
+    const client = makeClient({ plaintextPeers: [peer] });
+    const received: Array<{ from: string; payload: unknown; isPlaintext: boolean }> = [];
+    const errors: Array<{ kind: string }> = [];
+    client.onMessage((from, payload, isPlaintext) => received.push({ from, payload, isPlaintext }));
+    client.onError((kind) => errors.push({ kind }));
+
+    await client.connect();
+
+    // A working ratchet that returns the decrypted payload bytes.
+    const session = injectEncryptedSession(client, peer, () =>
+      new TextEncoder().encode(JSON.stringify({ text: "hello-encrypted" })),
+    );
+
+    lastMockWs!.simulateFrame(encryptedFrame(peer, { ciphertext: "opaque" }));
+    await tick();
+
+    expect(session.receiveInvoked()).toBe(true);
+    expect(received).toEqual([
+      { from: peer, payload: { text: "hello-encrypted" }, isPlaintext: false },
+    ]);
+    expect(errors).toHaveLength(0);
   });
 
   // No regression: a legitimately configured plaintext peer (no encrypted

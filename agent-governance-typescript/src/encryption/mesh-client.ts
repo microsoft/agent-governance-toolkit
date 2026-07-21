@@ -798,19 +798,16 @@ export class MeshClient {
     // `from` DID. Gate on isPlaintextPeer only; a peer that is not explicitly
     // allow-listed for plaintext always takes the encrypted path below and is
     // dropped if it cannot be cryptographically authenticated.
-    if (this.isPlaintextPeer(from)) {
-      // Legacy plaintext — only for operator-allowlisted peers, and only while
-      // no encrypted session has been negotiated with that peer. If a live
-      // channel already exists, an inbound "plaintext" frame would be a
-      // downgrade of that session, so it is dropped: a peer with an established
-      // encrypted session is never silently downgraded to the no-crypto path,
-      // even if it is also allow-listed for plaintext.
-      if (this.sessions.get(from)?.channel) {
-        for (const h of this.errorHandlers) {
-          try { h("frame", from, "plaintext frame for a peer with an established encrypted session — dropping (downgrade attempt)"); } catch { /* swallow */ }
-        }
-        return;
-      }
+    if (this.isPlaintextPeer(from) && !this.sessions.get(from)?.channel) {
+      // Legacy plaintext — taken ONLY for an operator-allow-listed peer that has
+      // no negotiated encrypted session. Once a live channel exists for the peer
+      // we deliberately fall through to the encrypted path instead of handling
+      // the frame as plaintext: a genuine encrypted frame is decrypted via the
+      // ratchet, while a plaintext / headerless downgrade frame fails closed on
+      // the missing-ratchet-header check below. This keeps downgrade protection
+      // (an established session is never silently downgraded to no-crypto) while
+      // no longer black-holing legitimate encrypted traffic from a peer that is
+      // also allow-listed for plaintext.
       payload = JSON.parse(atob(frame.ciphertext as string));
       isPlaintext = true;
     } else {
