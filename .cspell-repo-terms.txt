@@ -939,3 +939,15 @@ spanid
 parentspanid
 agtsignature
 agtsignaturealg
+
+# --- Python test suite code identifiers and scenario names ---
+adtech
+junitxml
+addoption
+addinivalue
+getoption
+asdict
+
+# --- Docker / BuildKit toolchain terms ---
+moby
+buildkit
