@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Codex CLI governance package** — added `@microsoft/agent-governance-codex-cli`, a first-party governance integration for the OpenAI Codex CLI. It adapts the Claude Code governance core over Codex's hook system (`SessionStart`, `UserPromptSubmit`, `PreToolUse`), mapping policy decisions onto Codex's `permissionDecision` schema (deny/ask/allow) with fail-closed error handling, and ships an installer (`agt-codex install/status/uninstall`), a default developer-protection policy, a bundled MCP inspection server, and tests. Proposed via RFC #3408 (#3409).
+
 ## [5.0.0] - 2026-06-25
 
 ### Changed

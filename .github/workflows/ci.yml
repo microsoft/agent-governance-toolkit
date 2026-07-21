@@ -69,6 +69,7 @@ jobs:
               - 'agent-governance-typescript/**'
               - 'agent-governance-antigravity-cli/**'
               - 'agent-governance-opencode/**'
+              - 'agent-governance-codex-cli/**'
               - 'agent-governance-python/agent-os/extensions/**'
               - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
               - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
@@ -131,6 +132,8 @@ jobs:
               - 'agent-governance-claude-code/**'
             pkg-agent-governance-opencode:
               - 'agent-governance-opencode/**'
+            pkg-agent-governance-codex-cli:
+              - 'agent-governance-codex-cli/**'
             pkg-agent-governance-sdk:
               - 'agent-governance-typescript/**'
             pkg-agentmesh-api:
@@ -183,6 +186,7 @@ jobs:
           COPILOT: ${{ steps.filter.outputs.pkg-agent-governance-copilot-cli }}
           CLAUDE: ${{ steps.filter.outputs.pkg-agent-governance-claude-code }}
           OPENCODE: ${{ steps.filter.outputs.pkg-agent-governance-opencode }}
+          CODEX: ${{ steps.filter.outputs.pkg-agent-governance-codex-cli }}
           SDK: ${{ steps.filter.outputs.pkg-agent-governance-sdk }}
           API: ${{ steps.filter.outputs.pkg-agentmesh-api }}
           EXT: ${{ steps.filter.outputs.pkg-agent-os-copilot-extension }}
@@ -194,6 +198,7 @@ jobs:
           [ "$COPILOT" = "true" ] && pkgs+=('"agent-governance-copilot-cli"')
           [ "$CLAUDE" = "true" ] && pkgs+=('"agent-governance-claude-code"')
           [ "$OPENCODE" = "true" ] && pkgs+=('"agent-governance-opencode"')
+          [ "$CODEX" = "true" ] && pkgs+=('"agent-governance-codex-cli"')
           [ "$SDK" = "true" ] && pkgs+=('"agent-governance-sdk"')
           [ "$API" = "true" ] && pkgs+=('"agentmesh-api"')
           [ "$EXT" = "true" ] && pkgs+=('"agent-os-copilot-extension"')
@@ -986,6 +991,9 @@ jobs:
             node-version: "22"
           - name: agent-governance-opencode
             path: agent-governance-opencode
+            node-version: "22"
+          - name: agent-governance-codex-cli
+            path: agent-governance-codex-cli
             node-version: "22"
           - name: agent-governance-copilot-cli
             path: agent-governance-copilot-cli

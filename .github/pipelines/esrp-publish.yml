@@ -127,6 +127,9 @@ parameters:
       - name: agent-governance-opencode
         path: agent-governance-opencode
         nodeVersion: '22'
+      - name: agent-governance-codex-cli
+        path: agent-governance-codex-cli
+        nodeVersion: '22'
       - name: agentos-mcp-server
         path: agent-governance-python/agent-os/extensions/mcp-server
         nodeVersion: '20'
