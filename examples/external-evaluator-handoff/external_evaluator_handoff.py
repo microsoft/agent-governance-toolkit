@@ -31,7 +31,14 @@ def _utc_timestamp(value: datetime) -> str:
 def _export_field(field: BOMField) -> dict[str, Any]:
     """Export one explicitly allowlisted BOM field with fail-closed JSON checks."""
     try:
-        json.dumps(field.value, allow_nan=False)
+        serialized_value = json.dumps(
+            field.value,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        exported_value = json.loads(serialized_value)
     except (TypeError, ValueError) as exc:
         raise ValueError(
             f"field {field.name!r} is not strict-JSON serializable"
@@ -40,7 +47,7 @@ def _export_field(field: BOMField) -> dict[str, Any]:
     return {
         "name": field.name,
         "category": field.category.value,
-        "value": field.value,
+        "value": exported_value,
         "source": field.source,
         "confidence": field.confidence,
         "inferred": field.inferred,
