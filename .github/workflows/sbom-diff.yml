@@ -51,14 +51,14 @@ jobs:
       # current latest-stable release; downgrading to v4 here would diverge
       # from the rest of the tree without a security or compatibility reason.
       - name: Check out PR head
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           path: head
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Check out PR base
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           path: base
           ref: ${{ github.event.pull_request.base.sha }}
