@@ -74,11 +74,15 @@ def run_human_approval(
 def test_high_risk_action_executes_after_approval(artifact_dir: Path) -> None:
     result, store, audit_trail, policy_decision = run_human_approval(human_approval=True)
 
+    # ACS escalates the high-risk deletion before any human decision.
+    assert policy_decision.verdict == "escalate"
+    assert policy_decision.reason == "approval.escalate-high-risk-delete"
+    assert "escalated" in {event["event_type"] for event in audit_trail}
+
+    # After approval the action runs exactly once.
     assert result.decision == "allow"
     assert result.executed_tools == [HIGH_RISK_ACTION]
     assert store.deletions == [DATASET_ID]
-    assert policy_decision.reason == "approval.escalate-high-risk-delete"
-    assert "escalated" in {event["event_type"] for event in audit_trail}
 
     write_artifact(result, artifact_dir, "human-approval-approved")
 
@@ -86,10 +90,14 @@ def test_high_risk_action_executes_after_approval(artifact_dir: Path) -> None:
 def test_high_risk_action_blocked_after_rejection(artifact_dir: Path) -> None:
     result, store, audit_trail, policy_decision = run_human_approval(human_approval=False)
 
+    # ACS escalates the high-risk deletion before any human decision.
+    assert policy_decision.verdict == "escalate"
+    assert policy_decision.reason == "approval.escalate-high-risk-delete"
+    assert "escalated" in {event["event_type"] for event in audit_trail}
+
+    # After rejection the action is blocked.
     assert result.decision == "deny"
     assert result.executed_tools == []
     assert store.deletions == []
-    assert policy_decision.reason == "approval.escalate-high-risk-delete"
-    assert "escalated" in {event["event_type"] for event in audit_trail}
 
     write_artifact(result, artifact_dir, "human-approval-rejected")
