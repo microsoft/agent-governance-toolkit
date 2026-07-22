@@ -1,0 +1,133 @@
+# AGT sandbox AppArmor profile — option 3 of the command-denylist stack (#3068).
+#
+# Relationship to the other enforcement layers:
+#   Option 1 (Dockerfile.sandbox): minimal PATH — dangerous CLIs are unreachable
+#     via name lookup.
+#   Option 2 (agt-deny-shim.py): logging shim — by-name and absolute-path
+#     invocations are logged as structured `command_denied` events.
+#   Option 3 (this file): kernel-level exec enforcement — exec of the listed
+#     binaries is denied even when a caller reconstructs the binary path or
+#     copies one to a writable directory. Note: in-process network access
+#     (e.g. Python urllib, requests) is not blocked by this profile; the
+#     network, allow at the top is intentionally broad to match docker-default.
+#     This profile enforces exec-level denylist only, not full network isolation.
+#
+# Installation (one-time, requires root):
+#   sudo apparmor_parser -r -W /path/to/agt-sandbox
+#
+# DockerSandboxProvider detects the profile via /sys/kernel/security/apparmor/profiles
+# and applies it automatically. Hosts without AppArmor (e.g. macOS / Docker Desktop)
+# fall back to docker-default transparently.
+#
+# Verified on Ubuntu 22.04 with AppArmor 3.0.4 and Docker 24.
+#
+# Profile structure mirrors docker-default (moby/moby) so updates to docker-default
+# can be ported here. Our additions are the AGT-specific `deny` blocks below.
+
+#include <tunables/global>
+
+profile agt-sandbox flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network,
+  capability,
+  file,
+  umount,
+
+  # /proc hardening — identical to docker-default
+  deny @{PROC}/{*,**^[0-9*],sys/kernel/shm*} wklx,
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/mem rwklx,
+  deny @{PROC}/kmem rwklx,
+  deny @{PROC}/kcore rwklx,
+  deny @{PROC}/kmsg rwklx,
+
+  # /sys hardening — identical to docker-default
+  deny mount,
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/efi/efivars/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+
+  # Signal handling — identical to docker-default
+  signal (receive) peer=unconfined,
+  signal (send,receive) peer=@{profile_name},
+
+  # ptrace within same profile — identical to docker-default
+  ptrace (read,trace) peer=@{profile_name},
+
+  # ------------------------------------------------------------------
+  # AGT-specific: deny execution of dangerous network and infra CLIs.
+  #
+  # AppArmor deny rules are processed before allow rules regardless of
+  # rule order, so these override the broad `file,` allow above.
+  #
+  # mrx (mmap-with-execute + read + exec) is used instead of x alone so
+  # that ld.so-based invocations (/lib/ld-linux.so.2 /usr/bin/curl) are
+  # also blocked. The copy-and-exec vector (cp /usr/bin/curl /tmp/c) is
+  # closed by the writable-directory exec denies further below.
+  #
+  # Keep this list in sync with DENIED_LOGGED_BIN_NAMES in Dockerfile.sandbox
+  # so all three enforcement layers cover the same binary set.
+  # ------------------------------------------------------------------
+
+  # Network exfiltration tools
+  deny /usr/bin/curl    mrx,
+  deny /usr/bin/wget    mrx,
+  deny /usr/bin/nc      mrx,
+  deny /usr/bin/netcat  mrx,
+  deny /usr/bin/ncat    mrx,
+  deny /usr/bin/socat   mrx,
+  deny /bin/nc          mrx,
+
+  # Remote access / file transfer
+  deny /usr/bin/ssh     mrx,
+  deny /usr/bin/scp     mrx,
+  deny /usr/bin/sftp    mrx,
+  deny /usr/bin/rsync   mrx,
+  deny /usr/bin/telnet  mrx,
+  deny /usr/bin/ftp     mrx,
+  deny /usr/bin/tftp    mrx,
+
+  # Version control (can exfiltrate or fetch code)
+  deny /usr/bin/git     mrx,
+
+  # Cloud provider CLIs
+  deny /usr/bin/az           mrx,
+  deny /usr/local/bin/az     mrx,
+  deny /usr/bin/aws          mrx,
+  deny /usr/local/bin/aws    mrx,
+  deny /usr/bin/gcloud       mrx,
+  deny /usr/local/bin/gcloud mrx,
+
+  # Infrastructure orchestration CLIs
+  deny /usr/bin/kubectl        mrx,
+  deny /usr/local/bin/kubectl  mrx,
+  deny /usr/bin/terraform      mrx,
+  deny /usr/local/bin/terraform mrx,
+  deny /usr/bin/helm           mrx,
+  deny /usr/local/bin/helm     mrx,
+  deny /usr/bin/ansible        mrx,
+  deny /usr/local/bin/ansible  mrx,
+
+  # Package managers (prevent in-container software installation)
+  deny /usr/bin/apt      mrx,
+  deny /usr/bin/apt-get  mrx,
+  deny /usr/bin/dpkg     mrx,
+  deny /usr/bin/dnf      mrx,
+  deny /usr/bin/yum      mrx,
+  deny /usr/bin/apk      mrx,
+
+  # Deny exec from writable directories to block copy-and-exec attacks.
+  # An attacker copying a denied binary to /tmp or /workspace cannot
+  # execute it from there. mx (not mrx): r would also deny read of these
+  # tmpfs-backed dirs (/workspace is the container working_dir + tmpfs
+  # mount, /tmp is tmpfs under read_only_fs=True — see provider.py),
+  # which kills the sandbox outright wherever the profile enforces. m
+  # alone already closes the ld.so PROT_EXEC-mmap vector.
+  deny /tmp/**       mx,
+  deny /workspace/** mx,
+}
