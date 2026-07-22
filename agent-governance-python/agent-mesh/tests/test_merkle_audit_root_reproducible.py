@@ -68,6 +68,10 @@ class TestMerkleRootReproducible:
     def test_incremental_root_matches_full_rebuild(self):
         # The incremental construction and the from-scratch _rebuild_tree are
         # separate code paths that must converge on the same canonical root.
+        # This deliberately calls the private _rebuild_tree: the divergence being
+        # regression-tested is *between* the two internal constructions, so the
+        # black-box public API alone cannot exercise it (the independent textbook
+        # recompute in the sibling test covers the public-API reproducibility).
         for n in (5, 6, 9, 13, 16, 20):
             chain = MerkleAuditChain()
             for i in range(n):
@@ -103,7 +107,7 @@ class TestMerkleRootReproducible:
         for entry in entries:
             proof = chain.get_proof(entry.entry_id)
             assert proof is not None
-            assert chain.verify_proof(entry.entry_hash, proof, root) is True
+            assert chain.verify_proof(entry.entry_hash, proof, root)
 
     def test_tampered_leaf_changes_the_rebuilt_root(self):
         chain = MerkleAuditChain()

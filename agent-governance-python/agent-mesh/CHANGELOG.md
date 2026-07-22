@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `'0' * 64` instead of the empty-subtree constant `E(k)`, so the recorded root
   diverged from a from-scratch rebuild for most chain sizes (22 of the first 32)
   and an exported `merkle_root` could not be reproduced by an independent
-  verifier. Interior padding now uses `E(k)`, keeping the update O(log n) per
-  append. Exported `merkle_root` values change for the affected sizes; see
+  verifier. Interior padding now uses `E(k)`, keeping the update amortized
+  O(log n) per append (worst-case O(n) when tree capacity doubles). Exported
+  `merkle_root` values change for the affected sizes; see
   `BREAKING_CHANGES.md`.
 
 ## [1.0.0-alpha.1] - 2026-02-01

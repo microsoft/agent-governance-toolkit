@@ -25,7 +25,8 @@ a from-scratch rebuild of the same leaves for most chain sizes (22 of the first
 32: n = 5, 6, 9-14, 17-30, and so on), so an exported `merkle_root` could not be
 reproduced by a verifier that rebuilt the tree. Interior padding now uses `E(k)`,
 so the incremental root, a from-scratch rebuild, and an independent textbook
-recomputation all agree, and the update stays O(log n) per append.
+recomputation all agree, and the update stays amortized O(log n) per append
+(worst-case O(n) when tree capacity doubles).
 
 **Impact / required action:**
 
