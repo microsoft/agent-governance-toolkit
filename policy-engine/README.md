@@ -126,6 +126,19 @@ These behaviors are part of the normative [`spec/SPECIFICATION.md`](spec/SPECIFI
 | `test` | Fixed test double path for runtime tests. |
 | `custom` | Host dispatcher path identified by a required `adapter` string. |
 
+## Artifact validation
+
+The Rust core exposes `validate_acs_artifacts` and every language SDK delegates
+to that implementation. The result shape is identical across Rust, Python,
+Node, and .NET, with `valid` plus structured diagnostics for manifest schema,
+typed ACS semantics, and OPA Rego parsing.
+
+```rust
+use agent_control_specification::validate_acs_artifacts;
+
+let result = validate_acs_artifacts(manifest_yaml, &rego_modules, None);
+```
+
 A policy binding selects one policy by `policy.id`. Rego policies require a query either on the policy definition or the binding.
 
 | Verdict member | Meaning |

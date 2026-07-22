@@ -29,7 +29,15 @@ from ._adapters import (
     mcp_approval_resolver,
     run_model_call,
 )
-from ._client import AnnotatorDispatcher, NativeRuntimeClient, PolicyDispatcher, RuntimeClient
+from ._client import (
+    AnnotatorDispatcher,
+    NativeRuntimeClient,
+    PolicyDispatcher,
+    RuntimeClient,
+    parse_manifest,
+    validate_manifest,
+    validate_manifest_overlay,
+)
 from ._orchestration import AgentControl
 from ._telemetry import (
     DEFAULT_OTEL_METER_NAME,
@@ -63,6 +71,12 @@ from ._types import (
     Verdict,
     action_identity,
 )
+from .validation import (
+    ArtifactValidationResult,
+    ValidationDiagnostic,
+    validate_acs_artifacts,
+    validate_acs_manifest,
+)
 
 __all__ = [
     "AdapterUnsupportedError",
@@ -75,6 +89,7 @@ __all__ = [
     "ApprovalOutcome",
     "ApprovalResolution",
     "ApprovalResolver",
+    "ArtifactValidationResult",
     "Decision",
     "DEFAULT_OTEL_METER_NAME",
     "EnforcementMode",
@@ -95,6 +110,11 @@ __all__ = [
     "OtelMetricsTelemetrySink",
     "PerfTelemetry",
     "PolicyDispatcher",
+    "parse_manifest",
+    "validate_manifest",
+    "validate_manifest_overlay",
+    "validate_acs_artifacts",
+    "validate_acs_manifest",
     "RunResult",
     "RuntimeClient",
     "TelemetryEvent",
@@ -104,6 +124,7 @@ __all__ = [
     "Transform",
     "UnsupportedFrameworkAdapter",
     "Verdict",
+    "ValidationDiagnostic",
     "action_identity",
     "guard_agent_method",
     "guard_anthropic_client",
