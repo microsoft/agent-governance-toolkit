@@ -24,6 +24,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Protocol
 
 if TYPE_CHECKING:
+    from agent_os.policies.context_envelope import ContextEnvelope
     from agent_os.policies.decision import PolicyCheckResult
 
 logger = logging.getLogger(__name__)
@@ -264,6 +265,7 @@ class GovernancePolicy:
     scope_guard: dict[str, Any] = field(default_factory=dict)
     supply_chain: dict[str, Any] = field(default_factory=dict)
     mcp_security: dict[str, Any] = field(default_factory=dict)
+    information_flow: dict[str, Any] = field(default_factory=dict)
 
     @staticmethod
     def _freeze_mapping(value: Any) -> Any:
@@ -311,6 +313,7 @@ class GovernancePolicy:
                 self._freeze_mapping(self.scope_guard),
                 self._freeze_mapping(self.supply_chain),
                 self._freeze_mapping(self.mcp_security),
+                self._freeze_mapping(self.information_flow),
             )
         )  # detection excluded from hash intentionally (mutable config object)
 
@@ -379,6 +382,7 @@ class GovernancePolicy:
             "scope_guard",
             "supply_chain",
             "mcp_security",
+            "information_flow",
         ):
             value = getattr(self, field_name)
             if not isinstance(value, dict):
@@ -498,6 +502,7 @@ class GovernancePolicy:
             "scope_guard": self.scope_guard,
             "supply_chain": self.supply_chain,
             "mcp_security": self.mcp_security,
+            "information_flow": self.information_flow,
         }
 
     @classmethod
@@ -534,6 +539,7 @@ class GovernancePolicy:
             "checkpoint_frequency", "max_concurrent", "backpressure_threshold",
             "version", "prompt_injection", "token_budget", "rate_limiter",
             "bounded_semaphore", "scope_guard", "supply_chain", "mcp_security",
+            "information_flow",
         }
         filtered = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered)
@@ -579,6 +585,7 @@ class GovernancePolicy:
             "scope_guard": self.scope_guard,
             "supply_chain": self.supply_chain,
             "mcp_security": self.mcp_security,
+            "information_flow": self.information_flow,
         }
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
 
@@ -615,6 +622,7 @@ class GovernancePolicy:
             "max_concurrent", "backpressure_threshold", "version",
             "prompt_injection", "token_budget", "rate_limiter",
             "bounded_semaphore", "scope_guard", "supply_chain", "mcp_security",
+            "information_flow",
         }
         filtered = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered)
@@ -644,6 +652,7 @@ class GovernancePolicy:
             "max_concurrent", "backpressure_threshold", "version",
             "prompt_injection", "token_budget", "rate_limiter",
             "bounded_semaphore", "scope_guard", "supply_chain", "mcp_security",
+            "information_flow",
         ]
         for f in fields:
             v_self = getattr(self, f)
@@ -713,6 +722,7 @@ class ExecutionContext:
     total_tokens: int = 0
     tool_calls: list[dict] = field(default_factory=list)
     checkpoints: list[str] = field(default_factory=list)
+    context_envelope: ContextEnvelope | None = None
     _baseline_hash: str | None = field(default=None, repr=False)
     _baseline_text: str | None = field(default=None, repr=False)
     _drift_scores: list[float] = field(default_factory=list, repr=False)
@@ -767,6 +777,15 @@ class ExecutionContext:
                     f"checkpoints[{i}] must be a string, got {type(cp).__name__}: {cp!r}"
                 )
 
+        if self.context_envelope is not None:
+            from agent_os.policies.context_envelope import ContextEnvelope
+
+            if not isinstance(self.context_envelope, ContextEnvelope):
+                raise ValueError(
+                    "context_envelope must be a ContextEnvelope instance or None, "
+                    f"got {type(self.context_envelope).__name__}"
+                )
+
 
 # ── Abstract Tool Call Interceptor ────────────────────────────
 
@@ -790,6 +809,7 @@ class ToolCallResult:
     reason: str | None = None
     modified_arguments: dict[str, Any] | None = None  # For argument sanitization
     audit_entry: dict[str, Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __repr__(self) -> str:
         return f"ToolCallResult(allowed={self.allowed!r}, reason={self.reason!r})"
@@ -1211,6 +1231,86 @@ class BaseIntegration(ABC):
         if ctx.session_id in self._semaphore_held_sessions:
             self._bounded_semaphore.release()
             self._semaphore_held_sessions.remove(ctx.session_id)
+
+    @staticmethod
+    def _information_flow_enabled(policy: GovernancePolicy) -> bool:
+        return bool(policy.information_flow.get("enabled", False))
+
+    @staticmethod
+    def _information_flow_strict(policy: GovernancePolicy) -> bool:
+        return bool(policy.information_flow.get("strict", True))
+
+    @staticmethod
+    def _information_flow_sink_tools(policy: GovernancePolicy) -> frozenset[str]:
+        configured = policy.information_flow.get("sink_tools", ())
+        sinks = policy.information_flow.get("sinks", ())
+        names: set[str] = set()
+        if isinstance(sinks, Mapping):
+            names.update(str(tool) for tool in sinks if str(tool).strip())
+        if configured is None:
+            return frozenset(names)
+        if isinstance(configured, Mapping):
+            names.update(str(tool) for tool in configured if str(tool).strip())
+            return frozenset(names)
+        if isinstance(configured, str):
+            names.add(configured)
+            return frozenset(names)
+        if not isinstance(configured, (list, tuple, set, frozenset)):
+            raise ValueError("IFC sink_tools must be a string, mapping, or collection of strings")
+        names.update(str(tool) for tool in configured if str(tool).strip())
+        return frozenset(names)
+
+    @staticmethod
+    def _information_flow_sink_policy(
+        policy: GovernancePolicy,
+        tool_name: str,
+    ) -> Any | None:
+        if not tool_name:
+            return None
+        from agent_os.policies.information_flow import InformationFlowSinkPolicy
+
+        for section_name in ("sinks", "sink_tools"):
+            configured = policy.information_flow.get(section_name, ())
+            if isinstance(configured, Mapping) and tool_name in configured:
+                value = configured[tool_name]
+                if not isinstance(value, Mapping):
+                    raise ValueError(
+                        f"IFC {section_name}.{tool_name} must be a sink policy mapping"
+                    )
+                return InformationFlowSinkPolicy.from_mapping(value, default_name=tool_name)
+        return None
+
+    @staticmethod
+    def _trusted_information_flow_metadata(output_data: Any) -> Mapping[str, Any] | None:
+        metadata = getattr(output_data, "metadata", None)
+        if isinstance(metadata, Mapping):
+            information_flow = metadata.get("information_flow")
+            if isinstance(information_flow, Mapping):
+                return {"information_flow": information_flow}
+            ifc = metadata.get("ifc")
+            if isinstance(ifc, Mapping):
+                return {"ifc": ifc}
+            agt_ifc = metadata.get("agt_ifc")
+            if isinstance(agt_ifc, Mapping):
+                return {"agt_ifc": agt_ifc}
+            additional = metadata.get("additional_properties")
+            if isinstance(additional, Mapping):
+                return {"additional_properties": additional}
+            fides = metadata.get("fides")
+            if isinstance(fides, Mapping):
+                return {"fides": fides}
+        return None
+
+    @staticmethod
+    def _ensure_context_envelope(ctx: ExecutionContext) -> ContextEnvelope:
+        from agent_os.policies.context_envelope import ContextEnvelope
+
+        if ctx.context_envelope is None:
+            ctx.context_envelope = ContextEnvelope(
+                envelope_id=f"{ctx.session_id}:ifc",
+                workflow_id=ctx.session_id,
+            )
+        return ctx.context_envelope
 
     # ------------------------------------------------------------------
     # Detection module auto-registration  (#2477)
@@ -1768,6 +1868,7 @@ class BaseIntegration(ABC):
             deny_blocked_pattern_input,
             deny_confidence_threshold,
             deny_human_approval,
+            deny_information_flow,
             deny_max_tool_calls,
             deny_policy_error,
             deny_timeout,
@@ -1856,6 +1957,73 @@ class BaseIntegration(ABC):
                 {**event_base, "reason": result.reason, "pattern": matched[0]},
             )
             return result
+
+        if self._information_flow_enabled(ctx.policy):
+            from agent_os.policies.information_flow import (
+                enforce_sink,
+                requires_sink_metadata,
+            )
+
+            tool_name = (
+                input_data.get("tool_name", "")
+                if isinstance(input_data, dict)
+                else getattr(input_data, "tool_name", "")
+            )
+            try:
+                missing_required_sink_metadata = requires_sink_metadata(input_data)
+                governed_sink_tools = self._information_flow_sink_tools(ctx.policy)
+                sink_policy = self._information_flow_sink_policy(ctx.policy, str(tool_name))
+            except ValueError as exc:
+                self._release_semaphore_if_held(ctx)
+                result = deny_information_flow(
+                    str(exc),
+                    violation="malformed_metadata",
+                    tool_name=str(tool_name) if tool_name else None,
+                )
+                self.emit(
+                    GovernanceEventType.TOOL_CALL_BLOCKED,
+                    {
+                        **event_base,
+                        "reason": result.reason,
+                        "source": "information_flow",
+                    },
+                )
+                return result
+            if sink_policy is None and self._information_flow_strict(ctx.policy):
+                if missing_required_sink_metadata or str(tool_name) in governed_sink_tools:
+                    self._release_semaphore_if_held(ctx)
+                    result = deny_information_flow(
+                        "IFC strict mode requires trusted sink policy for governed sink calls",
+                        violation="missing_sink_metadata",
+                        tool_name=str(tool_name) if tool_name else None,
+                    )
+                    self.emit(
+                        GovernanceEventType.TOOL_CALL_BLOCKED,
+                        {
+                            **event_base,
+                            "reason": result.reason,
+                            "source": "information_flow",
+                        },
+                    )
+                    return result
+            elif sink_policy is not None:
+                decision = enforce_sink(self._ensure_context_envelope(ctx), sink_policy)
+                if not decision.allowed:
+                    self._release_semaphore_if_held(ctx)
+                    result = deny_information_flow(
+                        decision.reason,
+                        violation=decision.violation.value if decision.violation else None,
+                        tool_name=sink_policy.name or (str(tool_name) if tool_name else None),
+                    )
+                    self.emit(
+                        GovernanceEventType.TOOL_CALL_BLOCKED,
+                        {
+                            **event_base,
+                            "reason": result.reason,
+                            "source": "information_flow",
+                        },
+                    )
+                    return result
 
         # Check human approval requirement
         if ctx.policy.require_human_approval:
@@ -2064,6 +2232,44 @@ class BaseIntegration(ABC):
             prompt_tokens, completion_tokens = self._extract_token_usage(output_data)
             if prompt_tokens > 0 or completion_tokens > 0:
                 self._token_budget_tracker.record_usage(ctx.agent_id, prompt_tokens, completion_tokens)
+
+        if self._information_flow_enabled(ctx.policy):
+            from agent_os.policies.information_flow import (
+                default_unlabeled_source_label,
+                fold_information_flow_label,
+                label_from_payload,
+            )
+            from agent_os.policies.decision_factory import deny_information_flow
+
+            try:
+                trusted_metadata = self._trusted_information_flow_metadata(output_data)
+                if trusted_metadata is not None:
+                    label = label_from_payload(trusted_metadata)
+                else:
+                    label = default_unlabeled_source_label(
+                        type(output_data).__name__ if output_data is not None else "unlabeled"
+                    )
+            except ValueError as exc:
+                return deny_information_flow(
+                    str(exc),
+                    violation="malformed_metadata",
+                )
+            ctx.context_envelope = fold_information_flow_label(
+                self._ensure_context_envelope(ctx),
+                label,
+            )
+            self.emit(
+                GovernanceEventType.POLICY_CHECK,
+                {
+                    "agent_id": ctx.agent_id,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "phase": "post_execute",
+                    "source": "information_flow",
+                    "aggregate_sensitivity": ctx.context_envelope.aggregate_sensitivity.name,
+                    "integrity": ctx.context_envelope.integrity,
+                    "label_count": len(ctx.context_envelope.labels),
+                },
+            )
 
         # Drift detection: compare output against baseline
         if ctx.policy.drift_threshold > 0.0:

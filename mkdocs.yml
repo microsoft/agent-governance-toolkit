@@ -177,6 +177,7 @@ nav:
   - Security:
     - Overview: security/index.md
     - OWASP Compliance: security/owasp-compliance.md
+    - Native IFC Layer: security/native-ifc-layer.md
     - Threat Model: security/threat-model.md
     - Security Scanning: security/scanning.md
     - Tenant Isolation: security/tenant-isolation.md

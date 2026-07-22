@@ -32,6 +32,7 @@ class ContextEnvelope:
         labels: Accumulated ``DataLabel`` categories (e.g. ``pii``, ``financial``).
         aggregate_sensitivity: Running max over all folded sensitivities.
         restrictions: Grow-only set of restriction tokens.
+        integrity: Accumulated IFC integrity label. ``untrusted`` is sticky.
         version: Monotonic counter; each fold/application yields ``version + 1``.
         parent_envelope_id: Set on a child (delegation) envelope.
         created_at: Caller-supplied ISO-8601 timestamp (kept out of pure code).
@@ -42,9 +43,17 @@ class ContextEnvelope:
     labels: frozenset[str] = frozenset()
     aggregate_sensitivity: DataClassification = DataClassification.PUBLIC
     restrictions: frozenset[str] = frozenset()
+    integrity: str = "trusted"
     version: int = 0
     parent_envelope_id: Optional[str] = None
     created_at: str = ""
+
+    def __post_init__(self) -> None:
+        raw_integrity = getattr(self.integrity, "value", self.integrity)
+        integrity = str(raw_integrity).strip().lower()
+        if integrity not in {"trusted", "untrusted"}:
+            raise ValueError(f"integrity must be 'trusted' or 'untrusted', got {self.integrity!r}")
+        object.__setattr__(self, "integrity", integrity)
 
 
 def fold(
