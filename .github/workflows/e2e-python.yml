@@ -37,8 +37,8 @@ permissions:
   contents: read
 
 jobs:
-  top5-ollama:
-    name: Top 5 Python E2E (Ollama)
+  python-e2e-ollama:
+    name: Python E2E (Ollama)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -148,7 +148,7 @@ jobs:
           print(json.dumps(metadata, sort_keys=True))
           PY
 
-      - name: Run Top 5 with Ollama
+      - name: Run Python E2E with Ollama
         run: |
           set -euo pipefail
           mkdir -p "$AGT_E2E_ARTIFACT_DIR"

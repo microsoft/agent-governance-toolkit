@@ -67,7 +67,7 @@ def run_human_approval(
 
     return ScenarioResult(
         decision="allow" if approved else "deny",
-        executed_tools=["delete_dataset"] if approved else [],
+        executed_tools=[HIGH_RISK_ACTION] if approved else [],
     ), store, audit_trail, decision
 
 
@@ -75,7 +75,7 @@ def test_high_risk_action_executes_after_approval(artifact_dir: Path) -> None:
     result, store, audit_trail, policy_decision = run_human_approval(human_approval=True)
 
     assert result.decision == "allow"
-    assert result.executed_tools == ["delete_dataset"]
+    assert result.executed_tools == [HIGH_RISK_ACTION]
     assert store.deletions == [DATASET_ID]
     assert policy_decision.reason == "approval.escalate-high-risk-delete"
     assert "escalated" in {event["event_type"] for event in audit_trail}

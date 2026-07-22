@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlparse
 
 from support import (
     PolicyDecision,
@@ -20,6 +21,17 @@ from support import (
 
 
 POLICY_DIR = Path(__file__).parent
+# Hosts the ACS manifest allowlists (allow_hosts: "*.internal.example"). The
+# scenario only exercises the deny path when the model targets a host outside
+# this allowlist.
+ALLOWLISTED_HOST_SUFFIX = ".internal.example"
+
+
+def _is_non_allowlisted_host(url: str) -> bool:
+    host = urlparse(url).hostname
+    if not host:
+        return False
+    return not host.endswith(ALLOWLISTED_HOST_SUFFIX)
 
 
 class MockEndpoint:
@@ -67,6 +79,14 @@ def run_network_egress() -> tuple[ScenarioResult, MockEndpoint, PolicyDecision |
         ), endpoint, None
 
     url = call.arguments["url"]
+    if not _is_non_allowlisted_host(url):
+        return not_exercised_result(
+            scenario_id,
+            "fetch_url targeting a non-allowlisted external host",
+            reply,
+            model.inputs,
+        ), endpoint, None
+
     runtime = load_acs_runtime(POLICY_DIR)
     decision = evaluate_pre_tool_call(
         runtime,
