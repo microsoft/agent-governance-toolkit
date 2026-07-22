@@ -40,7 +40,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "\\brm\\b[\\s\\S]*\\b-rf\\b",
+          "source": "(^|[\\s;&|(){`])(?:rm|remove-item|ri|rd|del)\\b",
           "flags": "i"
         }
       ]

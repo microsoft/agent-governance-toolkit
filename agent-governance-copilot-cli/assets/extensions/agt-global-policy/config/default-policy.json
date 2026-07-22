@@ -29,7 +29,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "\\b(remove-item|rm|ri|rd|del)\\b[\\s\\S]*\\b(-recurse|-rf)\\b",
+          "source": "(^|[\\s;&|(){`])(?:rm|remove-item|ri|rd|del)\\b",
           "flags": "i"
         }
       ]
@@ -109,7 +109,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "\\brm\\b[\\s\\S]*\\b-rf\\b",
+          "source": "(^|[\\s;&|(){`])(?:rm|remove-item|ri|rd|del)\\b",
           "flags": "i"
         }
       ]
