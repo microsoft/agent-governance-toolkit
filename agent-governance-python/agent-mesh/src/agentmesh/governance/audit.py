@@ -308,7 +308,8 @@ class MerkleAuditChain:
         padding node (first observable at five entries). With E(k) padding the
         incremental construction converges on the same canonical root as
         :meth:`_rebuild_tree`, so an exported ``merkle_root`` is reproducible by a
-        verifier, while the update stays O(log n) per append.
+        verifier, while the update stays amortized O(log n) per append
+        (worst-case O(n) when tree capacity doubles).
         """
         # Set previous hash
         if self._entries:
