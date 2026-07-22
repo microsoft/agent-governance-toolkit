@@ -65,6 +65,17 @@ pip install agent-governance-toolkit[full]
 
 ## Quick Start
 
+> [!NOTE]
+> This package is distributed as part of the `agent-governance-toolkit` meta-package on PyPI.
+>
+> Install with:
+>
+> ```bash
+> pip install "agent-governance-toolkit>=5.0"
+> ```
+>
+> Do **not** install using the repository subdirectory name (`agent-compliance`) or the internal package name (`agent-governance-toolkit-compliance`), as those are not published independently on PyPI.
+
 ```python
 import asyncio
 from agent_os import StatelessKernel, ExecutionContext
