@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **ACS artifact validation API** - added one bounded Rust-core validator for canonical manifest schema checks, typed ACS semantics, and OPA Rego parsing, exposed with the same structured result through Rust, Python, Node, and .NET. The `acs-generator` CLI now consumes this shared SDK surface.
+
+### Changed
+- **BREAKING: `acs-generator` is CLI-only in `0.4.0b0`.** Removed top-level library re-exports such as `GenerationEngine` and `FakeLanguageModel`. Reusable manifest and Rego validation now lives under `agent_control_specification.validation`; the Python SDK moves to `0.3.1b1`.
+
 ## [5.0.0] - 2026-06-25
 
 ### Changed
