@@ -20,6 +20,7 @@ on:
     paths:
       - "agent-governance-python/agent-governance-toolkit-core/**"
       - "agent-governance-python/agent-os/**"
+      - "policy-engine/sdk/python/**"
       - "tests/e2e_python/**"
       - ".github/actions/**"
       - ".github/workflows/**"
