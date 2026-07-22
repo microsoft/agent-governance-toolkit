@@ -23,7 +23,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use hmac::{Hmac, Mac};
-use rand::RngCore;
+use rand::Rng;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -280,7 +280,7 @@ impl CredentialVault {
     #[must_use]
     pub fn generate_key() -> [u8; KEY_LENGTH] {
         let mut k = [0u8; KEY_LENGTH];
-        rand::thread_rng().fill_bytes(&mut k);
+        rand::rng().fill_bytes(&mut k);
         k
     }
 
@@ -546,7 +546,7 @@ impl Default for CredentialVault {
 fn encrypt(key: &[u8; KEY_LENGTH], plaintext: &[u8]) -> Result<Vec<u8>, CredentialError> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let mut nonce_bytes = [0u8; NONCE_LENGTH];
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    rand::rng().fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ct = cipher
         .encrypt(nonce, plaintext)
