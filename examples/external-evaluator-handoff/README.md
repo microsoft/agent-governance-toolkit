@@ -83,13 +83,16 @@ and the permanent authority boundary.
 - Decision BOM fields can contain policy, context, or trace data. The exporter
   therefore includes no optional fields unless their exact names are
   allowlisted by the caller.
+- Allowlisted values are normalized into detached strict-JSON copies. Mutating
+  a constructed request therefore does not mutate the source Decision BOM.
 - The sample uses synthetic identifiers and values. Review tenant, privacy,
   retention, and cross-border requirements before exporting real records.
 - `source_completeness` describes Decision BOM reconstruction coverage. It does
   not prove that an event was correct, authorized, or complete in the real
   world.
-- A content hash identifies the request bytes; it is not a signature,
-  attestation, or proof of truth.
+- A content hash identifies the canonical payload bytes before `request_id` is
+  added, so the identifier itself is excluded from its hash input. The hash is
+  not a signature, attestation, or proof of truth.
 
 ## Prior art and interoperability intent
 
