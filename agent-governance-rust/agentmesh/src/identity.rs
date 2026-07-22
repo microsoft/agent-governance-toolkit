@@ -4,7 +4,7 @@
 //! Ed25519-based agent identity with DID support.
 
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
+use rand::{rand_core::UnwrapErr, rngs::SysRng};
 use serde::{Deserialize, Serialize};
 
 /// Maximum delegation depth to prevent Sybil attacks via infinite chains.
@@ -29,7 +29,7 @@ pub struct AgentIdentity {
 impl AgentIdentity {
     /// Generate a new Ed25519-based identity for the given agent.
     pub fn generate(agent_id: &str, capabilities: Vec<String>) -> Result<Self, IdentityError> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = SigningKey::generate(&mut UnwrapErr(SysRng));
         let public_key = signing_key.verifying_key();
         Ok(Self {
             did: format!("did:agentmesh:{}", agent_id),
@@ -77,7 +77,7 @@ impl AgentIdentity {
             }
         }
 
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = SigningKey::generate(&mut UnwrapErr(SysRng));
         let public_key = signing_key.verifying_key();
 
         Ok(Self {
