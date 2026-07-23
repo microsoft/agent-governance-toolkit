@@ -34,7 +34,7 @@
     "@types/jest": "30.0.0",
     "@types/node": "26.1.0",
     "@typescript-eslint/eslint-plugin": "8.62.0",
-    "@typescript-eslint/parser": "8.63.0",
+    "@typescript-eslint/parser": "8.65.0",
     "eslint": "10.7.0",
     "jest": "30.4.2",
     "rimraf": "6.1.3",
