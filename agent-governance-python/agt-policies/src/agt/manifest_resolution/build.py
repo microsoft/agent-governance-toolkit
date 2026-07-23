@@ -229,7 +229,17 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         message = str(rule.get("message", ""))
 
         accessor = _rego_field_accessor(field)
-        op_clause = _rego_op_clause(operator, accessor, value) if accessor is not None else None
+        match_missing_negative = action == "deny"
+        op_clause = (
+            _rego_op_clause(
+                operator,
+                accessor,
+                value,
+                match_missing_negative=match_missing_negative,
+            )
+            if accessor is not None
+            else None
+        )
         if op_clause is None:
             # Unsupported operators or invalid field paths MUST fail
             # closed. Render an always-matching deny rule so evaluation
@@ -318,8 +328,22 @@ def _rego_field_accessor(field: str) -> str | None:
     return expr
 
 
-def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
+def _rego_op_clause(
+    operator: str,
+    accessor: str,
+    value: Any,
+    *,
+    match_missing_negative: bool = False,
+) -> Optional[str]:
     """Render the body of a `_match[i]` rule for a given operator.
+
+    Args:
+        operator: Normalized AGT condition operator.
+        accessor: Rego expression that reads the condition field.
+        value: Expected condition value.
+        match_missing_negative: When true, missing fields satisfy negative
+            operators so deny rules fail closed. Allow rules leave this false
+            so they cannot mask a lower-priority deny rule.
 
     Returns None for unsupported operators; the caller turns the rule into a fail-closed deny.
     """
@@ -328,6 +352,10 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "eq":
         return f"{indent}{accessor} == {literal}"
     if operator == "ne":
+        if match_missing_negative:
+            # Deny rules fail closed on absent negative fields; allow rules keep
+            # the null guard so they cannot short-circuit lower-priority deny rules.
+            return f"{indent}not ({accessor} == {literal})"
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
@@ -340,7 +368,11 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "in":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
     if operator == "not_in":
-        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not _v in {literal}"
+        if match_missing_negative:
+            # Deny rules fail closed on absent negative fields; allow rules keep
+            # the null guard so they cannot short-circuit lower-priority deny rules.
+            return f"{indent}_v := {accessor}\n{indent}not (_v in {literal})"
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not (_v in {literal})"
     if operator == "exists":
         return f"{indent}{accessor} != null"
     if operator == "contains":

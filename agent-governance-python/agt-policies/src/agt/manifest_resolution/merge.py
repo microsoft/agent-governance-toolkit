@@ -70,6 +70,9 @@ def _accepts_value(operator: str, expected: Any, value: Any) -> bool:
     try:
         if operator == "eq":
             return value == expected
+        # This merge-time overlap helper treats missing values as non-matches.
+        # Runtime missing-field fail-closed behavior is deny-only and rendered
+        # in build.py, so allow rules cannot mask lower-priority deny rules.
         if operator == "ne":
             return value is not None and value != expected
         if operator == "gt":
