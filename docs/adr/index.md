@@ -52,3 +52,4 @@ Key architectural decisions and their rationale. Each ADR follows the standard f
 | [ADR-0030](0030-action-bound-approval-protocol.md) | Action-bound, fail-closed approval protocol | Policy / Audit |
 | [ADR-0031](0031-optional-embedding-detection-backend.md) | Optional embedding evidence backend for prompt-injection detection | Security |
 | [ADR-0032](0032-agt-emits-trace-v01-trust-records.md) | AGT emits TRACE v0.1 Trust Records per session | Audit / Standards |
+0033 - DecisionAssure Governance Learning Loop
