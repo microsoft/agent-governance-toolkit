@@ -134,8 +134,10 @@ class PolicyRegistry:
                 logger.info("Policy directory %s does not exist", self._policy_dir)
                 self._records = records
                 return
-
-            for path in sorted(self._policy_dir.iterdir()):
+            if not self._policy_dir.is_dir():
+                logger.warning("Policy directory %s is not a directory", self._policy_dir)
+                self._records = records
+                return
                 if not path.is_file():
                     continue
                 fmt = _format_for_suffix(path.suffix)
