@@ -20,6 +20,8 @@ from agentmesh.engine_api.pagination import PaginationParams, paginate
 
 router = APIRouter()
 
+# TODO(#2729): Epic 8 replaces these placeholders with the real trust backends.
+
 
 @router.get(
     "/api/v1/trust/scores",

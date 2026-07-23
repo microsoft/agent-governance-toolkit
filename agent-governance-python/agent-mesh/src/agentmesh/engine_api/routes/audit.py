@@ -22,6 +22,8 @@ from agentmesh.engine_api.pagination import PaginationParams, paginate
 
 router = APIRouter()
 
+# TODO(#2729): Epic 9 replaces this placeholder with the real audit backend.
+
 
 @router.get(
     "/api/v1/audit/log",

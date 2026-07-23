@@ -132,7 +132,31 @@ class TestTestPolicyWithFakeEngine:
         monkeypatch.setattr(policy_ops, "_load_replay", lambda: _bad_replay)
         resp = client.post("/api/v1/policy/test", json=_TEST_BODY)
         assert resp.status_code == 422
-        assert resp.json()["code"] == "FIXTURE_LOAD_ERROR"
+        body = resp.json()
+        assert body["code"] == "FIXTURE_LOAD_ERROR"
+        assert body["message"] == "Could not load fixtures or policies"
+        assert body["details"] == {}
+        assert "could not parse fixtures" not in json.dumps(body)
+
+    def test_fixture_load_error_only_echoes_explicit_override(
+        self, client, monkeypatch, policy_dir
+    ):
+        leaked_path = str(policy_dir / "internal" / "secret.yaml")
+
+        def _bad_replay(_policy_dir, _fixtures):
+            raise FileNotFoundError(leaked_path)
+
+        override = policy_dir / "subset"
+        override.mkdir()
+        monkeypatch.setattr(policy_ops, "_load_replay", lambda: _bad_replay)
+        resp = client.post(
+            "/api/v1/policy/test",
+            json=dict(_TEST_BODY, policy_dir=str(override)),
+        )
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["details"] == {"policy_dir": str(override)}
+        assert leaked_path not in body["message"]
 
     def test_oversized_fixture_list_is_validation_error(self, client):
         one = {"id": "f", "input": {"action": "read"}, "expected_verdict": "allow"}

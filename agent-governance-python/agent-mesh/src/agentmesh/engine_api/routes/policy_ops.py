@@ -171,12 +171,13 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
         try:
             report = replay(policy_dir, fixtures_file)
         except (FileNotFoundError, ValueError, KeyError, yaml.YAMLError, json.JSONDecodeError) as exc:
+            details = {"policy_dir": body.policy_dir} if body.policy_dir is not None else {}
             raise ApiError(
                 422,
                 FIXTURE_LOAD_ERROR,
-                f"Could not load fixtures or policies: {exc}",
-                {"policy_dir": policy_dir},
-            )
+                "Could not load fixtures or policies",
+                details,
+            ) from exc
 
     results = [
         FixtureResult(

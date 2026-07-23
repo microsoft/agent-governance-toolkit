@@ -131,7 +131,7 @@ class PolicyRegistry:
         with self._lock:
             records: dict[str, _PolicyRecord] = {}
             if not self._policy_dir.exists():
-                logger.warning("Policy directory %s does not exist", self._policy_dir)
+                logger.info("Policy directory %s does not exist", self._policy_dir)
                 self._records = records
                 return
 
@@ -184,8 +184,9 @@ class PolicyRegistry:
 
     def get_detail(self, policy_id: str) -> PolicyDetail | None:
         """Return the :class:`PolicyDetail` for ``policy_id`` or ``None`` if unknown."""
-        record = self._records.get(policy_id)
-        return record.to_detail() if record is not None else None
+        with self._lock:
+            record = self._records.get(policy_id)
+            return record.to_detail() if record is not None else None
 
     @staticmethod
     def _contained_path(base: str, filename: str) -> str:

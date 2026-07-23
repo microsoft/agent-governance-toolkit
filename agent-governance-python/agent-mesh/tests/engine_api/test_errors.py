@@ -96,6 +96,11 @@ class TestHandlers:
         assert resp.json()["code"] == POLICY_NOT_FOUND
         assert resp.json()["message"] == "missing"
 
+    def test_unmapped_client_http_exception_is_validation_error(self, handler_client):
+        resp = handler_client.post("/http-error")
+        assert resp.status_code == 405
+        assert resp.json()["code"] == VALIDATION_ERROR
+
     def test_unhandled_exception_is_internal_error(self, handler_client):
         resp = handler_client.get("/boom")
         assert resp.status_code == 500

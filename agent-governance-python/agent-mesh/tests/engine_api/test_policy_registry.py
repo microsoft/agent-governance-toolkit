@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -88,12 +90,39 @@ class TestGetDetail:
     def test_unknown_id_returns_none(self, registry):
         assert registry.get_detail("missing") is None
 
+    def test_detail_read_waits_for_registry_lock(self, registry):
+        started = threading.Event()
+        finished = threading.Event()
+
+        def read_detail():
+            started.set()
+            registry.get_detail("alpha")
+            finished.set()
+
+        with registry._lock:
+            thread = threading.Thread(target=read_detail)
+            thread.start()
+            assert started.wait(timeout=1)
+            assert not finished.wait(timeout=0.05)
+
+        assert finished.wait(timeout=1)
+        thread.join(timeout=1)
+
 
 class TestMissingDirectory:
-    def test_missing_dir_is_empty(self, tmp_path):
-        reg = PolicyRegistry(tmp_path / "does_not_exist")
+    def test_missing_dir_is_empty_and_logged_as_info(self, tmp_path, caplog):
+        with caplog.at_level(logging.INFO, logger="agentmesh.engine_api.policy_registry"):
+            reg = PolicyRegistry(tmp_path / "does_not_exist")
         assert reg.list_summaries() == []
         assert reg.get_detail("anything") is None
+        matching = [
+            record
+            for record in caplog.records
+            if record.name == "agentmesh.engine_api.policy_registry"
+            and "does not exist" in record.message
+        ]
+        assert matching
+        assert all(record.levelno == logging.INFO for record in matching)
 
 
 class TestMalformedTolerance:

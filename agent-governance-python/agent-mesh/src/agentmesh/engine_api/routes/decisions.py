@@ -18,6 +18,8 @@ from agentmesh.engine_api.pagination import PaginationParams, paginate
 
 router = APIRouter()
 
+# TODO(#2729): Epic 7 replaces this placeholder with the real decision log backend.
+
 
 @router.get(
     "/api/v1/decisions",
