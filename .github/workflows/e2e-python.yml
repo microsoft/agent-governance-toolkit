@@ -4,17 +4,37 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "site/**"
-      - "mkdocs.yml"
+    paths:
+      - "agent-governance-python/agent-governance-toolkit-core/**"
+      - "agent-governance-python/agent-os/**"
+      - "policy-engine/sdk/python/**"
+      - "policy-engine/core/**"
+      - "policy-engine/Cargo.toml"
+      - "policy-engine/Cargo.lock"
+      - "tests/e2e_python/**"
+      - ".github/actions/**"
+      - ".github/workflows/**"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/*.md"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/docs/**"
+      - "!agent-governance-python/agent-os/**/*.md"
+      - "!agent-governance-python/agent-os/**/docs/**"
+      - "!tests/e2e_python/**/*.md"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "site/**"
-      - "mkdocs.yml"
+    paths:
+      - "agent-governance-python/agent-governance-toolkit-core/**"
+      - "agent-governance-python/agent-os/**"
+      - "policy-engine/sdk/python/**"
+      - "policy-engine/core/**"
+      - "policy-engine/Cargo.toml"
+      - "policy-engine/Cargo.lock"
+      - "tests/e2e_python/**"
+      - ".github/actions/**"
+      - ".github/workflows/**"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/*.md"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/docs/**"
+      - "!agent-governance-python/agent-os/**/*.md"
+      - "!agent-governance-python/agent-os/**/docs/**"
+      - "!tests/e2e_python/**/*.md"
   workflow_dispatch: {}
 
 concurrency:
@@ -25,8 +45,8 @@ permissions:
   contents: read
 
 jobs:
-  top5-ollama:
-    name: Top 5 Python E2E (Ollama)
+  python-e2e-ollama:
+    name: Python E2E (Ollama)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -136,7 +156,7 @@ jobs:
           print(json.dumps(metadata, sort_keys=True))
           PY
 
-      - name: Run Top 5 with Ollama
+      - name: Run Python E2E with Ollama
         run: |
           set -euo pipefail
           mkdir -p "$AGT_E2E_ARTIFACT_DIR"
