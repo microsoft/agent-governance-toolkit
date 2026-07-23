@@ -298,10 +298,16 @@ def _rego_field_accessor(field: str) -> str | None:
             ``envelope.budgets.tool_call_count``.
 
     Returns:
-        Rego source like ``input.snapshot.tool_call.args.amount_usd``.
-        Each segment is checked with ``object.get`` so missing fields
-        evaluate to undefined (matches §5.2 of the ACS spec on missing
-        fields).
+        Rego source like
+        ``object.get(input.snapshot, ["tool_call", "args", "amount_usd"], null)``,
+        or ``None`` when a segment is not a simple identifier.
+
+        The whole path is resolved in one array-path ``object.get`` so that
+        a missing segment -- leaf *or* intermediate -- yields the ``null``
+        default rather than undefined. Operator clauses depend on that:
+        ``null`` is a value they can compare against, so a ``deny`` on a
+        negative operator fires on an absent field instead of silently
+        failing the match. See #3297.
     """
     parts = [p for p in field.split(".") if p]
     if not parts:
