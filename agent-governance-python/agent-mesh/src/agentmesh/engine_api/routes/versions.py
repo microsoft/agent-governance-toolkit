@@ -16,8 +16,7 @@ from agentmesh.engine_api.models import VersionsResponse
 API_VERSION: Final = "1.0.0"
 
 #: Distribution name to resolve the engine version from package metadata.
-_ENGINE_DISTRIBUTION: Final = "agentmesh_platform"
-
+_ENGINE_DISTRIBUTION: Final = "agentmesh-platform"
 #: Capability identifiers advertised via ``GET /api/v1/versions`` (contract section 5.1).
 ENGINE_CAPABILITIES: Final[list[str]] = [
     "agents",
