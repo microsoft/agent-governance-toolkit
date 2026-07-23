@@ -163,6 +163,7 @@ class PolicyRegistry:
                     logger.warning("Could not stat policy %s: %s", path.name, exc)
                     continue
                 last_modified = datetime.fromtimestamp(mtime, tz=UTC)
+                records[policy_id] = _PolicyRecord(
                     id=policy_id,
                     name=name or policy_id,
                     format=fmt,
