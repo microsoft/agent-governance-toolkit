@@ -1010,8 +1010,16 @@ def test_resolution_error_message_includes_reason_string() -> None:
 def _op_clause(operator: str, action: str) -> str:
     from agt.manifest_resolution.build import _rego_field_accessor, _rego_op_clause
 
+    # Both helpers are Optional-returning: the accessor is None for a field
+    # path that is not a simple identifier, and the clause is None for an
+    # unsupported operator. Neither applies here, so assert rather than
+    # propagate None -- a silent None would surface as an opaque TypeError
+    # from the `in` checks below instead of naming what failed to render.
     accessor = _rego_field_accessor("tool_call.field")
-    return _rego_op_clause(operator, accessor, "X", action)
+    assert accessor is not None, "expected an accessor for 'tool_call.field'"
+    clause = _rego_op_clause(operator, accessor, "X", action)
+    assert clause is not None, f"expected a clause for operator {operator!r}"
+    return clause
 
 
 @pytest.mark.parametrize("operator", ["ne", "not_in"])
