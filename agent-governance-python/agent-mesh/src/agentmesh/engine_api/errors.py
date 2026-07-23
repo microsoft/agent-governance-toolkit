@@ -138,7 +138,10 @@ async def _validation_error_handler(
 async def _http_exception_handler(
     _request: Request, exc: StarletteHTTPException
 ) -> JSONResponse:
-    code = _STATUS_TO_CODE.get(exc.status_code, INTERNAL_ERROR)
+    code = _STATUS_TO_CODE.get(
+        exc.status_code,
+        VALIDATION_ERROR if 400 <= exc.status_code < 500 else INTERNAL_ERROR,
+    )
     message = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
     return _envelope_response(exc.status_code, code, message)
 
