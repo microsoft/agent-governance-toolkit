@@ -219,6 +219,9 @@ class PolicyRegistry:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", policy_id):
             raise ValueError(f"Invalid policy id '{policy_id}'")
 
+        if fmt not in {"yaml", "json"}:
+            raise ValueError(f"Invalid policy format '{fmt}'")
+
         suffix = ".yaml" if fmt == "yaml" else ".json"
         with self._lock:
             self._policy_dir.mkdir(parents=True, exist_ok=True)
