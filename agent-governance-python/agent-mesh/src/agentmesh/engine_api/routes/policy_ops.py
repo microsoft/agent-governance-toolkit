@@ -119,11 +119,11 @@ async def validate_policy(body: ValidateRequest) -> ValidateResponse:
             yaml.safe_load(body.content)
         else:
             json.loads(body.content)
-    except (yaml.YAMLError, json.JSONDecodeError, ValueError) as exc:
+    except (yaml.YAMLError, json.JSONDecodeError, ValueError):
         raise ApiError(
             422,
             POLICY_PARSE_ERROR,
-            f"Policy content failed to parse: {exc}",
+            "Policy content failed to parse",
             {"format": body.format},
         )
 
