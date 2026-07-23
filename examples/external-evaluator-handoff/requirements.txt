@@ -1,0 +1,2 @@
+agent-governance-toolkit-core>=4.1.0,<6.0
+pytest>=8.0.0,<10.0
