@@ -178,7 +178,9 @@ class PolicyRegistry:
 
     def list_summaries(self) -> list[PolicySummary]:
         """Return all policy summaries, ordered by id."""
-        return [self._records[pid].to_summary() for pid in sorted(self._records)]
+        with self._lock:
+            records = self._records
+            return [records[pid].to_summary() for pid in sorted(records)]
 
     def get_detail(self, policy_id: str) -> PolicyDetail | None:
         """Return the :class:`PolicyDetail` for ``policy_id`` or ``None`` if unknown."""
