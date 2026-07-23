@@ -2,9 +2,10 @@
 # Licensed under the MIT License.
 """Policy read routes (contract sections 7.2, 7.3).
 
-``GET /api/v1/policies`` returns a paginated list of :class:`PolicySummary` objects. This is
-the fix for the counts-only gap in ``agentmesh.server.policy_server`` (which returns only
-totals). ``GET /api/v1/policies/{id}`` returns full :class:`PolicyDetail` or a
+``GET /api/v1/policies`` returns a paginated list of :class:`PolicySummary` objects.
+This reference adapter implements the contract shape; the legacy
+``agentmesh.server.policy_server`` endpoint still returns totals only.
+``GET /api/v1/policies/{id}`` returns full :class:`PolicyDetail` or a
 ``POLICY_NOT_FOUND`` envelope.
 """
 
