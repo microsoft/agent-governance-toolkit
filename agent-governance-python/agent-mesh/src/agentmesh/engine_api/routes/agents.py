@@ -18,7 +18,7 @@ from agentmesh.engine_api.pagination import PaginationParams, paginate
 
 router = APIRouter()
 
-# TODO(#2729): Epic 8 replaces this placeholder with the real agent registry backend.
+# Tracked by #2729, Epic 8: replace this placeholder with the real agent registry backend.
 
 
 @router.get(
