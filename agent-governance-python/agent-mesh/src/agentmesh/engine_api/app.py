@@ -80,8 +80,8 @@ def _register_routes_flat(app: FastAPI, router: APIRouter) -> None:
     with absolute ``/api/v1`` paths and per-route tags, so direct registration is
     equivalent to ``include_router`` here.
     """
-    # Tied to the ``fastapi>=0.137.1,<1.0`` pin in this package's pyproject.toml, which keeps
-    # the 0.118+/Starlette 1.x proxy behavior described above; revisit if that pin changes.
+    # Tied to the `fastapi` pin in agent-mesh/pyproject.toml (currently fastapi>=0.139.2,<1.0);
+    # revisit if FastAPI/Starlette route-inclusion behavior changes.
     app.router.routes.extend(router.routes)
 
 
