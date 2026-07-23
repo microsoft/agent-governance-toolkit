@@ -118,7 +118,6 @@ def evaluate_pre_tool_call(
     agent_id: str,
     tool_name: str,
     arguments: dict[str, Any],
-    extra_snapshot: dict[str, Any] | None = None,
     session_id: str = "session-1",
 ) -> PolicyDecision:
     """Evaluate a tool call at the ACS ``pre_tool_call`` intervention point."""
@@ -126,18 +125,10 @@ def evaluate_pre_tool_call(
         "tool_call": {"id": f"{session_id}-1", "name": tool_name, "args": arguments},
         "actor": {"id": agent_id},
     }
-    if extra_snapshot:
-        snapshot.update(extra_snapshot)
-    return _evaluate(control, InterventionPoint.PRE_TOOL_CALL, snapshot)
-
-
-def _evaluate(
-    control: AgentControl,
-    intervention_point: InterventionPoint,
-    snapshot: dict[str, Any],
-) -> PolicyDecision:
     result = asyncio.run(
-        control.evaluate_intervention_point(intervention_point, snapshot)
+        control.evaluate_intervention_point(
+            InterventionPoint.PRE_TOOL_CALL, snapshot
+        )
     )
     verdict = result.verdict
     return PolicyDecision(
