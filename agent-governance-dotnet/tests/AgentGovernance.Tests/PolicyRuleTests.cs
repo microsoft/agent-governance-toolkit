@@ -321,4 +321,319 @@ public class PolicyRuleTests
 
         Assert.True(rule.Evaluate(context));
     }
+
+    [Fact]
+    public void Evaluate_NumericEquality_MatchesInteger()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-int",
+            Condition = "count == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = 5 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_MatchesDecimal()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-decimal",
+            Condition = "score == 3.14",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = 3.14 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_MatchesNegative()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-negative",
+            Condition = "temperature == -5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["temperature"] = -5 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_MatchesZero()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-zero",
+            Condition = "count == 0",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = 0 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericInequality_MatchesInteger()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-int",
+            Condition = "count != 6",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = 5 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericInequality_MatchesNegative()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-negative",
+            Condition = "temperature != 5",
+            Action = PolicyAction.Allow
+        };
+
+        var context = new Dictionary<string, object> { ["temperature"] = -5 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_DoesNotMatchWrongInteger()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-miss-int",
+            Condition = "count == 6",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = 5 };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_DoesNotMatchWrongDecimal()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-miss-decimal",
+            Condition = "score == 2.71",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = 3.14 };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_MissingField_ReturnsFalse()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-missing",
+            Condition = "count == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>();
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_StringFieldCannotParse_ReturnsFalse()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-unparseable",
+            Condition = "count == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = "five" };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_InsideAndCompound()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-compound-and",
+            Condition = "count == 5 and risk < 0.5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["count"] = 5,
+            ["risk"] = 0.3
+        };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericInequality_InsideOrCompound()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-compound-or",
+            Condition = "count != 5 or count == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = 5 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_DotNotationResolves()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-dot",
+            Condition = "data.count == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["data"] = new Dictionary<string, object> { ["count"] = 5 }
+        };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_OrderedComparison_StringLiteralDoesNotMatchNumericBranch()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-ordered-string-literal",
+            Condition = "count >= 'high'",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = 5 };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericGreaterThan_MatchesNegative()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-ordered-gt-negative",
+            Condition = "temperature > -5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["temperature"] = -3 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericGreaterThan_DoesNotMatchNegative()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-ordered-gt-negative-miss",
+            Condition = "temperature > -5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["temperature"] = -10 };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericGreaterThanOrEqual_MatchesNegativeBoundary()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-ordered-gte-negative",
+            Condition = "temperature >= -5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["temperature"] = -5 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericGreaterThanOrEqual_DoesNotMatchNegative()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-ordered-gte-negative-miss",
+            Condition = "temperature >= -5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["temperature"] = -10 };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericLessThan_MatchesNegative()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-ordered-lt-negative",
+            Condition = "temperature < -5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["temperature"] = -10 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericLessThanOrEqual_MatchesNegativeBoundary()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-ordered-lte-negative",
+            Condition = "temperature <= -5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["temperature"] = -5 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_TolerantDecimalEquality()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-tolerance",
+            Condition = "score == 0.3",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = 0.1 + 0.2 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericInequality_TolerantDecimalEquality()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-tolerance",
+            Condition = "score != 0.3",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = 0.1 + 0.2 };
+        Assert.False(rule.Evaluate(context));
+    }
 }

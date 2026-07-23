@@ -40,8 +40,14 @@ public sealed class PolicyRule
     private static readonly Regex InequalityPattern =
         new(@"^(\w+(?:\.\w+)*)\s*!=\s*['""]([^'""]+)['""]$", RegexOptions.Compiled);
 
+    private static readonly Regex NumericEqualityPattern =
+        new(@"^(\w+(?:\.\w+)*)\s*==\s*(-?\d+(?:\.\d+)?)$", RegexOptions.Compiled);
+
+    private static readonly Regex NumericInequalityPattern =
+        new(@"^(\w+(?:\.\w+)*)\s*!=\s*(-?\d+(?:\.\d+)?)$", RegexOptions.Compiled);
+
     private static readonly Regex NumericComparisonPattern =
-        new(@"^(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(\d+(?:\.\d+)?)$", RegexOptions.Compiled);
+        new(@"^(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$", RegexOptions.Compiled);
 
     private static readonly Regex InListPattern =
         new(@"^(\w+(?:\.\w+)*)\s+in\s+(\w+(?:\.\w+)*)$", RegexOptions.Compiled);
@@ -234,6 +240,32 @@ public sealed class PolicyRule
         {
             var fieldValue = ResolveField(match.Groups[1].Value, context);
             return !string.Equals(fieldValue?.ToString(), match.Groups[2].Value, StringComparison.Ordinal);
+        }
+
+        // Numeric equality: field == 5, field == 3.14, field == -5
+        match = NumericEqualityPattern.Match(expression);
+        if (match.Success)
+        {
+            var fieldValue = ResolveField(match.Groups[1].Value, context);
+            if (fieldValue is not null && double.TryParse(fieldValue.ToString(), out var left)
+                && double.TryParse(match.Groups[2].Value, out var right))
+            {
+                return Math.Abs(left - right) < 1e-9;
+            }
+            return false;
+        }
+
+        // Numeric inequality: field != 5, field != 3.14, field != -5
+        match = NumericInequalityPattern.Match(expression);
+        if (match.Success)
+        {
+            var fieldValue = ResolveField(match.Groups[1].Value, context);
+            if (fieldValue is not null && double.TryParse(fieldValue.ToString(), out var left)
+                && double.TryParse(match.Groups[2].Value, out var right))
+            {
+                return Math.Abs(left - right) >= 1e-9;
+            }
+            return false;
         }
 
         // Numeric comparison: field > 10, field <= 100
