@@ -157,8 +157,12 @@ class PolicyRegistry:
                         records[policy_id].source,
                     )
                 name, description, rules_count = _extract_meta(content, fmt)
-                last_modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-                records[policy_id] = _PolicyRecord(
+                try:
+                    mtime = path.stat().st_mtime
+                except OSError as exc:
+                    logger.warning("Could not stat policy %s: %s", path.name, exc)
+                    continue
+                last_modified = datetime.fromtimestamp(mtime, tz=UTC)
                     id=policy_id,
                     name=name or policy_id,
                     format=fmt,
