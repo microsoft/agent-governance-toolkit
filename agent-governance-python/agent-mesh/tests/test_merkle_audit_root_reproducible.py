@@ -15,6 +15,7 @@ at five entries (and again at 6, 9, ...).
 
 from __future__ import annotations
 
+import copy
 import hashlib
 
 from agentmesh.governance.audit import AuditEntry, MerkleAuditChain
@@ -91,9 +92,12 @@ class TestMerkleRootReproducible:
             chain.add_entry(_entry(i))
         recorded = chain.get_root_hash()
         # Feeding the same entries to a fresh chain must yield the same root.
+        # Deep-copy each entry: add_entry rewrites previous_hash/entry_hash in
+        # place, so passing the originals would mutate chain._entries and make
+        # the independent recompute below no longer independent.
         fresh = MerkleAuditChain()
         for entry in list(chain._entries):
-            fresh.add_entry(entry)
+            fresh.add_entry(copy.deepcopy(entry))
         assert fresh.get_root_hash() == recorded
         # And an independent recompute over the recorded entries must agree.
         assert _textbook_merkle_root([e.entry_hash for e in chain._entries]) == recorded
