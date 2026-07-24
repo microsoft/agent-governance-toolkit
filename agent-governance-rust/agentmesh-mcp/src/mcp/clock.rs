@@ -4,7 +4,7 @@
 //! Clock and nonce seams for deterministic security testing.
 
 use crate::mcp::error::McpError;
-use rand::{distributions::Alphanumeric, Rng};
+use rand::distr::{Alphanumeric, SampleString};
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
@@ -71,11 +71,7 @@ pub struct SystemNonceGenerator;
 
 impl NonceGenerator for SystemNonceGenerator {
     fn generate(&self) -> Result<String, McpError> {
-        let nonce = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(32)
-            .map(char::from)
-            .collect();
+        let nonce = Alphanumeric.sample_string(&mut rand::rng(), 32);
         Ok(nonce)
     }
 }
@@ -124,5 +120,12 @@ mod tests {
         let generator = DeterministicNonceGenerator::from_values(vec!["a".into(), "b".into()]);
         assert_eq!(generator.generate().unwrap(), "a");
         assert_eq!(generator.generate().unwrap(), "b");
+    }
+
+    #[test]
+    fn system_nonce_generator_produces_expected_format() {
+        let nonce = SystemNonceGenerator.generate().unwrap();
+        assert_eq!(nonce.len(), 32);
+        assert!(nonce.bytes().all(|byte| byte.is_ascii_alphanumeric()));
     }
 }
