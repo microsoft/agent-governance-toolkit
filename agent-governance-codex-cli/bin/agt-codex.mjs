@@ -3,22 +3,26 @@
 // Licensed under the MIT License.
 
 /**
- * @file Installer CLI for the AGT Codex governance hooks (`agt-codex`).
+ * @file Installer CLI for the AGT Codex governance plugin (`agt-codex`).
  *
- * Codex discovers hooks from `<CODEX_HOME>/hooks.json`, so installation means
- * merging AGT's hook entries into that file rather than copying a plugin
- * bundle. Entries owned by AGT are identified by their `statusMessage` prefix,
- * so install stays idempotent and uninstall never touches user-defined hooks.
+ * This package ships as a Codex plugin: a `plugin.json` manifest plus
+ * `hooks/hooks.json` whose commands reference `${PLUGIN_ROOT}`, which Codex
+ * expands to the plugin's own install directory at runtime. Installation
+ * therefore only registers the plugin with a Codex home (and seeds a default
+ * policy) — there is no per-path substitution and no merge into the host
+ * `hooks.json`, because Codex loads the plugin's own hooks and resolves the
+ * root itself. This mirrors the Claude Code package, which relies on the host
+ * to expand `${CLAUDE_PLUGIN_ROOT}` rather than baking absolute paths.
  *
  * Usage: `agt-codex <install|uninstall|status> [--codex-home <dir>]`
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, symlink, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const AGT_MARKER = "AGT governance";
+const PLUGIN_NAME = "agt-governance";
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 /**
@@ -39,91 +43,33 @@ function resolveCodexHome(args) {
 }
 
 /**
- * Read and parse a JSON file.
- * @param {string} path File path.
- * @param {unknown} fallback Value returned when the file does not exist.
- * @returns {Promise<unknown>} Parsed JSON, or `fallback`.
+ * Directory Codex discovers this plugin from: `<codexHome>/plugins/<name>`.
+ * @param {string} codexHome Target Codex home directory.
+ * @returns {string} The plugin registration path.
  */
-async function loadJson(path, fallback) {
-  if (!existsSync(path)) {
-    return fallback;
-  }
-  return JSON.parse(await readFile(path, "utf8"));
+function pluginDir(codexHome) {
+  return join(codexHome, "plugins", PLUGIN_NAME);
 }
 
 /**
- * Write a value as pretty-printed JSON, creating parent directories as needed.
- * @param {string} path Destination file path.
- * @param {unknown} value JSON-serializable value.
- * @returns {Promise<void>}
- */
-async function writeJson(path, value) {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-/**
- * Whether a hook entry is AGT-owned (its `statusMessage` carries the AGT marker).
- * @param {{statusMessage?: string}} hook A single hook command entry.
- * @returns {boolean}
- */
-function isAgtHook(hook) {
-  return typeof hook?.statusMessage === "string" && hook.statusMessage.startsWith(AGT_MARKER);
-}
-
-/**
- * Return a copy of a Codex hooks config with every AGT-owned entry removed,
- * preserving all user-defined hooks and empty-event pruning.
- * @param {{hooks?: Record<string, Array<{hooks?: object[]}>>}} hooksConfig Parsed hooks.json.
- * @returns {object} The config without AGT-owned entries.
- */
-function withoutAgtEntries(hooksConfig) {
-  const events = hooksConfig.hooks ?? {};
-  const cleaned = {};
-  for (const [event, matcherGroups] of Object.entries(events)) {
-    const keptGroups = [];
-    for (const group of matcherGroups) {
-      const keptHooks = (group.hooks ?? []).filter((hook) => !isAgtHook(hook));
-      if (keptHooks.length > 0) {
-        keptGroups.push({ ...group, hooks: keptHooks });
-      }
-    }
-    if (keptGroups.length > 0) {
-      cleaned[event] = keptGroups;
-    }
-  }
-  return { ...hooksConfig, hooks: cleaned };
-}
-
-/**
- * Load this package's hook template and resolve `${AGT_PACKAGE_ROOT}` to the
- * installed package path so the written commands use absolute paths.
- * @returns {Promise<Record<string, object[]>>} The resolved per-event hook entries.
- */
-async function loadAgtHookEntries() {
-  const templatePath = join(PACKAGE_ROOT, "hooks", "hooks.json");
-  const template = await readFile(templatePath, "utf8");
-  const rendered = template.replaceAll("${AGT_PACKAGE_ROOT}", PACKAGE_ROOT);
-  return JSON.parse(rendered).hooks;
-}
-
-/**
- * Merge AGT governance hooks into `<codexHome>/hooks.json` (idempotently, by
- * first stripping any prior AGT entries) and seed a default policy if none
- * exists. Existing user hooks and any existing policy are left untouched.
+ * Register the plugin with a Codex home and seed a default policy.
+ *
+ * Registration links this package into `<codexHome>/plugins/<name>`; Codex reads
+ * the `plugin.json` manifest there and loads `hooks/hooks.json`, expanding
+ * `${PLUGIN_ROOT}` to the linked directory. No hook substitution or host
+ * `hooks.json` merge is performed. (The exact registration contract — link vs.
+ * `codex plugin add` — should be confirmed against the target Codex version.)
  * @param {string} codexHome Target Codex home directory.
  * @returns {Promise<void>}
  */
 async function install(codexHome) {
-  const hooksPath = join(codexHome, "hooks.json");
-  const existing = await loadJson(hooksPath, { hooks: {} });
-  const cleaned = withoutAgtEntries(existing);
-  const agtHooks = await loadAgtHookEntries();
-
-  for (const [event, matcherGroups] of Object.entries(agtHooks)) {
-    cleaned.hooks[event] = [...(cleaned.hooks[event] ?? []), ...matcherGroups];
+  const dest = pluginDir(codexHome);
+  await mkdir(dirname(dest), { recursive: true });
+  if (existsSync(dest)) {
+    await rm(dest, { recursive: true, force: true });
   }
-  await writeJson(hooksPath, cleaned);
+  // Junction (not "dir") so the link is created without elevation on Windows.
+  await symlink(PACKAGE_ROOT, dest, "junction");
 
   const policyPath = join(codexHome, "agt", "policy.json");
   let seededPolicy = false;
@@ -136,35 +82,34 @@ async function install(codexHome) {
 
   process.stdout.write(
     [
-      `Installed AGT governance hooks into ${hooksPath}`,
+      `Registered AGT governance plugin at ${dest}`,
       seededPolicy
         ? `Seeded default policy at ${policyPath}`
         : `Kept existing policy at ${policyPath}`,
       "",
-      "Next step: Codex requires a one-time trust review before hooks run.",
-      "Open Codex against this home and run /hooks to review and trust the AGT hooks.",
+      "Next step: Codex requires a one-time trust review before plugin hooks run.",
+      "Open Codex against this home and run /plugins to review and trust the AGT plugin.",
       "",
     ].join("\n"),
   );
 }
 
 /**
- * Remove only AGT-owned hook entries from `<codexHome>/hooks.json`. User-defined
- * hooks, the policy file, and the audit log are all preserved.
+ * Unregister the plugin from a Codex home. The policy file and audit log are
+ * preserved.
  * @param {string} codexHome Target Codex home directory.
  * @returns {Promise<void>}
  */
 async function uninstall(codexHome) {
-  const hooksPath = join(codexHome, "hooks.json");
-  if (!existsSync(hooksPath)) {
-    process.stdout.write(`No hooks.json at ${hooksPath}; nothing to uninstall.\n`);
+  const dest = pluginDir(codexHome);
+  if (!existsSync(dest)) {
+    process.stdout.write(`No AGT plugin registered at ${dest}; nothing to uninstall.\n`);
     return;
   }
-  const cleaned = withoutAgtEntries(await loadJson(hooksPath, { hooks: {} }));
-  await writeJson(hooksPath, cleaned);
+  await rm(dest, { recursive: true, force: true });
   process.stdout.write(
     [
-      `Removed AGT governance hooks from ${hooksPath}`,
+      `Unregistered AGT governance plugin from ${dest}`,
       `Policy and audit files under ${join(codexHome, "agt")} were kept; delete them manually if desired.`,
       "",
     ].join("\n"),
@@ -172,18 +117,13 @@ async function uninstall(codexHome) {
 }
 
 /**
- * Print which AGT hooks are installed for a Codex home, the policy path, and the
- * audit-log entry count and chain validity.
+ * Report whether the plugin is registered for a Codex home, the policy path,
+ * and the audit-log entry count and chain validity.
  * @param {string} codexHome Target Codex home directory.
  * @returns {Promise<void>}
  */
 async function status(codexHome) {
-  const hooksPath = join(codexHome, "hooks.json");
-  const config = await loadJson(hooksPath, { hooks: {} });
-  const installedEvents = Object.entries(config.hooks ?? {})
-    .filter(([, groups]) => groups.some((group) => (group.hooks ?? []).some(isAgtHook)))
-    .map(([event]) => event);
-
+  const dest = pluginDir(codexHome);
   const policyPath = join(codexHome, "agt", "policy.json");
   const auditPath = join(codexHome, "agt", "audit-log.json");
   const { getAuditStatus } = await import("../lib/audit.mjs");
@@ -192,7 +132,7 @@ async function status(codexHome) {
   process.stdout.write(
     [
       `Codex home:      ${codexHome}`,
-      `AGT hooks:       ${installedEvents.length > 0 ? installedEvents.join(", ") : "not installed"}`,
+      `AGT plugin:      ${existsSync(dest) ? `registered (${dest})` : "not registered"}`,
       `Policy file:     ${existsSync(policyPath) ? policyPath : "missing (default policy will apply)"}`,
       `Audit log:       ${audit.count} entries, chain ${audit.valid ? "valid" : `INVALID (${audit.error})`}`,
       "",

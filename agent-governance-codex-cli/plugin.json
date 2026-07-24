@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "agt-governance",
+  "version": "5.0.0",
+  "description": "AGT governance hooks for the OpenAI Codex CLI",
+  "keywords": ["governance", "security", "agent", "codex", "hooks"],
+  "paths": {
+    "hooks": "hooks/hooks.json"
+  }
+}

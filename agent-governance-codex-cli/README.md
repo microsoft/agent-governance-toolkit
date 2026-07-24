@@ -11,13 +11,13 @@ It installs AGT governance into Codex's lifecycle hooks and uses:
 - Codex hooks for deterministic session, prompt, and pre-tool governance
 - the AGT TypeScript SDK for policy evaluation, prompt defense, and MCP threat scanning
 
-> **Status — proposed upstream.** This package is proposed for the main AGT repository via
+> **Status — first-party package, not yet published to npm.** This package lives in the main
+> AGT repository. It is a thin host adapter over the existing Claude Code governance core,
+> following the same copy-and-adapt derivation used for the OpenCode integration
+> ([#2658](https://github.com/microsoft/agent-governance-toolkit/pull/2658)), and originated from
 > [RFC #3408: Codex Integration](https://github.com/microsoft/agent-governance-toolkit/issues/3408).
-> It is a thin host adapter over the existing Claude Code governance core, following the same
-> copy-and-adapt derivation used for the OpenCode integration
-> ([#2658](https://github.com/microsoft/agent-governance-toolkit/pull/2658)). The design below
-> — enforcement surface, decision mapping, and security model — is that RFC's reference
-> implementation, verified in a sandboxed `CODEX_HOME` and live against Codex 0.144.6.
+> The design below — enforcement surface, decision mapping, and security model — is verified in a
+> sandboxed `CODEX_HOME` and live against Codex 0.144.6.
 
 ## What this package is
 
@@ -25,7 +25,7 @@ It installs AGT governance into Codex's lifecycle hooks and uses:
 - a parity layer for the existing Claude Code governance package — it adapts the same
   governance core (policy engine, audit log, poisoning scanner) and adds a thin Codex host
   adapter, following the same copy-and-adapt pattern as the OpenCode package
-- an npm package that installs hooks into a Codex home you choose
+- a Codex plugin (a `plugin.json` manifest + `hooks/hooks.json`) that you register into a Codex home you choose
 
 ## What this package is not
 
@@ -62,10 +62,11 @@ After the package is released, the published flow matches the other AGT CLI pack
 npx @microsoft/agent-governance-codex-cli install
 ```
 
-This merges AGT's hook entries into `<CODEX_HOME>/hooks.json` (default `~/.codex`) and
-seeds a default developer-protection policy at `<CODEX_HOME>/agt/policy.json`. It does not
-overwrite an existing policy, and it identifies its own entries by an `AGT governance`
-status-message prefix so it never disturbs hooks you defined yourself.
+This registers the plugin under `<CODEX_HOME>/plugins/agt-governance` (default home `~/.codex`)
+and seeds a default developer-protection policy at `<CODEX_HOME>/agt/policy.json`. Codex reads
+the plugin's `plugin.json`, loads its `hooks/hooks.json`, and expands `${PLUGIN_ROOT}` to the
+plugin directory at runtime — so no absolute paths are baked into your Codex config and your own
+hooks are never touched. It does not overwrite an existing policy.
 
 Target a specific home (useful for testing) with `--codex-home`:
 
@@ -75,16 +76,16 @@ node bin/agt-codex.mjs install --codex-home /path/to/codex-home
 
 ### One-time trust step (required)
 
-Codex does not run non-managed hooks until you review and trust them. After installing,
+Codex does not run non-managed plugin hooks until you review and trust them. After installing,
 open Codex against that home and run:
 
 ```text
-/hooks
+/plugins
 ```
 
-Review the AGT hooks and trust them. Until you do, **Codex silently skips the hooks and no
+Review the AGT plugin and trust it. Until you do, **Codex silently skips the hooks and no
 governance is applied** — verify with `node bin/agt-codex.mjs status` and by confirming the audit log
-grows after a governed action. For unattended automation that already vets its hook
+grows after a governed action. For unattended automation that already vets its plugin
 sources, `codex exec --dangerously-bypass-hook-trust` runs trusted-by-policy without the
 interactive step (do not use this on developer machines).
 
