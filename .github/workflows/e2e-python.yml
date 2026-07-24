@@ -1,0 +1,173 @@
+name: E2E Python
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "agent-governance-python/agent-governance-toolkit-core/**"
+      - "agent-governance-python/agent-os/**"
+      - "policy-engine/sdk/python/**"
+      - "policy-engine/core/**"
+      - "policy-engine/Cargo.toml"
+      - "policy-engine/Cargo.lock"
+      - "tests/e2e_python/**"
+      - ".github/actions/**"
+      - ".github/workflows/**"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/*.md"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/docs/**"
+      - "!agent-governance-python/agent-os/**/*.md"
+      - "!agent-governance-python/agent-os/**/docs/**"
+      - "!tests/e2e_python/**/*.md"
+  pull_request:
+    paths:
+      - "agent-governance-python/agent-governance-toolkit-core/**"
+      - "agent-governance-python/agent-os/**"
+      - "policy-engine/sdk/python/**"
+      - "policy-engine/core/**"
+      - "policy-engine/Cargo.toml"
+      - "policy-engine/Cargo.lock"
+      - "tests/e2e_python/**"
+      - ".github/actions/**"
+      - ".github/workflows/**"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/*.md"
+      - "!agent-governance-python/agent-governance-toolkit-core/**/docs/**"
+      - "!agent-governance-python/agent-os/**/*.md"
+      - "!agent-governance-python/agent-os/**/docs/**"
+      - "!tests/e2e_python/**/*.md"
+  workflow_dispatch: {}
+
+concurrency:
+  group: e2e-python-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python-e2e-ollama:
+    name: Python E2E (Ollama)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AGT_E2E_ARTIFACT_DIR: artifacts/e2e-python/ollama
+      AGT_E2E_MODEL: llama3.1
+      AGT_E2E_MODEL_DIGEST: 46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e
+      AGT_E2E_MODEL_ATTEMPTS: "3"
+      OLLAMA_VERSION: "0.5.7"
+      # v0.5.7 ollama-linux-amd64.tgz, from the publisher's sha256sum.txt:
+      # https://github.com/ollama/ollama/releases/tag/v0.5.7
+      OLLAMA_V0_5_7_LINUX_AMD64_SHA256: 8d4e054bc512d53115074c19de5a7915df78180f89c014abbae4497e4a813a3c
+      OLLAMA_MODELS: /home/runner/.ollama/models
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Rust toolchain
+        # The ACS Python SDK (agent-control-specification) is a PyO3
+        # extension over the Rust core; building it from the in-tree
+        # source at policy-engine/sdk/python needs cargo + a C toolchain
+        # (present on ubuntu-latest by default).
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Install Python E2E dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip==24.3.1
+          python -m pip install \
+            -e agent-governance-python/agent-governance-toolkit-core \
+            ./policy-engine/sdk/python \
+            pytest==9.0.3 \
+            pytest-timeout==2.4.0
+
+      - name: Cache Ollama model
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.OLLAMA_MODELS }}
+          key: ollama-${{ runner.os }}-${{ env.OLLAMA_VERSION }}-${{ env.AGT_E2E_MODEL_DIGEST }}
+
+      - name: Install and start Ollama
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tgz"
+          install_dir="$RUNNER_TEMP/ollama"
+          curl --fail --show-error --location --retry 3 \
+            --output "$archive" \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tgz"
+          echo "${OLLAMA_V0_5_7_LINUX_AMD64_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$install_dir"
+          tar --extract --gzip --file "$archive" --directory "$install_dir"
+          export PATH="$install_dir/bin:$PATH"
+          echo "$install_dir/bin" >> "$GITHUB_PATH"
+
+          mkdir -p "$OLLAMA_MODELS"
+          ollama serve >/tmp/ollama.log 2>&1 &
+          is_up() { curl -fsS "http://127.0.0.1:11434/api/version" >/dev/null 2>&1; }
+          up=0
+          for _ in $(seq 1 30); do
+            if is_up; then up=1; break; fi
+            sleep 2
+          done
+          if [ "$up" -ne 1 ]; then
+            cat /tmp/ollama.log 2>/dev/null || true
+            exit 1
+          fi
+          ollama pull "$AGT_E2E_MODEL"
+
+          mkdir -p "$AGT_E2E_ARTIFACT_DIR"
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          base_url = "http://127.0.0.1:11434"
+          with urllib.request.urlopen(f"{base_url}/api/version", timeout=10) as response:
+              version = json.load(response)["version"]
+          with urllib.request.urlopen(f"{base_url}/api/tags", timeout=10) as response:
+              models = json.load(response).get("models", [])
+
+          requested_model = os.environ["AGT_E2E_MODEL"]
+          accepted_names = {requested_model, f"{requested_model}:latest"}
+          selected = next((model for model in models if model.get("name") in accepted_names), None)
+          if selected is None:
+              raise SystemExit(f"Pulled model {requested_model!r} was not listed by Ollama")
+
+          actual_digest = selected.get("digest", "")
+          expected_digest = os.environ["AGT_E2E_MODEL_DIGEST"]
+          if actual_digest != expected_digest:
+              raise SystemExit(
+                  f"Model digest mismatch for {requested_model}: "
+                  f"expected {expected_digest}, got {actual_digest}"
+              )
+
+          metadata = {
+              "model": selected.get("name"),
+              "model_digest": actual_digest,
+              "ollama_version": version,
+          }
+          output = Path(os.environ["AGT_E2E_ARTIFACT_DIR"]) / "runtime-metadata.json"
+          output.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
+          print(json.dumps(metadata, sort_keys=True))
+          PY
+
+      - name: Run Python E2E with Ollama
+        run: |
+          set -euo pipefail
+          mkdir -p "$AGT_E2E_ARTIFACT_DIR"
+          python -m pytest tests/e2e_python \
+            --junitxml="$AGT_E2E_ARTIFACT_DIR/junit.xml" \
+            -q
+
+      - name: Upload Ollama E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-python-ollama-artifacts
+          path: artifacts/e2e-python/ollama
+          if-no-files-found: warn

@@ -12,4 +12,10 @@
     <ProjectReference Include="../../src/AgentControlSpecification.AI/AgentControlSpecification.AI.csproj" />
     <ProjectReference Include="../../src/AgentControlSpecification.AutoGen/AgentControlSpecification.AutoGen.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../../../tests/parity/artifact-validation-cases.json"
+          Link="artifact-validation-cases.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

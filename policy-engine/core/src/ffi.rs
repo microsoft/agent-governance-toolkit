@@ -11,6 +11,8 @@ use crate::{
     PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use serde_json::json;
+#[cfg(feature = "opa")]
+use std::collections::BTreeMap;
 use std::{
     ffi::{CStr, CString},
     os::raw::{c_char, c_void},
@@ -786,6 +788,78 @@ pub unsafe extern "C" fn acs_runtime_free(r: *mut AcsRuntime) {
             unsafe { drop(Box::from_raw(r)) };
         }
     })
+}
+
+/// Validate ACS manifest and Rego strings and return a JSON validation result.
+///
+/// # Safety
+/// `manifest_yaml` and `rego_modules_json` must be valid NUL-terminated UTF-8
+/// strings. `rego_modules_json` must be a JSON object mapping source names to
+/// Rego module strings. `opa_path` may be null. The returned string and any
+/// populated error must be released with `acs_free_string`.
+#[no_mangle]
+#[cfg(feature = "opa")]
+pub unsafe extern "C" fn acs_validate_artifacts(
+    manifest_yaml: *const c_char,
+    rego_modules_json: *const c_char,
+    opa_path: *const c_char,
+    err: *mut *mut c_char,
+) -> *mut c_char {
+    ffi_guard!(ptr_with_err, err, {
+        let Some(manifest_yaml) = (unsafe { cstr_to_str(manifest_yaml) }) else {
+            unsafe { write_err(err, "null or non-UTF8 manifest YAML") };
+            return std::ptr::null_mut();
+        };
+        let Some(rego_modules_json) = (unsafe { cstr_to_str(rego_modules_json) }) else {
+            unsafe { write_err(err, "null or non-UTF8 Rego modules JSON") };
+            return std::ptr::null_mut();
+        };
+        if rego_modules_json.len() > 8_388_608 {
+            let result = crate::ArtifactValidationResult {
+                valid: false,
+                diagnostics: vec![crate::ValidationDiagnostic {
+                    component: "rego".to_string(),
+                    code: "rego_size_exceeded".to_string(),
+                    message: "Encoded Rego module input exceeds the 8 MiB ABI limit.".to_string(),
+                    source: "rego".to_string(),
+                    path: None,
+                    line: None,
+                    column: None,
+                    snippet: None,
+                }],
+            };
+            return unsafe { validation_result_to_c(&result, err) };
+        }
+        let modules: BTreeMap<String, String> = match serde_json::from_str(rego_modules_json) {
+            Ok(modules) => modules,
+            Err(error) => {
+                unsafe { write_err(err, &format!("invalid Rego modules JSON: {error}")) };
+                return std::ptr::null_mut();
+            }
+        };
+        let opa_path = unsafe { cstr_to_str(opa_path) }.map(Path::new);
+        let result = crate::validate_acs_artifacts(manifest_yaml, &modules, opa_path);
+        unsafe { validation_result_to_c(&result, err) }
+    })
+}
+
+#[cfg(feature = "opa")]
+unsafe fn validation_result_to_c(
+    result: &crate::ArtifactValidationResult,
+    err: *mut *mut c_char,
+) -> *mut c_char {
+    match serde_json::to_string(result) {
+        Ok(json) => cstring_lossy(&json).into_raw(),
+        Err(error) => {
+            unsafe {
+                write_err(
+                    err,
+                    &format!("failed to serialize validation result: {error}"),
+                )
+            };
+            std::ptr::null_mut()
+        }
+    }
 }
 
 /// Free a Rust-allocated string returned by ACS. Null-safe.

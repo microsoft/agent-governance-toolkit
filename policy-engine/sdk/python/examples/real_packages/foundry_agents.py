@@ -217,6 +217,38 @@ async def govern(
     return await control.evaluate_intervention_point(point, snapshot, EnforcementMode.ENFORCE)
 
 
+async def enforce(
+    control: AgentControl,
+    point: InterventionPoint,
+    result: InterventionPointResult,
+    policy_target: dict,
+    *,
+    approval_resolver=None,
+) -> dict:
+    """Host-side verdict enforcement for one manual interception point.
+
+    Drop this into your own framework's tool-dispatch hook so every interception
+    point shares a single enforcement path instead of re-deriving allow, warn,
+    deny, escalate, and transform handling at each seam. It delegates the
+    blocking decision to the SDK (``control.enforce`` raises
+    ``AgentControlBlocked`` on a deny or an unapproved escalate, and routes an
+    escalate to ``approval_resolver``), then returns the target the host must
+    propagate: the rewritten target on a transform verdict, otherwise the
+    original ``policy_target``.
+
+    This helper lives in the example on purpose. It is a thin composition over
+    the stable SDK surface (``control.enforce`` plus
+    ``result.transformed_policy_target``), so a host can copy and adapt it
+    without waiting on an SDK release.
+    """
+    await control.enforce(point, result, EnforcementMode.ENFORCE, approval_resolver=approval_resolver)
+    if result.verdict.decision is Decision.TRANSFORM and (
+        result.transformed_policy_target_applied or result.transformed_policy_target is not None
+    ):
+        return result.transformed_policy_target
+    return policy_target
+
+
 async def demo_short_path(control: AgentControl) -> None:
     """Short path: protect_tool returns a governed wrapper around the callable.
 
@@ -254,34 +286,24 @@ async def demo_short_path(control: AgentControl) -> None:
 
 
 async def demo_long_path(control: AgentControl) -> None:
-    """Long path: evaluate the seam yourself and branch on the decision.
+    """Long path: evaluate the seam yourself, then call ``enforce``.
 
-    This is the shape you drop into a framework's own tool-dispatch hook when you
-    need to inspect labels, route escalations, or apply a transformed argument.
+    This is the shape you drop into a framework's own tool-dispatch hook. The
+    reusable ``enforce`` helper above collapses the per-decision branching into
+    one call per interception point, so an agent builder wires evaluation once
+    and reuses the same enforcement path everywhere.
     """
-    print("\n-- long path: control.evaluate_intervention_point --")
+    print("\n-- long path: control.evaluate_intervention_point + enforce --")
 
     async def governed_call(tool_name: str, args: dict):
         pre = await govern(
             control, InterventionPoint.PRE_TOOL_CALL, {"tool_call": {"name": tool_name, "args": args}}
         )
-        decision = pre.verdict.decision
-        if decision is Decision.DENY:
-            print(f"  DENY   -> {tool_name}: {pre.verdict.reason}")
+        try:
+            effective_args = await enforce(control, InterventionPoint.PRE_TOOL_CALL, pre, args)
+        except AgentControlBlocked as blocked:
+            print(f"  {blocked.result.verdict.decision.name:8} -> {tool_name}: {blocked.result.verdict.reason}")
             return None, False
-        if decision is Decision.ESCALATE:
-            print(f"  ESCALATE -> {tool_name}: route to a human approver, holding the call")
-            return None, False
-        # ESCALATE and TRANSFORM are shown for completeness; this host policy
-        # only emits allow/deny, so those branches illustrate the full decision
-        # space a real policy could use.
-        # TRANSFORM hands back a rewritten policy target (e.g. redacted args).
-        effective_args = args
-        if (
-            decision is Decision.TRANSFORM
-            and isinstance(pre.transformed_policy_target, dict)
-        ):
-            effective_args = pre.transformed_policy_target
 
         output = TOOLS[tool_name](**effective_args)
 
@@ -293,10 +315,12 @@ async def demo_long_path(control: AgentControl) -> None:
             InterventionPoint.POST_TOOL_CALL,
             {"tool_call": {"name": tool_name, "args": effective_args}, "tool_result": output},
         )
-        if post.verdict.decision is not Decision.ALLOW:
-            print(f"  {post.verdict.decision.name} (post) -> {tool_name}: {post.verdict.reason}")
+        try:
+            output = await enforce(control, InterventionPoint.POST_TOOL_CALL, post, output)
+        except AgentControlBlocked as blocked:
+            print(f"  {blocked.result.verdict.decision.name:8} (post) -> {tool_name}: {blocked.result.verdict.reason}")
             return None, False
-        print(f"  {decision.name:5} -> {tool_name}: ran, output={output!r}")
+        print(f"  {pre.verdict.decision.name:5} -> {tool_name}: ran, output={output!r}")
         return output, True
 
     _, ran = await governed_call("search_records", {"query": "SELECT 1"})

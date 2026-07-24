@@ -76,11 +76,11 @@ jobs:
       # every non-Dependabot PR.
       - name: Fetch Dependabot metadata
         id: dependabot-metadata
-        if: github.actor == 'dependabot[bot]'
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
       - env:
           BASE_REF: ${{ github.base_ref }}
-          PR_ACTOR: ${{ github.actor }}
+          PR_ACTOR: ${{ github.event.pull_request.user.login }}
           DEPENDABOT_UPDATE_TYPE: ${{ steps.dependabot-metadata.outputs.update-type }}
         run: |
           chmod +x scripts/ci/vendored-patch-audit.sh

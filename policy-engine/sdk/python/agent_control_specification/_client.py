@@ -33,6 +33,54 @@ class RuntimeClient(Protocol):
     async def evaluate_intervention_point(self, request: InterventionPointRequest) -> InterventionPointResult: ...
 
 
+def parse_manifest(manifest: str | bytes) -> JsonValue:
+    """Parse manifest text with the same serde_yaml implementation as the Rust runtime."""
+
+    try:
+        from agent_control_specification import _native
+    except ImportError as exc:
+        raise ImportError(
+            "The agent_control_specification._native extension is not built. "
+            "Install this package with maturin or build the wheel before parsing manifests."
+        ) from exc
+    manifest_str = manifest.decode("utf-8") if isinstance(manifest, bytes) else manifest
+    if not isinstance(manifest_str, str):
+        raise TypeError("manifest must be a string or bytes")
+    return _native.parse_manifest(manifest_str)
+
+
+def validate_manifest(manifest: str | bytes) -> None:
+    """Validate manifest text with the Rust runtime's typed manifest contract."""
+
+    try:
+        from agent_control_specification import _native
+    except ImportError as exc:
+        raise ImportError(
+            "The agent_control_specification._native extension is not built. "
+            "Install this package with maturin or build the wheel before validating manifests."
+        ) from exc
+    manifest_str = manifest.decode("utf-8") if isinstance(manifest, bytes) else manifest
+    if not isinstance(manifest_str, str):
+        raise TypeError("manifest must be a string or bytes")
+    _native.validate_manifest(manifest_str)
+
+
+def validate_manifest_overlay(manifest: str | bytes) -> None:
+    """Validate resolution-independent fields on a partial manifest."""
+
+    try:
+        from agent_control_specification import _native
+    except ImportError as exc:
+        raise ImportError(
+            "The agent_control_specification._native extension is not built. "
+            "Install this package with maturin or build the wheel before validating manifests."
+        ) from exc
+    manifest_str = manifest.decode("utf-8") if isinstance(manifest, bytes) else manifest
+    if not isinstance(manifest_str, str):
+        raise TypeError("manifest must be a string or bytes")
+    _native.validate_manifest_overlay(manifest_str)
+
+
 class NativeRuntimeClient:
     """Thin async facade over the deterministic Rust core PyO3 binding."""
 
