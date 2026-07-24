@@ -4,6 +4,8 @@
   "description": "Public Preview \u2014 Codex CLI governance hooks for Agent Governance Toolkit developer protection policies",
   "type": "module",
   "files": [
+    ".agents/",
+    ".codex-plugin/",
     "bin/",
     "config/",
     "hooks/",

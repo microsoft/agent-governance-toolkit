@@ -187,6 +187,10 @@ test("bundled policy load failures block prompt submission in enforce mode", asy
   const state = await loadPolicy({
     auditPath,
     defaultPolicyPath: missingDefaultPolicy,
+    // Also isolate the user-policy lookup: loadPolicy checks
+    // <home>/agt/policy.json before the bundled default, so a real policy on
+    // the test machine would mask the bundled-failure path this test stages.
+    policyPath: join(root, "missing-user-policy.json"),
   });
 
   const result = await evaluatePromptSubmission(state, {

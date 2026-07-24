@@ -5,24 +5,28 @@
 /**
  * @file Installer CLI for the AGT Codex governance plugin (`agt-codex`).
  *
- * This package ships as a Codex plugin: a `plugin.json` manifest plus
- * `hooks/hooks.json` whose commands reference `${PLUGIN_ROOT}`, which Codex
- * expands to the plugin's own install directory at runtime. Installation
- * therefore only registers the plugin with a Codex home (and seeds a default
- * policy) — there is no per-path substitution and no merge into the host
- * `hooks.json`, because Codex loads the plugin's own hooks and resolves the
- * root itself. This mirrors the Claude Code package, which relies on the host
- * to expand `${CLAUDE_PLUGIN_ROOT}` rather than baking absolute paths.
+ * This package ships as a Codex plugin: `.codex-plugin/plugin.json` (the plugin
+ * manifest) plus `hooks/hooks.json`, whose commands reference `${PLUGIN_ROOT}` —
+ * which Codex expands to the plugin's install directory at runtime. The package
+ * is also its own single-plugin marketplace (`.agents/plugins/marketplace.json`,
+ * `source: "."`), so installation registers it with Codex's plugin system via
+ * `codex plugin marketplace add` + `codex plugin add`, and Codex then discovers
+ * the plugin and loads its hooks. There is no editing of the host `hooks.json`
+ * and no path substitution — Codex resolves `${PLUGIN_ROOT}` itself.
  *
  * Usage: `agt-codex <install|uninstall|status> [--codex-home <dir>]`
  */
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile, symlink, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PLUGIN_NAME = "agt-governance";
+// MARKETPLACE_NAME must match the "name" in .agents/plugins/marketplace.json.
+const MARKETPLACE_NAME = "agt";
+const PLUGIN_SELECTOR = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 /**
@@ -43,47 +47,81 @@ function resolveCodexHome(args) {
 }
 
 /**
- * Directory Codex discovers this plugin from: `<codexHome>/plugins/<name>`.
- * @param {string} codexHome Target Codex home directory.
- * @returns {string} The plugin registration path.
+ * Run a `codex` subcommand against a target home. Never throws on a non-zero
+ * exit (an "already registered" re-add is not fatal); the caller decides how to
+ * treat failure. Throws only if the `codex` CLI itself is missing.
+ * @param {string[]} args
+ * @param {string} codexHome
+ * @returns {{ok: boolean, stdout: string, stderr: string}}
  */
-function pluginDir(codexHome) {
-  return join(codexHome, "plugins", PLUGIN_NAME);
+function codex(args, codexHome) {
+  try {
+    const stdout = execFileSync("codex", args, {
+      env: { ...process.env, CODEX_HOME: codexHome },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { ok: true, stdout, stderr: "" };
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error("`codex` CLI not found on PATH. Install the Codex CLI, then re-run.");
+    }
+    return {
+      ok: false,
+      stdout: error?.stdout?.toString() ?? "",
+      stderr: error?.stderr?.toString() ?? String(error?.message ?? error),
+    };
+  }
+}
+
+/** True when `codex plugin list` reports our plugin as installed AND enabled. */
+function isPluginEnabled(codexHome) {
+  const list = codex(["plugin", "list"], codexHome);
+  return {
+    enabled: new RegExp(`${PLUGIN_NAME}@${MARKETPLACE_NAME}\\s+installed,\\s*enabled`).test(list.stdout),
+    listOutput: list.stdout,
+  };
+}
+
+/** Seed the editable default policy the hooks enforce, if none exists yet. */
+async function seedPolicy(codexHome) {
+  const policyPath = join(codexHome, "agt", "policy.json");
+  if (existsSync(policyPath)) {
+    return { seeded: false, policyPath };
+  }
+  const defaultPolicy = await readFile(join(PACKAGE_ROOT, "config", "default-policy.json"), "utf8");
+  await mkdir(dirname(policyPath), { recursive: true });
+  await writeFile(policyPath, defaultPolicy, "utf8");
+  return { seeded: true, policyPath };
 }
 
 /**
- * Register the plugin with a Codex home and seed a default policy.
- *
- * Registration links this package into `<codexHome>/plugins/<name>`; Codex reads
- * the `plugin.json` manifest there and loads `hooks/hooks.json`, expanding
- * `${PLUGIN_ROOT}` to the linked directory. No hook substitution or host
- * `hooks.json` merge is performed. (The exact registration contract — link vs.
- * `codex plugin add` — should be confirmed against the target Codex version.)
+ * Register this package as a Codex plugin marketplace, install + enable the
+ * plugin, and seed a default policy. Fails loudly (non-zero exit) if Codex did
+ * not actually enable the plugin, so install never reports success on a no-op.
  * @param {string} codexHome Target Codex home directory.
  * @returns {Promise<void>}
  */
 async function install(codexHome) {
-  const dest = pluginDir(codexHome);
-  await mkdir(dirname(dest), { recursive: true });
-  if (existsSync(dest)) {
-    await rm(dest, { recursive: true, force: true });
-  }
-  // Junction (not "dir") so the link is created without elevation on Windows.
-  await symlink(PACKAGE_ROOT, dest, "junction");
+  // Register the package as a marketplace, then install the plugin from it.
+  // Both are safe to re-run; correctness is confirmed by the list check below.
+  codex(["plugin", "marketplace", "add", PACKAGE_ROOT], codexHome);
+  const add = codex(["plugin", "add", PLUGIN_SELECTOR], codexHome);
 
-  const policyPath = join(codexHome, "agt", "policy.json");
-  let seededPolicy = false;
-  if (!existsSync(policyPath)) {
-    const defaultPolicy = await readFile(join(PACKAGE_ROOT, "config", "default-policy.json"), "utf8");
-    await mkdir(dirname(policyPath), { recursive: true });
-    await writeFile(policyPath, defaultPolicy, "utf8");
-    seededPolicy = true;
+  const { enabled, listOutput } = isPluginEnabled(codexHome);
+  if (!enabled) {
+    throw new Error(
+      `plugin did not register as installed+enabled.\n` +
+        `\`codex plugin add\` output:\n${add.stderr || add.stdout || "(none)"}\n` +
+        `\`codex plugin list\`:\n${listOutput || "(empty)"}`,
+    );
   }
 
+  const { seeded, policyPath } = await seedPolicy(codexHome);
   process.stdout.write(
     [
-      `Registered AGT governance plugin at ${dest}`,
-      seededPolicy
+      `Installed AGT governance plugin (${PLUGIN_SELECTOR}) — installed, enabled.`,
+      seeded
         ? `Seeded default policy at ${policyPath}`
         : `Kept existing policy at ${policyPath}`,
       "",
@@ -95,21 +133,19 @@ async function install(codexHome) {
 }
 
 /**
- * Unregister the plugin from a Codex home. The policy file and audit log are
- * preserved.
+ * Remove the plugin and its marketplace registration. Policy and audit files
+ * are preserved.
  * @param {string} codexHome Target Codex home directory.
  * @returns {Promise<void>}
  */
 async function uninstall(codexHome) {
-  const dest = pluginDir(codexHome);
-  if (!existsSync(dest)) {
-    process.stdout.write(`No AGT plugin registered at ${dest}; nothing to uninstall.\n`);
-    return;
-  }
-  await rm(dest, { recursive: true, force: true });
+  const removed = codex(["plugin", "remove", PLUGIN_SELECTOR], codexHome);
+  codex(["plugin", "marketplace", "remove", MARKETPLACE_NAME], codexHome);
   process.stdout.write(
     [
-      `Unregistered AGT governance plugin from ${dest}`,
+      removed.ok
+        ? `Removed AGT governance plugin (${PLUGIN_SELECTOR}) and its marketplace.`
+        : `AGT plugin was not installed; removed any marketplace registration.`,
       `Policy and audit files under ${join(codexHome, "agt")} were kept; delete them manually if desired.`,
       "",
     ].join("\n"),
@@ -117,13 +153,15 @@ async function uninstall(codexHome) {
 }
 
 /**
- * Report whether the plugin is registered for a Codex home, the policy path,
- * and the audit-log entry count and chain validity.
+ * Report whether the plugin is installed/enabled, the policy path, and the
+ * audit-log entry count and chain validity.
  * @param {string} codexHome Target Codex home directory.
  * @returns {Promise<void>}
  */
 async function status(codexHome) {
-  const dest = pluginDir(codexHome);
+  const list = codex(["plugin", "list"], codexHome);
+  const line =
+    list.stdout.split("\n").find((l) => l.includes(PLUGIN_NAME))?.trim() ?? "not installed";
   const policyPath = join(codexHome, "agt", "policy.json");
   const auditPath = join(codexHome, "agt", "audit-log.json");
   const { getAuditStatus } = await import("../lib/audit.mjs");
@@ -132,7 +170,7 @@ async function status(codexHome) {
   process.stdout.write(
     [
       `Codex home:      ${codexHome}`,
-      `AGT plugin:      ${existsSync(dest) ? `registered (${dest})` : "not registered"}`,
+      `AGT plugin:      ${line}`,
       `Policy file:     ${existsSync(policyPath) ? policyPath : "missing (default policy will apply)"}`,
       `Audit log:       ${audit.count} entries, chain ${audit.valid ? "valid" : `INVALID (${audit.error})`}`,
       "",
