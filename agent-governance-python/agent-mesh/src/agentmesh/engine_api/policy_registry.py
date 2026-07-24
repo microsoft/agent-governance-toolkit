@@ -138,6 +138,8 @@ class PolicyRegistry:
                 logger.warning("Policy directory %s is not a directory", self._policy_dir)
                 self._records = records
                 return
+
+            for path in self._policy_dir.iterdir():
                 if not path.is_file():
                     continue
                 fmt = _format_for_suffix(path.suffix)
