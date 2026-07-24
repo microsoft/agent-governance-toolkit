@@ -1,0 +1,7 @@
+# Detect direct attempts to replace the agent's governing instructions.
+version: "1.0"
+name: prompt-injection-e2e
+description: Block instruction-override content retrieved from external sources.
+detection_patterns:
+  direct_override:
+    - 'ignore\s+(all\s+)?previous\s+instructions'
