@@ -1,0 +1,42 @@
+{
+  "description": "AGT governance hooks for Codex CLI. ${AGT_PACKAGE_ROOT} is substituted with the installed package root by `agt-codex install`.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${AGT_PACKAGE_ROOT}/bin/agt-node\" \"${AGT_PACKAGE_ROOT}/hooks/session-start.mjs\"",
+            "statusMessage": "AGT governance: session start",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${AGT_PACKAGE_ROOT}/bin/agt-node\" \"${AGT_PACKAGE_ROOT}/hooks/user-prompt-submit.mjs\"",
+            "statusMessage": "AGT governance: prompt inspection",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${AGT_PACKAGE_ROOT}/bin/agt-node\" \"${AGT_PACKAGE_ROOT}/hooks/pre-tool-use.mjs\"",
+            "statusMessage": "AGT governance: tool-call policy check",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

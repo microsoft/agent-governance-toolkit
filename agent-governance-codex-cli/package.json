@@ -1,0 +1,50 @@
+{
+  "name": "@microsoft/agent-governance-codex-cli",
+  "version": "5.0.0",
+  "description": "Public Preview \u2014 Codex CLI governance hooks for Agent Governance Toolkit developer protection policies",
+  "type": "module",
+  "files": [
+    "bin/",
+    "config/",
+    "hooks/",
+    "lib/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run check",
+    "check": "node --check ./hooks/common.mjs && node --check ./hooks/session-start.mjs && node --check ./hooks/user-prompt-submit.mjs && node --check ./hooks/pre-tool-use.mjs && node --check ./lib/audit.mjs && node --check ./lib/poisoning.mjs && node --check ./lib/policy.mjs && node --check ./bin/agt-codex.mjs && node --test ./test/*.test.mjs",
+    "test": "node --test ./test/*.test.mjs"
+  },
+  "keywords": [
+    "codex",
+    "codex-cli",
+    "agent",
+    "governance",
+    "security",
+    "policy",
+    "mcp"
+  ],
+  "author": {
+    "name": "Microsoft Corporation",
+    "email": "agentgovtoolkit@microsoft.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
+    "directory": "agent-governance-codex-cli"
+  },
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-codex-cli",
+  "dependencies": {
+    "@microsoft/agent-governance-sdk": "4.0.0"
+  },
+  "overrides": {
+    "js-yaml": "4.2.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "bin": {
+    "agt-codex": "./bin/agt-codex.mjs"
+  }
+}

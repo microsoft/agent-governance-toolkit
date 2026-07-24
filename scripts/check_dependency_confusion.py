@@ -192,6 +192,7 @@ REGISTERED_NPM_PACKAGES = {
     "@microsoft/agent-governance-sdk", "@microsoft/agent-governance-copilot-cli",
     "@microsoft/agent-governance-claude-code",
     "@microsoft/agent-governance-opencode",
+    "@microsoft/agent-governance-codex-cli",
     "@microsoft/agent-governance-antigravity-cli",
     "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
     "@microsoft/agent-os-vscode",

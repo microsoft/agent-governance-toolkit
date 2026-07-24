@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Codex CLI governance package** — added `@microsoft/agent-governance-codex-cli`, a first-party governance integration for the OpenAI Codex CLI. It adapts the Claude Code governance core over Codex's hook system (`SessionStart`, `UserPromptSubmit`, `PreToolUse`), mapping policy decisions onto Codex's `permissionDecision` schema (deny/ask/allow) with fail-closed error handling, and ships an installer (`agt-codex install/status/uninstall`), a default developer-protection policy, and tests. Proposed via RFC #3408 (#3409). Adopts the in-flight core hardening for this package: the seam-based audit-log rollover fix (#3250, originally #1838), the recursive-delete policy tightening (#3251), and the secret-read pattern hardening incl. `/proc/self/environ` (#3295).
 - **ACS artifact validation API** - added one bounded Rust-core validator for canonical manifest schema checks, typed ACS semantics, and OPA Rego parsing, exposed with the same structured result through Rust, Python, Node, and .NET. The `acs-generator` CLI now consumes this shared SDK surface.
 
 ### Changed
