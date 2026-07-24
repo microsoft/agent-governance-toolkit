@@ -1,0 +1,155 @@
+name: Demos
+
+# Runs the runnable AGT demos on every push and pull request. The
+# governance middleware, policy engine, and audit trail are always real; the
+# LLM-driven demo is exercised against a small open-source model
+# (Meta Llama 3.1) served locally by Ollama, so no paid API keys or secrets
+# are required. This keeps the demos honest and continuously verified.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: demos-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # dorny/paths-filter uses the REST API to diff PRs on the pull_request
+      # trigger, which needs pull-requests: read.
+      pull-requests: read
+    outputs:
+      demos: ${{ steps.filter.outputs.demos }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            demos:
+              - 'examples/demos/**'
+              - 'agent-governance-python/agent-os/**'
+              - 'agent-governance-python/agent-mesh/**'
+              - 'agent-governance-python/agent-sre/**'
+              - 'agent-governance-python/agent-runtime/**'
+              - '.github/workflows/demos.yml'
+
+  run-demos:
+    needs: changes
+    if: needs.changes.outputs.demos == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Drive the existing OpenAI backend against a local Ollama server via the
+      # OpenAI-compatible API. OPENAI_API_KEY is a required-but-unused placeholder
+      # (Ollama ignores it); no real key or secret is involved.
+      OPENAI_BASE_URL: http://127.0.0.1:11434/v1
+      OPENAI_API_KEY: ollama
+      # Meta Llama 3.1 (8B), matching tests/e2e_python's e2e-python.yml so both
+      # workflows share the same pinned Ollama model and cache entry.
+      AGT_DEMO_MODEL: llama3.1
+      # Pin the Ollama runtime for reproducible, supply-chain-safe installs.
+      OLLAMA_VERSION: "0.5.7"
+      # v0.5.7 ollama-linux-amd64.tgz, from the publisher's sha256sum.txt:
+      # https://github.com/ollama/ollama/releases/tag/v0.5.7
+      OLLAMA_V0_5_7_LINUX_AMD64_SHA256: 8d4e054bc512d53115074c19de5a7915df78180f89c014abbae4497e4a813a3c
+      # llama3.1 manifest digest, verified after the pull so a tampered or
+      # drifted model fails the gate (same value as e2e-python.yml).
+      AGT_DEMO_MODEL_DIGEST: 46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e
+      OLLAMA_MODELS: /home/runner/.ollama/models
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install toolkit packages
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip==24.3.1
+          pip install -e agent-governance-python/agent-os
+          pip install -e agent-governance-python/agent-mesh
+          pip install -e agent-governance-python/agent-sre
+          pip install -e agent-governance-python/agent-runtime
+          # Install the OpenAI client last and pin httpx: openai 1.54.x passes a
+          # `proxies=` kwarg that httpx>=0.28 removed, so pin httpx<0.28.
+          pip install openai==1.54.4 httpx==0.27.2
+
+      - name: Offline governance smoke test
+        run: python examples/demos/governed-agent-in-10-min/demo.py --no-pause
+
+      - name: Cache Ollama model
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.OLLAMA_MODELS }}
+          key: ollama-${{ runner.os }}-${{ env.OLLAMA_VERSION }}-${{ env.AGT_DEMO_MODEL_DIGEST }}
+
+      - name: Start Ollama with a safe open-source model
+        run: |
+          set -euo pipefail
+          # Install a pinned, checksum-verified Ollama release rather than piping
+          # the upstream install script into a shell (supply-chain safety).
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tgz"
+          install_dir="$RUNNER_TEMP/ollama"
+          curl --fail --show-error --location --retry 3 \
+            --output "$archive" \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tgz"
+          echo "${OLLAMA_V0_5_7_LINUX_AMD64_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$install_dir"
+          tar --extract --gzip --file "$archive" --directory "$install_dir"
+          export PATH="$install_dir/bin:$PATH"
+          echo "$install_dir/bin" >> "$GITHUB_PATH"
+
+          mkdir -p "$OLLAMA_MODELS"
+          ollama serve >/tmp/ollama.log 2>&1 &
+          is_up() { curl -fsS "http://127.0.0.1:11434/api/version" >/dev/null 2>&1; }
+          up=0
+          for _ in $(seq 1 30); do
+            if is_up; then up=1; break; fi
+            sleep 2
+          done
+          if [ "$up" -ne 1 ]; then
+            echo "Ollama failed to start" >&2
+            cat /tmp/ollama.log 2>/dev/null || true
+            exit 1
+          fi
+          echo "Ollama is up."
+
+          ollama pull "$AGT_DEMO_MODEL"
+
+          # Verify the pulled model manifest digest against the pinned value so a
+          # tampered or drifted model cannot silently run in the demo gate.
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          with urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=10) as response:
+              models = json.load(response).get("models", [])
+          requested = os.environ["AGT_DEMO_MODEL"]
+          accepted = {requested, f"{requested}:latest"}
+          selected = next((m for m in models if m.get("name") in accepted), None)
+          if selected is None:
+              raise SystemExit(f"Pulled model {requested!r} was not listed by Ollama")
+          actual = selected.get("digest", "")
+          expected = os.environ["AGT_DEMO_MODEL_DIGEST"]
+          if actual != expected:
+              raise SystemExit(
+                  f"Model digest mismatch for {requested}: expected {expected}, got {actual}"
+              )
+          print(f"Verified {requested} digest {actual}")
+          PY
+
+      - name: Run governance demo against open-source model
+        run: python examples/demos/maf_governance_demo.py --model "$AGT_DEMO_MODEL"

@@ -1,0 +1,29 @@
+# Require human approval before a high-blast-radius deletion executes.
+# Native Agent Control Specification manifest: the pre_tool_call intervention
+# point binds a host-owned custom policy that escalates the destructive tool
+# call to a human approver rather than allowing or denying it outright. This is
+# the contract a customer would ship; no legacy policy language.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: high-risk-approval-guard
+policies:
+  approval_guard:
+    type: custom
+    adapter: e2e_rule
+    config:
+      rule:
+        tool: delete_production_dataset
+        decision: escalate
+        reason: approval.escalate-high-risk-delete
+        message: High-risk deletion requires human approval
+intervention_points:
+  pre_tool_call:
+    policy_target_kind: tool_args
+    policy_target: "$.tool_call.args"
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: approval_guard
+tools:
+  delete_production_dataset:
+    type: Tool
+    id: delete_production_dataset
