@@ -61,7 +61,7 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 **Prerequisites:** Python 3.10+
 
 ```bash
-pip install agent-governance-toolkit[full]
+pip install "agent-governance-toolkit[full]"
 ```
 
 Use the `[full]` extra for the quick-start imports below. The base
@@ -266,7 +266,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 | Language | Package | Command |
 |----------|---------|---------|
-| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
+| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install "agent-governance-toolkit[full]"` |
 | **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
 | **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |

@@ -47,10 +47,13 @@ python -m venv .venv
 source .venv/bin/activate        # Linux/macOS
 # .venv\Scripts\activate         # Windows
 
+# Install the core package from the local source to avoid dependency conflicts
+pip install --no-cache-dir --no-deps -e agent-governance-toolkit-core
+
 # Install the package you are working on in editable mode
-pip install -e agent-os/[dev]       # Policy engine
-pip install -e agent-mesh/[dev]     # Identity/trust layer
-pip install -e agent-compliance/[dev]  # Compliance tooling
+pip install -e "agent-os[dev]"       # Policy engine
+pip install -e "agent-mesh[dev]"     # Identity/trust layer
+pip install -e "agent-compliance[dev]"  # Compliance tooling
 
 # Run tests for that package
 cd agent-os && pytest
