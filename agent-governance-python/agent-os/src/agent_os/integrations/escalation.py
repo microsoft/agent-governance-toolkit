@@ -475,12 +475,17 @@ class EscalationHandler:
             Quorum with a non-``InMemoryApprovalQueue`` backend (e.g.
             :class:`WebhookApprovalBackend`) still only polls once; it
             cannot block on new votes the way the in-memory queue can.
-            Configure quorum with an in-memory backend, or poll
-            ``resolve()`` again yourself until enough votes are in.
+            Calling ``resolve()`` again does not help: if quorum is
+            unmet, this method applies ``default_action`` immediately on
+            the very first call, regardless of ``timeout_seconds``; it
+            does not wait, and repeated polling will keep returning the
+            same default rather than the outcome of later votes. Configure
+            quorum with an in-memory backend if you need real waiting.
 
         Returns:
-            The final decision. If the timeout expires, applies the
-            ``default_action`` and returns that.
+            The final decision. For a non-blocking backend with quorum
+            configured, an unmet quorum resolves to ``default_action``
+            immediately, see the Note above.
         """
         if isinstance(self.backend, InMemoryApprovalQueue):
             if self.quorum:
@@ -510,16 +515,24 @@ class EscalationHandler:
             )
 
         if decision == EscalationDecision.PENDING:
-            # Timeout — apply default
+            # No settled decision (or quorum unmet) — apply default.
             decision = (
                 EscalationDecision.ALLOW
                 if self.default_action == DefaultTimeoutAction.ALLOW
                 else EscalationDecision.DENY
             )
+            blocked_wait = isinstance(self.backend, InMemoryApprovalQueue)
             logger.warning(
-                "Escalation %s timed out after %.0fs, defaulting to %s",
+                "Escalation %s %s, defaulting to %s",
                 request_id,
-                self.timeout_seconds,
+                (
+                    f"timed out after {self.timeout_seconds:.0f}s"
+                    if blocked_wait
+                    else "has an unresolved decision on a non-blocking "
+                    f"backend (quorum unmet or no vote yet; "
+                    f"timeout_seconds={self.timeout_seconds:.0f}s was not "
+                    "actually waited)"
+                ),
                 decision.value,
             )
         return decision
