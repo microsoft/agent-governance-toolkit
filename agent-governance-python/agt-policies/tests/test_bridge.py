@@ -12,6 +12,7 @@ generated manifest end-to-end through OPA.
 
 from __future__ import annotations
 
+import builtins
 import json
 import shutil
 import subprocess
@@ -24,6 +25,9 @@ import yaml
 pytest.importorskip("agent_os")
 
 from agent_os.integrations.base import GovernancePolicy, PatternType  # noqa: E402
+
+_PATTERN_REGEX = PatternType.REGEX
+_PATTERN_GLOB = PatternType.GLOB
 from agent_os.policies.decision import ViolationCategory  # noqa: E402
 
 from agt.policies import EvaluationResult, SnapshotBuilder  # noqa: E402
@@ -119,8 +123,8 @@ def test_bridge_translates_blocked_patterns_via_patterns_library(tmp_path: Path)
         tmp_path,
         blocked_patterns=[
             "password",
-            ("rm\\s+-rf", PatternType.REGEX),
-            ("*.exe", PatternType.GLOB),
+            ("rm\\s+-rf", _PATTERN_REGEX),
+            ("*.exe", _PATTERN_GLOB),
         ],
     )
 
@@ -182,6 +186,137 @@ def test_bridge_blocked_patterns_match_stringified_tool_args(tmp_path: Path) -> 
         verdict = json.loads(completed.stdout)[0]
         assert verdict["decision"] == "deny"
         assert verdict["reason"] == "blocked_pattern_input"
+
+
+def test_bridge_glob_patterns_use_re2_end_anchor_and_enforce(
+    tmp_path: Path,
+) -> None:
+    opa = shutil.which("opa") or str(Path.home() / ".local" / "bin" / "opa")
+    if not Path(opa).exists():
+        pytest.skip("opa binary required for bridge Rego repro")
+
+    manifest = _bridge(
+        tmp_path,
+        blocked_patterns=[("*.exe", _PATTERN_GLOB)],
+        confidence_threshold=0.0,
+    )
+    bundle = Path(manifest["policies"]["agt_governance_policy"]["bundle"])
+    body = (bundle / "agt_governance_policy.rego").read_text(encoding="utf-8")
+    assert r"\\z" in body
+    assert r"\\Z" not in body
+
+    input_path = tmp_path / "glob.json"
+    input_path.write_text(
+        json.dumps({"policy_target": {"value": "payload.exe"}}),
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [
+            opa,
+            "eval",
+            "-f",
+            "values",
+            "-d",
+            str(bundle),
+            "-i",
+            str(input_path),
+            "data.agt.governance_policy.verdict",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    verdict = json.loads(completed.stdout)[0]
+    assert verdict["decision"] == "deny"
+
+
+def test_bridge_multi_star_glob_is_re2_safe_and_enforces(tmp_path: Path) -> None:
+    """A multi-wildcard glob must not leak fnmatch atomic groups into RE2.
+
+    ``fnmatch.translate('*secret*')`` emits ``(?>...)`` on CPython >= 3.12,
+    which Go RE2 rejects. An unvalidated pattern would compile to invalid RE2
+    and ``regex.match`` would evaluate to undefined, silently failing open.
+    ``*.exe`` (single star) never hits the atomic-group path, so it alone did
+    not cover this.
+    """
+    opa = shutil.which("opa") or str(Path.home() / ".local" / "bin" / "opa")
+    if not Path(opa).exists():
+        pytest.skip("opa binary required for bridge Rego repro")
+
+    manifest = _bridge(
+        tmp_path,
+        blocked_patterns=[("*secret*", _PATTERN_GLOB)],
+        confidence_threshold=0.0,
+    )
+    bundle = Path(manifest["policies"]["agt_governance_policy"]["bundle"])
+    body = (bundle / "agt_governance_policy.rego").read_text(encoding="utf-8")
+    assert "(?>" not in body, "atomic group leaked into the RE2 bundle"
+
+    input_path = tmp_path / "glob.json"
+    input_path.write_text(
+        json.dumps({"policy_target": {"value": "my secret value"}}),
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [
+            opa,
+            "eval",
+            "-f",
+            "values",
+            "-d",
+            str(bundle),
+            "-i",
+            str(input_path),
+            "data.agt.governance_policy.verdict",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    verdict = json.loads(completed.stdout)[0]
+    assert verdict["decision"] == "deny"
+
+
+def test_bridge_rejects_python_only_regex_when_opa_is_available(
+    tmp_path: Path,
+) -> None:
+    if shutil.which("opa") is None:
+        pytest.skip("opa binary required for RE2 validation")
+
+    with pytest.raises(ValueError, match="Go RE2"):
+        _bridge(
+            tmp_path,
+            blocked_patterns=[(r"(a)\1", _PATTERN_REGEX)],
+        )
+
+
+def test_bridge_regex_fails_closed_without_authoritative_validator(
+    tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+) -> None:
+    """With neither OPA nor google-re2, the bridge must refuse REGEX/GLOB
+    patterns rather than emit them past a best-effort check that Python's
+    grammar cannot make sound (e.g. an over-large ``{0,100000}`` bound RE2
+    rejects). The CLI ``_migrate_bridge`` already fails closed this way."""
+    import agt.policies._re2 as _re2
+
+    monkeypatch.delenv("ACS_OPA_PATH", raising=False)
+    monkeypatch.setattr(_re2.shutil, "which", lambda _name: None)
+    real_import = builtins.__import__
+
+    def _no_re2(name, *args, **kwargs):
+        if name == "re2":
+            raise ImportError("blocked for test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_re2)
+
+    with pytest.raises(ValueError, match="authoritative RE2 validator"):
+        _bridge(
+            tmp_path,
+            blocked_patterns=[("secret.{0,100000}", _PATTERN_REGEX)],
+        )
+    with pytest.raises(ValueError, match="authoritative RE2 validator"):
+        _bridge(tmp_path, blocked_patterns=[("*secret*", _PATTERN_GLOB)])
 
 
 def test_bridge_translates_require_human_approval_to_escalate(tmp_path: Path) -> None:

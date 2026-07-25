@@ -12,9 +12,9 @@ The algorithm follows ``plan.md`` §5 / milestone M6.S1:
 2. For every governance.yaml chain, run
    :func:`agt.manifest_resolution.resolve_manifest` and persist the
    resulting flat ACS manifest + generated Rego bundle.
-3. For every ``GovernancePolicy(...)`` constructor call, parse the
-   keyword arguments out of the source and bridge them through
-   :func:`agt.policies.bridge.governance_to_acs_manifest`.
+3. For every ``GovernancePolicy(...)`` constructor call, accept only exact
+   literals, translate them through the private one-way migrator, and refuse
+   dynamic or host-only fields with a manual-review finding.
 4. Flag ``PolicyAction.BLOCK`` references; offer a rewrite when
    ``--write`` is set.
 5. Flag ``CedarBackend(...)`` calls with a suggested v5
@@ -32,11 +32,13 @@ from __future__ import annotations
 
 import argparse
 import ast
-import dataclasses
 import logging
 import os
+import re
+import shutil
 import sys
 import tempfile
+import tokenize
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +47,9 @@ from typing import Any
 import yaml
 
 from agt.manifest_resolution import ResolutionError, resolve_manifest
+from agt.policies.manifest import AgtManifest
+
+from ._migrate_bridge import MigrationPolicyInput, build_migrated_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +90,7 @@ class GovernanceChainFinding:
     rego_bundle: Path | None = None
     backups: list[Path] = field(default_factory=list)
     error: str | None = None
+    applied: bool = False
 
 
 @dataclass
@@ -93,8 +99,11 @@ class GovernancePolicyFinding:
 
     location: Location
     kwargs: dict[str, Any]
+    migration_kwargs: dict[str, Any] = field(default_factory=dict)
+    manual_review: list[str] = field(default_factory=list)
     manifest_path: Path | None = None
     rewrite_snippet: str = ""
+    applied: bool = False
 
 
 @dataclass
@@ -130,6 +139,10 @@ class LegacyImportFinding:
     imported_names: tuple[str, ...]
 
 
+class SourceScanError(ValueError):
+    """A Python source file could not be decoded or parsed safely."""
+
+
 @dataclass
 class MigrationReport:
     """All findings produced by a single ``agt migrate v4-to-v5`` run."""
@@ -155,6 +168,9 @@ class MigrationReport:
                 self.legacy_imports,
             )
         )
+
+    def requires_manual_review(self) -> bool:
+        return any(finding.manual_review for finding in self.governance_policies)
 
 
 # ---------------------------------------------------------------------------
@@ -259,11 +275,136 @@ def _node_qualname(node: ast.AST) -> str:
         return "<node>"
 
 
+_MIGRATED_POLICY_FIELDS = {
+    "name",
+    "max_tokens",
+    "max_tool_calls",
+    "allowed_tools",
+    "blocked_patterns",
+    "require_human_approval",
+    "confidence_threshold",
+    "version",
+}
+_HOST_ONLY_POLICY_FIELDS = {
+    "timeout_seconds",
+    "drift_threshold",
+    "log_all_calls",
+    "checkpoint_frequency",
+    "max_concurrent",
+    "backpressure_threshold",
+    "prompt_injection",
+    "token_budget",
+    "rate_limiter",
+    "bounded_semaphore",
+    "scope_guard",
+    "supply_chain",
+    "mcp_security",
+    "detection",
+}
+
+
+def _parse_governance_call(
+    node: ast.Call,
+) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    captured: dict[str, Any] = {}
+    migration: dict[str, Any] = {}
+    issues: list[str] = []
+    if node.args:
+        issues.append(
+            "positional GovernancePolicy arguments require manual review"
+        )
+    for keyword in node.keywords:
+        if keyword.arg is None:
+            issues.append("**kwargs expansion requires manual review")
+            continue
+        name = keyword.arg
+        captured[name] = _literal_or_repr(keyword.value)
+        if name in _HOST_ONLY_POLICY_FIELDS:
+            issues.append(
+                f"{name} is host configuration and cannot be written to an ACS manifest"
+            )
+            continue
+        if name not in _MIGRATED_POLICY_FIELDS:
+            issues.append(f"unsupported GovernancePolicy field {name!r}")
+            continue
+        try:
+            migration[name] = _parse_governance_value(name, keyword.value)
+        except ValueError as exc:
+            issues.append(f"{name}: {exc}")
+    return captured, migration, issues
+
+
+def _parse_governance_value(name: str, node: ast.AST) -> Any:
+    if name == "blocked_patterns":
+        return _parse_blocked_patterns(node)
+    try:
+        value = ast.literal_eval(node)
+    except (ValueError, SyntaxError) as exc:
+        raise ValueError("dynamic expression cannot be migrated safely") from exc
+
+    expected: type[Any] | tuple[type[Any], ...]
+    if name in {"name", "version"}:
+        expected = str
+    elif name in {"max_tokens", "max_tool_calls"}:
+        expected = int
+    elif name == "require_human_approval":
+        expected = bool
+    elif name == "confidence_threshold":
+        expected = (int, float)
+    elif name == "allowed_tools":
+        if not isinstance(value, list) or any(
+            not isinstance(tool, str) for tool in value
+        ):
+            raise ValueError("must be a literal list of strings")
+        return value
+    else:  # pragma: no cover - guarded by _MIGRATED_POLICY_FIELDS
+        raise ValueError("unsupported migration field")
+
+    if isinstance(value, bool) and expected is not bool:
+        raise ValueError(f"must be a literal {name} value, not bool")
+    if not isinstance(value, expected):
+        raise ValueError("literal has the wrong type")
+    return value
+
+
+def _parse_blocked_patterns(node: ast.AST) -> list[str | tuple[str, str]]:
+    if not isinstance(node, ast.List):
+        raise ValueError("must be a literal list")
+    patterns: list[str | tuple[str, str]] = []
+    for index, entry in enumerate(node.elts):
+        if isinstance(entry, ast.Constant) and isinstance(entry.value, str):
+            patterns.append(entry.value)
+            continue
+        if not isinstance(entry, ast.Tuple) or len(entry.elts) != 2:
+            raise ValueError(
+                f"entry {index} must be a string or (string, PatternType)"
+            )
+        value_node, kind_node = entry.elts
+        if not (
+            isinstance(value_node, ast.Constant)
+            and isinstance(value_node.value, str)
+        ):
+            raise ValueError(f"entry {index} pattern must be a literal string")
+        kind_qualname = _node_qualname(kind_node)
+        parts = kind_qualname.split(".")
+        if len(parts) < 2 or parts[-2] != "PatternType":
+            raise ValueError(
+                f"entry {index} kind must be PatternType.SUBSTRING, "
+                "PatternType.REGEX, or PatternType.GLOB"
+            )
+        kind = parts[-1]
+        if kind not in {"SUBSTRING", "REGEX", "GLOB"}:
+            raise ValueError(f"entry {index} uses unsupported PatternType.{kind}")
+        patterns.append((value_node.value, kind))
+    return patterns
+
+
 class _LegacyVisitor(ast.NodeVisitor):
     """Collect every legacy v4 marker out of a single Python source file."""
 
     def __init__(self, path: Path):
         self.path = path
+        self.governance_policy_names = {"GovernancePolicy"}
         self.governance_policies: list[GovernancePolicyFinding] = []
         self.policy_action_blocks: list[PolicyActionBlockFinding] = []
         self.cedar_backends: list[CedarBackendFinding] = []
@@ -273,6 +414,12 @@ class _LegacyVisitor(ast.NodeVisitor):
     # — imports ------------------------------------------------------
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
         module = node.module or ""
+        if module == "agent_os.integrations.base":
+            for alias in node.names:
+                if alias.name == "GovernancePolicy":
+                    self.governance_policy_names.add(
+                        alias.asname or alias.name
+                    )
         if module == "agent_os.policies" or module.startswith("agent_os.policies."):
             names = tuple(alias.name for alias in node.names)
             self.legacy_imports.append(
@@ -288,16 +435,16 @@ class _LegacyVisitor(ast.NodeVisitor):
         callee = _node_qualname(node.func)
         callee_tail = callee.split(".")[-1]
 
-        if callee_tail == "GovernancePolicy":
-            kwargs: dict[str, Any] = {}
-            for kw in node.keywords:
-                if kw.arg is None:
-                    continue
-                kwargs[kw.arg] = _literal_or_repr(kw.value)
+        if callee_tail in self.governance_policy_names:
+            kwargs, migration_kwargs, manual_review = _parse_governance_call(
+                node
+            )
             self.governance_policies.append(
                 GovernancePolicyFinding(
                     location=Location(self.path, node.lineno, node.col_offset),
                     kwargs=kwargs,
+                    migration_kwargs=migration_kwargs,
+                    manual_review=manual_review,
                 )
             )
 
@@ -356,15 +503,16 @@ class _LegacyVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def _scan_python_file(path: Path) -> _LegacyVisitor | None:
+def _scan_python_file(path: Path) -> _LegacyVisitor:
     try:
-        source = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return None
+        with tokenize.open(path) as source_file:
+            source = source_file.read()
+    except (OSError, SyntaxError, UnicodeDecodeError) as exc:
+        raise SourceScanError(f"{path}: cannot decode Python source: {exc}") from exc
     try:
         tree = ast.parse(source, filename=str(path))
-    except SyntaxError:
-        return None
+    except SyntaxError as exc:
+        raise SourceScanError(f"{path}: cannot parse Python source: {exc}") from exc
     visitor = _LegacyVisitor(path)
     visitor.visit(tree)
     return visitor
@@ -380,71 +528,9 @@ def _render_cedar_snippet(args_repr: list[str]) -> str:
         "#       policies:\n"
         "#         my_cedar_policy:\n"
         "#           type: cedar\n"
-        "#           bundle: ./policies/my_cedar.cedar\n"
-        "#           query: my::action::permit"
+        "#           policy_path: ./policies/my_cedar.cedar\n"
+        "#           # Optional: entities_path and schema_path"
     )
-
-
-# ---------------------------------------------------------------------------
-# Bridge helpers (v4 GovernancePolicy → v5 manifest)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class _BridgeInputs:
-    """A normalised v4 GovernancePolicy shape used by the bridge."""
-
-    name: str = "migrated_policy"
-    max_tokens: int = 0
-    max_tool_calls: int = 0
-    allowed_tools: list[str] = field(default_factory=list)
-    blocked_patterns: list[Any] = field(default_factory=list)
-    require_human_approval: bool = False
-    confidence_threshold: float = 0.0
-    version: str = "1.0.0"
-
-
-def _coerce_bridge_inputs(kwargs: dict[str, Any]) -> _BridgeInputs:
-    """Pull bridge-relevant fields out of the literal-decoded kwargs.
-
-    Anything we cannot literal-decode is silently treated as the
-    field's default; the report still records the raw kwargs so the
-    user can see what got dropped.
-    """
-    out = _BridgeInputs()
-    scalar_fields = (
-        ("name", str),
-        ("max_tokens", int),
-        ("max_tool_calls", int),
-        ("require_human_approval", bool),
-        ("confidence_threshold", (int, float)),
-        ("version", str),
-    )
-    for source_key, expected_type in scalar_fields:
-        if source_key not in kwargs:
-            continue
-        value = kwargs[source_key]
-        if isinstance(value, str) and value.startswith("<expr:"):
-            continue
-        if not isinstance(value, expected_type):
-            continue
-        setattr(out, source_key, value)
-
-    allowed = kwargs.get("allowed_tools")
-    if isinstance(allowed, list):
-        out.allowed_tools = [str(x) for x in allowed if isinstance(x, str)]
-
-    blocked = kwargs.get("blocked_patterns")
-    if isinstance(blocked, list):
-        normalised: list[Any] = []
-        for entry in blocked:
-            if isinstance(entry, str):
-                normalised.append(entry)
-            elif isinstance(entry, tuple) and len(entry) == 2 and isinstance(entry[0], str):
-                normalised.append(entry[0])
-        out.blocked_patterns = normalised
-
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -465,16 +551,35 @@ def _migrate_governance_chain(
     - calls :func:`resolve_manifest` to produce a flat ACS manifest +
       Rego bundle under ``chain_root/manifest.yaml`` +
       ``chain_root/policy/agt_legacy.rego``;
-    - moves every governance.yaml(.yml) in the discovered chain to
-      ``<file>.v4-backup`` so re-runs do not double-translate.
+    - moves every governance.yaml(.yml) that lives directly in
+      ``chain_root`` to ``<file>.v4-backup`` so re-runs do not
+      double-translate. Parent governance files that the resolved chain
+      inherits from directories ABOVE ``chain_root`` are left untouched;
+      each parent is migrated by its own chain.
 
     On dry-run the rego bundle is materialised inside a temp dir that
     is dropped on return, so the project on disk is untouched.
     """
     finding = GovernanceChainFinding(chain_root=chain_root, governance_files=[])
+    manifest_path = chain_root / "manifest.yaml"
+    rego_bundle = chain_root / "policy"
+    # ``exists()`` follows symlinks and returns False for a broken one, so a
+    # symlink named ``manifest.yaml``/``policy`` (broken or pointing outside
+    # chain_root) would slip past this guard and make the migration write its
+    # bundle through the link — outside the project — while still unlinking the
+    # governance files. Treat any pre-existing path OR symlink as output that
+    # must not be overwritten.
+    manifest_present = manifest_path.exists() or manifest_path.is_symlink()
+    bundle_present = rego_bundle.exists() or rego_bundle.is_symlink()
+    if manifest_present or bundle_present:
+        finding.error = (
+            "migration output already exists; refusing to overwrite "
+            f"{manifest_path if manifest_present else rego_bundle}"
+        )
+        return finding
 
     if write:
-        target_bundle_dir = chain_root / "policy"
+        target_bundle_dir = rego_bundle
     else:
         target_bundle_dir = Path(
             tempfile.mkdtemp(prefix="agt_migrate_dryrun_")
@@ -488,33 +593,82 @@ def _migrate_governance_chain(
         )
     except ResolutionError as exc:
         finding.error = f"{exc.reason.value}: {exc}"
-        if not write:
-            _rmtree_silent(target_bundle_dir)
+        _rmtree_silent(target_bundle_dir)
         return finding
 
     discovered = [
         Path(p) for p in manifest.get("metadata", {}).get("resolved_from", {}).get("chain", [])
     ]
     finding.governance_files = discovered
-
-    manifest_path = chain_root / "manifest.yaml"
-    rego_bundle = chain_root / "policy"
+    # Only back up and remove governance files that live directly in this
+    # chain_root. The resolved chain also lists parent governance files ABOVE
+    # chain_root; those declare deny rules that ADR-0014 treats as immutable and
+    # are shared by every sibling chain under the same parent. Each parent file
+    # is migrated by its own chain, so backing it up / unlinking it here would
+    # corrupt sibling chains that inherit from it.
+    chain_root_resolved = chain_root.resolve()
+    local_files = [
+        gov_file
+        for gov_file in discovered
+        if gov_file.parent.resolve() == chain_root_resolved
+    ]
+    backup_paths = [
+        gov_file.with_name(f".{gov_file.name}.v4-backup")
+        for gov_file in local_files
+    ]
+    existing_backups = [path for path in backup_paths if path.exists()]
+    if existing_backups:
+        finding.error = (
+            "migration backup already exists; refusing to overwrite "
+            + ", ".join(str(path) for path in existing_backups)
+        )
+        _rmtree_silent(target_bundle_dir)
+        return finding
 
     if write:
-        manifest_path.write_text(
-            yaml.safe_dump(manifest, sort_keys=False),
-            encoding="utf-8",
-        )
-        for gov_file in discovered:
-            backup = gov_file.with_name(f".{gov_file.name}.v4-backup")
-            if gov_file.exists():
-                gov_file.replace(backup)
-                finding.backups.append(backup)
+        with tempfile.TemporaryDirectory(
+            prefix=".agt_chain_migration_", dir=chain_root
+        ) as staging_dir:
+            staged_manifest = Path(staging_dir) / "manifest.yaml"
+            staged_manifest.write_text(
+                yaml.safe_dump(manifest, sort_keys=False),
+                encoding="utf-8",
+            )
+            # Use os.replace (atomic rename) rather than os.link so the swap
+            # works on any filesystem, not just hard-link-capable ones (some
+            # Windows volumes and Unix mounts do not support hard links). Each
+            # rename both backs
+            # up and removes the original in one atomic step, so the data always
+            # has exactly one name and a crash cannot lose it. Every path stays
+            # inside chain_root (staging dir and backups), so the rename can
+            # never cross a filesystem boundary.
+            moved_backups: list[tuple[Path, Path]] = []
+            manifest_placed = False
+            try:
+                os.replace(staged_manifest, manifest_path)
+                manifest_placed = True
+                for gov_file, backup in zip(
+                    local_files, backup_paths, strict=True
+                ):
+                    os.replace(gov_file, backup)
+                    moved_backups.append((backup, gov_file))
+            except Exception as exc:
+                for backup, gov_file in reversed(moved_backups):
+                    os.replace(backup, gov_file)
+                if manifest_placed:
+                    manifest_path.unlink(missing_ok=True)
+                _rmtree_silent(rego_bundle)
+                finding.error = (
+                    f"chain migration failed: {type(exc).__name__}: {exc}"
+                )
+                return finding
+            finding.backups.extend(backup_paths)
     else:
         _rmtree_silent(target_bundle_dir)
 
     finding.manifest_path = manifest_path
     finding.rego_bundle = rego_bundle
+    finding.applied = write
     return finding
 
 
@@ -542,7 +696,6 @@ def _migrate_governance_policy(
     write: bool,
 ) -> None:
     """Materialise a v5 manifest for a single GovernancePolicy() call."""
-    inputs = _coerce_bridge_inputs(finding.kwargs)
     source_dir = finding.location.path.parent
     policies_dir = source_dir / "policies"
     base_name = finding.location.path.stem
@@ -553,41 +706,96 @@ def _migrate_governance_policy(
     finding.rewrite_snippet = _render_governance_rewrite_snippet(
         kwargs=finding.kwargs,
         manifest_path=manifest_path,
+        manual_review=finding.manual_review,
     )
+
+    if finding.manual_review:
+        return
+
+    try:
+        inputs = MigrationPolicyInput(**finding.migration_kwargs)
+    except (TypeError, ValueError, re.error) as exc:
+        finding.manual_review.append(str(exc))
+        finding.rewrite_snippet = _render_governance_rewrite_snippet(
+            kwargs=finding.kwargs,
+            manifest_path=manifest_path,
+            manual_review=finding.manual_review,
+        )
+        return
+
+    bundle_dir = policies_dir / f"{base_name}_bundle"
+    if manifest_path.exists() or bundle_dir.exists():
+        finding.manual_review.append(
+            "migration output already exists; refusing to overwrite it"
+        )
+        finding.rewrite_snippet = _render_governance_rewrite_snippet(
+            kwargs=finding.kwargs,
+            manifest_path=manifest_path,
+            manual_review=finding.manual_review,
+        )
+        return
 
     if not write:
         finding.manifest_path = manifest_path
         return
 
-    try:
-        from agt.policies.bridge import governance_to_acs_manifest
-    except Exception as exc:  # pragma: no cover - import error path
-        logger.warning("agt.policies.bridge unavailable: %s", exc)
-        return
-
     policies_dir.mkdir(parents=True, exist_ok=True)
-    bundle_dir = policies_dir / f"{base_name}_bundle"
-    manifest = governance_to_acs_manifest(
-        dataclasses.replace(inputs),
-        bundle_dir=bundle_dir,
-        policy_id=base_name or "agt_governance_policy",
-    )
-    manifest_path.write_text(
-        yaml.safe_dump(manifest, sort_keys=False),
-        encoding="utf-8",
-    )
+    policy_id = base_name or "agt_governance_policy"
+    with tempfile.TemporaryDirectory(
+        prefix=f".{policy_id}_migration_", dir=policies_dir
+    ) as staging_dir:
+        staging = Path(staging_dir)
+        staging_bundle = staging / "bundle"
+        bundle_created = False
+        try:
+            manifest = build_migrated_manifest(
+                inputs,
+                bundle_dir=staging_bundle,
+                policy_id=policy_id,
+            )
+            manifest["policies"][policy_id]["bundle"] = str(
+                bundle_dir.resolve()
+            )
+            manifest = AgtManifest.from_document(manifest).to_document()
+            staged_manifest = staging / "manifest.yaml"
+            staged_manifest.write_text(
+                yaml.safe_dump(manifest, sort_keys=False),
+                encoding="utf-8",
+            )
+            bundle_dir.mkdir()
+            bundle_created = True
+            # Snapshot the entries before moving them, since os.replace mutates
+            # staging_bundle as we iterate. os.replace (atomic rename) keeps this
+            # portable across filesystems that do not support hard links; every
+            # path is under policies_dir, so the rename never crosses a mount.
+            for staged_file in list(staging_bundle.iterdir()):
+                os.replace(staged_file, bundle_dir / staged_file.name)
+            os.replace(staged_manifest, manifest_path)
+        except Exception as exc:
+            if bundle_created and bundle_dir.exists():
+                shutil.rmtree(bundle_dir)
+            finding.manual_review.append(
+                f"manifest generation failed: {type(exc).__name__}: {exc}"
+            )
+            finding.rewrite_snippet = _render_governance_rewrite_snippet(
+                kwargs=finding.kwargs,
+                manifest_path=manifest_path,
+                manual_review=finding.manual_review,
+            )
+            return
     finding.manifest_path = manifest_path
+    finding.applied = True
 
 
 def _render_governance_rewrite_snippet(
     *,
     kwargs: dict[str, Any],
     manifest_path: Path,
+    manual_review: list[str],
 ) -> str:
     """Render the v5 replacement snippet for a v4 ``GovernancePolicy``.
 
-    The bridge ships a ``Manifest.from_governance_policy`` helper on the
-    v5 surface; v4 callers most often replace::
+    v4 callers most often replace::
 
         policy = GovernancePolicy(max_tokens=2048, allowed_tools=[...])
         agent.attach_policy(policy)
@@ -601,22 +809,22 @@ def _render_governance_rewrite_snippet(
     source even with ``--write`` because the surrounding usage of the
     policy object varies too much across hosts.
     """
-    rel_manifest = manifest_path
-    if "name" in kwargs:
-        name_literal = repr(kwargs["name"]) if isinstance(kwargs["name"], str) else "..."
-    else:
-        name_literal = '"migrated_policy"'
+    if manual_review:
+        reasons = "\n".join(f"#     - {reason}" for reason in manual_review)
+        return (
+            "# Manual review required. No manifest was written.\n"
+            f"{reasons}\n"
+            "# Resolve these fields, then run `agt migrate v4-to-v5 --write` again."
+        )
     return (
         "# v4:\n"
         "#     from agent_os.integrations.base import GovernancePolicy\n"
         f"#     policy = GovernancePolicy({_pretty_kwargs(kwargs)})\n"
         "#\n"
         "# v5 — replace the construction with:\n"
+        "#     from pathlib import Path\n"
         "#     from agt.policies.runtime import AgtRuntime\n"
-        f"#     runtime = AgtRuntime(Path({str(rel_manifest)!r}))\n"
-        "#     # Or, if you want to keep the v4 dataclass surface:\n"
-        "#     from agt.policies.bridge import governance_to_acs_manifest\n"
-        f"#     manifest = governance_to_acs_manifest(policy)  # name={name_literal}\n"
+        f"#     runtime = AgtRuntime.from_manifest(Path({str(manifest_path)!r}))\n"
     )
 
 
@@ -684,7 +892,7 @@ def render_report(report: MigrationReport) -> str:
             status = (
                 f"❌ {_md_escape(gc.error)}"
                 if gc.error
-                else ("✅ migrated" if report.write else "🟡 would migrate")
+                else ("✅ migrated" if gc.applied else "🟡 would migrate")
             )
             lines.append(
                 f"| {idx} | `{gc.chain_root}` | {files} | {manifest} | {bundle} | {status} |"
@@ -713,8 +921,14 @@ def render_report(report: MigrationReport) -> str:
             lines.append("```")
             lines.append("")
             if gp.manifest_path is not None:
-                state = "written" if report.write else "would be written"
+                state = "written" if gp.applied else "would be written"
                 lines.append(f"**v5 manifest** ({state}): `{gp.manifest_path}`")
+                lines.append("")
+            if gp.manual_review:
+                lines.append("**Manual review required. No manifest was written.**")
+                lines.append("")
+                for reason in gp.manual_review:
+                    lines.append(f"- {_md_escape(reason)}")
                 lines.append("")
             lines.append("**Suggested code rewrite:**")
             lines.append("")
@@ -813,29 +1027,63 @@ def migrate_project(
 
     report = MigrationReport(project_root=project_root, write=write)
 
-    # 1. governance.yaml chains
-    for chain_root in _find_governance_chains(project_root):
-        chain_finding = _migrate_governance_chain(
-            chain_root,
-            project_root,
-            write=write,
-        )
-        report.governance_chains.append(chain_finding)
+    chain_roots = _find_governance_chains(project_root)
 
-    # 2-6. Python AST scans
+    # Preflight every governance chain without project side effects.
+    for chain_root in chain_roots:
+        report.governance_chains.append(
+            _migrate_governance_chain(
+                chain_root,
+                project_root,
+                write=False,
+            )
+        )
+
+    # Scan and preflight every Python constructor before any write.
     for path in _iter_files(project_root):
         if path.suffix != ".py":
             continue
-        visitor = _scan_python_file(path)
-        if visitor is None:
+        try:
+            visitor = _scan_python_file(path)
+        except SourceScanError as exc:
+            report.errors.append(str(exc))
             continue
-        for gp in visitor.governance_policies:
-            _migrate_governance_policy(gp, write=write)
-            report.governance_policies.append(gp)
+        if len(visitor.governance_policies) > 1:
+            for finding in visitor.governance_policies:
+                finding.manual_review.append(
+                    "multiple GovernancePolicy constructors in one source file "
+                    "require explicit manifest and policy identifiers"
+                )
+        for finding in visitor.governance_policies:
+            _migrate_governance_policy(finding, write=False)
+            report.governance_policies.append(finding)
         report.policy_action_blocks.extend(visitor.policy_action_blocks)
         report.cedar_backends.extend(visitor.cedar_backends)
         report.policy_interceptors.extend(visitor.policy_interceptors)
         report.legacy_imports.extend(visitor.legacy_imports)
+
+    if not write:
+        return report
+    if (
+        any(chain.error for chain in report.governance_chains)
+        or report.requires_manual_review()
+        or report.errors
+    ):
+        return report
+
+    # Apply only after every source and chain passed preflight.
+    report.governance_chains = []
+    for chain_root in chain_roots:
+        chain_finding = _migrate_governance_chain(
+            chain_root,
+            project_root,
+            write=True,
+        )
+        report.governance_chains.append(chain_finding)
+    if any(chain.error for chain in report.governance_chains):
+        return report
+    for finding in report.governance_policies:
+        _migrate_governance_policy(finding, write=True)
 
     return report
 
@@ -922,10 +1170,14 @@ def run_from_args(args: argparse.Namespace) -> int:
         out_path = Path(args.write_report)
         out_path.write_text(text, encoding="utf-8")
 
-    # Exit zero even when findings exist — the CLI is informational by
-    # default. We only fail when a per-chain resolution error blocks a
-    # --write migration mid-flight.
-    if write and any(c.error for c in report.governance_chains):
+    # Dry runs remain informational. A write run fails when any artifact could
+    # not be migrated exactly, so automation cannot mistake partial output for
+    # a completed security-policy migration.
+    if write and (
+        any(c.error for c in report.governance_chains)
+        or report.requires_manual_review()
+        or report.errors
+    ):
         return 1
     return 0
 

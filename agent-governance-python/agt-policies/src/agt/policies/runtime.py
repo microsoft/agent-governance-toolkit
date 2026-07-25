@@ -42,7 +42,8 @@ from typing import Any, Awaitable, Callable, Mapping, Optional, Union
 
 import yaml
 
-from agt.policies.result import EvaluationResult
+from agt.policies.manifest import AgtManifest
+from agt.policies.result import EvaluationResult, PolicyEvaluation
 
 try:
     from agent_control_specification import (
@@ -213,6 +214,9 @@ class AgtRuntime:
     D1.4.
     """
 
+    _manifest_path: Path | None
+    _manifest: AgtManifest | None
+
     def __init__(
         self,
         manifest_path: Path | str,
@@ -223,6 +227,7 @@ class AgtRuntime:
         annotator_dispatcher: Any | None = None,
     ) -> None:
         self._manifest_path = Path(manifest_path)
+        self._manifest = None
         self._resolution_root = resolution_root
         self._approval_resolver = approval_resolver
         self._resolution_bundle_dir: Any | None = None
@@ -242,9 +247,9 @@ class AgtRuntime:
                     self._approval_timeout_seconds,
                     self._approval_on_timeout,
                 ) = _approval_settings_from_manifest(resolved)
-                engine_manifest, _ = _sanitize_manifest_for_acs(resolved)
+                engine_document, _ = _sanitize_manifest_for_acs(resolved)
                 self._control = AgentControl.from_native(
-                    engine_manifest,
+                    engine_document,
                     annotator_dispatcher=annotator_dispatcher,
                     policy_dispatcher=policy_dispatcher,
                 )
@@ -254,32 +259,103 @@ class AgtRuntime:
                 raise
         elif policy_dispatcher is not None or annotator_dispatcher is not None:
             manifest_text = self._manifest_path.read_text(encoding="utf-8")
-            parsed, engine_manifest = _parse_and_sanitize_manifest_text(manifest_text)
+            parsed, engine_manifest_text = _parse_and_sanitize_manifest_text(
+                manifest_text
+            )
             (
                 self._approval_timeout_seconds,
                 self._approval_on_timeout,
             ) = _approval_settings_from_manifest(parsed)
             self._control = AgentControl.from_native(
-                engine_manifest,
+                engine_manifest_text,
                 annotator_dispatcher=annotator_dispatcher,
                 policy_dispatcher=policy_dispatcher,
             )
         else:
             manifest_text = self._manifest_path.read_text(encoding="utf-8")
-            parsed, engine_manifest = _parse_and_sanitize_manifest_text(manifest_text)
+            parsed, engine_manifest_text = _parse_and_sanitize_manifest_text(
+                manifest_text
+            )
             (
                 self._approval_timeout_seconds,
                 self._approval_on_timeout,
             ) = _approval_settings_from_manifest(parsed)
-            if engine_manifest == manifest_text:
+            if engine_manifest_text == manifest_text:
                 self._control = AgentControl.from_path(str(self._manifest_path))
             else:
-                self._control = AgentControl.from_native(engine_manifest)
+                self._control = AgentControl.from_native(engine_manifest_text)
+
+    @classmethod
+    def from_manifest(
+        cls,
+        manifest: Path | str | Mapping[str, Any] | AgtManifest,
+        *,
+        base_dir: Path | str | None = None,
+        approval_resolver: ApprovalCallback | None = None,
+        policy_dispatcher: Any | None = None,
+        annotator_dispatcher: Any | None = None,
+    ) -> "AgtRuntime":
+        """Construct the canonical v5 runtime from a typed manifest source.
+
+        ``Path`` inputs derive provenance from their parent directory. A string
+        naming an existing file is treated as a path; every other string is
+        parsed as manifest YAML. Mapping, YAML text, and typed inputs with
+        relative references require ``base_dir`` or typed provenance. No
+        current-working-directory fallback is used.
+        """
+        if isinstance(manifest, Path) or (
+            isinstance(manifest, str) and _is_existing_manifest_path(manifest)
+        ):
+            typed = AgtManifest.from_path(Path(manifest))
+        elif isinstance(manifest, AgtManifest):
+            typed = manifest
+        else:
+            typed = AgtManifest.from_document(manifest, base_dir=base_dir)
+
+        if typed.limits is not None:
+            raise ValueError(
+                "manifest limits are not wired to the ACS Python runtime; "
+                "refusing to accept unenforced limits"
+            )
+
+        document = typed.resolved_document(base_dir)
+        instance = cls.__new__(cls)
+        instance._manifest_path = None
+        instance._resolution_root = None
+        instance._resolution_bundle_dir = None
+        instance._approval_resolver = approval_resolver
+        instance._manifest = typed
+        (
+            instance._approval_timeout_seconds,
+            instance._approval_on_timeout,
+        ) = _approval_settings_from_manifest(document)
+        engine_document, _ = _sanitize_manifest_for_acs(document)
+        engine_manifest = yaml.safe_dump(engine_document, sort_keys=False)
+        instance._control = AgentControl.from_native(
+            engine_manifest,
+            annotator_dispatcher=annotator_dispatcher,
+            policy_dispatcher=policy_dispatcher,
+        )
+        return instance
 
     @property
     def control(self) -> AgentControl:
         """Underlying ACS orchestrator. Exposed for advanced hosts."""
         return self._control
+
+    @property
+    def manifest(self) -> AgtManifest | None:
+        """Typed manifest for runtimes created through :meth:`from_manifest`."""
+        return self._manifest
+
+    def evaluate(
+        self,
+        ip: str,
+        snapshot: Mapping[str, Any],
+        mode: str = "enforce",
+    ) -> PolicyEvaluation:
+        """Evaluate through the native v5 result contract."""
+        return self.evaluate_intervention_point(ip, snapshot, mode).to_native()
 
     def evaluate_intervention_point(
         self,
@@ -407,6 +483,15 @@ def _parse_and_sanitize_manifest_text(manifest_text: str) -> tuple[Mapping[str, 
     if not changed:
         return parsed, manifest_text
     return parsed, yaml.safe_dump(sanitized, sort_keys=False)
+
+
+def _is_existing_manifest_path(value: str) -> bool:
+    if "\n" in value:
+        return False
+    try:
+        return Path(value).is_file()
+    except OSError:
+        return False
 
 
 def _approval_settings_from_manifest_text(manifest_text: str) -> tuple[float, str]:
