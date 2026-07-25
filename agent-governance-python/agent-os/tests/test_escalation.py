@@ -188,6 +188,61 @@ class TestQuorumResolution:
         decision = handler.resolve(request.request_id)
         assert decision == EscalationDecision.DENY
 
+    def test_quorum_unmet_on_non_blocking_backend_resolves_immediately(self, caplog):
+        """Non-blocking backends can't wait, so quorum applies default_action
+        on the very first ``resolve()`` call rather than after ``timeout_seconds``
+        actually elapses. This is a known limitation (see the ``resolve()``
+        docstring Note), this test pins the behavior and the honest log
+        message so a future fix or regression is visible here first.
+        """
+
+        class _NonBlockingBackend(ApprovalBackend):
+            """Wraps an in-memory queue but is deliberately NOT an
+            InMemoryApprovalQueue, so EscalationHandler treats it as a
+            single-poll backend like WebhookApprovalBackend does."""
+
+            def __init__(self):
+                self._inner = InMemoryApprovalQueue()
+
+            def submit(self, request):
+                self._inner.submit(request)
+
+            def get_decision(self, request_id):
+                return self._inner.get_decision(request_id)
+
+            def approve(self, request_id, approver=""):
+                return self._inner.approve(request_id, approver=approver)
+
+            def deny(self, request_id, approver=""):
+                return self._inner.deny(request_id, approver=approver)
+
+            def list_pending(self):
+                return self._inner.list_pending()
+
+        backend = _NonBlockingBackend()
+        handler = EscalationHandler(
+            backend=backend,
+            timeout_seconds=30,
+            default_action=DefaultTimeoutAction.DENY,
+            quorum=QuorumConfig(required_approvals=2, required_denials=1),
+        )
+        request = handler.escalate("agent-1", "deploy", "needs review")
+        backend.approve(request.request_id, approver="reviewer-1")
+
+        start = time.monotonic()
+        with caplog.at_level("WARNING"):
+            decision = handler.resolve(request.request_id)
+        elapsed = time.monotonic() - start
+
+        assert decision == EscalationDecision.DENY
+        assert elapsed < 1.0, "should not have actually waited timeout_seconds"
+        message = caplog.records[-1].getMessage()
+        assert "timed out after 30s" not in message, (
+            "log must not claim a real timeout occurred when the "
+            "non-blocking backend never actually waited"
+        )
+        assert "non-blocking" in message
+
     def test_duplicate_approver_does_not_satisfy_quorum(self):
         queue = InMemoryApprovalQueue()
         handler = EscalationHandler(backend=queue, timeout_seconds=0.2, default_action=DefaultTimeoutAction.DENY, quorum=QuorumConfig(required_approvals=2, total_approvers=3))
