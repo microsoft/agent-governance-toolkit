@@ -158,6 +158,7 @@ class ApprovalCoordinator:
             fail_closed_on_timeout=fail_closed_on_timeout,
         )
         self.store.save_request(request)
+        self._maybe_resolve(request, chain)
         return decision, request
 
     # -- advancing the chain ------------------------------------------------
@@ -248,10 +249,15 @@ class ApprovalCoordinator:
                 return
 
         # Allow is terminal only once every required stage has an allow.
+        # A chain with zero required stages is misconfigured and must fail closed (deny).
+        required = {s.stage_index for s in chain.stages if s.required}
+        if not required:
+            self._resolve(request, Outcome.DENY, None)
+            return
+
         allowed_stages = {
             e.stage_index for e in entries if e.decision == EntryDecision.ALLOW
         }
-        required = {s.stage_index for s in chain.stages if s.required}
         if required.issubset(allowed_stages):
             final_digest = entries[-1].entry_digest if entries else None
             self._resolve(request, Outcome.ALLOW, final_digest)

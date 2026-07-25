@@ -16,6 +16,7 @@ from agentmesh.governance.approval_protocol import (
     ApproverKind,
     EntryDecision,
     InMemoryApprovalStore,
+    Outcome,
     ReasonCode,
     canonicalize,
     sha256_jcs,
@@ -512,3 +513,31 @@ class TestChainIntegrity:
         )
         assert first is second
         assert len(coord.store.get_entries(request.approval_request_id)) == 1
+
+    def test_zero_required_stages_denies(self):
+        chain = ApprovalChain(
+            chain_id="zero-required",
+            version="1",
+            stages=(
+                ApprovalStage(0, allowed_identities=frozenset({ALICE}), required=False),
+            ),
+        )
+        coord = make_coordinator(chain)
+        binding = make_binding()
+        _, request = coord.open_request(
+            binding,
+            policy_rule_id="r",
+            policy_version="v1",
+            chain_id=chain.chain_id,
+            ttl_seconds=600,
+        )
+        verdict = coord.validate_for_execution(
+            request.approval_request_id,
+            current_action_digest=binding.digest(),
+            current_policy_version="v1",
+            current_chain_version=chain.version,
+        )
+        assert not verdict.allowed
+        resolution = coord.store.get_resolution(request.approval_request_id)
+        assert resolution is not None
+        assert resolution.outcome == Outcome.DENY
