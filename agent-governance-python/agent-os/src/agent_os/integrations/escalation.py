@@ -81,6 +81,10 @@ class EscalationRequest:
         resolved_at: When a human responded (or timeout).
         decision: Final decision from the human (or timeout default).
         resolved_by: Identifier of the human who resolved.
+        quorum: If set, ``approve``/``deny`` only finalize ``decision``
+            once this quorum is satisfied (see ``QuorumConfig``), instead
+            of finalizing on the first vote. ``None`` preserves the
+            original single-vote-wins behavior.
     """
 
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -91,6 +95,7 @@ class EscalationRequest:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     resolved_at: Optional[datetime] = None
     decision: EscalationDecision = EscalationDecision.PENDING
+    quorum: Optional[QuorumConfig] = None
     resolved_by: Optional[str] = None
     # Quorum tracking: list of (approver, decision, timestamp) votes
     votes: list[tuple[str, str, datetime]] = field(default_factory=list)
@@ -118,6 +123,30 @@ class ApprovalBackend(abc.ABC):
     @abc.abstractmethod
     def list_pending(self) -> list[EscalationRequest]:
         """List all pending escalation requests."""
+
+
+def _tally_quorum(
+    votes: list[tuple[str, str, datetime]], quorum: QuorumConfig
+) -> EscalationDecision | None:
+    """Evaluate a vote list against a quorum config.
+
+    Returns ``ALLOW``/``DENY`` once enough votes are in to decide, or
+    ``None`` if quorum hasn't been satisfied yet. Denials are checked
+    before approvals, matching ``EscalationHandler._quorum_outcome``,
+    which delegates here. Also used directly by
+    ``InMemoryApprovalQueue.approve``/``deny`` so a stored request's
+    ``decision`` only finalizes once quorum is actually met, instead of
+    on the first vote, keeping ``req.decision`` and ``list_pending()``
+    in agreement with the quorum outcome at every point, not just at
+    ``resolve()`` time.
+    """
+    approvals = sum(1 for _, v, _ in votes if v == "ALLOW")
+    denials = sum(1 for _, v, _ in votes if v == "DENY")
+    if denials >= quorum.required_denials:
+        return EscalationDecision.DENY
+    if approvals >= quorum.required_approvals:
+        return EscalationDecision.ALLOW
+    return None
 
 
 class InMemoryApprovalQueue(ApprovalBackend):
@@ -153,14 +182,16 @@ class InMemoryApprovalQueue(ApprovalBackend):
                 return False
             req.votes.append((approver, "ALLOW", datetime.now(timezone.utc)))
             if req.decision == EscalationDecision.PENDING:
-                req.decision = EscalationDecision.ALLOW
-                req.resolved_by = approver
-                req.resolved_at = datetime.now(timezone.utc)
-            # Fire on every accepted vote, not just the one that first sets
-            # req.decision, wait_for_quorum() (see below) needs a wake-up
-            # for each subsequent vote too, to re-check quorum promptly
-            # instead of blocking for the remainder of the timeout even
-            # after enough votes have already arrived.
+                if req.quorum is not None:
+                    outcome = _tally_quorum(req.votes, req.quorum)
+                    if outcome is not None:
+                        req.decision = outcome
+                        req.resolved_by = approver
+                        req.resolved_at = datetime.now(timezone.utc)
+                else:
+                    req.decision = EscalationDecision.ALLOW
+                    req.resolved_by = approver
+                    req.resolved_at = datetime.now(timezone.utc)
             event = self._events.get(request_id)
         if event:
             event.set()
@@ -177,9 +208,16 @@ class InMemoryApprovalQueue(ApprovalBackend):
                 return False
             req.votes.append((approver, "DENY", datetime.now(timezone.utc)))
             if req.decision == EscalationDecision.PENDING:
-                req.decision = EscalationDecision.DENY
-                req.resolved_by = approver
-                req.resolved_at = datetime.now(timezone.utc)
+                if req.quorum is not None:
+                    outcome = _tally_quorum(req.votes, req.quorum)
+                    if outcome is not None:
+                        req.decision = outcome
+                        req.resolved_by = approver
+                        req.resolved_at = datetime.now(timezone.utc)
+                else:
+                    req.decision = EscalationDecision.DENY
+                    req.resolved_by = approver
+                    req.resolved_at = datetime.now(timezone.utc)
             event = self._events.get(request_id)
         if event:
             event.set()
@@ -430,6 +468,7 @@ class EscalationHandler:
             action=action,
             reason=reason,
             context_snapshot=context_snapshot or {},
+            quorum=self.quorum,
         )
         self.backend.submit(request)
         logger.info(
@@ -445,19 +484,13 @@ class EscalationHandler:
     def _quorum_outcome(self, req: EscalationRequest) -> EscalationDecision | None:
         """Evaluate ``req.votes`` against ``self.quorum``.
 
-        Returns ``ALLOW``/``DENY`` once enough votes are in to decide,
-        or ``None`` if quorum has not been satisfied yet. Single source
-        of truth for the vote tally. Used both as the wait predicate
-        and for the final decision, so the two can never disagree.
+        Thin wrapper around the module-level ``_tally_quorum``, which is
+        the single source of truth for the vote tally, also used by
+        ``InMemoryApprovalQueue.approve``/``deny`` so a request's stored
+        ``decision`` can never disagree with what this returns.
         """
         assert self.quorum is not None
-        approvals = sum(1 for _, v, _ in req.votes if v == "ALLOW")
-        denials = sum(1 for _, v, _ in req.votes if v == "DENY")
-        if denials >= self.quorum.required_denials:
-            return EscalationDecision.DENY
-        if approvals >= self.quorum.required_approvals:
-            return EscalationDecision.ALLOW
-        return None
+        return _tally_quorum(req.votes, self.quorum)
 
     def resolve(self, request_id: str) -> EscalationDecision:
         """Check or wait for a resolution.

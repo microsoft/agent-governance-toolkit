@@ -188,6 +188,56 @@ class TestQuorumResolution:
         decision = handler.resolve(request.request_id)
         assert decision == EscalationDecision.DENY
 
+    def test_partial_quorum_stays_pending_and_visible(self):
+        """A single vote short of quorum must not look authorized or
+        disappear from list_pending()"""
+        queue = InMemoryApprovalQueue()
+        handler = EscalationHandler(
+            backend=queue,
+            timeout_seconds=5,
+            quorum=QuorumConfig(required_approvals=2, required_denials=1),
+        )
+        request = handler.escalate("agent-1", "action", "reason")
+
+        queue.approve(request.request_id, approver="reviewer-1")
+
+        req = queue.get_decision(request.request_id)
+        assert req.decision == EscalationDecision.PENDING
+        assert request.request_id in {r.request_id for r in queue.list_pending()}
+
+    def test_quorum_satisfying_vote_finalizes_with_correct_attribution(self):
+        """Once quorum closes, decision/resolved_by must reflect the vote
+        that actually satisfied it, not whichever vote arrived first."""
+        queue = InMemoryApprovalQueue()
+        handler = EscalationHandler(
+            backend=queue,
+            timeout_seconds=5,
+            quorum=QuorumConfig(required_approvals=2, required_denials=1),
+        )
+        request = handler.escalate("agent-1", "action", "reason")
+
+        queue.approve(request.request_id, approver="reviewer-1")
+        queue.deny(request.request_id, approver="reviewer-2")
+
+        req = queue.get_decision(request.request_id)
+        assert req.decision == EscalationDecision.DENY
+        assert req.resolved_by == "reviewer-2"
+        assert request.request_id not in {r.request_id for r in queue.list_pending()}
+
+    def test_no_quorum_configured_finalizes_on_first_vote_unchanged(self):
+        """Without quorum, a single vote must still finalize immediately;
+        this is the pre-existing, non-quorum behavior and must not regress."""
+        queue = InMemoryApprovalQueue()
+        handler = EscalationHandler(backend=queue, timeout_seconds=5)
+        request = handler.escalate("agent-1", "action", "reason")
+
+        queue.approve(request.request_id, approver="reviewer-1")
+
+        req = queue.get_decision(request.request_id)
+        assert req.decision == EscalationDecision.ALLOW
+        assert req.resolved_by == "reviewer-1"
+        assert request.request_id not in {r.request_id for r in queue.list_pending()}
+
     def test_quorum_unmet_on_non_blocking_backend_resolves_immediately(self, caplog):
         """Non-blocking backends can't wait, so quorum applies default_action
         on the very first ``resolve()`` call rather than after ``timeout_seconds``
