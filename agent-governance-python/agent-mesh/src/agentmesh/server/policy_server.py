@@ -37,19 +37,38 @@ _engine: PolicyEngine = PolicyEngine()
 _trust_policies: list[TrustPolicy] = []
 _trust_evaluator: PolicyEvaluator | None = None
 _loaded_count: int = 0
+_startup_warnings: list[str] = []
+
+
+def _validate_startup() -> None:
+    """Record startup warnings for empty policy state."""
+    global _startup_warnings
+
+    _startup_warnings = []
+    if _loaded_count == 0:
+        warning = (
+            f"Startup validation: no policies loaded from {POLICY_DIR}; "
+            "governance defaults may be permissive until policies are configured."
+        )
+        logger.warning(warning)
+        _startup_warnings.append(warning)
 
 
 def _load_policies() -> None:
     """Load all YAML/JSON policy files from POLICY_DIR."""
     global _engine, _trust_policies, _trust_evaluator, _loaded_count
 
+    _engine = PolicyEngine()
+    _trust_policies = []
+    _trust_evaluator = None
+    _loaded_count = 0
+
     policy_path = Path(POLICY_DIR)
     if not policy_path.exists():
         logger.warning("Policy directory %s does not exist", POLICY_DIR)
+        _validate_startup()
         return
 
-    _engine = PolicyEngine()
-    _trust_policies = []
     governance_count = 0
 
     for f in sorted(policy_path.glob("*.yaml")):
@@ -81,6 +100,7 @@ def _load_policies() -> None:
         governance_count,
         len(_trust_policies),
     )
+    _validate_startup()
 
 
 @app.on_event("startup")
@@ -172,6 +192,7 @@ async def list_policies() -> dict[str, Any]:
         "total_loaded": _loaded_count,
         "trust_policies": len(_trust_policies),
         "policy_dir": POLICY_DIR,
+        "startup_warnings": list(_startup_warnings),
     }
 
 
@@ -183,6 +204,7 @@ async def reload_policies() -> dict[str, Any]:
         "status": "reloaded",
         "total_loaded": _loaded_count,
         "trust_policies": len(_trust_policies),
+        "startup_warnings": list(_startup_warnings),
     }
 
 

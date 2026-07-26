@@ -63,6 +63,7 @@ def create_sidecar_app() -> FastAPI:
             "status": "ready",
             "component": "governance-sidecar",
             "policies_loaded": _loaded_count,
+            "startup_warnings": list(_startup_warnings),
         }
 
     @app.get("/healthz", tags=["health"])
@@ -137,13 +138,18 @@ def create_sidecar_app() -> FastAPI:
             "total_loaded": _loaded_count,
             "policy_dir": _policy_dir,
             "version": VERSION,
+            "startup_warnings": list(_startup_warnings),
         }
 
     @app.post("/api/v1/policy/reload", tags=["policy"])
     async def reload_policies() -> dict[str, Any]:
         """Hot-reload policies from disk."""
         _load_policies()
-        return {"status": "reloaded", "total_loaded": _loaded_count}
+        return {
+            "status": "reloaded",
+            "total_loaded": _loaded_count,
+            "startup_warnings": list(_startup_warnings),
+        }
 
     return app
 
@@ -169,9 +175,24 @@ class EvaluateResponse(BaseModel):
 
 _policy_dir = os.getenv("AGT_POLICY_DIR", "/etc/agt/policies")
 _loaded_count = 0
+_startup_warnings: list[str] = []
 
 # Initialize engine eagerly so tests work without startup event
 _engine = _PolicyEngine()
+
+
+def _validate_startup() -> None:
+    """Record startup warnings for empty policy state."""
+    global _startup_warnings
+
+    _startup_warnings = []
+    if _loaded_count == 0:
+        warning = (
+            f"Startup validation: no policies loaded from {_policy_dir}; "
+            "governance defaults may be permissive until policies are configured."
+        )
+        logger.warning(warning)
+        _startup_warnings.append(warning)
 
 
 def _load_policies() -> None:
@@ -182,11 +203,12 @@ def _load_policies() -> None:
 
     _policy_dir = os.getenv("AGT_POLICY_DIR", "/etc/agt/policies")
     _engine = PolicyEngine()
+    _loaded_count = 0
 
     policy_path = Path(_policy_dir)
     if not policy_path.exists():
         logger.warning("Policy directory %s does not exist", _policy_dir)
-        _loaded_count = 0
+        _validate_startup()
         return
 
     count = 0
@@ -207,6 +229,7 @@ def _load_policies() -> None:
 
     _loaded_count = count
     logger.info("Loaded %d policies from %s", count, _policy_dir)
+    _validate_startup()
 
 
 def _bootstrap_telemetry() -> None:

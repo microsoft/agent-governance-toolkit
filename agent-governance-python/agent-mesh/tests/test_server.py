@@ -6,6 +6,9 @@ Tests for AgentMesh component server endpoints.
 Uses FastAPI TestClient for synchronous HTTP testing of all four servers.
 """
 
+import logging
+import os
+
 import pytest
 
 fastapi = pytest.importorskip("fastapi", reason="fastapi not installed (optional [server] extra)")
@@ -260,6 +263,22 @@ class TestPolicyServer:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "reloaded"
+
+    def test_list_policies_reports_startup_warning_when_empty(self, caplog, tmp_path):
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"AGENTMESH_POLICY_DIR": str(tmp_path)}):
+            from agentmesh.server import policy_server
+
+            with caplog.at_level(logging.WARNING):
+                with TestClient(policy_server.app) as client:
+                    resp = client.get("/api/v1/policies")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_loaded"] == 0
+        assert data["startup_warnings"]
+        assert any("Startup validation: no policies loaded" in msg for msg in caplog.messages)
 
     def test_trust_evaluate_no_policies(self):
         resp = self.client.post("/api/v1/policy/trust/evaluate", json={
