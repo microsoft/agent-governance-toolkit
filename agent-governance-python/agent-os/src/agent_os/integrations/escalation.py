@@ -544,7 +544,7 @@ class EscalationHandler:
             req = self.backend.get_decision(request_id)
             decision = req.decision if req else EscalationDecision.PENDING
 
-        quorum = req.quorum if req is not None else self.quorum        
+        quorum = req.quorum if req is not None else self.quorum
         # Quorum evaluation (also catches the non-blocking backend case
         # above, and re-derives the decision from votes either way so a
         # raw req.decision set by a single approve()/deny() call never
