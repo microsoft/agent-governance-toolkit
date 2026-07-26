@@ -238,6 +238,84 @@ class TestQuorumResolution:
         assert req.resolved_by == "reviewer-1"
         assert request.request_id not in {r.request_id for r in queue.list_pending()}
 
+    def test_resolve_uses_the_request_own_quorum_not_the_handler_current_quorum(self):
+        """resolve() must key off req.quorum. The config that actually
+        governed approve()/deny()'s finalization for this request, not
+        self.quorum, which can have been reassigned since escalate() was
+        called. A stale/updated self.quorum must not change the outcome
+        of a request that was already escalated under a different quorum.
+        """
+        queue = InMemoryApprovalQueue()
+        handler = EscalationHandler(
+            backend=queue,
+            timeout_seconds=5,
+            quorum=QuorumConfig(required_approvals=1, required_denials=1),
+        )
+        request = handler.escalate("agent-1", "action", "reason")
+        assert request.quorum.required_approvals == 1
+
+        handler.quorum = QuorumConfig(required_approvals=5, required_denials=1)
+
+        queue.approve(request.request_id, approver="reviewer-1")
+
+        req = queue.get_decision(request.request_id)
+        assert req.decision == EscalationDecision.ALLOW
+
+        decision = handler.resolve(request.request_id)
+        assert decision == EscalationDecision.ALLOW, (
+            "resolve() re-derived against the handler's current (reassigned, "
+            "stricter) quorum instead of the request's own quorum"
+        )
+
+    def test_non_blocking_backend_second_resolve_call_observes_later_settled_quorum(self):
+        """A single resolve() call on a non-blocking backend still can't
+        wait (see the docstring Note), but it must not permanently commit
+        the request to default_action either: once req.decision is
+        quorum-aware, a later resolve() call, made after enough votes
+        have actually arrived, must return the real quorum outcome
+        instead of repeating the earlier default.
+        """
+
+        class _NonBlockingBackend(ApprovalBackend):
+            def __init__(self):
+                self._inner = InMemoryApprovalQueue()
+
+            def submit(self, request):
+                self._inner.submit(request)
+
+            def get_decision(self, request_id):
+                return self._inner.get_decision(request_id)
+
+            def approve(self, request_id, approver=""):
+                return self._inner.approve(request_id, approver=approver)
+
+            def deny(self, request_id, approver=""):
+                return self._inner.deny(request_id, approver=approver)
+
+            def list_pending(self):
+                return self._inner.list_pending()
+
+        backend = _NonBlockingBackend()
+        handler = EscalationHandler(
+            backend=backend,
+            timeout_seconds=30,
+            default_action=DefaultTimeoutAction.DENY,
+            quorum=QuorumConfig(required_approvals=2, required_denials=1),
+        )
+        request = handler.escalate("agent-1", "deploy", "needs review")
+        backend.approve(request.request_id, approver="reviewer-1")
+
+        first = handler.resolve(request.request_id)
+        assert first == EscalationDecision.DENY
+
+        backend.approve(request.request_id, approver="reviewer-2")
+
+        second = handler.resolve(request.request_id)
+        assert second == EscalationDecision.ALLOW, (
+            "a later resolve() call after quorum actually settled must "
+            "return the real outcome, not repeat the earlier default"
+        )
+
     def test_quorum_unmet_on_non_blocking_backend_resolves_immediately(self, caplog):
         """Non-blocking backends can't wait, so quorum applies default_action
         on the very first ``resolve()`` call rather than after ``timeout_seconds``
