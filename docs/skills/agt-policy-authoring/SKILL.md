@@ -92,6 +92,10 @@ Validate the repository policy with the installed CLI:
 agt-copilot policy validate --file .agt/policy.json
 ```
 
+Validation confirms that the policy is a supported document and preserves the CLI's required
+baseline constraints. It does not load the policy, grant tool permissions, or enforce decisions
+for the repository.
+
 If validation fails, correct the policy rather than recommending activation. Do not substitute an
 unsupported schema version or relax the strict baseline merely to make validation pass.
 
