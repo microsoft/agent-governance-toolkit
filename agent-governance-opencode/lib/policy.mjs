@@ -964,20 +964,38 @@ function isPowerShellTool(toolName) {
   return /\b(?:powershell|pwsh)\b/i.test(String(toolName ?? ""));
 }
 
+function parsePowerShellParameter(flag) {
+  // PowerShell switch parameters accept an explicit boolean assignment
+  // (`-Recurse:$true`, `-Force:$false`), so the parameter name has to be matched
+  // separately from any `:<value>` suffix. A bare switch is asserted; `$false`
+  // disables it and must not be read as a recursive delete; any other value,
+  // including an unresolved variable, is treated as asserted so an unknown value
+  // fails safe toward the deny.
+  const match = /^-([a-z]+)(?::(\S*))?$/i.exec(flag);
+  if (!match || flag.startsWith("--")) {
+    return undefined;
+  }
+  const [, parameterName, switchValue] = match;
+  return {
+    asserted: switchValue === undefined || !/^\$false$/i.test(switchValue),
+    name: parameterName.toLowerCase(),
+  };
+}
+
 function isPowerShellRecursiveParameter(flag) {
-  if (!/^-[a-z]+$/i.test(flag) || flag.startsWith("--")) {
+  const parameter = parsePowerShellParameter(flag);
+  if (!parameter?.asserted) {
     return false;
   }
-  const parameterName = flag.slice(1).toLowerCase();
-  return parameterName === "recursive" || "recurse".startsWith(parameterName);
+  return parameter.name === "recursive" || "recurse".startsWith(parameter.name);
 }
 
 function isPowerShellForceParameter(flag) {
-  if (!/^-[a-z]+$/i.test(flag) || flag.startsWith("--")) {
+  const parameter = parsePowerShellParameter(flag);
+  if (!parameter?.asserted) {
     return false;
   }
-  const parameterName = flag.slice(1).toLowerCase();
-  return parameterName.length >= 2 && "force".startsWith(parameterName);
+  return parameter.name.length >= 2 && "force".startsWith(parameter.name);
 }
 
 function isUnixRmShortOptionCluster(flag) {

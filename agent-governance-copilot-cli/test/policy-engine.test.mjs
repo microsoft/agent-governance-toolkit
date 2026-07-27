@@ -484,6 +484,12 @@ test("evaluatePreToolUse denies recursive force deletes", async () => {
       ["bash", "rm --recursive important-data"],
       ["bash", "rm -r important-data"],
       ["powershell", "Remove-Item -Recurse important-data"],
+      ["powershell", "Remove-Item -Recurse:$true -Force:$true important-data"],
+      ["powershell", "Remove-Item -Recurse:$true important-data"],
+      ["powershell", "Remove-Item -Recurse:$TRUE important-data"],
+      ["powershell", "Remove-Item -r:$true -fo:$true important-data"],
+      ["powershell", "ri -Recurse:$true important-data"],
+      ["powershell", "Remove-Item -Recurse:$unresolved important-data"],
       ["bash", "rm -rfx important-data"],
       ["bash", "`rm -rf /`"],
       ["bash", "{rm -rf /;}"],
@@ -513,6 +519,10 @@ test("evaluatePreToolUse does not deny safe cleanup or non-recursive force delet
       ["powershell", "Remove-Item -Filter *.tmp important-data"],
       ["powershell", "Remove-Item important-data -Confirm"],
       ["powershell", "Remove-Item -Recurse -Force build"],
+      ["powershell", "Remove-Item -Recurse:$false important-data"],
+      ["powershell", "Remove-Item -Recurse:$false -Force:$true important-data"],
+      ["powershell", "Remove-Item -Force:$true important-data"],
+      ["powershell", "Remove-Item -Recurse:$true build"],
       ["powershell", "rd /s /q node_modules"],
     ]) {
       const result = await evaluatePreToolUse(state, {
