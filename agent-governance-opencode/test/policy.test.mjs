@@ -116,6 +116,8 @@ test("evaluateOpenCodeTool denies recursive force deletes", async () => {
     "ri -r -fo important-data",
     "rd /s /q important-data",
     "rmdir /s /q important-data",
+    "rm -rf /usr",
+    "rm -rf /sbin",
     "rmdir /S /Q important-data",
     "rmdir -Recurse -Force important-data",
     "rm --recursive important-data",
@@ -172,6 +174,10 @@ test("evaluateOpenCodeTool does not deny safe cleanup or non-recursive force del
     "rd /s /q node_modules",
     "rmdir /s /q node_modules",
     "rmdir emptydir",
+    "rm -f /usr",
+    "rm -f /srv",
+    "rm /sys",
+    "rm -i /sbin",
     "rmdir -p a/b/c",
   ]) {
     const result = await evaluateOpenCodeTool(state, {

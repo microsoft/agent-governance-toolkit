@@ -1023,7 +1023,7 @@ function getRmCommandDetails(commandText, toolName) {
       }
       continue;
     }
-    if (/^\/[a-z]+$/i.test(normalizedToken)) {
+    if (isWindowsSlashFlagCommand(commandName) && /^\/[a-z]+$/i.test(normalizedToken)) {
       recursive ||= /s/i.test(normalizedToken);
       force ||= /[fq]/i.test(normalizedToken);
       continue;
@@ -1138,6 +1138,14 @@ function isPowerShellForceParameter(flag) {
     return false;
   }
   return parameter.name.length >= 2 && "force".startsWith(parameter.name);
+}
+
+function isWindowsSlashFlagCommand(commandName) {
+  // Only the cmd.exe delete commands take `/s`-style switches. For `rm` a token
+  // such as `/usr` or `/sbin` is an ordinary absolute path, and reading it as a
+  // switch marked plainly non-recursive deletes (`rm -i /sbin`) as recursive and
+  // hard-denied them, contradicting the recursive-only deny semantics.
+  return commandName === "rd" || commandName === "rmdir" || commandName === "del";
 }
 
 function isUnixRmShortOptionCluster(flag) {
