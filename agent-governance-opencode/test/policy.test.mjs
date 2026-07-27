@@ -202,6 +202,9 @@ test("evaluateOpenCodeTool denies credential reads regardless of the reader bina
     "read k < .env",
     "cat /proc/self/environ",
     "cp -t /exfil .env", // GNU target-directory form: .env is still the source
+    "sudo cp .env /tmp/exfil", // wrapper does not make a real .env a safe source
+    "sudo cat .env",
+    "sudo cp -t /exfil .env",
   ];
   for (const command of denied) {
     const result = await evaluateOpenCodeTool(state, {
@@ -220,6 +223,10 @@ test("evaluateOpenCodeTool denies credential reads regardless of the reader bina
     "cp README.md docs/",
     "cp .env.example .env",
     "cp -t /dest .env.example", // GNU target-directory form of the template copy
+    "sudo cp .env.example .env", // wrapped copy still scaffolds from a template
+    "env VAR=1 cp .env.example .env",
+    "nohup cp .env.example .env",
+    "/usr/bin/sudo cp .env.example .env",
   ]) {
     const result = await evaluateOpenCodeTool(state, {
       tool: "bash",

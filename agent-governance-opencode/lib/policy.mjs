@@ -935,9 +935,33 @@ function isSafeEnvTemplateReadCommand(commandText) {
   );
 }
 
+// Wrapper commands that take another command as their argument. `cp` behind one
+// of these is still a copy, so the destination token has to be found past the
+// wrapper rather than assuming the copy sits at index 0.
+const COMMAND_WRAPPERS = new Set(["command", "doas", "env", "nice", "nohup", "sudo", "time"]);
+
+function findCopyCommandIndex(tokens) {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    // Wrapper options (`sudo -n`) and `env` assignments (`VAR=1`) precede the
+    // real command name.
+    if (token.startsWith("-") || /^[a-z_][a-z0-9_]*=/i.test(token)) {
+      continue;
+    }
+    const name = getLastPathSegment(token).toLowerCase();
+    if (COMMAND_WRAPPERS.has(name)) {
+      continue;
+    }
+    // First non-wrapper word is the command. Anything else means this is not a
+    // copy, and nothing should be dropped.
+    return /^(cp|mv|install)$/.test(name) ? index : -1;
+  }
+  return -1;
+}
+
 function dropCopyDestinationToken(tokens) {
-  const commandName = getLastPathSegment(String(tokens[0] ?? "")).toLowerCase();
-  if (!/^(cp|mv|install)$/.test(commandName)) {
+  const commandIndex = findCopyCommandIndex(tokens);
+  if (commandIndex < 0) {
     return tokens;
   }
   // With an explicit target-directory option (`-t DIR` / `--target-directory`)
@@ -947,7 +971,7 @@ function dropCopyDestinationToken(tokens) {
     return tokens;
   }
   const lastPathIndex = tokens.reduce(
-    (acc, token, index) => (index === 0 || token.startsWith("-") ? acc : index),
+    (acc, token, index) => (index <= commandIndex || token.startsWith("-") ? acc : index),
     -1,
   );
   return lastPathIndex < 0 ? tokens : tokens.filter((_, index) => index !== lastPathIndex);
