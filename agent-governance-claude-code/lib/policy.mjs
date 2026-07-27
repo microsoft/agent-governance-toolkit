@@ -889,7 +889,7 @@ function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
 function getRmCommandDetails(commandText, toolName) {
   const tokens = tokenizeDeleteCommandParts(commandText);
   const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|ri|rd|del)$/i.test(normalizeCommandNameToken(token)),
+    /^(rm|remove-item|rmdir|ri|rd|del)$/i.test(normalizeCommandNameToken(token)),
   );
   if (commandIndex === -1) {
     return undefined;
