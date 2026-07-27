@@ -879,7 +879,7 @@ function createMinimalFallbackPolicy() {
 
 function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
   if (rule.id === "recursive-delete") {
-    return !hasRecursiveDelete(commandText, toolName) || isSafeCleanupCommand(commandText, toolName);
+    return !hasUnsafeRecursiveDelete(commandText, toolName);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);
@@ -940,6 +940,46 @@ function getRmCommandDetails(commandText, toolName) {
     recursive,
     targets: candidateTargets,
   };
+}
+
+function splitCommandSegments(commandText) {
+  // Each command in a chain has to be judged on its own: flags belonging to a
+  // later command must not be attributed to an earlier delete
+  // (`rm file && tar -rf archive.tar`), and a safe cleanup stays a safe cleanup
+  // when it is chained with unrelated work (`rm -rf node_modules && npm install`).
+  // Quoted spans are copied verbatim so an operator inside a literal argument
+  // does not split the command.
+  const text = String(commandText);
+  const segments = [];
+  let current = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"' || character === "'") {
+      const closingIndex = text.indexOf(character, index + 1);
+      const end = closingIndex === -1 ? text.length : closingIndex;
+      current += text.slice(index, end + 1);
+      index = end;
+      continue;
+    }
+    if (/[&|;\r\n]/.test(character)) {
+      segments.push(current);
+      current = "";
+      while (index + 1 < text.length && /[&|;\r\n]/.test(text[index + 1])) {
+        index += 1;
+      }
+      continue;
+    }
+    current += character;
+  }
+  segments.push(current);
+  return segments.map((segment) => segment.trim()).filter(Boolean);
+}
+
+function hasUnsafeRecursiveDelete(commandText, toolName) {
+  return splitCommandSegments(commandText).some(
+    (segment) =>
+      hasRecursiveDelete(segment, toolName) && !isSafeCleanupCommand(segment, toolName),
+  );
 }
 
 function hasRecursiveDelete(commandText, toolName) {
@@ -1225,7 +1265,12 @@ function normalizeCommandNameToken(token) {
   // Strip surrounding quotes and any leading shell grouping/substitution
   // delimiters so a command glued to punctuation is still recognized, e.g.
   // `rm ... ` (backtick substitution), {rm ...;} (brace group), $(rm ...).
-  return stripCommandToken(token).replace(/^[`({$]+/, "");
+  // Then reduce to the trailing path segment, so a path-qualified invocation
+  // (`/bin/rm`, `./rm`) or a module-qualified cmdlet
+  // (`Microsoft.PowerShell.Management\\Remove-Item`) is still recognized as the
+  // delete command instead of silently skipping the deny.
+  const command = stripCommandToken(token).replace(/^[`({$]+/, "");
+  return command.slice(command.search(/[^\\/]*$/));
 }
 
 function normalizeCommandPathToken(token) {
