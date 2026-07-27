@@ -990,7 +990,7 @@ function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
 }
 
 function getRmCommandDetails(commandText, toolName) {
-  const tokens = tokenizeCommand(commandText);
+  const tokens = tokenizeDeleteCommandParts(commandText);
   const commandIndex = tokens.findIndex((token) =>
     /^(rm|remove-item|ri|rd|del)$/i.test(normalizeCommandNameToken(token)),
   );
@@ -1368,6 +1368,18 @@ function containsCommandControlOperator(commandText) {
 
 function tokenizeCommand(commandText) {
   return String(commandText).match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
+}
+
+function tokenizeDeleteCommandParts(commandText) {
+  // `tokenizeCommand` splits on whitespace only, so a delete command glued to a
+  // control operator (`npm test&&rm -rf important-data`) stays inside a single
+  // token and is never recognized as the command name, which would silently skip
+  // the recursive-delete deny. Split unquoted tokens on the shell control
+  // operators so each command in a chain is tokenized on its own. Quoted spans are
+  // left intact so an operator inside a literal argument is not treated as syntax.
+  return tokenizeCommand(commandText).flatMap((token) =>
+    /^["']/.test(token) ? [token] : token.split(/&&|\|\||[;&|]/).filter(Boolean),
+  );
 }
 
 function stripCommandToken(token) {
