@@ -10,6 +10,16 @@ const GENESIS_HASH = "0".repeat(64);
 export const MAX_ENTRIES = 10000;
 
 export async function appendAuditEntry(auditPath, entry, { limit = MAX_ENTRIES } = {}) {
+  // `limit` feeds index arithmetic below (`combined[overflow - 1]`), so a
+  // negative or fractional value would fail as an opaque TypeError on an
+  // undefined element, and NaN would silently disable eviction and let the log
+  // grow without bound. Reject it here instead, where the message is actionable.
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new TypeError(
+      `Audit entry limit must be a positive integer, received ${String(limit)}.`,
+    );
+  }
+
   const { seamHash, entries } = await loadAuditFile(auditPath);
   if (!verifyAuditEntries(entries, seamHash)) {
     throw new Error(`Audit log at ${auditPath} failed hash-chain verification.`);

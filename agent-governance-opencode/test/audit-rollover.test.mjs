@@ -35,6 +35,22 @@ test("MAX_ENTRIES default is exported and positive", () => {
   assert.ok(MAX_ENTRIES > 0);
 });
 
+test("append rejects a limit that is not a positive integer", async () => {
+  const { dir, path } = await tmp();
+  try {
+    const entry = { agentId: "a", action: "tool.t", decision: "allow" };
+    for (const limit of [-1, 0, 1.5, Number.NaN, "3", null]) {
+      await assert.rejects(
+        () => appendAuditEntry(path, entry, { limit }),
+        (error) => error instanceof TypeError && /positive integer/.test(error.message),
+        `limit=${String(limit)}`,
+      );
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("append itself evicts and computes the seam once entries exceed the limit", async () => {
   const { dir, path } = await tmp();
   try {
