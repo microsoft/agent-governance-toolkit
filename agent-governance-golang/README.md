@@ -109,21 +109,23 @@ OPA/Rego and Cedar support with fail-closed evaluation paths.
 | `OPAOptions` | Configure OPA URL, package/query, timeout, and Rego content |
 | `CedarOptions` | Configure Cedar policy content, entities, schema, and timeout |
 
-### Context Accumulation Governance (`context_governance.go`)
+### Context Accumulation Governance (`context_governance.go`, `context_audit.go`)
 
-Workflow-scoped context envelopes for accumulated labels, aggregate sensitivity, grow-only restrictions, unknown-combination escalation, and delegation inheritance.
+Workflow-scoped context envelopes for accumulated labels, aggregate sensitivity, grow-only restrictions, unknown-combination escalation, delegation inheritance, and classified transition events. `DelegateContext` is a Go convenience for constructing a child envelope from the cross-language `MergeContextRestrictions` contract.
 
 | Type / Function | Description |
 |---|---|
-| `NewContextEnvelope(envelopeID, workflowID)` | Create an empty workflow-scoped context envelope |
+| `NewContextEnvelope(envelopeID, workflowID, createdAt)` | Create an empty workflow-scoped context envelope with a caller-supplied timestamp |
 | `FoldContext(env, labels, sensitivity)` | Return the next envelope version with labels folded and sensitivity raised |
 | `ApplyContextRestrictions(env, restrictions)` | Return the next envelope version with grow-only restrictions applied |
 | `EvaluateAggregation(env, ruleset, threshold)` | Apply organization-authored aggregation rules and escalate unknown combinations |
 | `AccumulateContext(env, labels, sensitivity, ruleset, threshold)` | Fold post-execution result labels and apply aggregation-derived restrictions |
 | `DecideNextContext(env, action, ruleset, threshold)` | Gate export, delegation, and memory writes against accumulated state |
-| `(*ContextDecision).PolicyDecision(hasObligationChannel)` | Collapse context outcomes onto the existing Go policy verdicts |
+| `(ContextDecision).PolicyDecision(hasObligationChannel)` | Collapse context outcomes onto the existing Go policy verdicts |
 | `MergeContextRestrictions(parent, childDeclared)` | Inherit parent restrictions across delegation boundaries |
+| `DelegateContext(parent, childID, childDeclared, createdAt)` | Construct a child envelope with inherited restrictions and a caller-supplied timestamp |
 | `ContextEnvelopeReference(env)` | Project an envelope to an opaque id plus coarse sensitivity |
+| `ContextEventFor(eventType, agentID, before, after, rulesApplied)` | Build a classified audit event for an envelope transition |
 
 ### Audit (`audit.go`)
 
