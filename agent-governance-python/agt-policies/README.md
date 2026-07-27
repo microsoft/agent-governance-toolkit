@@ -26,6 +26,7 @@ annotators contribute additional context.
 adapters. Use it when host code needs to:
 
 - discover, scope, merge, and materialize AGT governance manifests
+- author and validate a lossless typed `AgtManifest`
 - build complete AGT snapshots for ACS intervention points
 - call the ACS Python SDK through `AgtRuntime`
 - enforce `allow`, `warn`, `deny`, `escalate`, and `transform` verdicts
@@ -40,7 +41,7 @@ AGT adapters enforce.
 | Layer | Responsibility |
 | --- | --- |
 | AGT host | Intercepts the agent loop, owns side effects, and enforces the verdict. |
-| `agt-policies` | Python-facing ACS package for AGT hosts. Resolves manifests, builds snapshots, calls the runtime, and returns `EvaluationResult`. |
+| `agt-policies` | Python-facing ACS package for AGT hosts. Validates manifests, builds snapshots, calls the runtime, and returns native `PolicyEvaluation` results. |
 | ACS runtime | Evaluates the manifest and snapshot as a stateless policy decision runtime. |
 
 ## What is here
@@ -51,10 +52,14 @@ AGT adapters enforce.
   (`discover`, `scope`, `merge`, `build`.)
 - `agt.policies.snapshot` — snapshot builder per
   `spec/agt/AGT-SNAPSHOT-1.0.md`.
+- `agt.policies.manifest` provides lossless typed `AgtManifest`, provenance-aware
+  local reference resolution, and adapter compatibility preflight.
 - `agt.policies.bridge` — renders a v4 `GovernancePolicy` into an ACS
   manifest + OPA rego module.
-- `agt.policies.result` — `EvaluationResult` (replaces v4
-  `PolicyCheckResult`).
+- `agt.policies.result` provides native immutable `PolicyEvaluation` plus the
+  temporary `EvaluationResult` compatibility surface.
+- `agt.policies.session` provides `AdapterRuntimeSession`, which owns one
+  session's snapshots and budget counters while sharing a stateless runtime.
 - `agt.policies.runtime` — Python wrapper over the ACS Python SDK that
   loads a resolved manifest, runs intervention points, applies the
   transform verdict, enforces approval, and emits AGT telemetry events.
@@ -65,14 +70,46 @@ AGT adapters enforce.
    `pre_tool_call`.
 2. `SnapshotBuilder` creates the complete AGT snapshot for that call,
    including the agent/session envelope and current budget counters.
-3. `AgtRuntime` resolves the manifest when needed, sanitizes AGT-only
-   fields for the native engine, and calls the ACS Python SDK.
-4. The returned ACS verdict is mapped to `EvaluationResult`, including
-   `verdict`, `reason`, optional `transform`, optional `evidence`, and
-   the `input_identity` / `enforced_identity` audit fields.
+3. `AgtRuntime.from_manifest(...)` validates the typed manifest, resolves
+   relative references from explicit provenance, and calls the ACS Python SDK.
+4. The returned ACS verdict is mapped to immutable `PolicyEvaluation`,
+   including `verdict`, namespaced `reason_code`, optional `transform`,
+   optional `evidence`, result labels, and the
+   `input_identity` / `enforced_identity` audit fields.
 5. The host enforces the result. `allow`, `warn`, and `transform`
    proceed; `deny` blocks; `escalate` routes through the configured
    approval resolver or fails closed.
+
+## Native host API
+
+```python
+from pathlib import Path
+
+from agt.policies import AgtManifest, SnapshotBuilder
+from agt.policies.runtime import AgtRuntime
+
+manifest = AgtManifest.from_path(Path("manifest.yaml"))
+runtime = AgtRuntime.from_manifest(manifest)
+snapshot = SnapshotBuilder(agent_id="mail-agent", session_id="run-1").input(
+    body={"body": "hello"}
+)
+result = runtime.evaluate("input", snapshot)
+```
+
+Mapping, typed, and YAML-text inputs must provide `base_dir` when they contain
+relative references. The runtime does not use the process working directory as
+an implicit trust boundary. The typed model preserves `limits`, but
+`AgtRuntime.from_manifest(...)` rejects it until the Python SDK can enforce
+those values rather than silently dropping them.
+`PolicyEvaluation.audit_record()` emits schema `agt.policy_evaluation.v1`.
+Policy-authored messages remain restricted audit detail, while host exceptions
+use stable sanitized text.
+
+`AdapterRuntimeSession` charges every attempted tool call, including denied
+and failed attempts, before the next policy evaluation. Model token usage is
+recorded after `post_model_call`. Existing v4 adapters temporarily disable
+those native charges because they still update their old execution context.
+Phase 3 removes that compatibility override.
 
 ## Compatibility bridge
 
@@ -87,6 +124,14 @@ The generated compatibility policy is identified as `agt_legacy_rules`
 inside the resolved ACS manifest. If merged governance rules are
 present but no intervention point binds to `agt_legacy_rules`,
 resolution fails closed rather than producing rules that never run.
+
+The `agt migrate v4-to-v5` command does not import this runtime bridge. Its
+private one-way translator accepts exact literals only. Dynamic constructor
+expressions, host-only fields, unsupported pattern kinds, invalid patterns, and
+existing output paths produce manual-review findings and no manifest. A write
+run exits nonzero whenever any policy could not be translated exactly. REGEX
+and GLOB migration uses OPA's Go RE2 validator. GLOB anchors are normalized to
+RE2 `\z`; Python-only expressions such as backreferences are refused.
 
 ## Security invariants
 

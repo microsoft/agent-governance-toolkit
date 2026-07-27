@@ -37,6 +37,7 @@ for callers that want to assemble custom intervention points.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -52,8 +53,15 @@ def _validate_budget_counter(name: str, value: Any) -> None:
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError(f"{name} must be a non-negative integer, got {value!r}")
         return
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise ValueError(f"{name} must be a non-negative number, got {value!r}")
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        raise ValueError(
+            f"{name} must be a non-negative, finite number, got {value!r}"
+        )
 
 
 def _envelope(
@@ -343,11 +351,11 @@ class SnapshotBuilder:
     def record_tool_call(self, count: int = 1) -> None:
         """Increment the ``tool_call_count`` budget by ``count`` (default 1).
 
-        Hosts call this after a ``post_tool_call`` returns successfully,
-        matching the v4 ``ExecutionContext.call_count += 1`` pattern. The
-        engine sees the new value on the next intervention point because
-        AGT-SNAPSHOT §1 specifies budgets are read at the start of each
-        evaluation.
+        Native hosts reserve attempted calls through
+        :class:`agt.policies.session.AdapterRuntimeSession`. Direct callers may
+        use this mutator for host-observed usage. The engine sees the new value
+        on the next intervention point because AGT-SNAPSHOT section 1 specifies
+        budgets are read at the start of each evaluation.
         """
         if not isinstance(count, int) or count < 0:
             raise ValueError(f"count must be a non-negative integer, got {count!r}")
@@ -361,14 +369,28 @@ class SnapshotBuilder:
 
     def record_cost(self, usd: float) -> None:
         """Add ``usd`` to the running ``cost_usd`` budget."""
-        if not isinstance(usd, (int, float)) or usd < 0:
-            raise ValueError(f"usd must be a non-negative number, got {usd!r}")
+        if (
+            not isinstance(usd, (int, float))
+            or isinstance(usd, bool)
+            or not math.isfinite(usd)
+            or usd < 0
+        ):
+            raise ValueError(
+                f"usd must be a non-negative, finite number, got {usd!r}"
+            )
         self.cost_usd += float(usd)
 
     def record_elapsed(self, seconds: float) -> None:
         """Add ``seconds`` to the running ``elapsed_seconds`` budget."""
-        if not isinstance(seconds, (int, float)) or seconds < 0:
-            raise ValueError(f"seconds must be a non-negative number, got {seconds!r}")
+        if (
+            not isinstance(seconds, (int, float))
+            or isinstance(seconds, bool)
+            or not math.isfinite(seconds)
+            or seconds < 0
+        ):
+            raise ValueError(
+                f"seconds must be a non-negative, finite number, got {seconds!r}"
+            )
         self.elapsed_seconds += float(seconds)
 
     def reset_budgets(self) -> None:
