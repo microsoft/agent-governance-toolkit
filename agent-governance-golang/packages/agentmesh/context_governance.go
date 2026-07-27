@@ -6,7 +6,6 @@ package agentmesh
 import (
 	"sort"
 	"strings"
-	"time"
 )
 
 // DataClassification is the shared sensitivity ladder for context governance.
@@ -38,15 +37,6 @@ func (dc DataClassification) String() string {
 	}
 }
 
-// DataLabel describes classified data folded into a context envelope.
-type DataLabel struct {
-	Classification DataClassification `json:"classification" yaml:"classification"`
-	Categories     []string           `json:"categories,omitempty" yaml:"categories,omitempty"`
-	Owner          string             `json:"owner,omitempty" yaml:"owner,omitempty"`
-	RetentionDays  int                `json:"retention_days,omitempty" yaml:"retention_days,omitempty"`
-	Geography      string             `json:"geography,omitempty" yaml:"geography,omitempty"`
-}
-
 // ContextEnvelope is the accumulated governance state for one workflow.
 //
 // Treat envelopes as value objects: helpers in this file return a new envelope
@@ -64,12 +54,14 @@ type ContextEnvelope struct {
 }
 
 // NewContextEnvelope creates an empty workflow-scoped context envelope.
-func NewContextEnvelope(envelopeID, workflowID string) ContextEnvelope {
+// createdAt is caller-supplied so construction remains deterministic and free
+// of hidden clock access.
+func NewContextEnvelope(envelopeID, workflowID, createdAt string) ContextEnvelope {
 	return ContextEnvelope{
 		EnvelopeID:           envelopeID,
 		WorkflowID:           workflowID,
 		AggregateSensitivity: DataClassificationPublic,
-		CreatedAt:            time.Now().UTC().Format(time.RFC3339),
+		CreatedAt:            createdAt,
 	}
 }
 
@@ -299,8 +291,16 @@ func MergeContextRestrictions(parent ContextEnvelope, childDeclared []string) []
 	return unionTokens(parent.Restrictions, childDeclared)
 }
 
-// DelegateContext creates a child envelope that inherits parent restrictions and sensitivity.
-func DelegateContext(parent ContextEnvelope, childEnvelopeID string, childDeclaredRestrictions []string) ContextEnvelope {
+// DelegateContext creates a child envelope that inherits parent restrictions
+// and sensitivity. It is a Go convenience over MergeContextRestrictions rather
+// than a direct Python or TypeScript API counterpart. createdAt is
+// caller-supplied so the helper stays deterministic.
+func DelegateContext(
+	parent ContextEnvelope,
+	childEnvelopeID string,
+	childDeclaredRestrictions []string,
+	createdAt string,
+) ContextEnvelope {
 	parent = cloneContextEnvelope(parent)
 	return ContextEnvelope{
 		EnvelopeID:           childEnvelopeID,
@@ -309,7 +309,7 @@ func DelegateContext(parent ContextEnvelope, childEnvelopeID string, childDeclar
 		AggregateSensitivity: parent.AggregateSensitivity,
 		Restrictions:         MergeContextRestrictions(parent, childDeclaredRestrictions),
 		ParentEnvelopeID:     parent.EnvelopeID,
-		CreatedAt:            time.Now().UTC().Format(time.RFC3339),
+		CreatedAt:            createdAt,
 	}
 }
 

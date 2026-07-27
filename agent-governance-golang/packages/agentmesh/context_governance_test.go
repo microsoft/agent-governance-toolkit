@@ -19,6 +19,19 @@ var contextGovernanceRules = AggregationRuleSet{
 	},
 }
 
+func TestNewContextEnvelopeUsesCallerSuppliedCreatedAt(t *testing.T) {
+	const createdAt = "2026-07-27T08:30:00Z"
+
+	env := NewContextEnvelope("env-1", "wf-1", createdAt)
+
+	if env.CreatedAt != createdAt {
+		t.Fatalf("created at = %q, want %q", env.CreatedAt, createdAt)
+	}
+	if env.AggregateSensitivity != DataClassificationPublic {
+		t.Fatalf("aggregate sensitivity = %v, want public", env.AggregateSensitivity)
+	}
+}
+
 func TestFoldContextJoinsLabelsAndRaisesSensitivity(t *testing.T) {
 	env := ContextEnvelope{
 		EnvelopeID:           "env-1",
@@ -280,7 +293,8 @@ func TestMergeContextRestrictionsAndDelegateContextInheritParentRestrictions(t *
 		t.Fatalf("merged restrictions = %#v, want parent+child restrictions", merged)
 	}
 
-	child := DelegateContext(parent, "child-1", []string{"no_memory_write"})
+	const childCreatedAt = "2026-07-27T08:31:00Z"
+	child := DelegateContext(parent, "child-1", []string{"no_memory_write"}, childCreatedAt)
 	if child.ParentEnvelopeID != parent.EnvelopeID {
 		t.Fatalf("parent envelope id = %q, want %q", child.ParentEnvelopeID, parent.EnvelopeID)
 	}
@@ -289,5 +303,8 @@ func TestMergeContextRestrictionsAndDelegateContextInheritParentRestrictions(t *
 	}
 	if child.AggregateSensitivity != parent.AggregateSensitivity {
 		t.Fatalf("child sensitivity = %v, want %v", child.AggregateSensitivity, parent.AggregateSensitivity)
+	}
+	if child.CreatedAt != childCreatedAt {
+		t.Fatalf("child created at = %q, want %q", child.CreatedAt, childCreatedAt)
 	}
 }
