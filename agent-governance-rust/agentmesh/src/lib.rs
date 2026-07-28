@@ -21,6 +21,7 @@
 #![cfg_attr(test, allow(deprecated))]
 
 pub mod audit;
+pub mod context;
 pub mod control_support;
 pub mod credential_vault;
 pub mod governance_support;
