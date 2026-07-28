@@ -208,7 +208,7 @@ var decision = ContextGovernance.DecideNext(
     rules,
     categoryThreshold: 3);
 
-var policyAction = decision.ToPolicyAction(hasObligationChannel: false);
+var decisionOutcome = decision.Outcome;
 var aggregation = rules.Evaluate(after, categoryThreshold: 3);
 var auditEvent = ContextEvent.Create(
     ContextEventTypes.AggregationElevated,
@@ -218,7 +218,7 @@ var auditEvent = ContextEvent.Create(
     aggregation.RulesApplied);
 ```
 
-In this example, accumulation raises the envelope to `Restricted`, adds `no_external_export`, and increments the version twice. The export decision is `Constrain`; without an obligation channel its policy action is `Deny`. Unknown combinations produce `Escalate`, which maps to the existing stop-and-review `RequireApproval` policy action. Envelope and audit timestamps are never read from the wall clock by this API.
+In this example, accumulation raises the envelope to `Restricted`, adds `no_external_export`, and increments the version twice. The export decision is `Constrain`; a caller without an obligation channel should fail closed and deny the action. Unknown combinations produce `Escalate` and should enter the existing stop-and-review flow. Envelope and audit timestamps are never read from the wall clock by this API.
 
 ### Rate Limiting
 
