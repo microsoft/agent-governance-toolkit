@@ -383,10 +383,11 @@ YAML-based policy engine with four-way decisions (allow / deny / requires-approv
 | `engine.load_from_file(path)` | Load rules from a YAML file |
 | `engine.evaluate(action, context)` | Evaluate an action against loaded policy |
 
-### Accumulated Context (`context.rs`)
+### Accumulated Context (`context.rs`, `context_audit.rs`)
 
 Workflow-scoped governance that folds actual result labels after execution, then gates later
-actions against the accumulated sensitivity and restrictions.
+actions against the accumulated sensitivity and restrictions. Transition audit events record
+only the envelope delta and carry the higher of the before/after sensitivity classifications.
 
 ```rust
 use agentmesh::context::{

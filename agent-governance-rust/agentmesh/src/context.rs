@@ -297,11 +297,11 @@ pub fn decide_next(
     if restriction_present || floor_triggered {
         let reason = if restriction_present {
             format!(
-                "action {action:?} restricted by {:?}",
+                "action '{action}' restricted by '{}'",
                 gating_restriction.expect("restriction checked above")
             )
         } else {
-            format!("action {action:?} gated by sensitivity floor")
+            format!("action '{action}' gated by sensitivity floor")
         };
         return ContextDecision {
             outcome: ContextOutcome::Constrain,
