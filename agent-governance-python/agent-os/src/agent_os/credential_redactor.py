@@ -104,11 +104,20 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])Bearer\s+[A-Za-z0-9._\-+/=]{16,}\b"),
         ),
         CredentialPattern(
+            # A private key only has real newlines while it sits in a file. By the
+            # time it reaches this scanner it is usually text that has been through
+            # an encoding: a JSON tool response or a GCP service-account blob
+            # carries the key as ``\n`` escape sequences, and an env var or .env
+            # line often has the newlines stripped altogether. The body class
+            # already admits the backslash and ``n`` of an escape sequence, so the
+            # line break is an alternative here rather than a required prefix,
+            # which covers all three shapes. Still linear: each iteration consumes
+            # exactly one character and the ``-----END`` literal bounds the match.
             name="PEM private key",
             pattern=re.compile(
                 r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
-                r"(?:\r?\n[!-~ \t]*)*?"
-                r"\r?\n-----END (?P=label)-----"
+                r"(?:[!-~ \t]|\r?\n)*?"
+                r"-----END (?P=label)-----"
             ),
         ),
         CredentialPattern(

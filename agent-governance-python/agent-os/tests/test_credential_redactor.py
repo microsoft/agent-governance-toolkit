@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -356,3 +357,104 @@ def test_scan_and_redact_reports_types_without_raw_secret():
 def test_scan_and_redact_empty_input():
     assert CredentialRedactor.scan_and_redact(None) == ("", [])
     assert CredentialRedactor.scan_and_redact("") == ("", [])
+
+
+_FAKE_PEM_BODY = "VGhpcyBpcyBub3QgYSByZWFsIGtleS4="
+
+
+def _fake_pem_block_with(label: str, separator: str) -> str:
+    """A PEM block whose line breaks have been replaced by ``separator``."""
+    return (
+        f"-----BEGIN {label}-----{separator}"
+        f"{_FAKE_PEM_BODY}{separator}"
+        f"-----END {label}-----"
+    )
+
+
+@pytest.mark.parametrize(
+    ("shape", "separator"),
+    [
+        ("real newlines, as in a file", "\n"),
+        ("CRLF newlines", "\r\n"),
+        # A JSON tool response, or the private_key field of a GCP
+        # service-account blob, carries the key with escaped newlines.
+        ("escaped newlines, as in JSON", "\\n"),
+        # An env var or .env line often has the breaks stripped entirely.
+        ("no separator, as in an env var", ""),
+        ("literal spaces", " "),
+    ],
+)
+def test_redacts_private_key_however_its_newlines_are_encoded(shape: str, separator: str):
+    """A key is a key whatever encoding it arrived in.
+
+    This scanner is handed text that has already been through a transport, so a
+    pattern that only matches real newlines misses the shapes that actually
+    reach it and passes the key through to the model or the audit log.
+    """
+    pem_block = _fake_pem_block_with("RSA PRIVATE KEY", separator)
+    text = f"before {pem_block} after"
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_PEM_BODY not in redacted, shape
+    assert redacted == f"before {REDACTED_PLACEHOLDER} after"
+    assert "PEM private key" in CredentialRedactor.detect_credential_types(text)
+
+
+def test_redacts_gcp_service_account_json():
+    """The whole-file shape a user is most likely to paste into a tool call."""
+    blob = json.dumps(
+        {
+            "type": "service_account",
+            "project_id": "example-project",
+            "private_key": _fake_pem_block("PRIVATE KEY") + "\n",
+            "client_email": "svc@example-project.iam.gserviceaccount.com",
+        }
+    )
+
+    redacted = CredentialRedactor.redact(blob)
+
+    assert _FAKE_PEM_BODY not in redacted
+    assert REDACTED_PLACEHOLDER in redacted
+    # Non-secret fields are left intact.
+    assert "example-project" in redacted
+
+
+@pytest.mark.parametrize(
+    "separator",
+    ["\n", "\n", ""],
+)
+def test_still_ignores_non_private_pem_in_every_encoding(separator: str):
+    """Widening the separator must not start matching public keys."""
+    text = _fake_pem_block_with("PUBLIC KEY", separator)
+
+    assert CredentialRedactor.redact(text) == text
+    assert CredentialRedactor.contains_credentials(text) is False
+
+
+@pytest.mark.parametrize(
+    "separator",
+    ["\n", "\n", ""],
+)
+def test_still_requires_matching_begin_and_end_labels(separator: str):
+    """Widening the separator must not let mismatched labels through."""
+    text = (
+        f"-----BEGIN RSA PRIVATE KEY-----{separator}"
+        f"{_FAKE_PEM_BODY}{separator}"
+        f"-----END EC PRIVATE KEY-----"
+    )
+
+    assert CredentialRedactor.redact(text) == text
+    assert CredentialRedactor.contains_credentials(text) is False
+
+
+def test_escaped_private_key_pattern_handles_adversarial_input_quickly():
+    """The widened body must stay linear on an unterminated escaped key."""
+    text = "-----BEGIN RSA PRIVATE KEY-----" + ("A\\n" * 50_000)
+
+    start = time.perf_counter()
+    redacted = CredentialRedactor.redact(text)
+    elapsed = time.perf_counter() - start
+
+    assert redacted == text
+    assert elapsed < 1.0
