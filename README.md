@@ -22,7 +22,7 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Discord](https://dcbadge.limes.pink/api/server/7aVPCcVh?style=flat)](https://discord.gg/7aVPCcVh)
+[![Discord](https://dcbadge.limes.pink/api/server/TxMRqY3pFr?style=flat)](https://discord.gg/TxMRqY3pFr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
@@ -413,7 +413,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 
 ## Contributing
 
-[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/7aVPCcVh) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/TxMRqY3pFr) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 **Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md).
 
