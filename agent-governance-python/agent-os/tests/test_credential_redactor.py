@@ -356,3 +356,95 @@ def test_scan_and_redact_reports_types_without_raw_secret():
 def test_scan_and_redact_empty_input():
     assert CredentialRedactor.scan_and_redact(None) == ("", [])
     assert CredentialRedactor.scan_and_redact("") == ("", [])
+
+
+# A clearly-fake secret value long enough to clear every pattern's length floor.
+_FAKE_SECRET_VALUE = "hunter22-not-a-real-secret"
+
+
+@pytest.mark.parametrize(
+    ("keyword", "expected_type"),
+    [
+        ("api_key", "Generic API secret"),
+        ("api-key", "Generic API secret"),
+        ("apikey", "Generic API secret"),
+        ("client_secret", "Generic API secret"),
+        ("secret", "Generic API secret"),
+        ("token", "Generic API secret"),
+        ("password", "Connection string secret"),
+        ("pwd", "Connection string secret"),
+        ("passphrase", "Connection string secret"),
+    ],
+)
+def test_detects_keyword_secrets_in_the_json_spelling(keyword: str, expected_type: str):
+    r"""JSON is the wire format for MCP tool output, so it is the shape that matters.
+
+    In `"api_key": "value"` the closing quote of the key sits between the keyword
+    and the colon. A pattern that runs the keyword straight into `\s*[:=]` matches
+    the bare `api_key=value` form and misses the quoted one entirely, which is
+    the form a tool response, a config file, and a log line all use.
+    """
+    text = '{"' + keyword + '": "' + _FAKE_SECRET_VALUE + '"}'
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_SECRET_VALUE not in redacted
+    assert expected_type in CredentialRedactor.detect_credential_types(text)
+
+
+@pytest.mark.parametrize(
+    "text_template",
+    [
+        '{{"api_key": "{value}"}}',
+        '{{"api_key":"{value}"}}',
+        "api_key={value}",
+        "api_key: {value}",
+        "api_key = '{value}'",
+        'api_key: "{value}"',
+    ],
+)
+def test_one_secret_is_found_in_every_spelling(text_template: str):
+    """The same secret, however the surrounding syntax quotes it."""
+    text = text_template.format(value=_FAKE_SECRET_VALUE)
+
+    assert _FAKE_SECRET_VALUE not in CredentialRedactor.redact(text)
+
+
+def test_redaction_of_a_json_secret_leaves_the_other_fields_intact():
+    """The match must stop at the value, not swallow the rest of the object."""
+    text = '{"user": "alice", "api_key": "' + _FAKE_SECRET_VALUE + '", "region": "eu-west-1"}'
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_SECRET_VALUE not in redacted
+    assert '"user": "alice"' in redacted
+    assert '"region": "eu-west-1"' in redacted
+
+
+def test_detects_azure_account_key_in_the_json_spelling():
+    text = '{"AccountKey": "abc123def456ghi789jkl012mno345pqr678stu901vw=="}'
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert "abc123def456ghi789jkl012mno345pqr678stu901vw" not in redacted
+    assert "Azure key" in CredentialRedactor.detect_credential_types(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Below every value-length floor.
+        '{"api_key": "abc"}',
+        '{"token": ""}',
+        # Prose that mentions a keyword without assigning anything.
+        "the token is rotated weekly",
+        "rotate the password before Friday",
+        # The keyword must not match inside a longer word.
+        "mytokenizer=abcdefghijkl",
+        # A separator with nothing after it.
+        '{"password":}',
+    ],
+)
+def test_keyword_patterns_still_avoid_false_positives(text: str):
+    assert CredentialRedactor.redact(text) == text
+    assert CredentialRedactor.contains_credentials(text) is False

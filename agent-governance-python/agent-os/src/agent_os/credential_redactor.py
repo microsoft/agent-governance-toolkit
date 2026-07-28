@@ -86,7 +86,8 @@ class CredentialRedactor:
         CredentialPattern(
             name="Azure key",
             pattern=re.compile(
-                r"(?i)(?:accountkey|sharedaccesskey|azure[_-]?key)\s*[:=]\s*[A-Za-z0-9+/=]{20,}"
+                r"(?i)(?:accountkey|sharedaccesskey|azure[_-]?key)"
+                r"[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9+/=]{20,}"
             ),
         ),
         CredentialPattern(
@@ -112,9 +113,15 @@ class CredentialRedactor:
             ),
         ),
         CredentialPattern(
+            # Also accepts ``:`` and quotes so the JSON and YAML spellings of a
+            # password field are covered, not just the ``key=value`` of a
+            # connection string. The value class excludes the quote characters so
+            # a quoted value stops at its own closing quote rather than running
+            # into the rest of the object.
             name="Connection string secret",
             pattern=re.compile(
-                r"(?i)(?<![A-Za-z0-9])(?:password|pwd|accountkey|sharedaccesssignature)\s*=\s*[^;\s]{4,}"
+                r"(?i)(?<![A-Za-z0-9])(?:password|passphrase|pwd|accountkey|sharedaccesssignature)"
+                r"[\"']?\s*[:=]\s*[\"']?[^;\s\"']{4,}"
             ),
         ),
         CredentialPattern(
@@ -146,9 +153,15 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}\b"),
         ),
         CredentialPattern(
+            # ``\b`` sits before the optional closing quote, not after it: in
+            # ``"api_key": "..."`` the quote falls between the keyword and the
+            # separator, and a pattern that goes straight from the keyword to
+            # ``\s*[:=]`` never matches the JSON spelling — which is the shape
+            # most MCP tool output arrives in.
             name="Generic API secret",
             pattern=re.compile(
-                r"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|client[_-]?secret|secret|token)\b\s*[:=]\s*['\"]?[^\s'\";]{6,}"
+                r"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|client[_-]?secret|secret|token)\b"
+                r"['\"]?\s*[:=]\s*['\"]?[^\s'\";]{6,}"
             ),
         ),
     )
