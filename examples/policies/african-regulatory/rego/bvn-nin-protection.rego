@@ -149,17 +149,19 @@ escalate contains msg if {
 }
 
 # NIMC Act 2026 — Purpose limitation: NIN/BVN lookup without declared purpose.
-# object.get treats a missing key and an empty-string value the same way, so a
-# request that sets nin_purpose: "" cannot bypass this gate by omission.
+# Defaulting through object.get twice — once for a missing `context` object,
+# once for a missing/empty `nin_purpose` within it — means an absent context,
+# an absent nin_purpose, and an explicit nin_purpose: "" are all treated
+# identically, so none of the three can bypass this gate.
 escalate contains msg if {
 	input.action in nin_verification_actions
-	object.get(input.context, "nin_purpose", "") == ""
+	object.get(object.get(input, "context", {}), "nin_purpose", "") == ""
 	msg := "NIMC Act 2026: NIN lookup attempted without a declared purpose — purpose limitation requires stating the reason before each verification"
 }
 
 escalate contains msg if {
 	input.action in bvn_verification_actions
-	object.get(input.context, "nin_purpose", "") == ""
+	object.get(object.get(input, "context", {}), "nin_purpose", "") == ""
 	msg := "NIMC Act 2026: BVN lookup attempted without a declared purpose — purpose limitation requires stating the reason before each verification"
 }
 

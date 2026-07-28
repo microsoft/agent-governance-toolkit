@@ -322,6 +322,27 @@ test_bvn_lookup_with_empty_purpose_escalates_nimc_2026 if {
 	_has_nimc_purpose_msg(result)
 }
 
+test_nin_lookup_with_no_context_key_escalates_nimc_2026 if {
+	result := bvn_nin.escalate with input as {
+		"action": "nin_lookup",
+		"params": {},
+		"output": "",
+	}
+	# `context` is absent altogether (not merely empty) — regression test for
+	# object.get(object.get(input, "context", {}), ...) defaulting through a
+	# missing context object, not just a missing/empty nin_purpose within one.
+	_has_nimc_purpose_msg(result)
+}
+
+test_bvn_lookup_with_no_context_key_escalates_nimc_2026 if {
+	result := bvn_nin.escalate with input as {
+		"action": "verify_bvn",
+		"params": {},
+		"output": "",
+	}
+	_has_nimc_purpose_msg(result)
+}
+
 test_nin_lookup_with_purpose_does_not_trigger_purpose_escalate if {
 	result := bvn_nin.escalate with input as {
 		"action": "nin_lookup",
