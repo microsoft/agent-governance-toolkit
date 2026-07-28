@@ -1,6 +1,6 @@
 # agt-policies-africa
 # Tests for Rwanda Law No. 058/2021 Personal Data Protection policy
-# Run: opa test policies/rego/ -v
+# Run: opa test rego/ -v
 
 package agt_policies_africa.rwanda_dpa_test
 

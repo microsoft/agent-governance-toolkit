@@ -93,7 +93,7 @@ To run the Rego policies with OPA:
 curl -L -o /tmp/opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
 chmod +x /tmp/opa
 
-# Run all tests (140 tests)
+# Run all tests (143 tests)
 /tmp/opa test rego/ -v
 
 # Evaluate a single policy

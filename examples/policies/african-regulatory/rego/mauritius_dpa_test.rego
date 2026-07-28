@@ -1,6 +1,6 @@
 # agt-policies-africa
 # Tests for Mauritius Data Protection Act 2017 policy
-# Run: opa test policies/rego/ -v
+# Run: opa test rego/ -v
 
 package agt_policies_africa.mauritius_dpa_test
 
@@ -251,10 +251,10 @@ test_escalate_criminal_proceedings if {
 	}
 }
 
-# ── Escalate: DPO bypass ─────────────────────────────────────────
+# ── Deny: DPO bypass ──────────────────────────────────────────────
 
-test_escalate_dpo_bypass if {
-	count(mauritius_dpa.escalate) > 0 with input as {
+test_deny_dpo_bypass if {
+	count(mauritius_dpa.deny) > 0 with input as {
 		"action": "respond",
 		"params": {},
 		"output": "There is no need for a DPO at your company size.",

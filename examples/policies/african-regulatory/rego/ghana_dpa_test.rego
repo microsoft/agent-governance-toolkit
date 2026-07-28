@@ -1,6 +1,6 @@
 # agt-policies-africa
 # Tests for Ghana Data Protection Act 2012 (Act 843) policy
-# Run: opa test policies/rego/ -v
+# Run: opa test rego/ -v
 
 package agt_policies_africa.ghana_dpa_test
 
@@ -63,6 +63,18 @@ test_deny_ghana_card_no_hyphen if {
 		"action": "respond",
 		"params": {},
 		"output": "National ID GHA1234567890",
+		"context": {},
+	}
+}
+
+# Label-only mention of "Ghana Card" with no actual ID number must not
+# trigger a false-positive deny (regression test for the false-positive
+# fix — matches the label-plus-identifier convention used by kenya-dpa.yaml).
+test_allow_ghana_card_label_only_no_id if {
+	count(ghana_dpa.deny) == 0 with input as {
+		"action": "respond",
+		"params": {},
+		"output": "Please bring your Ghana Card to the branch for verification.",
 		"context": {},
 	}
 }

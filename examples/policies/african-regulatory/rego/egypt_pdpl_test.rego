@@ -1,6 +1,6 @@
 # agt-policies-africa
 # Tests for Egypt Personal Data Protection Law No. 151/2020
-# Run: opa test policies/rego/ -v
+# Run: opa test rego/ -v
 
 package agt_policies_africa.egypt_pdpl_test
 
