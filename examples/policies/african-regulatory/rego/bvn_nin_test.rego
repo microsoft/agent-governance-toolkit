@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
 # BVN / NIN Data Protection Policy — Rego unit tests
 #
 # Covers all rules in bvn-nin-protection.rego including the four new
@@ -295,6 +298,28 @@ test_bvn_lookup_without_purpose_escalates_nimc_2026 if {
 	count(result) > 0
 	some msg in result
 	contains(msg, "NIMC Act 2026")
+}
+
+test_nin_lookup_with_empty_purpose_escalates_nimc_2026 if {
+	result := bvn_nin.escalate with input as {
+		"action": "nin_lookup",
+		"params": {},
+		"output": "",
+		"context": {"nin_purpose": ""},
+	}
+	# An explicit empty string must be treated the same as an absent field —
+	# regression test for the object.get(..., "") bypass fix.
+	_has_nimc_purpose_msg(result)
+}
+
+test_bvn_lookup_with_empty_purpose_escalates_nimc_2026 if {
+	result := bvn_nin.escalate with input as {
+		"action": "verify_bvn",
+		"params": {},
+		"output": "",
+		"context": {"nin_purpose": ""},
+	}
+	_has_nimc_purpose_msg(result)
 }
 
 test_nin_lookup_with_purpose_does_not_trigger_purpose_escalate if {
