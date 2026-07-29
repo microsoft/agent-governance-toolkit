@@ -4,9 +4,12 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class _ContextLike(Protocol):
@@ -31,6 +34,10 @@ class AdapterResult(Protocol):
     @property
     def permits_unchanged(self) -> bool:
         """Return whether the caller may proceed with the value it has."""
+
+    @property
+    def point_not_configured(self) -> bool:
+        """Return whether the manifest configures this intervention point."""
 
     @property
     def verdict(self) -> str:
@@ -92,14 +99,38 @@ class AdapterRuntime(Protocol):
         """Record host usage after execution."""
 
 
+# The engine answers a request naming a point the manifest does not configure
+# with this reason. Failing closed is right for a request that names an
+# unknown point, but an adapter does not name points on the host's behalf: it
+# evaluates output after every call whether or not the manifest asked for
+# output governance. See ``permit_if_unconfigured``.
+POINT_NOT_CONFIGURED = "runtime_error:intervention_point_unknown"
+
+
 @dataclass(frozen=True)
 class NativeAdapterResult:
     """Adapter decision backed by the native ``PolicyEvaluation`` contract."""
 
     evaluation: Any
+    permit_if_unconfigured: bool = False
+    """Whether an unconfigured intervention point permits instead of denying.
+
+    Set only where the adapter evaluates on its own initiative rather than
+    because the host asked. It is set for ``output`` and deliberately not for
+    ``input`` or ``pre_tool_call``, which stay fail-closed: a manifest that
+    omits those omits governance of an action that is about to happen, and
+    that must be loud.
+    """
+
+    @property
+    def point_not_configured(self) -> bool:
+        """Whether the manifest leaves this intervention point unconfigured."""
+        return self.reason == POINT_NOT_CONFIGURED
 
     @property
     def allowed(self) -> bool:
+        if self.permit_if_unconfigured and self.point_not_configured:
+            return True
         return bool(self.evaluation.is_allowed())
 
     @property
@@ -162,6 +193,7 @@ class NativeAdapterRuntime:
             raise TypeError("NativeAdapterRuntime requires AgtRuntime")
         self._runtime = runtime
         self._sessions: dict[str, Any] = {}
+        self._output_unconfigured_logged = False
 
     @property
     def runtime(self) -> Any:
@@ -296,7 +328,22 @@ class NativeAdapterRuntime:
             content=content if isinstance(content, str | dict) else str(content),
             message_chain=message_chain,
         )
-        return NativeAdapterResult(evaluation)
+        result = NativeAdapterResult(evaluation, permit_if_unconfigured=True)
+        if result.point_not_configured:
+            self._warn_output_unconfigured()
+        return result
+
+    def _warn_output_unconfigured(self) -> None:
+        """Say once that output enforcement is off, so it is not silent."""
+        if self._output_unconfigured_logged:
+            return
+        self._output_unconfigured_logged = True
+        _LOGGER.warning(
+            "manifest configures no 'output' intervention point; model output "
+            "is forwarded without policy evaluation "
+            "(reason=%s). Bind 'output' in the manifest to enforce it.",
+            POINT_NOT_CONFIGURED,
+        )
 
 __all__ = [
     "AdapterResult",

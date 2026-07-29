@@ -95,6 +95,23 @@ Elsewhere (8): `NoOpGovernanceMiddleware`, `NoOpPolicyEvaluator`,
 `evaluate_policy_cli` (`agent_marketplace.hooks`); `EvaluationResult`; and the
 `agt._harness.opa_runner` module.
 
+**An intervention point the manifest omits no longer behaves the same way**
+
+The bridge rewrote an unconfigured intervention point to an allow, so a
+manifest could bind nothing and every path ran ungoverned. The ACS runtime
+reports one as `runtime_error:intervention_point_unknown` instead, and the
+adapters now split on which point it is.
+
+`input` and `pre_tool_call` deny. Omitting them omits governance of an action
+that is about to happen, so the failure has to be loud rather than silent. A
+manifest that bound only one of the two used to run the other ungoverned and
+now refuses it.
+
+`output` permits, and logs a warning once per runtime. The adapter evaluates
+output after every call whether or not the manifest asked for it, so treating
+the omission as a denial would block every response rather than leave a gap.
+Bind `output` to enforce it.
+
 **A tool-call budget now counts one call differently**
 
 The bridge reported the tool-call count *including* the call under evaluation,
