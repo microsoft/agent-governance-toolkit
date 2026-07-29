@@ -173,15 +173,15 @@ def test_the_census_actually_found_the_consumers():
 
 
 @pytest.mark.parametrize(
-    "where,funcname,body",
+    "where,func_name,body",
     CONSUMERS,
     ids=[f"{w}::{n}" for w, n, _ in CONSUMERS],
 )
-def test_consumer_applies_or_refuses_a_transform(where, funcname, body):
+def test_consumer_applies_or_refuses_a_transform(where, func_name, body):
     handled = any(marker in body for marker in HANDLES)
 
     assert handled, (
-        f"{where} {funcname}() branches on a policy verdict but neither "
+        f"{where} {func_name}() branches on a policy verdict but neither "
         "applies a transform nor refuses one. `allowed` is True for a "
         "transform, so this forwards the original value while the policy "
         "believes it was rewritten. Either rewrite from `transformed_value` "
@@ -391,12 +391,12 @@ def test_the_second_census_found_the_guarded_applications():
 
 
 @pytest.mark.parametrize(
-    "where,funcname,body",
+    "where,func_name,body",
     GUARDED,
     ids=[f"{w}::{n}" for w, n, _ in GUARDED],
 )
 def test_a_replacement_of_the_wrong_shape_does_not_fall_through(
-    where, funcname, body
+    where, func_name, body
 ):
     """Each guarded application needs a path for the shape it cannot take.
 
@@ -409,13 +409,13 @@ def test_a_replacement_of_the_wrong_shape_does_not_fall_through(
     # already written a dict replacement into params. A non-string there is
     # therefore applied, not dropped, and refusing would reject a correct
     # rewrite. Its caller carries the check instead.
-    if funcname == "_merge_bridge_verdict":
+    if func_name == "_merge_bridge_verdict":
         pytest.skip("replacement is applied by the caller before this runs")
 
     caught = "applies_to(" in body or "applied" in body
 
     assert caught, (
-        f"{where} {funcname}() applies a transform only when the replacement "
+        f"{where} {func_name}() applies a transform only when the replacement "
         "is the right shape, and does nothing when it is not, so the original "
         "value is forwarded. Fold `applies_to(<type>)` into the deny check, "
         "or track whether the rewrite happened."
@@ -609,10 +609,10 @@ def _swallowed_rewrites():
                 key=lambda f: f.lineno,
                 default=None,
             )
-            fbody = (
+            enclosing_src = (
                 "\n".join(lines[fn.lineno - 1 : fn.end_lineno]) if fn else ""
             )
-            if re.search(r"^\s*(applied|rewritten) = ", fbody, re.M):
+            if re.search(r"^\s*(applied|rewritten) = ", enclosing_src, re.M):
                 continue
             found.append(f"{path.relative_to(SRC)}:{node.lineno}")
     return found
@@ -683,7 +683,8 @@ def _skipped_writes():
                 # that IS the return rather than an attribute on it; denying
                 # there would turn a redaction into a refusal.
                 handled = (
-                    inner.orelse
+                    # An else branch renders as "else:" in the unparsed source.
+                    "else:" in whole
                     or "raise" in whole
                     or re.search(r"(applied|rewritten) = ", whole)
                     or re.search(r"return \w+\.transformed_value", block)

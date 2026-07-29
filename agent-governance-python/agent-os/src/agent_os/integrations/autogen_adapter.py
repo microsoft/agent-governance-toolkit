@@ -149,7 +149,7 @@ class GovernanceInterventionHandler:
                 # forwarding the message to the recipient. This surface takes
                 # a dict carrying "arguments" or a bare string; anything else,
                 # or a message that refuses the write, leaves the original in
-                # place, so the call is dropped rather than sent unrewritten.
+                # place, so the call is dropped rather than sent as it was.
                 applied = False
                 replacement = bridge_result.transformed_value
                 if isinstance(replacement, dict) and "arguments" in replacement:

@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from conftest import install as _install_framework_stubs
+from _framework_stubs import install as _install_framework_stubs
 
 _install_framework_stubs()
 
