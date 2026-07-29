@@ -198,19 +198,52 @@ func TestApprovalCoordinatorOpenSubmitValidateConsume(t *testing.T) {
 }
 
 func TestApprovalCoordinatorOpenRequestInvalidConfig(t *testing.T) {
-	coordinator := NewApprovalCoordinator(ApprovalChain{
-		Version: "1",
-		Stages: []ApprovalStage{
-			{StageIndex: 0, ApproverKind: ApproverHuman},
+	cases := []struct {
+		name  string
+		chain ApprovalChain
+	}{
+		{
+			name: "missing chain id",
+			chain: ApprovalChain{
+				Version: "1",
+				Stages: []ApprovalStage{
+					{StageIndex: 0, ApproverKind: ApproverHuman},
+				},
+			},
 		},
-	})
-
-	result, err := coordinator.OpenRequest(productionBinding())
-	if err == nil {
-		t.Fatal("OpenRequest should fail when chain id is missing")
+		{
+			name: "duplicate stage index",
+			chain: ApprovalChain{
+				ChainID: "duplicate-stages",
+				Version: "1",
+				Stages: []ApprovalStage{
+					{StageIndex: 0, ApproverKind: ApproverHuman},
+					{StageIndex: 0, ApproverKind: ApproverHuman},
+				},
+			},
+		},
+		{
+			name: "negative stage index",
+			chain: ApprovalChain{
+				ChainID: "negative-stage",
+				Version: "1",
+				Stages: []ApprovalStage{
+					{StageIndex: -1, ApproverKind: ApproverHuman},
+				},
+			},
+		},
 	}
-	if result == nil || result.Resolution.ReasonCode != "invalid_approval_chain" {
-		t.Fatalf("result = %#v, want invalid_approval_chain", result)
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			coordinator := NewApprovalCoordinator(test.chain)
+			result, err := coordinator.OpenRequest(productionBinding())
+			if err == nil {
+				t.Fatal("OpenRequest should fail for invalid approval chain")
+			}
+			if result == nil || result.Resolution.ReasonCode != "invalid_approval_chain" {
+				t.Fatalf("result = %#v, want invalid_approval_chain", result)
+			}
+		})
 	}
 }
 
