@@ -533,6 +533,19 @@ class TestEdgeCases:
 from agent_os.integrations.conversation_guardian import normalize_text
 
 
+def _hidden(word: str, char: str) -> str:
+    """Return *word* with *char* inserted in the middle of it.
+
+    The character goes inside the word, which is where it defeats a word-anchored
+    pattern. Inserted at runtime rather than written into the literals so the
+    source keeps whole, readable words.
+    """
+    if len(word) < 2:
+        return word
+    middle = len(word) // 2
+    return word[:middle] + char + word[middle:]
+
+
 class TestEvasionResistance:
     """Tests that pattern detection resists common evasion techniques."""
 
@@ -584,6 +597,86 @@ class TestEvasionResistance:
         d = OffensiveIntentDetector()
         score, _ = d.score_message("3xpl0it the vulner4bility")
         assert score > 0.0
+
+    # Invisible characters that render as nothing but still split a word for the
+    # regex engine. Only the five zero-width ones were stripped, so any of these
+    # placed *inside* a keyword defeated every pattern in the module.
+    # (`test_zero_width_characters` above puts its zero width space *between*
+    # words, which the whitespace collapse already handled -- the mid-word case
+    # was never covered.) One per Unicode category involved, since no single
+    # category test finds them all: Cf, Mn, Lo and unassigned are represented.
+    @pytest.mark.parametrize(
+        ("name", "char"),
+        [
+            ("soft hyphen", "­"),
+            ("combining grapheme joiner", "͏"),
+            ("arabic letter mark", "؜"),
+            ("mongolian vowel separator", "᠎"),
+            ("left-to-right mark", "‎"),
+            ("right-to-left isolate", "⁧"),
+            ("invisible plus", "⁤"),
+            ("unassigned invisible", "⁥"),
+            ("hangul filler", "ㅤ"),
+            ("variation selector 16", "️"),
+            ("zero width no-break space", "﻿"),
+            ("tag latin small letter a", "\U000e0061"),
+        ],
+    )
+    def test_invisible_char_inside_keyword_is_stripped(self, name: str, char: str):
+        assert normalize_text(_hidden("urgent", char)) == "urgent", name
+
+    @pytest.mark.parametrize(
+        "char", ["­", "‎", "️", "ㅤ", "͏"]
+    )
+    def test_invisible_chars_do_not_evade_escalation_scoring(self, char: str):
+        # An invisible character in each keyword took the score from 0.80 to
+        # 0.00 -- past the 0.6 threshold in the wrong direction, so a message
+        # that should quarantine produced no alert at all.
+        c = EscalationClassifier()
+        words = ["urgent", "you", "must", "comply", "immediately", "no", "excuses"]
+        clean = " ".join(words)
+        evaded = " ".join(_hidden(word, char) for word in words)
+
+        assert c.score_message(evaded)[0] == c.score_message(clean)[0]
+
+    @pytest.mark.parametrize("char", ["­", "‎", "️"])
+    def test_invisible_chars_do_not_evade_offensive_scoring(self, char: str):
+        d = OffensiveIntentDetector()
+        words = ["exfiltrate", "the", "data", "escalate", "privileges", "impersonate"]
+        clean = " ".join(words)
+        evaded = " ".join(_hidden(word, char) for word in words)
+
+        assert d.score_message(evaded)[0] == d.score_message(clean)[0]
+
+    def test_invisible_chars_do_not_evade_the_guardian(self):
+        # End to end: the same message went from critical/quarantine to
+        # none/none with one soft hyphen per keyword.
+        words = ["exfiltrate", "the", "data", "escalate", "privileges", "impersonate"]
+        content = " ".join(_hidden(word, "­") for word in words)
+        guardian = ConversationGuardian()
+
+        alert = guardian.analyze_message("c1", "a", "b", content)
+
+        assert alert.severity is AlertSeverity.CRITICAL
+        assert alert.action is AlertAction.QUARANTINE
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "hello world",
+            "the API returned 200 OK",
+            "naïve café",  # visible diacritics
+            "中文测试",  # CJK
+            "ok \U0001f44d\U0001f3fd done",  # emoji with a skin tone modifier
+            "\U0001f1fa\U0001f1f8 usa",  # regional indicator pair
+            "한국어 test",  # hangul syllables, not the fillers
+            "start \u05e9\u05dc\u05d5\u05dd end",  # right-to-left script
+        ],
+    )
+    def test_stripping_does_not_empty_ordinary_text(self, text: str):
+        # The strip must not eat real content: every character above is visible
+        # and has to survive, including the ones adjacent to stripped ranges.
+        assert normalize_text(text).strip()
 
 
 # =============================================================================

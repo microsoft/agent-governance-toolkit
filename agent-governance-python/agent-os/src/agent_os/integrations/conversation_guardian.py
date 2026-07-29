@@ -80,14 +80,60 @@ _HOMOGLYPH_MAP: dict[str, str] = {
 }
 
 
+# Inclusive code point ranges of characters that render as nothing but still
+# split a word for a regex engine.
+#
+# Enumerating a handful of zero-width code points is not enough: any invisible
+# character inserted mid-word defeats every ``\b``-anchored pattern in this
+# module equally, so the set has to be defined by the property that makes them
+# usable for evasion rather than by the few that came to mind.
+#
+# These are Unicode's Default_Ignorable_Code_Point ranges -- which is what
+# "renders as nothing" means normatively -- plus the invisible Hangul filler
+# letters. ``unicodedata`` does not expose that property, so the ranges are
+# spelled out. Note they do not share one category: U+FE0F (variation selector)
+# and U+034F (combining grapheme joiner) are Mn, U+3164 (Hangul filler) is Lo,
+# and U+2065 is unassigned, so no single category test finds them all.
+#
+# The result of this function is only ever matched against, never shown to a
+# user or stored, so stripping is always preferable to preserving.
+_INVISIBLE_RANGES: tuple[tuple[int, int], ...] = (
+    (0x00AD, 0x00AD),  # soft hyphen
+    (0x034F, 0x034F),  # combining grapheme joiner
+    (0x061C, 0x061C),  # arabic letter mark
+    (0x115F, 0x1160),  # hangul filler letters
+    (0x17B4, 0x17B5),  # khmer inherent vowels
+    (0x180B, 0x180F),  # mongolian variation selectors, vowel separator
+    (0x200B, 0x200F),  # zero width space and joiners, directional marks
+    (0x202A, 0x202E),  # directional embedding and override
+    (0x2060, 0x206F),  # word joiner, invisible operators, deprecated formats
+    (0x3164, 0x3164),  # hangul filler
+    (0xFE00, 0xFE0F),  # variation selectors
+    (0xFEFF, 0xFEFF),  # zero width no-break space
+    (0xFFA0, 0xFFA0),  # half width hangul filler
+    (0xFFF0, 0xFFF8),  # unassigned, reserved as invisible
+    (0x1BCA0, 0x1BCA3),  # shorthand format controls
+    (0xE0000, 0xE0FFF),  # tag characters, variation selectors supplement
+)
+
+# Built from the ranges rather than written as one literal so the code points
+# stay readable -- spelled out, the class is a run of characters that show up as
+# nothing in an editor. None of them need escaping inside a character class.
+_INVISIBLE_CHARS = re.compile(
+    "[" + "".join(f"{chr(low)}-{chr(high)}" for low, high in _INVISIBLE_RANGES) + "]"
+)
+
+
 def normalize_text(text: str) -> str:
     """Normalize text to defeat common evasion techniques.
 
     Handles: unicode homoglyphs, leetspeak, zero-width characters,
     excessive whitespace, combining diacritics, fullwidth characters.
     """
-    # Strip zero-width characters
-    text = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text)
+    # Strip invisible characters (see _INVISIBLE_RANGES). This has to run before
+    # the compatibility decomposition below, which does not remove them, and one
+    # of them mid-word is enough to defeat every word-anchored pattern here.
+    text = _INVISIBLE_CHARS.sub("", text)
 
     # NFKD decomposition (handles fullwidth, compatibility chars)
     text = unicodedata.normalize("NFKD", text)
