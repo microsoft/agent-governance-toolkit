@@ -200,6 +200,28 @@ func TestDecideNextContextGatesRestrictedActions(t *testing.T) {
 	}
 }
 
+func TestDecideNextContextUsesAggregationDerivedRestrictions(t *testing.T) {
+	env := ContextEnvelope{
+		EnvelopeID:           "env-1",
+		WorkflowID:           "wf-1",
+		Labels:               []string{"financial", "pii"},
+		AggregateSensitivity: DataClassificationInternal,
+	}
+
+	decision := DecideNextContext(env, "export", contextGovernanceRules, 99)
+
+	if decision.Outcome != ContextOutcomeConstrain {
+		t.Fatalf("outcome = %q, want constrain", decision.Outcome)
+	}
+	if len(decision.Obligations.Obligations) != 1 ||
+		decision.Obligations.Obligations[0].Key != "no_external_export" {
+		t.Fatalf("obligations = %#v, want no_external_export", decision.Obligations.Obligations)
+	}
+	if decision.Reason != "action export restricted by no_external_export" {
+		t.Fatalf("reason = %q, want aggregation-derived restriction", decision.Reason)
+	}
+}
+
 func TestDecideNextContextExplicitRestrictionGatesBelowFloor(t *testing.T) {
 	env := ContextEnvelope{
 		EnvelopeID:           "env-1",
