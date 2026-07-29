@@ -39,7 +39,10 @@ public sealed class WebhookApprover : IApprovalTransport, IDisposable
     {
         ValidateEndpoint(endpoint);
         _endpoint = endpoint;
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? new HttpClient(new HttpClientHandler
+        {
+            AllowAutoRedirect = false
+        });
         _ownsClient = httpClient is null;
         _headers = headers is null
             ? new Dictionary<string, string>(StringComparer.Ordinal)

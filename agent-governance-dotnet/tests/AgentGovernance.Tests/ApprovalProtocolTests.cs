@@ -602,6 +602,64 @@ public sealed class WebhookApproverTests
     }
 
     [Fact]
+    public async Task RequestApprovalAsync_DefaultClientDoesNotFollowRedirects()
+    {
+        var request = OpenRequest();
+        var port = GetFreePort();
+        var baseUrl = $"http://127.0.0.1:{port}";
+        using var listener = new HttpListener();
+        listener.Prefixes.Add($"{baseUrl}/");
+        listener.Start();
+        var redirectedRequests = 0;
+        var serverTask = Task.Run(async () =>
+        {
+            try
+            {
+                while (listener.IsListening)
+                {
+                    var context = await listener.GetContextAsync().ConfigureAwait(false);
+                    if (context.Request.Url?.AbsolutePath == "/start")
+                    {
+                        context.Response.StatusCode = (int)HttpStatusCode.Found;
+                        context.Response.RedirectLocation = $"{baseUrl}/target";
+                    }
+                    else
+                    {
+                        Interlocked.Increment(ref redirectedRequests);
+                        context.Response.StatusCode = (int)HttpStatusCode.OK;
+                    }
+
+                    context.Response.Close();
+                }
+            }
+            catch (HttpListenerException)
+            {
+                // Listener shutdown ends the test server.
+            }
+            catch (ObjectDisposedException)
+            {
+                // Listener shutdown ends the test server.
+            }
+        });
+
+        try
+        {
+            using var approver = new WebhookApprover(new Uri($"{baseUrl}/start"));
+
+            await Assert.ThrowsAsync<HttpRequestException>(
+                () => approver.RequestApprovalAsync(request));
+
+            Assert.Equal(0, Volatile.Read(ref redirectedRequests));
+        }
+        finally
+        {
+            listener.Stop();
+            listener.Close();
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Fact]
     public async Task RequestApprovalAsync_DenyDoesNotTrustBodyIdentityForAllow()
     {
         var request = OpenRequest();
@@ -668,6 +726,15 @@ public sealed class WebhookApproverTests
     {
         Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
     };
+
+    private static int GetFreePort()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
 
     private sealed class StubHandler : HttpMessageHandler
     {
