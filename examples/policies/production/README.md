@@ -1,7 +1,7 @@
 # Production Policy Library
 
-Ready-to-use governance policies for common enterprise scenarios.
-Each file uses the AGT PolicyDocument schema and works with PolicyEvaluator.
+Native ACS manifests for common enterprise scenarios. Each profile binds input
+and output intervention points to a Rego package under `rego/`.
 
 | Policy | Risk | Default | Best For |
 |--------|------|---------|----------|
@@ -14,8 +14,14 @@ Each file uses the AGT PolicyDocument schema and works with PolicyEvaluator.
 ## Usage
 
 ```python
-from agentmesh.governance.policy import PolicyDocument
+from agt.policies.runtime import AgtRuntime
 
-policy = PolicyDocument.from_yaml(open("enterprise.yaml").read())
-decision = policy.evaluate({"action": "write_file"})
+runtime = AgtRuntime.from_manifest("enterprise.yaml")
+decision = runtime.evaluate(
+    "input",
+    {
+        "envelope": {"agent_id": "example-agent"},
+        "input": {"body": {"action": "write_file", "params": {}}},
+    },
+)
 ```
