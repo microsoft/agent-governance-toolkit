@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timezone
-from functools import wraps
 from typing import Any
 
 from ._native_adapter_runtime import (
@@ -170,80 +169,6 @@ def _get_agent_tools(agent: Any) -> list:
         tools = agent.tools
         return list(tools) if tools else []
     return []
-
-
-def _wrap_single_tool(
-    tool_entry: Any,
-    governed: Any,
-    kernel: PydanticAIKernel,
-    ctx: AdapterExecutionState,
-) -> None:
-    """Wrap a single tool's function with governance interception."""
-    if getattr(tool_entry, "_governed", False):
-        return
-
-    # Determine the tool name and callable
-    tool_name = getattr(tool_entry, "name", None) or getattr(
-        tool_entry, "__name__", str(tool_entry)
-    )
-    original_fn = getattr(tool_entry, "function", None) or getattr(
-        tool_entry, "_run", None
-    )
-    if original_fn is None:
-        return
-
-    @wraps(original_fn)
-    def governed_fn(*args: Any, **kwargs: Any) -> Any:
-        """Governed wrapper that validates and delegates PydanticAI tool calls."""
-        # Build arguments dict for policy check
-        call_args: dict[str, Any] = kwargs.copy()
-        if args:
-            call_args["_positional"] = list(args)
-
-        result = kernel.intercept_tool_call(ctx, tool_name, call_args)
-
-        if not result.allowed:
-            kernel._record_audit(
-                "tool_blocked",
-                tool_name=tool_name,
-                allowed=False,
-                reason=result.reason or "",
-                arguments=call_args,
-                agent_id=ctx.agent_id,
-            )
-            raise PolicyViolationError(
-                result.reason or f"Tool '{tool_name}' blocked by policy"
-            )
-
-        # AGT-DELTA D1.1: if the engine rewrote the arguments via a
-        # transform verdict, swap them in for the downstream tool call
-        # so the host sees the redacted payload.
-        effective_kwargs = kwargs
-        effective_args = args
-        if result.modified_arguments is not None:
-            mod = dict(result.modified_arguments)
-            positional = mod.pop("_positional", None)
-            if positional is not None:
-                effective_args = tuple(positional)
-            effective_kwargs = mod
-
-        ctx.call_count += 1
-        kernel._record_audit(
-            "tool_executed",
-            tool_name=tool_name,
-            allowed=True,
-            arguments=call_args,
-            agent_id=ctx.agent_id,
-        )
-        return original_fn(*effective_args, **effective_kwargs)
-
-    # Patch the tool entry
-    if hasattr(tool_entry, "function"):
-        tool_entry.function = governed_fn
-    elif hasattr(tool_entry, "_run"):
-        tool_entry._run = governed_fn
-
-    tool_entry._governed = True
 
 
 # Convenience function
