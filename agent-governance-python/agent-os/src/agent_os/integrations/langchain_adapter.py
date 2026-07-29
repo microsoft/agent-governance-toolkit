@@ -227,12 +227,18 @@ class GovernanceMiddleware(_MiddlewareBase):
             args=tool_args if isinstance(tool_args, dict) else {"value": tool_args},
             call_id=tool_call.get("id", "call-1") if isinstance(tool_call, dict) else "call-1",
         )
-        if bridge_result.transform is not None and isinstance(
-            bridge_result.transformed_value, dict
-        ) and isinstance(tool_call, dict):
-            tool_args = bridge_result.transformed_value
-            tool_call["args"] = tool_args
-        if not bridge_result.allowed:
+        applied = True
+        if bridge_result.transform is not None:
+            # Tool arguments are a dict on a dict-shaped call. Without both
+            # there is nowhere to write the replacement, and forwarding would
+            # run the arguments the policy meant to rewrite.
+            applied = isinstance(bridge_result.transformed_value, dict) and isinstance(
+                tool_call, dict
+            )
+            if applied:
+                tool_args = bridge_result.transformed_value
+                tool_call["args"] = tool_args
+        if not bridge_result.allowed or not applied:
             logger.info(
                 "[%s] Policy DENY (AGT pre_tool_call) on tool '%s': %s",
                 self._name,

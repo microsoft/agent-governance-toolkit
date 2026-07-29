@@ -330,20 +330,30 @@ class RuntimeGovernanceMiddleware(AgentMiddleware):
         # AGT-DELTA D1.1: rewrite the last message body when the engine
         # returned a transform verdict so the agent's downstream tools
         # see the AGT-sanitised text.
-        if (
-            bridge_result.transform is not None
-            and isinstance(bridge_result.transformed_value, str)
-            and last_msg is not None
-        ):
-            try:
-                if hasattr(last_msg, "text"):
-                    last_msg.text = bridge_result.transformed_value
-                if hasattr(last_msg, "contents") and isinstance(
-                    getattr(last_msg, "contents"), list
-                ):
-                    last_msg.contents = [bridge_result.transformed_value]
-            except Exception:  # noqa: BLE001 — best-effort rewrite
-                pass
+        applied = True
+        if bridge_result.transform is not None:
+            # The replacement has to reach the message, which needs a string
+            # and a message to write it to. If either is missing, or the write
+            # raises, the original text stays and the agent would see the
+            # value the policy meant to redact, so the call is refused.
+            applied = False
+            if isinstance(bridge_result.transformed_value, str) and last_msg is not None:
+                try:
+                    if hasattr(last_msg, "text"):
+                        last_msg.text = bridge_result.transformed_value
+                        applied = True
+                    if hasattr(last_msg, "contents") and isinstance(
+                        getattr(last_msg, "contents"), list
+                    ):
+                        last_msg.contents = [bridge_result.transformed_value]
+                        applied = True
+                except Exception:  # noqa: BLE001 — opaque message object
+                    applied = False
+        if not applied:
+            raise MiddlewareTermination(
+                "AGT returned a transform this middleware could not apply to "
+                f"the message ({bridge_result.reason or bridge_result.verdict})"
+            )
 
         logger.debug(
             "Policy ALLOW (AGT input) for agent '%s'", agent_name

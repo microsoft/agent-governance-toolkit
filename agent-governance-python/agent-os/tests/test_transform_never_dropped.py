@@ -284,21 +284,26 @@ def _guarded_applications():
                 isinstance(node, ast.If)
                 and isinstance(node.test, ast.BoolOp)
                 and isinstance(node.test.op, ast.And)
-                and len(node.test.values) == 2
             ):
                 continue
-            left, right = node.test.values
-            if not (
-                isinstance(left, ast.Compare)
-                and isinstance(left.left, ast.Attribute)
-                and left.left.attr == "transform"
-            ):
-                continue
-            if not (
-                isinstance(right, ast.Call)
-                and isinstance(right.func, ast.Name)
-                and right.func.id == "isinstance"
-            ):
+            # Any number of ANDed operands, in any order. Requiring exactly
+            # two, with the transform check first, is how two live drops hid:
+            # both add a third condition (`and last_msg is not None`,
+            # `and isinstance(tool_call, dict)`) and so were invisible here.
+            ops = node.test.values
+            has_transform = any(
+                isinstance(o, ast.Compare)
+                and isinstance(o.left, ast.Attribute)
+                and o.left.attr == "transform"
+                for o in ops
+            )
+            has_isinstance = any(
+                isinstance(o, ast.Call)
+                and isinstance(o.func, ast.Name)
+                and o.func.id == "isinstance"
+                for o in ops
+            )
+            if not (has_transform and has_isinstance):
                 continue
             enclosing = max(
                 (f for f in fns if f.lineno <= node.lineno <= (f.end_lineno or 0)),
