@@ -234,7 +234,7 @@ hypercall
 Hyperlight
 hyperlightjs
 IATP
-IMDSI
+IMDS
 idweb
 IGNORECASE
 importorskip

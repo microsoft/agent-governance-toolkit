@@ -65,6 +65,9 @@ func NewWebhookApprover(rawURL string, opts ...WebhookApproverOption) (*WebhookA
 		url: rawURL,
 		client: &http.Client{
 			Timeout: 5 * time.Minute,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 		},
 		headers: make(map[string]string),
 	}
@@ -272,19 +275,31 @@ func validateApprovalWebhookURL(rawURL string) error {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return fmt.Errorf("unsupported approval webhook URL scheme %q", parsed.Scheme)
 	}
-	host := strings.ToLower(parsed.Hostname())
+	host := strings.TrimRight(strings.ToLower(parsed.Hostname()), ".")
 	if host == "" {
 		return errors.New("approval webhook URL must include a host")
 	}
-	blockedHosts := map[string]bool{
-		"169.254.169.254":          true,
-		"fd00:ec2::254":            true,
-		"metadata.google.internal": true,
+	blockedHosts := []string{
+		"localhost",
+		"metadata.google",
+		"metadata.google.internal",
+		"169.254.169.254",
+		"169.254.170.2",
+		"168.63.129.16",
+		"100.100.100.200",
+		"fd00:ec2::254",
 	}
-	if blockedHosts[host] {
-		return fmt.Errorf("approval webhook URL host %q is blocked", host)
+	for _, blockedHost := range blockedHosts {
+		if host == blockedHost || strings.HasSuffix(host, "."+blockedHost) {
+			return fmt.Errorf("approval webhook URL host %q is blocked", host)
+		}
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLinkLocalUnicast() {
+	ipHost := host
+	if zone := strings.LastIndex(ipHost, "%"); zone >= 0 {
+		ipHost = ipHost[:zone]
+	}
+	if ip := net.ParseIP(ipHost); ip != nil &&
+		(ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
 		return fmt.Errorf("approval webhook URL host %q is blocked", host)
 	}
 	return nil

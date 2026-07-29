@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 package agentmesh
 
 import (
@@ -386,5 +389,11 @@ func TestExecuteWithGovernanceNilFieldsReturnsError(t *testing.T) {
 	_, err := client.ExecuteWithGovernance("any.action", nil)
 	if err == nil {
 		t.Fatal("expected error when client fields are nil")
+	}
+}
+
+func TestDecisionFromApprovalResultFailsClosedForNilResult(t *testing.T) {
+	if decision := decisionFromApprovalResult(nil, nil); decision != Deny {
+		t.Fatalf("decision = %s, want deny", decision)
 	}
 }
