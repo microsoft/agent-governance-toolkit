@@ -2,7 +2,9 @@
   "version": "0.2",
   "language": "en",
   "useGitignore": true,
-  "dictionaries": ["repo-terms"],
+  "dictionaries": [
+    "repo-terms"
+  ],
   "dictionaryDefinitions": [
     {
       "name": "repo-terms",
@@ -96,7 +98,6 @@
     "Microtask",
     "headerless",
     "desync",
-    "starlette",
     "realpeerrealpeerrealpeerreal",
     "pwsh",
     "notlike",
@@ -114,7 +115,12 @@
     "runserver",
     "datastructures",
     "jsonify",
-    "undecoded"
+    "undecoded",
+    "chacha",
+    "chacha20",
+    "getrandom",
+    "spki",
+    "zerocopy"
   ],
   "ignorePaths": [
     "**/node_modules/**",
