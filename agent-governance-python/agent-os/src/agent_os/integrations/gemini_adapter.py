@@ -291,8 +291,10 @@ class GovernedGeminiModel:
                         raise tool_result.to_policy_violation(PolicyViolationError)
                     try:
                         fn_call.args = tool_result.transformed_value
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
-                        pass
+                    except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                        # The policy rewrote this value and the write did not
+                        # land, so proceeding would run the original.
+                        raise tool_result.to_policy_violation(PolicyViolationError) from exc
                 self._kernel.bridge.record_post_execute(self._ctx, tool_calls=1)
 
         allowed, reason = self._kernel.post_execute(self._ctx, response)

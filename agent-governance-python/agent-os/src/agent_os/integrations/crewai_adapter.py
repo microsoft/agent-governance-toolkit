@@ -172,14 +172,16 @@ class GovernanceHooks:
                 args=tool_input,
                 call_id=getattr(context, "tool_call_id", "call-1"),
             )
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transformed_value, dict
-            ):
+            # True unless a replacement was meant to land and did not: wrong
+            # shape, or a write the context refused. Either way the original
+            # arguments would run while the policy believed it rewrote them.
+            rewritten = bridge_result.applies_to(dict)
+            if bridge_result.transform is not None and rewritten:
                 try:
                     context.tool_input = bridge_result.transformed_value
-                except Exception:  # noqa: BLE001 — best-effort rewrite
-                    pass
-            if not bridge_result.allowed or not bridge_result.applies_to(dict):
+                except Exception:  # noqa: BLE001 — opaque context object
+                    rewritten = False
+            if not bridge_result.allowed or not rewritten:
                 logger.info(
                     "[%s] Policy DENY (AGT pre_tool_call): %s",
                     name,
@@ -270,8 +272,10 @@ class GovernanceHooks:
                         raise post_result.to_policy_violation(PolicyViolationError)
                     try:
                         context.tool_result = post_result.transformed_value
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
-                        pass
+                    except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                        # The policy rewrote this value and the write did not
+                        # land, so proceeding would run the original.
+                        raise post_result.to_policy_violation(PolicyViolationError) from exc
 
             logger.debug("[%s] after_tool_call OK: tool=%s", name, tool_name)
             return None
@@ -335,24 +339,34 @@ class GovernanceHooks:
                         name, pre_result.reason,
                     )
                     return False
-                if pre_result.transform is not None and isinstance(
-                    pre_result.transformed_value, str
-                ):
-                    # Rewrite the last user message content per AGT D1.1.
+                if pre_result.transform is not None:
+                    # Rewrite the last user message content per AGT D1.1. If
+                    # no message takes it, or the write is refused, the
+                    # original text would reach the model while the policy
+                    # believed it had been rewritten, so the call is refused.
+                    rewritten = False
                     for msg in reversed(messages):
                         if isinstance(msg, dict) and isinstance(
                             msg.get("content"), str
                         ):
                             msg["content"] = pre_result.transformed_value
+                            rewritten = True
                             break
                         if hasattr(msg, "content") and isinstance(
                             getattr(msg, "content"), str
                         ):
                             try:
                                 msg.content = pre_result.transformed_value
-                            except Exception:  # noqa: BLE001 — best-effort rewrite
-                                pass
+                                rewritten = True
+                            except Exception:  # noqa: BLE001 — opaque message
+                                rewritten = False
                             break
+                    if not rewritten:
+                        logger.info(
+                            "[%s] Policy REFUSE (AGT input): no message took "
+                            "the rewrite on LLM input", name,
+                        )
+                        return False
 
             return None  # allow
 
@@ -422,8 +436,10 @@ class GovernanceHooks:
                         raise post_result.to_policy_violation(PolicyViolationError)
                     try:
                         context.response = post_result.transformed_value
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
-                        pass
+                    except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                        # The policy rewrote this value and the write did not
+                        # land, so proceeding would run the original.
+                        raise post_result.to_policy_violation(PolicyViolationError) from exc
                     return post_result.transformed_value
 
             return None  # keep original response

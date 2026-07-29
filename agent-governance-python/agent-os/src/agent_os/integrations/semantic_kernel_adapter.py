@@ -360,8 +360,10 @@ class GovernedSemanticKernel:
                     try:
                         result.value = post_result.transformed_value
                         return result
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
-                        pass
+                    except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                        # The policy rewrote this value and the write did not
+                        # land, so proceeding would run the original.
+                        raise post_result.to_policy_violation(PolicyViolationError) from exc
                 return post_result.transformed_value
 
             return result
@@ -633,8 +635,10 @@ class GovernedSemanticKernel:
                 try:
                     result.value = post_result.transformed_value
                     return result
-                except Exception:  # noqa: BLE001 — best-effort rewrite
-                    pass
+                except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                    # The policy rewrote this value and the write did not
+                    # land, so proceeding would run the original.
+                    raise post_result.to_policy_violation(PolicyViolationError) from exc
             return post_result.transformed_value
 
         return result
@@ -1001,8 +1005,10 @@ class GovernanceFunctionFilter:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
             try:
                 context.arguments = bridge_result.transformed_value
-            except Exception:  # noqa: BLE001 — best-effort rewrite
-                pass
+            except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                # The policy rewrote this value and the write did not
+                # land, so proceeding would run the original.
+                raise bridge_result.to_policy_violation(PolicyViolationError) from exc
 
         # Proceed with execution
         await next(context)
@@ -1023,8 +1029,10 @@ class GovernanceFunctionFilter:
                     raise post_result.to_policy_violation(PolicyViolationError)
                 try:
                     context.result = post_result.transformed_value
-                except Exception:  # noqa: BLE001 — best-effort rewrite
-                    pass
+                except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                    # The policy rewrote this value and the write did not
+                    # land, so proceeding would run the original.
+                    raise post_result.to_policy_violation(PolicyViolationError) from exc
 
         # Advance the host counter so the next snapshot sees this invocation.
         self._ctx.call_count += 1

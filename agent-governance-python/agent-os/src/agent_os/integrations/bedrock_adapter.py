@@ -223,8 +223,10 @@ class _GovernedEventStream:
                             # AGT-redacted payload.
                             try:
                                 ag["parameters"] = bridge_result.transformed_value
-                            except Exception:  # noqa: BLE001 — best-effort rewrite
-                                pass
+                            except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                                # The policy rewrote this value and the write did not
+                                # land, so proceeding would run the original.
+                                raise bridge_result.to_policy_violation(PolicyViolationError) from exc
                         if not bridge_result.allowed or not bridge_result.applies_to(dict):
                             self._ctx.blocked_events += 1
                             logger.warning(

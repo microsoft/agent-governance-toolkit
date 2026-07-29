@@ -498,8 +498,11 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
         ):
             try:
                 context.arguments = bridge_result.transformed_value
-            except Exception:  # noqa: BLE001 — best-effort rewrite
-                pass
+            except Exception as exc:  # noqa: BLE001 — opaque context object
+                raise MiddlewareTermination(
+                    "AGT returned a transform the capability guard could not "
+                    "write to the tool arguments"
+                ) from exc
 
         if self.audit_log:
             self.audit_log.log(

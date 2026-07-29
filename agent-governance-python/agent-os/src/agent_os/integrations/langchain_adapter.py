@@ -288,8 +288,10 @@ class GovernanceMiddleware(_MiddlewareBase):
             if hasattr(result, "content"):
                 try:
                     result.content = post_result.transformed_value
-                except Exception:  # noqa: BLE001 — best-effort rewrite on opaque message
-                    pass
+                except Exception as exc:  # noqa: BLE001 — opaque message
+                    raise post_result.to_policy_violation(
+                        PolicyViolationError
+                    ) from exc
 
         self._ctx.call_count += 1
         return result
@@ -390,8 +392,10 @@ class GovernanceMiddleware(_MiddlewareBase):
                     ):
                         try:
                             msg.content = pre_result.transformed_value
-                        except Exception:  # noqa: BLE001 — best-effort rewrite
-                            pass
+                        except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                            # The policy rewrote this value and the write did not
+                            # land, so proceeding would run the original.
+                            raise pre_result.to_policy_violation(PolicyViolationError) from exc
                         break
             logger.info("[%s] Policy ALLOW on model input", self._name)
 
@@ -426,8 +430,10 @@ class GovernanceMiddleware(_MiddlewareBase):
                 if hasattr(response_msg, "content"):
                     try:
                         response_msg.content = post_result.transformed_value
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
-                        pass
+                    except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                        # The policy rewrote this value and the write did not
+                        # land, so proceeding would run the original.
+                        raise post_result.to_policy_violation(PolicyViolationError) from exc
 
         return response
 

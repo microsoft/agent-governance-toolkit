@@ -31,6 +31,7 @@ from __future__ import annotations
 import ast
 import copy
 import pathlib
+import re
 import types
 
 import pytest
@@ -525,3 +526,67 @@ class TestPostExecuteHonoursIt:
 
         assert (allowed, reason) == (True, None)
         assert adapter.completed == [{"output_data": "fine"}]
+
+
+# ── census 3: a rewrite that fails to land must not be swallowed ──────────
+
+
+def _swallowed_rewrites():
+    """Transform rewrites whose failure is discarded with a bare ``pass``.
+
+    The write targets a framework object the adapter does not own: a pydantic
+    model, a frozen message, a context whose setter may reject. When it raises
+    and the handler only passes, the original value survives and execution
+    continues while the policy believes the value was rewritten. It is the
+    same silent drop as ignoring the verdict, one level below the shape check.
+    """
+    found = []
+    for path in sorted(SRC.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if "transformed_value" not in text:
+            continue
+        tree = ast.parse(text)
+        lines = text.splitlines()
+        fns = [
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            body = "\n".join(lines[node.lineno - 1 : node.end_lineno])
+            # The replacement may be read straight off the result or held in a
+            # local first, so match both spellings.
+            if not any(k in body for k in ("transformed_value", "replacement")):
+                continue
+            if not any(
+                len(h.body) == 1 and isinstance(h.body[0], ast.Pass)
+                for h in node.handlers
+            ):
+                continue
+            # A bare pass is fine when the enclosing function tracks whether
+            # the rewrite landed: the flag stays false and the caller refuses.
+            fn = max(
+                (f for f in fns if f.lineno <= node.lineno <= (f.end_lineno or 0)),
+                key=lambda f: f.lineno,
+                default=None,
+            )
+            fbody = (
+                "\n".join(lines[fn.lineno - 1 : fn.end_lineno]) if fn else ""
+            )
+            if re.search(r"^\s*(applied|rewritten) = ", fbody, re.M):
+                continue
+            found.append(f"{path.relative_to(SRC)}:{node.lineno}")
+    return found
+
+
+def test_no_transform_rewrite_swallows_its_own_failure():
+    swallowed = _swallowed_rewrites()
+
+    assert not swallowed, (
+        "these apply a transform inside a try whose handler only passes, so a "
+        "write that fails leaves the original value in place and execution "
+        "continues: " + ", ".join(swallowed) + ". Refuse instead, by raising "
+        "or by tracking whether the rewrite landed."
+    )

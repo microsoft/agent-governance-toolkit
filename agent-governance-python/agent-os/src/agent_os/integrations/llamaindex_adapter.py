@@ -196,14 +196,18 @@ class LlamaIndexKernel(BaseIntegration):
                         try:
                             result.response = bridge_result.transformed_value
                             return result
-                        except Exception:  # noqa: BLE001 — best-effort rewrite
-                            pass
+                        except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                            # The policy rewrote this value and the write did not
+                            # land, so proceeding would run the original.
+                            raise bridge_result.to_policy_violation(PolicyViolationError) from exc
                     if hasattr(result, "content"):
                         try:
                             result.content = bridge_result.transformed_value
                             return result
-                        except Exception:  # noqa: BLE001 — best-effort rewrite
-                            pass
+                        except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                            # The policy rewrote this value and the write did not
+                            # land, so proceeding would run the original.
+                            raise bridge_result.to_policy_violation(PolicyViolationError) from exc
                     return bridge_result.transformed_value
                 return result
 

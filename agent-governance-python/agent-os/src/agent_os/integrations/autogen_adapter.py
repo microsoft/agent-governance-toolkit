@@ -188,14 +188,15 @@ class GovernanceInterventionHandler:
         content = self._extract_content(message)
         if content:
             bridge_result = kernel.evaluate_input(ctx, content)
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transformed_value, str
-            ):
+            # True unless a replacement was meant to land and did not: wrong
+            # shape, or a message that refused the write.
+            rewritten = bridge_result.applies_to(str)
+            if bridge_result.transform is not None and rewritten:
                 try:
                     self._apply_content(message, bridge_result.transformed_value)
-                except Exception:  # noqa: BLE001 — best-effort rewrite
-                    pass
-            if not bridge_result.allowed or not bridge_result.applies_to(str):
+                except Exception:  # noqa: BLE001 — opaque message object
+                    rewritten = False
+            if not bridge_result.allowed or not rewritten:
                 logger.info(
                     "[%s] Policy DENY (AGT input): %s",
                     name,
