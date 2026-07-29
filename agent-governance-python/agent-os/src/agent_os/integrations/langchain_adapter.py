@@ -286,10 +286,12 @@ class GovernanceMiddleware(_MiddlewareBase):
                 # run the original the policy meant to rewrite.
                 raise post_result.to_policy_violation(PolicyViolationError)
             if not hasattr(result, "content"):
-                # A tool that returns a plain string has nowhere to take the
-                # replacement, and `result_str` above shows those are
-                # expected. Returning it would hand back the original.
-                raise post_result.to_policy_violation(PolicyViolationError)
+                # A tool that returns a plain string has no attribute to write
+                # to, but it is still the value being returned, so hand back
+                # the replacement itself. llamaindex and semantic_kernel do
+                # the same. Refusing here would turn a redaction policy into a
+                # denial for the most ordinary kind of tool.
+                return post_result.transformed_value
             try:
                 result.content = post_result.transformed_value
             except Exception as exc:  # noqa: BLE001 — opaque message
@@ -438,7 +440,9 @@ class GovernanceMiddleware(_MiddlewareBase):
                     # run the original the policy meant to rewrite.
                     raise post_result.to_policy_violation(PolicyViolationError)
                 if not hasattr(response_msg, "content"):
-                    raise post_result.to_policy_violation(PolicyViolationError)
+                    # A plain response is itself the value, so return the
+                    # replacement rather than denying a redaction.
+                    return post_result.transformed_value
                 try:
                     response_msg.content = post_result.transformed_value
                 except Exception as exc:  # noqa: BLE001 — opaque message

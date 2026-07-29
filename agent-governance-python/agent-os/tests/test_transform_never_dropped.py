@@ -640,12 +640,18 @@ def _skipped_writes():
                 if "transformed_value" not in body:
                     continue
                 whole = ast.unparse(inner)
-                refuses = (
+                # Handled when the branch refuses, tracks a landed-flag, or
+                # hands the replacement back to the caller. That last form is
+                # how llamaindex, semantic_kernel and langchain treat a value
+                # that IS the return rather than an attribute on it; denying
+                # there would turn a redaction into a refusal.
+                handled = (
                     inner.orelse
                     or "raise" in whole
                     or re.search(r"(applied|rewritten) = ", whole)
+                    or re.search(r"return \w+\.transformed_value", block)
                 )
-                if not refuses:
+                if not handled:
                     found.append(f"{path.relative_to(SRC)}:{inner.lineno}")
     return found
 
