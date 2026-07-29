@@ -491,7 +491,7 @@ héllo
 h├⌐llo
 iban
 idna
-IMDSI
+IMDS
 idweb
 importorskip
 imran

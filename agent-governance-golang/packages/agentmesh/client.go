@@ -83,11 +83,7 @@ func (c *AgentMeshClient) ExecuteWithGovernanceContext(ctx context.Context, acti
 		if resolved != nil {
 			approval = resolved
 		}
-		if err != nil {
-			decision = Deny
-		} else {
-			decision = resolved.Decision
-		}
+		decision = decisionFromApprovalResult(resolved, err)
 	}
 
 	entry := c.Audit.Log(c.Identity.DID, action, decision)
@@ -106,4 +102,11 @@ func (c *AgentMeshClient) ExecuteWithGovernanceContext(ctx context.Context, acti
 		Allowed:    decision == Allow,
 		Approval:   approval,
 	}, nil
+}
+
+func decisionFromApprovalResult(result *ApprovalResult, err error) PolicyDecision {
+	if err != nil || result == nil {
+		return Deny
+	}
+	return result.Decision
 }

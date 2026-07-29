@@ -87,10 +87,7 @@ func TestApprovalCoordinatorWebhookAllow(t *testing.T) {
 	}))
 	defer server.Close()
 
-	approver, err := NewWebhookApprover(server.URL, WithWebhookResponseVerifier(verifiedApproverFromBody))
-	if err != nil {
-		t.Fatalf("NewWebhookApprover: %v", err)
-	}
+	approver := newTestWebhookApprover(t, server, WithWebhookResponseVerifier(verifiedApproverFromBody))
 	coordinator := NewApprovalCoordinator(
 		ApprovalChain{
 			ChainID: "high-risk-tools",
@@ -572,10 +569,7 @@ func TestWebhookRolesSatisfyAllowedRoles(t *testing.T) {
 	}))
 	defer server.Close()
 
-	approver, err := NewWebhookApprover(server.URL, WithWebhookResponseVerifier(verifiedApproverFromBody))
-	if err != nil {
-		t.Fatalf("NewWebhookApprover: %v", err)
-	}
+	approver := newTestWebhookApprover(t, server, WithWebhookResponseVerifier(verifiedApproverFromBody))
 	coordinator := NewApprovalCoordinator(ApprovalChain{
 		ChainID: "role-chain",
 		Version: "1",
@@ -596,9 +590,50 @@ func TestWebhookRolesSatisfyAllowedRoles(t *testing.T) {
 	}
 }
 
-func TestApprovalWebhookBlocksIMDSIPv6(t *testing.T) {
-	if _, err := NewWebhookApprover("http://[fd00:ec2::254]/approve"); err == nil {
-		t.Fatal("expected fd00:ec2::254 approval webhook URL to be blocked")
+func TestApprovalWebhookBlocksPrivateAndMetadataHosts(t *testing.T) {
+	blockedURLs := []string{
+		"http://localhost/approve",
+		"http://api.localhost/approve",
+		"http://localhost./approve",
+		"http://127.0.0.1/approve",
+		"http://10.0.0.1/approve",
+		"http://172.16.0.1/approve",
+		"http://192.168.1.1/approve",
+		"http://0.0.0.0/approve",
+		"http://[::1]/approve",
+		"http://[fd12::1]/approve",
+		"http://[fd00:ec2::254]/approve",
+		"http://169.254.169.254/approve",
+		"http://168.63.129.16/approve",
+		"http://100.100.100.200/approve",
+		"http://metadata.google.internal/approve",
+		"http://api.metadata.google.internal/approve",
+	}
+	for _, rawURL := range blockedURLs {
+		t.Run(rawURL, func(t *testing.T) {
+			if _, err := NewWebhookApprover(rawURL); err == nil {
+				t.Fatalf("expected approval webhook URL %q to be blocked", rawURL)
+			}
+		})
+	}
+}
+
+func TestApprovalWebhookAllowsPublicHost(t *testing.T) {
+	if _, err := NewWebhookApprover("https://approvals.example.com/approve"); err != nil {
+		t.Fatalf("expected public approval webhook URL to be accepted: %v", err)
+	}
+}
+
+func TestApprovalWebhookDefaultClientDoesNotFollowRedirects(t *testing.T) {
+	approver, err := NewWebhookApprover("https://approvals.example.com/approve")
+	if err != nil {
+		t.Fatalf("NewWebhookApprover: %v", err)
+	}
+	if approver.client.CheckRedirect == nil {
+		t.Fatal("expected default approval webhook client to reject redirects")
+	}
+	if err := approver.client.CheckRedirect(nil, nil); err != http.ErrUseLastResponse {
+		t.Fatalf("redirect policy error = %v, want %v", err, http.ErrUseLastResponse)
 	}
 }
 
@@ -627,14 +662,8 @@ func TestApprovalCoordinatorWebhookDenyShortCircuits(t *testing.T) {
 	}))
 	defer second.Close()
 
-	firstApprover, err := NewWebhookApprover(first.URL, WithWebhookResponseVerifier(verifiedApproverFromBody))
-	if err != nil {
-		t.Fatalf("first approver: %v", err)
-	}
-	secondApprover, err := NewWebhookApprover(second.URL, WithWebhookResponseVerifier(verifiedApproverFromBody))
-	if err != nil {
-		t.Fatalf("second approver: %v", err)
-	}
+	firstApprover := newTestWebhookApprover(t, first, WithWebhookResponseVerifier(verifiedApproverFromBody))
+	secondApprover := newTestWebhookApprover(t, second, WithWebhookResponseVerifier(verifiedApproverFromBody))
 
 	coordinator := NewApprovalCoordinator(ApprovalChain{
 		ChainID: "two-stage",
@@ -667,10 +696,7 @@ func TestApprovalCoordinatorWebhookTimeoutFailsClosed(t *testing.T) {
 	}))
 	defer server.Close()
 
-	approver, err := NewWebhookApprover(server.URL, WithWebhookResponseVerifier(verifiedApproverFromBody))
-	if err != nil {
-		t.Fatalf("NewWebhookApprover: %v", err)
-	}
+	approver := newTestWebhookApprover(t, server, WithWebhookResponseVerifier(verifiedApproverFromBody))
 	coordinator := NewApprovalCoordinator(
 		ApprovalChain{
 			ChainID: "timeouts",
@@ -714,10 +740,7 @@ func TestWebhookBindingMismatchFailsClosed(t *testing.T) {
 	}))
 	defer server.Close()
 
-	approver, err := NewWebhookApprover(server.URL, WithWebhookResponseVerifier(verifiedApproverFromBody))
-	if err != nil {
-		t.Fatalf("NewWebhookApprover: %v", err)
-	}
+	approver := newTestWebhookApprover(t, server, WithWebhookResponseVerifier(verifiedApproverFromBody))
 	coordinator := NewApprovalCoordinator(ApprovalChain{
 		ChainID: "binding",
 		Version: "1",
@@ -755,10 +778,7 @@ func TestExecuteWithGovernanceRoutesRequireApproval(t *testing.T) {
 	}))
 	defer server.Close()
 
-	approver, err := NewWebhookApprover(server.URL, WithWebhookResponseVerifier(verifiedApproverFromBody))
-	if err != nil {
-		t.Fatalf("NewWebhookApprover: %v", err)
-	}
+	approver := newTestWebhookApprover(t, server, WithWebhookResponseVerifier(verifiedApproverFromBody))
 	coordinator := NewApprovalCoordinator(ApprovalChain{
 		ChainID: "client-chain",
 		Version: "1",
@@ -837,6 +857,39 @@ func productionBinding() ActionBinding {
 			"values":    []interface{}{"closed", 42},
 		},
 	}
+}
+
+type testWebhookTransport struct {
+	targetHost string
+	base       http.RoundTripper
+}
+
+func (t testWebhookTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	cloned := request.Clone(request.Context())
+	clonedURL := *request.URL
+	clonedURL.Scheme = "http"
+	clonedURL.Host = t.targetHost
+	cloned.URL = &clonedURL
+	return t.base.RoundTrip(cloned)
+}
+
+func newTestWebhookApprover(t *testing.T, server *httptest.Server, opts ...WebhookApproverOption) *WebhookApprover {
+	t.Helper()
+	client := &http.Client{
+		Transport: testWebhookTransport{
+			targetHost: strings.TrimPrefix(server.URL, "http://"),
+			base:       server.Client().Transport,
+		},
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	allOpts := append([]WebhookApproverOption{WithWebhookHTTPClient(client)}, opts...)
+	approver, err := NewWebhookApprover("http://approval-webhook.test/approve", allOpts...)
+	if err != nil {
+		t.Fatalf("NewWebhookApprover: %v", err)
+	}
+	return approver
 }
 
 func verifiedApproverFromBody(body map[string]interface{}, _ ApprovalRequest) (string, bool) {
