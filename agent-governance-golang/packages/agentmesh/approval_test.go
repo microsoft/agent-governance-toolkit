@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 package agentmesh
 
 import (
@@ -263,7 +266,7 @@ func TestApprovalCoordinatorRejectsInvalidActionBinding(t *testing.T) {
 			},
 		},
 		{
-			name: "nonfinite parameter",
+			name: "non-finite parameter",
 			mutate: func(binding *ActionBinding) {
 				binding.Parameters["amount"] = math.Inf(1)
 			},
