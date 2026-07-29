@@ -19,7 +19,7 @@ const (
 	DataClassificationTopSecret
 )
 
-// String returns the stable wire spelling of the classification.
+// String returns the lowercase display spelling of the classification.
 func (dc DataClassification) String() string {
 	switch dc {
 	case DataClassificationPublic:
