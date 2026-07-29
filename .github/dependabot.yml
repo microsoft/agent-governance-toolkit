@@ -167,6 +167,11 @@ updates:
       prefix-development: "chore(deps-dev)"
 
   # GitHub Actions
+  # Actions pinned via .github/ci/actions.toml are excluded below: Dependabot
+  # bumping these directly in workflow YAML diverges from that source of
+  # truth and breaks the "Check generated workflows" CI job (see #3357).
+  # Bump these by updating .github/ci/actions.toml and re-running
+  # scripts/ci/generate_workflows.py --write instead.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -177,3 +182,9 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
+    ignore:
+      - dependency-name: "actions/checkout"
+      - dependency-name: "actions/setup-python"
+      - dependency-name: "actions/setup-node"
+      - dependency-name: "actions/setup-dotnet"
+      - dependency-name: "dtolnay/rust-toolchain"
