@@ -1,3 +1,9 @@
+---
+title: MCP Trust Guide
+last_reviewed: 2026-07-12
+owner: docs-team
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Adding Governance and Trust to MCP Servers
@@ -441,19 +447,13 @@ pip install agent-os-kernel
 ### Setting Up the Gateway
 
 ```python
+from agt.policies import AgtRuntime
 from agent_os.mcp_gateway import MCPGateway, ApprovalStatus, AuditEntry
-from agent_os.integrations.base import GovernancePolicy, PatternType
 
-policy = GovernancePolicy(
-    name="production",
-    allowed_tools=["search", "read_file", "summarize"],
-    max_tool_calls=50,
-    blocked_patterns=[(r";\s*(rm|del)\b", PatternType.REGEX)],
-    log_all_calls=True,
-)
+runtime = AgtRuntime("policies/mcp-manifest.yaml")
 
 gateway = MCPGateway(
-    policy,
+    runtime,
     denied_tools=["execute_code", "shell"],
     sensitive_tools=["deploy", "delete_repo"],
     enable_builtin_sanitization=True,
@@ -462,7 +462,7 @@ gateway = MCPGateway(
 
 | Parameter | Type | Default | Purpose |
 |-----------|------|---------|---------|
-| `policy` | `GovernancePolicy` | *(required)* | Governance policy defining constraints |
+| `runtime` | `AgtRuntime` | *(required)* | Native ACS runtime |
 | `denied_tools` | `list[str] \| None` | `None` | Tools that are never exposed |
 | `sensitive_tools` | `list[str] \| None` | `None` | Tools requiring human approval |
 | `approval_callback` | `Callable \| None` | `None` | `(agent_id, tool_name, params) -> ApprovalStatus` |
@@ -510,7 +510,7 @@ def my_approval_handler(agent_id: str, tool_name: str, params: dict) -> Approval
     return ApprovalStatus.APPROVED
 
 gateway = MCPGateway(
-    policy,
+    runtime,
     sensitive_tools=["deploy", "delete_repo"],
     approval_callback=my_approval_handler,
 )
@@ -528,12 +528,12 @@ input configuration.
 ```python
 config = MCPGateway.wrap_mcp_server(
     server_config={"command": "python", "args": ["-m", "my_server"]},
-    policy=policy,
     denied_tools=["shell"],
     sensitive_tools=["deploy"],
+    rate_limit=50,
 )
-print(config.policy_name)      # "production"
-print(config.allowed_tools)    # ["search", "read_file", "summarize"]
+print(config.denied_tools)     # ["shell"]
+print(config.sensitive_tools)  # ["deploy"]
 print(config.rate_limit)       # 50
 ```
 
@@ -683,9 +683,9 @@ Agent Request
 
 ```python
 from mcp_trust_proxy import TrustProxy, ToolPolicy
+from agt.policies import AgtRuntime
 from agent_os.mcp_security import MCPSecurityScanner
 from agent_os.mcp_gateway import MCPGateway
-from agent_os.integrations.base import GovernancePolicy, PatternType
 
 # 1. Trust Proxy
 proxy = TrustProxy(default_min_trust=300)
@@ -695,12 +695,8 @@ proxy.set_tool_policy("file_write", ToolPolicy(min_trust=800))
 scanner = MCPSecurityScanner()
 
 # 3. MCP Gateway
-policy = GovernancePolicy(
-    name="production",
-    allowed_tools=["search", "read_file"],
-    max_tool_calls=100,
-)
-gateway = MCPGateway(policy, denied_tools=["shell"])
+runtime = AgtRuntime("policies/mcp-manifest.yaml")
+gateway = MCPGateway(runtime, denied_tools=["shell"])
 
 # --- Per-request pipeline ---
 
@@ -788,7 +784,7 @@ The MCP client can then invoke the six trust tools directly:
 | `agent_os/mcp_security.py` | `agent-os-kernel` | `MCPSecurityScanner`, `MCPThreat`, `ScanResult`, `ToolFingerprint` |
 | `agent_os/mcp_gateway.py` | `agent-os-kernel` | `MCPGateway`, `AuditEntry`, `ApprovalStatus`, `GatewayConfig` |
 | `agentmesh/integrations/mcp/__init__.py` | `agentmesh-platform` | `TrustGatedMCPServer`, `TrustGatedMCPClient`, `MCPToolCall` |
-| `agent_os/integrations/base.py` | `agent-os-kernel` | `GovernancePolicy`, `PatternType` |
+| `agent_os/integrations/base.py` | `agent-os-kernel` | `AgtRuntime`, `PolicyEvaluation` |
 
 ### Working Example
 

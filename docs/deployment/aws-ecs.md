@@ -77,8 +77,8 @@ aws ecs create-service \
 
 ## Using with AWS Bedrock Agents
 
-AGT works with any agent framework. For Bedrock agents, wrap the agent's
-tool calls with `PolicyEvaluator.evaluate()` — see
+AGT works with any agent framework. For Bedrock agents, construct
+`BedrockKernel` with `AgtRuntime`. See
 [examples/quickstart/govern_in_60_seconds.py](../../examples/quickstart/govern_in_60_seconds.py).
 
 ## See Also

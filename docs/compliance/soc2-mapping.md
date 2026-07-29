@@ -54,16 +54,16 @@ The Agent Governance Toolkit provides runtime governance infrastructure that add
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| CC5.1 Risk-mitigating controls | PolicyEvaluator — every agent action evaluated before execution | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` | ✅ Covered |
-| CC5.2 Technology controls | GovernancePolicy with max_tool_calls, max_tokens, timeout_seconds, blocked_patterns | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` | ✅ Covered |
-| CC5.2 Policy modes | Strict (deny-by-default), permissive (allow-by-default), audit (log-only) | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:34-41` | ✅ Covered |
+| CC5.1 Risk-mitigating controls | AgtRuntime — every agent action evaluated before execution | `agent-governance-python/agt-policies/src/agt/policies/runtime.py` | ✅ Covered |
+| CC5.2 Technology controls | AgtRuntime with max_tool_calls, max_tokens, timeout_seconds, blocked_patterns | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` | ✅ Covered |
+| CC5.2 Policy modes | Strict (deny-by-default), permissive (allow-by-default), audit (log-only) | `agent-governance-python/agt-policies/src/agt/policies/manifest.py:34-41` | ✅ Covered |
 
 #### CC6: Logical and Physical Access Controls
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
 | CC6.1 Logical access | RBAC — 4 roles with action-level permissions | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py:24-30` | ✅ Covered |
-| CC6.1 Tool restrictions | `allowed_tools` per policy, `PolicyInterceptor` blocks unlisted tools | `agent-governance-python/agent-os/src/agent_os/integrations/base.py:689-693` | ✅ Covered |
+| CC6.1 Tool restrictions | `allowed_tools` per policy, `NativeAdapterRuntime` blocks unlisted tools | `agent-governance-python/agent-os/src/agent_os/integrations/base.py:689-693` | ✅ Covered |
 | CC6.2 Access provisioning | Trust scoring (0–1000, 5 tiers), delegation chains must narrow | `agent-governance-python/agent-mesh/src/agentmesh/trust/` | ✅ Covered |
 | CC6.3 Access removal | Trust decay over time without positive signals, role removal | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py:94-96` | ⚠️ Partial |
 | CC6.6 Authentication | Ed25519 challenge-response handshake with DoS protection | `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py:158-456` | ✅ Covered |
@@ -77,7 +77,7 @@ The Agent Governance Toolkit provides runtime governance infrastructure that add
 |---------|---------|----------|----------|
 | CC7.1 Detection and monitoring | GovernanceAuditLogger with pluggable backends (JSONL, in-memory, logging) | `agent-governance-python/agent-os/src/agent_os/audit_logger.py:19-136` | ✅ Covered |
 | CC7.1 Tamper-evident logging | MerkleAuditChain with SHA-256 hash chaining and inclusion proofs | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:23-344` | ✅ Covered |
-| CC7.2 Change monitoring | Version-controlled PolicyDocument with name, version, description fields | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:70-115` | ⚠️ Partial |
+| CC7.2 Change monitoring | Version-controlled AgtManifest with name, version, description fields | `agent-governance-python/agt-policies/src/agt/policies/manifest.py:70-115` | ⚠️ Partial |
 | CC7.3 Vulnerability management | MCP security scanner: tool poisoning, rug pulls, description injection, schema abuse, cross-server attacks, confused deputy | `agent-governance-python/agent-os/src/agent_os/mcp_security.py:300-331` | ⚠️ Partial |
 | CC7.3 Supply chain | SupplyChainGuard: freshly published packages (<7 days), unpinned versions, typosquatting detection | `agent-governance-python/agent-os/src/agent_os/supply_chain.py:72-79` | ⚠️ Partial |
 | CC7.4 Incident response | Kill switch with 6 kill reasons (BEHAVIORAL_DRIFT, RATE_LIMIT, RING_BREACH, MANUAL, QUARANTINE_TIMEOUT, SESSION_TIMEOUT) | `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py:64-136` | ⚠️ Partial |
@@ -139,7 +139,7 @@ audit.log_decision(
 
 ### Recommended Controls
 
-1. Wire detection modules into `BaseIntegration.pre_execute()` via `GovernancePolicy` flags (closes CC6.8 gaps across multiple OWASP risks).
+1. Wire detection modules into `BaseIntegration.pre_execute()` via `AgtRuntime` flags (closes CC6.8 gaps across multiple OWASP risks).
 2. Implement actual process termination in `KillSwitch` (CC7.4).
 3. Deploy each agent in a separate container with governance middleware inside for defense-in-depth (CC6.7).
 4. Add network policies for cross-agent communication control (CC6.6).
@@ -225,7 +225,7 @@ slo = SLO(
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| PI1.1 Input validation | PolicyEvaluator validates every action against declarative rules before execution | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` | ✅ Covered |
+| PI1.1 Input validation | AgtRuntime validates every action against declarative rules before execution | `agent-governance-python/agt-policies/src/agt/policies/runtime.py` | ✅ Covered |
 | PI1.1 Blocked patterns | Substring, regex, and glob pattern blocking on tool arguments | `agent-governance-python/agent-os/src/agent_os/integrations/base.py:695-701` | ✅ Covered |
 | PI1.1 Input sanitization | Command injection detection, shell metacharacter blocking, base64 payload decoding | `agent-governance-python/agent-os/src/agent_os/prompt_injection.py:548-563` | ✅ Covered |
 | PI1.2 Processing completeness | Saga orchestration tracks multi-step workflows with checkpoint_frequency | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` | ⚠️ Partial |
@@ -272,7 +272,7 @@ assert entry.previous_hash != "" or log.entries.index(entry) == 0
 1. ~~**Fix DeltaEngine `verify_chain()` stub**~~ — **Done.** Now performs real SHA-256 chain verification.
 2. **Fix FlightRecorder hash** — compute hash over final state including resolved verdict, not INSERT-time state.
 3. Wire anomaly detections into the tamper-evident audit chain.
-4. Add `GovernancePolicy.block_on_drift` flag to enable enforcement in `post_execute()`.
+4. Add `AgtRuntime.block_on_drift` flag to enable enforcement in `post_execute()`.
 5. Use only `MerkleAuditChain` (the sound implementation) for SOC 2 audit evidence until other implementations are fixed.
 
 ---
@@ -292,7 +292,7 @@ assert entry.previous_hash != "" or log.entries.index(entry) == 0
 | C1.2 Cryptographic identity | Ed25519 key pairs for agent identity; DID format `did:agentmesh:{agentId}:{fingerprint}` | `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py` | ✅ Covered |
 | C1.2 Signed audit | HMAC-SHA256 signatures on audit entries for tamper detection | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py:61-87` | ⚠️ Partial |
 | C1.2 Channel encryption | IATP (Inter-Agent Trust Protocol) provides encrypted inter-agent communication channels | `agent-governance-python/agent-os/modules/iatp/` | ⚠️ Partial |
-| C1.3 Data disposal | `retention_days` field in policy schema (default 90, minimum 1) | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json:215-218` | ❌ Declaration only |
+| C1.3 Data disposal | `retention_days` field in policy schema (default 90, minimum 1) | `policy-engine/spec/schema/manifest.schema.json:215-218` | ❌ Declaration only |
 
 ```python
 # C1.2 in action: Egress Policy with Default-Deny
@@ -341,7 +341,7 @@ assert policy.is_allowed("api.openai.com")              # Allowed
 | P1 Notice | No privacy notice mechanism | — | ❌ Gap |
 | P2 Choice and consent | No consent management | — | ❌ Gap |
 | P3 Collection limitation | `blocked_patterns` can restrict sensitive data in tool arguments (regex, substring, glob) | `agent-governance-python/agent-os/src/agent_os/integrations/base.py:695-701` | ⚠️ Partial — tool arguments only |
-| P4 Use, retention, disposal | `retention_days` schema field (default 90, minimum 1) — declaration only, not enforced at runtime | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json:215-218` | ❌ Gap |
+| P4 Use, retention, disposal | `retention_days` schema field (default 90, minimum 1) — declaration only, not enforced at runtime | `policy-engine/spec/schema/manifest.schema.json:215-218` | ❌ Gap |
 | P5 Access | No data subject access request (DSAR) support | — | ❌ Gap |
 | P6 Disclosure and notification | PII detection: 2 regex patterns (SSN, credit card) block matching tool parameters | `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py:34-42` | ⚠️ Partial |
 | P6 Egress controls | Domain-level egress filtering prevents data exfiltration to unauthorized domains | `agent-governance-python/agent-os/src/agent_os/egress_policy.py:113-139` | ⚠️ Partial |
@@ -368,7 +368,7 @@ assert policy.is_allowed("api.openai.com")              # Allowed
 3. Apply PII scanning to LLM outputs via `post_execute()` or a dedicated output interceptor.
 4. Deploy dedicated privacy management tooling (e.g., OneTrust, BigID, Transcend) for consent, DSAR, and data mapping.
 5. Enforce `retention_days` at runtime with automated log deletion.
-6. Add `GovernancePolicy.data_classification` metadata to categorize agents by data sensitivity.
+6. Add `AgtRuntime.data_classification` metadata to categorize agents by data sensitivity.
 7. Document the scope boundary: the toolkit governs agent actions, not personal data lifecycle management.
 
 ---
@@ -381,8 +381,8 @@ All file paths referenced in this document, organized by package:
 | File | Evidence For |
 |------|-------------|
 | `src/agent_os/policies/evaluator.py` | CC5.1, PI1.1 — Policy evaluation engine |
-| `src/agent_os/policies/schema.py:34-115` | CC5.2, CC7.2 — PolicyDocument, PolicyRule, PolicyAction |
-| `src/agent_os/integrations/base.py:689-1038` | CC5.2, CC6.1, PI1.1, PI1.3 — GovernancePolicy, PolicyInterceptor, drift detection |
+| `src/agent_os/policies/schema.py:34-115` | CC5.2, CC7.2 — AgtManifest, PolicyRule, PolicyEvaluation |
+| `src/agent_os/integrations/base.py:689-1038` | CC5.2, CC6.1, PI1.1, PI1.3 — AgtRuntime, NativeAdapterRuntime, drift detection |
 | `src/agent_os/integrations/rbac.py:16-144` | CC6.1, C1.2 — RBAC roles, permissions, YAML serialization |
 | `src/agent_os/integrations/escalation.py:48-583` | CC7.4 — Escalation system, approval backends, quorum, fatigue detection |
 | `src/agent_os/audit_logger.py:19-136` | CC7.1 — GovernanceAuditLogger, pluggable backends |

@@ -83,43 +83,21 @@ agent-governance verify --badge
 创建一个名为 `governed_agent.py` 的文件：
 
 ```python
-from agent_os.policies import PolicyEvaluator, PolicyDecision
-from agent_os.policies.schema import (
-    PolicyDocument, PolicyRule, PolicyCondition,
-    PolicyAction, PolicyOperator, PolicyDefaults,
+from agt.policies import AdapterRuntimeSession, AgtRuntime
+
+runtime = AgtRuntime("policies/manifest.yaml")
+session = AdapterRuntimeSession(
+    runtime,
+    agent_id="quickstart-agent",
+    session_id="quickstart-session",
 )
 
-# 内联定义治理规则（或从 YAML 加载 — 见下文）
-policy = PolicyDocument(
-    name="agent-safety",
-    version="1.0",
-    description="示例安全策略",
-    defaults=PolicyDefaults(action=PolicyAction.ALLOW),
-    rules=[
-        PolicyRule(
-            name="block-dangerous-tools",
-            condition=PolicyCondition(
-                field="tool_name",
-                operator=PolicyOperator.IN,
-                value=["execute_code", "delete_file", "shell_exec"],
-            ),
-            action=PolicyAction.DENY,
-            message="工具被策略阻止",
-            priority=100,
-        ),
-    ],
+result = session.evaluate_pre_tool_call(
+    tool_name="delete_file",
+    args={"path": "/etc/passwd"},
 )
-
-evaluator = PolicyEvaluator(policies=[policy])
-
-# 允许
-result = evaluator.evaluate({"tool_name": "web_search", "input_text": "latest AI news"})
-print(f"操作允许: {result.allowed}")   # True
-
-# 阻止 — 确定性
-result = evaluator.evaluate({"tool_name": "delete_file", "input_text": "/etc/passwd"})
-print(f"操作允许: {result.allowed}")   # False
-print(f"原因: {result.reason}")       # "工具被策略阻止"
+print(result.verdict)
+print(result.reason_code)
 ```
 
 运行：

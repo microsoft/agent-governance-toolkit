@@ -83,104 +83,21 @@ agt verify --badge
 `governed_agent.py` 파일을 생성합니다.
 
 ```python
-from agent_os.policies import PolicyEvaluator
-from agent_os.policies.schema import (
-    PolicyDocument, PolicyRule, PolicyCondition,
-    PolicyAction, PolicyOperator, PolicyDefaults,
+from agt.policies import AdapterRuntimeSession, AgtRuntime
+
+runtime = AgtRuntime("policies/manifest.yaml")
+session = AdapterRuntimeSession(
+    runtime,
+    agent_id="research-agent",
+    session_id="quickstart-session",
 )
 
-# --- 1단계: 에이전트 도구(tool) 정의 ---
-
-def web_search(query: str) -> str:
-    """웹 검색 도구 시뮬레이션"""
-    return f"검색 결과: {query}"
-
-def delete_file(path: str) -> str:
-    """위험한 도구 — 정책에 의해 차단되어야 함"""
-    return f"삭제됨: {path}"
-
-TOOLS = {
-    "web_search": web_search,
-    "delete_file": delete_file,
-}
-
-# --- 2단계: 거버넌스 정책 정의 ---
-
-policy = PolicyDocument(
-    name="agent-safety",
-    version="1.0",
-    description="연구용 에이전트를 위한 안전 정책",
-    defaults=PolicyDefaults(action=PolicyAction.ALLOW),
-    rules=[
-        PolicyRule(
-            name="block-dangerous-tools",
-            condition=PolicyCondition(
-                field="tool_name",
-                operator=PolicyOperator.IN,
-                value=["delete_file", "shell_exec", "execute_code"],
-            ),
-            action=PolicyAction.DENY,
-            message="안전 정책에 의해 도구가 차단되었습니다.",
-            priority=100,
-        ),
-        PolicyRule(
-            name="block-ssn-patterns",
-            condition=PolicyCondition(
-                field="input_text",
-                operator=PolicyOperator.MATCHES,
-                value=r"\b\d{3}-\d{2}-\d{4}\b",
-            ),
-            action=PolicyAction.DENY,
-            message="개인정보에 해당하는 사회보장번호(SSN) 패턴 감지 — 차단됨",
-            priority=90,
-        ),
-    ],
+result = session.evaluate_pre_tool_call(
+    tool_name="delete_file",
+    args={"path": "/etc/passwd"},
 )
-
-evaluator = PolicyEvaluator(policies=[policy])
-
-# --- 3단계: 거버넌스 에이전트 구축 ---
-
-class GovernedAgent:
-    """모든 도구(Tool) 호출 전에 정책을 확인하는 간단한 에이전트"""
-
-    def __init__(self, name, tools, evaluator):
-        self.name = name
-        self.tools = tools
-        self.evaluator = evaluator
-
-    def call_tool(self, tool_name: str, params: dict) -> str:
-        # 실행관련 사전 정책 확인 (Pre-execution check)
-        decision = self.evaluator.evaluate({
-            "tool_name": tool_name,
-            "input_text": str(params),
-            "agent_id": self.name,
-        })
-
-        if not decision.allowed:
-            print(f"  ✗ 차단됨: {decision.reason}")
-            return f"[차단됨] {decision.reason}"
-
-        # 도구 실행
-        print(f"  ✓ 허용됨: {tool_name}")
-        tool_fn = self.tools[tool_name]
-        return tool_fn(**params)
-
-# --- 4단계: 실행 ---
-
-agent = GovernedAgent("research-agent", TOOLS, evaluator)
-
-print("에이전트: 웹 검색 중...")
-result = agent.call_tool("web_search", {"query": "최신 AI 거버넌스 뉴스"})
-print(f"  결과: {result}\n")
-
-print("에이전트: 파일 삭제 시도 중...")
-result = agent.call_tool("delete_file", {"path": "/etc/passwd"})
-print(f"  결과: {result}\n")
-
-print("에이전트: 쿼리에 SSN을 포함하여 검색 중...")
-result = agent.call_tool("web_search", {"query": "lookup 123-45-6789"})
-print(f"  결과: {result}")
+print(result.verdict)
+print(result.reason_code)
 ```
 
 실행 결과 확인:
@@ -192,17 +109,8 @@ python governed_agent.py
 예상 출력:
 
 ```
-에이전트: 웹 검색 중...
-  ✓ 허용됨: web_search
-  결과: 검색 결과: 최신 AI 거버넌스 뉴스
-
-에이전트: 파일 삭제 시도 중...
-  ✗ 차단됨: 안전 정책에 의해 도구가 차단되었습니다.
-  결과: [차단됨] 안전 정책에 의해 도구가 차단되었습니다.
-
-에이전트: 쿼리에 SSN을 포함하여 검색 중...
-  ✗ 차단됨: 사회보장번호(SSN) 패턴 감지 — 차단됨
-  결과: [차단됨] 사회보장번호(SSN) 패턴 감지 — 차단됨
+deny
+policy:<reason-code>
 ```
 
 거버넌스 레이어는 실행 전 **모든 도구 호출**을 가로챕니다. 따라서 에이전트가 `delete_file`을 실행하거나 개인 정보(PII)를 유출할 수 없습니다.
@@ -212,13 +120,9 @@ python governed_agent.py
 실무 환경에서는 인라인 코드 대신 YAML 파일로 정책을 정의하세요.
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agt.policies import AgtRuntime
 
-evaluator = PolicyEvaluator()
-evaluator.load_policies("policies/")   # 모든 *.yaml 파일을 로드합니다.
-
-result = evaluator.evaluate({"tool_name": "web_search", "agent_id": "analyst-1"})
-print(f"허용 여부: {result.allowed}")
+runtime = AgtRuntime("policies/manifest.yaml")
 ```
 
 ### 첫 번째 거버넌스 에이전트 — TypeScript
@@ -265,24 +169,11 @@ Console.WriteLine($"Allowed: {result.Allowed}");  // False
 이 툴킷은 주요한 에이전트 프레임워크와 연동이 가능합니다. 다음은 LangChain 예시입니다.
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agt.policies import AgtRuntime
+from agent_os.integrations.langchain_adapter import LangChainKernel
 
-# 거버넌스 정책 로드
-evaluator = PolicyEvaluator()
-evaluator.load_policies("policies/")
-
-# 프레임워크의 모든 도구 호출 전 평가 수행
-decision = evaluator.evaluate({
-    "agent_id": "langchain-agent-1",
-    "tool_name": "web_search",
-    "action": "tool_call",
-})
-
-if decision.allowed:
-    # LangChain 도구 호출 진행
-    result = your_langchain_agent.run(...)
-else:
-    print(f"차단됨: {decision.reason}")
+runtime = AgtRuntime("policies/manifest.yaml")
+kernel = LangChainKernel(runtime=runtime)
 ```
 
 심화된 연동 구현을 위해 프레임워크별 전용 어댑터를 사용할 수 있습니다.

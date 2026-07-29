@@ -45,7 +45,7 @@ to build governed agents in any language:
 
 | Primitive | What It Does | Python | TS | .NET | Rust | Go |
 |---|---|---|---|---|---|---|
-| Policy evaluation | Evaluate actions against rules before execution | `PolicyEvaluator` | `PolicyEngine` | `PolicyEngine` | `PolicyEngine` | `PolicyEngine` |
+| Policy evaluation | Evaluate actions against rules before execution | `AgtRuntime` | `PolicyEngine` | `PolicyEngine` | `AgentControl` | `PolicyEngine` |
 | Agent identity | Cryptographic credentials | `AgentIdentity` | `AgentIdentity` | `AgentIdentity` (.NET 8 compatibility signing, delegation, JWK/JWKS, DID docs) | `Identity` | `AgentIdentity` |
 | Trust scoring | 0–1000 score based on behavior | `TrustEngine` | `TrustEngine` | `TrustStore` | `TrustEngine` | `TrustManager` |
 | Audit logging | Append-only action log | `AuditLogger` | `AuditLogger` | `AuditLogger` | `AuditLogger` | `AuditLogger` |

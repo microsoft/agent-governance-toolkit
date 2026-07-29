@@ -1,3 +1,9 @@
+---
+title: Prompt Injection Detection
+last_reviewed: 2026-07-12
+owner: docs-team
+---
+
 # Tutorial 09 — Prompt Injection Detection & Input Security
 
 > **Package:** `agent-os-kernel` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
@@ -713,20 +719,14 @@ interceptor and reports which attacks succeed.
 ```python
 from agent_os.adversarial import (
     AdversarialEvaluator,
-    AttackVector,
-    AttackCategory,
 )
-from agent_os.integrations.base import GovernancePolicy
-from agent_os.integrations.maf_adapter import PolicyInterceptor
+from agent_os.integrations.base import CompositeInterceptor, ContentHashInterceptor
 
-# Set up a policy interceptor
-policy = GovernancePolicy(
-    max_tool_calls=10,
-    blocked_patterns=["rm -rf", "DROP TABLE", "ignore.*instructions"],
+# Exercise host-side tool integrity controls.
+interceptor = CompositeInterceptor(
+    interceptors=[ContentHashInterceptor(strict=True)]
 )
-interceptor = PolicyInterceptor(policy)
 
-# Run built-in attack suite (8 vectors)
 evaluator = AdversarialEvaluator(interceptor)
 report = evaluator.evaluate()
 
@@ -735,6 +735,8 @@ print(f"Passed: {report.passed}")       # attacks correctly blocked
 print(f"Failed: {report.failed}")       # attacks that got through!
 print(f"Risk score: {report.risk_score:.0%}")  # failed / total
 ```
+
+Use `agt test` separately to replay native ACS policy fixtures.
 
 ### Built-in Attack Vectors
 
@@ -799,49 +801,27 @@ indicates gaps in your policy that need addressing.
 ## Integration with Policy Engine
 
 The prompt injection detector works alongside the YAML-based policy engine
-described in [Tutorial 01 — Policy Engine](./01-policy-engine.md). You can
+described in Tutorial 01 — Policy Engine. You can
 combine pattern-based blocking policies with runtime injection detection.
 
 ### Policy-Level Pattern Blocking
 
-Block injection patterns directly in your YAML policy:
+Bind injection policy to the native input intervention point:
 
 ```yaml
-# policies/input-security.yaml
-version: "1.0"
-name: input-security
-description: Block common injection patterns at the policy layer
-
-rules:
-  - name: block-instruction-override
-    condition:
-      field: message
-      operator: matches
-      value: "(?i)ignore\\s+(all\\s+)?previous\\s+instructions"
-    action: block
-    priority: 100
-    message: Prompt injection attempt detected — instruction override
-
-  - name: block-role-play-jailbreak
-    condition:
-      field: message
-      operator: matches
-      value: "(?i)(pretend|act)\\s+.*\\b(no\\s+restrictions|unrestricted|DAN)"
-    action: block
-    priority: 99
-    message: Jailbreak attempt detected — role-play attack
-
-  - name: block-delimiter-injection
-    condition:
-      field: message
-      operator: matches
-      value: "<\\|im_start\\|>|\\[INST\\]|<<SYS>>"
-    action: block
-    priority: 98
-    message: Chat-format delimiter injection detected
-
-defaults:
-  action: allow
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: input-security
+extends: []
+policies:
+  prompt-safety:
+    type: rego
+    bundle: ./prompt-safety
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: prompt-safety
 ```
 
 ### Combining Policy + Detector
@@ -850,12 +830,15 @@ For best coverage, use both: the policy engine for known patterns and the
 detector for deeper heuristic analysis.
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agt.policies import AdapterRuntimeSession, AgtRuntime
 from agent_os.prompt_injection import PromptInjectionDetector, DetectionConfig
 
-# Layer 1: Policy-based blocking
-evaluator = PolicyEvaluator()
-evaluator.load_policies("./policies/")
+runtime = AgtRuntime("policies/input-security.yaml")
+session = AdapterRuntimeSession(
+    runtime,
+    agent_id="input-guard",
+    session_id="input-session",
+)
 
 # Layer 2: Heuristic injection detection
 detector = PromptInjectionDetector(
@@ -865,9 +848,9 @@ detector = PromptInjectionDetector(
 def check_input(user_input: str) -> tuple[bool, str]:
     """Two-layer input validation."""
     # Policy check
-    decision = evaluator.evaluate({"message": user_input})
-    if not decision.allowed:
-        return False, f"Policy blocked: {decision.reason}"
+    decision = session.evaluate_input(body=user_input)
+    if not decision.is_allowed():
+        return False, decision.public_error_message()
 
     # Injection detection
     result = detector.detect(user_input, source="user")
@@ -1043,8 +1026,8 @@ assert report.risk_score == 0.0, f"Gaps found: {report.failed} attacks succeeded
 
 ## Next Steps
 
-- **[Tutorial 01 — Policy Engine](./01-policy-engine.md):** Learn the YAML
-  policy syntax and `PolicyEvaluator` API to define declarative governance
+- **Tutorial 01 — Policy Engine:** Learn the YAML
+  policy syntax and `AgtRuntime` API to define declarative governance
   rules.
 - **[Tutorial 02 — Trust & Identity](./02-trust-and-identity.md):** Set up
   trust roots and supervisor hierarchies that complement injection detection
@@ -1076,7 +1059,7 @@ assert report.risk_score == 0.0, f"Gaps found: {report.failed} attacks succeeded
 | Security Skills | `agent-governance-python/agent-os/src/agent_os/security_skills.py` |
 | Prompt injection tests | `agent-governance-python/agent-os/tests/test_prompt_injection.py` |
 | Memory guard tests | `agent-governance-python/agent-os/tests/test_memory_guard.py` |
-| Adversarial tests | `agent-governance-python/agent-os/tests/test_adversarial.py` |
+| Adversarial tests | `agent-governance-python/agent-os/tests/test_prompt_injection.py` |
 | Conversation guardian tests | `agent-governance-python/agent-os/tests/test_conversation_guardian.py` |
 | Escalation tests | `agent-governance-python/agent-os/tests/test_escalation.py` |
 

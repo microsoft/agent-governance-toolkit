@@ -212,16 +212,16 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 ```bash
 # フルガバナンスデモ（ポリシー適用、監査、トラスト、コスト、信頼性）
-python examples/demos/maf_governance_demo.py
+python examples/maf-integration/01-loan-processing/python/main.py
 
 # 敵対的攻撃シナリオを含めて実行
-python examples/demos/maf_governance_demo.py --include-attacks
+python examples/maf-integration/01-loan-processing/python/main.py --include-attacks
 ```
 
 ## その他のサンプルと例
 
 - **[フレームワーククイックスタート](../../examples/quickstart/)** — LangChain、CrewAI、AutoGen、OpenAI Agents、Google ADK 向けの単一ファイルガバナンス付きエージェント
-- **[チュートリアル 1: Policy Engine](../../docs/tutorials/01-policy-engine.md)** — ガバナンスポリシーの定義と適用
+- **チュートリアル 1: Policy Engine** — ガバナンスポリシーの定義と適用
 - **[チュートリアル 2: Trust & Identity](../../docs/tutorials/02-trust-and-identity.md)** — ゼロトラストエージェント資格情報
 - **[チュートリアル 3: Framework Integrations](../../docs/tutorials/03-framework-integrations.md)** — 任意のフレームワークにガバナンスを追加
 - **[チュートリアル 4: Audit & Compliance](../../docs/tutorials/04-audit-and-compliance.md)** — OWASP コンプライアンスとアテステーション
@@ -235,33 +235,23 @@ python examples/demos/maf_governance_demo.py --include-attacks
 ### OPA/Rego (Agent OS)
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agt.policies import AdapterRuntimeSession, AgtRuntime
 
-evaluator = PolicyEvaluator()
-evaluator.load_rego(rego_content="""
-package agentos
-default allow = false
-allow { input.tool_name == "web_search" }
-allow { input.role == "admin" }
-""")
-
-decision = evaluator.evaluate({"tool_name": "web_search", "role": "analyst"})
-# decision.allowed == True
+runtime = AgtRuntime("policies/rego-manifest.yaml")
+session = AdapterRuntimeSession(
+    runtime, agent_id="agent-1", session_id="session-1"
+)
+decision = session.evaluate_pre_tool_call(
+    tool_name="web_search", args={"query": "status"}
+)
 ```
 
 ### Cedar (Agent OS)
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agt.policies import AgtRuntime
 
-evaluator = PolicyEvaluator()
-evaluator.load_cedar(policy_content="""
-permit(principal, action == Action::"ReadData", resource);
-forbid(principal, action == Action::"DeleteFile", resource);
-""")
-
-decision = evaluator.evaluate({"tool_name": "read_data", "agent_id": "agent-1"})
-# decision.allowed == True
+runtime = AgtRuntime("policies/cedar-manifest.yaml")
 ```
 
 ### AgentMesh OPA/Cedar
