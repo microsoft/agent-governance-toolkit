@@ -8,6 +8,7 @@ import { checkArbitraryText, getPolicyStatus, loadPolicy } from "../lib/policy.m
 
 const VERSION = "3.6.0";
 const PROTOCOL_VERSION = "2024-11-05";
+const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
 const TOOL_DEFINITIONS = [
   {
     name: "agt_policy_status",
@@ -149,52 +150,54 @@ function jsonRpcError(id, code, message) {
 
 async function startServer() {
   const state = await loadPolicy();
-  let buffer = "";
+  let buffer = Buffer.alloc(0);
 
-  process.stdin.setEncoding("utf8");
-  process.stdin.on("data", async (chunk) => {
-    buffer += chunk;
+  for await (const chunk of process.stdin) {
+    buffer = Buffer.concat([buffer, chunk]);
     try {
       buffer = await drainBuffer(state, buffer);
     } catch (error) {
       const response = jsonRpcError(null, -32603, error instanceof Error ? error.message : String(error));
       process.stdout.write(encodeJsonRpcMessage(response));
-      buffer = "";
+      buffer = Buffer.alloc(0);
     }
-  });
+  }
 }
 
 async function drainBuffer(state, buffer) {
   let remaining = buffer;
 
   while (remaining.length > 0) {
-    const headerEnd = remaining.indexOf("\r\n\r\n");
+    const headerEnd = remaining.indexOf(HEADER_SEPARATOR);
     if (headerEnd >= 0) {
-      const headerBlock = remaining.slice(0, headerEnd);
+      const headerBlock = remaining.subarray(0, headerEnd).toString("utf8");
       const lengthMatch = /Content-Length:\s*(\d+)/i.exec(headerBlock);
       if (!lengthMatch) {
         throw new Error("Missing Content-Length header");
       }
 
-      const bodyStart = headerEnd + 4;
+      const bodyStart = headerEnd + HEADER_SEPARATOR.length;
       const bodyLength = Number(lengthMatch[1]);
       if (remaining.length < bodyStart + bodyLength) {
         return remaining;
       }
 
-      const body = remaining.slice(bodyStart, bodyStart + bodyLength);
-      remaining = remaining.slice(bodyStart + bodyLength);
+      const body = remaining.subarray(bodyStart, bodyStart + bodyLength).toString("utf8");
+      remaining = remaining.subarray(bodyStart + bodyLength);
       await respondToBody(state, body);
       continue;
     }
 
-    const newlineIndex = remaining.indexOf("\n");
+    const newlineIndex = remaining.indexOf(0x0a);
     if (newlineIndex < 0) {
       return remaining;
     }
 
-    const line = remaining.slice(0, newlineIndex).trim();
-    remaining = remaining.slice(newlineIndex + 1);
+    const line = remaining.subarray(0, newlineIndex).toString("utf8").trim();
+    if (/^\s*Content-Length:\s*\d+\s*$/i.test(line)) {
+      return remaining;
+    }
+    remaining = remaining.subarray(newlineIndex + 1);
     if (line.length === 0) {
       continue;
     }
