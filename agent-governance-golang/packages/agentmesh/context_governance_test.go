@@ -255,6 +255,9 @@ func TestDecideNextContextFloorGatesFlowActionWithoutExplicitRestriction(t *test
 	if decision.PolicyDecision(false) != Deny {
 		t.Fatalf("policy decision = %q, want deny", decision.PolicyDecision(false))
 	}
+	if decision.PolicyDecision(true) != Deny {
+		t.Fatalf("policy decision with empty obligation channel = %q, want deny", decision.PolicyDecision(true))
+	}
 }
 
 func TestDecideNextContextEscalatesUnknownCombinations(t *testing.T) {
