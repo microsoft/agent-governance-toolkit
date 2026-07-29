@@ -289,8 +289,8 @@ pub fn decide_next(
         "memory_write" => Some("no_memory_write"),
         _ => None,
     };
-    let restriction_present =
-        gating_restriction.is_some_and(|restriction| envelope.restrictions.contains(restriction));
+    let restriction_present = gating_restriction
+        .is_some_and(|restriction| aggregation.restrictions.contains(restriction));
     let floor_triggered =
         gating_restriction.is_some() && aggregation.aggregate_sensitivity >= restricted_floor;
 
@@ -306,7 +306,7 @@ pub fn decide_next(
         return ContextDecision {
             outcome: ContextOutcome::Constrain,
             obligations: ObligationSet {
-                obligations: envelope
+                obligations: aggregation
                     .restrictions
                     .iter()
                     .map(|restriction| Obligation {
@@ -511,6 +511,32 @@ mod tests {
         let floor_decision =
             decide_next(&floor, "delegate", &[], 99, DataClassification::Restricted);
         assert_eq!(floor_decision.outcome, ContextOutcome::Constrain);
+    }
+
+    #[test]
+    fn rule_implied_restrictions_gate_without_prior_accumulation() {
+        let rules = [aggregation_rule()];
+        let envelope = ContextEnvelope::new("env-1", "workflow-1")
+            .fold(["pii", "financial"], DataClassification::Internal);
+
+        assert!(envelope.restrictions().is_empty());
+
+        let decision = decide_next(
+            &envelope,
+            "export",
+            &rules,
+            3,
+            DataClassification::TopSecret,
+        );
+
+        assert_eq!(decision.outcome, ContextOutcome::Constrain);
+        assert_eq!(
+            decision.obligations.obligations,
+            vec![Obligation {
+                key: "no_external_export".to_string(),
+                satisfied: false,
+            }]
+        );
     }
 
     #[test]
