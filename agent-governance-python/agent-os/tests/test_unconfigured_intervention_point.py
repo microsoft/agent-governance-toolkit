@@ -169,6 +169,9 @@ class TestPostExecuteHonoursIt:
 
         assert allowed is False
         assert reason == "transform_not_applicable"
+        # Recording completion here would charge the budget and seed the drift
+        # baseline from output the caller is being told not to use.
+        assert adapter.completed == []
 
     def test_allow_passes_and_records_completion(self):
         adapter = _adapter(NativeAdapterResult(_Evaluation(True)))

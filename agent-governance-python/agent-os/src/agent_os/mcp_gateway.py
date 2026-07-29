@@ -455,6 +455,19 @@ class MCPGateway:
             args=params,
             call_id=f"mcp-{context.call_count + 1}",
         )
+        # A transform permits, but it permits a rewritten call and carries the
+        # replacement. This gate answers with a bool, so it has nowhere to put
+        # one; permitting would forward the original arguments while the policy
+        # believed they were rewritten. Refuse instead, as the sandbox
+        # providers do.
+        if evaluation.transform is not None:
+            return (
+                False,
+                "Runtime returned a transform the MCP gateway cannot apply to "
+                f"tool arguments (reason={evaluation.reason or evaluation.verdict})",
+                None,
+                "runtime",
+            )
         if not evaluation.allowed:
             return False, evaluation.reason or "Runtime denied tool call", None, "runtime"
 

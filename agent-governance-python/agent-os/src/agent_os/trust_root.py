@@ -44,6 +44,19 @@ class TrustRoot:
             args=arguments,
             call_id=f"trust-{self._context.call_count + 1}",
         )
+        # TrustDecision carries no replacement, so a transform cannot be
+        # honoured here. Reporting it as allowed would let the caller run the
+        # original action while the policy believed it was rewritten, and this
+        # is the final authority, so it fails closed instead.
+        if result.transform is not None:
+            return TrustDecision(
+                allowed=False,
+                reason=(
+                    "runtime returned a transform the trust root cannot apply "
+                    f"({result.reason or result.verdict})"
+                ),
+                authority="native-runtime",
+            )
         if result.allowed:
             self._context.call_count += 1
         return TrustDecision(
