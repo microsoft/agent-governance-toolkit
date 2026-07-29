@@ -59,6 +59,11 @@ intervention_points:
     tool_name_from: $.tool_call.name
     policy:
       id: scenario_policy
+  output:
+    policy_target: $.response.content
+    policy_target_kind: assistant_output
+    policy:
+      id: scenario_policy
 tools:
   get_weather:
     clearance: public
@@ -143,14 +148,21 @@ def test_generate_content_allow_path_forwards_to_gemini(tmp_path: Path) -> None:
 
     gemini_mod._HAS_GENAI = True
 
-    runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
+    runtime, policy = _build_runtime(
+        tmp_path,
+        [
+            {"decision": "allow"},  # input
+            {"decision": "allow"},  # output (post-execute)
+        ],
+    )
     kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
     governed.generate_content("what is the weather today?")
 
-    assert len(policy.invocations) == 1
+    # The manifest binds input and output, so the adapter evaluates both.
+    assert len(policy.invocations) == 2
     model.generate_content.assert_called_once()
     sent = model.generate_content.call_args.args
     assert sent[0] == "what is the weather today?"
@@ -201,7 +213,8 @@ def test_generate_content_transform_path_redacts_outbound_prompt(tmp_path: Path)
                     "path": "$policy_target",
                     "value": "Customer SSN is [REDACTED]",
                 },
-            }
+            },
+            {"decision": "allow"},  # output (post-execute)
         ],
     )
     kernel = GeminiKernel(runtime=runtime)
@@ -234,7 +247,10 @@ def test_generate_content_escalate_with_approving_resolver_forwards(
 
     runtime, _policy = _build_runtime(
         tmp_path,
-        [{"decision": "escalate", "reason": "human_approval_required"}],
+        [
+            {"decision": "escalate", "reason": "human_approval_required"},
+            {"decision": "allow"},  # output (post-execute)
+        ],
         approval_resolver=resolver,
     )
     kernel = GeminiKernel(runtime=runtime)
@@ -257,7 +273,10 @@ def test_generate_content_escalate_with_no_resolver_denies(tmp_path: Path) -> No
 
     runtime, _policy = _build_runtime(
         tmp_path,
-        [{"decision": "escalate", "reason": "human_approval_required"}],
+        [
+            {"decision": "escalate", "reason": "human_approval_required"},
+            {"decision": "allow"},  # output (post-execute)
+        ],
         approval_resolver=None,
     )
     kernel = GeminiKernel(runtime=runtime)
@@ -292,6 +311,7 @@ def test_function_call_transform_rewrites_args(tmp_path: Path) -> None:
                     "value": {"city": "[REDACTED]"},
                 },
             },
+            {"decision": "allow"},  # output (post-execute)
         ],
     )
     kernel = GeminiKernel(runtime=runtime)

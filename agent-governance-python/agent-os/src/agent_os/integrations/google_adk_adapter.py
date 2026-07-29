@@ -560,7 +560,7 @@ class GoogleADKKernel(BaseIntegration):
             self._adapter_ctx,
             body=f"agent:{agent_name}",
         )
-        if not bridge_result.allowed:
+        if not bridge_result.permits_unchanged:
             error = self._raise_violation(bridge_result)
             return {"error": str(error)}
 
@@ -866,7 +866,7 @@ class GovernancePlugin(_PluginBase):  # type: ignore[misc]
 
         if text:
             result = self._kernel.evaluate_input(None, text)
-            if not result.allowed:
+            if not result.permits_unchanged:
                 self._kernel._record(
                     "user_message_blocked",
                     "plugin",

@@ -246,7 +246,7 @@ class LangGraphKernel(BaseIntegration):
         logger.debug("before_node_execution: node=%s", node_name)
 
         evaluation = self._adapter_runtime.evaluate_input(ctx, body=state)
-        if not evaluation.allowed:
+        if not evaluation.permits_unchanged:
             raise evaluation.to_policy_violation(PolicyViolationError)
 
         # ── 3. Audit record ──────────────────────────────────────────
@@ -280,7 +280,7 @@ class LangGraphKernel(BaseIntegration):
             args=tool_input,
             call_id=f"langgraph-{ctx.call_count + 1}",
         )
-        if not evaluation.allowed:
+        if not evaluation.permits_unchanged:
             raise evaluation.to_policy_violation(PolicyViolationError)
         ctx.call_count += 1
 

@@ -338,7 +338,7 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             evaluation = self._kernel._adapter_runtime.evaluate_input(
                 ctx, body=input_text
             )
-            if not evaluation.allowed:
+            if not evaluation.permits_unchanged:
                 raise evaluation.to_policy_violation(PolicyViolationError)
 
         trusted_skill_sources = self._kernel.trusted_sources(
@@ -397,7 +397,7 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             evaluation = self._kernel._adapter_runtime.evaluate_output(
                 ctx, content=output_str
             )
-            if not evaluation.allowed:
+            if not evaluation.permits_unchanged:
                 raise evaluation.to_policy_violation(PolicyViolationError)
 
         self._kernel._record_event(
@@ -470,7 +470,7 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             args=tool_args,
             call_id=f"openai-agents-{self._kernel._tool_call_count}",
         )
-        if not evaluation.allowed:
+        if not evaluation.permits_unchanged:
             raise evaluation.to_policy_violation(PolicyViolationError)
 
         self._kernel._record_event(
@@ -519,7 +519,7 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             result=result,
             call_id=f"openai-agents-{self._kernel._tool_call_count}",
         )
-        if not evaluation.allowed:
+        if not evaluation.permits_unchanged:
             raise evaluation.to_policy_violation(PolicyViolationError)
 
         self._kernel._record_event(

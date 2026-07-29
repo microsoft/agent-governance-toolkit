@@ -793,7 +793,7 @@ class GovernedPlan:
                     args=dict(kwargs),
                     call_id=f"sk-plan-{self._ctx.call_count + 1}",
                 )
-                if not result.allowed:
+                if not result.permits_unchanged:
                     raise result.to_policy_violation(PolicyViolationError)
 
         # Execute with signal checks

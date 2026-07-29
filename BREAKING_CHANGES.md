@@ -95,26 +95,26 @@ Elsewhere (8): `NoOpGovernanceMiddleware`, `NoOpPolicyEvaluator`,
 `evaluate_policy_cli` (`agent_marketplace.hooks`); `EvaluationResult`; and the
 `agt._harness.opa_runner` module.
 
-**An intervention point the manifest omits no longer behaves the same way**
+**A manifest must bind every intervention point the adapter evaluates**
 
 The bridge rewrote an unconfigured intervention point to an allow, so a
-manifest could bind nothing and every path ran ungoverned. The ACS runtime
-reports one as `runtime_error:intervention_point_unknown` instead, and the
-adapters now split on which point it is.
+manifest could bind nothing and every path still ran. The ACS runtime denies
+it instead, with reason `runtime_error:intervention_point_unknown`, and the
+adapters pass that denial through.
 
-The split is between points that gate an action and points that run after it.
+This bites on a minimal manifest. An adapter evaluates a fixed set of points:
+`input` on every call, `pre_tool_call` on every tool call, `output` after
+every response. A manifest binding only `input` therefore denies the tool and
+output paths, which reads as the adapter being broken.
 
-`input`, `pre_tool_call`, and `pre_model_call` deny. The action has not
-happened yet, so refusing still protects it, and omitting the binding omits
-governance of something about to happen. That has to be loud. A manifest that
-bound only one of these used to run the others ungoverned and now refuses
-them.
+Bind each point the adapter uses. The Rust guidance in
+`agent-governance-rust/agentmesh/MIGRATION_V5.md` says the same thing and
+shows the shape.
 
-`output`, `post_tool_call`, and `post_model_call` permit, and each warns once.
-The tool already ran and the model already answered, so refusing protects
-nothing and only breaks the caller. The adapter evaluates these after every
-call whether or not the manifest asked for them, so a denial would block every
-response rather than leave a gap. Bind them to enforce them.
+Do not read the reason as "no policy here, carry on". A `post_*` block still
+stops the result propagating even though the guarded action already ran, so
+permitting an unconfigured `output` or `post_tool_call` forwards model
+responses and tool results no policy was consulted about.
 
 **A tool-call budget now counts one call differently**
 

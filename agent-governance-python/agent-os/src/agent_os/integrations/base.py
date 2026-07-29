@@ -330,7 +330,11 @@ class BaseIntegration:
         """Evaluate host output and update lifecycle counters."""
 
         result = self._adapter_runtime.evaluate_output(state, content=output_data)
-        if result.allowed:
+        # ``allowed`` is true for a transform, but this contract cannot return
+        # the replacement, so the call below reports it as refused. Recording
+        # completion on that path would charge the budget and set the drift
+        # baseline from output the caller is being told not to use.
+        if result.permits_unchanged:
             self.record_host_completion(state, output_data=output_data)
         return self._tuple_for(result)
 

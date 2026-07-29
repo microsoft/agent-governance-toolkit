@@ -68,6 +68,11 @@ intervention_points:
     tool_name_from: $.tool_call.name
     policy:
       id: scenario_policy
+  output:
+    policy_target: $.response.content
+    policy_target_kind: assistant_output
+    policy:
+      id: scenario_policy
 tools:
   web_search:
     clearance: public
@@ -129,7 +134,13 @@ def test_chat_allow_path_forwards_to_mistral(tmp_path: Path) -> None:
     """An ``allow`` verdict lets the Mistral client see the original message."""
     from agent_os.integrations.mistral_adapter import MistralKernel
 
-    runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
+    runtime, policy = _build_runtime(
+        tmp_path,
+        [
+            {"decision": "allow"},  # input
+            {"decision": "allow"},  # output (post-execute)
+        ],
+    )
     kernel = MistralKernel(runtime=runtime)
     client = _make_client()
     governed = kernel.wrap(client)
@@ -139,7 +150,8 @@ def test_chat_allow_path_forwards_to_mistral(tmp_path: Path) -> None:
         messages=[{"role": "user", "content": "what is the weather today?"}],
     )
 
-    assert len(policy.invocations) == 1
+    # The manifest binds input and output, so the adapter evaluates both.
+    assert len(policy.invocations) == 2
     client.chat.assert_called_once()
     sent = client.chat.call_args.kwargs
     assert sent["messages"][0]["content"] == "what is the weather today?"
@@ -190,7 +202,8 @@ def test_chat_transform_path_redacts_outbound_content(tmp_path: Path) -> None:
                     "path": "$policy_target",
                     "value": "Customer SSN is [REDACTED]",
                 },
-            }
+            },
+            {"decision": "allow"},  # output (post-execute)
         ],
     )
     kernel = MistralKernel(runtime=runtime)
@@ -221,7 +234,10 @@ def test_chat_escalate_with_approving_resolver_forwards(tmp_path: Path) -> None:
 
     runtime, _policy = _build_runtime(
         tmp_path,
-        [{"decision": "escalate", "reason": "human_approval_required"}],
+        [
+            {"decision": "escalate", "reason": "human_approval_required"},
+            {"decision": "allow"},  # output (post-execute)
+        ],
         approval_resolver=resolver,
     )
     kernel = MistralKernel(runtime=runtime)
@@ -247,7 +263,10 @@ def test_chat_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
 
     runtime, _policy = _build_runtime(
         tmp_path,
-        [{"decision": "escalate", "reason": "human_approval_required"}],
+        [
+            {"decision": "escalate", "reason": "human_approval_required"},
+            {"decision": "allow"},  # output (post-execute)
+        ],
         approval_resolver=None,
     )
     kernel = MistralKernel(runtime=runtime)

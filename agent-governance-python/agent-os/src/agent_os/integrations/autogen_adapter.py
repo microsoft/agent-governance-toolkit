@@ -768,7 +768,7 @@ class AutoGenKernel(BaseIntegration):
                 result = kernel.evaluate_pre_tool_call(
                     ctx, tool_name=_name, args={"args": args, "kwargs": kwargs}
                 )
-                if not result.allowed:
+                if not result.permits_unchanged:
                     raise result.to_policy_violation(PolicyViolationError)
 
                 # Record the call
@@ -823,7 +823,7 @@ class AutoGenKernel(BaseIntegration):
                 kernel._groupchat_message_log.append(record)
 
                 evaluation = kernel.evaluate_input(ctx, speaker_name)
-                if not evaluation.allowed:
+                if not evaluation.permits_unchanged:
                     raise evaluation.to_policy_violation(PolicyViolationError)
 
                 logger.debug(
@@ -846,7 +846,7 @@ class AutoGenKernel(BaseIntegration):
                 ) -> Any:
                     message_str = str(args[0]) if args else str(kwargs)
                     evaluation = kernel.evaluate_input(ctx, message_str)
-                    if not evaluation.allowed:
+                    if not evaluation.permits_unchanged:
                         raise evaluation.to_policy_violation(PolicyViolationError)
 
                     kernel._groupchat_message_log.append({
@@ -893,7 +893,7 @@ class AutoGenKernel(BaseIntegration):
                         )
 
                 evaluation = kernel.evaluate_input(ctx, content)
-                if not evaluation.allowed:
+                if not evaluation.permits_unchanged:
                     raise evaluation.to_policy_violation(PolicyViolationError)
 
                 kernel._state_change_log.append({

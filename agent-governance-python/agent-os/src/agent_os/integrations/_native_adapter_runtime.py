@@ -4,12 +4,10 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-_LOGGER = logging.getLogger(__name__)
 
 
 class _ContextLike(Protocol):
@@ -55,9 +53,6 @@ class AdapterResult(Protocol):
     def enforced_identity(self) -> str | None:
         """Return the identity of the enforced action."""
 
-    def to_legacy_tuple(self) -> tuple[bool, str]:
-        """Return the temporary tuple compatibility shape."""
-
     @property
     def public_message(self) -> str:
         """Return the sanitized public policy message."""
@@ -100,10 +95,12 @@ class AdapterRuntime(Protocol):
 
 
 # The engine answers a request naming a point the manifest does not configure
-# with this reason. Failing closed is right for a request that names an
-# unknown point, but an adapter does not name points on the host's behalf: it
-# evaluates output after every call whether or not the manifest asked for
-# output governance. See ``permit_if_unconfigured``.
+# with this reason, and it does not permit. That is deliberate: an adapter
+# evaluates a fixed set of points, so a manifest that omits one is a
+# configuration gap rather than a decision to allow. A ``post_*`` block still
+# prevents the result propagating even though the action already ran, so
+# permitting here would forward tool output and model responses no policy was
+# consulted about. Bind every point the adapter evaluates.
 POINT_NOT_CONFIGURED = "runtime_error:intervention_point_unknown"
 
 
@@ -112,25 +109,20 @@ class NativeAdapterResult:
     """Adapter decision backed by the native ``PolicyEvaluation`` contract."""
 
     evaluation: Any
-    permit_if_unconfigured: bool = False
-    """Whether an unconfigured intervention point permits instead of denying.
-
-    Set only where the adapter evaluates on its own initiative rather than
-    because the host asked. It is set for ``output`` and deliberately not for
-    ``input`` or ``pre_tool_call``, which stay fail-closed: a manifest that
-    omits those omits governance of an action that is about to happen, and
-    that must be loud.
-    """
 
     @property
     def point_not_configured(self) -> bool:
-        """Whether the manifest leaves this intervention point unconfigured."""
+        """Whether the denial is only that the manifest omits this point.
+
+        Reported so a host can say which point is missing. It does NOT permit:
+        a ``post_*`` block stops the result propagating even though the action
+        already ran, so an unconfigured point that permitted would forward tool
+        output and model responses a policy was never consulted about.
+        """
         return self.reason == POINT_NOT_CONFIGURED
 
     @property
     def allowed(self) -> bool:
-        if self.permit_if_unconfigured and self.point_not_configured:
-            return True
         return bool(self.evaluation.is_allowed())
 
     @property
@@ -179,10 +171,16 @@ class NativeAdapterResult:
         return str(self.evaluation.public_error_message())
 
     def to_policy_violation(self, error_type: Any) -> Exception:
+        if self.transform is not None:
+            # Reached only from a site gating on ``permits_unchanged``. The
+            # verdict permits, so reporting its reason ("pii_redaction") would
+            # describe the policy rather than the problem, which is that this
+            # integration has nowhere to put the replacement.
+            return error_type(
+                "policy returned a transform this integration cannot apply, "
+                f"so the original value was refused (reason={self.reason})"
+            )
         return error_type.from_evaluation_result(self.evaluation)
-
-    def to_legacy_tuple(self) -> tuple[bool, str]:
-        return self.allowed, self.reason
 
 
 class NativeAdapterRuntime:
@@ -193,7 +191,6 @@ class NativeAdapterRuntime:
             raise TypeError("NativeAdapterRuntime requires AgtRuntime")
         self._runtime = runtime
         self._sessions: dict[str, Any] = {}
-        self._unconfigured_logged: set[str] = set()
 
     @property
     def runtime(self) -> Any:
@@ -277,7 +274,7 @@ class NativeAdapterRuntime:
             duration_ms=duration_ms,
             call_id=call_id,
         )
-        return self._post_hoc_result(evaluation, "post_tool_call")
+        return NativeAdapterResult(evaluation)
 
     def evaluate_pre_model_call(
         self,
@@ -315,7 +312,7 @@ class NativeAdapterRuntime:
             request_id=request_id,
             model_vendor=model_vendor,
         )
-        return self._post_hoc_result(evaluation, "post_model_call")
+        return NativeAdapterResult(evaluation)
 
     def evaluate_output(
         self,
@@ -328,29 +325,7 @@ class NativeAdapterRuntime:
             content=content if isinstance(content, str | dict) else str(content),
             message_chain=message_chain,
         )
-        return self._post_hoc_result(evaluation, "output")
-
-    def _post_hoc_result(self, evaluation: Any, point: str) -> NativeAdapterResult:
-        """Wrap a verdict for a point evaluated after the action happened.
-
-        A post-hoc point cannot prevent anything: the tool ran, the model
-        answered. Refusing an unconfigured one therefore protects nothing and
-        only breaks the caller, so it permits and says so. The pre-points keep
-        denying, because there the action has not happened yet.
-        """
-        result = NativeAdapterResult(evaluation, permit_if_unconfigured=True)
-        if result.point_not_configured and point not in self._unconfigured_logged:
-            self._unconfigured_logged.add(point)
-            _LOGGER.warning(
-                "manifest configures no '%s' intervention point; it is a "
-                "post-hoc point, so the value is forwarded without policy "
-                "evaluation (reason=%s). Bind '%s' in the manifest to "
-                "enforce it.",
-                point,
-                POINT_NOT_CONFIGURED,
-                point,
-            )
-        return result
+        return NativeAdapterResult(evaluation)
 
 __all__ = [
     "AdapterResult",
