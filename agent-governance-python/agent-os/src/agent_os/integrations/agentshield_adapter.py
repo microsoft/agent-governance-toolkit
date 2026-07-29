@@ -680,7 +680,14 @@ class AgentShieldKernel:
         exec_verdict = self._merge_bridge_verdict(exec_verdict, bridge_result)
 
         return ToolCallVerdict(
-            allowed=state_verdict.allowed and exec_verdict.allowed,
+            # Tool arguments are a dict, so a replacement of any other shape
+            # cannot be written into ``params``. Allowing the call would run
+            # the arguments the policy meant to rewrite.
+            allowed=(
+                state_verdict.allowed
+                and exec_verdict.allowed
+                and bridge_result.applies_to(dict)
+            ),
             state_verdict=state_verdict,
             execution_verdict=exec_verdict,
             tool_name=tool_name,

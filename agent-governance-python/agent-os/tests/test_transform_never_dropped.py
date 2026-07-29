@@ -245,3 +245,104 @@ def test_trust_root_refuses_a_transform_it_cannot_apply():
     assert decision.allowed is False, "trust root downgraded a transform to allow"
     assert "transform" in decision.reason.lower()
     assert root._context.call_count == 0, "a refused action must not be charged"
+
+
+# ── census 2: a replacement of the wrong shape must not fall through ──────
+
+
+def _guarded_applications():
+    """Every `if X.transform is not None and isinstance(V, T):` application.
+
+    A surface takes one shape. When the policy returns a replacement of
+    another shape, the guard is False and, unless something else catches it,
+    execution simply continues with the ORIGINAL value the policy meant to
+    rewrite. That is the same silent drop as ignoring the verdict, one level
+    down, and it is reachable: ACS allows a transform value to be any JSON
+    value, so a manifest can legitimately return a dict for a string target.
+    """
+    found = []
+    for path in sorted(SRC.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if "transform is not None" not in text:
+            continue
+        tree = ast.parse(text)
+        fns = [
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.If)
+                and isinstance(node.test, ast.BoolOp)
+                and isinstance(node.test.op, ast.And)
+                and len(node.test.values) == 2
+            ):
+                continue
+            left, right = node.test.values
+            if not (
+                isinstance(left, ast.Compare)
+                and isinstance(left.left, ast.Attribute)
+                and left.left.attr == "transform"
+            ):
+                continue
+            if not (
+                isinstance(right, ast.Call)
+                and isinstance(right.func, ast.Name)
+                and right.func.id == "isinstance"
+            ):
+                continue
+            enclosing = max(
+                (f for f in fns if f.lineno <= node.lineno <= (f.end_lineno or 0)),
+                key=lambda f: f.lineno,
+                default=None,
+            )
+            if enclosing is None:
+                continue
+            found.append(
+                (
+                    f"{path.relative_to(SRC)}:{node.lineno}",
+                    enclosing.name,
+                    _code_only(enclosing),
+                )
+            )
+    return found
+
+
+GUARDED = _guarded_applications()
+
+
+def test_the_second_census_found_the_guarded_applications():
+    assert len(GUARDED) > 10, f"census collapsed to {len(GUARDED)} applications"
+
+
+@pytest.mark.parametrize(
+    "where,funcname,body",
+    GUARDED,
+    ids=[f"{w}::{n}" for w, n, _ in GUARDED],
+)
+def test_a_replacement_of_the_wrong_shape_does_not_fall_through(
+    where, funcname, body
+):
+    """Each guarded application needs a path for the shape it cannot take.
+
+    ``applies_to`` folds the check into the deny branch the site already has;
+    an explicit refusal or an ``applied`` flag works too. Something must catch
+    it, or the original value is forwarded.
+    """
+    # ``_merge_bridge_verdict`` surfaces a string replacement on
+    # ShieldVerdict.modified_value, but it runs AFTER validate_tool_call has
+    # already written a dict replacement into params. A non-string there is
+    # therefore applied, not dropped, and refusing would reject a correct
+    # rewrite. Its caller carries the check instead.
+    if funcname == "_merge_bridge_verdict":
+        pytest.skip("replacement is applied by the caller before this runs")
+
+    caught = "applies_to(" in body or "applied" in body
+
+    assert caught, (
+        f"{where} {funcname}() applies a transform only when the replacement "
+        "is the right shape, and does nothing when it is not, so the original "
+        "value is forwarded. Fold `applies_to(<type>)` into the deny check, "
+        "or track whether the rewrite happened."
+    )

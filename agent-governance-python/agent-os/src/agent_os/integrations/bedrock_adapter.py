@@ -225,7 +225,7 @@ class _GovernedEventStream:
                                 ag["parameters"] = bridge_result.transformed_value
                             except Exception:  # noqa: BLE001 — best-effort rewrite
                                 pass
-                        if not bridge_result.allowed:
+                        if not bridge_result.allowed or not bridge_result.applies_to(dict):
                             self._ctx.blocked_events += 1
                             logger.warning(
                                 "Bedrock action blocked by AGT | tool=%s agent=%s",
@@ -302,7 +302,7 @@ class GovernedBedrockClient:
             if result.transform is not None and isinstance(result.transformed_value, str):
                 input_text = result.transformed_value
                 kwargs["inputText"] = input_text
-            if not result.allowed:
+            if not result.allowed or not result.applies_to(str):
                 self._kernel.emit(GovernanceEventType.POLICY_VIOLATION, {
                     "agent_id": self._ctx.agent_id,
                     "agent_arn": agent_arn,

@@ -179,7 +179,7 @@ class GovernanceHooks:
                     context.tool_input = bridge_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
-            if not bridge_result.allowed:
+            if not bridge_result.allowed or not bridge_result.applies_to(dict):
                 logger.info(
                     "[%s] Policy DENY (AGT pre_tool_call): %s",
                     name,
@@ -262,9 +262,12 @@ class GovernanceHooks:
                         name, post_result.reason,
                     )
                     raise post_result.to_policy_violation(PolicyViolationError)
-                if post_result.transform is not None and isinstance(
-                    post_result.transformed_value, str
-                ):
+                if post_result.transform is not None:
+                    if not isinstance(post_result.transformed_value, str):
+                        # The replacement is not the shape this surface takes,
+                        # so it cannot be applied here. Falling through would
+                        # run the original the policy meant to rewrite.
+                        raise post_result.to_policy_violation(PolicyViolationError)
                     try:
                         context.tool_result = post_result.transformed_value
                     except Exception:  # noqa: BLE001 — best-effort rewrite
@@ -326,7 +329,7 @@ class GovernanceHooks:
                 )
 
                 pre_result = kernel.evaluate_input(ctx, combined_input)
-                if not pre_result.allowed:
+                if not pre_result.allowed or not pre_result.applies_to(str):
                     logger.info(
                         "[%s] Policy DENY (AGT input) on LLM input: %s",
                         name, pre_result.reason,
@@ -411,10 +414,12 @@ class GovernanceHooks:
                         name, post_result.reason,
                     )
                     raise post_result.to_policy_violation(PolicyViolationError)
-                if post_result.transform is not None and isinstance(
-                    post_result.transformed_value, str
-                ):
-                    # Replace the LLM response per AGT D1.1.
+                if post_result.transform is not None:
+                    if not isinstance(post_result.transformed_value, str):
+                        # The replacement is not the shape this surface takes,
+                        # so it cannot be applied here. Falling through would
+                        # run the original the policy meant to rewrite.
+                        raise post_result.to_policy_violation(PolicyViolationError)
                     try:
                         context.response = post_result.transformed_value
                     except Exception:  # noqa: BLE001 — best-effort rewrite

@@ -213,9 +213,12 @@ class GovernedMistralClient:
             bridge_result = self._kernel.evaluate_input(self._ctx, content)
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transformed_value, str
-            ):
+            if bridge_result.transform is not None:
+                if not isinstance(bridge_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 if isinstance(msg, dict):
                     msg["content"] = bridge_result.transformed_value
                     messages[idx] = msg
@@ -306,10 +309,12 @@ class GovernedMistralClient:
                     self._ctx.call_count = current_call_count
                 if not tool_result.allowed:
                     raise tool_result.to_policy_violation(PolicyViolationError)
-                if tool_result.transform is not None and isinstance(
-                    tool_result.transformed_value, dict
-                ):
-                    # Rewrite the Mistral tool-call arguments per AGT D1.1.
+                if tool_result.transform is not None:
+                    if not isinstance(tool_result.transformed_value, dict):
+                        # The replacement is not the shape this surface takes,
+                        # so it cannot be applied here. Falling through would
+                        # run the original the policy meant to rewrite.
+                        raise tool_result.to_policy_violation(PolicyViolationError)
                     try:
                         import json as _json
 

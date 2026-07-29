@@ -254,7 +254,7 @@ class A2AGovernanceAdapter:
                 # Capture the AGT-redacted payload so the host can
                 # substitute it into the outbound task per AGT-DELTA D1.1.
                 transform_value = bridge_result.transformed_value
-            elif not bridge_result.allowed:
+            elif not bridge_result.allowed or not bridge_result.applies_to(str):
                 reason_text = (
                     bridge_result.reason
                     or "Content blocked by AGT input policy"

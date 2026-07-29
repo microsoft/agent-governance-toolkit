@@ -452,7 +452,7 @@ class GoogleADKKernel(BaseIntegration):
                         tool_context.tool_args = tool_args
                     except Exception:  # noqa: BLE001 — best-effort rewrite on opaque context
                         pass
-        if not bridge_result.allowed:
+        if not bridge_result.allowed or not bridge_result.applies_to(dict):
             error = self._raise_violation(bridge_result)
             return {"error": str(error)}
 
@@ -603,7 +603,7 @@ class GoogleADKKernel(BaseIntegration):
             bridge_result = self._bridge.evaluate_output(
                 self._adapter_ctx, content=content
             )
-            if not bridge_result.allowed:
+            if not bridge_result.allowed or not bridge_result.applies_to(str):
                 error = self._raise_violation(bridge_result)
                 return {"error": str(error)}
             if bridge_result.transform is not None and isinstance(

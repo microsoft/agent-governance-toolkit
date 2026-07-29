@@ -272,11 +272,12 @@ class GovernanceMiddleware(_MiddlewareBase):
                 post_result.reason,
             )
             raise post_result.to_policy_violation(PolicyViolationError)
-        if post_result.transform is not None and isinstance(
-            post_result.transformed_value, str
-        ):
-            # Rewrite the tool result content so downstream consumers see
-            # the AGT-redacted text per AGT-DELTA D1.1.
+        if post_result.transform is not None:
+            if not isinstance(post_result.transformed_value, str):
+                # The replacement is not the shape this surface takes,
+                # so it cannot be applied here. Falling through would
+                # run the original the policy meant to rewrite.
+                raise post_result.to_policy_violation(PolicyViolationError)
             if hasattr(result, "content"):
                 try:
                     result.content = post_result.transformed_value
@@ -370,10 +371,12 @@ class GovernanceMiddleware(_MiddlewareBase):
                     pre_result.reason,
                 )
                 raise pre_result.to_policy_violation(PolicyViolationError)
-            if pre_result.transform is not None and isinstance(
-                pre_result.transformed_value, str
-            ):
-                # Rewrite the most recent user message content per AGT D1.1.
+            if pre_result.transform is not None:
+                if not isinstance(pre_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise pre_result.to_policy_violation(PolicyViolationError)
                 for msg in reversed(messages):
                     if hasattr(msg, "content") and isinstance(
                         getattr(msg, "content"), str
@@ -407,9 +410,12 @@ class GovernanceMiddleware(_MiddlewareBase):
                     post_result.reason,
                 )
                 raise post_result.to_policy_violation(PolicyViolationError)
-            if post_result.transform is not None and isinstance(
-                post_result.transformed_value, str
-            ):
+            if post_result.transform is not None:
+                if not isinstance(post_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise post_result.to_policy_violation(PolicyViolationError)
                 if hasattr(response_msg, "content"):
                     try:
                         response_msg.content = post_result.transformed_value

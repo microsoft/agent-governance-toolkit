@@ -430,7 +430,7 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
             call_id=f"maf-cap-{ctx.call_count + 1}",
         )
 
-        if not bridge_result.allowed:
+        if not bridge_result.allowed or not bridge_result.applies_to(dict):
             reason = bridge_result.reason or "tool_blocked"
             logger.info(
                 "Capability DENY (AGT pre_tool_call): tool '%s' blocked: %s",

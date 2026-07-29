@@ -371,7 +371,7 @@ class GovernanceStepCallback:
                         tc.arguments = bridge_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
-            if not bridge_result.allowed:
+            if not bridge_result.allowed or not bridge_result.applies_to(dict):
                 self._kernel._record(
                     "tool_blocked", agent_name,
                     {"tool": tool_name, "reason": bridge_result.reason},
@@ -401,7 +401,7 @@ class GovernanceStepCallback:
                     step.observation = bridge_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
-            elif not bridge_result.allowed:
+            elif not bridge_result.allowed or not bridge_result.applies_to(dict):
                 self._kernel._record(
                     "observation_blocked", agent_name,
                     {"reason": bridge_result.reason, "step": self._step_count},

@@ -320,9 +320,12 @@ class GovernedSemanticKernel:
             self._ctx.call_count = current_call_count
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
-        if bridge_result.transform is not None and isinstance(
-            bridge_result.transformed_value, dict
-        ):
+        if bridge_result.transform is not None:
+            if not isinstance(bridge_result.transformed_value, dict):
+                # The replacement is not the shape this surface takes,
+                # so it cannot be applied here. Falling through would
+                # run the original the policy meant to rewrite.
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             kwargs = dict(bridge_result.transformed_value)
 
         # Execute
@@ -347,9 +350,12 @@ class GovernedSemanticKernel:
             )
             if not post_result.allowed:
                 raise post_result.to_policy_violation(PolicyViolationError)
-            if post_result.transform is not None and isinstance(
-                post_result.transformed_value, str
-            ):
+            if post_result.transform is not None:
+                if not isinstance(post_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise post_result.to_policy_violation(PolicyViolationError)
                 if hasattr(result, "value"):
                     try:
                         result.value = post_result.transformed_value
@@ -496,7 +502,7 @@ class GovernedSemanticKernel:
 
         # AGT input intervention point check on the memory body
         bridge_result = self._wrapper.evaluate_input(self._ctx, text)
-        if not bridge_result.allowed:
+        if not bridge_result.allowed or not bridge_result.applies_to(str):
             raise _prefixed_violation("Memory save blocked", bridge_result)
         if bridge_result.transform is not None and isinstance(
             bridge_result.transformed_value, str
@@ -591,7 +597,7 @@ class GovernedSemanticKernel:
 
         # AGT input intervention point check on the prompt
         bridge_result = self._wrapper.evaluate_input(self._ctx, prompt)
-        if not bridge_result.allowed:
+        if not bridge_result.allowed or not bridge_result.applies_to(str):
             raise _prefixed_violation("Prompt blocked", bridge_result)
         if bridge_result.transform is not None and isinstance(
             bridge_result.transformed_value, str
@@ -617,9 +623,12 @@ class GovernedSemanticKernel:
         )
         if not post_result.allowed:
             raise post_result.to_policy_violation(PolicyViolationError)
-        if post_result.transform is not None and isinstance(
-            post_result.transformed_value, str
-        ):
+        if post_result.transform is not None:
+            if not isinstance(post_result.transformed_value, str):
+                # The replacement is not the shape this surface takes,
+                # so it cannot be applied here. Falling through would
+                # run the original the policy meant to rewrite.
+                raise post_result.to_policy_violation(PolicyViolationError)
             if hasattr(result, "value"):
                 try:
                     result.value = post_result.transformed_value
@@ -666,9 +675,12 @@ class GovernedSemanticKernel:
         bridge_result = self._wrapper.evaluate_input(self._ctx, goal)
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
-        if bridge_result.transform is not None and isinstance(
-            bridge_result.transformed_value, str
-        ):
+        if bridge_result.transform is not None:
+            if not isinstance(bridge_result.transformed_value, str):
+                # The replacement is not the shape this surface takes,
+                # so it cannot be applied here. Falling through would
+                # run the original the policy meant to rewrite.
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             goal = bridge_result.transformed_value
 
         # Create plan
@@ -981,9 +993,12 @@ class GovernanceFunctionFilter:
         )
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
-        if bridge_result.transform is not None and isinstance(
-            bridge_result.transformed_value, dict
-        ):
+        if bridge_result.transform is not None:
+            if not isinstance(bridge_result.transformed_value, dict):
+                # The replacement is not the shape this surface takes,
+                # so it cannot be applied here. Falling through would
+                # run the original the policy meant to rewrite.
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             try:
                 context.arguments = bridge_result.transformed_value
             except Exception:  # noqa: BLE001 — best-effort rewrite
@@ -1000,9 +1015,12 @@ class GovernanceFunctionFilter:
             )
             if not post_result.allowed:
                 raise post_result.to_policy_violation(PolicyViolationError)
-            if post_result.transform is not None and isinstance(
-                post_result.transformed_value, str
-            ):
+            if post_result.transform is not None:
+                if not isinstance(post_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise post_result.to_policy_violation(PolicyViolationError)
                 try:
                     context.result = post_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite

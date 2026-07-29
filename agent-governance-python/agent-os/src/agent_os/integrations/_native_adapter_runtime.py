@@ -33,6 +33,9 @@ class AdapterResult(Protocol):
     def permits_unchanged(self) -> bool:
         """Return whether the caller may proceed with the value it has."""
 
+    def applies_to(self, kind: type | tuple[type, ...]) -> bool:
+        """Return whether a transform fits the surface it targets."""
+
     @property
     def point_not_configured(self) -> bool:
         """Return whether the manifest configures this intervention point."""
@@ -109,6 +112,20 @@ class NativeAdapterResult:
     """Adapter decision backed by the native ``PolicyEvaluation`` contract."""
 
     evaluation: Any
+
+    def applies_to(self, kind: type | tuple[type, ...]) -> bool:
+        """Whether a transform, if there is one, fits the surface it targets.
+
+        A surface can only carry a replacement of the shape it holds: a
+        message body takes a ``str``, tool arguments take a ``dict``. When the
+        replacement is another shape the site cannot apply it, and permitting
+        would run the original the policy meant to rewrite. Sites fold this
+        into the deny check they already have, so an unusable replacement
+        takes the same path as a denial.
+
+        True when there is no transform, so a plain allow is unaffected.
+        """
+        return self.transform is None or isinstance(self.transformed_value, kind)
 
     @property
     def point_not_configured(self) -> bool:

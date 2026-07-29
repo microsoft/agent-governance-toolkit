@@ -407,9 +407,12 @@ class GovernedAssistant:
         bridge_result = self._kernel.evaluate_input(self._ctx, content)
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
-        if bridge_result.transform is not None and isinstance(
-            bridge_result.transformed_value, str
-        ):
+        if bridge_result.transform is not None:
+            if not isinstance(bridge_result.transformed_value, str):
+                # The replacement is not the shape this surface takes,
+                # so it cannot be applied here. Falling through would
+                # run the original the policy meant to rewrite.
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             content = bridge_result.transformed_value
 
         message = self._client.beta.threads.messages.create(
@@ -472,9 +475,12 @@ class GovernedAssistant:
             bridge_result = self._kernel.evaluate_input(self._ctx, instructions)
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transformed_value, str
-            ):
+            if bridge_result.transform is not None:
+                if not isinstance(bridge_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 instructions = bridge_result.transformed_value
 
         # Create run
@@ -511,9 +517,12 @@ class GovernedAssistant:
             bridge_result = self._kernel.evaluate_input(self._ctx, instructions)
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transformed_value, str
-            ):
+            if bridge_result.transform is not None:
+                if not isinstance(bridge_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 instructions = bridge_result.transformed_value
 
         # Create streaming run
@@ -644,7 +653,7 @@ class GovernedAssistant:
             ):
                 parsed_args = bridge_result.transformed_value
                 raw_args = json.dumps(parsed_args)
-            if not bridge_result.allowed:
+            if not bridge_result.allowed or not bridge_result.applies_to(dict):
                 self._kernel.cancel_run(thread_id, run.id, self._client)
                 raise bridge_result.to_policy_violation(PolicyViolationError)
 

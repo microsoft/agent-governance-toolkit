@@ -143,21 +143,28 @@ class GovernanceInterventionHandler:
                 args=tool_args,
                 call_id=getattr(message, "id", "call-1"),
             )
+            applied = True
             if bridge_result.transform is not None:
                 # Rewrite the FunctionCall arguments per AGT D1.1 before
-                # forwarding the message to the recipient.
+                # forwarding the message to the recipient. This surface takes
+                # a dict carrying "arguments" or a bare string; anything else,
+                # or a message that refuses the write, leaves the original in
+                # place, so the call is dropped rather than sent unrewritten.
+                applied = False
                 replacement = bridge_result.transformed_value
                 if isinstance(replacement, dict) and "arguments" in replacement:
                     try:
                         message.arguments = replacement["arguments"]
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        applied = True
+                    except Exception:  # noqa: BLE001 — opaque message object
                         pass
                 elif isinstance(replacement, str):
                     try:
                         message.arguments = replacement
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        applied = True
+                    except Exception:  # noqa: BLE001 — opaque message object
                         pass
-            if not bridge_result.allowed:
+            if not bridge_result.allowed or not applied:
                 logger.info(
                     "[%s] Policy DENY (AGT pre_tool_call): %s",
                     name,
@@ -188,7 +195,7 @@ class GovernanceInterventionHandler:
                     self._apply_content(message, bridge_result.transformed_value)
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
-            if not bridge_result.allowed:
+            if not bridge_result.allowed or not bridge_result.applies_to(str):
                 logger.info(
                     "[%s] Policy DENY (AGT input): %s",
                     name,
@@ -244,7 +251,7 @@ class GovernanceInterventionHandler:
             if result.transform is not None and isinstance(result.transformed_value, str):
                 self._apply_content(message, result.transformed_value)
                 content = result.transformed_value
-            if not result.allowed:
+            if not result.allowed or not result.applies_to(str):
                 logger.info("[%s] Policy DENY (publish): %s", name, result.reason)
                 return DropMessage
             for pii_pattern in PII_PATTERNS:

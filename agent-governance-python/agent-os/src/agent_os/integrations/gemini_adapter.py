@@ -206,9 +206,12 @@ class GovernedGeminiModel:
         bridge_result = self._kernel.evaluate_input(self._ctx, content_str)
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
-        if bridge_result.transform is not None and isinstance(
-            bridge_result.transformed_value, str
-        ):
+        if bridge_result.transform is not None:
+            if not isinstance(bridge_result.transformed_value, str):
+                # The replacement is not the shape this surface takes,
+                # so it cannot be applied here. Falling through would
+                # run the original the policy meant to rewrite.
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             contents = bridge_result.transformed_value
 
         # Validate tools against policy
@@ -280,9 +283,12 @@ class GovernedGeminiModel:
                     self._ctx.call_count = current_call_count
                 if not tool_result.allowed:
                     raise tool_result.to_policy_violation(PolicyViolationError)
-                if tool_result.transform is not None and isinstance(
-                    tool_result.transformed_value, dict
-                ):
+                if tool_result.transform is not None:
+                    if not isinstance(tool_result.transformed_value, dict):
+                        # The replacement is not the shape this surface takes,
+                        # so it cannot be applied here. Falling through would
+                        # run the original the policy meant to rewrite.
+                        raise tool_result.to_policy_violation(PolicyViolationError)
                     try:
                         fn_call.args = tool_result.transformed_value
                     except Exception:  # noqa: BLE001 — best-effort rewrite

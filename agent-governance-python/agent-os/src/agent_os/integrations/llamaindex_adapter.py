@@ -168,9 +168,12 @@ class LlamaIndexKernel(BaseIntegration):
                 bridge_result = self._kernel.evaluate_input(self._ctx, input_data)
                 if not bridge_result.allowed:
                     raise bridge_result.to_policy_violation(PolicyViolationError)
-                if bridge_result.transform is not None and isinstance(
-                    bridge_result.transformed_value, str
-                ):
+                if bridge_result.transform is not None:
+                    if not isinstance(bridge_result.transformed_value, str):
+                        # The replacement is not the shape this surface takes,
+                        # so it cannot be applied here. Falling through would
+                        # run the original the policy meant to rewrite.
+                        raise bridge_result.to_policy_violation(PolicyViolationError)
                     return bridge_result.transformed_value
                 return input_data
 
@@ -183,10 +186,12 @@ class LlamaIndexKernel(BaseIntegration):
                 bridge_result = self._kernel.evaluate_output(self._ctx, result)
                 if not bridge_result.allowed:
                     raise bridge_result.to_policy_violation(PolicyViolationError)
-                if bridge_result.transform is not None and isinstance(
-                    bridge_result.transformed_value, str
-                ):
-                    # Rewrite the response content if the result exposes one.
+                if bridge_result.transform is not None:
+                    if not isinstance(bridge_result.transformed_value, str):
+                        # The replacement is not the shape this surface takes,
+                        # so it cannot be applied here. Falling through would
+                        # run the original the policy meant to rewrite.
+                        raise bridge_result.to_policy_violation(PolicyViolationError)
                     if hasattr(result, "response"):
                         try:
                             result.response = bridge_result.transformed_value
