@@ -439,8 +439,9 @@ def test_detects_azure_account_key_in_the_json_spelling():
         # Prose that mentions a keyword without assigning anything.
         "the token is rotated weekly",
         "rotate the password before Friday",
-        # The keyword must not match inside a longer word.
-        "mytokenizer=abcdefghijkl",
+        # The keyword must not match as the tail of a longer word. This is the
+        # `(?<![A-Za-z0-9])` lookbehind's job: drop it and `topsecret=` matches.
+        "topsecret=abcdefghijkl",
         # A separator with nothing after it.
         '{"password":}',
     ],
