@@ -101,7 +101,12 @@
     "pwsh",
     "notlike",
     "sdists",
-    "shellcheck"
+    "shellcheck",
+    "chacha",
+    "chacha20",
+    "getrandom",
+    "spki",
+    "zerocopy"
   ],
   "ignorePaths": [
     "**/node_modules/**",
