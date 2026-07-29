@@ -196,7 +196,10 @@ func (c *ApprovalCoordinator) SubmitEntry(approvalRequestID string, stageIndex i
 		return c.appendSystemDenyAndResolve(approvalRequestID, stage, "malformed_approval_decision")
 	}
 
-	isAdvisory := stage.isAdvisory() || vote.ApproverKind == ApproverLLMAdvisory
+	if !stage.isAdvisory() && vote.ApproverKind == ApproverLLMAdvisory {
+		return result, fmt.Errorf("LLM advisory vote is not valid for non-advisory approval stage %d", stageIndex)
+	}
+	isAdvisory := stage.isAdvisory()
 	if !isAdvisory && !stage.authorizes(vote.ApproverIdentity, vote.Roles) {
 		return result, fmt.Errorf("identity %q not permitted for approval stage %d", vote.ApproverIdentity, stageIndex)
 	}
@@ -405,7 +408,9 @@ func (c *ApprovalCoordinator) entryFromVote(request ApprovalRequest, entries []A
 		return ApprovalChainEntry{}, err
 	}
 	kind := vote.ApproverKind
-	if kind == "" {
+	if stage.isAdvisory() {
+		kind = ApproverLLMAdvisory
+	} else if kind == "" {
 		kind = stage.ApproverKind
 	}
 	if kind == "" {

@@ -551,6 +551,62 @@ func TestLLMAdvisoryDoesNotSatisfyApprovalStage(t *testing.T) {
 	}
 }
 
+func TestSubmitEntryRejectsAdvisoryVoteForNonAdvisoryStage(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "required-human",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+
+	result, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+		ApproverKind:     ApproverLLMAdvisory,
+		ApproverIdentity: "llm:reviewer",
+		Decision:         ApprovalEntryAllow,
+	})
+	if err == nil {
+		t.Fatal("expected advisory vote on non-advisory stage to be rejected")
+	}
+	if result.Request.Status != ApprovalPending || len(result.Entries) != 0 {
+		t.Fatalf("result = %#v, want pending request with no entries", result)
+	}
+}
+
+func TestSubmitEntryKeepsConfiguredAdvisoryStageNonAuthoritative(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "advisory-then-human",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverLLMAdvisory},
+			{StageIndex: 1, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+
+	result, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+		ApproverKind:     ApproverService,
+		ApproverIdentity: "service:reviewer",
+		Decision:         ApprovalEntryDeny,
+	})
+	if err != nil {
+		t.Fatalf("SubmitEntry: %v", err)
+	}
+	if result.Resolution.ApprovalResolutionID != "" || result.Request.Status != ApprovalPending {
+		t.Fatalf("result = %#v, want pending advisory result", result)
+	}
+	if len(result.Entries) != 1 || result.Entries[0].ApproverKind != ApproverLLMAdvisory {
+		t.Fatalf("entries = %#v, want one LLM advisory entry", result.Entries)
+	}
+}
+
 func TestWebhookRolesSatisfyAllowedRoles(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]interface{}
