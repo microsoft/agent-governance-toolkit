@@ -103,6 +103,52 @@ def test_check_mode_passes_on_committed_tree():
     assert gen.main(["--check"]) == 0
 
 
+def test_composite_action_pins_match_registry():
+    actions = gen._load_actions(gen.ACTIONS_PATH)
+    assert gen.check_composite_action_pins(actions) == []
+
+
+def test_composite_action_drift_is_detected(tmp_path, monkeypatch):
+    action_dir = tmp_path / "stale-action"
+    action_dir.mkdir()
+    (action_dir / "action.yml").write_text(
+        "runs:\n"
+        "  using: composite\n"
+        "  steps:\n"
+        "    - uses: actions/checkout@0000000000000000000000000000000000000000 # v0.0.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", tmp_path)
+    actions = gen._load_actions(gen.ACTIONS_PATH)
+    drift = gen.check_composite_action_pins(actions)
+    assert len(drift) == 1
+    assert "stale-action/action.yml" in drift[0]
+    assert "actions/checkout" in drift[0]
+
+
+def test_composite_action_sync_rewrites_only_the_pin_line(tmp_path, monkeypatch):
+    action_dir = tmp_path / "stale-action"
+    action_dir.mkdir()
+    original = (
+        "name: Stale\n"
+        "runs:\n"
+        "  using: composite\n"
+        "  steps:\n"
+        "    - uses: actions/checkout@0000000000000000000000000000000000000000 # v0.0.0\n"
+        "      with:\n"
+        "        fetch-depth: 0\n"
+    )
+    (action_dir / "action.yml").write_text(original, encoding="utf-8")
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", tmp_path)
+    actions = gen._load_actions(gen.ACTIONS_PATH)
+    changed = gen.sync_composite_action_pins(actions)
+    assert len(changed) == 1
+    rewritten = (action_dir / "action.yml").read_text(encoding="utf-8")
+    assert f"uses: {actions['checkout']}\n" in rewritten
+    assert "with:\n        fetch-depth: 0\n" in rewritten
+    assert gen.check_composite_action_pins(actions) == []
+
+
 def test_unpinned_action_is_rejected(tmp_path):
     bad = tmp_path / "actions.toml"
     bad.write_text('[checkout]\nuses = "actions/checkout@v4"\ncomment = "v4"\n', encoding="utf-8")

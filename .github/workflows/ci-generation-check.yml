@@ -3,6 +3,8 @@ name: ci-generation-check
 # Guards the deterministic CI workflow generator. When the manifest under
 # .github/ci or the generator script changes, regenerate and fail on any drift
 # so the committed YAML under .github/workflows always matches its source.
+# Also validates that the hand authored composite actions under
+# .github/actions/*/action.yml keep their pins in sync with the same registry.
 # This workflow is intentionally hand authored because it is the meta check
 # that guards generation; it is not itself generated.
 
@@ -14,6 +16,7 @@ on:
     paths:
       - '.github/ci/**'
       - '.github/workflows/**'
+      - '.github/actions/**'
       - 'scripts/ci/generate_workflows.py'
       - 'tests/ci/**'
 
