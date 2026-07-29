@@ -362,7 +362,20 @@ class MCPGateway:
                 # so relaxing the credential hard-block above can never leak.
                 sanitize_failed = any(t.category == "error" for t in removed)
                 residual_credential = CredentialRedactor.contains_credentials(sanitized)
-                if sanitize_failed or residual_credential:
+                # The same guarantee for injection tags, which are the whole point
+                # of the SANITIZE path: re-scan the output instead of trusting that
+                # sanitize_response removed everything it reported. Only the
+                # categories sanitize_response actually removes are checked here --
+                # a residual imperative ("ignore all previous instructions") is
+                # prose it never claimed to strip, and blocking on it would turn
+                # SANITIZE into BLOCK for ordinary text.
+                residual_tag = any(
+                    threat.category == "instruction_injection"
+                    for threat in self._response_scanner.scan_response(
+                        sanitized, tool_name
+                    ).threats
+                )
+                if sanitize_failed or residual_credential or residual_tag:
                     decision = MCPResponseDecision(
                         allowed=False,
                         reason="Response blocked — sanitization incomplete (fail closed)",

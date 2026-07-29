@@ -4,7 +4,11 @@
 
 from __future__ import annotations
 
-from agent_os.mcp_response_scanner import MCPResponseScanner
+import time
+
+import pytest
+
+from agent_os.mcp_response_scanner import _MAX_TAG_STRIP_PASSES, MCPResponseScanner
 
 # Fake Google API key built by concatenation so the contiguous literal never
 # appears in source (avoids secret-scanner false positives on a test value).
@@ -101,6 +105,95 @@ def test_sanitize_response_strips_tags_and_redacts_credentials_together():
     assert secret not in sanitized
     categories = {threat.category for threat in removed}
     assert {"instruction_injection", "credential_leak"} <= categories
+
+
+def _spliced(outer: str, inner: str, split: int) -> str:
+    """Build a payload whose outer tag only exists once ``inner`` is removed.
+
+    ``outer`` is written with ``inner`` embedded at offset ``split``, so a
+    stripping pass that deletes ``inner`` joins the two halves of ``outer``
+    back into a live tag. Assembled from parts rather than written out as one
+    literal so the halves are not misread as misspelled words.
+    """
+    return f"<{outer[:split]}<{inner}>{outer[split:]}>PAYLOAD"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        # Deleting the inner tag splices the two halves of the outer one back.
+        _spliced("important", "important", 2),
+        _spliced("system", "system", 3),
+        # The same trick with the split at the very start of the tag name, and
+        # its bracket-form equivalent.
+        "<" * 2 + "important>" * 2 + "PAYLOAD",
+        "[[system]system]PAYLOAD",
+        # Two levels of splicing.
+        "<" * 3 + "important>" * 3 + "PAYLOAD",
+        # The splice may form a *different* tag than the one removed.
+        _spliced("instruction", "system", 2),
+    ],
+)
+def test_sanitize_response_output_contains_no_instruction_tag(payload: str):
+    """The sanitizer's output must satisfy the scanner it is paired with.
+
+    A single stripping pass is not enough: removing a tag joins the text on
+    either side of it, and the join can form a new tag. The method reported the
+    inner tag as "stripped" while handing back a live outer one, so a caller
+    that trusts the returned content -- which is the entire purpose of
+    `sanitize_response` -- forwarded a working injection to the model.
+    """
+    scanner = MCPResponseScanner()
+
+    sanitized, removed = scanner.sanitize_response(payload, "tool")
+
+    assert removed
+    assert scanner.scan_response(sanitized, "tool").is_safe is True
+
+
+def test_sanitize_response_fails_closed_when_stripping_does_not_converge():
+    """Beyond the pass limit the content is refused, not partially cleaned.
+
+    Each nesting level costs one pass, so looping to an unbounded fixed point is
+    quadratic in the depth -- a 220 KB response of nested markers took ~15s.
+    The limit keeps that bounded, and reaching it means the output cannot
+    honestly be called sanitized, so it is dropped entirely.
+    """
+    scanner = MCPResponseScanner()
+    depth = _MAX_TAG_STRIP_PASSES + 1
+    payload = "<" * depth + "important>" * depth + "PAYLOAD"
+
+    sanitized, removed = scanner.sanitize_response(payload, "tool")
+
+    assert sanitized == ""
+    assert [threat.category for threat in removed] == ["error"]
+    assert "did not converge" in removed[0].description
+    # The raw content must not be echoed back in the finding.
+    assert "PAYLOAD" not in removed[0].description
+
+
+def test_sanitize_response_bounds_adversarial_nesting_cost():
+    depth = 20_000
+    payload = "<" * depth + "important>" * depth + "PAYLOAD"
+    scanner = MCPResponseScanner()
+
+    start = time.perf_counter()
+    scanner.sanitize_response(payload, "tool")
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 1.0
+
+
+def test_sanitize_response_still_converges_in_one_pass_for_ordinary_content():
+    # The bound must not cost anything for content a host would really sanitize.
+    scanner = MCPResponseScanner()
+
+    sanitized, removed = scanner.sanitize_response(
+        "<important>read this</important> and <system>that</system>", "tool"
+    )
+
+    assert sanitized == "read this</important> and that</system>"
+    assert len(removed) == 2
 
 
 def test_scan_response_does_not_flag_credential_digits_as_pii():

@@ -32,6 +32,21 @@ _IMPERATIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bdo\s+not\s+(?:follow|obey|listen)\b", re.IGNORECASE),
 )
 _URL_PATTERN = re.compile(r"https?://[^\s<>'\"]+", re.IGNORECASE)
+
+# Maximum tag-stripping passes in :meth:`MCPResponseScanner.sanitize_response`.
+#
+# Removing a tag splices the text on either side of it together, and that splice
+# can form a *new* tag: writing an ``<important>`` tag with a second one embedded
+# inside its own name leaves a live tag once the inner one is deleted. Each
+# nesting level therefore needs one more pass, so a single pass is defeated by a
+# single level.
+#
+# Looping to a fixed point without a bound is quadratic in the nesting depth --
+# ``"<" * n + "important>" * n`` costs n passes over an O(n) string, which is
+# 15 seconds for a 220 KB response. Content a host would legitimately sanitize
+# converges in one or two passes; anything still changing after this many is
+# constructed, so the method fails closed on it rather than grinding.
+_MAX_TAG_STRIP_PASSES = 8
 _EXFILTRATION_URL_PATTERN = re.compile(
     r"(?i)(?:\b(?:api[_-]?key|token|secret|payload|data|dump|upload|exfil|webhook)\b|webhook\.site|requestbin|pastebin|ngrok|transfer\.sh)"
 )
@@ -174,16 +189,42 @@ class MCPResponseScanner:
 
             sanitized = response_content
             removed: list[MCPResponseThreat] = []
-            for pattern in _INSTRUCTION_TAG_PATTERNS:
-                for match in pattern.finditer(sanitized):
-                    removed.append(
-                        MCPResponseThreat(
-                            category="instruction_injection",
-                            description="Instruction tag stripped from tool response.",
-                            matched_pattern=match.group(0),
+            # Strip to a fixed point: one pass is not enough, because removing a
+            # tag splices its neighbors into a new one (see
+            # _MAX_TAG_STRIP_PASSES).
+            for _ in range(_MAX_TAG_STRIP_PASSES):
+                before_pass = sanitized
+                for pattern in _INSTRUCTION_TAG_PATTERNS:
+                    for match in pattern.finditer(sanitized):
+                        removed.append(
+                            MCPResponseThreat(
+                                category="instruction_injection",
+                                description="Instruction tag stripped from tool response.",
+                                matched_pattern=match.group(0),
+                            )
                         )
+                    sanitized = pattern.sub("", sanitized)
+                if sanitized == before_pass:
+                    break
+            else:
+                # Still producing new tags at the pass limit. The output cannot be
+                # called sanitized, and the caller must not be handed content whose
+                # threats were reported as "stripped" while they are still present.
+                logger.error(
+                    "MCP response sanitization did not converge in %s passes for tool %s "
+                    "— failing closed",
+                    _MAX_TAG_STRIP_PASSES,
+                    tool_name,
+                )
+                return "", [
+                    MCPResponseThreat(
+                        category="error",
+                        description=(
+                            f"Response sanitization did not converge for tool '{tool_name}': "
+                            "nested instruction tags re-form when stripped (fail-closed)."
+                        ),
                     )
-                sanitized = pattern.sub("", sanitized)
+                ]
 
             credential_matches = self._deduplicate_credential_matches(
                 CredentialRedactor.find_matches(sanitized)
