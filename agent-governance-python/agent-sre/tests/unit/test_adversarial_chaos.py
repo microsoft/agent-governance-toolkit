@@ -257,15 +257,33 @@ class TestAdversarialRunner:
         assert all(r.resilience_score == 100.0 for r in results)
 
     def test_runner_custom_threshold(self) -> None:
+        """Validate resilience threshold evaluation including edge case values."""
         exp = self._make_experiment([
             Fault.prompt_injection("target"),
         ])
         runner = AdversarialRunner(exp)
         pb = BUILTIN_PLAYBOOKS[1]  # privilege-escalation: partial defense (1/3 blocked, score 33.3)
+
+        # Standard custom thresholds
         res_low = runner.run_playbook(pb, threshold=30.0)
         assert res_low.passed is True
+
         res_high = runner.run_playbook(pb, threshold=50.0)
         assert res_high.passed is False
+
+        # Edge case threshold values: zero, negative numbers, and values exceeding 100
+        res_zero = runner.run_playbook(pb, threshold=0.0)
+        assert res_zero.passed is True
+
+        res_neg = runner.run_playbook(pb, threshold=-10.0)
+        assert res_neg.passed is True
+
+        res_extreme = runner.run_playbook(pb, threshold=150.0)
+        assert res_extreme.passed is False
+
+        # Verify run_all propagates custom threshold to all playbooks
+        results = runner.run_all([pb], threshold=50.0)
+        assert results[0].passed is False
 
 
 # ---------------------------------------------------------------------------
