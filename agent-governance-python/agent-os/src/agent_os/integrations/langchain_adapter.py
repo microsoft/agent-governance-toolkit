@@ -285,13 +285,17 @@ class GovernanceMiddleware(_MiddlewareBase):
                 # so it cannot be applied here. Falling through would
                 # run the original the policy meant to rewrite.
                 raise post_result.to_policy_violation(PolicyViolationError)
-            if hasattr(result, "content"):
-                try:
-                    result.content = post_result.transformed_value
-                except Exception as exc:  # noqa: BLE001 — opaque message
-                    raise post_result.to_policy_violation(
-                        PolicyViolationError
-                    ) from exc
+            if not hasattr(result, "content"):
+                # A tool that returns a plain string has nowhere to take the
+                # replacement, and `result_str` above shows those are
+                # expected. Returning it would hand back the original.
+                raise post_result.to_policy_violation(PolicyViolationError)
+            try:
+                result.content = post_result.transformed_value
+            except Exception as exc:  # noqa: BLE001 — opaque message
+                raise post_result.to_policy_violation(
+                    PolicyViolationError
+                ) from exc
 
         self._ctx.call_count += 1
         return result
@@ -386,17 +390,23 @@ class GovernanceMiddleware(_MiddlewareBase):
                     # so it cannot be applied here. Falling through would
                     # run the original the policy meant to rewrite.
                     raise pre_result.to_policy_violation(PolicyViolationError)
+                rewritten = False
                 for msg in reversed(messages):
                     if hasattr(msg, "content") and isinstance(
                         getattr(msg, "content"), str
                     ):
                         try:
                             msg.content = pre_result.transformed_value
-                        except Exception as exc:  # noqa: BLE001 — best-effort rewrite
-                            # The policy rewrote this value and the write did not
-                            # land, so proceeding would run the original.
-                            raise pre_result.to_policy_violation(PolicyViolationError) from exc
+                            rewritten = True
+                        except Exception as exc:  # noqa: BLE001 — opaque message
+                            raise pre_result.to_policy_violation(
+                                PolicyViolationError
+                            ) from exc
                         break
+                if not rewritten:
+                    # No message took the rewrite, so the model would see the
+                    # text the policy meant to replace.
+                    raise pre_result.to_policy_violation(PolicyViolationError)
             logger.info("[%s] Policy ALLOW on model input", self._name)
 
         # ─── 2. Execute the model call ────────────────────────────
@@ -427,13 +437,14 @@ class GovernanceMiddleware(_MiddlewareBase):
                     # so it cannot be applied here. Falling through would
                     # run the original the policy meant to rewrite.
                     raise post_result.to_policy_violation(PolicyViolationError)
-                if hasattr(response_msg, "content"):
-                    try:
-                        response_msg.content = post_result.transformed_value
-                    except Exception as exc:  # noqa: BLE001 — best-effort rewrite
-                        # The policy rewrote this value and the write did not
-                        # land, so proceeding would run the original.
-                        raise post_result.to_policy_violation(PolicyViolationError) from exc
+                if not hasattr(response_msg, "content"):
+                    raise post_result.to_policy_violation(PolicyViolationError)
+                try:
+                    response_msg.content = post_result.transformed_value
+                except Exception as exc:  # noqa: BLE001 — opaque message
+                    raise post_result.to_policy_violation(
+                        PolicyViolationError
+                    ) from exc
 
         return response
 

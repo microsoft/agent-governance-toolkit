@@ -444,15 +444,20 @@ class GoogleADKKernel(BaseIntegration):
         if bridge_result.transform is not None and isinstance(
             bridge_result.transformed_value, dict
         ):
-            if isinstance(tool_args, dict):
+            # Only a dict takes the replacement in place; anything else
+            # would run the arguments the policy meant to rewrite.
+            rewritten = isinstance(tool_args, dict)
+            if rewritten:
                 tool_args.clear()
                 tool_args.update(bridge_result.transformed_value)
                 if tool_context is not None and hasattr(tool_context, "tool_args"):
                     try:
                         tool_context.tool_args = tool_args
-                    except Exception:  # noqa: BLE001 — best-effort rewrite on opaque context
-                        pass
-        if not bridge_result.allowed or not bridge_result.applies_to(dict):
+                    except Exception:  # noqa: BLE001 — opaque context object
+                        rewritten = False
+        else:
+            rewritten = bridge_result.applies_to(dict)
+        if not bridge_result.allowed or not rewritten:
             error = self._raise_violation(bridge_result)
             return {"error": str(error)}
 

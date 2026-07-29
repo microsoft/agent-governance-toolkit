@@ -364,10 +364,14 @@ class GovernanceStepCallback:
                 # Rewrite the tool-call args in place per AGT-DELTA D1.1
                 # so the subsequent smolagents executor sees the
                 # sanitised payload.
+                if not hasattr(tc, "tool_arguments") and not hasattr(tc, "arguments"):
+                    # The tool call carries no argument slot, so the sanitised
+                    # payload has nowhere to go.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 try:
                     if hasattr(tc, "tool_arguments"):
                         tc.tool_arguments = bridge_result.transformed_value
-                    elif hasattr(tc, "arguments"):
+                    else:
                         tc.arguments = bridge_result.transformed_value
                 except Exception as exc:  # noqa: BLE001 — best-effort rewrite
                     # The policy rewrote this value and the write did not

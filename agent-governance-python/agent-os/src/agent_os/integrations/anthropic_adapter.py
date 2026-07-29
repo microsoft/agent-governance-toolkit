@@ -271,9 +271,12 @@ class _GovernedMessages:
                     # so it cannot be applied here. Falling through would
                     # run the original the policy meant to rewrite.
                     raise bridge_result.to_policy_violation(PolicyViolationError)
-                if isinstance(msg, dict):
-                    msg["content"] = bridge_result.transformed_value
-                    messages[idx] = msg
+                if not isinstance(msg, dict):
+                    # Only a dict message takes the replacement here, so any
+                    # other shape would forward the original text.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
+                msg["content"] = bridge_result.transformed_value
+                messages[idx] = msg
 
         # Audit log
         logger.info(
@@ -479,9 +482,12 @@ class GovernanceMessageHook:
                     # so it cannot be applied here. Falling through would
                     # run the original the policy meant to rewrite.
                     raise bridge_result.to_policy_violation(PolicyViolationError)
-                if isinstance(msg, dict):
-                    msg["content"] = bridge_result.transformed_value
-                    messages[idx] = msg
+                if not isinstance(msg, dict):
+                    # Only a dict message takes the replacement here, so any
+                    # other shape would forward the original text.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
+                msg["content"] = bridge_result.transformed_value
+                messages[idx] = msg
 
         # Audit log
         logger.info(

@@ -219,9 +219,12 @@ class GovernedMistralClient:
                     # so it cannot be applied here. Falling through would
                     # run the original the policy meant to rewrite.
                     raise bridge_result.to_policy_violation(PolicyViolationError)
-                if isinstance(msg, dict):
-                    msg["content"] = bridge_result.transformed_value
-                    messages[idx] = msg
+                if not isinstance(msg, dict):
+                    # Only a dict message takes the replacement here, so any
+                    # other shape would forward the original text.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
+                msg["content"] = bridge_result.transformed_value
+                messages[idx] = msg
 
         # Validate tools against policy (host-side allowlist guard — the
         # AGT manifest bridge emits no ``pre_tool_call`` binding for tool
@@ -315,11 +318,14 @@ class GovernedMistralClient:
                         # so it cannot be applied here. Falling through would
                         # run the original the policy meant to rewrite.
                         raise tool_result.to_policy_violation(PolicyViolationError)
+                    if fn is None:
+                        # Nothing to write the sanitised arguments to, so the
+                        # original call would go out unchanged.
+                        raise tool_result.to_policy_violation(PolicyViolationError)
                     try:
                         import json as _json
 
-                        if fn is not None:
-                            fn.arguments = _json.dumps(tool_result.transformed_value)
+                        fn.arguments = _json.dumps(tool_result.transformed_value)
                     except Exception as exc:  # noqa: BLE001 — best-effort rewrite
                         # The policy rewrote this value and the write did not
                         # land, so proceeding would run the original.

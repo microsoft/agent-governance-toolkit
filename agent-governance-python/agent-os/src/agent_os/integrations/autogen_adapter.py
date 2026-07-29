@@ -192,10 +192,9 @@ class GovernanceInterventionHandler:
             # shape, or a message that refused the write.
             rewritten = bridge_result.applies_to(str)
             if bridge_result.transform is not None and rewritten:
-                try:
-                    self._apply_content(message, bridge_result.transformed_value)
-                except Exception:  # noqa: BLE001 — opaque message object
-                    rewritten = False
+                rewritten = self._apply_content(
+                    message, bridge_result.transformed_value
+                )
             if not bridge_result.allowed or not rewritten:
                 logger.info(
                     "[%s] Policy DENY (AGT input): %s",
@@ -249,10 +248,13 @@ class GovernanceInterventionHandler:
         content = self._extract_content(message)
         if content:
             result = kernel.evaluate_input(self._ctx, content)
-            if result.transform is not None and isinstance(result.transformed_value, str):
-                self._apply_content(message, result.transformed_value)
+            # True unless a replacement was meant to land and did not: wrong
+            # shape, or a message with no content to write.
+            rewritten = result.applies_to(str)
+            if result.transform is not None and rewritten:
+                rewritten = self._apply_content(message, result.transformed_value)
                 content = result.transformed_value
-            if not result.allowed or not result.applies_to(str):
+            if not result.allowed or not rewritten:
                 logger.info("[%s] Policy DENY (publish): %s", name, result.reason)
                 return DropMessage
             for pii_pattern in PII_PATTERNS:
@@ -334,23 +336,28 @@ class GovernanceInterventionHandler:
         return ""
 
     @staticmethod
-    def _apply_content(message: Any, new_content: str) -> None:
+    def _apply_content(message: Any, new_content: str) -> bool:
         """Rewrite a message's content in place per AGT D1.1 transform.
 
         Mirrors :meth:`_extract_content`. Strings are immutable so the
         AutoGen runtime keeps the original reference; for dicts and
         objects with a ``content`` attribute the new value is written
-        through. Best-effort: opaque message types fall through
-        silently.
+        through.
+
+        Returns whether the write landed. A message that has no content to
+        write, or refuses the write, leaves the original in place, and the
+        caller has to refuse rather than forward it.
         """
         if isinstance(message, dict):
             message["content"] = new_content
-            return
+            return True
         if hasattr(message, "content"):
             try:
                 message.content = new_content
-            except Exception:  # noqa: BLE001 — best-effort rewrite
-                pass
+                return True
+            except Exception:  # noqa: BLE001 — opaque message object
+                return False
+        return False
 
     # ── Convenience properties ────────────────────────────────────
 

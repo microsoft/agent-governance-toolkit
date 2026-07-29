@@ -590,3 +590,72 @@ def test_no_transform_rewrite_swallows_its_own_failure():
         "continues: " + ", ".join(swallowed) + ". Refuse instead, by raising "
         "or by tracking whether the rewrite landed."
     )
+
+
+# ── census 4: a target that takes no write must not be passed over ────────
+
+
+def _skipped_writes():
+    """Transform applications guarded on the TARGET with no refusal.
+
+    The three censuses above look at the verdict, the replacement's shape and
+    a failed write. This is the fourth way the same drop happens and the one
+    that hid longest: the write is never attempted, because a guard on what
+    is being written TO fails. ``hasattr(result, "content")`` on a tool that
+    returned a plain string, ``isinstance(msg, dict)`` on a message object,
+    ``if fn is not None`` on a malformed tool call. No exception is raised, so
+    nothing else here notices, and the original value is forwarded.
+
+    A guard is fine when the branch refuses, tracks a landed-flag, or returns
+    the replacement to a caller that uses it.
+    """
+    found = []
+    for path in sorted(SRC.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if "transformed_value" not in text:
+            continue
+        tree = ast.parse(text)
+        for outer in ast.walk(tree):
+            # `if <result>.transform is not None ...:` blocks
+            if not isinstance(outer, ast.If):
+                continue
+            test_src = ast.unparse(outer.test)
+            if "transform is not None" not in test_src:
+                continue
+            block = "\n".join(ast.unparse(s) for s in outer.body)
+            if "transformed_value" not in block:
+                continue
+            for inner in ast.walk(outer):
+                if not isinstance(inner, ast.If) or inner is outer:
+                    continue
+                guard = ast.unparse(inner.test)
+                # a guard on the write TARGET, not on the replacement
+                if "transformed_value" in guard or "transform" in guard:
+                    continue
+                if not any(
+                    k in guard for k in ("hasattr", "isinstance", "is not None")
+                ):
+                    continue
+                body = "\n".join(ast.unparse(s) for s in inner.body)
+                if "transformed_value" not in body:
+                    continue
+                whole = ast.unparse(inner)
+                refuses = (
+                    inner.orelse
+                    or "raise" in whole
+                    or re.search(r"(applied|rewritten) = ", whole)
+                )
+                if not refuses:
+                    found.append(f"{path.relative_to(SRC)}:{inner.lineno}")
+    return found
+
+
+def test_a_target_that_takes_no_write_is_not_passed_over():
+    skipped = _skipped_writes()
+
+    assert not skipped, (
+        "these apply a transform only when the write target has the right "
+        "shape, and do nothing when it does not, so the original value is "
+        "forwarded with no exception raised: " + ", ".join(skipped) + ". "
+        "Refuse on the other branch, or track whether the write landed."
+    )
