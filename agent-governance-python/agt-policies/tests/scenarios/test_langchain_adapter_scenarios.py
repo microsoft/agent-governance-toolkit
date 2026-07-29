@@ -249,3 +249,41 @@ def test_wrap_tool_call_escalate_with_no_resolver_denies(tmp_path: Path) -> None
         mw.wrap_tool_call(_make_tool_request(), handler)
 
     handler.assert_not_called()
+
+
+def test_wrap_tool_call_refuses_a_transform_it_cannot_write(tmp_path: Path) -> None:
+    """A tool result with nowhere to write the replacement must be refused.
+
+    LangChain types ``wrap_tool_call`` as returning ``ToolMessage | Command``.
+    A tool that returns a plain string is wrapped as a ``ToolMessage`` before
+    middleware sees it, and that has ``.content``, so what arrives here
+    without one is a ``Command``. Handing back the replacement itself would
+    return a ``str``, which ``ToolNode`` turns into a ``HumanMessage``,
+    dropping the command's updates and its ``tool_call_id``. An earlier
+    revision did exactly that; refusing is the only answer that both applies
+    the policy and keeps the contract.
+    """
+    pytest.importorskip("langgraph")
+    from langgraph.types import Command
+
+    from agent_os.exceptions import PolicyViolationError
+    from agent_os.integrations.langchain_adapter import LangChainKernel
+
+    runtime, _policy = _build_runtime(
+        tmp_path,
+        [
+            {"decision": "allow"},  # pre_tool_call
+            {
+                "decision": "transform",
+                "reason": "pii_redaction",
+                "transform": {"path": "$policy_target", "value": "[REDACTED]"},
+            },
+        ],
+    )
+    kernel = LangChainKernel(runtime=runtime)
+    mw = kernel.as_middleware()
+
+    with pytest.raises(PolicyViolationError):
+        mw.wrap_tool_call(
+            _make_tool_request(), lambda _req: Command(update={"x": 1})
+        )

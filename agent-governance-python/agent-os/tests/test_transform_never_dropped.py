@@ -682,9 +682,16 @@ def _skipped_writes():
                 # how llamaindex, semantic_kernel and langchain treat a value
                 # that IS the return rather than an attribute on it; denying
                 # there would turn a redaction into a refusal.
+                # The else branch is whatever this If node holds beyond its
+                # test and body. Searching the unparsed source for "else:"
+                # would also match an else on a nested for/try/if and mark the
+                # site handled when it is not.
+                children = list(ast.iter_child_nodes(inner))
+                has_else = any(
+                    c is not inner.test and c not in inner.body for c in children
+                )
                 handled = (
-                    # An else branch renders as "else:" in the unparsed source.
-                    "else:" in whole
+                    has_else
                     or "raise" in whole
                     or re.search(r"(applied|rewritten) = ", whole)
                     or re.search(r"return \w+\.transformed_value", block)

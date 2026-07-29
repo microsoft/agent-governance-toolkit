@@ -286,12 +286,15 @@ class GovernanceMiddleware(_MiddlewareBase):
                 # run the original the policy meant to rewrite.
                 raise post_result.to_policy_violation(PolicyViolationError)
             if not hasattr(result, "content"):
-                # A tool that returns a plain string has no attribute to write
-                # to, but it is still the value being returned, so hand back
-                # the replacement itself. llamaindex and semantic_kernel do
-                # the same. Refusing here would turn a redaction policy into a
-                # denial for the most ordinary kind of tool.
-                return post_result.transformed_value
+                # wrap_tool_call must return ToolMessage | Command. A tool that
+                # returns a plain string is already wrapped as a ToolMessage
+                # before middleware sees it, and that has .content, so what
+                # reaches here is a Command. Returning the replacement itself
+                # would hand back a str, which ToolNode turns into a
+                # HumanMessage and which drops the command's updates and
+                # tool_call_id. There is nowhere to write the replacement, so
+                # the call is refused.
+                raise post_result.to_policy_violation(PolicyViolationError)
             try:
                 result.content = post_result.transformed_value
             except Exception as exc:  # noqa: BLE001 — opaque message
@@ -440,9 +443,12 @@ class GovernanceMiddleware(_MiddlewareBase):
                     # run the original the policy meant to rewrite.
                     raise post_result.to_policy_violation(PolicyViolationError)
                 if not hasattr(response_msg, "content"):
-                    # A plain response is itself the value, so return the
-                    # replacement rather than denying a redaction.
-                    return post_result.transformed_value
+                    # wrap_model_call must return ModelResponse | AIMessage |
+                    # ExtendedModelResponse; a str is none of those and the
+                    # caller crashes reading .result off it. A ModelResponse
+                    # carries its messages in .result rather than .content, so
+                    # there is nothing to write here and the call is refused.
+                    raise post_result.to_policy_violation(PolicyViolationError)
                 try:
                     response_msg.content = post_result.transformed_value
                 except Exception as exc:  # noqa: BLE001 — opaque message
