@@ -189,7 +189,7 @@ def _validate_startup() -> None:
     if _loaded_count == 0:
         warning = (
             f"Startup validation: no policies loaded from {_policy_dir}; "
-            "governance defaults may be permissive until policies are configured."
+            "all evaluations will be denied by default until policies are loaded."
         )
         logger.warning(warning)
         _startup_warnings.append(warning)

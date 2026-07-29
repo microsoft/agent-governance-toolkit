@@ -264,20 +264,66 @@ class TestPolicyServer:
         data = resp.json()
         assert data["status"] == "reloaded"
 
+    def test_reload_missing_policy_dir_preserves_loaded_state(self, tmp_path):
+        from agentmesh.server import policy_server
+
+        policy_file = tmp_path / "policy.yaml"
+        policy_file.write_text(
+            "name: test-policy\n"
+            "version: '1.0'\n"
+            "rules:\n"
+            "  - name: deny-shell\n"
+            "    condition: \"action == 'shell.execute'\"\n"
+            "    action: deny\n"
+            "    reason: 'Shell execution blocked'\n"
+        )
+
+        original_dir = policy_server.POLICY_DIR
+        original_engine = policy_server._engine
+        original_trust_policies = policy_server._trust_policies
+        original_trust_evaluator = policy_server._trust_evaluator
+        original_loaded_count = policy_server._loaded_count
+        original_load_warnings = policy_server._load_warnings
+
+        policy_server.POLICY_DIR = str(tmp_path)
+        try:
+            policy_server._load_policies()
+            loaded_before = policy_server._loaded_count
+
+            missing_dir = tmp_path / "missing"
+            policy_server.POLICY_DIR = str(missing_dir)
+            policy_server._load_policies()
+
+            assert policy_server._loaded_count == loaded_before
+            assert policy_server._trust_evaluator is None
+            assert policy_server._engine.evaluate(
+                agent_did="did:mesh:test-agent",
+                context={"action": "shell.execute", "resource": "/bin/bash"},
+            ).action == "deny"
+        finally:
+            policy_server._engine = original_engine
+            policy_server._trust_policies = original_trust_policies
+            policy_server._trust_evaluator = original_trust_evaluator
+            policy_server._loaded_count = original_loaded_count
+            policy_server._load_warnings = original_load_warnings
+            policy_server.POLICY_DIR = original_dir
+
     def test_list_policies_reports_startup_warning_when_empty(self, caplog, tmp_path):
-        from unittest.mock import patch
+        from agentmesh.server import policy_server
 
-        with patch.dict(os.environ, {"AGENTMESH_POLICY_DIR": str(tmp_path)}):
-            from agentmesh.server import policy_server
-
+        original_dir = policy_server.POLICY_DIR
+        policy_server.POLICY_DIR = str(tmp_path)
+        try:
             with caplog.at_level(logging.WARNING):
                 with TestClient(policy_server.app) as client:
                     resp = client.get("/api/v1/policies")
+        finally:
+            policy_server.POLICY_DIR = original_dir
 
         assert resp.status_code == 200
         data = resp.json()
         assert data["total_loaded"] == 0
-        assert data["startup_warnings"]
+        assert data["load_warnings"]
         assert any("Startup validation: no policies loaded" in msg for msg in caplog.messages)
 
     def test_trust_evaluate_no_policies(self):

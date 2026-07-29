@@ -37,37 +37,38 @@ _engine: PolicyEngine = PolicyEngine()
 _trust_policies: list[TrustPolicy] = []
 _trust_evaluator: PolicyEvaluator | None = None
 _loaded_count: int = 0
-_startup_warnings: list[str] = []
+_load_warnings: list[str] = []
 
 
-def _validate_startup() -> None:
+def _validate_load_warnings() -> None:
     """Record startup warnings for empty policy state."""
-    global _startup_warnings
+    global _load_warnings
 
-    _startup_warnings = []
+    _load_warnings = []
     if _loaded_count == 0:
         warning = (
             f"Startup validation: no policies loaded from {POLICY_DIR}; "
-            "governance defaults may be permissive until policies are configured."
+            "all evaluations will be denied by default until policies are loaded."
         )
         logger.warning(warning)
-        _startup_warnings.append(warning)
+        _load_warnings.append(warning)
 
 
 def _load_policies() -> None:
     """Load all YAML/JSON policy files from POLICY_DIR."""
     global _engine, _trust_policies, _trust_evaluator, _loaded_count
 
+    policy_path = Path(POLICY_DIR)
+    if not policy_path.exists():
+        logger.warning("Policy directory %s does not exist", POLICY_DIR)
+        if _loaded_count == 0:
+            _validate_load_warnings()
+        return
+
     _engine = PolicyEngine()
     _trust_policies = []
     _trust_evaluator = None
     _loaded_count = 0
-
-    policy_path = Path(POLICY_DIR)
-    if not policy_path.exists():
-        logger.warning("Policy directory %s does not exist", POLICY_DIR)
-        _validate_startup()
-        return
 
     governance_count = 0
 
@@ -100,7 +101,7 @@ def _load_policies() -> None:
         governance_count,
         len(_trust_policies),
     )
-    _validate_startup()
+    _validate_load_warnings()
 
 
 @app.on_event("startup")
@@ -192,7 +193,7 @@ async def list_policies() -> dict[str, Any]:
         "total_loaded": _loaded_count,
         "trust_policies": len(_trust_policies),
         "policy_dir": POLICY_DIR,
-        "startup_warnings": list(_startup_warnings),
+        "load_warnings": list(_load_warnings),
     }
 
 
@@ -204,7 +205,7 @@ async def reload_policies() -> dict[str, Any]:
         "status": "reloaded",
         "total_loaded": _loaded_count,
         "trust_policies": len(_trust_policies),
-        "startup_warnings": list(_startup_warnings),
+        "load_warnings": list(_load_warnings),
     }
 
 
