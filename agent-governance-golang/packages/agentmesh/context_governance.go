@@ -232,11 +232,12 @@ func DecideNextContextWithFloor(
 	}
 
 	gating := contextRestrictedActions[action]
-	restrictionPresent := gating != "" && tokenSet(env.Restrictions)[gating]
+	effectiveRestrictions := aggregation.Restrictions
+	restrictionPresent := gating != "" && tokenSet(effectiveRestrictions)[gating]
 	floorTriggered := gating != "" && aggregation.AggregateSensitivity >= restrictedFloor
 	if restrictionPresent || floorTriggered {
-		obligations := make([]ContextObligation, 0, len(env.Restrictions))
-		for _, restriction := range env.Restrictions {
+		obligations := make([]ContextObligation, 0, len(effectiveRestrictions))
+		for _, restriction := range effectiveRestrictions {
 			obligations = append(obligations, ContextObligation{Key: restriction})
 		}
 
