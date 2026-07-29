@@ -192,21 +192,78 @@ def test_consumer_applies_or_refuses_a_transform(where, funcname, body):
 # ── behavioural: the two sites with nowhere to put a replacement ──────────
 
 
-class _TransformEvaluation:
-    """A permitting verdict that carries a replacement."""
+class _Transform:
+    """The replacement a transform verdict carries."""
 
-    reason_code = "pii_redaction"
-    verdict = "transform"
-    input_identity = None
-    enforced_identity = None
+    def __init__(self, value):
+        self.value = value
+        self.applied_value = value
 
-    def __init__(self, replacement):
-        self.transform = type(
-            "_T", (), {"value": replacement, "applied_value": replacement}
-        )()
+
+class _Decision(str):
+    """A decision that reads as a string and answers ``permits``/``value``."""
+
+    def __new__(cls, value: str, permits: bool):
+        obj = super().__new__(cls, value)
+        obj.permits = permits
+        obj.value = value
+        return obj
+
+
+class _Verdict:
+    """The ACS-shaped verdict, carrying decision, reason and transform."""
+
+    def __init__(self, decision: str, permits: bool, reason, transform):
+        self.decision = _Decision(decision, permits)
+        self.reason = reason
+        self.transform = transform
+
+    def __str__(self) -> str:  # earlier layers read the verdict as a string
+        return str(self.decision)
+
+
+class _Evaluation:
+    """Stand-in for the native ``PolicyEvaluation`` a session returns.
+
+    Deliberately not a stand-in for ``NativeAdapterResult``: the behaviour
+    under test lives on that class, so faking it would test the fake.
+    """
+
+    def __init__(self, allowed: bool, reason_code: str | None = None, transform=None):
+        self._allowed = allowed
+        self.reason_code = reason_code
+        # Earlier layers read ``verdict``/``transform``/``reason_code`` off the
+        # evaluation; the ACS layer reads them off ``verdict``. Carry both so
+        # this reads the same wherever in the stack it runs.
+        self.transform = transform
+        self.verdict = _Verdict(
+            "transform" if transform is not None else ("allow" if allowed else "deny"),
+            allowed,
+            reason_code,
+            transform,
+        )
+        self.input_identity = None
+        self.enforced_identity = None
 
     def is_allowed(self) -> bool:
-        return True
+        return self._allowed
+
+    def public_error_message(self) -> str:
+        return self.reason_code or "policy violation"
+
+    def audit_record(self) -> dict:
+        return {"reason": self.reason_code}
+
+
+class _TransformEvaluation(_Evaluation):
+    """A permitting verdict that carries a replacement."""
+
+    def __init__(self, replacement):
+        super().__init__(
+            True,
+            "pii_redaction",
+            type("_T", (), {"value": replacement, "applied_value": replacement})(),
+        )
 
 
 def _transform_runtime(replacement):
@@ -219,6 +276,9 @@ def _transform_runtime(replacement):
     runtime._sessions = {}
     evaluation = _TransformEvaluation(replacement)
     runtime._session_for = lambda ctx: types.SimpleNamespace(
+        evaluate=lambda *a, **kw: evaluation,
+        # The pre-tool-call path charges the attempt through the builder.
+        builder=types.SimpleNamespace(record_tool_call=lambda: None),
         evaluate_pre_tool_call=lambda **kw: evaluation,
         evaluate_input=lambda **kw: evaluation,
         evaluate_output=lambda **kw: evaluation,
@@ -376,31 +436,6 @@ def test_a_replacement_of_the_wrong_shape_does_not_fall_through(
 STATE = types.SimpleNamespace(agent_id="a", session_id="s")
 
 
-class _Transform:
-    """The replacement a transform verdict carries."""
-
-    def __init__(self, value):
-        self.value = value
-        self.applied_value = value
-
-
-class _Evaluation:
-    """Stand-in for the native ``PolicyEvaluation`` a session returns.
-
-    Deliberately not a stand-in for ``NativeAdapterResult``: the behaviour
-    under test lives on that class, so faking it would test the fake.
-    """
-
-    def __init__(self, allowed: bool, reason_code: str | None = None, transform=None):
-        self._allowed = allowed
-        self.reason_code = reason_code
-        self.verdict = "allow" if allowed else "deny"
-        self.transform = transform
-        self.input_identity = None
-        self.enforced_identity = None
-
-    def is_allowed(self) -> bool:
-        return self._allowed
 
 
 def _unconfigured():
@@ -428,6 +463,8 @@ def _runtime(evaluation):
     runtime = object.__new__(NativeAdapterRuntime)
     runtime._sessions = {}
     runtime._session_for = lambda ctx: _t.SimpleNamespace(
+        evaluate=lambda *a, **kw: evaluation,
+        builder=_t.SimpleNamespace(record_tool_call=lambda: None),
         evaluate_output=lambda **kw: evaluation,
         evaluate_post_tool_call=lambda **kw: evaluation,
         evaluate_post_model_call=lambda **kw: evaluation,
