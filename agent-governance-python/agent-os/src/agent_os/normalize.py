@@ -337,7 +337,7 @@ def _try_decode_once(s: str, cfg: NormalizeConfig) -> Optional[tuple[str, Transf
         if (
             dec is not None
             and _printable_ratio(dec) >= cfg.printable_min_ratio
-            and _english_score(dec) > _english_score(trimmed)
+            and _has_decode_benefit(trimmed, dec)
         ):
             return dec, Transform.PERCENT
 
@@ -347,7 +347,7 @@ def _try_decode_once(s: str, cfg: NormalizeConfig) -> Optional[tuple[str, Transf
         if (
             dec != trimmed
             and _printable_ratio(dec) >= cfg.printable_min_ratio
-            and _english_score(dec) > _english_score(trimmed)
+            and _has_decode_benefit(trimmed, dec)
         ):
             return dec, Transform.UNICODE_ESCAPE
 
@@ -357,7 +357,7 @@ def _try_decode_once(s: str, cfg: NormalizeConfig) -> Optional[tuple[str, Transf
         if (
             dec != trimmed
             and _printable_ratio(dec) >= cfg.printable_min_ratio
-            and _english_score(dec) > _english_score(trimmed)
+            and _has_decode_benefit(trimmed, dec)
         ):
             return dec, Transform.HTML_ENTITY
 
@@ -384,6 +384,35 @@ def _try_decode_once(s: str, cfg: NormalizeConfig) -> Optional[tuple[str, Transf
                 return dec, Transform.HEX
 
     return None
+
+
+def _has_decode_benefit(before: str, after: str) -> bool:
+    """Return True if decoding ``before`` into ``after`` made progress.
+
+    The percent, escape and entity layers are ambiguous: their markers occur in
+    benign text (``50% off``, ``&amp;``, a Windows path), so a decode has to
+    justify itself. An English-marker gain is the justification when the payload
+    is plain prose.
+
+    It is not the only one. When the inner text is *itself* an encoded blob, both
+    sides score zero English markers and a gain can never be shown -- so
+    ``percent(base64(payload))`` was left verbatim while the reverse nesting,
+    ``base64(percent(payload))``, unwrapped fully. The base64/hex layer below
+    already accepts on the printable ratio alone precisely "so nested encodings
+    unwrap"; an outer layer that reveals a blob that layer would take is the same
+    kind of progress, and gets the same treatment.
+
+    This cannot loosen the guard into benign text: revealing a decodable blob is
+    strictly narrower than revealing arbitrary printable text -- a contiguous,
+    non-whitespace, >= 16 char run of base64 or hex alphabet -- and the caller
+    only proceeds if that blob then decodes to printable content of its own.
+    """
+    if _english_score(after) > _english_score(before):
+        return True
+    # No English gain: accept only if the decode exposed something the base64/hex
+    # layer will unwrap on the next pass. Without this, a decode whose output is
+    # another encoding can never show a benefit and the nesting survives.
+    return _looks_encoded(after) and not _looks_encoded(before)
 
 
 def _looks_encoded(s: str) -> bool:
