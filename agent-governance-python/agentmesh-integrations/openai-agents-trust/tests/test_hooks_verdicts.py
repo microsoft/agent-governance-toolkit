@@ -1,0 +1,115 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+"""Tests for the verdict handling in GovernanceHooks and the input guardrail.
+
+The hooks observe a run; they cannot rewrite the payload the agent is about to
+use. That makes ``transform`` the interesting verdict: it permits, so a naive
+check lets the run continue with content the policy expected to be rewritten.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from agt.policies import PolicyEvaluation
+
+# hooks imports the openai-agents SDK at module level. CI installs it; skip
+# rather than fail where it is absent or version-skewed.
+pytest.importorskip("agents", reason="openai-agents SDK not installed")
+
+from openai_agents_trust.hooks import GovernanceHooks  # noqa: E402
+
+
+def _evaluation(verdict: str, **kw: Any) -> PolicyEvaluation:
+    return PolicyEvaluation(verdict=verdict, **kw)
+
+
+class TestRequireAllowed:
+    def test_allow_passes(self) -> None:
+        GovernanceHooks._require_allowed(_evaluation("allow"))
+
+    def test_warn_passes(self) -> None:
+        """warn permits, and the hooks have nothing to apply, so it proceeds."""
+        GovernanceHooks._require_allowed(_evaluation("warn"))
+
+    def test_deny_raises(self) -> None:
+        with pytest.raises(PermissionError):
+            GovernanceHooks._require_allowed(
+                _evaluation("deny", reason_code="blocked")
+            )
+
+    def test_escalate_raises(self) -> None:
+        with pytest.raises(PermissionError):
+            GovernanceHooks._require_allowed(_evaluation("escalate"))
+
+    def test_transform_raises_rather_than_running_unredacted_content(self) -> None:
+        """A transform must not proceed just because the verdict permits.
+
+        These hooks cannot apply the replacement, so continuing would run the
+        original content while the policy believed it had been rewritten.
+        """
+        with pytest.raises(PermissionError) as excinfo:
+            GovernanceHooks._require_allowed(
+                _evaluation("transform", reason_code="redact")
+            )
+
+        assert "transform" in str(excinfo.value)
+
+    def test_deny_message_does_not_fall_back_to_an_empty_string(self) -> None:
+        error = None
+        try:
+            GovernanceHooks._require_allowed(_evaluation("deny"))
+        except PermissionError as exc:  # noqa: PERF203 - asserting on the raise
+            error = exc
+
+        assert error is not None
+        assert str(error)
+
+
+class TestGuardrailBody:
+    """The input guardrail must hand evaluate_input a supported type."""
+
+    def test_a_list_of_input_items_becomes_a_dict(self) -> None:
+        """evaluate_input declares body: str | dict, so a list cannot pass through."""
+        from openai_agents_trust import guardrails
+
+        captured: dict[str, Any] = {}
+
+        class _Session:
+            def evaluate_input(self, *, body: Any) -> Any:
+                captured["body"] = body
+                return PolicyEvaluation(verdict="allow")
+
+        class _Config:
+            audit_log = None
+
+            def session(self, _name: str) -> Any:
+                return _Session()
+
+        guard = guardrails.governance_input_guardrail(_Config())
+        agent = type("A", (), {"name": "a"})()
+        guard.guardrail_function(None, agent, [{"role": "user", "content": "hi"}, "plain"])
+
+        assert isinstance(captured["body"], (str, dict))
+        assert captured["body"] == {"items": [{"role": "user", "content": "hi"}, "plain"]}
+
+
+class TestGuardrailTripsOnTransform:
+    def test_transform_trips_the_wire(self) -> None:
+        """A guardrail cannot apply a replacement, so a transform must stop the run."""
+        from openai_agents_trust import guardrails
+
+        assert guardrails._should_trip(PolicyEvaluation(verdict="transform")) is True
+
+    def test_permitting_verdicts_do_not_trip(self) -> None:
+        from openai_agents_trust import guardrails
+
+        assert guardrails._should_trip(PolicyEvaluation(verdict="allow")) is False
+        assert guardrails._should_trip(PolicyEvaluation(verdict="warn")) is False
+
+    def test_deny_trips(self) -> None:
+        from openai_agents_trust import guardrails
+
+        assert guardrails._should_trip(PolicyEvaluation(verdict="deny")) is True

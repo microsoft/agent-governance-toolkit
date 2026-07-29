@@ -1,94 +1,23 @@
 # agentmesh-openai-agents-trust
 
-Trust & governance layer for the [OpenAI Agents SDK](https://github.com/openai/openai-agents-python). Adds policy enforcement, trust-gated handoffs, and tamper-evident audit trails using native SDK guardrails and hooks.
+This package is deprecated. Install
+`agent-governance-toolkit-integrations[openai-agents]` for the consolidated
+integration surface.
 
-> Built by [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — the open-source trust layer for multi-agent systems. Similar integrations merged into [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), and [Microsoft Agent-Lightning](https://github.com/microsoft/agent-governance-python/agent-lightning/pull/478) (15K ⭐).
-
-## Install
-
-```bash
-pip install agentmesh-openai-agents-trust
-```
-
-## Quick Start
+Policy guardrails now use the native ACS runtime owned by Agent OS. Trust
+scoring, handoffs, hooks, identity, and tamper-evident audit helpers remain
+separate host concerns.
 
 ```python
-from agents import Agent, Runner
-from openai_agents_trust import (
-    trust_input_guardrail,
-    policy_input_guardrail,
-    GovernanceHooks,
-    TrustGuardrailConfig,
-    PolicyGuardrailConfig,
-    TrustScorer,
-    GovernancePolicy,
-    AuditLog,
-)
+from agt.policies import AgtRuntime
+from agent_os.integrations.openai_agents_sdk import OpenAIAgentsKernel
 
-# Shared governance state
-scorer = TrustScorer()
-audit = AuditLog()
-policy = GovernancePolicy(
-    name="production",
-    max_tool_calls=20,
-    blocked_patterns=[r"DROP TABLE", r"rm -rf", r"eval\("],
-    min_trust_score=0.7,
-)
-
-# Create guardrails
-trust_config = TrustGuardrailConfig(scorer=scorer, min_score=0.7, audit_log=audit)
-policy_config = PolicyGuardrailConfig(policy=policy, audit_log=audit)
-
-# Attach to agents
-agent = Agent(
-    name="researcher",
-    instructions="You are a research assistant.",
-    input_guardrails=[
-        trust_input_guardrail(trust_config),
-        policy_input_guardrail(policy_config),
-    ],
-)
-
-# Run with governance hooks
-result = await Runner.run(
-    agent,
-    input="Analyze this data",
-    run_config=RunConfig(hooks=GovernanceHooks(policy=policy, scorer=scorer, audit_log=audit)),
-)
-
-# Verify audit integrity
-print(f"Audit entries: {len(audit)}")
-print(f"Chain valid: {audit.verify_chain()}")
+runtime = AgtRuntime("policies/manifest.yaml")
+kernel = OpenAIAgentsKernel(runtime=runtime)
 ```
 
-## Trust-Gated Handoffs
+The manifest owns policy bindings, tool catalogs, budgets, transforms, and
+approval. This package no longer exposes an inline policy interpreter.
 
-```python
-from openai_agents_trust import trust_gated_handoff
-
-billing_agent = Agent(name="billing", instructions="Handle billing.")
-support_agent = Agent(name="support", instructions="Handle support.")
-
-triage = Agent(
-    name="triage",
-    handoffs=[
-        trust_gated_handoff(billing_agent, scorer=scorer, min_score=0.8),
-        trust_gated_handoff(support_agent, scorer=scorer, min_score=0.6),
-    ],
-)
-```
-
-## Features
-
-| Feature | SDK Hook | Description |
-|---------|----------|-------------|
-| **Trust Guardrail** | `InputGuardrail` | Blocks agents below trust threshold |
-| **Policy Guardrail** | `InputGuardrail` | Enforces blocked patterns, tool limits |
-| **Content Guardrail** | `OutputGuardrail` | Validates output against policies |
-| **Governance Hooks** | `RunHooksBase` | Tracks tools, audits handoffs, scores trust |
-| **Trust-Gated Handoff** | `is_enabled` | Disables handoffs to untrusted agents |
-| **hash-chain Audit** | — | Tamper-evident chain of all decisions |
-
-## License
-
-MIT
+See the
+[package consolidation migration guide](../../../docs/package-consolidation/MIGRATION.md).
