@@ -102,15 +102,19 @@ manifest could bind nothing and every path ran ungoverned. The ACS runtime
 reports one as `runtime_error:intervention_point_unknown` instead, and the
 adapters now split on which point it is.
 
-`input` and `pre_tool_call` deny. Omitting them omits governance of an action
-that is about to happen, so the failure has to be loud rather than silent. A
-manifest that bound only one of the two used to run the other ungoverned and
-now refuses it.
+The split is between points that gate an action and points that run after it.
 
-`output` permits, and logs a warning once per runtime. The adapter evaluates
-output after every call whether or not the manifest asked for it, so treating
-the omission as a denial would block every response rather than leave a gap.
-Bind `output` to enforce it.
+`input`, `pre_tool_call`, and `pre_model_call` deny. The action has not
+happened yet, so refusing still protects it, and omitting the binding omits
+governance of something about to happen. That has to be loud. A manifest that
+bound only one of these used to run the others ungoverned and now refuses
+them.
+
+`output`, `post_tool_call`, and `post_model_call` permit, and each warns once.
+The tool already ran and the model already answered, so refusing protects
+nothing and only breaks the caller. The adapter evaluates these after every
+call whether or not the manifest asked for them, so a denial would block every
+response rather than leave a gap. Bind them to enforce them.
 
 **A tool-call budget now counts one call differently**
 

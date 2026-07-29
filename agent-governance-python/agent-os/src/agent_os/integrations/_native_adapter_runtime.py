@@ -193,7 +193,7 @@ class NativeAdapterRuntime:
             raise TypeError("NativeAdapterRuntime requires AgtRuntime")
         self._runtime = runtime
         self._sessions: dict[str, Any] = {}
-        self._output_unconfigured_logged = False
+        self._unconfigured_logged: set[str] = set()
 
     @property
     def runtime(self) -> Any:
@@ -277,7 +277,7 @@ class NativeAdapterRuntime:
             duration_ms=duration_ms,
             call_id=call_id,
         )
-        return NativeAdapterResult(evaluation)
+        return self._post_hoc_result(evaluation, "post_tool_call")
 
     def evaluate_pre_model_call(
         self,
@@ -315,7 +315,7 @@ class NativeAdapterRuntime:
             request_id=request_id,
             model_vendor=model_vendor,
         )
-        return NativeAdapterResult(evaluation)
+        return self._post_hoc_result(evaluation, "post_model_call")
 
     def evaluate_output(
         self,
@@ -328,22 +328,29 @@ class NativeAdapterRuntime:
             content=content if isinstance(content, str | dict) else str(content),
             message_chain=message_chain,
         )
-        result = NativeAdapterResult(evaluation, permit_if_unconfigured=True)
-        if result.point_not_configured:
-            self._warn_output_unconfigured()
-        return result
+        return self._post_hoc_result(evaluation, "output")
 
-    def _warn_output_unconfigured(self) -> None:
-        """Say once that output enforcement is off, so it is not silent."""
-        if self._output_unconfigured_logged:
-            return
-        self._output_unconfigured_logged = True
-        _LOGGER.warning(
-            "manifest configures no 'output' intervention point; model output "
-            "is forwarded without policy evaluation "
-            "(reason=%s). Bind 'output' in the manifest to enforce it.",
-            POINT_NOT_CONFIGURED,
-        )
+    def _post_hoc_result(self, evaluation: Any, point: str) -> NativeAdapterResult:
+        """Wrap a verdict for a point evaluated after the action happened.
+
+        A post-hoc point cannot prevent anything: the tool ran, the model
+        answered. Refusing an unconfigured one therefore protects nothing and
+        only breaks the caller, so it permits and says so. The pre-points keep
+        denying, because there the action has not happened yet.
+        """
+        result = NativeAdapterResult(evaluation, permit_if_unconfigured=True)
+        if result.point_not_configured and point not in self._unconfigured_logged:
+            self._unconfigured_logged.add(point)
+            _LOGGER.warning(
+                "manifest configures no '%s' intervention point; it is a "
+                "post-hoc point, so the value is forwarded without policy "
+                "evaluation (reason=%s). Bind '%s' in the manifest to "
+                "enforce it.",
+                point,
+                POINT_NOT_CONFIGURED,
+                point,
+            )
+        return result
 
 __all__ = [
     "AdapterResult",

@@ -136,9 +136,13 @@ class TestEveryAdapterGetsIt:
     def _runtime(evaluation):
         runtime = object.__new__(NativeAdapterRuntime)
         runtime._sessions = {}
-        runtime._output_unconfigured_logged = False
+        runtime._unconfigured_logged = set()
         runtime._session_for = lambda ctx: types.SimpleNamespace(
-            evaluate_output=lambda **kw: evaluation
+            evaluate_output=lambda **kw: evaluation,
+            evaluate_post_tool_call=lambda **kw: evaluation,
+            evaluate_post_model_call=lambda **kw: evaluation,
+            evaluate_input=lambda **kw: evaluation,
+            evaluate_pre_tool_call=lambda **kw: evaluation,
         )
         return runtime
 
@@ -211,3 +215,62 @@ class TestPostExecuteBookkeeping:
 
         assert (allowed, reason) == (True, None)
         assert adapter.completed == [{"output_data": "fine"}]
+
+
+class TestEveryPostHocPointPermits:
+    """The line is pre-point versus post-hoc point, not output versus rest.
+
+    Thirteen scenario manifests bind ``pre_tool_call`` and none bind
+    ``post_tool_call``, so ``openai_agents_sdk`` raised on the configuration
+    every scenario uses. Nothing caught it because that adapter has no
+    scenario test.
+    """
+
+    def _runtime(self):
+        return TestEveryAdapterGetsIt._runtime(
+            _Evaluation(False, POINT_NOT_CONFIGURED)
+        )
+
+    def test_post_tool_call_permits(self):
+        result = self._runtime().evaluate_post_tool_call(
+            STATE, tool_name="t", args={}, result="r"
+        )
+
+        assert result.allowed is True
+
+    def test_post_model_call_permits(self):
+        result = self._runtime().evaluate_post_model_call(
+            STATE, model_name="m", response={}
+        )
+
+        assert result.allowed is True
+
+    def test_pre_points_still_deny(self):
+        """The action has not happened yet, so refusing still protects it."""
+        runtime = self._runtime()
+
+        assert runtime.evaluate_input(STATE, body="x").allowed is False
+        assert (
+            runtime.evaluate_pre_tool_call(
+                STATE, tool_name="t", args={}
+            ).allowed
+            is False
+        )
+
+    def test_each_point_warns_separately(self, caplog):
+        runtime = self._runtime()
+        with caplog.at_level("WARNING"):
+            runtime.evaluate_output(STATE, content="a")
+            runtime.evaluate_output(STATE, content="b")
+            runtime.evaluate_post_tool_call(
+                STATE, tool_name="t", args={}, result="r"
+            )
+
+        points = {
+            p
+            for p in ("output", "post_tool_call")
+            for r in caplog.records
+            if f"no '{p}' intervention" in r.message
+        }
+        assert points == {"output", "post_tool_call"}
+        assert len(caplog.records) == 2, "once per point, not once per call"
