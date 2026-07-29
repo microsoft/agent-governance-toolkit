@@ -374,12 +374,20 @@ class GuardrailsKernel:
                 error_message="",
                 metadata={"verdict": verdict, "reason": reason},
             )
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transformed_value, str
-            ):
-                final_value = bridge_result.transformed_value
-                outcome.fixed_value = final_value
-                outcome.metadata["transform_applied"] = True
+            if bridge_result.transform is not None:
+                if isinstance(bridge_result.transformed_value, str):
+                    final_value = bridge_result.transformed_value
+                    outcome.fixed_value = final_value
+                    outcome.metadata["transform_applied"] = True
+                else:
+                    # Guardrails validates strings, so there is nowhere to put
+                    # a non-string replacement. Passing the value through would
+                    # forward the original the policy meant to rewrite.
+                    outcome.passed = False
+                    outcome.error_message = (
+                        "AGT returned a transform this validator cannot apply"
+                    )
+                    outcome.metadata["transform_applied"] = False
             outcomes.append(outcome)
         else:
             outcomes.append(

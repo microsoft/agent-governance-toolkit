@@ -29,6 +29,7 @@ replacement and confirm they refuse rather than forward.
 from __future__ import annotations
 
 import ast
+import copy
 import pathlib
 
 import pytest
@@ -45,11 +46,68 @@ EVAL_METHODS = {
 }
 
 
+BRANCH_ATTRS = ("allowed", "permits_unchanged")
+HANDLES = ("transformed_value", "permits_unchanged", ".transform is not None")
+
+
+def _called_names(fn):
+    """Names of every method/function this function calls."""
+    out = set()
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Call):
+            if isinstance(n.func, ast.Attribute):
+                out.add(n.func.attr)
+            elif isinstance(n.func, ast.Name):
+                out.add(n.func.id)
+    return out
+
+
+def _code_only(fn) -> str:
+    """The function's executable source, with docstrings and comments gone.
+
+    Matching raw source would let a docstring satisfy the census. That is not
+    hypothetical: ``base.py``'s ``_tuple_for`` documents ``transformed_value``
+    in prose, so a regression that deleted its actual transform check still
+    passed until this stripped them.
+    """
+    node = copy.deepcopy(fn)
+    for n in ast.walk(node):
+        body = getattr(n, "body", None)
+        if (
+            isinstance(body, list)
+            and body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            body.pop(0)
+    # ast.unparse drops comments, which are not in the tree at all.
+    return ast.unparse(node) if node.body else ""
+
+
+def _branches(fn) -> bool:
+    return any(
+        isinstance(n, ast.Attribute) and n.attr in BRANCH_ATTRS for n in ast.walk(fn)
+    ) or any(
+        isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "is_allowed"
+        for n in ast.walk(fn)
+    )
+
+
 def _consumers():
     """Every function that evaluates a policy AND branches on the verdict.
 
     A function that returns the result for someone else to judge is a
     forwarder, not a consumer, and is excluded.
+
+    Evaluation and branching are not always in the same function. Four sites
+    hand the result to a local helper that does the branching (``_tuple_for``,
+    ``_apply_bridge_result``, ``_merge_bridge_verdict``). Those helpers carry
+    live transform logic, so the census follows one level of same-file
+    delegation and judges the pair together, rather than excluding both halves
+    as neither-evaluates-nor-branches.
     """
     found = []
     for path in sorted(SRC.rglob("*.py")):
@@ -60,12 +118,12 @@ def _consumers():
             tree = ast.parse(text)
         except SyntaxError:  # pragma: no cover - the repo does not ship these
             continue
-        lines = text.splitlines()
-        for fn in [
+        all_fns = [
             n
             for n in ast.walk(tree)
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]:
+        ]
+        for fn in all_fns:
             evaluates = [
                 n
                 for n in ast.walk(fn)
@@ -75,26 +133,25 @@ def _consumers():
             ]
             if not evaluates:
                 continue
-            branches = any(
-                isinstance(n, ast.Attribute)
-                and n.attr in ("allowed", "permits_unchanged")
-                for n in ast.walk(fn)
-            ) or any(
-                isinstance(n, ast.Call)
-                and isinstance(n.func, ast.Attribute)
-                and n.func.attr == "is_allowed"
-                for n in ast.walk(fn)
-            )
-            if not branches:
+            body = _code_only(fn)
+            label = f"{path.relative_to(SRC)}:{evaluates[0].lineno}"
+
+            if _branches(fn):
+                found.append((label, fn.name, body))
                 continue
-            body = "\n".join(lines[fn.lineno - 1 : fn.end_lineno])
-            found.append(
-                (
-                    f"{path.relative_to(SRC)}:{evaluates[0].lineno}",
-                    fn.name,
-                    body,
-                )
-            )
+
+            # Not a branching consumer itself. It is still one if it delegates
+            # to a same-file helper that branches; judge the pair together.
+            called = _called_names(fn)
+            helpers = [
+                h
+                for h in all_fns
+                if h.name in called and h is not fn and _branches(h)
+            ]
+            if helpers:
+                joined = body + "\n".join(_code_only(h) for h in helpers)
+                names = "+".join([fn.name] + [h.name for h in helpers])
+                found.append((label, names, joined))
     return found
 
 
@@ -112,10 +169,9 @@ def test_the_census_actually_found_the_consumers():
     ids=[f"{w}::{n}" for w, n, _ in CONSUMERS],
 )
 def test_consumer_applies_or_refuses_a_transform(where, funcname, body):
-    applies = "transformed_value" in body
-    refuses = "permits_unchanged" in body or ".transform is not None" in body
+    handled = any(marker in body for marker in HANDLES)
 
-    assert applies or refuses, (
+    assert handled, (
         f"{where} {funcname}() branches on a policy verdict but neither "
         "applies a transform nor refuses one. `allowed` is True for a "
         "transform, so this forwards the original value while the policy "

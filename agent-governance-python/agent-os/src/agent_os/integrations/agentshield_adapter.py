@@ -906,6 +906,10 @@ class AgentShieldKernel:
         # Capture AGT transform output first — even when the Shield
         # verdict already denied, the AGT engine may have produced a
         # redaction the host wants to surface.
+        # ``modified_value`` is a string surface, so only a string replacement
+        # can be carried here. A non-string payload is not dropped: the
+        # tool-call path applies a dict replacement to ``params`` before
+        # calling this, so the rewrite has already happened by now.
         if bridge_result.transform is not None and isinstance(
             bridge_result.transformed_value, str
         ):
