@@ -16,6 +16,7 @@ This is the canonical home for all security documentation in Agent Governance To
 | Multi-tenant isolation guarantees and operator checklist | [Tenant Isolation](tenant-isolation.md) · [Checklist](tenant-isolation-checklist.md) |
 | Trust score calibration methodology and thresholds | [Trust Score Calibration](trust-score-calibration.md) |
 | Plugin and dependency scanning that runs on every PR | [Security Scanning](scanning.md) |
+| Native information-flow control for labeled context, sinks, and AgentMesh receipts | [Native FIDES-compatible IFC layer](native-ifc-layer.md) |
 | How AGT maps to the OWASP Agentic Top 10 | [OWASP ASI coverage](../compliance/owasp-agentic-top10-architecture.md) |
 | Dated security audit notes (additive contracts, sandbox extensions, etc.) | [Audits](audits/README.md) |
 | Reporting a vulnerability | [Disclosure](disclosure.md) |

@@ -1,0 +1,60 @@
+{
+  "annotations": {
+    "information_flow": {
+      "schema": "agt.ifc.annotation.v1",
+      "context": {
+        "aggregate_sensitivity": "confidential",
+        "envelope_id": "env-support-001",
+        "integrity": "untrusted",
+        "label_count": 1,
+        "version": 2,
+        "workflow_id": "wf-support-001"
+      },
+      "label": {
+        "categories": [
+          "pii"
+        ],
+        "confidentiality": "confidential",
+        "integrity": "untrusted",
+        "source": "customer_email"
+      },
+      "sink": {
+        "accepts_untrusted": false,
+        "max_allowed_confidentiality": "internal",
+        "name": "send_external_email"
+      }
+    }
+  },
+  "snapshot": {
+    "action": "invokeTool",
+    "actor": {
+      "id": "support-agent",
+      "type": "Agent"
+    },
+    "tool_call": {
+      "args": {
+        "body_ref": "ifcvar://customer-email",
+        "to": "external@example.test"
+      },
+      "id": "tool-call-ifc-1",
+      "name": "send_external_email"
+    }
+  },
+  "intervention_point": "pre_tool_call",
+  "policy_target": {
+    "kind": "tool_args",
+    "path": "$snap.tool_call.args",
+    "value": {
+      "body_ref": "ifcvar://customer-email",
+      "to": "external@example.test"
+    }
+  },
+  "tool": {
+    "id": "send_external_email",
+    "name": "send_external_email",
+    "security_labels": [
+      "external_sink"
+    ],
+    "type": "Tool"
+  }
+}

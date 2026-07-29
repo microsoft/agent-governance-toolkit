@@ -175,9 +175,10 @@ AGT reduces risk but does not eliminate it. The main residual risks are:
 - External tools or plugins that behave unsafely inside their allowed scope
 - Gaps between documented controls and the exact deployment posture of a given
   organization
-- **Knowledge flow risks**: AGT governs tool calls but not the knowledge
-  (documents, embeddings, context) that agents consume and propagate — see
-  [Limitations §7](../LIMITATIONS.md#7-knowledge-governance-gap)
+- **Knowledge flow risks**: AGT has scoped IFC for labeled governed Agent OS
+  flows, but unlabeled or incorrectly labeled external knowledge still remains
+  a deployment risk — see
+  [Limitations §7](../LIMITATIONS.md#7-knowledge-governance-scope)
 - **Credential persistence**: AGT does not observe or revoke credentials agents
   hold across tasks within a session — accumulated permissions may exceed
   what the current task requires — see

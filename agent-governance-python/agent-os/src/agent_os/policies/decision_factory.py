@@ -20,6 +20,7 @@ _PUBLIC_MESSAGES: dict[ViolationCategory, str] = {
     ViolationCategory.TIMEOUT: "Execution timeout exceeded.",
     ViolationCategory.HUMAN_APPROVAL: "Human approval required.",
     ViolationCategory.CONFIDENCE_THRESHOLD: "Confidence below required threshold.",
+    ViolationCategory.INFORMATION_FLOW: "Information flow blocked by governance policy.",
     ViolationCategory.POLICY_ERROR: "Policy evaluation error.",
     ViolationCategory.DRIFT: "Behavioral drift detected.",
 }
@@ -152,6 +153,26 @@ def deny_blocked_tool(tool_name: str) -> PolicyCheckResult:
         scope="tool",
         tool_name=tool_name,
         audit_entry={"tool_name": tool_name},
+    )
+
+
+def deny_information_flow(
+    detail: str,
+    *,
+    violation: str | None = None,
+    tool_name: str | None = None,
+) -> PolicyCheckResult:
+    """Return a denial for a native IFC/FIDES flow violation."""
+
+    audit_entry = {"source": "information_flow"}
+    if violation:
+        audit_entry["violation"] = violation
+    return _deny_result(
+        category=ViolationCategory.INFORMATION_FLOW,
+        detail=detail,
+        scope="information_flow",
+        tool_name=tool_name,
+        audit_entry=audit_entry,
     )
 
 

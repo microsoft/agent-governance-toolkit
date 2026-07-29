@@ -19,6 +19,20 @@ from .grpc_transport import (
     TrustRequest,
     TrustResponse,
 )
+from .information_flow import (
+    DEFAULT_RECEIPT_TTL,
+    RECEIPT_FRAME_KEY,
+    RECEIPT_SCHEMA_VERSION,
+    InformationFlowEnvelopeLike,
+    InformationFlowNonceCache,
+    InformationFlowReceipt,
+    InformationFlowReceiptVerification,
+    attach_information_flow_receipt,
+    create_information_flow_receipt,
+    extract_information_flow_receipt,
+    message_hash,
+    verify_information_flow_receipt,
+)
 from .websocket import HAS_WEBSOCKETS, WebSocketTransport
 
 __all__ = [
@@ -26,6 +40,19 @@ __all__ = [
     "Transport",
     "TransportConfig",
     "TransportState",
+    # Distributed IFC receipts
+    "DEFAULT_RECEIPT_TTL",
+    "RECEIPT_FRAME_KEY",
+    "RECEIPT_SCHEMA_VERSION",
+    "InformationFlowEnvelopeLike",
+    "InformationFlowNonceCache",
+    "InformationFlowReceipt",
+    "InformationFlowReceiptVerification",
+    "attach_information_flow_receipt",
+    "create_information_flow_receipt",
+    "extract_information_flow_receipt",
+    "message_hash",
+    "verify_information_flow_receipt",
     # WebSocket
     "WebSocketTransport",
     "HAS_WEBSOCKETS",
