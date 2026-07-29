@@ -574,6 +574,16 @@ func (c *ApprovalCoordinator) validateConfig() error {
 	if len(c.chain.Stages) == 0 {
 		return errors.New("approval chain must contain at least one stage")
 	}
+	stageIndexes := make(map[int]struct{}, len(c.chain.Stages))
+	for _, stage := range c.chain.Stages {
+		if stage.StageIndex < 0 {
+			return fmt.Errorf("approval stage index %d must not be negative", stage.StageIndex)
+		}
+		if _, exists := stageIndexes[stage.StageIndex]; exists {
+			return fmt.Errorf("approval stage index %d is duplicated", stage.StageIndex)
+		}
+		stageIndexes[stage.StageIndex] = struct{}{}
+	}
 	return nil
 }
 
