@@ -32,6 +32,10 @@
       "policy_yaml_to_nono_config": 1,
       "v4_policy_model_shape": 1
     },
+    "agent-governance-python/agt-policies/README.md": {
+      "AGT-RESOLUTION": 1,
+      "governance.yaml": 2
+    },
     "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/AGT-RESOLUTION-1.0.md": {
       "AGT-RESOLUTION": 1,
       "PolicyDocument": 1,
@@ -67,7 +71,6 @@
       "PatternType": 3,
       "PolicyAction": 5,
       "PolicyInterceptor": 3,
-      "import:agt.policies.bridge": 2,
       "v4_rule_document_shape": 1
     },
     "agent-governance-python/agt-policies/tests/test_migrate_resolution.py": {
@@ -180,7 +183,7 @@
     },
     "scripts/v4_ratchet_baseline.json": {
       "GovernancePolicy": 7,
-      "PolicyDocument": 10,
+      "PolicyDocument": 9,
       "v4_policy_document_file": 1
     }
   },

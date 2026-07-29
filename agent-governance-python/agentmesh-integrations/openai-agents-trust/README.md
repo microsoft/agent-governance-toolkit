@@ -9,10 +9,10 @@ scoring, handoffs, hooks, identity, and tamper-evident audit helpers remain
 separate host concerns.
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.integrations.openai_agents_sdk import OpenAIAgentsKernel
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 kernel = OpenAIAgentsKernel(runtime=runtime)
 ```
 

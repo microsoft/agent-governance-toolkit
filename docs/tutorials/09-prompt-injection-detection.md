@@ -830,11 +830,11 @@ For best coverage, use both: the policy engine for known patterns and the
 detector for deeper heuristic analysis.
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 from agent_os.prompt_injection import PromptInjectionDetector, DetectionConfig
 
-runtime = AgtRuntime("policies/input-security.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/input-security.yaml")
+session = HostSession(
     runtime,
     agent_id="input-guard",
     session_id="input-session",
@@ -848,8 +848,8 @@ detector = PromptInjectionDetector(
 def check_input(user_input: str) -> tuple[bool, str]:
     """Two-layer input validation."""
     # Policy check
-    decision = session.evaluate_input(body=user_input)
-    if not decision.is_allowed():
+    decision = session.input(user_input)
+    if not decision.verdict.decision.permits:
         return False, decision.public_error_message()
 
     # Injection detection
@@ -1027,7 +1027,7 @@ assert report.risk_score == 0.0, f"Gaps found: {report.failed} attacks succeeded
 ## Next Steps
 
 - **Tutorial 01 — Policy Engine:** Learn the YAML
-  policy syntax and `AgtRuntime` API to define declarative governance
+  policy syntax and `AgentControl` API to define declarative governance
   rules.
 - **[Tutorial 02 — Trust & Identity](./02-trust-and-identity.md):** Set up
   trust roots and supervisor hierarchies that complement injection detection

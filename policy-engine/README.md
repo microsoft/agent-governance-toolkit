@@ -54,7 +54,7 @@ AGT is the host and policy enforcement point around the ACS decision core. The i
 | Layer | Role in the integration |
 | --- | --- |
 | AGT host adapters | Framework adapters in `agent-os` intercept the agent loop, build the snapshot for each intervention point, call the policy layer, and enforce the returned verdict. |
-| `agt-policies` bridge | The Python `agt.policies` package mediates between AGT host calls and the ACS runtime and normalizes verdicts for host consumption. |
+| `agt-policies` bridge | The Python `agent_control_specification` package mediates between AGT host calls and the ACS runtime and normalizes verdicts for host consumption. |
 | ACS native runtime | The `agent_control_specification` Python SDK over the Rust core performs the deterministic decision and is built from `sdk/python` with maturin. |
 
 The runtime consumes native ACS/AGT manifests and resolves ACS `extends`.

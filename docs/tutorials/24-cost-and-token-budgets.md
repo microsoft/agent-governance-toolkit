@@ -160,7 +160,7 @@ print(tracker.format_status("researcher"))
 ### §2.7 Coordinating with Native Sessions
 
 The host-side tracker uses an explicit soft limit. Native policy counters remain
-owned by `AdapterRuntimeSession`.
+owned by `HostSession`.
 
 ```python
 from agent_os.integrations.token_budget import TokenBudgetTracker

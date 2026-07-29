@@ -12,9 +12,9 @@ itself should bind policy to the intervention points that enforce the
 classification.
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime("policies/korea-high-impact-manifest.yaml")
+runtime = AgentControl.from_path("policies/korea-high-impact-manifest.yaml")
 ```
 
 ## Transparency and records

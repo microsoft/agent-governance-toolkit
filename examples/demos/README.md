@@ -1,14 +1,14 @@
 # Agent Governance Toolkit — Live Governance Demo
 
-> Demonstrates governance enforcement through the MAF adapter against a real
-> ACS manifest. The policy decisions and audit entries are real; the example
-> does not call a model, so it runs offline with no API key.
+> Demonstrates real-time governance enforcement using **real LLM calls**
+> (OpenAI / Azure OpenAI) with the full governance middleware stack.
+> Every API call, policy decision, and audit entry is real.
 
 ## What This Shows
 
 | Scenario | Layer | What Happens |
 |----------|-------|--------------|
-| **1. Policy Enforcement** | `RuntimeGovernanceMiddleware` | The manifest allows a search prompt but blocks `**/internal/**` — **before the LLM is called** |
+| **1. Policy Enforcement** | `RuntimeGovernanceMiddleware` | YAML policy allows a search prompt but blocks `**/internal/**` — **before the LLM is called** |
 | **2. Capability Sandboxing** | `CapabilityGuardMiddleware` | LLM requests tool calls; governance allows `run_code` but denies `write_file` |
 | **3. Rogue Detection** | `RogueDetectionMiddleware` | Behavioral anomaly engine detects a 50-call burst and auto-quarantines |
 | **4. Content Filtering** | `RuntimeGovernanceMiddleware` | Multiple prompts evaluated — dangerous ones blocked, safe ones forwarded |
@@ -18,14 +18,14 @@
 
 ```
 +-------------------------------------------------------+
-|  Agent (MAF adapter, no model call in this example)   |
+|  Agent (with real OpenAI / Azure OpenAI backend)      |
 |  +--------------------------------------------------+ |
-|  |  RuntimeGovernanceMiddleware (manifest + Rego)| <-- Blocks before LLM
+|  |  RuntimeGovernanceMiddleware (YAML policy eval)    | <-- Blocks before LLM
 |  |  CapabilityGuardMiddleware  (tool allow/deny)     | <-- Intercepts tools
 |  |  RogueDetectionMiddleware   (anomaly scoring)     | <-- Behavioral SRE
 |  +--------------------------------------------------+ |
 |                      |                                |
-|         Mediated call site (model optional)           |
+|         Real LLM API Call (gpt-4o-mini)               |
 +-------------------------------------------------------+
         |                              |
         v                              v
@@ -38,6 +38,22 @@
 ```bash
 pip install -e "agent-governance-python/agt-policies"
 pip install -e "agent-governance-python/agent-os"
+```
+
+### No API key: run against a open-source model
+
+The demo also runs against a local, OpenAI-compatible server such as
+[Ollama](https://ollama.com) — no paid keys or secrets required. The OpenAI
+client picks up `OPENAI_BASE_URL` automatically, so pointing it at Ollama is
+just two environment variables. This is the mode used by CI, which exercises the
+governance stack against **Meta Llama 3.1**:
+
+```bash
+ollama serve &
+ollama pull llama3.1
+export OPENAI_BASE_URL="http://127.0.0.1:11434/v1"
+export OPENAI_API_KEY="ollama"   # placeholder; Ollama ignores it
+python examples/maf-integration/01-loan-processing/python/main.py --model llama3.1
 ```
 
 ## Running

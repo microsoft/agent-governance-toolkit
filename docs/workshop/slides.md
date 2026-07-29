@@ -38,10 +38,10 @@ An ACS manifest declares:
 # Runtime model
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="agent-1",
     session_id="session-1",
@@ -53,7 +53,7 @@ session = AdapterRuntimeSession(
 # Tool mediation
 
 ```python
-evaluation = session.evaluate_pre_tool_call(
+evaluation = session.pre_tool_call(
     tool_name="delete_file",
     args={"path": "report.txt"},
 )

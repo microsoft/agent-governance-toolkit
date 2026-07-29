@@ -217,13 +217,13 @@ python examples/maf-integration/01-loan-processing/python/main.py --include-atta
 ### OPA/Rego (Agent OS)
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/rego-manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/rego-manifest.yaml")
+session = HostSession(
     runtime, agent_id="agent-1", session_id="session-1"
 )
-decision = session.evaluate_pre_tool_call(
+decision = session.pre_tool_call(
     tool_name="web_search", args={"query": "status"}
 )
 ```
@@ -231,9 +231,9 @@ decision = session.evaluate_pre_tool_call(
 ### Cedar (Agent OS)
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime("policies/cedar-manifest.yaml")
+runtime = AgentControl.from_path("policies/cedar-manifest.yaml")
 ```
 
 ### AgentMesh OPA/Cedar

@@ -4,20 +4,20 @@
 
 from pathlib import Path
 
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.integrations.maf_adapter import MAFKernel
 
 
 def main() -> None:
     root = Path(__file__).resolve().parent
-    runtime = AgtRuntime.from_manifest(
+    runtime = AgentControl.from_manifest(
         root / "policies" / "manifest.yaml"
     )
     try:
         kernel = MAFKernel(runtime=runtime)
         context = kernel.create_context("devops-example")
         for prompt in ("Review the current request", 'kubectl delete namespace production'):
-            result = kernel.evaluate_input(context, prompt)
+            result = kernel.input(context, prompt)
             print(prompt, result.verdict)
     finally:
         runtime.close()

@@ -83,16 +83,16 @@ agent-governance verify --badge
 建立一個名為 `governed_agent.py` 的檔案：
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="quickstart-agent",
     session_id="quickstart-session",
 )
 
-result = session.evaluate_pre_tool_call(
+result = session.pre_tool_call(
     tool_name="delete_file",
     args={"path": "/etc/passwd"},
 )

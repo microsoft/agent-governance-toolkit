@@ -447,10 +447,10 @@ pip install agent-os-kernel
 ### Setting Up the Gateway
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.mcp_gateway import MCPGateway, ApprovalStatus, AuditEntry
 
-runtime = AgtRuntime("policies/mcp-manifest.yaml")
+runtime = AgentControl.from_path("policies/mcp-manifest.yaml")
 
 gateway = MCPGateway(
     runtime,
@@ -462,7 +462,7 @@ gateway = MCPGateway(
 
 | Parameter | Type | Default | Purpose |
 |-----------|------|---------|---------|
-| `runtime` | `AgtRuntime` | *(required)* | Native ACS runtime |
+| `runtime` | `AgentControl` | *(required)* | Native ACS runtime |
 | `denied_tools` | `list[str] \| None` | `None` | Tools that are never exposed |
 | `sensitive_tools` | `list[str] \| None` | `None` | Tools requiring human approval |
 | `approval_callback` | `Callable \| None` | `None` | `(agent_id, tool_name, params) -> ApprovalStatus` |
@@ -683,7 +683,7 @@ Agent Request
 
 ```python
 from mcp_trust_proxy import TrustProxy, ToolPolicy
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.mcp_security import MCPSecurityScanner
 from agent_os.mcp_gateway import MCPGateway
 
@@ -695,7 +695,7 @@ proxy.set_tool_policy("file_write", ToolPolicy(min_trust=800))
 scanner = MCPSecurityScanner()
 
 # 3. MCP Gateway
-runtime = AgtRuntime("policies/mcp-manifest.yaml")
+runtime = AgentControl.from_path("policies/mcp-manifest.yaml")
 gateway = MCPGateway(runtime, denied_tools=["shell"])
 
 # --- Per-request pipeline ---
@@ -784,7 +784,7 @@ The MCP client can then invoke the six trust tools directly:
 | `agent_os/mcp_security.py` | `agent-os-kernel` | `MCPSecurityScanner`, `MCPThreat`, `ScanResult`, `ToolFingerprint` |
 | `agent_os/mcp_gateway.py` | `agent-os-kernel` | `MCPGateway`, `AuditEntry`, `ApprovalStatus`, `GatewayConfig` |
 | `agentmesh/integrations/mcp/__init__.py` | `agentmesh-platform` | `TrustGatedMCPServer`, `TrustGatedMCPClient`, `MCPToolCall` |
-| `agent_os/integrations/base.py` | `agent-os-kernel` | `AgtRuntime`, `PolicyEvaluation` |
+| `agent_os/integrations/base.py` | `agent-os-kernel` | `AgentControl`, `PolicyEvaluation` |
 
 ### Working Example
 

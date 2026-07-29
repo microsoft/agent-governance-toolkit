@@ -93,9 +93,9 @@ AGT is designed for enterprise governance. For simple use cases, the full stack
 
 **Minimal path (no mesh, no identity):**
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 # Native ACS policy evaluation, with no mesh or identity dependency.
 ```
 

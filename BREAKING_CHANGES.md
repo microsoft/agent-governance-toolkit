@@ -5,6 +5,62 @@ entries appear first.
 
 ---
 
+## `agt.policies` is removed; hosts call the ACS runtime directly
+
+**Date:** TBD
+
+**Affected**
+
+- anything importing `agt.policies`
+- hosts relying on the wrapper's approval-timeout default
+- audit records keyed on the `policy:` reason-code prefix
+
+**What changed**
+
+`agt.policies` wrapped the ACS runtime to re-expose it under AGT names. The
+wrapper is deleted and every module now calls
+`agent_control_specification` directly. The `agt` package keeps only the CLI,
+including the v4 migration tool.
+
+The following public symbols are removed:
+
+- runtime and manifest: `AgtRuntime`, `AgtManifest`, `AdapterRuntimeSession`,
+  `AdapterManifestContract`, `ManifestCompatibilityError`, `ManifestProvenance`
+- results: `PolicyEvaluation`, `ApprovalDecision`, `PolicyAuditRecord`,
+  `TransformResult`, `EvidenceResult`
+- snapshot builders: `SnapshotBuilder`, `agent_startup_snapshot`,
+  `agent_shutdown_snapshot`, `input_snapshot`, `output_snapshot`,
+  `pre_model_call_snapshot`, `post_model_call_snapshot`,
+  `pre_tool_call_snapshot`, `post_tool_call_snapshot`
+
+**Replacements**
+
+| Removed | Use instead |
+|---------|-------------|
+| `AgtRuntime(path)` | `AgentControl.from_path(str(path))` |
+| `AdapterRuntimeSession` | `HostSession` |
+| `AgtManifest` | `parse_manifest` / `validate_manifest` |
+| `PolicyEvaluation` | `InterventionPointResult` and `Verdict` |
+| `ApprovalDecision` | `ApprovalResolution` |
+| `*_snapshot()` helpers | `SnapshotBuilder` from `agent_control_specification` |
+| `evaluation.is_allowed()` | `result.verdict.decision.permits` |
+
+**Three deliberate behaviour changes**
+
+1. Reason codes lose the `policy:` prefix. A Pydantic validator on the wrapper
+   added it; the engine never emitted it. Anything matching on `policy:` needs
+   updating.
+2. `agt validate` now applies the runtime's own contract, so a manifest with no
+   intervention points is an error rather than a warning.
+3. The approval timeout moved onto the session. `HostSession` defaults to 300
+   seconds and denies on expiry; pass `approval_timeout_seconds` to change it.
+   The manifest's `approval.timeout_seconds` does not drive this. The core
+   treats that section as opaque host configuration and `AgentControl` does not
+   surface it, so a host that declares it in the manifest must pass the same
+   value to the session until the SDK exposes an accessor.
+
+---
+
 ## acs-generator is now a CLI-only package
 
 **Date:** TBD (next `acs-generator` release)
@@ -57,7 +113,7 @@ Manifest resolution is gone as a module. It walked a folder tree, merged the
 documents it found, and filtered them by scope, all of which described a
 layout the ACS manifest does not have. `resolve_manifest`, `discover_policies`,
 `merge_documents`, `filter_by_scope`, `ResolutionError`, and `ResolutionReason`
-go with it, along with the `agt._harness.opa_runner` module. Point `AgtRuntime`
+go with it, along with the `agt._harness.opa_runner` module. Point `AgentControl`
 at a manifest instead.
 
 `agent_os.policies` loses the evaluators and backends that read the rule model
@@ -75,7 +131,7 @@ Framework integrations lose their local policy surfaces: `GovernancePolicy`,
 `GovernanceToolset`, `PolicyGuardrailConfig`, `PatternType`,
 `ShellPolicyViolation`, `load_policy_yaml`, `governed_shell`,
 `policy_input_guardrail`, and `content_output_guardrail`. Each took a local
-policy object; each now takes an `AgtRuntime` or an `AgentControl`.
+policy object; each now takes an `AgentControl`.
 
 The `cedarling-agentmesh` backend and `CedarlingBackend` are removed with the
 consolidated package extra that pulled them in. The backend implemented the
@@ -83,8 +139,8 @@ deleted backend contract and was never released.
 
 **Migration**
 
-Build the manifest with `agt migrate`, construct `AgtRuntime` from it, and pass
-that runtime wherever a policy object used to go. Read `evaluation_result` and
+Build the manifest with `agt migrate`, construct `AgentControl` from it, and
+pass that wherever a policy object used to go. Read `evaluation_result` and
 the ACS audit record in place of the compatibility exception fields.
 
 ---

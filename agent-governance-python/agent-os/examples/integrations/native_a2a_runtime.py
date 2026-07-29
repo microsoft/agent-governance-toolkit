@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 
 from agent_os.integrations.a2a_adapter import A2AGovernanceAdapter
 
@@ -27,9 +27,9 @@ class RequestPolicy:
 
 def main() -> None:
     manifest = Path(__file__).with_name("native_a2a_manifest.yaml")
-    runtime = AgtRuntime.from_manifest(
+    runtime = AgentControl.from_path(str(
         manifest,
-        policy_dispatcher=RequestPolicy(),
+        policy_dispatcher=RequestPolicy()),
     )
     adapter = A2AGovernanceAdapter(runtime=runtime)
     evaluation = adapter.evaluate_task(

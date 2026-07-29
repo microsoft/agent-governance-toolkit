@@ -10,7 +10,7 @@ guidance, not a legal opinion or certification.
 |------|-------------|
 | Define allowed behavior | Native ACS manifest and policy bundles |
 | Restrict tools | Manifest tool catalog and `pre_tool_call` |
-| Bound autonomous work | `AdapterRuntimeSession` counters and manifest limits |
+| Bound autonomous work | `HostSession` counters and manifest limits |
 | Isolate execution | Sandbox providers and `SandboxConfig` |
 | Classify deployment risk | Agent Control Plane risk classification |
 
@@ -21,9 +21,9 @@ host enforces. Approval timeout, denial, suspension, and identity mismatch fail
 closed.
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime(
+runtime = AgentControl(
     "policies/singapore-mgf-manifest.yaml",
     approval_resolver=approval_resolver,
 )

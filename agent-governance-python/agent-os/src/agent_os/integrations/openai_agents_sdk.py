@@ -12,9 +12,9 @@ SDK's ``RunHooks`` lifecycle system.
     from agent_os.integrations.openai_agents_sdk import OpenAIAgentsKernel
     from agents import Agent, Runner
 
-    from agt.policies import AgtRuntime
+    from agent_control_specification import AgentControl
 
-    runtime = AgtRuntime("policies/manifest.yaml")
+    control = AgentControl.from_path("policies/manifest.yaml")
     kernel = OpenAIAgentsKernel(runtime=runtime)
 
     agent = Agent(name="assistant", model="gpt-4o")
@@ -72,7 +72,7 @@ class OpenAIAgentsKernel(BaseIntegration):
 
     Example::
 
-        runtime = AgtRuntime("policies/manifest.yaml")
+        control = AgentControl.from_path("policies/manifest.yaml")
         kernel = OpenAIAgentsKernel(runtime=runtime)
         result = await Runner.run(agent, "input", hooks=kernel.as_hooks())
     """

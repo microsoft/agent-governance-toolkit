@@ -18,10 +18,8 @@ PRIVATE_RESOLVER = "agt.cli._migrate_resolution"
 @pytest.mark.parametrize(
     "module",
     [
-        "agt.policies",
-        "agt.policies.runtime",
-        "agt.policies.session",
-        "agt._harness.snapshot",
+        "agent_control_specification",
+        "agent_control_specification._host",
     ],
 )
 def test_runtime_imports_do_not_load_private_migrator(module: str) -> None:

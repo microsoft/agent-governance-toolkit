@@ -7,7 +7,7 @@ owner: agt-maintainers
 # Framework Adapter Contract
 
 Framework adapters accept a native runtime and mediate supported lifecycle
-events through `AdapterRuntimeSession`.
+events through `HostSession`.
 
 Adapters declare required intervention points, apply transforms before side
 effects or disclosure, surface native `PolicyEvaluation` errors, and keep

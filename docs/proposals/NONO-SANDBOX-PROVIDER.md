@@ -23,7 +23,7 @@ responsibility.
 
 ## Native governance
 
-An optional `AgtRuntime` is wrapped in `AdapterRuntimeSession`. Runtime and
+An optional `AgentControl` is wrapped in `HostSession`. Runtime and
 static-scan denials occur before `sandboxed_exec`.
 
 ## Related implementation

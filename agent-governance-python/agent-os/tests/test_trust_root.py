@@ -2,17 +2,16 @@
 # Licensed under the MIT License.
 """Tests for the native-runtime trust authority and supervisor hierarchy."""
 from __future__ import annotations
-from typing import Any
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 from agent_os.supervisor import SupervisorHierarchy
 from agent_os.trust_root import TrustRoot
 
 class _Runtime:
     manifest = None
 
-    def evaluate(self, intervention_point: str, snapshot: dict[str, Any]) -> PolicyEvaluation:
+    async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
         denied = 'delete_file' in str(snapshot) or 'DROP TABLE' in str(snapshot)
-        return PolicyEvaluation(verdict='deny' if denied else 'allow', reason_code='restricted_action' if denied else '', message='Action denied by trust authority' if denied else '', intervention_point=intervention_point)
+        return InterventionPointResult(verdict=Verdict(decision=Decision('deny') if denied else Decision('allow'), reason='restricted_action' if denied else '', message='Action denied by trust authority' if denied else ''))
 
 def _root() -> TrustRoot:
     return TrustRoot(_Runtime())

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 
 from agent_os.integrations.base import (
     AdapterExecutionState,
@@ -26,9 +26,9 @@ class _Runtime:
         self.verdict = verdict
         self.points: list[str] = []
 
-    def evaluate(self, intervention_point: str, snapshot: dict[str, Any]) -> PolicyEvaluation:
+    async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
         self.points.append(intervention_point)
-        return PolicyEvaluation(verdict=self.verdict, intervention_point=intervention_point)
+        return InterventionPointResult(verdict=Verdict(decision=Decision(self.verdict)))
 
 
 class _Integration(BaseIntegration):

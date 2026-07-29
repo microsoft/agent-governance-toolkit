@@ -21,8 +21,8 @@ handle = provider.create_session(
 ```
 
 `SandboxConfig` owns CPU, memory, timeout, environment, mounts, and network
-settings. `AgtRuntime` is optional and owns every governance decision. The
-provider wraps it in `AdapterRuntimeSession` and evaluates before Azure
+settings. `AgentControl` is optional and owns every governance decision. The
+provider wraps it in `HostSession` and evaluates before Azure
 execution.
 
 ## Egress

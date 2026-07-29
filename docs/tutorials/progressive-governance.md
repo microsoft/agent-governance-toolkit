@@ -11,23 +11,23 @@ requires them.
 
 ## Level 1
 
-Create a manifest and evaluate it through `AgtRuntime`.
+Create a manifest and evaluate it through `AgentControl`.
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="agent-1",
     session_id="session-1",
 )
 
-evaluation = session.evaluate_pre_tool_call(
+evaluation = session.pre_tool_call(
     tool_name="delete_file",
     args={"path": "report.txt"},
 )
-assert not evaluation.is_allowed()
+assert not evaluation.verdict.decision.permits
 ```
 
 The manifest owns policy definitions, tool catalogs, intervention-point

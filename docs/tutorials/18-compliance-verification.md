@@ -112,7 +112,7 @@ The verifier checks 10 controls from the OWASP Agentic Security Initiatives (ASI
 |---------|------|--------|-----------|
 | ASI-01 | Prompt Injection | `agent_os.integrations.base` | `NativeAdapterRuntime` |
 | ASI-02 | Insecure Tool Use | `agent_os.integrations.tool_aliases` | `ToolAliasRegistry` |
-| ASI-03 | Excessive Agency | `agent_os.integrations.base` | `AgtRuntime` |
+| ASI-03 | Excessive Agency | `agent_os.integrations.base` | `AgentControl` |
 | ASI-04 | Unauthorized Escalation | `agent_os.integrations.escalation` | `EscalationPolicy` |
 | ASI-05 | Trust Boundary Violation | `agentmesh.trust.cards` | `CardRegistry` |
 | ASI-06 | Insufficient Logging | `agentmesh.governance.audit` | `AuditChain` |
@@ -300,7 +300,7 @@ SOX requires segregation of duties and change control:
 
 The EU AI Act mandates transparency and human oversight for high-risk AI:
 
-- **ASI-03 (Excessive Agency)**: `AgtRuntime` constrains what agents can do autonomously
+- **ASI-03 (Excessive Agency)**: `AgentControl` constrains what agents can do autonomously
 - **ASI-10 (Behavioral Anomaly)**: `ComplianceEngine` monitors for out-of-spec behavior
 
 ### 5.6 SOC 2 — Service Organization Controls
