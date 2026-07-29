@@ -198,6 +198,16 @@ class TestRedTeamAttack:
         if "agent-sre" not in (result.output or ""):
             assert result.exit_code == 1
 
+    def test_attack_threshold_consistency(self, runner: CliRunner):
+        """Verify report verdict and exit code are consistent when using custom threshold."""
+        result = runner.invoke(cli, ["red-team", "attack", "--threshold", "100.0", "--json"])
+        if result.exit_code in (0, 1) and "target" in (result.output or ""):
+            data = json.loads(result.output)
+            if data["overall_passed"]:
+                assert result.exit_code == 0
+            else:
+                assert result.exit_code == 1
+
 
 class TestRedTeamReport:
     """Tests for agt red-team report."""

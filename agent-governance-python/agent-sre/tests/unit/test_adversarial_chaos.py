@@ -256,6 +256,17 @@ class TestAdversarialRunner:
         assert all(r.passed for r in results)
         assert all(r.resilience_score == 100.0 for r in results)
 
+    def test_runner_custom_threshold(self) -> None:
+        exp = self._make_experiment([
+            Fault.prompt_injection("target"),
+        ])
+        runner = AdversarialRunner(exp)
+        pb = BUILTIN_PLAYBOOKS[1]  # privilege-escalation: partial defense (1/3 blocked, score 33.3)
+        res_low = runner.run_playbook(pb, threshold=30.0)
+        assert res_low.passed is True
+        res_high = runner.run_playbook(pb, threshold=50.0)
+        assert res_high.passed is False
+
 
 # ---------------------------------------------------------------------------
 # PlaybookResult scoring

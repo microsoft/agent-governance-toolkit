@@ -108,7 +108,9 @@ class AdversarialRunner:
             return AttackResult.BLOCKED
         return AttackResult.BYPASSED
 
-    def run_playbook(self, playbook: AdversarialPlaybook) -> PlaybookResult:
+    def run_playbook(
+        self, playbook: AdversarialPlaybook, threshold: float = 70.0
+    ) -> PlaybookResult:
         """Execute all steps in a playbook and score the results."""
         step_results: list[tuple[PlaybookStep, AttackResult, bool]] = []
         blocked_count = 0
@@ -122,7 +124,7 @@ class AdversarialRunner:
 
         total = len(playbook.steps)
         resilience_score = (blocked_count / total * 100.0) if total > 0 else 0.0
-        overall_passed = resilience_score >= 70.0
+        overall_passed = resilience_score >= threshold
 
         return PlaybookResult(
             playbook=playbook,
@@ -131,9 +133,11 @@ class AdversarialRunner:
             passed=overall_passed,
         )
 
-    def run_all(self, playbooks: list[AdversarialPlaybook]) -> list[PlaybookResult]:
+    def run_all(
+        self, playbooks: list[AdversarialPlaybook], threshold: float = 70.0
+    ) -> list[PlaybookResult]:
         """Run all provided playbooks and return their results."""
-        return [self.run_playbook(pb) for pb in playbooks]
+        return [self.run_playbook(pb, threshold=threshold) for pb in playbooks]
 
 
 # ---------------------------------------------------------------------------
