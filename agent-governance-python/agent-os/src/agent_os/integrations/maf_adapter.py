@@ -350,10 +350,34 @@ class RuntimeGovernanceMiddleware(AgentMiddleware):
                 except Exception:  # noqa: BLE001 — opaque message object
                     applied = False
         if not applied:
-            raise MiddlewareTermination(
+            # A refused transform is a block, so it is logged, surfaced and
+            # audited exactly like a denial. Raising bare would have blocked
+            # the call while leaving no record of it.
+            refusal = (
                 "AGT returned a transform this middleware could not apply to "
                 f"the message ({bridge_result.reason or bridge_result.verdict})"
             )
+            logger.info(
+                "Policy REFUSE (AGT input transform) for agent '%s': %s",
+                agent_name,
+                refusal,
+            )
+            context.result = AgentResponse(
+                messages=[Message("assistant", [f"⛔ Policy violation: {refusal}"])]
+            )
+            if self.audit_log:
+                self.audit_log.log(
+                    event_type="policy_violation",
+                    agent_did=agent_name,
+                    action="deny",
+                    data={
+                        "reason": refusal,
+                        "message_preview": last_message_text[:200],
+                    },
+                    outcome="denied",
+                    policy_decision="deny",
+                )
+            raise MiddlewareTermination(refusal)
 
         logger.debug(
             "Policy ALLOW (AGT input) for agent '%s'", agent_name

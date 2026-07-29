@@ -318,3 +318,48 @@ def test_capability_guard_transform_path_rewrites_arguments(tmp_path: Path) -> N
 
     # The wrapped tool MUST receive the AGT-redacted arguments.
     assert captured["args"] == {"query": "[SANITIZED]"}
+
+
+def test_policy_middleware_refuses_a_replacement_it_cannot_write(
+    tmp_path: Path,
+) -> None:
+    """A replacement that is not a string cannot reach the message body.
+
+    The guard here ANDs a third condition (``last_msg is not None``), which is
+    how this drop stayed hidden: the sweep and the first census both keyed on
+    a two-operand shape. Before the fix a dict replacement skipped the rewrite
+    and the agent ran on the original text while the policy believed it had
+    been redacted.
+    """
+    from agent_os.integrations.maf_adapter import (
+        MAFKernel,
+        RuntimeGovernanceMiddleware,
+    )
+
+    runtime, _policy = _build_runtime(
+        tmp_path,
+        [
+            {
+                "decision": "transform",
+                "reason": "pii_redaction",
+                "transform": {
+                    "path": "$policy_target",
+                    "value": {"redacted": "Customer SSN is [REDACTED]"},
+                },
+            }
+        ],
+    )
+    kernel = MAFKernel(runtime=runtime)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
+    ctx = _make_agent_ctx(text="Customer SSN is 123-45-6789")
+    call_next = AsyncMock()
+
+    with pytest.raises(Exception) as excinfo:
+        asyncio.run(mw.process(ctx, call_next))
+
+    assert "transform" in str(excinfo.value).lower()
+    call_next.assert_not_awaited()
+    assert ctx.messages[-1].text == "Customer SSN is 123-45-6789"
+    # A block has to leave a record and a user-visible result, the same way a
+    # denial does.
+    assert ctx.result is not None

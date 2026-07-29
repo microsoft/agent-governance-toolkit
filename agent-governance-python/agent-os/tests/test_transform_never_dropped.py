@@ -375,6 +375,14 @@ def test_a_replacement_of_the_wrong_shape_does_not_fall_through(
 STATE = types.SimpleNamespace(agent_id="a", session_id="s")
 
 
+class _Transform:
+    """The replacement a transform verdict carries."""
+
+    def __init__(self, value):
+        self.value = value
+        self.applied_value = value
+
+
 class _Evaluation:
     """Stand-in for the native ``PolicyEvaluation`` a session returns.
 

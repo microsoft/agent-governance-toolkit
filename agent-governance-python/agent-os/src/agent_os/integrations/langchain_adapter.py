@@ -240,8 +240,9 @@ class GovernanceMiddleware(_MiddlewareBase):
                 tool_call["args"] = tool_args
         if not bridge_result.allowed or not applied:
             logger.info(
-                "[%s] Policy DENY (AGT pre_tool_call) on tool '%s': %s",
+                "[%s] Policy %s (AGT pre_tool_call) on tool '%s': %s",
                 self._name,
+                "DENY" if not bridge_result.allowed else "REFUSE (unapplied transform)",
                 tool_name,
                 bridge_result.reason,
             )
