@@ -131,6 +131,23 @@ public sealed class ApprovalProtocolTests
     }
 
     [Fact]
+    public void SubmitEntry_RejectsAdvisoryVoteForNonAdvisoryStage()
+    {
+        var coordinator = Coordinator(Chain(Stage(0, "alice")));
+        var opened = coordinator.OpenRequest(Binding());
+        var advisoryVote = Vote("model") with { ApproverKind = ApproverKind.LlmAdvisory };
+
+        Assert.Throws<ApprovalProtocolException>(() => coordinator.SubmitEntry(
+            opened.Request.ApprovalRequestId,
+            0,
+            advisoryVote));
+
+        var result = coordinator.GetResult(opened.Request.ApprovalRequestId);
+        Assert.Equal(ApprovalStatus.Pending, result.Request.Status);
+        Assert.Empty(result.Entries);
+    }
+
+    [Fact]
     public async Task ResolveAsync_NoRequiredNonAdvisoryStageFailsClosed()
     {
         var advisory = Stage(0, "model") with
@@ -340,6 +357,26 @@ public sealed class ApprovalProtocolTests
     }
 
     [Fact]
+    public void ValidateForExecution_InternalErrorEmitsExecutionDeniedForKnownRequest()
+    {
+        var sink = new InMemoryApprovalAuditSink();
+        var coordinator = Coordinator(Chain(Stage(0, "alice")), auditSink: sink);
+        var opened = coordinator.OpenRequest(Binding());
+
+        var decision = coordinator.CheckForExecution(
+            opened.Request.ApprovalRequestId,
+            Binding() with { Target = null! });
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(ApprovalReasonCodes.InternalError, decision.ReasonCode);
+        var denied = Assert.Single(
+            sink.GetEvents(),
+            item => item.Type == ApprovalAuditEventType.ExecutionDenied);
+        Assert.Equal(ApprovalReasonCodes.InternalError, denied.ReasonCode);
+        Assert.Equal(opened.Request.ApprovalRequestId, denied.ApprovalRequestId);
+    }
+
+    [Fact]
     public async Task ResolveAsync_TimeoutFailsClosedAndRecordsDeny()
     {
         var stage = Stage(0, "alice") with
@@ -491,6 +528,46 @@ public sealed class WebhookApproverTests
         Assert.Equal("did:web:example.com:alice", vote.ApproverIdentity);
         Assert.Equal("oidc", vote.IdentityAssurance);
         Assert.Contains("security", vote.Roles);
+    }
+
+    [Fact]
+    public async Task RequestApprovalAsync_VerifiedApproveWithNullRolesUsesEmptyRoles()
+    {
+        var request = OpenRequest();
+        using var client = ClientFor(request, approved: true);
+        using var approver = new WebhookApprover(
+            new Uri("https://approvals.example/v1"),
+            client,
+            responseVerifier: (_, _) => new WebhookVerifiedIdentity
+            {
+                Identity = "did:web:example.com:alice",
+                Assurance = "oidc",
+                Roles = null!
+            });
+
+        var vote = await approver.RequestApprovalAsync(request);
+
+        Assert.Empty(vote.Roles);
+    }
+
+    [Fact]
+    public async Task RequestApprovalAsync_BlankVerifiedAssuranceFailsClosed()
+    {
+        var request = OpenRequest();
+        using var client = ClientFor(request, approved: true);
+        using var approver = new WebhookApprover(
+            new Uri("https://approvals.example/v1"),
+            client,
+            responseVerifier: (_, _) => new WebhookVerifiedIdentity
+            {
+                Identity = "did:web:example.com:alice",
+                Assurance = " "
+            });
+
+        var error = await Assert.ThrowsAsync<ApprovalTransportProtocolException>(
+            () => approver.RequestApprovalAsync(request));
+
+        Assert.Equal("unverified_approver_identity", error.ReasonCode);
     }
 
     [Fact]

@@ -153,7 +153,9 @@ public sealed class WebhookApprover : IApprovalTransport, IDisposable
                 $"identity_verification_error:{exception.GetType().Name}");
         }
 
-        if (verifiedIdentity is null || string.IsNullOrWhiteSpace(verifiedIdentity.Identity))
+        if (verifiedIdentity is null ||
+            string.IsNullOrWhiteSpace(verifiedIdentity.Identity) ||
+            string.IsNullOrWhiteSpace(verifiedIdentity.Assurance))
         {
             throw new ApprovalTransportProtocolException("unverified_approver_identity");
         }
@@ -165,7 +167,7 @@ public sealed class WebhookApprover : IApprovalTransport, IDisposable
             IdentityAssurance = verifiedIdentity.Assurance,
             Decision = ApprovalEntryDecision.Allow,
             ReasonCode = reason,
-            Roles = verifiedIdentity.Roles.ToArray(),
+            Roles = verifiedIdentity.Roles?.ToArray() ?? Array.Empty<string>(),
             ChainEntryId = chainEntryId
         };
     }

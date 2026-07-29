@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Concurrent;
 using AgentGovernance.Policy;
 
 namespace AgentGovernance.Approvals;
@@ -86,10 +85,11 @@ public sealed record ApprovalCoordinatorOptions
 /// </summary>
 public sealed class ApprovalCoordinator
 {
+    private const int RequestLockStripeCount = 64;
     private readonly ApprovalChain _chain;
     private readonly IApprovalStore _store;
     private readonly ApprovalCoordinatorOptions _options;
-    private readonly ConcurrentDictionary<string, object> _requestLocks = new(StringComparer.Ordinal);
+    private readonly object[] _requestLocks = CreateRequestLocks();
 
     /// <summary>Creates a coordinator for one versioned approval chain.</summary>
     public ApprovalCoordinator(
@@ -188,7 +188,13 @@ public sealed class ApprovalCoordinator
 
             var stage = _chain.FindStage(stageIndex) ??
                 throw new ApprovalProtocolException($"Unknown approval stage '{stageIndex}'.");
-            var isAdvisory = stage.IsAdvisory || vote.ApproverKind == ApproverKind.LlmAdvisory;
+            if (!stage.IsAdvisory && vote.ApproverKind == ApproverKind.LlmAdvisory)
+            {
+                throw new ApprovalProtocolException(
+                    $"LLM advisory vote is not valid for non-advisory approval stage {stageIndex}.");
+            }
+
+            var isAdvisory = stage.IsAdvisory;
             if (!isAdvisory && !stage.Authorizes(vote.ApproverIdentity, vote.Roles))
             {
                 throw new ApprovalProtocolException(
@@ -277,7 +283,7 @@ public sealed class ApprovalCoordinator
         ActionBinding binding) =>
         ValidateForExecutionCore(approvalRequestId, binding, consume: false);
 
-    /// <summary>Cancels a pending request and records a terminal deny.</summary>
+    /// <summary>Cancels a pending request and records a terminal cancellation.</summary>
     public ApprovalResult CancelRequest(string approvalRequestId, string reasonCode = ApprovalReasonCodes.Cancelled)
     {
         lock (RequestLock(approvalRequestId))
@@ -528,6 +534,7 @@ public sealed class ApprovalCoordinator
         }
         catch (Exception)
         {
+            TryEmitInternalExecutionDenied(approvalRequestId);
             return new ApprovalExecutionDecision
             {
                 ApprovalRequestId = approvalRequestId,
@@ -743,8 +750,51 @@ public sealed class ApprovalCoordinator
         return (policyDecision, request);
     }
 
-    private object RequestLock(string approvalRequestId) =>
-        _requestLocks.GetOrAdd(approvalRequestId, static _ => new object());
+    private object RequestLock(string approvalRequestId)
+    {
+        var index = (int)((uint)StringComparer.Ordinal.GetHashCode(approvalRequestId) %
+            (uint)_requestLocks.Length);
+        return _requestLocks[index];
+    }
+
+    private static object[] CreateRequestLocks()
+    {
+        var locks = new object[RequestLockStripeCount];
+        for (var index = 0; index < locks.Length; index++)
+        {
+            locks[index] = new object();
+        }
+
+        return locks;
+    }
+
+    private void TryEmitInternalExecutionDenied(string approvalRequestId)
+    {
+        try
+        {
+            if (!_store.TryGetRequest(approvalRequestId, out var policyDecision, out var request))
+            {
+                return;
+            }
+
+            ApprovalResolution? resolution = null;
+            if (_store.TryGetResolution(approvalRequestId, out var storedResolution))
+            {
+                resolution = storedResolution;
+            }
+
+            Emit(
+                ApprovalAuditEventType.ExecutionDenied,
+                policyDecision,
+                request,
+                resolution,
+                reasonCode: ApprovalReasonCodes.InternalError);
+        }
+        catch (Exception)
+        {
+            // Audit emission must not turn a fail-closed validation result into an exception.
+        }
+    }
 
     private void ValidateConfiguration()
     {
