@@ -35,6 +35,82 @@ surface and prevents the generator package from becoming a second SDK.
 - Invoke generation through `acs` or `acs-generate`. Code that imported
   generator implementation classes must move to the CLI or maintain its own
   integration with the internal modules.
+## The rest of the Python policy surface follows the rule model out
+
+**Date:** TBD
+
+**Affected**
+
+- `agt-policies` (`agt.manifest_resolution`, `agt._harness.opa_runner`)
+- `agent-os` (`agent_os.policies` evaluators, decisions, and conflict types)
+- `agentmesh-integrations`
+- The unreleased `cedarling-agentmesh` backend and its package extra
+
+**What changed**
+
+The entry titled "Python runtime policy APIs drop the pre-ACS rule model"
+records the rule model itself, the conversion helpers, and the sandbox
+policy-to-config helpers. What goes here is everything that depended on them
+and could only leave once they had.
+
+Manifest resolution is gone as a module. It walked a folder tree, merged the
+documents it found, and filtered them by scope, all of which described a
+layout the ACS manifest does not have. `resolve_manifest`, `discover_policies`,
+`merge_documents`, `filter_by_scope`, `ResolutionError`, and `ResolutionReason`
+go with it, along with the `agt._harness.opa_runner` module. Point `AgtRuntime`
+at a manifest instead.
+
+`agent_os.policies` loses the evaluators and backends that read the rule model
+(`PolicyEvaluator`, `ExternalPolicyBackend`, `ConcurrencyStats`), the decision
+and conflict types they produced (`PolicyDecision`, `CandidateDecision`,
+`PolicyCheckResult`, `PolicyConflictResolver`, `ConflictResolutionStrategy`,
+`ResolutionResult`), and the remaining rule types (`PolicyRule`, `PolicyScope`,
+`Condition`). Names that survive elsewhere are unrelated: `agent_os.base_agent`
+keeps its own `PolicyDecision` enum, `agent_os` re-exports a `PolicyRule` from
+`agent_control_plane`, and `agentmesh.governance` keeps a separate trust-policy
+system that was never part of the v4 language.
+
+Framework integrations lose their local policy surfaces: `GovernancePolicy`,
+`GovernancePolicyChecker`, `GovernanceComponent`, `GovernanceSkill`,
+`GovernanceToolset`, `PolicyGuardrailConfig`, `PatternType`,
+`ShellPolicyViolation`, `load_policy_yaml`, `governed_shell`,
+`policy_input_guardrail`, and `content_output_guardrail`. Each took a local
+policy object; each now takes an `AgtRuntime` or an `AgentControl`.
+
+The `cedarling-agentmesh` backend and `CedarlingBackend` are removed with the
+consolidated package extra that pulled them in. The backend implemented the
+deleted backend contract and was never released.
+
+**Migration**
+
+Build the manifest with `agt migrate`, construct `AgtRuntime` from it, and pass
+that runtime wherever a policy object used to go. Read `evaluation_result` and
+the ACS audit record in place of the compatibility exception fields.
+
+---
+
+## Rust and Mastra framework policy surfaces now use ACS manifests
+
+**Date:** TBD
+
+**Affected:**
+
+- Rust `agentmesh::FrameworkGovernanceAdapter`
+- `@microsoft/agentmesh-mastra`
+
+**What changed:**
+
+The Rust framework adapter no longer accepts its local policy struct and
+pattern enum. It accepts native `AgentControl` or `Manifest` input. The Mastra
+wrapper no longer exports a local policy middleware. It requires a Node ACS
+`AgentControl` and delegates tool execution to `runTool`.
+
+**Migration:**
+
+Move tool catalogs, bindings, budgets, content policies, and approval rules
+into an ACS manifest. Rust callers construct `AgentControl::from_manifest` or
+`FrameworkGovernanceAdapter::from_path`. Mastra callers pass
+`AgentControl.fromPath(...)` as the `control` option to `createGovernedTool`.
 
 ---
 
@@ -276,9 +352,8 @@ policy input. This release standardizes all three on fail-closed semantics:
 
 1. **Default action is now deny.** When `defaults.action` is omitted, or when
    no policies are loaded at all, the decision is now `deny` in every SDK.
-   - Python: `PolicyDefaults.action` now defaults to `PolicyAction.DENY`, and
-     the evaluator returns `deny` when no policies are loaded (previously both
-     were `allow`, fail-open).
+   - Python native ACS evaluation fails closed when no valid binding can
+     produce a decision.
    - .NET: the zero-policy path now returns `PolicyDecision.DenyDefault`
      (previously `AllowDefault`).
    - TypeScript already defaulted to `deny`; no change.

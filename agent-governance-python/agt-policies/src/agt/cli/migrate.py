@@ -9,8 +9,7 @@ project to the v5 shape (``--write``).
 The algorithm follows ``plan.md`` §5 / milestone M6.S1:
 
 1. Find legacy artifacts under the project root.
-2. For every governance.yaml chain, run
-   :func:`agt.manifest_resolution.resolve_manifest` and persist the
+2. For every governance.yaml chain, run the private migration resolver and persist the
    resulting flat ACS manifest + generated Rego bundle.
 3. For every ``GovernancePolicy(...)`` constructor call, accept only exact
    literals, translate them through the private one-way migrator, and refuse
@@ -23,9 +22,8 @@ The algorithm follows ``plan.md`` §5 / milestone M6.S1:
 7. Render a Markdown report (printed to stdout, optionally written
    via ``--write-report``).
 
-The CLI is deliberately stdlib + pyyaml only — the only third-party
-imports are the same ones the rest of agt-policies already depends on
-through ``manifest_resolution`` and ``policies.bridge``.
+The CLI is deliberately stdlib + pyyaml only. Its private resolver and
+translator use the same dependencies already declared by `agt-policies`.
 """
 
 from __future__ import annotations
@@ -46,10 +44,10 @@ from typing import Any
 
 import yaml
 
-from agt.manifest_resolution import ResolutionError, resolve_manifest
 from agt.policies.manifest import AgtManifest
 
 from ._migrate_bridge import MigrationPolicyInput, build_migrated_manifest
+from ._migrate_resolution import ResolutionError, resolve_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +217,7 @@ def _find_governance_chains(root: Path) -> list[Path]:
 
     A "chain root" is the directory containing the **most-specific**
     governance file in a path — i.e. the directory we would pass as
-    ``action_path`` to :func:`agt.manifest_resolution.resolve_manifest`.
+    ``action_path`` to the private migration resolver.
     Directories that already have a v5 ``manifest.yaml`` sitting next to
     the governance file are still reported so the migration is idempotent
     (the run is a no-op when ``--write`` already happened).
