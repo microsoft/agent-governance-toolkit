@@ -19,6 +19,9 @@ def _fake_github_token(prefix: str) -> str:
 # appears in source (avoids secret-scanner false positives on a test value).
 _FAKE_GOOGLE_KEY = "AIza" + "SyD1234567890abcdefghijklmnopqrstuv"
 
+# AWS's own documentation example access key ID -- deterministic and clearly fake.
+_FAKE_AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
+
 
 def _fake_pem_block(label: str) -> str:
     return (
@@ -338,6 +341,68 @@ def test_detects_secret_glued_to_preceding_word_character(text: str):
 def test_loosened_anchor_does_not_match_inside_words(text: str):
     # The (?<![A-Za-z0-9]) anchor still refuses to match a secret prefix that is
     # embedded in an alphanumeric word (e.g. the "sk-" inside "disk-").
+    assert CredentialRedactor.contains_credentials(text) is False
+    assert CredentialRedactor.redact(text) == text
+
+
+# A base64 Basic-auth value; the credential is the whole encoded pair.
+_FAKE_BASIC_B64 = "YWxhZGRpbjpvcGVuc2VzYW1l"
+
+
+@pytest.mark.parametrize(
+    ("text", "secret"),
+    [
+        # AKIA... is fixed-length, so the engine has no shorter match to back off
+        # to and the whole pattern fails -- the key is not redacted at all.
+        (f"{_FAKE_AWS_ACCESS_KEY}_old", _FAKE_AWS_ACCESS_KEY),
+        (f"AWS_ACCESS_KEY_ID_OLD={_FAKE_AWS_ACCESS_KEY}_deprecated", _FAKE_AWS_ACCESS_KEY),
+        (f'{{"{_FAKE_AWS_ACCESS_KEY}_backup": "unused"}}', _FAKE_AWS_ACCESS_KEY),
+        # Google keys are fixed-length too. No `key=` prefix here: that would be
+        # caught by the keyword-anchored "Generic API secret" pattern instead, and
+        # the case would pass without exercising the Google pattern at all.
+        (f"rotate {_FAKE_GOOGLE_KEY}_v2 today", _FAKE_GOOGLE_KEY),
+        # Stripe's value class excludes "_", so {10,} cannot absorb the suffix.
+        ("stripe=sk_live_FakeTestKey0000_rotated", "sk_live_FakeTestKey0000"),
+        # Both Basic-auth alternatives kept \b on the *left* edge, the very case
+        # the lookbehind was introduced for everywhere else.
+        (f"auth_Basic {_FAKE_BASIC_B64}", _FAKE_BASIC_B64),
+        ("url_https://user:pass123@example.com/resource", "pass123"),
+    ],
+)
+def test_redacts_secret_glued_to_a_following_word_character(text: str, secret: str):
+    """A key annotated in place must still be redacted.
+
+    Rotation notes are how secrets actually appear in the text a host scans:
+    `AKIA..._old`, `sk_live_..._rotated`, a JSON key suffixed `_backup`. A
+    trailing `\\b` after a value class that excludes `_` cannot match these,
+    and because the value length is fixed (or `_`-free) there is no shorter
+    match ending on a word boundary for the engine to fall back to. The result
+    was not a truncated redaction but no redaction at all.
+    """
+    assert CredentialRedactor.contains_credentials(text) is True
+    assert secret not in CredentialRedactor.redact(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Glued on the left: still an alphanumeric word, still not a secret.
+        f"x{_FAKE_AWS_ACCESS_KEY}",
+        f"prefix{_FAKE_GOOGLE_KEY}",
+        # One character too long for a fixed-length key: not that key.
+        f"{_FAKE_AWS_ACCESS_KEY}X",
+        f"{_FAKE_AWS_ACCESS_KEY}1",
+        f"{_FAKE_GOOGLE_KEY}9",
+        # Below the length floor.
+        "sk_live_short",
+        "Basic short",
+        # A URL with no userinfo.
+        "https://example.com/path",
+    ],
+)
+def test_trailing_anchor_does_not_widen_the_match(text: str):
+    # Replacing the trailing \b with (?![A-Za-z0-9]) must not make the patterns
+    # accept more: an alphanumeric character on either side still disqualifies.
     assert CredentialRedactor.contains_credentials(text) is False
     assert CredentialRedactor.redact(text) == text
 
