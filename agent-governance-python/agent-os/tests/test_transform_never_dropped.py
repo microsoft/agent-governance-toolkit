@@ -677,11 +677,7 @@ def _skipped_writes():
                 if "transformed_value" not in body:
                     continue
                 whole = ast.unparse(inner)
-                # Handled when the branch refuses, tracks a landed-flag, or
-                # hands the replacement back to the caller. That last form is
-                # how llamaindex, semantic_kernel and langchain treat a value
-                # that IS the return rather than an attribute on it; denying
-                # there would turn a redaction into a refusal.
+
                 # The else branch is whatever this If node holds beyond its
                 # test and body. Searching the unparsed source for "else:"
                 # would also match an else on a nested for/try/if and mark the
@@ -690,11 +686,46 @@ def _skipped_writes():
                 has_else = any(
                     c is not inner.test and c not in inner.body for c in children
                 )
+
+                # A raise only handles the SKIPPED write if it is reachable
+                # when the guard is false. A raise inside the branch's own
+                # except handler fires when the write THROWS, which is the
+                # class census 3 covers, and says nothing about the branch
+                # never being entered. Counting it here would exempt the
+                # repo's most common shape, a guarded write in a try.
+                handlers = [
+                    h for n in inner.body for h in ast.walk(n)
+                    if isinstance(h, ast.ExceptHandler)
+                ]
+                in_handler = {
+                    id(r) for h in handlers for r in ast.walk(h)
+                    if isinstance(r, ast.Raise)
+                }
+                refuses = any(
+                    isinstance(n, ast.Raise) and id(n) not in in_handler
+                    for stmt in inner.body for n in ast.walk(stmt)
+                )
+
+                # Handing the replacement back to the caller also handles it,
+                # and that is matched against the whole outer block on purpose.
+                # llamaindex and semantic_kernel chain several target guards
+                # and end the block with `return <result>.transformed_value`,
+                # so a guard falling through reaches that fallback rather than
+                # carrying on with the original. Scoping this to the branch
+                # would flag those as drops. The cost is that a block with a
+                # fallback on one path and a genuine drop on another reads as
+                # handled; census 1 still requires the function to apply or
+                # refuse, and the branch-level clauses above catch the shape
+                # that has no fallback at all.
+                returns_replacement = re.search(
+                    r"return \w+\.transformed_value", block
+                )
+
                 handled = (
                     has_else
-                    or "raise" in whole
+                    or refuses
                     or re.search(r"(applied|rewritten) = ", whole)
-                    or re.search(r"return \w+\.transformed_value", block)
+                    or returns_replacement
                 )
                 if not handled:
                     found.append(f"{path.relative_to(SRC)}:{inner.lineno}")
