@@ -275,10 +275,13 @@ func (decision ContextDecision) PolicyDecision(hasObligationChannel bool) Policy
 	case ContextOutcomeEscalate:
 		return Review
 	case ContextOutcomeConstrain:
+		if len(decision.Obligations.Obligations) == 0 {
+			return Deny
+		}
 		if hasObligationChannel {
 			return Allow
 		}
-		if len(decision.Obligations.Obligations) > 0 && decision.Obligations.AllSatisfied() {
+		if decision.Obligations.AllSatisfied() {
 			return Allow
 		}
 		return Deny
