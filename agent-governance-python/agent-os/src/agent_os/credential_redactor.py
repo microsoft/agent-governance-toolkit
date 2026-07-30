@@ -61,6 +61,60 @@ def _not_a_literal(value_end: str, *, numeric: bool) -> str:
     return rf"(?!(?:{literals})\s*(?:[{value_end}]|$))"
 
 
+# A value that is wholly an unexpanded interpolation reference names a secret
+# without containing one. ``"api_key": "${MCP_API_KEY}"`` is the *config* that
+# reads a credential at startup, so redacting it destroys the reference and
+# tells the reader a secret was committed when none was.
+_INTERPOLATION_REFERENCE = (
+    r"(?![\"']?(?:\$\{[^{}]*\}|\{\{[^{}]*\}\}|%[A-Za-z_][A-Za-z0-9_]*%)"
+    r"[\"']?(?:[\s,;}\]]|$))"
+)
+
+
+def _separator(
+    value_end: str, *, numeric_is_literal: bool, colon_floor: int | None = None
+) -> str:
+    """Build the ``:``/``=`` separator, applying the numeric guard to ``:`` only.
+
+    A bare number is a *typed* number only where the syntax has a number type.
+    ``{"token": 12345678}`` and ``token: 3600`` are JSON and YAML integers, and
+    reading either as a credential is a false positive. ``token=12345678`` is
+    not: in an environment variable, a connection string or a query string
+    every value is a string, so a digit run there is a digit-only secret.
+
+    Guarding both separators alike is what made the same secret redact in one
+    spelling and leak in another -- ``token="12345678"`` redacted while
+    ``token=12345678`` did not -- which contradicts the invariant
+    ``test_one_secret_is_found_in_every_spelling`` asserts. Quoting already
+    settles the JSON case: a quoted digit run is a string by construction and
+    reaches the quoted branches, which this guard never sees.
+    """
+    # ``true``/``false``/``null`` are not credentials under either separator,
+    # so that half of the guard applies to both. Only the numeric half is
+    # specific to the syntaxes that have a number type.
+    word_guard = _not_a_literal(value_end, numeric=False)
+    # A floor that applies to the ``:`` spelling only. ``password`` needs a low
+    # floor for ``Password=1234``, but ``:`` is also how Python annotates a
+    # parameter, so the same floor let source text match: in
+    # ``def f(username: str, password: str):`` the value ``str):`` clears four
+    # characters and the line tail was redacted. A connection string is written
+    # with ``=``, so raising the floor for ``:`` costs no real spelling.
+    colon_floor_guard = (
+        "" if colon_floor is None else rf"(?=[\"']?[^{value_end}]{{{colon_floor},}})"
+    )
+    colon = rf":\s*{colon_floor_guard}"
+    # An interpolation reference is not a secret under either separator: an
+    # env-file line is written ``API_KEY=${MY_KEY}`` as often as a YAML one is
+    # written ``api_key: ${MY_KEY}``.
+    colon_guard = word_guard if not numeric_is_literal else _not_a_literal(
+        value_end, numeric=True
+    )
+    return (
+        rf"(?:{colon}{_INTERPOLATION_REFERENCE}{colon_guard}"
+        rf"|=\s*{_INTERPOLATION_REFERENCE}{word_guard})"
+    )
+
+
 def _keyword_value(
     keywords: str,
     floor: int,
@@ -68,6 +122,7 @@ def _keyword_value(
     *,
     value_end: str = _JSON_VALUE_END,
     numeric_is_literal: bool = True,
+    colon_floor: int | None = None,
 ) -> str:
     """Build a ``keyword <sep> value`` pattern whose value is a capture group.
 
@@ -83,14 +138,19 @@ def _keyword_value(
         value_end: Character-class body for the delimiters an unquoted value
             stops at. Also drives the literal guard, so the two cannot drift.
         numeric_is_literal: Passed to :func:`_not_a_literal`.
+        colon_floor: Optional larger floor for the ``:`` spelling only, for a
+            keyword whose ``=`` form needs a floor too low to distinguish a
+            short secret from source text. See :func:`_separator`.
 
     Returns:
         A pattern string with the secret captured in a ``secret*`` group.
     """
     # An optional quote before the separator: in ``"api_key": "..."`` the
     # closing quote of the *key* falls between the keyword and the separator.
-    guard = _not_a_literal(value_end, numeric=numeric_is_literal)
-    head = rf"(?i)(?<![A-Za-z0-9]){keywords}[\"']?\s*[:=]\s*{guard}"
+    sep = _separator(
+        value_end, numeric_is_literal=numeric_is_literal, colon_floor=colon_floor
+    )
+    head = rf"(?i)(?<![A-Za-z0-9]){keywords}[\"']?\s*{sep}"
     if value_class is not None:
         return rf"{head}[\"']?(?P<{_SECRET_GROUP}_bare>{value_class}{{{floor},}})"
     # The unquoted branch excludes a quote only as its *first* character, which
@@ -106,11 +166,23 @@ def _keyword_value(
     # mapping from consuming the delimiter that closes it and turning a redaction
     # into a parse failure. A password whose last character really is ``,`` loses
     # that one character from the redaction, which is not a meaningful leak.
+    # The quoted classes exclude a newline as well as their own delimiter. A
+    # JSON or YAML string cannot contain a raw newline, so a quote that is not
+    # closed on its own line is an unterminated quote rather than the start of a
+    # very long value. Without ``\n`` a stray opening quote consumed the
+    # following lines and redacted them as one secret.
+    #
+    # The bare branch's leading quote is *optional*, not excluded. Excluding it
+    # meant an unterminated quote matched nothing at all and the secret leaked
+    # in full (``api_key="SECRET`` with no closing quote), where the earlier
+    # ``[\"']?`` handled it. The quoted branches are tried first, so a properly
+    # terminated value still matches them and keeps its quotes outside the
+    # redacted span; the bare branch only takes over when they fail.
     return (
         rf"{head}"
-        rf"(?:\"(?P<{_SECRET_GROUP}_dq>[^\"]{{{floor},}})\""
-        rf"|'(?P<{_SECRET_GROUP}_sq>[^']{{{floor},}})'"
-        rf"|(?![\"'])(?P<{_SECRET_GROUP}_bare>[^{value_end}]{{{floor},}})(?<![,}}\]]))"
+        rf"(?:\"(?P<{_SECRET_GROUP}_dq>[^\"\n]{{{floor},}})\""
+        rf"|'(?P<{_SECRET_GROUP}_sq>[^'\n]{{{floor},}})'"
+        rf"|[\"']?(?P<{_SECRET_GROUP}_bare>[^{value_end}]{{{floor},}})(?<![,}}\]]))"
     )
 
 
@@ -245,6 +317,9 @@ class CredentialRedactor:
                     value_end=_CONNECTION_VALUE_END,
                     # "password = 12345678" is a bad password, not a non-secret.
                     numeric_is_literal=False,
+                    # ``:`` is also Python's annotation separator, and floor 4
+                    # matched ``password: str):`` in a function signature.
+                    colon_floor=8,
                 )
             ),
         ),

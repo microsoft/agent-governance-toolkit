@@ -414,6 +414,58 @@ def test_one_secret_is_found_in_every_spelling(text_template: str):
     assert _FAKE_SECRET_VALUE not in CredentialRedactor.redact(text)
 
 
+@pytest.mark.parametrize(
+    "text_template",
+    [
+        "token={value}",
+        "api_key={value}",
+        '{{"token": "{value}"}}',
+        "api_key = '{value}'",
+    ],
+)
+def test_a_digit_only_secret_is_found_in_every_string_spelling(text_template: str):
+    """Quoting or an ``=`` makes a digit run a string, so it is a secret.
+
+    The literal guard exists so ``{"token": 12345678}`` -- a JSON integer, an ID
+    or an expiry -- is not read as a credential. Applying it to every spelling
+    alike instead made the *same* digit-only secret redact in one and leak in
+    another: ``token="12345678"`` was redacted while ``token=12345678`` was not.
+    An environment variable, a connection string and a query string have no
+    number type, so a digit run there is a digit-only secret.
+    """
+    text = text_template.format(value="1234567890123")
+
+    assert "1234567890123" not in CredentialRedactor.redact(text)
+
+
+def test_an_unterminated_quote_still_redacts():
+    """A truncated log line must not be the way a secret survives.
+
+    The bare branch takes an *optional* opening quote rather than excluding one.
+    Excluding it meant a value whose closing quote never arrived matched no
+    branch at all and leaked in full.
+    """
+    text = 'api_key="' + _FAKE_SECRET_VALUE
+
+    assert _FAKE_SECRET_VALUE not in CredentialRedactor.redact(text)
+
+
+def test_a_stray_quote_does_not_swallow_the_following_lines():
+    """A quoted value ends at its line: a JSON string cannot hold a raw newline.
+
+    Without ``\\n`` excluded from the quoted classes, an unclosed quote ran on to
+    the next quote anywhere later in the buffer and redacted the intervening log
+    lines as if they were one secret.
+    """
+    text = 'api_key="' + _FAKE_SECRET_VALUE + '\nkeep one\nkeep two "quoted"\n'
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_SECRET_VALUE not in redacted
+    assert "keep one" in redacted
+    assert 'keep two "quoted"' in redacted
+
+
 def test_redaction_of_a_json_secret_leaves_the_other_fields_intact():
     """The match must stop at the value, not swallow the rest of the object."""
     text = '{"user": "alice", "api_key": "' + _FAKE_SECRET_VALUE + '", "region": "eu-west-1"}'
@@ -464,11 +516,39 @@ def test_detects_azure_account_key_in_the_json_spelling():
         '{"expires_token": -1}',
         "token: null",
         "password = false",
+        # ``:`` is also Python's annotation separator. The connection-string
+        # floor of 4 exists for ``Password=1234``, but with ``:`` it let a
+        # function signature match and redacted the tail of the line.
+        "def authenticate_user(username: str, password: str):",
+        "def f(self, token: str) -> None:",
+        "    api_key: str",
+        # A value that is wholly an unexpanded reference names a credential
+        # without containing one. Redacting it destroys the reference and
+        # reports a leak that did not happen.
+        '"API_KEY": "${MCP_API_KEY}"',
+        'api_key: "{{ vault_key }}"',
+        "api_key=${MY_KEY}",
+        "password=%DB_PASS%",
+        '{"token": "${GITHUB_TOKEN}", "keep": 1}',
     ],
 )
 def test_keyword_patterns_still_avoid_false_positives(text: str):
     assert CredentialRedactor.redact(text) == text
     assert CredentialRedactor.contains_credentials(text) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Only a value that is *wholly* a reference is exempt. A secret is not
+        # laundered by wrapping part of it to look like one.
+        'api_key: "${MCP_API_KEY}' + _FAKE_SECRET_VALUE + '"',
+        'api_key: "prefix${X}' + _FAKE_SECRET_VALUE + '"',
+        'api_key: "{not-a-reference-' + _FAKE_SECRET_VALUE + '"',
+    ],
+)
+def test_a_reference_prefix_does_not_exempt_a_real_secret(text: str):
+    assert _FAKE_SECRET_VALUE not in CredentialRedactor.redact(text)
 
 
 # ── redaction replaces the value, not the key ─────────────────
