@@ -13,9 +13,10 @@ from typing import Any
 
 import pytest
 
-_HERE = Path(__file__).resolve().parent
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_EXAMPLE_DIR = _REPO_ROOT / "examples" / "external-checkpoint-bridge"
 _spec = importlib.util.spec_from_file_location(
-    "external_checkpoint_bridge_demo", _HERE / "demo.py"
+    "external_checkpoint_bridge_demo", _EXAMPLE_DIR / "demo.py"
 )
 demo = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
 sys.modules["external_checkpoint_bridge_demo"] = demo
@@ -179,6 +180,18 @@ def test_parse_remote_verdict_accepts_valid_payload() -> None:
         "decision_id": "dec_test",
         "action_ref": envelope["action_ref"],
     }
+
+
+@pytest.mark.parametrize(
+    ("verdict", "enforcement"),
+    [
+        ("allow", "execute"),
+        ("require_approval", "pause_for_human_approval"),
+        ("deny", "block"),
+    ],
+)
+def test_map_to_enforcement(verdict: demo.Verdict, enforcement: demo.Enforcement) -> None:
+    assert demo.map_to_enforcement(verdict) == enforcement
 
 
 def test_map_to_enforcement_rejects_unknown_verdict() -> None:

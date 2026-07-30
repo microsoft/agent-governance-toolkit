@@ -26,6 +26,12 @@ python examples/external-checkpoint-bridge/demo.py
 No API keys or third-party packages are required. By default, the demo uses a local
 checkpoint implementation.
 
+To run the regression tests for this example:
+
+```bash
+python -m pytest tests/test_external_checkpoint_bridge.py -q
+```
+
 ## Optional remote checkpoint
 
 Set `EXTERNAL_CHECKPOINT_URL` to send each action envelope to an HTTPS endpoint:
