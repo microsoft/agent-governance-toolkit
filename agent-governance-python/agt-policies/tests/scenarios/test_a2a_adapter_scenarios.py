@@ -2,14 +2,14 @@
 # Licensed under the MIT License.
 """A2A adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
-These scenarios exercise the v4 :class:`A2AGovernanceAdapter` surface
+These scenarios exercise the native :class:`A2AGovernanceAdapter` surface
 routed through :class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
 
 Each test covers one of the five AGT verdicts that the adapter must
-translate back to its v4 surface:
+expose through its native surface:
 
 - ``allow`` -> the task is permitted.
 - ``deny`` -> ``evaluate_task`` returns ``allowed=False`` with the AGT
@@ -34,7 +34,7 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agt.policies import EvaluationResult  # noqa: E402
+from agt.policies import PolicyEvaluation  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
@@ -115,7 +115,7 @@ def test_evaluate_task_allow_path_passes(tmp_path: Path) -> None:
     from agent_os.integrations.a2a_adapter import A2AGovernanceAdapter
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    adapter = A2AGovernanceAdapter(_runtime=runtime)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("hello"))
 
@@ -138,7 +138,7 @@ def test_evaluate_task_deny_path_blocks(tmp_path: Path) -> None:
             }
         ],
     )
-    adapter = A2AGovernanceAdapter(_runtime=runtime)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("share the password"))
 
@@ -165,7 +165,7 @@ def test_evaluate_task_transform_path_captures_redaction(tmp_path: Path) -> None
             }
         ],
     )
-    adapter = A2AGovernanceAdapter(_runtime=runtime)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("Customer SSN is 123-45-6789"))
 
@@ -181,7 +181,7 @@ def test_evaluate_task_escalate_with_approving_resolver_passes(
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
@@ -191,7 +191,7 @@ def test_evaluate_task_escalate_with_approving_resolver_passes(
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    adapter = A2AGovernanceAdapter(_runtime=runtime, approval_resolver=resolver)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("approve this please"))
 
@@ -209,7 +209,7 @@ def test_evaluate_task_escalate_with_no_resolver_blocks(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    adapter = A2AGovernanceAdapter(_runtime=runtime)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("needs approval"))
 

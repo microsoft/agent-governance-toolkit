@@ -91,7 +91,7 @@ The CSA Agentic Trust Framework (ATF) applies Zero Trust security principles to 
 | ATF MUST | Implementation | Component |
 |----------|---------------|-----------|
 | Validate data schema and types | Policy engine validates action schemas before execution | `PolicyEngine.evaluate()` |
-| Detect injection attacks | Blocked patterns (regex/glob) for SQL injection, shell commands, prompt injection | `GovernancePolicy.blocked_patterns` |
+| Detect injection attacks | Blocked patterns (regex/glob) for SQL injection, shell commands, prompt injection | `AgtRuntime.blocked_patterns` |
 | Check for data poisoning | VFS integrity checks, CMVK content verification | Agent OS VFS |
 
 #### 4.3.2 Output Filtering
@@ -99,7 +99,7 @@ The CSA Agentic Trust Framework (ATF) applies Zero Trust security principles to 
 | ATF MUST | Implementation | Component |
 |----------|---------------|-----------|
 | Scan outputs for PII/secrets/credentials | PII detection patterns, credential scanning | `OutputValidationMiddleware` |
-| Configurable content filtering | Blocked output patterns, max length limits | `GovernancePolicy` |
+| Configurable content filtering | Blocked output patterns, max length limits | `AgtRuntime` |
 | Log all filtering actions | Full audit trail of policy decisions | Audit subsystem |
 
 | ATF SHOULD | Implementation |
@@ -117,7 +117,7 @@ The CSA Agentic Trust Framework (ATF) applies Zero Trust security principles to 
 | ATF MUST | Implementation | Component |
 |----------|---------------|-----------|
 | Granular permissions per agent | Tool-level allow/deny lists, capability-based access control | `CapabilitySandbox` |
-| Time-based access restrictions | Rate limiting with sliding windows (60s default) | `GovernancePolicy.rate_limits` |
+| Time-based access restrictions | Rate limiting with sliding windows (60s default) | `AgtRuntime.rate_limits` |
 | Dynamic permission adjustment | Policy hot-reload, context-aware capability grants | `PolicyEngine` |
 
 | ATF Required Policy Elements | Our Coverage |

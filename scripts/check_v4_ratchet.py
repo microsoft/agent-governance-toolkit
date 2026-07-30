@@ -124,6 +124,10 @@ ALLOWED_V4_FILES: frozenset[str] = frozenset(
         "agent-governance-python/agt-policies/tests/test_migration_boundary.py",
         "agent-governance-python/agt-policies/tests/test_migration_equivalence.py",
         "docs/v4-removal.md",
+        # The breaking-changes record has to name each removed symbol so users
+        # can find its replacement. Naming a symbol in order to say it is gone
+        # documents the removal; it is not a use of it.
+        "BREAKING_CHANGES.md",
         # The ratchet's own test fixtures reference v4 names deliberately.
         "scripts/tests/test_check_v4_ratchet.py",
         # The baseline inventories v4 names by design and must not inventory itself.

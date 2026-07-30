@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 """Agent Shield adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
-These scenarios exercise the v4 :class:`AgentShieldKernel` surface
+These scenarios exercise the native :class:`AgentShieldKernel` surface
 routed through :class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The Agent Shield SDK itself is mocked (so the suite does not depend on
 ``agent-shield`` being installed), and the AGT runtime is wired with a
 scripted policy dispatcher so the suite does not depend on OPA on
@@ -34,7 +34,7 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agt.policies import EvaluationResult  # noqa: E402
+from agt.policies import PolicyEvaluation  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
@@ -117,7 +117,7 @@ def test_validate_input_allow_path_passes(tmp_path: Path) -> None:
     )
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = AgentShieldKernel.mock(_runtime=runtime)
+    kernel = AgentShieldKernel.mock(agt_runtime=runtime)
 
     verdict = kernel.validate_input("Hello, world")
 
@@ -143,7 +143,7 @@ def test_validate_input_deny_path_blocks(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = AgentShieldKernel.mock(_runtime=runtime)
+    kernel = AgentShieldKernel.mock(agt_runtime=runtime)
 
     verdict = kernel.validate_input("share the password")
 
@@ -171,7 +171,7 @@ def test_validate_input_transform_path_sets_modified_value(tmp_path: Path) -> No
             }
         ],
     )
-    kernel = AgentShieldKernel.mock(_runtime=runtime)
+    kernel = AgentShieldKernel.mock(agt_runtime=runtime)
 
     verdict = kernel.validate_input("Customer SSN is 123-45-6789")
 
@@ -187,7 +187,7 @@ def test_validate_input_escalate_with_approving_resolver_passes(
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
@@ -197,7 +197,7 @@ def test_validate_input_escalate_with_approving_resolver_passes(
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = AgentShieldKernel.mock(_runtime=runtime, approval_resolver=resolver)
+    kernel = AgentShieldKernel.mock(agt_runtime=runtime)
 
     verdict = kernel.validate_input("approve this please")
 
@@ -218,7 +218,7 @@ def test_validate_input_escalate_with_no_resolver_blocks(tmp_path: Path) -> None
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = AgentShieldKernel.mock(_runtime=runtime)
+    kernel = AgentShieldKernel.mock(agt_runtime=runtime)
 
     verdict = kernel.validate_input("needs approval")
 
@@ -247,7 +247,7 @@ def test_validate_tool_call_transform_rewrites_parameters(tmp_path: Path) -> Non
             }
         ],
     )
-    kernel = AgentShieldKernel.mock(_runtime=runtime)
+    kernel = AgentShieldKernel.mock(agt_runtime=runtime)
 
     verdict = kernel.validate_tool_call(
         "send_email", {"to": "user@example.com"}
@@ -271,7 +271,7 @@ def test_validate_tool_call_deny_blocks_tool_call(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = AgentShieldKernel.mock(_runtime=runtime)
+    kernel = AgentShieldKernel.mock(agt_runtime=runtime)
 
     verdict = kernel.validate_tool_call(
         "send_email", {"to": "user@example.com"}
@@ -302,7 +302,7 @@ def test_validate_output_transform_redacts_response(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = AgentShieldKernel.mock(_runtime=runtime)
+    kernel = AgentShieldKernel.mock(agt_runtime=runtime)
 
     verdict = kernel.validate_output("Order processed for SSN 123-45-6789")
 

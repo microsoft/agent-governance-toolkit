@@ -27,8 +27,8 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 ### ASI02 — Tool Misuse & Exploitation
 
 - **MCPSecurityScanner**: Rug pull detection via SHA-256 tool fingerprinting, cross-server impersonation detection (Levenshtein distance), schema abuse detection
-- **GovernancePolicy.allowed_tools**: Whitelist-based tool access control
-- **PolicyInterceptor**: Runtime interception of all tool calls with pre/post hooks
+- **AgtRuntime.allowed_tools**: Whitelist-based tool access control
+- **NativeAdapterRuntime**: Runtime interception of all tool calls with pre/post hooks
 - **ExecutionSandbox**: Resource-limited execution with AST-based static analysis
 
 ### ASI03 — Identity & Privilege Abuse
@@ -53,7 +53,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
   - Blocked builtins: exec, eval, compile, \_\_import\_\_
 - **SandboxConfig**: Configurable max_memory_mb, max_cpu_seconds, allowed_paths
 - **SemanticPolicyEngine**: CODE_EXECUTION intent detection with deny policies
-- **Content filtering**: blocked_patterns in GovernancePolicy
+- **Content filtering**: blocked_patterns in AgtRuntime
 
 ### ASI06 — Memory & Context Poisoning
 

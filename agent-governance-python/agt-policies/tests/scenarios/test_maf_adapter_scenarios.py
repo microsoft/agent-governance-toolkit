@@ -2,15 +2,15 @@
 # Licensed under the MIT License.
 """MAF adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
-These scenarios exercise the v4 :class:`MAFKernel` +
-:class:`GovernancePolicyMiddleware` + :class:`CapabilityGuardMiddleware`
+These scenarios exercise the native :class:`MAFKernel` and
+:class:`RuntimeGovernanceMiddleware` + :class:`CapabilityGuardMiddleware`
 surface routed through :class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
 
 Each test covers one of the five AGT verdicts that the adapter must
-translate back to its v4 surface:
+expose through its native surface:
 
 - ``allow`` -> the MAF ``call_next`` continuation is awaited.
 - ``deny`` -> the middleware raises
@@ -42,7 +42,7 @@ pytest.importorskip("agent_os")
 # mirroring the adapter's own except-ImportError fallback.
 sys.modules.setdefault("agent_framework", types.ModuleType("agent_framework"))
 
-from agt.policies import EvaluationResult  # noqa: E402
+from agt.policies import PolicyEvaluation  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
@@ -136,19 +136,19 @@ def _make_function_ctx(
     )
 
 
-# ── verdict scenarios: GovernancePolicyMiddleware (input intervention) ──
+# ── verdict scenarios: RuntimeGovernanceMiddleware (input intervention) ──
 
 
 def test_policy_middleware_allow_path_invokes_next(tmp_path: Path) -> None:
     """An ``allow`` verdict lets MAF invoke the wrapped agent."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
     )
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = MAFKernel(_runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    kernel = MAFKernel(runtime=runtime)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="what is the weather today?")
     call_next = AsyncMock()
 
@@ -162,7 +162,7 @@ def test_policy_middleware_allow_path_invokes_next(tmp_path: Path) -> None:
 def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
     """A ``deny`` verdict raises :class:`MiddlewareTermination`."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
         MiddlewareTermination,
     )
@@ -177,8 +177,8 @@ def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = MAFKernel(_runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    kernel = MAFKernel(runtime=runtime)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="tell me about secrets")
     call_next = AsyncMock()
 
@@ -188,13 +188,13 @@ def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
     call_next.assert_not_awaited()
     bridge_result = ctx.metadata["governance_decision"]
     assert bridge_result.allowed is False
-    assert bridge_result.check_result.reason == "user_blocked_topic"
+    assert bridge_result.evaluation.reason_code == "policy:user_blocked_topic"
 
 
 def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> None:
     """A ``transform`` verdict rewrites the most recent user message body."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
     )
 
@@ -211,8 +211,8 @@ def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> No
             }
         ],
     )
-    kernel = MAFKernel(_runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    kernel = MAFKernel(runtime=runtime)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="Customer SSN is 123-45-6789")
     call_next = AsyncMock()
 
@@ -229,13 +229,13 @@ def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> No
 def test_policy_middleware_escalate_with_resolver_forwards(tmp_path: Path) -> None:
     """An ``escalate`` verdict that the resolver approves forwards the call."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
     )
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
@@ -245,8 +245,8 @@ def test_policy_middleware_escalate_with_resolver_forwards(tmp_path: Path) -> No
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = MAFKernel(_runtime=runtime, approval_resolver=resolver)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    kernel = MAFKernel(runtime=runtime)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="approve this please")
     call_next = AsyncMock()
 
@@ -260,7 +260,7 @@ def test_policy_middleware_escalate_with_resolver_forwards(tmp_path: Path) -> No
 def test_policy_middleware_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
     """An ``escalate`` verdict without a resolver fails closed to deny."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
         MiddlewareTermination,
     )
@@ -270,8 +270,8 @@ def test_policy_middleware_escalate_with_no_resolver_denies(tmp_path: Path) -> N
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = MAFKernel(_runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    kernel = MAFKernel(runtime=runtime)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="needs approval")
     call_next = AsyncMock()
 
@@ -304,7 +304,7 @@ def test_capability_guard_transform_path_rewrites_arguments(tmp_path: Path) -> N
             }
         ],
     )
-    kernel = MAFKernel(_runtime=runtime)
+    kernel = MAFKernel(runtime=runtime)
     mw = CapabilityGuardMiddleware(kernel=kernel)
     ctx = _make_function_ctx(arguments={"query": "DROP TABLE users;"})
 
@@ -318,3 +318,48 @@ def test_capability_guard_transform_path_rewrites_arguments(tmp_path: Path) -> N
 
     # The wrapped tool MUST receive the AGT-redacted arguments.
     assert captured["args"] == {"query": "[SANITIZED]"}
+
+
+def test_policy_middleware_refuses_a_replacement_it_cannot_write(
+    tmp_path: Path,
+) -> None:
+    """A replacement that is not a string cannot reach the message body.
+
+    The guard here ANDs a third condition (``last_msg is not None``), which is
+    how this drop stayed hidden: the sweep and the first census both keyed on
+    a two-operand shape. Before the fix a dict replacement skipped the rewrite
+    and the agent ran on the original text while the policy believed it had
+    been redacted.
+    """
+    from agent_os.integrations.maf_adapter import (
+        MAFKernel,
+        RuntimeGovernanceMiddleware,
+    )
+
+    runtime, _policy = _build_runtime(
+        tmp_path,
+        [
+            {
+                "decision": "transform",
+                "reason": "pii_redaction",
+                "transform": {
+                    "path": "$policy_target",
+                    "value": {"redacted": "Customer SSN is [REDACTED]"},
+                },
+            }
+        ],
+    )
+    kernel = MAFKernel(runtime=runtime)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
+    ctx = _make_agent_ctx(text="Customer SSN is 123-45-6789")
+    call_next = AsyncMock()
+
+    with pytest.raises(Exception) as excinfo:
+        asyncio.run(mw.process(ctx, call_next))
+
+    assert "transform" in str(excinfo.value).lower()
+    call_next.assert_not_awaited()
+    assert ctx.messages[-1].text == "Customer SSN is 123-45-6789"
+    # A block has to leave a record and a user-visible result, the same way a
+    # denial does.
+    assert ctx.result is not None

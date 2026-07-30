@@ -11,7 +11,20 @@ from typing import Any
 from agent_os.integrations.base import BaseIntegration, GovernanceEventType
 
 
+class _Runtime:
+    manifest = None
+
+    def evaluate(self, intervention_point, snapshot):
+        raise AssertionError("audit helper tests must not evaluate policy")
+
+    def close(self):
+        pass
+
+
 class _ConcreteIntegration(BaseIntegration):
+    def __init__(self):
+        super().__init__(runtime=_Runtime())
+
     def wrap(self, agent: Any) -> Any:
         return agent
 

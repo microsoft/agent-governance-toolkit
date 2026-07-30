@@ -42,6 +42,11 @@ class _FakeAuditBackend:
         pass
 
 
+class _FakeRuntime:
+    def create_session(self):
+        return object()
+
+
 @pytest.fixture
 def checker_with_checks():
     checker = HealthChecker(
@@ -49,7 +54,8 @@ def checker_with_checks():
         register_builtins=False,
         audit_backend=_FakeAuditBackend(),
     )
-    checker.register_check("policy_engine", checker._check_policy_engine)
+    checker._runtime = _FakeRuntime()
+    checker.register_check("runtime", checker._check_runtime)
     checker.register_check("audit_backend", checker._check_audit_backend)
     return checker
 
@@ -248,10 +254,11 @@ class TestCheckLive:
 
 
 class TestBuiltInChecks:
-    def test_policy_engine_check(self, checker):
-        result = checker._check_policy_engine()
+    def test_runtime_check(self):
+        checker = HealthChecker(register_builtins=False, runtime=_FakeRuntime())
+        result = checker._check_runtime()
         assert result.status == HealthStatus.HEALTHY
-        assert result.name == "policy_engine"
+        assert result.name == "runtime"
 
     def test_audit_backend_check_degraded_without_backend(self, checker):
         # No backend configured -> DEGRADED, never a bare HEALTHY.
@@ -270,13 +277,16 @@ class TestBuiltInAutoRegistration:
     def test_fresh_checker_auto_registers_builtins(self):
         # Flips the defect: fresh checker verifies real components, not empty.
         report = HealthChecker().check_health()
-        assert set(report.components) == {"policy_engine", "audit_backend"}
-        # No audit backend injected -> DEGRADED, and definitely not HEALTHY.
+        assert set(report.components) == {"runtime", "audit_backend"}
+        # No runtime or audit backend injected -> DEGRADED, never HEALTHY.
         assert report.status == HealthStatus.DEGRADED
         assert not report.is_healthy()
 
     def test_fresh_checker_healthy_with_audit_backend(self):
-        report = HealthChecker(audit_backend=_FakeAuditBackend()).check_health()
+        report = HealthChecker(
+            audit_backend=_FakeAuditBackend(),
+            runtime=_FakeRuntime(),
+        ).check_health()
         assert report.is_healthy()
         assert len(report.components) == 2
 

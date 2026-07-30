@@ -6,8 +6,8 @@ OS-native [MXC](https://github.com/microsoft/mxc) sandbox using
 
 1. Install and discover the MXC native binary.
 2. Run code in a one-shot sandbox.
-3. Drive the sandbox from a governance **policy** (mounts, egress, timeout).
-4. Convert a policy YAML straight into the MXC JSON config.
+3. Configure mounts, egress, and timeout explicitly.
+4. Render host configuration as MXC JSON.
 5. Understand what MXC enforces vs. what the host enforces.
 
 > **Design reference:** [MXC-SANDBOX-PROVIDER.md](../../../../docs/proposals/MXC-SANDBOX-PROVIDER.md).
@@ -92,62 +92,50 @@ print(result.stdout)
 > agent work, `run_once` is all you need.
 
 
-## Step 3 — Drive the sandbox from a policy
+## Step 3 — Configure the sandbox
 
-Instead of hand-building config, pass a governance policy. The provider reads
-well-known attributes — `defaults.timeout_seconds`, `sandbox_mounts`,
-`network_allowlist` — and translates them into MXC's filesystem/network policy.
-
-```yaml
-# sandbox_policy.yaml
-version: "1.0"
-name: pdf-summarizer-sandbox
-defaults:
-  timeout_seconds: 30
-  network_default: deny        # fail-closed egress
-network_allowlist:
-  - pypi.org
-  - "*.github.com"
-sandbox_mounts:
-  input_dir: /data/user-pdf    # mounted read-only
-  output_dir: /data/agent-out  # mounted read-write
-```
+Host resource and egress controls use `SandboxConfig`. Policy decisions use
+the separate `runtime=` argument when an ACS runtime is needed.
 
 > **Tool allowlists are not supported by MXC.** The native binary has no
 > tool-registration channel, so MXC cannot enforce a `tool_allowlist`.
 > Rather than silently ignore the control, the provider **fails closed**:
-> passing a policy whose `tool_allowlist` is non-empty raises at
+> passing a config whose `tool_allowlist` is non-empty raises at
 > `create_session` / `run_once`. Use the Docker or Hyperlight backend when
 > you need tool gating.
 
 > **Egress is fail-closed.** Outbound networking stays off unless you opt in.
 > A non-empty `network_allowlist` enables egress restricted to those hosts;
-> to allow unrestricted egress you must set `defaults.network_default: allow`
+> to allow unrestricted egress you must set `network_default="allow"`
 > explicitly. Enabling outbound with no host filter and no explicit opt-in is
 > rejected.
 
 ```python
-from agent_os.policies.schema import PolicyDocument
-from agent_sandbox import MxcSandboxProvider
+from agent_sandbox import MxcSandboxProvider, SandboxConfig
 
-# `sandbox_mounts` (input_dir / output_dir) is a native PolicyDocument
-# field, so the YAML block loads directly — no subclass needed.
-policy = PolicyDocument.from_yaml("sandbox_policy.yaml")
+config = SandboxConfig(
+    timeout_seconds=30,
+    input_dir="/data/user-pdf",
+    output_dir="/data/agent-out",
+    network_enabled=True,
+    network_allowlist=["pypi.org", "*.github.com"],
+)
 
 provider = MxcSandboxProvider(backend="bubblewrap")
-execution = provider.run_once("pdf-agent", code, policy=policy)
+execution = provider.run_once("pdf-agent", code, config=config)
 ```
 
-## Step 4 — Convert a policy straight to MXC JSON
+## Step 4 — Render MXC JSON
 
-If you just want to see (or persist) the exact JSON MXC will consume, use the
-converters — no provider or sandbox required:
+You can inspect the exact JSON MXC consumes without starting a sandbox.
 
 ```python
-from agent_sandbox.mxc_sandbox_provider import policy_yaml_to_mxc_json
 import json
+from agent_sandbox.mxc_sandbox_provider import MxcConfig
 
-doc = policy_yaml_to_mxc_json("sandbox_policy.yaml", "python /scripts/run.py")
+doc = MxcConfig.from_sandbox_config(config).to_mxc_json(
+    "python /scripts/run.py"
+)
 print(json.dumps(doc, indent=2))
 ```
 
@@ -169,9 +157,6 @@ Output:
 }
 ```
 
-There is also `policy_to_mxc_json(policy_obj, command_line)` for an in-memory
-policy object.
-
 ## Step 5 — Understand the enforcement split
 
 Notice what is — and is **not** — in that JSON:
@@ -186,7 +171,7 @@ Notice what is — and is **not** — in that JSON:
 
 `tool_allowlist`, CPU, and memory are intentionally omitted from the JSON so it
 never claims enforcement MXC does not provide. Because MXC cannot gate tools at
-all, a policy that carries a non-empty `tool_allowlist` is **rejected** at
+all, a config that carries a non-empty `tool_allowlist` is **rejected** at
 `create_session` / `run_once` rather than silently ignored — use Docker or
 Hyperlight when tool gating is required.
 
@@ -194,7 +179,7 @@ Hyperlight when tool gating is required.
 
 For each execution, the provider applies four layers in order:
 
-1. **Host policy gate** — `PolicyEvaluator` can deny before any sandbox spawns.
+1. **Native ACS gate** — `AgtRuntime` can deny before any sandbox spawns.
 2. **Static code scan** — `enforce_no_subprocess_execution` rejects obvious
    process-spawning APIs.
 3. **MXC containment** — filesystem/network policy enforced by the OS backend.

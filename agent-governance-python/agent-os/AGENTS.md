@@ -46,7 +46,7 @@ ruff format .
 
 | File | Purpose |
 |------|---------|
-| `src/agent_os/integrations/base.py` | Core governance — GovernancePolicy, BaseIntegration, PolicyInterceptor, event hooks |
+| `src/agent_os/integrations/base.py` | Core governance — AgtRuntime, BaseIntegration, NativeAdapterRuntime, event hooks |
 | `src/agent_os/integrations/profiling.py` | @profile_governance decorator |
 | `src/agent_os/base_agent.py` | Base agent class with audit logging |
 | `src/agent_os/stateless.py` | Stateless agent with optional Redis |
@@ -57,31 +57,33 @@ ruff format .
 
 - All public APIs must have type hints (`mypy --strict`)
 - Use `dataclass` or Pydantic `BaseModel` for data structures
-- GovernancePolicy fields: `max_tokens_per_request`, `max_tool_calls_per_request`, `blocked_patterns`, `allowed_tools`, `confidence_threshold`
-- Pattern types: `PatternType.SUBSTRING`, `PatternType.REGEX`, `PatternType.GLOB`
+- Construct `AgtRuntime` from a native ACS manifest or `AgtManifest`.
+- Keep per-session counters in `AdapterRuntimeSession`, not `AgtRuntime`.
 - Event types: `GovernanceEventType.POLICY_CHECK`, `.POLICY_VIOLATION`, `.TOOL_CALL_BLOCKED`, `.CHECKPOINT_CREATED`
 - Tests go in `tests/` (unit) or `modules/*/tests/` (module-specific)
 
-## Policy Check Result (additive)
+## Native policy evaluation
 
-Policy checks should prefer the additive `*_execute_check` methods when new code needs structured denial data, while preserving the legacy tuple-returning methods for compatibility. Raise the canonical `PolicyViolationError.from_check_result(result)` for new typed flows; hosts should surface `str(e)` and use `e.check_result.category` for dispatch instead of substring-matching internal details.
+Framework adapters route intervention points through `AdapterRuntimeSession` and
+receive `PolicyEvaluation`. Raise the canonical
+`PolicyViolationError.from_evaluation_result(result)` for denied or escalated
+results. Hosts should surface `str(error)` and use
+`error.evaluation_result.reason_code` for structured handling.
 
 ```python
-from agent_os.policies.decision import ViolationCategory
 from agent_os.exceptions import PolicyViolationError
 
-result = kernel.pre_execute_check(ctx, input_data)
-if not result.allowed:
-    raise PolicyViolationError.from_check_result(result)
-# Hosts: surface str(e); switch on e.check_result.category for typed dispatch.
+result = session.evaluate_input(body=input_data)
+if not result.is_allowed():
+    raise PolicyViolationError.from_evaluation_result(result)
 ```
 
 ## Boundaries
 
 - **Never modify** `tests/test_mcp_server.py` (known pre-existing failure, excluded from CI)
 - **Never commit** secrets, API keys, or credentials
-- **Never loosen** existing GovernancePolicy constraints — policies can only be tightened
-- Keep backward compatibility — don't break existing public API signatures
+- **Never bypass** native ACS intervention points or weaken fail-closed behavior
+- Keep host lifecycle controls separate from native policy evaluation
 
 ## Testing Requirements
 

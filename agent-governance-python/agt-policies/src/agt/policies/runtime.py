@@ -6,17 +6,15 @@
 underlying :class:`agent_control_specification.AgentControl` async
 orchestrator with a small synchronous API tailored to AGT host code:
 
-- Accepts a manifest by path. When ``resolution_root`` is provided the
-  AGT manifest-resolution layer (:mod:`agt.manifest_resolution`) walks
-  the workspace, merges the governance chain, and writes a flat ACS
-  manifest first. Otherwise the manifest is fed to
-  :meth:`AgentControl.from_path` as-is.
+- Accepts a native ACS/AGT manifest by path or through
+  :meth:`AgtRuntime.from_manifest`. Legacy governance folder discovery is
+  migration-only and is never performed at runtime.
 - Translates an AGT snapshot (the dict shape from
   ``policy-engine/spec/agt/AGT-SNAPSHOT-1.0.md`` 1) into the ACS
   ``snapshot`` argument and calls
   :meth:`AgentControl.evaluate_intervention_point`.
 - Maps the returned :class:`InterventionPointResult` to an AGT
-  :class:`agt.policies.result.EvaluationResult`, propagating the
+  :class:`agt.policies.result.PolicyEvaluation`, propagating the
   five-state ``verdict`` per AGT-DELTA D1, the transform body per D1.1,
   the evidence per D2, and the bisected identities per D1.4.
 - Registers a host-supplied approval resolver. When the engine returns
@@ -36,14 +34,17 @@ import asyncio
 import copy
 import math
 from pathlib import Path
-import tempfile
 import threading
 from typing import Any, Awaitable, Callable, Mapping, Optional, Union
 
 import yaml
 
 from agt.policies.manifest import AgtManifest
-from agt.policies.result import EvaluationResult, PolicyEvaluation
+from agt.policies.result import (
+    EvidenceResult,
+    PolicyEvaluation,
+    TransformResult,
+)
 
 try:
     from agent_control_specification import (
@@ -75,7 +76,7 @@ _TIMED_RUN_SYNC_SLOTS = threading.BoundedSemaphore(_TIMED_RUN_SYNC_MAX_WORKERS)
 
 
 ApprovalCallback = Callable[
-    [str, EvaluationResult],
+    [str, PolicyEvaluation],
     Union[
         "ApprovalDecision",
         Awaitable["ApprovalDecision"],
@@ -84,7 +85,7 @@ ApprovalCallback = Callable[
 """Host-supplied callback for ``escalate`` verdicts.
 
 The callback receives the intervention-point name and the
-:class:`EvaluationResult` and returns an :class:`ApprovalDecision`
+:class:`PolicyEvaluation` and returns an :class:`ApprovalDecision`
 (allow/deny/suspend) carrying the approved ``enforced_identity`` per
 AGT-DELTA D1.4. It may be sync or async.
 """
@@ -96,7 +97,7 @@ class ApprovalDecision:
     Wraps the ACS :class:`ApprovalResolution` so AGT host code does not
     need to import from :mod:`agent_control_specification` directly. The
     ``enforced_identity`` MUST match the
-    :attr:`EvaluationResult.enforced_identity` the resolver was handed,
+    :attr:`PolicyEvaluation.enforced_identity` the resolver was handed,
     per AGT-DELTA D1.4. The runtime raises
     ``runtime_error:approval_action_mismatch`` when the identities do
     not match.
@@ -137,46 +138,34 @@ class ApprovalDecision:
 def _result_from_intervention(
     ip_result: InterventionPointResult,
     snapshot: Mapping[str, Any],
-) -> EvaluationResult:
-    """Map an ACS :class:`InterventionPointResult` to an AGT :class:`EvaluationResult`."""
+) -> PolicyEvaluation:
+    """Map an ACS result to the native AGT evaluation contract."""
     verdict: Verdict = ip_result.verdict
     decision = verdict.decision.value
-    transform: dict[str, Any] | None = None
+    transform: TransformResult | None = None
     if verdict.transform is not None:
-        transform = {"path": verdict.transform.path, "value": verdict.transform.value}
-        if ip_result.transformed_policy_target is not None:
-            transform["applied_value"] = ip_result.transformed_policy_target
-    evidence: dict[str, Any] | None = None
+        transform = TransformResult(
+            path=verdict.transform.path,
+            value=verdict.transform.value,
+            applied_value=ip_result.transformed_policy_target,
+        )
+    evidence: EvidenceResult | None = None
     if verdict.evidence is not None:
-        evidence = {
-            "artefact": verdict.evidence.artefact,
-            "verification_pointers": dict(verdict.evidence.verification_pointers),
-        }
+        evidence = EvidenceResult(
+            artefact=verdict.evidence.artefact,
+            verification_pointers=dict(verdict.evidence.verification_pointers),
+        )
     reason = verdict.reason or ""
     message = verdict.message or ""
-    audit: dict[str, Any] = {
-        "verdict": decision,
-        "intervention_point": snapshot.get("envelope", {}).get(
-            "intervention_point", ""
-        ),
-    }
-    if verdict.result_labels:
-        audit["result_labels"] = list(verdict.result_labels)
-    if ip_result.input_identity is not None:
-        audit["input_identity"] = ip_result.input_identity
-    if ip_result.enforced_identity is not None:
-        audit["enforced_identity"] = ip_result.enforced_identity
-    return EvaluationResult(
-        allowed=decision in ("allow", "warn", "transform"),
-        category=None,
-        matched_rule=None,
-        public_message=message,
-        detail=message,
-        reason=reason,
-        audit_entry=audit,
+    return PolicyEvaluation(
         verdict=decision,  # type: ignore[arg-type]
+        reason_code=reason,
+        intervention_point=str(
+            snapshot.get("envelope", {}).get("intervention_point", "")
+        ),
         transform=transform,
         evidence=evidence,
+        result_labels=tuple(verdict.result_labels),
         input_identity=ip_result.input_identity,
         enforced_identity=ip_result.enforced_identity,
         message=message,
@@ -198,18 +187,14 @@ def _snapshot_to_acs(
 class AgtRuntime:
     """Public host wrapper over :class:`agent_control_specification.AgentControl`.
 
-    Construct with the path to an AGT manifest. When ``resolution_root``
-    is supplied the AGT manifest-resolution layer pre-resolves the
-    governance chain (folder discovery, scope filter, merge, Rego bundle
-    materialisation) and feeds the engine the resolved manifest. With
-    no ``resolution_root`` the manifest at ``manifest_path`` is loaded
-    verbatim.
+    Construct with the path to a native ACS/AGT manifest. Use
+    :meth:`from_manifest` for typed, mapping, or YAML-text inputs.
 
     Pass ``approval_resolver`` to wire the host approval path. The
     callback is invoked synchronously by :meth:`evaluate_intervention_point`
     when the engine returns ``escalate``; it MUST return an
     :class:`ApprovalDecision` whose ``enforced_identity`` matches the
-    one carried on the :class:`EvaluationResult`. An identity mismatch
+    one carried on the :class:`PolicyEvaluation`. An identity mismatch
     raises ``runtime_error:approval_action_mismatch`` per AGT-DELTA
     D1.4.
     """
@@ -221,43 +206,15 @@ class AgtRuntime:
         self,
         manifest_path: Path | str,
         *,
-        resolution_root: Path | None = None,
         approval_resolver: ApprovalCallback | None = None,
         policy_dispatcher: Any | None = None,
         annotator_dispatcher: Any | None = None,
     ) -> None:
         self._manifest_path = Path(manifest_path)
         self._manifest = None
-        self._resolution_root = resolution_root
         self._approval_resolver = approval_resolver
-        self._resolution_bundle_dir: Any | None = None
 
-        if resolution_root is not None:
-            from agt.manifest_resolution import resolve_manifest
-
-            bundle_dir = tempfile.TemporaryDirectory(prefix="agt_runtime_bundle_")
-            self._resolution_bundle_dir = bundle_dir
-            try:
-                resolved = resolve_manifest(
-                    Path(resolution_root),
-                    self._manifest_path,
-                    bundle_dir=Path(bundle_dir.name),
-                )
-                (
-                    self._approval_timeout_seconds,
-                    self._approval_on_timeout,
-                ) = _approval_settings_from_manifest(resolved)
-                engine_document, _ = _sanitize_manifest_for_acs(resolved)
-                self._control = AgentControl.from_native(
-                    engine_document,
-                    annotator_dispatcher=annotator_dispatcher,
-                    policy_dispatcher=policy_dispatcher,
-                )
-            except Exception:
-                bundle_dir.cleanup()
-                self._resolution_bundle_dir = None
-                raise
-        elif policy_dispatcher is not None or annotator_dispatcher is not None:
+        if policy_dispatcher is not None or annotator_dispatcher is not None:
             manifest_text = self._manifest_path.read_text(encoding="utf-8")
             parsed, engine_manifest_text = _parse_and_sanitize_manifest_text(
                 manifest_text
@@ -321,8 +278,6 @@ class AgtRuntime:
         document = typed.resolved_document(base_dir)
         instance = cls.__new__(cls)
         instance._manifest_path = None
-        instance._resolution_root = None
-        instance._resolution_bundle_dir = None
         instance._approval_resolver = approval_resolver
         instance._manifest = typed
         (
@@ -355,18 +310,18 @@ class AgtRuntime:
         mode: str = "enforce",
     ) -> PolicyEvaluation:
         """Evaluate through the native v5 result contract."""
-        return self.evaluate_intervention_point(ip, snapshot, mode).to_native()
+        return self.evaluate_intervention_point(ip, snapshot, mode)
 
     def evaluate_intervention_point(
         self,
         ip: str,
         snapshot: Mapping[str, Any],
         mode: str = "enforce",
-    ) -> EvaluationResult:
+    ) -> PolicyEvaluation:
         """Evaluate one intervention point.
 
         Translates the AGT snapshot to ACS shape, calls the engine, and
-        maps the verdict back to :class:`EvaluationResult`. In
+        maps the verdict to :class:`PolicyEvaluation`. In
         ``enforce`` mode an ``escalate`` verdict is routed through the
         host-supplied approval resolver and the result's verdict is
         rewritten to reflect the resolution outcome (``allow``,
@@ -426,19 +381,20 @@ class AgtRuntime:
                 and self._approval_resolver is not None
             ):
                 # An ``escalate`` that returned cleanly means the resolver
-                # approved the action; reflect that in the EvaluationResult
+                # approved the action; reflect that in the native result
                 # so callers see ``allow`` like the ACS ``run`` helper does.
-                result = result.model_copy(
-                    update={"verdict": "allow", "allowed": True}
-                )
+                result = result.model_copy(update={"verdict": "allow"})
             return result
 
         if isinstance(exc, AgentControlSuspended):
             return result.model_copy(
                 update={
                     "verdict": "escalate",
-                    "allowed": False,
-                    "audit_entry": {**result.audit_entry, "suspend_handle": exc.handle},
+                    "approval": {
+                        **result.approval,
+                        "outcome": "suspend",
+                        "handle": exc.handle,
+                    },
                 }
             )
 
@@ -452,15 +408,13 @@ class AgtRuntime:
             # (``runtime_error:approval_*`` or the original escalate
             # reason) and the bisected identities.
             update: dict[str, Any] = {
-                "audit_entry": {
-                    **result.audit_entry,
-                    **mapped.audit_entry,
-                    "approval_outcome": "deny",
+                "approval": {
+                    **mapped.approval,
+                    "outcome": "deny",
                 },
             }
             if mapped.verdict == "escalate":
                 update["verdict"] = "deny"
-                update["allowed"] = False
             return mapped.model_copy(update=update)
 
         raise exc  # pragma: no cover - exhaustive control flow
@@ -470,9 +424,6 @@ class AgtRuntime:
     def close(self) -> None:
         """Release the underlying ACS runtime (best effort)."""
         self._control = None  # type: ignore[assignment]
-        if self._resolution_bundle_dir is not None:
-            self._resolution_bundle_dir.cleanup()
-            self._resolution_bundle_dir = None
 
 
 def _parse_and_sanitize_manifest_text(manifest_text: str) -> tuple[Mapping[str, Any], str]:
@@ -574,30 +525,28 @@ def _approval_timeout_result(
     raw_result: InterventionPointResult,
     snapshot: Mapping[str, Any],
     on_timeout: str,
-) -> EvaluationResult:
+) -> PolicyEvaluation:
     result = _result_from_intervention(raw_result, snapshot)
     if on_timeout == "allow":
         return result.model_copy(
             update={
                 "verdict": "allow",
-                "allowed": True,
-                "audit_entry": {
-                    **result.audit_entry,
-                    "approval_outcome": "allow",
-                    "approval_timeout": True,
+                "approval": {
+                    **result.approval,
+                    "outcome": "allow",
+                    "timeout": True,
                 },
             }
         )
     return result.model_copy(
         update={
             "verdict": "deny",
-            "allowed": False,
-            "reason": "runtime_error:approval_timeout",
+            "reason_code": "runtime_error:approval_timeout",
             "message": "Approval resolver timed out and failed closed.",
-            "audit_entry": {
-                **result.audit_entry,
-                "approval_outcome": "deny",
-                "approval_timeout": True,
+            "approval": {
+                **result.approval,
+                "outcome": "deny",
+                "timeout": True,
             },
         }
     )
@@ -607,18 +556,17 @@ def _approval_error_result(
     raw_result: InterventionPointResult,
     snapshot: Mapping[str, Any],
     exc: Exception,
-) -> EvaluationResult:
+) -> PolicyEvaluation:
     result = _result_from_intervention(raw_result, snapshot)
     return result.model_copy(
         update={
             "verdict": "deny",
-            "allowed": False,
-            "reason": "runtime_error:approval_resolver_error",
+            "reason_code": "runtime_error:approval_resolver_error",
             "message": f"Approval resolver failed closed: {type(exc).__name__}",
-            "audit_entry": {
-                **result.audit_entry,
-                "approval_outcome": "deny",
-                "approval_error": type(exc).__name__,
+            "approval": {
+                **result.approval,
+                "outcome": "deny",
+                "error": type(exc).__name__,
             },
         }
     )

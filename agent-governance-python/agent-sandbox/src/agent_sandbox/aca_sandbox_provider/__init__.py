@@ -10,7 +10,6 @@ import ACASandboxProvider``.
 
 from agent_sandbox.aca_sandbox_provider.aca_sandbox_provider import (
     ACASandboxProvider,
-    aca_config_from_policy,
 )
 
 # Note: ``_network_allowlist``, ``_network_default``, and
@@ -20,5 +19,4 @@ from agent_sandbox.aca_sandbox_provider.aca_sandbox_provider import (
 # refactored or removed without a deprecation cycle.
 __all__ = [
     "ACASandboxProvider",
-    "aca_config_from_policy",
 ]

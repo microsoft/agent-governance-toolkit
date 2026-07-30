@@ -7,16 +7,15 @@ without Azure credentials or network access. Integration tests that hit
 real Azure live in ``test_azure_sandbox_integration.py``.
 
 Covers:
-* Module-level helpers (``_validate_resource_name``,
-  ``_network_allowlist``, ``_network_default``,
-  ``_unpack_exec_result``, ``aca_config_from_policy``).
+* Module-level helpers (``_validate_resource_name`` and
+  ``_unpack_exec_result``).
 * Construction: missing SDK, name validation, missing region,
   ``ensure_group_location`` wiring, mgmt-client failure tolerance.
-* ``create_session``: with/without policy, fail-closed egress,
+* ``create_session``: with/without runtime, fail-closed egress,
   ``network_default=allow`` opt-out, empty allowlist, invalid IDs,
   data-plane failures, missing sandbox id, kwargs forwarding,
   resource-cap projection.
-* ``execute_code``: policy gate fires before any Azure call,
+* ``execute_code``: native governance fires before any Azure call,
   base64 transport, context merging, timeout kill, no-session error,
   data-plane failure surfacing, dict-vs-typed-result handling.
 * ``destroy_session``: idempotent, error swallowing.
@@ -34,17 +33,13 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from agt.policies import PolicyEvaluation
 
 from agent_sandbox.code_scanner import SandboxCodeViolation
-from agent_sandbox.aca_sandbox_provider import (
-    ACASandboxProvider,
-    aca_config_from_policy,
-)
+from agent_sandbox.aca_sandbox_provider import ACASandboxProvider
 # Underscore-prefixed helpers are internal: import them directly from the
 # implementation module rather than the package's public ``__all__``.
 from agent_sandbox.aca_sandbox_provider.aca_sandbox_provider import (
-    _network_allowlist,
-    _network_default,
     _unpack_exec_result,
     _validate_resource_name,
 )
@@ -60,7 +55,7 @@ from agent_sandbox.sandbox_provider import (
 # =========================================================================
 
 
-def _make_policy(
+def _make_config(
     *,
     network_allowlist=None,
     tool_allowlist=None,
@@ -68,28 +63,18 @@ def _make_policy(
     max_memory_mb=None,
     timeout_seconds=None,
     network_default=None,
-    rules=None,
-    name="test-policy",
-    version="1",
 ):
-    """Build a duck-typed policy object matching what the provider reads."""
-    defaults = SimpleNamespace()
-    if max_cpu is not None:
-        defaults.max_cpu = max_cpu
-    if max_memory_mb is not None:
-        defaults.max_memory_mb = max_memory_mb
-    if timeout_seconds is not None:
-        defaults.timeout_seconds = timeout_seconds
-    if network_default is not None:
-        defaults.network_default = network_default
-
-    return SimpleNamespace(
-        name=name,
-        version=version,
-        rules=rules or [],
-        defaults=defaults,
-        network_allowlist=list(network_allowlist) if network_allowlist else [],
-        tool_allowlist=list(tool_allowlist) if tool_allowlist else [],
+    """Build explicit sandbox host configuration."""
+    hosts = list(network_allowlist or [])
+    default = network_default or "deny"
+    return SandboxConfig(
+        cpu_limit=max_cpu if max_cpu is not None else 1.0,
+        memory_mb=max_memory_mb if max_memory_mb is not None else 512,
+        timeout_seconds=timeout_seconds if timeout_seconds is not None else 60.0,
+        network_enabled=bool(hosts or default == "allow"),
+        network_allowlist=hosts,
+        tool_allowlist=list(tool_allowlist or []),
+        network_default=default,
     )
 
 
@@ -228,62 +213,6 @@ class TestValidateResourceName:
             _validate_resource_name(value, "label")
 
 
-class TestNetworkAllowlist:
-    def test_empty_when_missing(self):
-        assert _network_allowlist(SimpleNamespace()) == []
-
-    def test_returns_str_list_verbatim(self):
-        policy = SimpleNamespace(network_allowlist=["a.com", "*.b.com"])
-        assert _network_allowlist(policy) == ["a.com", "*.b.com"]
-
-    def test_accepts_host_object_form(self):
-        entries = [
-            SimpleNamespace(host="x.com"),
-            SimpleNamespace(pattern="*.y.com"),
-        ]
-        assert _network_allowlist(
-            SimpleNamespace(network_allowlist=entries)
-        ) == ["x.com", "*.y.com"]
-
-    def test_skips_entries_with_no_host_or_pattern(self):
-        entries = [
-            "a.com",
-            SimpleNamespace(),
-            SimpleNamespace(host="b.com"),
-        ]
-        assert _network_allowlist(
-            SimpleNamespace(network_allowlist=entries)
-        ) == ["a.com", "b.com"]
-
-    def test_none_allowlist(self):
-        assert _network_allowlist(
-            SimpleNamespace(network_allowlist=None)
-        ) == []
-
-
-class TestNetworkDefault:
-    @pytest.mark.parametrize("value", ["deny", "DENY", "Deny"])
-    def test_explicit_deny(self, value):
-        policy = SimpleNamespace(defaults=SimpleNamespace(network_default=value))
-        assert _network_default(policy) == "deny"
-
-    @pytest.mark.parametrize("value", ["allow", "ALLOW", "Allow"])
-    def test_explicit_allow(self, value):
-        policy = SimpleNamespace(defaults=SimpleNamespace(network_default=value))
-        assert _network_default(policy) == "allow"
-
-    def test_fail_closed_when_field_missing(self):
-        assert _network_default(SimpleNamespace(defaults=SimpleNamespace())) == "deny"
-
-    def test_fail_closed_when_defaults_missing(self):
-        assert _network_default(SimpleNamespace()) == "deny"
-
-    @pytest.mark.parametrize("value", ["", "permit", "block", 1, None, [], {}])
-    def test_fail_closed_on_invalid_value(self, value):
-        policy = SimpleNamespace(defaults=SimpleNamespace(network_default=value))
-        assert _network_default(policy) == "deny"
-
-
 class TestUnpackExecResult:
     def test_typed_result_object(self):
         resp = SimpleNamespace(exit_code=0, stdout="hi", stderr="")
@@ -311,44 +240,22 @@ class TestUnpackExecResult:
         assert _unpack_exec_result("opaque") == (-1, "", "opaque")
 
 
-class TestAzureConfigFromPolicy:
-    def test_preserves_base_when_policy_empty(self):
-        base = SandboxConfig(memory_mb=999, cpu_limit=3.0, timeout_seconds=42)
-        cfg = aca_config_from_policy(
-            SimpleNamespace(defaults=SimpleNamespace()), base
+class TestAzureHostConfig:
+    def test_resource_caps_are_explicit(self):
+        cfg = _make_config(
+            max_cpu=0.25,
+            max_memory_mb=256,
+            timeout_seconds=15,
         )
-        assert cfg.memory_mb == 999
-        assert cfg.cpu_limit == 3.0
-        assert cfg.timeout_seconds == 42
-        assert cfg.network_enabled is False
-
-    def test_applies_resource_caps(self):
-        policy = _make_policy(max_cpu=0.25, max_memory_mb=256, timeout_seconds=15)
-        cfg = aca_config_from_policy(policy, SandboxConfig())
         assert cfg.cpu_limit == 0.25
         assert cfg.memory_mb == 256
         assert cfg.timeout_seconds == 15
 
-    def test_zero_or_falsy_caps_do_not_override(self):
-        policy = _make_policy(max_cpu=0, max_memory_mb=0, timeout_seconds=0)
-        base = SandboxConfig(memory_mb=777, cpu_limit=4.0, timeout_seconds=30)
-        cfg = aca_config_from_policy(policy, base)
-        assert cfg.memory_mb == 777
-        assert cfg.cpu_limit == 4.0
-        assert cfg.timeout_seconds == 30
-
-    def test_network_allowlist_enables_network(self):
-        policy = _make_policy(network_allowlist=["a.com"])
-        cfg = aca_config_from_policy(policy, SandboxConfig())
+    def test_network_allowlist_enables_filtered_egress(self):
+        cfg = _make_config(network_allowlist=["a.com"])
         assert cfg.network_enabled is True
-
-    def test_env_vars_are_copied_not_aliased(self):
-        base = SandboxConfig(env_vars={"K": "V"})
-        cfg = aca_config_from_policy(
-            SimpleNamespace(defaults=SimpleNamespace()), base
-        )
-        cfg.env_vars["NEW"] = "X"
-        assert "NEW" not in base.env_vars
+        assert cfg.network_allowlist == ["a.com"]
+        assert cfg.network_default == "deny"
 
 
 # =========================================================================
@@ -579,13 +486,15 @@ class TestConstruction:
 
 
 class TestCreateSession:
-    def test_ungoverned_session_writes_no_egress_policy(self, provider, fake_sdk):
+    def test_default_session_applies_deny_all_egress(self, provider, fake_sdk):
         handle = provider.create_session("agent-1")
         assert handle.status == SessionStatus.READY
         assert handle.session_id == "sb-abc123"
         fake_sdk.group.begin_create_sandbox.assert_called_once()
-        # No policy → no egress configuration at all on the sandbox client.
-        fake_sdk.default_sandbox.set_egress_policy.assert_not_called()
+        fake_sdk.default_sandbox.set_egress_policy.assert_called_once()
+        body = fake_sdk.default_sandbox.set_egress_policy.call_args.args[0]
+        assert body.default_action == "Deny"
+        assert body.host_rules == []
 
     def test_validates_agent_id(self, provider):
         with pytest.raises(ValueError, match="agent_id"):
@@ -597,9 +506,11 @@ class TestCreateSession:
         assert kwargs["disk"] == "ubuntu"
         assert kwargs["labels"] == {"agent_id": "agent-1"}
 
-    def test_governed_session_is_fail_closed_by_default(self, provider, fake_sdk):
-        policy = _make_policy(network_allowlist=["pypi.org", "*.github.com"])
-        provider.create_session("agent-1", policy=policy)
+    def test_filtered_egress_is_fail_closed_by_default(self, provider, fake_sdk):
+        config = _make_config(
+            network_allowlist=["pypi.org", "*.github.com"]
+        )
+        provider.create_session("agent-1", config=config)
 
         sb = fake_sdk.default_sandbox
         sb.set_egress_policy.assert_called_once()
@@ -612,8 +523,7 @@ class TestCreateSession:
         assert all(r.action == "Allow" for r in body.host_rules)
 
     def test_empty_allowlist_plus_deny_is_total_lockdown(self, provider, fake_sdk):
-        policy = _make_policy(network_allowlist=[])
-        provider.create_session("agent-1", policy=policy)
+        provider.create_session("agent-1", config=_make_config())
 
         sb = fake_sdk.default_sandbox
         sb.set_egress_policy.assert_called_once()
@@ -622,19 +532,16 @@ class TestCreateSession:
         assert body.host_rules == []
 
     def test_network_default_allow_skips_egress_api_call(self, provider, fake_sdk):
-        policy = _make_policy(
-            network_allowlist=["pypi.org"],
-            network_default="allow",
-        )
-        provider.create_session("agent-1", policy=policy)
+        config = _make_config(network_default="allow")
+        provider.create_session("agent-1", config=config)
         fake_sdk.default_sandbox.set_egress_policy.assert_not_called()
 
     def test_egress_policy_failure_is_logged_not_raised(self, provider, fake_sdk):
         fake_sdk.default_sandbox.set_egress_policy.side_effect = RuntimeError(
             "egress 5xx"
         )
-        policy = _make_policy(network_allowlist=["pypi.org"])
-        handle = provider.create_session("agent-1", policy=policy)
+        config = _make_config(network_allowlist=["pypi.org"])
+        handle = provider.create_session("agent-1", config=config)
         assert handle.status == SessionStatus.READY
 
     def test_egress_falls_back_to_dict_when_typed_models_missing(
@@ -656,8 +563,8 @@ class TestCreateSession:
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
 
-        policy = _make_policy(network_allowlist=["pypi.org"])
-        provider.create_session("agent-1", policy=policy)
+        config = _make_config(network_allowlist=["pypi.org"])
+        provider.create_session("agent-1", config=config)
 
         sb = fake_sdk.default_sandbox
         sb.set_egress_policy.assert_called_once()
@@ -690,27 +597,27 @@ class TestCreateSession:
         handle = provider.create_session("agent-1")
         assert handle.session_id == "sb-from-id"
 
-    def test_policy_resource_caps_flow_into_create_kwargs(self, provider, fake_sdk):
-        policy = _make_policy(max_cpu=0.5, max_memory_mb=1024)
-        provider.create_session("agent-1", policy=policy)
+    def test_config_resource_caps_flow_into_create_kwargs(self, provider, fake_sdk):
+        config = _make_config(max_cpu=0.5, max_memory_mb=1024)
+        provider.create_session("agent-1", config=config)
         kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
         assert kwargs["cpu"] == "500m"
         assert kwargs["memory"] == "1024Mi"
 
     def test_cpu_floor_is_100m(self, provider, fake_sdk):
-        policy = _make_policy(max_cpu=0.001)
-        provider.create_session("agent-1", policy=policy)
+        config = _make_config(max_cpu=0.001)
+        provider.create_session("agent-1", config=config)
         kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
         assert kwargs["cpu"] == "100m"
 
     def test_memory_floor_is_128mi(self, provider, fake_sdk):
-        policy = _make_policy(max_memory_mb=16)
-        provider.create_session("agent-1", policy=policy)
+        config = _make_config(max_memory_mb=16)
+        provider.create_session("agent-1", config=config)
         kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
         assert kwargs["memory"] == "128Mi"
 
-    def test_resource_caps_omitted_when_no_policy(self, provider, fake_sdk):
-        # Without a policy the provider must not invent caps the user
+    def test_resource_caps_omitted_when_no_config(self, provider, fake_sdk):
+        # Without explicit config the provider must not invent caps the user
         # didn't ask for — let the sandbox image defaults apply.
         provider.create_session("agent-1")
         kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
@@ -729,8 +636,8 @@ class TestCreateSession:
             return _make_poller(_make_sandbox_client("sb-fallback"))
 
         fake_sdk.group.begin_create_sandbox.side_effect = fake_create
-        policy = _make_policy(max_cpu=0.5, max_memory_mb=256)
-        handle = provider.create_session("agent-1", policy=policy)
+        config = _make_config(max_cpu=0.5, max_memory_mb=256)
+        handle = provider.create_session("agent-1", config=config)
         assert handle.session_id == "sb-fallback"
         assert len(calls) == 2
         assert "cpu" not in calls[1] and "memory" not in calls[1]
@@ -744,9 +651,9 @@ class TestCreateSession:
             raise RuntimeError("backend down")
 
         fake_sdk.group.begin_create_sandbox.side_effect = fake_create
-        policy = _make_policy(max_cpu=0.5, max_memory_mb=256)
+        config = _make_config(max_cpu=0.5, max_memory_mb=256)
         with pytest.raises(RuntimeError, match="backend down"):
-            provider.create_session("agent-1", policy=policy)
+            provider.create_session("agent-1", config=config)
 
     def test_env_vars_forwarded_to_create(self, provider, fake_sdk):
         cfg = SandboxConfig(env_vars={"OPENAI_API_KEY": "sk-test", "DEBUG": "1"})
@@ -756,38 +663,6 @@ class TestCreateSession:
         # Caller's dict must not be aliased — provider stores a copy.
         kwargs["environment"]["MUTATED"] = "yes"
         assert "MUTATED" not in cfg.env_vars
-
-    def test_runs_ungated_when_evaluator_missing(self, provider, monkeypatch, caplog):
-        import builtins
-
-        real_import = builtins.__import__
-
-        def fake_import(name, *a, **kw):
-            if name == "agent_os.policies.evaluator":
-                raise ImportError("simulated")
-            return real_import(name, *a, **kw)
-
-        monkeypatch.setattr(builtins, "__import__", fake_import)
-        policy = _make_policy()
-        with caplog.at_level("WARNING"):
-            handle = provider.create_session("agent-1", policy=policy)
-        assert handle.status == SessionStatus.READY
-        assert "agent-os-kernel not installed" in caplog.text
-
-    def test_evaluator_construction_error_is_fatal(self, provider, monkeypatch):
-        class BadEvaluator:
-            def __init__(self, *a, **kw):
-                raise RuntimeError("evaluator broken")
-
-        evaluator_module = MagicMock()
-        evaluator_module.PolicyEvaluator = BadEvaluator
-        monkeypatch.setitem(
-            __import__("sys").modules,
-            "agent_os.policies.evaluator",
-            evaluator_module,
-        )
-        with pytest.raises(RuntimeError, match="PolicyEvaluator"):
-            provider.create_session("agent-1", policy=_make_policy())
 
     def test_ensure_group_idempotent_on_existing_group(self, fake_sdk):
         p = ACASandboxProvider(
@@ -871,12 +746,6 @@ class TestCreateSession:
 # =========================================================================
 
 
-class _Decision:
-    def __init__(self, allowed, reason=""):
-        self.allowed = allowed
-        self.reason = reason
-
-
 class _StubEvaluator:
     """Captures the eval context and returns a canned decision."""
 
@@ -885,9 +754,15 @@ class _StubEvaluator:
         self.reason = reason
         self.calls: list[dict] = []
 
-    def evaluate(self, ctx):
-        self.calls.append(dict(ctx))
-        return _Decision(self.allow, self.reason)
+    def evaluate_pre_tool_call(self, *, tool_name, args, call_id):
+        self.calls.append(
+            {"tool_name": tool_name, "args": dict(args), "call_id": call_id}
+        )
+        return PolicyEvaluation(
+            verdict="allow" if self.allow else "deny",
+            reason_code=self.reason,
+            message=self.reason,
+        )
 
 
 @pytest.fixture()
@@ -927,7 +802,7 @@ class TestExecuteCode:
             handle.agent_id, handle.session_id, "print(1)",
             context={"step_index": 3, "intent": "test"},
         )
-        ctx = ev.calls[-1]
+        ctx = ev.calls[-1]["args"]
         assert ctx["agent_id"] == handle.agent_id
         assert ctx["action"] == "execute"
         assert ctx["code"] == "print(1)"
@@ -1146,8 +1021,12 @@ class TestMultiSessionIsolation:
         sb_b = _make_sandbox_client("sb-b")
         fake_sdk.queue(sb_a, sb_b)
 
-        h1 = provider.create_session("agent-1", policy=_make_policy(max_cpu=0.5))
-        h2 = provider.create_session("agent-2", policy=_make_policy(max_cpu=2.0))
+        h1 = provider.create_session(
+            "agent-1", config=_make_config(max_cpu=0.5)
+        )
+        h2 = provider.create_session(
+            "agent-2", config=_make_config(max_cpu=2.0)
+        )
 
         assert h1.session_id == "sb-a"
         assert h2.session_id == "sb-b"

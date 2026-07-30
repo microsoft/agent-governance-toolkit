@@ -1,44 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-AutoGen Integration
+"""AutoGen integration backed by a required native ACS runtime.
 
-Provides governance for Microsoft AutoGen agents via **native intervention
-handlers** (``DefaultInterventionHandler`` with ``on_send``,
-``on_publish``, ``on_response``) introduced in AutoGen v0.4+.
-
-Backend (AGT 5.0): every policy decision is routed through
-:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
-The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
-translated to an AGT manifest via
-:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
-time, an :class:`AgtRuntime` is memoised per policy, and a
-:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
-``ExecutionContext`` budgets between intervention points. The legacy
-``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
-keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
-outbound ``FunctionCall`` arguments and message content before the
-AutoGen runtime forwards them; ``escalate`` verdicts route through the
-configured approval resolver per AGT-DELTA D1.4.
-
-Recommended usage (native intervention handler)::
-
-    from agent_os.integrations.autogen_adapter import AutoGenKernel
-
-    kernel = AutoGenKernel(policy=GovernancePolicy(
-        blocked_patterns=["DROP TABLE"],
-        allowed_tools=["search", "calculator"],
-    ))
-    handler = kernel.as_handler()
-    runtime = SingleThreadedAgentRuntime(
-        intervention_handlers=[handler],
-    )
-
-Legacy usage (deprecated)::
-
-    kernel = AutoGenKernel()
-    kernel.govern(agent1, agent2, agent3)
-    agent1.initiate_chat(agent2, message="...")
+The intervention handler mediates messages and function calls before AutoGen
+forwards them. Runtime-owned transforms and approvals are preserved.
 """
 
 import functools
@@ -47,17 +12,16 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
 from .base import (
+    get_adapter_runtime,
     PII_PATTERNS,
     BaseIntegration,
-    ExecutionContext,
+    AdapterExecutionState,
     GovernanceEventType,
-    GovernancePolicy,
     PolicyViolationError,
 )
 
@@ -90,39 +54,8 @@ except ImportError:
 class GovernanceInterventionHandler:
     """Native AutoGen intervention handler for Agent OS governance.
 
-    Intercepts messages flowing through the AutoGen runtime to enforce
-    governance policies at the message-passing level:
-
-    * ``on_send``    – intercepts direct messages between agents; blocks
-      tool calls violating allowlist/blocklist, scans content for blocked
-      patterns, and runs Cedar/OPA ``pre_execute`` gate.
-    * ``on_publish`` – intercepts broadcast messages; scans for blocked
-      patterns and PII.
-    * ``on_response``– intercepts agent responses; scans output for blocked
-      patterns and runs ``post_execute`` drift detection.
-
-    Parameters
-    ----------
-    kernel : AutoGenKernel
-        The governing kernel whose policy is enforced.
-    name : str, optional
-        Human-readable name for logging (default ``"governance"``).
-
-    Notes
-    -----
-    AutoGen intervention handlers are registered with the runtime at
-    creation time via ``SingleThreadedAgentRuntime(intervention_handlers=
-    [handler])``.  They intercept **all** message traffic in the runtime.
-
-    When ``autogen_core`` is not installed, this class is still importable
-    but cannot be used — :meth:`AutoGenKernel.as_handler` raises
-    ``RuntimeError`` in that case.
-
-    Examples
-    --------
-    >>> kernel = AutoGenKernel(policy=GovernancePolicy(allowed_tools=["search"]))
-    >>> handler = kernel.as_handler()
-    >>> runtime = SingleThreadedAgentRuntime(intervention_handlers=[handler])
+    It mediates direct messages, broadcasts, tool calls, and responses through
+    the kernel's native runtime.
     """
 
     def __init__(self, kernel: "AutoGenKernel", name: str = "governance"):
@@ -204,41 +137,34 @@ class GovernanceInterventionHandler:
                 "[%s] on_send: FunctionCall tool=%s", name, tool_name,
             )
 
-            # Host-side defensive pattern scan on the tool name and the
-            # serialised arguments. The AGT manifest bridge only emits a
-            # pattern check against ``input.policy_target.value`` (a
-            # string), so tool-name and dict-arg pattern matching stays
-            # on the host side to preserve the v4 behavioural contract.
-            for candidate in (tool_name, str(tool_args)):
-                matched = kernel.policy.matches_pattern(candidate)
-                if matched:
-                    logger.info(
-                        "[%s] Policy DENY: blocked pattern '%s' in tool name/args",
-                        name, matched[0],
-                    )
-                    return DropMessage
-
             bridge_result = kernel.evaluate_pre_tool_call(
                 ctx,
                 tool_name=tool_name,
                 args=tool_args,
                 call_id=getattr(message, "id", "call-1"),
             )
+            applied = True
             if bridge_result.transform is not None:
                 # Rewrite the FunctionCall arguments per AGT D1.1 before
-                # forwarding the message to the recipient.
-                replacement = bridge_result.transform.value
+                # forwarding the message to the recipient. This surface takes
+                # a dict carrying "arguments" or a bare string; anything else,
+                # or a message that refuses the write, leaves the original in
+                # place, so the call is dropped rather than sent as it was.
+                applied = False
+                replacement = bridge_result.transformed_value
                 if isinstance(replacement, dict) and "arguments" in replacement:
                     try:
                         message.arguments = replacement["arguments"]
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        applied = True
+                    except Exception:  # noqa: BLE001 — opaque message object
                         pass
                 elif isinstance(replacement, str):
                     try:
                         message.arguments = replacement
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        applied = True
+                    except Exception:  # noqa: BLE001 — opaque message object
                         pass
-            if not bridge_result.allowed:
+            if not bridge_result.allowed or not applied:
                 logger.info(
                     "[%s] Policy DENY (AGT pre_tool_call): %s",
                     name,
@@ -262,14 +188,14 @@ class GovernanceInterventionHandler:
         content = self._extract_content(message)
         if content:
             bridge_result = kernel.evaluate_input(ctx, content)
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
-            ):
-                try:
-                    self._apply_content(message, bridge_result.transform.value)
-                except Exception:  # noqa: BLE001 — best-effort rewrite
-                    pass
-            if not bridge_result.allowed:
+            # True unless a replacement was meant to land and did not: wrong
+            # shape, or a message that refused the write.
+            rewritten = bridge_result.applies_to(str)
+            if bridge_result.transform is not None and rewritten:
+                rewritten = self._apply_content(
+                    message, bridge_result.transformed_value
+                )
+            if not bridge_result.allowed or not rewritten:
                 logger.info(
                     "[%s] Policy DENY (AGT input): %s",
                     name,
@@ -321,22 +247,19 @@ class GovernanceInterventionHandler:
 
         content = self._extract_content(message)
         if content:
-            # Blocked-pattern check
-            matched = kernel.policy.matches_pattern(content)
-            if matched:
-                logger.info(
-                    "[%s] Policy DENY (publish): blocked pattern '%s'",
-                    name, matched[0],
-                )
+            result = kernel.evaluate_input(self._ctx, content)
+            # True unless a replacement was meant to land and did not: wrong
+            # shape, or a message with no content to write.
+            rewritten = result.applies_to(str)
+            if result.transform is not None and rewritten:
+                rewritten = self._apply_content(message, result.transformed_value)
+                content = result.transformed_value
+            if not result.allowed or not rewritten:
+                logger.info("[%s] Policy DENY (publish): %s", name, result.reason)
                 return DropMessage
-
-            # PII check
             for pii_pattern in PII_PATTERNS:
                 if pii_pattern.search(content):
-                    logger.info(
-                        "[%s] Policy DENY (publish): PII detected",
-                        name,
-                    )
+                    logger.info("[%s] Policy DENY (publish): PII detected", name)
                     return DropMessage
 
         return message
@@ -375,15 +298,6 @@ class GovernanceInterventionHandler:
 
         content = self._extract_content(message)
         if content:
-            # Blocked-pattern check on output
-            matched = kernel.policy.matches_pattern(content)
-            if matched:
-                logger.info(
-                    "[%s] Policy DENY (response): blocked pattern '%s'",
-                    name, matched[0],
-                )
-                return DropMessage
-
             # Drift detection / checkpointing via base post_execute
             valid, reason = kernel.post_execute(ctx, content)
             if not valid:
@@ -422,23 +336,28 @@ class GovernanceInterventionHandler:
         return ""
 
     @staticmethod
-    def _apply_content(message: Any, new_content: str) -> None:
+    def _apply_content(message: Any, new_content: str) -> bool:
         """Rewrite a message's content in place per AGT D1.1 transform.
 
         Mirrors :meth:`_extract_content`. Strings are immutable so the
         AutoGen runtime keeps the original reference; for dicts and
         objects with a ``content`` attribute the new value is written
-        through. Best-effort: opaque message types fall through
-        silently.
+        through.
+
+        Returns whether the write landed. A message that has no content to
+        write, or refuses the write, leaves the original in place, and the
+        caller has to refuse rather than forward it.
         """
         if isinstance(message, dict):
             message["content"] = new_content
-            return
+            return True
         if hasattr(message, "content"):
             try:
                 message.content = new_content
-            except Exception:  # noqa: BLE001 — best-effort rewrite
-                pass
+                return True
+            except Exception:  # noqa: BLE001 — opaque message object
+                return False
+        return False
 
     # ── Convenience properties ────────────────────────────────────
 
@@ -463,79 +382,18 @@ class GovernanceInterventionHandler:
 # ═══════════════════════════════════════════════════════════════════
 
 class AutoGenKernel(BaseIntegration):
-    """AutoGen adapter for Agent OS.
-
-    Provides governance for AutoGen agents via two mechanisms:
-
-    **Recommended (native intervention handler)**:
-        Use :meth:`as_handler` to create a
-        ``GovernanceInterventionHandler`` for the AutoGen runtime.
-
-    **Legacy (deprecated)**:
-        Use :meth:`govern` to monkey-patch agent methods in-place.
-
-    Parameters
-    ----------
-    policy : GovernancePolicy, optional
-        The governance policy to enforce.
-    timeout_seconds : float
-        Default timeout in seconds (default 300).
-    on_error : callable, optional
-        Error callback ``(exception, agent_id)``.
-    deep_hooks_enabled : bool
-        When ``True`` (default), the legacy :meth:`govern` method also
-        applies function call, GroupChat, and state change interception.
-    evaluator : Any, optional
-        Cedar/OPA policy evaluator for fine-grained access control.
-
-    Examples
-    --------
-    >>> kernel = AutoGenKernel(policy=GovernancePolicy(allowed_tools=["search"]))
-    >>> handler = kernel.as_handler()
-    >>> runtime = SingleThreadedAgentRuntime(intervention_handlers=[handler])
-    """
+    """AutoGen adapter using native intervention handlers and ACS."""
 
     def __init__(
         self,
-        policy: Optional[GovernancePolicy] = None,
         timeout_seconds: float = 300.0,
         on_error: Optional[Callable[[Exception, str], Any]] = None,
         deep_hooks_enabled: bool = True,
-        evaluator: Any = None,
         *,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ):
-        """Initialise the AutoGen governance kernel.
-
-        Args:
-            policy: Governance policy to enforce. When ``None`` the default
-                ``GovernancePolicy`` is used. The policy is translated to
-                an AGT manifest and an :class:`agt.policies.runtime.AgtRuntime`
-                is constructed over it at init time.
-            timeout_seconds: Default timeout in seconds (default 300).
-            on_error: Optional callback invoked on errors with ``(exception,
-                agent_id)`` arguments.  When ``None``, errors propagate
-                normally.
-            deep_hooks_enabled: When ``True`` (default), apply deep
-                integration hooks — function call pipeline interception,
-                GroupChat message routing, and state change tracking.
-            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
-                policy evaluation. Retained for backward compatibility;
-                the primary decision path now runs through the AGT 5.0
-                runtime.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature matches
-                :data:`agt.policies.runtime.ApprovalCallback`. When
-                ``None`` an escalate verdict fails closed to ``deny``.
-            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-                so scenario tests can wire a scripted policy dispatcher
-                without OPA on PATH. Not part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public surface.
-        """
-        super().__init__(policy, evaluator=evaluator)
+        """Initialise host controls and the required native runtime."""
+        super().__init__(runtime=runtime)
         self.timeout_seconds = timeout_seconds
         self.on_error = on_error
         self.deep_hooks_enabled = deep_hooks_enabled
@@ -547,20 +405,14 @@ class AutoGenKernel(BaseIntegration):
         self._function_call_log: list[dict[str, Any]] = []
         self._groupchat_message_log: list[dict[str, Any]] = []
         self._state_change_log: list[dict[str, Any]] = []
-        self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
-            approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
-        )
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+    def evaluate_input(self, ctx: Any, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
@@ -571,7 +423,7 @@ class AutoGenKernel(BaseIntegration):
         tool_name: str,
         args: Any,
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for an AutoGen FunctionCall."""
         normalised: dict[str, Any]
         if isinstance(args, dict):
@@ -586,15 +438,7 @@ class AutoGenKernel(BaseIntegration):
 
     @staticmethod
     def _to_body(data: Any) -> Any:
-        """Normalise an AutoGen payload to a JSON-serialisable body.
-
-        v4 callers passed dicts like ``{"recipient": ..., "message":
-        ...}`` to :meth:`pre_execute` and relied on ``str(input_data)``
-        matching against ``blocked_patterns``. The AGT manifest bridge
-        only pattern-matches a string ``policy_target.value``, so the
-        adapter stringifies dict bodies before forwarding them so the
-        v4 pattern contract still holds.
-        """
+        """Normalise an AutoGen payload to a JSON-serialisable body."""
         if isinstance(data, str):
             return data
         if isinstance(data, dict):
@@ -697,12 +541,6 @@ class AutoGenKernel(BaseIntegration):
         Returns:
             The same agent objects (in-place patched) as a list.
 
-        Example:
-            >>> kernel = AutoGenKernel(policy=GovernancePolicy(
-            ...     blocked_patterns=["password"]
-            ... ))
-            >>> kernel.govern(assistant, user_proxy)
-            >>> assistant.initiate_chat(user_proxy, message="hello")
         """
         import warnings
         warnings.warn(
@@ -753,7 +591,7 @@ class AutoGenKernel(BaseIntegration):
 
         return governed
 
-    def _wrap_initiate_chat(self, agent: Any, ctx: ExecutionContext, agent_id: str):
+    def _wrap_initiate_chat(self, agent: Any, ctx: AdapterExecutionState, agent_id: str):
         """Wrap ``initiate_chat`` with pre-/post-execution governance.
 
         Args:
@@ -801,7 +639,7 @@ class AutoGenKernel(BaseIntegration):
 
         agent.initiate_chat = governed_initiate_chat
 
-    def _wrap_generate_reply(self, agent: Any, ctx: ExecutionContext, agent_id: str):
+    def _wrap_generate_reply(self, agent: Any, ctx: AdapterExecutionState, agent_id: str):
         """Wrap ``generate_reply`` with message interception and governance.
 
         Unlike ``initiate_chat``, violations in ``generate_reply`` return a
@@ -853,7 +691,7 @@ class AutoGenKernel(BaseIntegration):
 
         agent.generate_reply = governed_generate_reply
 
-    def _wrap_receive(self, agent: Any, ctx: ExecutionContext, agent_id: str):
+    def _wrap_receive(self, agent: Any, ctx: AdapterExecutionState, agent_id: str):
         """Wrap ``receive`` with inbound message governance.
 
         Intercepts messages arriving at this agent and validates them
@@ -908,7 +746,7 @@ class AutoGenKernel(BaseIntegration):
     # ── Deep Integration Hooks (legacy) ───────────────────────────
 
     def _intercept_function_calls(
-        self, agent: Any, ctx: ExecutionContext, agent_id: str
+        self, agent: Any, ctx: AdapterExecutionState, agent_id: str
     ) -> None:
         """Wrap the function_map on an AutoGen AssistantAgent.
 
@@ -942,19 +780,11 @@ class AutoGenKernel(BaseIntegration):
                 **kwargs: Any,
             ) -> Any:
                 """Governed wrapper around an AutoGen function_map entry."""
-                # Check allowed tools
-                if kernel.policy.allowed_tools and _name not in kernel.policy.allowed_tools:
-                    raise PolicyViolationError(
-                        f"Function '{_name}' not in allowed list: {kernel.policy.allowed_tools}"
-                    )
-
-                # Check blocked patterns on function name + arguments
-                combined = _name + str(args) + str(kwargs)
-                matched = kernel.policy.matches_pattern(combined)
-                if matched:
-                    raise PolicyViolationError(
-                        f"Function '{_name}' blocked: pattern '{matched[0]}' detected"
-                    )
+                result = kernel.evaluate_pre_tool_call(
+                    ctx, tool_name=_name, args={"args": args, "kwargs": kwargs}
+                )
+                if not result.permits_unchanged:
+                    raise result.to_policy_violation(PolicyViolationError)
 
                 # Record the call
                 record = {
@@ -972,7 +802,7 @@ class AutoGenKernel(BaseIntegration):
             function_map[func_name] = governed_function
 
     def _intercept_groupchat(
-        self, agent: Any, ctx: ExecutionContext, agent_id: str
+        self, agent: Any, ctx: AdapterExecutionState, agent_id: str
     ) -> None:
         """Hook into GroupChat's select_speaker and message routing.
 
@@ -1007,13 +837,9 @@ class AutoGenKernel(BaseIntegration):
                 }
                 kernel._groupchat_message_log.append(record)
 
-                # Validate speaker selection against blocked patterns
-                matched = kernel.policy.matches_pattern(speaker_name)
-                if matched:
-                    raise PolicyViolationError(
-                        f"Speaker '{speaker_name}' blocked: "
-                        f"pattern '{matched[0]}' detected"
-                    )
+                evaluation = kernel.evaluate_input(ctx, speaker_name)
+                if not evaluation.permits_unchanged:
+                    raise evaluation.to_policy_violation(PolicyViolationError)
 
                 logger.debug(
                     "GroupChat speaker selected: manager=%s speaker=%s",
@@ -1034,11 +860,9 @@ class AutoGenKernel(BaseIntegration):
                     *args: Any, _orig=original_route, _attr=route_attr, **kwargs: Any
                 ) -> Any:
                     message_str = str(args[0]) if args else str(kwargs)
-                    matched = kernel.policy.matches_pattern(message_str)
-                    if matched:
-                        raise PolicyViolationError(
-                            f"GroupChat message blocked: pattern '{matched[0]}' detected"
-                        )
+                    evaluation = kernel.evaluate_input(ctx, message_str)
+                    if not evaluation.permits_unchanged:
+                        raise evaluation.to_policy_violation(PolicyViolationError)
 
                     kernel._groupchat_message_log.append({
                         "groupchat_manager": agent_id,
@@ -1052,7 +876,7 @@ class AutoGenKernel(BaseIntegration):
                 setattr(groupchat, route_attr, governed_route)
 
     def _intercept_state_changes(
-        self, agent: Any, ctx: ExecutionContext, agent_id: str
+        self, agent: Any, ctx: AdapterExecutionState, agent_id: str
     ) -> None:
         """Track agent state changes for governance audit.
 
@@ -1083,13 +907,9 @@ class AutoGenKernel(BaseIntegration):
                             f"sensitive data detected (pattern: {pattern.pattern})"
                         )
 
-                # Blocked patterns check
-                matched = kernel.policy.matches_pattern(content)
-                if matched:
-                    raise PolicyViolationError(
-                        f"State update blocked for '{agent_id}': "
-                        f"pattern '{matched[0]}' detected"
-                    )
+                evaluation = kernel.evaluate_input(ctx, content)
+                if not evaluation.permits_unchanged:
+                    raise evaluation.to_policy_violation(PolicyViolationError)
 
                 kernel._state_change_log.append({
                     "agent_id": agent_id,
@@ -1185,41 +1005,3 @@ class AutoGenKernel(BaseIntegration):
             "last_error": self._last_error,
             "uptime_seconds": round(uptime, 2),
         }
-
-
-# ── Convenience function (deprecated) ─────────────────────────────
-
-def govern(
-    *agents: Any,
-    policy: Optional[GovernancePolicy] = None,
-    timeout_seconds: float = 300.0,
-    on_error: Optional[Callable[[Exception, str], Any]] = None,
-) -> list[Any]:
-    """Convenience function to add governance to AutoGen agents.
-
-    .. deprecated::
-        Use ``AutoGenKernel(policy).as_handler()`` instead.
-
-    Args:
-        *agents: AutoGen agents to govern.
-        policy: Optional governance policy (uses defaults when ``None``).
-        timeout_seconds: Default timeout in seconds (default 300).
-        on_error: Optional error callback ``(exception, agent_id)``.
-
-    Returns:
-        The governed agents as a list.
-
-    Example:
-        >>> from agent_os.integrations.autogen_adapter import govern
-        >>> governed_agents = govern(assistant, user_proxy)
-    """
-    import warnings
-    warnings.warn(
-        "autogen_adapter.govern() is deprecated. "
-        "Use AutoGenKernel(policy).as_handler() instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return AutoGenKernel(
-        policy, timeout_seconds=timeout_seconds, on_error=on_error
-    ).govern(*agents)

@@ -57,7 +57,9 @@ AGT is the host and policy enforcement point around the ACS decision core. The i
 | `agt-policies` bridge | The Python `agt.policies` package mediates between AGT host calls and the ACS runtime and normalizes verdicts for host consumption. |
 | ACS native runtime | The `agent_control_specification` Python SDK over the Rust core performs the deterministic decision and is built from `sdk/python` with maturin. |
 
-AGT folder discovery, scope, and merge pre-resolve manifests before the engine evaluates them, so the runtime always receives one fully resolved manifest. Manifest resolution rules live in [`spec/agt/AGT-RESOLUTION-1.0.md`](spec/agt/AGT-RESOLUTION-1.0.md).
+The runtime consumes native ACS/AGT manifests and resolves ACS `extends`.
+Legacy governance folder discovery is available only through the one-way
+`agt migrate v4-to-v5` command.
 
 ## Core properties
 

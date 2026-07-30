@@ -2,19 +2,19 @@
 # Licensed under the MIT License.
 """OpenAI adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
-These scenarios exercise the v4 :class:`OpenAIKernel` /
+These scenarios exercise the native :class:`OpenAIKernel` /
 :class:`GovernedAssistant` surface routed through
 :class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
 
 Each test covers one of the five AGT verdicts that the adapter must
-translate back to its v4 surface:
+expose through its native surface:
 
 - ``allow`` -> the OpenAI message is forwarded verbatim.
 - ``deny`` -> the adapter raises
-  :class:`PolicyViolationError.from_check_result(...)`.
+  :class:`PolicyViolationError` with its native evaluation attached.
 - ``transform`` -> the adapter rewrites the outbound message with the
   AGT D1.1 ``{path, value}`` payload before calling the OpenAI client.
 - ``escalate`` (resolver approves) -> the adapter forwards the call.
@@ -32,7 +32,7 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agt.policies import EvaluationResult, SnapshotBuilder  # noqa: E402
+from agt.policies import PolicyEvaluation  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
@@ -121,7 +121,7 @@ def test_add_message_allow_path_forwards_to_openai(tmp_path: Path) -> None:
     from agent_os.integrations.openai_adapter import OpenAIKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = OpenAIKernel(_runtime=runtime)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 
@@ -147,14 +147,14 @@ def test_add_message_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = OpenAIKernel(_runtime=runtime)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 
     with pytest.raises(PolicyViolationError) as excinfo:
         governed.add_message("thread_1", "tell me about secrets")
 
-    assert excinfo.value.check_result.reason == "user_blocked_topic"
+    assert excinfo.value.evaluation_result.reason_code == "policy:user_blocked_topic"
     client.beta.threads.messages.create.assert_not_called()
 
 
@@ -175,7 +175,7 @@ def test_add_message_transform_path_redacts_outbound_content(tmp_path: Path) -> 
             }
         ],
     )
-    kernel = OpenAIKernel(_runtime=runtime)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 
@@ -193,7 +193,7 @@ def test_add_message_escalate_with_approving_resolver_forwards(tmp_path: Path) -
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
@@ -203,7 +203,7 @@ def test_add_message_escalate_with_approving_resolver_forwards(tmp_path: Path) -
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = OpenAIKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 
@@ -223,7 +223,7 @@ def test_add_message_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = OpenAIKernel(_runtime=runtime)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 

@@ -38,6 +38,102 @@ surface and prevents the generator package from becoming a second SDK.
 
 ---
 
+## Python runtime policy APIs drop the pre-ACS rule model
+
+**Date:** TBD
+
+**Affected**
+
+- `agent-os` (`agent_os.policies`, `agent_os.integrations`, `agent_os.compat`, `agent_os.providers`)
+- `agt-sandbox` (`agent_sandbox`)
+- `agt-policies` (`agt.policies`, `agt._harness`)
+- `agent-marketplace` (`agent_marketplace.hooks`)
+
+**What changed**
+
+The Python runtime no longer carries its own rule model, its own evaluators and
+external backends, or the bridge that translated between that model and ACS.
+The ACS runtime evaluates policy, so the parallel model and every helper that
+converted between the two are gone rather than deprecated. Framework
+adapters take an `AgtRuntime`. Sandbox providers take `runtime=` alongside an
+explicit `SandboxConfig` instead of deriving one from a policy document.
+
+These 75 public names are removed. The list is computed from the export diff
+against the merge base, not assembled by hand.
+
+`agent_os.policies` (39):
+`AsyncPolicyEvaluator`, `BackendDecision`, `BudgetPolicy`, `CedarBackend`,
+`DynamicBudgetTracker`, `DynamicCondition`, `DynamicConditionEvaluator`,
+`DynamicConditionType`, `OPABackend`, `PolicyAction`, `PolicyCondition`,
+`PolicyDefaults`, `PolicyDocument`, `PolicyOperator`, `SandboxMounts`,
+`SharedPolicyDecision`, `SharedPolicyEvaluator`, `SharedPolicyRule`,
+`SharedPolicySchema`, `ViolationCategory`, `deny_blocked_pattern_input`,
+`deny_blocked_pattern_memory`, `deny_blocked_pattern_output`,
+`deny_blocked_pattern_tool`, `deny_blocked_tool`, `deny_confidence_threshold`,
+`deny_drift`, `deny_human_approval`, `deny_max_tool_calls`,
+`deny_not_allowed_tool`, `deny_policy_error`, `deny_timeout`,
+`document_to_governance`, `get_effective_defaults`, `governance_to_document`,
+`merge_policies`, `policy_document_to_shared`, `shared_to_policy_document`,
+`to_policy_action`
+
+`agent_os.integrations` (20):
+`ADKPolicyConfig`, `AdapterRegistry`, `AdapterRuntimeBridge`,
+`AsyncGovernedWrapper`, `BridgeResult`, `DetectionEnforcementAction`,
+`DetectionModuleConfig`, `EscalationResult`, `GovernancePolicyMiddleware`,
+`HumanApprovalRequired`, `MAFGovernancePolicyMiddleware`, `PolicyConfig`,
+`PolicyHierarchy`, `PolicyInterceptor`, `PolicyTemplates`, `TransformOutcome`,
+`compose_policies`, `get_runtime_bridge`, `override_policy`, `register_adapter`
+
+`agent_sandbox` (8): `aca_config_from_policy`, `docker_config_from_policy`,
+`hyperlight_config_from_policy`, `mxc_config_from_policy`,
+`nono_config_from_policy`, `policy_to_mxc_json`, `policy_yaml_to_mxc_json`,
+`policy_yaml_to_nono_config`
+
+Elsewhere (8): `NoOpGovernanceMiddleware`, `NoOpPolicyEvaluator`,
+`get_evaluator` (`agent_os.compat`); `get_policy_engine`
+(`agent_os.providers`); `governance_to_acs_manifest` (`agt.policies`);
+`evaluate_policy_cli` (`agent_marketplace.hooks`); `EvaluationResult`; and the
+`agt._harness.opa_runner` module.
+
+**A manifest must bind every intervention point the adapter evaluates**
+
+The bridge rewrote an unconfigured intervention point to an allow, so a
+manifest could bind nothing and every path still ran. The ACS runtime denies
+it instead, with reason `runtime_error:intervention_point_unknown`, and the
+adapters pass that denial through.
+
+This bites on a minimal manifest. An adapter evaluates a fixed set of points:
+`input` on every call, `pre_tool_call` on every tool call, `output` after
+every response. A manifest binding only `input` therefore denies the tool and
+output paths, which reads as the adapter being broken.
+
+Bind each point the adapter uses. The Rust guidance in
+`agent-governance-rust/agentmesh/MIGRATION_V5.md` says the same thing and
+shows the shape.
+
+Do not read the reason as "no policy here, carry on". A `post_*` block still
+stops the result propagating even though the guarded action already ran, so
+permitting an unconfigured `output` or `post_tool_call` forwards model
+responses and tool results no policy was consulted about.
+
+**A tool-call budget now counts one call differently**
+
+The bridge reported the tool-call count *including* the call under evaluation,
+so `max_tool_calls: 3` denied the third call and allowed two. The ACS runtime
+reports calls already completed, so `max_tool_calls: 3` now allows three. The
+bridge carried this as a compatibility override and recorded it as temporary.
+A deployed policy therefore permits one more tool call than it used to. Lower
+the limit by one to keep the behaviour you have.
+
+**Migration**
+
+Run `agt migrate` on a supported literal policy, then build an `AgtRuntime`
+from the manifest it writes. Sandbox resources, mounts, network settings, and
+tool exposure move into `SandboxConfig`. Read `evaluation_result` and the ACS audit
+record where you used to read the compatibility exception fields.
+
+---
+
 ## MuteAgentValidator now runs capability validators consistently and honors strict_mode
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)

@@ -25,7 +25,6 @@ annotators contribute additional context.
 `agt-policies` is the Python package that exposes ACS to AGT hosts and
 adapters. Use it when host code needs to:
 
-- discover, scope, merge, and materialize AGT governance manifests
 - author and validate a lossless typed `AgtManifest`
 - build complete AGT snapshots for ACS intervention points
 - call the ACS Python SDK through `AgtRuntime`
@@ -46,15 +45,11 @@ AGT adapters enforce.
 
 ## What is here
 
-- `agt.manifest_resolution` — folder discovery + scope filtering +
-  rule merge layer that runs in the host before the engine sees a
-  manifest. Implements `spec/agt/AGT-RESOLUTION-1.0.md`.
-  (`discover`, `scope`, `merge`, `build`.)
 - `agt.policies.snapshot` — snapshot builder per
   `spec/agt/AGT-SNAPSHOT-1.0.md`.
 - `agt.policies.manifest` provides lossless typed `AgtManifest`, provenance-aware
   local reference resolution, and adapter compatibility preflight.
-- `agt.policies.bridge` — renders a v4 `GovernancePolicy` into an ACS
+- `agt.policies.runtime` — renders a v4 `AgtRuntime` into an ACS
   manifest + OPA rego module.
 - `agt.policies.result` provides native immutable `PolicyEvaluation` plus the
   temporary `EvaluationResult` compatibility surface.
@@ -105,6 +100,11 @@ those values rather than silently dropping them.
 Policy-authored messages remain restricted audit detail, while host exceptions
 use stable sanitized text.
 
+The dependency-light
+[`native_a2a_runtime.py`](../agent-os/examples/integrations/native_a2a_runtime.py)
+example constructs an A2A adapter with the public `runtime=` argument and a
+custom ACS policy dispatcher.
+
 `AdapterRuntimeSession` charges every attempted tool call, including denied
 and failed attempts, before the next policy evaluation. Model token usage is
 recorded after `post_model_call`. Existing v4 adapters temporarily disable
@@ -113,17 +113,16 @@ Phase 3 removes that compatibility override.
 
 ## Compatibility bridge
 
-Existing Agent OS adapters still accept the v4 `GovernancePolicy`
-dataclass. `agt.policies.bridge` renders that policy into an ACS
+Existing Agent OS adapters still accept the v4 `AgtRuntime`
+dataclass. `agt.policies.runtime` renders that policy into an ACS
 manifest plus a generated Rego bundle. The bridge preserves v4
 semantics where they differ from the native ACS defaults, including an
 empty `allowed_tools` list meaning no allowlist and `max_tool_calls=0`
 meaning deny every tool call.
 
-The generated compatibility policy is identified as `agt_legacy_rules`
-inside the resolved ACS manifest. If merged governance rules are
-present but no intervention point binds to `agt_legacy_rules`,
-resolution fails closed rather than producing rules that never run.
+The migration command keeps legacy folder discovery private under `agt.cli`.
+Runtime modules never import it. Users migrate the folder chain once, then
+load the generated ACS manifest directly.
 
 The `agt migrate v4-to-v5` command does not import this runtime bridge. Its
 private one-way translator accepts exact literals only. Dynamic constructor
@@ -135,17 +134,16 @@ RE2 `\z`; Python-only expressions such as backreferences are refused.
 
 ## Security invariants
 
-The host layer is fail-closed by design. Notably: governance files
-that resolve outside the workspace root are rejected; directory-style
-scopes (`dir/`) cover their subtree; a parent `deny` cannot be
-neutralised by a child `allow` whose condition overlaps it; malformed
-budget counters and approval-resolver timeouts deny rather than
-silently allow.
+The host layer is fail-closed by design. Native manifests enforce path
+confinement through ACS `extends`. The migration command rejects governance
+files that resolve outside the workspace root and preserves parent-deny
+immutability while flattening the old chain. Malformed budget counters and
+approval-resolver timeouts deny rather than silently allow.
 
-Resolved Rego bundles are materialized outside the governed workspace
-for runtime use and cleaned up when the runtime closes. This prevents a
-workspace-writable policy bundle from being overwritten between
-resolution and evaluation.
+The migration resolver writes generated Rego into a staging directory and
+publishes outputs only after project-wide preflight succeeds. Native runtime
+bundles use ACS manifest paths and ACS confinement rules. The runtime does not
+materialize or clean legacy governance bundles.
 
 ## Install (development)
 

@@ -1,51 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Anthropic Claude Integration
+"""Anthropic Messages integration backed by a required native ACS runtime.
 
-Wraps Anthropic's Messages API with Agent OS governance.
-
-Backend (AGT 5.0): every policy decision is routed through
-:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
-The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
-translated to an AGT manifest via
-:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
-time, an :class:`AgtRuntime` is memoised per policy, and a
-:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
-``ExecutionContext`` budgets between intervention points. The legacy
-``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
-keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
-outbound message content before the Anthropic client sees it;
-``escalate`` verdicts route through the configured approval resolver
-per AGT-DELTA D1.4.
-
-Usage:
-    from agent_os.integrations.anthropic_adapter import AnthropicKernel
-
-    kernel = AnthropicKernel(policy=GovernancePolicy(
-        max_tokens=4096,
-        allowed_tools=["web_search", "code_interpreter"],
-        blocked_patterns=["password", "api_key"],
-    ))
-
-    governed = kernel.wrap(client)
-    # All messages.create() calls are now governed
-    response = governed.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": "Hello"}],
-    )
-
-Features:
-- Pre-execution policy checks via the AGT 5.0 ACS runtime
-- Tool call interception at the AGT pre_tool_call hook
-- Transform-verdict rewriting of outbound message content
-- Escalate-verdict approval routing via the configured resolver
-- Token limit enforcement
-- Content filtering via the AGT manifest bridge
-- SIGKILL support (cancel running requests)
-- Full audit trail with AGT bisected input/enforced identities
-- Health check endpoint
+Input, tool, and output intervention points are mediated before content is
+forwarded to or disclosed by the Anthropic client.
 """
 
 from __future__ import annotations
@@ -54,15 +12,14 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
-from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy
+from ..exceptions import PolicyViolationError
+from .base import AdapterExecutionState, BaseIntegration, get_adapter_runtime
 
 logger = logging.getLogger("agent_os.anthropic")
 
@@ -84,7 +41,7 @@ def _check_anthropic_available() -> None:
 
 
 @dataclass
-class AnthropicContext(ExecutionContext):
+class AnthropicContext(AdapterExecutionState):
     """Execution context for Anthropic Claude interactions.
 
     Attributes:
@@ -102,18 +59,6 @@ class AnthropicContext(ExecutionContext):
     completion_tokens: int = 0
 
 
-class PolicyViolationError(_CanonicalPolicyViolationError):
-    """Raised when a Claude request violates governance policy.
-
-    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
-    canonical ``from_check_result`` constructor is available while
-    preserving the legacy ``agent_os.integrations.anthropic_adapter.PolicyViolationError``
-    import path for v4 callers.
-    """
-
-    pass
-
-
 class RequestCancelledException(Exception):
     """Raised when a request is cancelled via SIGKILL."""
 
@@ -121,76 +66,31 @@ class RequestCancelledException(Exception):
 
 
 class AnthropicKernel(BaseIntegration):
-    """Anthropic Claude adapter for Agent OS.
-
-    Provides governance for the Anthropic Messages API including policy
-    enforcement, tool-call validation, token tracking, and audit logging.
-
-    Example:
-        >>> kernel = AnthropicKernel(policy=GovernancePolicy(max_tokens=8192))
-        >>> governed = kernel.wrap(anthropic.Anthropic())
-        >>> response = governed.messages.create(
-        ...     model="claude-sonnet-4-20250514",
-        ...     max_tokens=1024,
-        ...     messages=[{"role": "user", "content": "Hello"}],
-        ... )
-    """
+    """Govern Anthropic Messages API calls with a native runtime."""
 
     def __init__(
         self,
-        policy: GovernancePolicy | None = None,
         max_retries: int = 3,
         timeout_seconds: float = 300.0,
-        evaluator: Any = None,
         *,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ) -> None:
-        """Initialise the Anthropic governance kernel.
-
-        Args:
-            policy: Governance policy to enforce. Uses default when ``None``.
-                The policy is translated to an AGT manifest and an
-                :class:`agt.policies.runtime.AgtRuntime` is constructed
-                over it at init time.
-            max_retries: Maximum retry attempts for transient errors.
-            timeout_seconds: Default timeout for operations.
-            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
-                policy evaluation. Retained for backward compatibility;
-                the primary decision path now runs through the AGT 5.0
-                runtime.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature matches
-                :data:`agt.policies.runtime.ApprovalCallback`. When
-                ``None`` an escalate verdict fails closed to ``deny``.
-            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-                so scenario tests can wire a scripted policy dispatcher
-                without OPA on PATH. Not part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public surface.
-        """
-        super().__init__(policy, evaluator=evaluator)
+        """Initialise retry controls and the required native runtime."""
+        super().__init__(runtime=runtime)
         self.max_retries = max_retries
         self.timeout_seconds = timeout_seconds
         self._wrapped_clients: dict[int, Any] = {}
         self._cancelled_requests: set[str] = set()
         self._start_time = time.monotonic()
         self._last_error: str | None = None
-        self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
-            approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
-        )
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+    def evaluate_input(self, ctx: Any, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
@@ -201,7 +101,7 @@ class AnthropicKernel(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for an Anthropic tool-use block."""
         return self._bridge.evaluate_pre_tool_call(
             ctx, tool_name=tool_name, args=args, call_id=call_id
@@ -263,7 +163,6 @@ class AnthropicKernel(BaseIntegration):
         ctx = AnthropicContext(
             agent_id=f"anthropic-{client_id}",
             session_id=f"ant-{int(time.time())}",
-            policy=self.policy,
         )
         self.contexts[ctx.agent_id] = ctx
         self._wrapped_clients[client_id] = client
@@ -365,26 +264,19 @@ class _GovernedMessages:
                 content = str(content)
             bridge_result = self._kernel.evaluate_input(self._ctx, content)
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(bridge_result.check_result)
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
-            ):
-                if isinstance(msg, dict):
-                    msg["content"] = bridge_result.transform.value
-                    messages[idx] = msg
-
-        # Validate requested tools against policy
-        tools = kwargs.get("tools")
-        if tools:
-            self._validate_tools(tools)
-
-        # Enforce max_tokens cap from policy
-        requested_max = kwargs.get("max_tokens", 0)
-        if requested_max > self._kernel.policy.max_tokens:
-            raise PolicyViolationError(
-                f"Requested max_tokens ({requested_max}) exceeds policy limit "
-                f"({self._kernel.policy.max_tokens})"
-            )
+                raise bridge_result.to_policy_violation(PolicyViolationError)
+            if bridge_result.transform is not None:
+                if not isinstance(bridge_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
+                if not isinstance(msg, dict):
+                    # Only a dict message takes the replacement here, so any
+                    # other shape would forward the original text.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
+                msg["content"] = bridge_result.transformed_value
+                messages[idx] = msg
 
         # Audit log
         logger.info(
@@ -415,10 +307,6 @@ class _GovernedMessages:
 
             total = self._ctx.prompt_tokens + self._ctx.completion_tokens
             self._ctx.total_tokens = total
-            if total > self._kernel.policy.max_tokens:
-                raise PolicyViolationError(
-                    f"Token limit exceeded: {total} > {self._kernel.policy.max_tokens}"
-                )
 
         # Validate tool_use blocks via AGT pre_tool_call intervention point
         content_blocks = getattr(response, "content", [])
@@ -434,47 +322,36 @@ class _GovernedMessages:
                 }
                 self._ctx.tool_use_calls.append(call_info)
                 self._ctx.tool_calls.append(call_info)
-                self._ctx.call_count = len(self._ctx.tool_calls)
-
-                tool_result = self._kernel.evaluate_pre_tool_call(
-                    self._ctx,
-                    tool_name=tool_name,
-                    args=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
-                    call_id=getattr(block, "id", "call-1"),
-                )
-                if not tool_result.allowed:
-                    raise PolicyViolationError.from_check_result(
-                        tool_result.check_result
+                current_call_count = len(self._ctx.tool_calls)
+                self._ctx.call_count = max(0, current_call_count - 1)
+                try:
+                    tool_result = self._kernel.evaluate_pre_tool_call(
+                        self._ctx,
+                        tool_name=tool_name,
+                        args=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
+                        call_id=getattr(block, "id", "call-1"),
                     )
-                if tool_result.transform is not None and isinstance(
-                    tool_result.transform.value, dict
-                ):
+                finally:
+                    self._ctx.call_count = current_call_count
+                if not tool_result.allowed:
+                    raise tool_result.to_policy_violation(PolicyViolationError)
+                if tool_result.transform is not None:
+                    if not isinstance(tool_result.transformed_value, dict):
+                        # The replacement is not the shape this surface takes,
+                        # so it cannot be applied here. Falling through would
+                        # run the original the policy meant to rewrite.
+                        raise tool_result.to_policy_violation(PolicyViolationError)
                     try:
-                        block.input = tool_result.transform.value
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
-                        pass
+                        block.input = tool_result.transformed_value
+                    except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                        # The policy rewrote this value and the write did not
+                        # land, so proceeding would run the original.
+                        raise tool_result.to_policy_violation(PolicyViolationError) from exc
 
         # Post-execute bookkeeping
         self._kernel.post_execute(self._ctx, response)
 
         return response
-
-    def _validate_tools(self, tools: list[Any]) -> None:
-        """Validate tool definitions against policy allowlist.
-
-        Args:
-            tools: List of tool definitions from the request.
-
-        Raises:
-            PolicyViolationError: If a tool is not in the allowed list.
-        """
-        if not self._kernel.policy.allowed_tools:
-            return
-        for tool in tools:
-            name = tool.get("name") if isinstance(tool, dict) else getattr(tool, "name", None)
-            if name and name not in self._kernel.policy.allowed_tools:
-                raise PolicyViolationError(f"Tool not allowed: {name}")
-
 
 class GovernedAnthropicClient:
     """Anthropic client wrapped with Agent OS governance.
@@ -514,14 +391,12 @@ class GovernedAnthropicClient:
         """Return cumulative token usage statistics.
 
         Returns:
-            A dict with ``prompt_tokens``, ``completion_tokens``,
-            ``total_tokens``, and ``limit``.
+            A dict with cumulative prompt, completion, and total token counts.
         """
         return {
             "prompt_tokens": self._ctx.prompt_tokens,
             "completion_tokens": self._ctx.completion_tokens,
             "total_tokens": self._ctx.prompt_tokens + self._ctx.completion_tokens,
-            "limit": self._kernel.policy.max_tokens,
         }
 
     def __getattr__(self, name: str) -> Any:
@@ -538,12 +413,6 @@ class GovernedAnthropicClient:
 # composable "message hook" that wraps messages.create() calls
 # with governance checks — without creating a proxy client object.
 #
-# Usage:
-#     kernel = AnthropicKernel(policy=policy)
-#     hook = kernel.as_message_hook()
-#
-#     # Use the hook to govern individual calls
-#     response = hook.create(client, model="claude-sonnet-4-20250514", ...)
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -557,16 +426,6 @@ class GovernanceMessageHook:
     This is the recommended integration pattern for Anthropic because the
     SDK does not expose a native plugin/middleware system.
 
-    Example::
-
-        kernel = AnthropicKernel(policy=GovernancePolicy(
-            blocked_patterns=["password"],
-            allowed_tools=["web_search"],
-        ))
-        hook = kernel.as_message_hook()
-
-        response = hook.create(client, model="claude-sonnet-4-20250514",
-                               max_tokens=1024, messages=[...])
     """
 
     def __init__(self, kernel: AnthropicKernel, *, name: str = "anthropic-governance") -> None:
@@ -575,7 +434,6 @@ class GovernanceMessageHook:
         self._ctx = AnthropicContext(
             agent_id=name,
             session_id=f"ant-hook-{int(time.time())}",
-            policy=kernel.policy,
         )
         kernel.contexts[name] = self._ctx
 
@@ -617,23 +475,19 @@ class GovernanceMessageHook:
                 content = str(content)
             bridge_result = self._kernel.evaluate_input(self._ctx, content)
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(bridge_result.check_result)
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
-            ):
-                if isinstance(msg, dict):
-                    msg["content"] = bridge_result.transform.value
-                    messages[idx] = msg
-
-        # Enforce max_tokens cap from policy (host-level guard preserved
-        # because Anthropic's max_tokens is a request-level cap, not a
-        # budget the AGT engine reads from the snapshot).
-        requested_max = kwargs.get("max_tokens", 0)
-        if requested_max > self._kernel.policy.max_tokens:
-            raise PolicyViolationError(
-                f"Requested max_tokens ({requested_max}) exceeds policy limit "
-                f"({self._kernel.policy.max_tokens})"
-            )
+                raise bridge_result.to_policy_violation(PolicyViolationError)
+            if bridge_result.transform is not None:
+                if not isinstance(bridge_result.transformed_value, str):
+                    # The replacement is not the shape this surface takes,
+                    # so it cannot be applied here. Falling through would
+                    # run the original the policy meant to rewrite.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
+                if not isinstance(msg, dict):
+                    # Only a dict message takes the replacement here, so any
+                    # other shape would forward the original text.
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
+                msg["content"] = bridge_result.transformed_value
+                messages[idx] = msg
 
         # Audit log
         logger.info(
@@ -657,10 +511,6 @@ class GovernanceMessageHook:
 
             total = self._ctx.prompt_tokens + self._ctx.completion_tokens
             self._ctx.total_tokens = total
-            if total > self._kernel.policy.max_tokens:
-                raise PolicyViolationError(
-                    f"Token limit exceeded: {total} > {self._kernel.policy.max_tokens}"
-                )
 
         # Validate tool_use blocks in response via AGT pre_tool_call
         content_blocks = getattr(response, "content", [])
@@ -675,30 +525,33 @@ class GovernanceMessageHook:
                     "timestamp": datetime.now().isoformat(),
                 })
                 self._ctx.tool_calls.append({"name": tool_name})
-                self._ctx.call_count = len(self._ctx.tool_calls)
-
-                tool_result = self._kernel.evaluate_pre_tool_call(
-                    self._ctx,
-                    tool_name=tool_name,
-                    args=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
-                    call_id=getattr(block, "id", "call-1"),
-                )
-                if not tool_result.allowed:
-                    raise PolicyViolationError.from_check_result(
-                        tool_result.check_result
+                current_call_count = len(self._ctx.tool_calls)
+                self._ctx.call_count = max(0, current_call_count - 1)
+                try:
+                    tool_result = self._kernel.evaluate_pre_tool_call(
+                        self._ctx,
+                        tool_name=tool_name,
+                        args=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
+                        call_id=getattr(block, "id", "call-1"),
                     )
-                if tool_result.transform is not None and isinstance(
-                    tool_result.transform.value, dict
-                ):
-                    # Rewrite the tool-use block's input per AGT D1.1
-                    # so any subsequent host-side tool executor sees
-                    # the sanitised arguments.
+                finally:
+                    self._ctx.call_count = current_call_count
+                if not tool_result.allowed:
+                    raise tool_result.to_policy_violation(PolicyViolationError)
+                if tool_result.transform is not None:
+                    if not isinstance(tool_result.transformed_value, dict):
+                        # The replacement is not the shape this surface takes,
+                        # so it cannot be applied here. Falling through would
+                        # run the original the policy meant to rewrite.
+                        raise tool_result.to_policy_violation(PolicyViolationError)
                     try:
-                        block.input = tool_result.transform.value
-                    except Exception:  # noqa: BLE001 — best-effort rewrite
-                        pass
+                        block.input = tool_result.transformed_value
+                    except Exception as exc:  # noqa: BLE001 — best-effort rewrite
+                        # The policy rewrote this value and the write did not
+                        # land, so proceeding would run the original.
+                        raise tool_result.to_policy_violation(PolicyViolationError) from exc
 
-        # Post-execute bookkeeping (mirrors v4 ctx.call_count increment)
+        # Record host completion after output mediation.
         self._kernel.post_execute(self._ctx, response)
 
         return response
@@ -709,7 +562,8 @@ class GovernanceMessageHook:
 
 def wrap_client(
     client: Any,
-    policy: GovernancePolicy | None = None,
+    *,
+    runtime: Any,
 ) -> GovernedAnthropicClient:
     """Quick wrapper for Anthropic clients.
 
@@ -719,7 +573,7 @@ def wrap_client(
 
     Args:
         client: An ``anthropic.Anthropic`` client instance.
-        policy: Optional governance policy.
+        runtime: Native runtime used for every intervention point.
 
     Returns:
         A governed client.
@@ -731,10 +585,9 @@ def wrap_client(
     """
     import warnings
     warnings.warn(
-        "wrap_client() is deprecated. Use AnthropicKernel(policy=...).as_message_hook() "
+        "wrap_client() is deprecated. Use AnthropicKernel(runtime=...).as_message_hook() "
         "for a non-invasive governance pattern that doesn't proxy the client.",
         DeprecationWarning,
         stacklevel=2,
     )
-    return AnthropicKernel(policy=policy).wrap(client)
-
+    return AnthropicKernel(runtime=runtime).wrap(client)

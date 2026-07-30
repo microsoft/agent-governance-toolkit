@@ -14,6 +14,8 @@ on:
     paths:
       - '.github/ci/**'
       - '.github/workflows/**'
+      - 'agent-governance-python/agt-policies/**'
+      - 'agent-governance-python/agent-governance-toolkit-core/pyproject.toml'
       - 'scripts/ci/generate_workflows.py'
       - 'tests/ci/**'
 
