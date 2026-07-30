@@ -197,6 +197,7 @@ class TestEnforcement:
 
 
 class TestTurkishSignals:
+    # cspell:ignore Kullanıcıya Sunucuyu Kodu kayitlari listele goster
     @pytest.mark.parametrize(
         ("instruction", "category"),
         [

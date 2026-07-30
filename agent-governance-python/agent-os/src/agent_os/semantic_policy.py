@@ -111,6 +111,10 @@ class PolicyDenied(Exception):
 # =============================================================================
 
 # Each signal: (pattern_regex, weight, explanation)
+# cspell:ignore bütün tum butun kayıtları kayitlari verileri tabloları tablolari temizle
+# cspell:ignore harici dış dis sunucuya depoya aktar gönder gonder yükle yukle
+# cspell:ignore yönetici yonetici süper super kullanıcı kullanici yetkisi yetkilerini erişimi erisimi
+# cspell:ignore tanı tani sistemi sunucuyu kapat yeniden başlat baslat durdur kodu komutu çalıştır calistir yürüt yurut
 _SIGNALS_TR: dict[IntentCategory, list[tuple]] = {
     IntentCategory.DESTRUCTIVE_DATA: [
         (
