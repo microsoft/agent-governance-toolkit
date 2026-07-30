@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from agent_os.mcp_response_scanner import _MAX_TAG_STRIP_PASSES, MCPResponseScanner
+from agent_os.mcp_response_scanner import _MAX_TAG_NESTING_DEPTH, MCPResponseScanner
 
 # Fake Google API key built by concatenation so the contiguous literal never
 # appears in source (avoids secret-scanner false positives on a test value).
@@ -162,7 +162,7 @@ def test_sanitize_response_output_contains_no_instruction_tag(payload: str):
 
 
 def test_sanitize_response_fails_closed_when_stripping_does_not_converge():
-    """Beyond the pass limit the content is refused, not partially cleaned.
+    """Beyond the tolerated nesting depth the content is refused, not partially cleaned.
 
     Each nesting level costs one pass, so looping to an unbounded fixed point is
     quadratic in the depth -- a 220 KB response of nested markers took ~15s.
@@ -170,7 +170,7 @@ def test_sanitize_response_fails_closed_when_stripping_does_not_converge():
     honestly be called sanitized, so it is dropped entirely.
     """
     scanner = MCPResponseScanner()
-    depth = _MAX_TAG_STRIP_PASSES + 1
+    depth = _MAX_TAG_NESTING_DEPTH + 1
     payload = "<" * depth + "important>" * depth + "PAYLOAD"
 
     sanitized, removed = scanner.sanitize_response(payload, "tool")
@@ -185,37 +185,37 @@ def test_sanitize_response_fails_closed_when_stripping_does_not_converge():
 def test_non_convergence_log_reports_the_passes_it_actually_ran(caplog):
     """The logged pass count is the loop's iteration count, not the depth.
 
-    The loop runs ``_MAX_TAG_STRIP_PASSES + 1`` times, because convergence is
+    The loop runs ``_MAX_TAG_NESTING_DEPTH + 1`` times, because convergence is
     only observable on a pass that changes nothing. Logging the tolerated depth
     instead sends whoever reads the line during an incident looking for an
     8th pass that in fact ran 9 times -- and the two numbers mean different
     things, so the message states both.
     """
     scanner = MCPResponseScanner()
-    depth = _MAX_TAG_STRIP_PASSES + 1
+    depth = _MAX_TAG_NESTING_DEPTH + 1
     payload = "<" * depth + "important>" * depth + "PAYLOAD"
 
     with caplog.at_level(logging.ERROR, logger="agent_os.mcp_response_scanner"):
         scanner.sanitize_response(payload, "tool")
 
     message = caplog.records[-1].getMessage()
-    assert f"in {_MAX_TAG_STRIP_PASSES + 1} passes" in message
-    assert f"depth over {_MAX_TAG_STRIP_PASSES}" in message
+    assert f"in {_MAX_TAG_NESTING_DEPTH + 1} passes" in message
+    assert f"depth over {_MAX_TAG_NESTING_DEPTH}" in message
     assert "PAYLOAD" not in message
 
 
-def test_sanitize_response_accepts_content_at_exactly_the_pass_limit():
+def test_sanitize_response_accepts_content_at_exactly_the_nesting_limit():
     """A payload of exactly the tolerated depth is cleaned, not refused.
 
     Convergence is only observable on a pass that changes nothing, so depth n
     needs n stripping passes plus one confirming pass. A loop that iterates
-    exactly ``_MAX_TAG_STRIP_PASSES`` times strips the last tag on its final
+    exactly ``_MAX_TAG_NESTING_DEPTH`` times strips the last tag on its final
     pass and then exits before seeing that the result was clean, so it rejects a
     payload it had in fact fully sanitized -- and the constant's name would
     overstate the real limit by one.
     """
     scanner = MCPResponseScanner()
-    depth = _MAX_TAG_STRIP_PASSES
+    depth = _MAX_TAG_NESTING_DEPTH
     payload = "<" * depth + "important>" * depth + "PAYLOAD"
 
     sanitized, removed = scanner.sanitize_response(payload, "tool")

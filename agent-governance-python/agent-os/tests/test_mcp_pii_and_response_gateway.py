@@ -6,7 +6,7 @@ from agent_os.credential_redactor import CredentialRedactor
 from agt.policies import PolicyEvaluation
 from agent_os.mcp_gateway import MCPGateway, MCPResponseDecision, ResponsePolicy
 from agent_os.mcp_protocols import InMemoryAuditSink
-from agent_os.mcp_response_scanner import _MAX_TAG_STRIP_PASSES, MCPResponseScanner
+from agent_os.mcp_response_scanner import _MAX_TAG_NESTING_DEPTH, MCPResponseScanner
 _FAKE_GOOGLE_KEY = 'AIza' + 'SyD1234567890abcdefghijklmnopqrstuv'
 
 class _Runtime:
@@ -280,7 +280,7 @@ class TestGatewayResponseSanitize:
     def test_non_converging_response_is_blocked_not_sanitized(self):
         # Sanitization that cannot converge must never be reported as sanitized.
         gw = _make_gateway(response_policy=ResponsePolicy.SANITIZE)
-        depth = _MAX_TAG_STRIP_PASSES + 1
+        depth = _MAX_TAG_NESTING_DEPTH + 1
         payload = '<' * depth + 'important>' * depth + 'PAYLOAD'
         decision = gw.intercept_tool_response('a1', 'tool', payload)
         assert decision.allowed is False

@@ -33,7 +33,8 @@ _IMPERATIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 _URL_PATTERN = re.compile(r"https?://[^\s<>'\"]+", re.IGNORECASE)
 
-# Maximum tag-stripping passes in :meth:`MCPResponseScanner.sanitize_response`.
+# Maximum instruction-tag nesting depth :meth:`MCPResponseScanner.sanitize_response`
+# will clean before it fails closed.
 #
 # Removing a tag splices the text on either side of it together, and that splice
 # can form a *new* tag: writing an ``<important>`` tag with a second one embedded
@@ -47,14 +48,18 @@ _URL_PATTERN = re.compile(r"https?://[^\s<>'\"]+", re.IGNORECASE)
 # converges in one or two passes; anything still changing after this many is
 # constructed, so the method fails closed on it rather than grinding.
 #
-# This is the depth tolerated, not the iteration count. Convergence is only
-# observable on a pass that changes nothing, so a payload of depth n needs n
-# stripping passes plus one confirming pass; the loop below ranges over
-# ``_MAX_TAG_STRIP_PASSES + 1`` for that reason. Iterating exactly this many
-# times instead would reject a depth-8 payload -- the final pass strips the last
-# tag but the loop ends before it can see the result was clean -- making the
-# real limit 7 and the name off by one.
-_MAX_TAG_STRIP_PASSES = 8
+# Convergence is only observable on a pass that changes nothing, so a payload of
+# depth n needs n stripping passes plus one confirming pass; the loop below ranges
+# over ``_MAX_TAG_NESTING_DEPTH + 1`` for that reason. Iterating exactly this many
+# times instead would reject a payload at exactly this depth -- the final pass
+# strips the last tag but the loop ends before it can see the result was clean --
+# making the real limit one less than the constant says.
+#
+# The constant names the depth rather than the pass count because the two differ
+# by that one, and naming the pass count is what produced an off-by-one in the
+# non-convergence log message: it reported the depth where the reader would look
+# for an 8th pass that had in fact run 9 times.
+_MAX_TAG_NESTING_DEPTH = 8
 _EXFILTRATION_URL_PATTERN = re.compile(
     r"(?i)(?:\b(?:api[_-]?key|token|secret|payload|data|dump|upload|exfil|webhook)\b|webhook\.site|requestbin|pastebin|ngrok|transfer\.sh)"
 )
@@ -199,11 +204,11 @@ class MCPResponseScanner:
             removed: list[MCPResponseThreat] = []
             # Strip to a fixed point: one pass is not enough, because removing a
             # tag splices its neighbors into a new one (see
-            # _MAX_TAG_STRIP_PASSES). The ``+ 1`` is the pass that observes
+            # _MAX_TAG_NESTING_DEPTH). The ``+ 1`` is the pass that observes
             # convergence: clearing depth n takes n passes, and one more to see
             # that nothing changed. Without it a payload of exactly the tolerated
             # depth would be rejected even though it was fully cleaned.
-            for _ in range(_MAX_TAG_STRIP_PASSES + 1):
+            for _ in range(_MAX_TAG_NESTING_DEPTH + 1):
                 before_pass = sanitized
                 for pattern in _INSTRUCTION_TAG_PATTERNS:
                     for match in pattern.finditer(sanitized):
@@ -228,8 +233,8 @@ class MCPResponseScanner:
                 logger.error(
                     "MCP response sanitization did not converge in %s passes "
                     "(nesting depth over %s) for tool %s — failing closed",
-                    _MAX_TAG_STRIP_PASSES + 1,
-                    _MAX_TAG_STRIP_PASSES,
+                    _MAX_TAG_NESTING_DEPTH + 1,
+                    _MAX_TAG_NESTING_DEPTH,
                     tool_name,
                 )
                 return "", [
