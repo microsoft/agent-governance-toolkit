@@ -74,3 +74,28 @@ def test_floor_triggers_flow_action_without_explicit_restriction():
     e = _env({"pii"}, sens=DC.RESTRICTED)
     decision = decide_next(e, "export", RULESET, 99)
     assert decision.outcome == ContextOutcome.CONSTRAIN
+
+
+def test_floor_gated_decision_reports_newly_triggered_restrictions():
+    # The labels satisfy the rule, but no accumulate() has run so the
+    # restriction was never folded into the envelope. decide_next re-evaluates
+    # aggregation, so the gate fires via the sensitivity floor -- and the
+    # obligations must name the restriction the rule just triggered rather than
+    # the envelope's (still empty) restriction set. Otherwise the caller is told
+    # to constrain the action without being told what to satisfy.
+    e = _env({"pii", "financial"}, sens=DC.CONFIDENTIAL)
+    decision = decide_next(e, "export", RULESET, 99)
+    assert decision.outcome == ContextOutcome.CONSTRAIN
+    assert {o.key for o in decision.obligations.obligations} == {"no_external_export"}
+
+
+def test_obligations_keep_envelope_restrictions_and_add_new_ones():
+    # evaluate_aggregation seeds from env.restrictions before unioning rule
+    # restrictions, so reading obligations off the aggregation result is a
+    # superset -- an existing restriction is never dropped.
+    e = _env({"pii", "financial"}, sens=DC.CONFIDENTIAL, restrictions=frozenset({"no_print"}))
+    decision = decide_next(e, "export", RULESET, 99)
+    assert {o.key for o in decision.obligations.obligations} == {
+        "no_print",
+        "no_external_export",
+    }
