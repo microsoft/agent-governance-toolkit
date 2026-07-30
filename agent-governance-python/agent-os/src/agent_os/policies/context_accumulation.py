@@ -95,7 +95,7 @@ def decide_next(
     if restriction_present or floor_triggered:
         obligations = ObligationSet(
             obligations=tuple(
-                Obligation(key=r, satisfied=False) for r in sorted(env.restrictions)
+                Obligation(key=r, satisfied=False) for r in sorted(agg.restrictions)
             ),
             result_labels=env.labels,
         )
