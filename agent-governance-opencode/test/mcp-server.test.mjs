@@ -95,7 +95,73 @@ test("stdio server handles UTF-8 JSON-RPC frames", async () => {
   assert.deepEqual(response, { jsonrpc: "2.0", id: 5, result: {} });
 });
 
-async function requestOverStdio(payload) {
+test("stdio server handles a frame split inside its header", async () => {
+  const payload = {
+    jsonrpc: "2.0",
+    id: 6,
+    method: "ping",
+    params: { note: "Привет" },
+  };
+  const frame = Buffer.from(encodeJsonRpcMessage(payload), "utf8");
+  const headerEnd = frame.indexOf(Buffer.from("\r\n\r\n", "utf8"));
+  assert.notEqual(headerEnd, -1);
+
+  const response = await requestOverStdio(payload, headerEnd + 2);
+
+  assert.deepEqual(response, { jsonrpc: "2.0", id: 6, result: {} });
+});
+
+test("stdio server handles a frame split inside a UTF-8 character", async () => {
+  const payload = {
+    jsonrpc: "2.0",
+    id: 7,
+    method: "ping",
+    params: { note: "Привет" },
+  };
+  const frame = Buffer.from(encodeJsonRpcMessage(payload), "utf8");
+  const characterStart = frame.indexOf(Buffer.from("Привет", "utf8"));
+  assert.notEqual(characterStart, -1);
+
+  const response = await requestOverStdio(payload, characterStart + 1);
+
+  assert.deepEqual(response, { jsonrpc: "2.0", id: 7, result: {} });
+});
+
+test("stdio server reports malformed LF-only content-length headers", async () => {
+  const payload = JSON.stringify({ jsonrpc: "2.0", id: 8, method: "ping" });
+  const responses = await requestChunksOverStdio([
+    Buffer.from(`Content-Length: ${Buffer.byteLength(payload, "utf8")}\n\n${payload}\n`, "utf8"),
+  ]);
+
+  assert.equal(responses[0].error.code, -32700);
+  assert.deepEqual(responses[1], { jsonrpc: "2.0", id: 8, result: {} });
+});
+
+test("stdio server rejects oversized content-length headers", async () => {
+  const [response] = await requestChunksOverStdio([
+    Buffer.from("Content-Length: 5242881\r\n\r\n", "utf8"),
+  ]);
+
+  assert.equal(response.error.code, -32603);
+});
+
+test("stdio server rejects oversized incomplete MCP headers", async () => {
+  const [response] = await requestChunksOverStdio([
+    Buffer.from(`Content-Length: 1\r\n${"x".repeat(8193)}`, "utf8"),
+  ]);
+
+  assert.equal(response.error.code, -32603);
+});
+
+async function requestOverStdio(payload, splitAt) {
+  const frame = Buffer.from(encodeJsonRpcMessage(payload), "utf8");
+  const chunks =
+    splitAt === undefined ? [frame] : [frame.subarray(0, splitAt), frame.subarray(splitAt)];
+  const [response] = await requestChunksOverStdio(chunks);
+  return response;
+}
+
+async function requestChunksOverStdio(chunks) {
   const child = spawn(process.execPath, [MCP_SERVER_PATH], {
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -105,25 +171,48 @@ async function requestOverStdio(payload) {
   child.stderr.on("data", (chunk) => stderr.push(chunk));
 
   const closed = once(child, "close");
-  child.stdin.end(encodeJsonRpcMessage(payload));
+  const ready = once(child.stdout, "data");
+  child.stdin.write('{"jsonrpc":"2.0","id":"ready","method":"ping"}\n');
+  await ready;
+
+  for (const [index, chunk] of chunks.entries()) {
+    if (index === chunks.length - 1) {
+      child.stdin.end(chunk);
+      break;
+    }
+
+    child.stdin.write(chunk);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+
   const [code, signal] = await closed;
 
   assert.equal(code, 0, Buffer.concat(stderr).toString("utf8"));
   assert.equal(signal, null);
-  return decodeJsonRpcMessage(Buffer.concat(stdout));
+  const responses = decodeJsonRpcMessages(Buffer.concat(stdout));
+  assert.deepEqual(responses.shift(), { jsonrpc: "2.0", id: "ready", result: {} });
+  return responses;
 }
 
-function decodeJsonRpcMessage(frame) {
+function decodeJsonRpcMessages(frame) {
   const separator = Buffer.from("\r\n\r\n", "utf8");
-  const headerEnd = frame.indexOf(separator);
-  assert.notEqual(headerEnd, -1, "MCP server did not return a framed response");
+  const messages = [];
+  let remaining = frame;
 
-  const header = frame.subarray(0, headerEnd).toString("utf8");
-  const contentLength = Number(/Content-Length:\s*(\d+)/i.exec(header)?.[1]);
-  assert.ok(Number.isSafeInteger(contentLength));
+  while (remaining.length > 0) {
+    const headerEnd = remaining.indexOf(separator);
+    assert.notEqual(headerEnd, -1, "MCP server did not return a framed response");
 
-  const bodyStart = headerEnd + separator.length;
-  const bodyEnd = bodyStart + contentLength;
-  assert.equal(frame.length, bodyEnd);
-  return JSON.parse(frame.subarray(bodyStart, bodyEnd).toString("utf8"));
+    const header = remaining.subarray(0, headerEnd).toString("utf8");
+    const contentLength = Number(/Content-Length:\s*(\d+)/i.exec(header)?.[1]);
+    assert.ok(Number.isSafeInteger(contentLength));
+
+    const bodyStart = headerEnd + separator.length;
+    const bodyEnd = bodyStart + contentLength;
+    assert.ok(remaining.length >= bodyEnd);
+    messages.push(JSON.parse(remaining.subarray(bodyStart, bodyEnd).toString("utf8")));
+    remaining = remaining.subarray(bodyEnd);
+  }
+
+  return messages;
 }

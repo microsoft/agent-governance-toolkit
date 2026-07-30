@@ -9,6 +9,8 @@ import { checkArbitraryText, getPolicyStatus, loadPolicy } from "../lib/policy.m
 const VERSION = "3.6.0";
 const PROTOCOL_VERSION = "2024-11-05";
 const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
+const MAX_HEADER_BYTES = 8 * 1024;
+const MAX_FRAME_BYTES = 5 * 1024 * 1024;
 const TOOL_DEFINITIONS = [
   {
     name: "agt_policy_status",
@@ -178,6 +180,9 @@ async function drainBuffer(state, buffer) {
 
       const bodyStart = headerEnd + HEADER_SEPARATOR.length;
       const bodyLength = Number(lengthMatch[1]);
+      if (!Number.isSafeInteger(bodyLength) || bodyLength > MAX_FRAME_BYTES) {
+        throw new Error("Invalid or oversized Content-Length header");
+      }
       if (remaining.length < bodyStart + bodyLength) {
         return remaining;
       }
@@ -194,7 +199,14 @@ async function drainBuffer(state, buffer) {
     }
 
     const line = remaining.subarray(0, newlineIndex).toString("utf8").trim();
-    if (/^\s*Content-Length:\s*\d+\s*$/i.test(line)) {
+    if (
+      newlineIndex > 0 &&
+      remaining[newlineIndex - 1] === 0x0d &&
+      /^\s*Content-Length:\s*\d+\s*$/i.test(line)
+    ) {
+      if (remaining.length > MAX_HEADER_BYTES) {
+        throw new Error("MCP header exceeds maximum size");
+      }
       return remaining;
     }
     remaining = remaining.subarray(newlineIndex + 1);
