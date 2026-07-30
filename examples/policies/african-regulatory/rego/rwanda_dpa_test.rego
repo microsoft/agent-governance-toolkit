@@ -142,6 +142,27 @@ test_escalate_ethnic_origin if {
 	}
 }
 
+# Bare "HIV"/"race" substrings previously caused false positives on ordinary
+# words (archive, grace period) — regression tests for the \b anchor and
+# racial-origin phrasing fix.
+test_allow_archive_word_does_not_trigger_hiv_match if {
+	count(rwanda_dpa.escalate) == 0 with input as {
+		"action": "respond",
+		"params": {},
+		"output": "Please check the archive for old records.",
+		"context": {},
+	}
+}
+
+test_allow_grace_period_does_not_trigger_race_match if {
+	count(rwanda_dpa.escalate) == 0 with input as {
+		"action": "respond",
+		"params": {},
+		"output": "There is a grace period before the payment is due.",
+		"context": {},
+	}
+}
+
 test_escalate_political_opinion if {
 	count(rwanda_dpa.escalate) > 0 with input as {
 		"action": "respond",

@@ -950,32 +950,6 @@ workiq
 workstream
 worktree
 writeln
-# --- CloudEvents / signed audit-event terms ---
-cloudevent
-cloudevents
-specversion
-datacontenttype
-schemaversion
-sessionid
-traceid
-spanid
-parentspanid
-agtsignature
-agtsignaturealg
-GROUPREF
-
-# --- Python test suite code identifiers and scenario names ---
-adtech
-junitxml
-addoption
-addinivalue
-getoption
-asdict
-
-# --- Docker / BuildKit toolchain terms ---
-moby
-buildkit
-
 # --- West/North Africa regulatory policy terms ---
 # British spellings used in GDPR-modelled African data protection laws
 minimisation

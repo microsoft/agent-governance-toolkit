@@ -125,7 +125,7 @@ deny contains msg if {
 
 # Art. 1/4: Health/medical sensitive data
 escalate contains msg if {
-	regex.match(`(?i)(medical\s+record|health\s+(condition|status|data)|HIV|genetic\s+(data|test)|mental\s+health|disability|prescription|clinical\s+data|psychological\s+(assessment|report|status))`, input.output)
+	regex.match(`(?i)(medical\s+record|health\s+(condition|status|data)|\bHIV\b|genetic\s+(data|test)|mental\s+health|disability|prescription|clinical\s+data|psychological\s+(assessment|report|status))`, input.output)
 	msg := "Egypt PDPL No. 151/2020 Art. 1/4: Health/medical/genetic sensitive data detected — requires explicit consent or Art. 5 exception (PDPC)"
 }
 
@@ -137,7 +137,7 @@ escalate contains msg if {
 
 # Art. 1/4: Special category data (religious, political, criminal, racial)
 escalate contains msg if {
-	regex.match(`(?i)(religious\s+belief|political\s+(view|opinion)|criminal\s+(record|conviction|offence)|ethnic\s+origin|race|sexual\s+(orientation|life))`, input.output)
+	regex.match(`(?i)(religious\s+belief|political\s+(view|opinion)|criminal\s+(record|conviction|offence)|ethnic\s+origin|racial\s+origin|sexual\s+(orientation|life))`, input.output)
 	msg := "Egypt PDPL No. 151/2020 Art. 1/4: Special category personal data detected — requires explicit consent or Art. 5 exception (PDPC)"
 }
 

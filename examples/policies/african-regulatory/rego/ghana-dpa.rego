@@ -109,13 +109,13 @@ deny contains msg if {
 
 # s.37: Health/medical special personal data
 escalate contains msg if {
-	regex.match(`(?i)(medical\s+record|health\s+(condition|status|data)|HIV|genetic\s+(data|test)|mental\s+health|disability|prescription|clinical\s+data)`, input.output)
+	regex.match(`(?i)(medical\s+record|health\s+(condition|status|data)|\bHIV\b|genetic\s+(data|test)|mental\s+health|disability|prescription|clinical\s+data)`, input.output)
 	msg := "Ghana DPA Act 843 s.37: Health/medical special personal data detected — requires explicit consent or documented lawful basis"
 }
 
 # s.37: Special category data (ethnic, religious, political, trade union, criminal)
 escalate contains msg if {
-	regex.match(`(?i)(ethnic\s+origin|race|tribe|political\s+opinion|religious\s+belief|trade\s+union|sexual\s+(life|orientation)|criminal\s+(offence|conviction|record)|court\s+proceedings)`, input.output)
+	regex.match(`(?i)(ethnic\s+origin|racial\s+origin|tribe|political\s+opinion|religious\s+belief|trade\s+union|sexual\s+(life|orientation)|criminal\s+(offence|conviction|record)|court\s+proceedings)`, input.output)
 	msg := "Ghana DPA Act 843 s.37: Special personal data detected — requires explicit consent and restricted processing"
 }
 

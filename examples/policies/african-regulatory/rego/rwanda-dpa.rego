@@ -115,13 +115,13 @@ deny contains msg if {
 
 # Art. 3(2)/10: Health/medical sensitive data
 escalate contains msg if {
-	regex.match(`(?i)(medical\s+record|health\s+(condition|status|data)|HIV|genetic\s+(data|test)|mental\s+health|disability|prescription|clinical\s+data)`, input.output)
+	regex.match(`(?i)(medical\s+record|health\s+(condition|status|data)|\bHIV\b|genetic\s+(data|test)|mental\s+health|disability|prescription|clinical\s+data)`, input.output)
 	msg := "Rwanda Law 058/2021 Art. 3(2)/10: Health/medical sensitive data detected — requires explicit consent or documented lawful basis"
 }
 
 # Art. 3(2)/10: Special category data
 escalate contains msg if {
-	regex.match(`(?i)(race|ethnic\s+origin|social\s+origin|political\s+opinion|religious\s+belief|philosophical\s+belief|sexual\s+(life|orientation)|family\s+(detail|data)|criminal\s+(record|conviction))`, input.output)
+	regex.match(`(?i)(racial\s+origin|ethnic\s+origin|social\s+origin|political\s+opinion|religious\s+belief|philosophical\s+belief|sexual\s+(life|orientation)|family\s+(detail|data)|criminal\s+(record|conviction))`, input.output)
 	msg := "Rwanda Law 058/2021 Art. 3(2)/10: Special category personal data detected — requires specific processing grounds (Art. 10)"
 }
 

@@ -193,6 +193,27 @@ test_escalate_religious_belief if {
 	}
 }
 
+# Bare "HIV"/"race" substrings previously caused false positives on ordinary
+# words (archive, stack trace) — regression tests for the \b anchor and
+# racial-origin phrasing fix.
+test_allow_archive_word_does_not_trigger_hiv_match if {
+	count(egypt_pdpl.escalate) == 0 with input as {
+		"action": "respond",
+		"params": {},
+		"output": "Please check the archive for old records.",
+		"context": {},
+	}
+}
+
+test_allow_stack_trace_does_not_trigger_race_match if {
+	count(egypt_pdpl.escalate) == 0 with input as {
+		"action": "respond",
+		"params": {},
+		"output": "Check the stack trace for errors.",
+		"context": {},
+	}
+}
+
 test_escalate_political_opinion if {
 	count(egypt_pdpl.escalate) > 0 with input as {
 		"action": "respond",
