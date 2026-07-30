@@ -45,7 +45,7 @@ python examples/adk-governed/adk_governance_demo.py
 Policy configuration is located at:
 
 ```text
-examples/adk-governed/policies/adk-governance.yaml
+examples/adk-governed/policies/adk-agt-manifest.yaml
 ```
 
 The sample policy demonstrates:

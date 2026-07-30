@@ -15,11 +15,10 @@ import pytest
 
 from agent_os import integrations
 
-
 INTEGRATIONS_DIR = Path(__file__).resolve().parents[1] / "src" / "agent_os" / "integrations"
 
 
-V5_BRIDGE_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
+NATIVE_RUNTIME_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "A2AGovernanceAdapter": ("a2a_adapter.py", ("_bridge.evaluate_input(",)),
     "AgentShieldKernel": (
         "agentshield_adapter.py",
@@ -111,25 +110,32 @@ V5_BRIDGE_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
 }
 
-LEGACY_HOOK_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
+NATIVE_HOOK_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "LangGraphKernel": (
         "langgraph_adapter.py",
-        ("before_node_execution(", "before_tool_call(", "_wrap_nodes("),
+        (
+            "NativeAdapterRuntime(runtime)",
+            "_adapter_runtime.evaluate_input(",
+            "_adapter_runtime.evaluate_pre_tool_call(",
+        ),
     ),
     "OpenAIAgentsKernel": (
         "openai_agents_sdk.py",
         (
-            "on_agent_start",
-            "pre_execute(",
-            "on_agent_end",
-            "post_execute(",
-            "on_tool_start",
+            "NativeAdapterRuntime(runtime)",
+            "_adapter_runtime.evaluate_input(",
+            "_adapter_runtime.evaluate_pre_tool_call(",
+            "_adapter_runtime.evaluate_post_tool_call(",
+            "_adapter_runtime.evaluate_output(",
         ),
     ),
 }
 
 NON_KERNEL_EXPORTS = {"GovernedSemanticKernel", "LlamaFirewallAdapter"}
 DIRECT_SUPPORTED_ADAPTERS = {"AgentShieldKernel", "MAFKernel", "OpenAIAgentsKernel"}
+NATIVE_RUNTIME_PARAMETER = {
+    "AgentShieldKernel": "agt_runtime: Any",
+}
 
 
 def _source(filename: str) -> str:
@@ -156,50 +162,53 @@ def _assert_ordered(source: str, *markers: str) -> None:
 
 def test_public_adapter_mediation_contract_is_explicit() -> None:
     expected = (
-        set(V5_BRIDGE_CONTRACTS)
-        | set(LEGACY_HOOK_CONTRACTS)
+        set(NATIVE_RUNTIME_CONTRACTS)
+        | set(NATIVE_HOOK_CONTRACTS)
         | NON_KERNEL_EXPORTS
     )
 
     assert _public_adapter_names() - expected == set()
 
 
-@pytest.mark.parametrize("adapter_name", sorted(V5_BRIDGE_CONTRACTS))
-def test_v5_bridge_adapters_route_declared_intervention_points(adapter_name: str) -> None:
-    filename, required_calls = V5_BRIDGE_CONTRACTS[adapter_name]
+@pytest.mark.parametrize("adapter_name", sorted(NATIVE_RUNTIME_CONTRACTS))
+def test_native_adapters_route_declared_intervention_points(
+    adapter_name: str,
+) -> None:
+    filename, required_calls = NATIVE_RUNTIME_CONTRACTS[adapter_name]
     source = _source(filename)
 
-    assert "get_runtime_bridge(" in source
+    assert "get_adapter_runtime(" in source
+    assert NATIVE_RUNTIME_PARAMETER.get(
+        adapter_name, "runtime: Any"
+    ) in source
+    assert "AdapterRuntime" + "Bridge" not in source
+    assert "BridgeResult" not in source
+    assert "get_runtime_bridge(" not in source
     for call in required_calls:
         assert call in source, f"{adapter_name} must route through {call}"
+    assert ".transform.value" not in source
 
 
-@pytest.mark.parametrize("adapter_name", sorted(LEGACY_HOOK_CONTRACTS))
-def test_legacy_hook_adapters_keep_pre_side_effect_gates(adapter_name: str) -> None:
-    filename, required_markers = LEGACY_HOOK_CONTRACTS[adapter_name]
+@pytest.mark.parametrize("adapter_name", sorted(NATIVE_HOOK_CONTRACTS))
+def test_native_hook_adapters_keep_pre_side_effect_gates(
+    adapter_name: str,
+) -> None:
+    filename, required_markers = NATIVE_HOOK_CONTRACTS[adapter_name]
     source = _source(filename)
 
     for marker in required_markers:
         assert marker in source, f"{adapter_name} must keep mediation marker {marker}"
 
 
-def test_langchain_stream_buffers_before_yielding() -> None:
+def test_langchain_model_call_mediates_before_and_after_handler() -> None:
     source = _source("langchain_adapter.py")
 
     _assert_ordered(
         source,
-        "chunks = list(self._original.stream",
-        "bridge_result = self._kernel.evaluate_output",
-        "yield from chunks",
+        "pre_result = self._kernel.evaluate_input",
+        "response = handler(request)",
+        "post_result = self._kernel._bridge.evaluate_output",
     )
-    _assert_ordered(
-        source,
-        "async def astream",
-        "chunks = [chunk async for chunk in stream]",
-        "for chunk in chunks:",
-    )
-    assert "async def astream_log" in source
-    assert "async def astream_events" in source
 
 
 def test_openai_stream_buffers_before_yielding() -> None:
@@ -213,6 +222,29 @@ def test_openai_stream_buffers_before_yielding() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("filename", "expected_occurrences"),
+    [
+        ("anthropic_adapter.py", 2),
+        ("gemini_adapter.py", 1),
+        ("openai_adapter.py", 1),
+        ("semantic_kernel_adapter.py", 1),
+    ],
+)
+def test_pre_counted_tool_calls_evaluate_with_previous_budget_count(
+    filename: str,
+    expected_occurrences: int,
+) -> None:
+    source = _source(filename)
+
+    assert source.count(
+        "self._ctx.call_count = max(0, current_call_count - 1)"
+    ) == expected_occurrences
+    assert source.count(
+        "self._ctx.call_count = current_call_count"
+    ) >= expected_occurrences
+
+
 def test_llamaindex_stream_chat_post_checks_before_replay() -> None:
     source = _source("llamaindex_adapter.py")
 
@@ -224,7 +256,6 @@ def test_llamaindex_stream_chat_post_checks_before_replay() -> None:
     _assert_ordered(
         source,
         "async def astream_chat",
-        "self._enforce_budget()",
         "response = await self._post_async_stream_response(response)",
         "self._ctx.call_count += 1",
         "return response",
@@ -232,7 +263,6 @@ def test_llamaindex_stream_chat_post_checks_before_replay() -> None:
     _assert_ordered(
         source,
         "def stream_chat",
-        "self._enforce_budget()",
         "response = self._post_stream_response(response)",
         "self._ctx.call_count += 1",
         "return response",
@@ -251,6 +281,6 @@ def test_bedrock_action_events_are_checked_before_yield() -> None:
     _assert_ordered(
         source,
         "bridge_result = self._kernel.evaluate_pre_tool_call",
-        "raise PolicyViolationError.from_check_result",
+        "raise bridge_result.to_policy_violation",
         "yield event",
     )

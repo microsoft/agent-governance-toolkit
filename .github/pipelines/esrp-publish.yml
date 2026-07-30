@@ -14,6 +14,8 @@
 #   3. Set up signing certificate in Azure Key Vault
 #   4. Install ESRP Release ADO Task extension (v11)
 #   5. Configure ADO pipeline variables (see below)
+#   6. Create the WIF service connection 'AGT-ESRP-Signing' with a federated
+#      credential on the managed identity (referenced by all ESRP tasks)
 #
 # See: PUBLISHING.md for full setup guide.
 # ---------------------------------------------------------
@@ -217,30 +219,39 @@ parameters:
         vmImage: windows-latest
 
 # -------------------------------------------------------
-# ESRP Configuration
+# ESRP Configuration (Managed Identity / Workload Identity Federation)
+# Signing authenticates via a user-assigned managed identity through the ADO
+# Workload Identity Federation service connection 'AGT-ESRP-Signing'. There is
+# no authentication certificate in this model; only the request-signing cert is
+# needed, and a single OneCertV2-PublicCA cert serves both the CodeSign and
+# Release paths.
+#
 # Service connection name is hardcoded (required at compile time by ADO).
 # All other values sourced from ADO pipeline variables (mark as secret):
-#   ESRP_KEYVAULT_NAME, ESRP_AUTH_CERT_IDENTIFIER, ESRP_SIGN_CERT_IDENTIFIER,
-#   ESRP_RELEASE_CERT_IDENTIFIER, ESRP_NUGET_SIGN_CERT_IDENTIFIER,
-#   ESRP_CLIENT_ID, ESRP_OWNERS, ESRP_APPROVERS
+#   ESRP_KEYVAULT_NAME, ESRP_SIGN_CERT_IDENTIFIER, ESRP_RELEASE_CERT_IDENTIFIER,
+#   ESRP_NUGET_SIGN_CERT_IDENTIFIER, ESRP_CLIENT_ID, ESRP_OWNERS, ESRP_APPROVERS
 #
-# ESRP_AUTH_CERT_IDENTIFIER    = authentication certificate for EsrpCodeSigning (Public CA)
-# ESRP_SIGN_CERT_IDENTIFIER   = signing certificate for Authenticode (Private CA)
-# ESRP_RELEASE_CERT_IDENTIFIER = release certificate for EsrpRelease tasks (separate from sign cert)
-# ESRP_NUGET_SIGN_CERT_IDENTIFIER = signing certificate for NuGet package signing
-# These MUST be separate certificates from the appropriate CAs.
-# Do NOT reuse the signing certificate for release tasks.
+# ESRP_CLIENT_ID                  = ESRP registration (AAD app) id the signing
+#                                   tasks run as; the managed identity is set as
+#                                   its Associated App Id for cert-less MI auth
+# ESRP_SIGN_CERT_IDENTIFIER       = cert name for EsrpCodeSigning AuthSignCertName
+#                                   (Authenticode/DLL sign path)
+# ESRP_NUGET_SIGN_CERT_IDENTIFIER = cert name for EsrpCodeSigning AuthSignCertName
+#                                   (NuGet package sign path)
+# ESRP_RELEASE_CERT_IDENTIFIER    = cert name for EsrpRelease signcertname
+#                                   (PyPI/npm/crates release path)
+# Each cert identifier is a separate variable so a path can point at a different
+# Key Vault cert if needed. Under the current MI setup they are configured to the
+# same OneCertV2-PublicCA request-signing cert.
+# MICROSOFT_TENANT_ID (below)     = tenant hosting the identity, vault, and cert (AME).
 #
-# Note: ESRP_DOMAIN_TENANT_ID was removed from pipeline variables due to
-# cyclical reference. The ESRP cert lives in the PME (Partner Managed
-# Engineering) tenant, not the Microsoft corporate tenant. If
-# ESRP_DOMAIN_TENANT_ID still exists in ADO pipeline variables, DELETE
-# IT — it causes a cyclical variable expansion warning that confuses
-# log triage.
+# ESRP_AUTH_CERT_IDENTIFIER is no longer used (auth cert removed under MI auth).
+# Delete ESRP_AUTH_CERT_IDENTIFIER and ESRP_DOMAIN_TENANT_ID from the ADO
+# pipeline variables if they still exist.
 # -------------------------------------------------------
 
 variables:
-  MICROSOFT_TENANT_ID: '975f013f-7f24-47e8-a7d3-abc4752bf346'
+  MICROSOFT_TENANT_ID: '33e01921-4d64-4f8c-a055-5bdaffd5e33d'
 
 pool:
   vmImage: ubuntu-latest
@@ -351,7 +362,7 @@ stages:
               displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
               retryCountOnTaskFailure: 2
               inputs:
-                connectedservicename: 'Agent Governance Toolkit'
+                connectedservicename: 'AGT-ESRP-Signing'
                 usemanagedidentity: true
                 keyvaultname: '$(ESRP_KEYVAULT_NAME)'
                 signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
@@ -586,7 +597,7 @@ stages:
           - task: EsrpRelease@11
             displayName: 'ESRP Publish to npm'
             inputs:
-              connectedservicename: 'Agent Governance Toolkit'
+              connectedservicename: 'AGT-ESRP-Signing'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
               signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
@@ -824,11 +835,11 @@ stages:
           - task: EsrpCodeSigning@6
             displayName: 'ESRP Authenticode sign DLLs'
             inputs:
-              ConnectedServiceName: 'Agent Governance Toolkit'
+              ConnectedServiceName: 'AGT-ESRP-Signing'
+              UseMSIAuthentication: true
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
-              AuthCertName: '$(ESRP_AUTH_CERT_IDENTIFIER)'
               AuthSignCertName: '$(ESRP_SIGN_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.dll'
@@ -877,11 +888,11 @@ stages:
           - task: EsrpCodeSigning@6
             displayName: 'ESRP Code Sign NuGet package'
             inputs:
-              ConnectedServiceName: 'Agent Governance Toolkit'
+              ConnectedServiceName: 'AGT-ESRP-Signing'
+              UseMSIAuthentication: true
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
-              AuthCertName: '$(ESRP_AUTH_CERT_IDENTIFIER)'
               AuthSignCertName: '$(ESRP_NUGET_SIGN_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.nupkg'
@@ -1029,7 +1040,7 @@ stages:
             - task: EsrpRelease@11
               displayName: 'ESRP Publish ${{ pkg.name }} to crates.io'
               inputs:
-                connectedservicename: 'Agent Governance Toolkit'
+                connectedservicename: 'AGT-ESRP-Signing'
                 usemanagedidentity: true
                 keyvaultname: '$(ESRP_KEYVAULT_NAME)'
                 signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
@@ -1093,7 +1104,7 @@ stages:
           - task: EsrpRelease@11
             displayName: 'ESRP Publish agent-control-specification to crates.io'
             inputs:
-              connectedservicename: 'Agent Governance Toolkit'
+              connectedservicename: 'AGT-ESRP-Signing'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
               signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'

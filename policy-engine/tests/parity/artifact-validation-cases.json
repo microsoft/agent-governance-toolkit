@@ -1,0 +1,44 @@
+{
+  "cases": [
+    {
+      "name": "valid_rego_policy",
+      "manifest": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.p.verdict\nintervention_points:\n  input:\n    policy_target: $.input\n    policy:\n      id: p\n",
+      "rego": {
+        "policy.rego": "package p\nimport rego.v1\ndefault verdict := {\"decision\": \"allow\"}\n"
+      },
+      "valid": true,
+      "codes": []
+    },
+    {
+      "name": "schema_and_rego_errors",
+      "manifest": "metadata: []\n",
+      "rego": {
+        "bad.rego": "package p\nallow if { value := }\n"
+      },
+      "valid": false,
+      "codes": [
+        "manifest_schema_error",
+        "manifest_schema_error",
+        "rego_parse_error"
+      ]
+    },
+    {
+      "name": "invalid_partial_version",
+      "manifest": "agent_control_specification_version: banana\nextends: [base.yaml]\n",
+      "rego": {},
+      "valid": false,
+      "codes": [
+        "manifest_semantic_error"
+      ]
+    },
+    {
+      "name": "embedded_null_manifest",
+      "manifest": "agent_control_specification_version: 0.3.1-beta\nextends: [base.yaml]\n\u0000not: [valid",
+      "rego": {},
+      "valid": false,
+      "codes": [
+        "manifest_parse_error"
+      ]
+    }
+  ]
+}

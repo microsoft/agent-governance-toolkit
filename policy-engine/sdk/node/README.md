@@ -21,6 +21,16 @@ const result = await agentControl.evaluateInterventionPoint(
 );
 ```
 
+Validate authored manifest and Rego strings without constructing a runtime:
+
+```js
+const { validateArtifacts } = require("agent-control-specification");
+
+const validation = await validateArtifacts(manifestYaml, {
+  "policy.rego": regoSource,
+});
+```
+
 Supply host-specific dispatchers when annotators are local or policy outputs need post-processing. The dispatcher arguments are optional and default independently, so a host can override the annotator dispatcher while keeping the bundled OPA policy default:
 
 ```js
