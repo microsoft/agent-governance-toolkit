@@ -24,7 +24,7 @@ def _manifest_files(raw_paths: list[str]) -> list[Path]:
 
 def _validate_manifest(path: Path) -> tuple[list[str], list[str]]:
     """Return native manifest errors and warnings for one path."""
-    from agt.policies import AgtManifest
+    from agent_control_specification import parse_manifest, validate_manifest
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -33,14 +33,16 @@ def _validate_manifest(path: Path) -> tuple[list[str], list[str]]:
     if path.suffix.lower() not in {".yaml", ".yml", ".json"}:
         return [f"{path}: Manifest must be YAML or JSON"], warnings
 
+    # The runtime's own contract decides validity, so the CLI reports exactly
+    # what loading the manifest would do. It requires at least one intervention
+    # point, which the previous Python-side model only warned about.
     try:
-        manifest = AgtManifest.from_path(path)
-        manifest.resolved_document(path.parent)
+        manifest_text = path.read_text(encoding="utf-8")
+        validate_manifest(manifest_text)
+        parse_manifest(manifest_text)
     except Exception as exc:
         return [f"{path}: {exc}"], warnings
 
-    if not manifest.intervention_points:
-        warnings.append(f"{path}: Manifest defines no intervention points")
     return errors, warnings
 
 

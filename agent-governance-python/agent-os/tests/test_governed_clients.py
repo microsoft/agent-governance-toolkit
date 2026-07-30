@@ -20,7 +20,11 @@ from _framework_stubs import install as _install_framework_stubs
 
 _install_framework_stubs()
 
-from agt.policies import PolicyEvaluation  # noqa: E402
+from agent_control_specification import (  # noqa: E402
+    Decision,
+    InterventionPointResult,
+    Verdict,
+)
 
 from agent_os.exceptions import PolicyViolationError  # noqa: E402
 from agent_os.integrations.anthropic_adapter import AnthropicKernel  # noqa: E402
@@ -41,27 +45,29 @@ from agent_os.integrations.smolagents_adapter import SmolagentsKernel  # noqa: E
 class _StubRuntime:
     manifest = None
 
-    def __init__(self, result: PolicyEvaluation) -> None:
+    def __init__(self, result: InterventionPointResult) -> None:
         self._result = result
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    def evaluate(
-        self, intervention_point: str, snapshot: dict[str, Any]
-    ) -> PolicyEvaluation:
+    async def evaluate_intervention_point(
+        self, intervention_point: Any, snapshot: dict[str, Any], mode: Any = None
+    ) -> InterventionPointResult:
         name = getattr(intervention_point, "value", str(intervention_point))
         self.calls.append((name, snapshot))
-        return self._result.model_copy(update={"intervention_point": name})
+        return self._result
 
     def close(self) -> None:  # pragma: no cover - adapters may not close
         pass
 
 
-def _allow() -> PolicyEvaluation:
-    return PolicyEvaluation(verdict="allow")
+def _allow() -> InterventionPointResult:
+    return InterventionPointResult(verdict=Verdict(decision=Decision.ALLOW))
 
 
-def _deny() -> PolicyEvaluation:
-    return PolicyEvaluation(verdict="deny", reason_code="blocked", message="detail")
+def _deny() -> InterventionPointResult:
+    return InterventionPointResult(
+        verdict=Verdict(decision=Decision.DENY, reason="blocked", message="detail")
+    )
 
 
 # ── health_check ──────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 import warnings
 warnings.warn(
     "openshell-agentmesh is deprecated: the OpenShell governance skill "

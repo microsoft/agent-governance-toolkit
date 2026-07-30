@@ -22,7 +22,7 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Discord](https://dcbadge.limes.pink/api/server/TxMRqY3pFr?style=flat)](https://discord.gg/TxMRqY3pFr)
+[![Discord](https://dcbadge.limes.pink/api/server/7aVPCcVh?style=flat)](https://discord.gg/7aVPCcVh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
@@ -105,19 +105,19 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
   파괴적인 작업은 사람의 승인이 필요합니다
 ```
 
-또는 프로그래밍 방식 제어를 위해 전체 `AgtRuntime` API를 사용하세요:
+또는 프로그래밍 방식 제어를 위해 전체 `AgentControl` API를 사용하세요:
 
 <details>
-<summary><b>AgtRuntime 예제</b></summary>
+<summary><b>AgentControl 예제</b></summary>
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime, agent_id="agent-1", session_id="session-1"
 )
-result = session.evaluate_pre_tool_call(
+result = session.pre_tool_call(
     tool_name="delete_file", args={"path": "report.txt"}
 )
 ```
@@ -384,7 +384,7 @@ AGT는 OS 커널 레벨이 아닌 애플리케이션 미들웨어 레이어에�
 
 ## 기여하기 (Contributing)
 
-[기여 가이드](../../CONTRIBUTING.md) · [커뮤니티](../../docs/COMMUNITY.md) · [Discord](https://discord.gg/TxMRqY3pFr) · [보안 정책](../../SECURITY.md) · [변경 이력](../../CHANGELOG.md)
+[기여 가이드](../../CONTRIBUTING.md) · [커뮤니티](../../docs/COMMUNITY.md) · [Discord](https://discord.gg/7aVPCcVh) · [보안 정책](../../SECURITY.md) · [변경 이력](../../CHANGELOG.md)
 
 **AGT를 사용 중이신가요?** [ADOPTERS.md](../../docs/ADOPTERS.md)에 귀하의 조직을 추가해 주세요.
 

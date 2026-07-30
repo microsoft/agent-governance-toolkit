@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 import warnings
 warnings.warn(
     "adk-agentmesh is deprecated and will be removed in a future release. "

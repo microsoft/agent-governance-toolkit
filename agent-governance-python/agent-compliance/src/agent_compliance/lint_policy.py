@@ -70,7 +70,7 @@ class LintResult:
 def lint_file(path: str | Path) -> LintResult:
     """Validate one native ACS manifest and its relative references."""
 
-    from agt.policies import AgtManifest
+    from agent_control_specification import parse_manifest, validate_manifest
 
     manifest_path = Path(path)
     result = LintResult()
@@ -97,8 +97,9 @@ def lint_file(path: str | Path) -> LintResult:
         return result
 
     try:
-        manifest = AgtManifest.from_path(manifest_path)
-        manifest.resolved_document(manifest_path.parent)
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+        validate_manifest(manifest_text)
+        manifest = parse_manifest(manifest_text)
     except Exception as exc:
         result.messages.append(
             LintMessage(
@@ -110,13 +111,13 @@ def lint_file(path: str | Path) -> LintResult:
         )
         return result
 
-    for policy_id, policy in manifest.policies.items():
+    for policy_id, policy in (manifest.get("policies") or {}).items():
         references = [
-            policy.bundle,
-            policy.policy_path,
-            policy.entities_path,
-            policy.schema_path,
-            *policy.data_paths,
+            policy.get("bundle"),
+            policy.get("policy_path"),
+            policy.get("entities_path"),
+            policy.get("schema_path"),
+            *(policy.get("data_paths") or []),
         ]
         for reference in references:
             if (
@@ -133,7 +134,7 @@ def lint_file(path: str | Path) -> LintResult:
                     )
                 )
 
-    if not manifest.intervention_points:
+    if not manifest.get("intervention_points"):
         result.messages.append(
             LintMessage(
                 "warning",
