@@ -93,20 +93,20 @@ Think of AGT as an **operating-system-inspired governance layer for AI agents**:
 Define exactly what each agent can and cannot do — enforced at the application layer, not by prompts:
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="architecture-agent",
     session_id="architecture-session",
 )
 
-result = session.evaluate_pre_tool_call(
+result = session.pre_tool_call(
     tool_name="delete_file",
     args={"path": "/etc/passwd"},
 )
-# result.is_allowed() is False
+# result.verdict.decision.permits is False
 ```
 
 Supports **OPA/Rego** and **Cedar** policies so you can reuse existing infrastructure policies.
@@ -206,37 +206,37 @@ Also available for: **TypeScript** (`npm install @microsoft/agent-governance-sdk
 ### Step 2: Your First Governed Agent
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="langchain-agent-1",
     session_id="session-1",
 )
 
 # Allowed
-result = session.evaluate_pre_tool_call(
+result = session.pre_tool_call(
     tool_name="web_search",
     args={"query": "quarterly sales data"},
 )
-print(f"Allowed: {result.is_allowed()}")
+print(f"Allowed: {result.verdict.decision.permits}")
 
 # Blocked deterministically
-result = session.evaluate_pre_tool_call(
+result = session.pre_tool_call(
     tool_name="delete_file",
     args={"path": "/critical/data.csv"},
 )
-print(f"Allowed: {result.is_allowed()}")
+print(f"Allowed: {result.verdict.decision.permits}")
 ```
 
 ### Step 3: Wrap an Existing Framework
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.integrations.langchain_adapter import LangChainKernel
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 kernel = LangChainKernel(runtime=runtime)
 ```
 

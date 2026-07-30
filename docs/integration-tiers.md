@@ -117,7 +117,7 @@ input, before executing tools, and after getting results.
 |---|---|---|
 | **Trust scoring with decay** | `TrustManager` | Call at agent-to-agent handoff |
 | **DID-based agent identity** | `AgentIdentity` | Initialize at agent startup |
-| **Policy evaluation (programmatic)** | `AgtRuntime` | Call before tool execution |
+| **Policy evaluation (programmatic)** | `AgentControl` | Call before tool execution |
 | **MCP session authentication** | `MCPSessionAuthenticator` | Wrap MCP client connections |
 | **Credential redaction** | `CredentialRedactor` | Call on tool outputs |
 | **Tamper-evident audit log** | `AuditLogger` (hash-chain) | Call after each action |
@@ -127,14 +127,14 @@ input, before executing tools, and after getting results.
 ### Code example (Python)
 
 ```python
-from agt.policies.runtime import AgtRuntime
-from agt.policies.session import AdapterRuntimeSession
+from agent_control_specification import AgentControl
+from agent_control_specification import HostSession
 from agent_os import AuditLogger
 from agentmesh import TrustManager
 
 # Initialize once
-runtime = AgtRuntime.from_manifest("manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path(str("manifest.yaml"))
+session = HostSession(
     runtime,
     agent_id="example-agent",
     session_id="example-session",
@@ -151,11 +151,11 @@ def handle_tool_call(tool_name, params, agent_did):
         return deny()
 
     # Policy check
-    decision = session.evaluate_pre_tool_call(
+    decision = session.pre_tool_call(
         tool_name=tool_name,
         args=params,
     )
-    if not decision.is_allowed():
+    if not decision.verdict.decision.permits:
         audit.log("deny", tool=tool_name, reason=decision.reason_code)
         return deny()
 

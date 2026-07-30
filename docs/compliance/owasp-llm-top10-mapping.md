@@ -24,7 +24,7 @@
 The toolkit contains detection mechanisms for 9 of 10 LLM risks. However, 6 of 10
 share a structural gap where detection modules exist as standalone utilities but are
 not wired into the `BaseIntegration` enforcement lifecycle. A single integration
-effort — adding optional auto-wiring controlled by `AgtRuntime` flags — would
+effort — adding optional auto-wiring controlled by `AgentControl` flags — would
 close gaps across multiple risks simultaneously. The strongest enforcement is in
 plugin/tool security (MCPGateway) and execution privilege control (rings, kill switch).
 The widest gaps are in output sanitization and sensitive data protection.
@@ -91,7 +91,7 @@ for rogue detection, governance policy, and ring enforcement via its
 integration path.
 
 **Recommendation:** A unified integration effort — adding optional auto-wiring in
-`BaseIntegration.__init__()` controlled by `AgtRuntime` flags — would close
+`BaseIntegration.__init__()` controlled by `AgentControl` flags — would close
 gaps across LLM01, LLM02, LLM04, LLM06, and LLM07 simultaneously. Recommended
 interceptor ordering: rate limiting first, then scope guard, then content
 inspection (to avoid expensive regex on requests that would be rate-limited
@@ -133,7 +133,7 @@ anyway).
 
 **Recommendations:**
 
-- Wire `PromptInjectionDetector` into `BaseIntegration.pre_execute()` via a `AgtRuntime.prompt_injection_detection` flag (default: True for regex).
+- Wire `PromptInjectionDetector` into `BaseIntegration.pre_execute()` via a `AgentControl.prompt_injection_detection` flag (default: True for regex).
 - Document LlamaFirewall integration as the recommended ML-based upgrade path for semantic detection (covers paraphrasing and multilingual attacks).
 - Share `ConversationGuardian`'s `normalize_text()` homoglyph/evasion logic with `PromptInjectionDetector`.
 - Add allowlist validation (minimum length, format constraints) to prevent overly broad entries from disabling detection.
@@ -166,7 +166,7 @@ anyway).
 
 **Recommendations:**
 
-- Add `AgtRuntime.block_on_drift: bool = False` and honor it in `post_execute()` (1-line change + policy flag).
+- Add `AgentControl.block_on_drift: bool = False` and honor it in `post_execute()` (1-line change + policy flag).
 - Ship a basic `OutputSanitizer` that scans tool outputs for the dangerous patterns already defined in `mcp_gateway.py`.
 - Document that multi-language code validation requires CodeShield integration (available via LlamaFirewall's `scan_code()`).
 
@@ -205,9 +205,9 @@ Training pipeline data poisoning is architecturally out of scope — the toolkit
 
 **Mitigations:**
 
-- Token limits — `base.py:150` — `AgtRuntime.max_tokens` (default 4096). Validated as positive integer on construction.
-- Tool call limits — `base.py:151` — `AgtRuntime.max_tool_calls` (default 10). Enforced by `NativeAdapterRuntime` (line 705-709).
-- Timeout — `base.py:155` — `AgtRuntime.timeout_seconds` (default 300s). Checked in `pre_execute` (line 944).
+- Token limits — `base.py:150` — `AgentControl.max_tokens` (default 4096). Validated as positive integer on construction.
+- Tool call limits — `base.py:151` — `AgentControl.max_tool_calls` (default 10). Enforced by `NativeAdapterRuntime` (line 705-709).
+- Timeout — `base.py:155` — `AgentControl.timeout_seconds` (default 300s). Checked in `pre_execute` (line 944).
 - Concurrency limits — `base.py:805-859` — `BoundedSemaphore` with backpressure. Rejects requests when capacity exhausted.
 - MCPGateway rate limiting — `mcp_gateway.py:219-225` — Per-agent call budget enforcement. Manual reset methods exist (`reset_agent` at line 292, `reset_all` at line 296) but no automatic time-window reset.
 - `RateLimiter` — `rate_limiter.py:93-101` — Token-bucket algorithm, thread-safe with `threading.Lock`. Returns `False` when budget exhausted.
@@ -227,7 +227,7 @@ Training pipeline data poisoning is architecturally out of scope — the toolkit
 **Recommendations:**
 
 - Wire `RateLimiter` and `TokenBudgetTracker` into `BaseIntegration` with blocking behavior controlled by policy flags (`block_on_budget_exceeded`, `block_on_rate_limit`).
-- Add `AgtRuntime.max_input_length` as a coarse payload size guard.
+- Add `AgentControl.max_input_length` as a coarse payload size guard.
 - Add automatic time-window reset to MCPGateway's call counter.
 - Note: prompt-length validation relative to model context windows is model-serving scope, not governance scope.
 
@@ -299,7 +299,7 @@ pathway. This finding warrants priority remediation.
 
 **Recommendations:**
 
-- **Priority:** Add `AgtRuntime.redact_audit_pii: bool = False` for pattern-based redaction of `AuditEntry.parameters` before persistence.
+- **Priority:** Add `AgentControl.redact_audit_pii: bool = False` for pattern-based redaction of `AuditEntry.parameters` before persistence.
 - Expand default PII patterns to cover the OWASP-recommended set (email, phone, IP address, JWT tokens).
 - Apply the same pattern scanning to LLM outputs via `post_execute()` or a new output interceptor.
 - Document integration path for external DLP services as an advanced configuration.
@@ -390,7 +390,7 @@ pathway. This finding warrants priority remediation.
 **Mitigations:**
 
 - Drift detection — `base.py:977-1038` — `SequenceMatcher`-based drift scoring between baseline and actual output. Emits `DRIFT_DETECTED` event when threshold exceeded.
-- Confidence threshold — `base.py:964-973` — `AgtRuntime.confidence_threshold` (default 0.8) gates actions below minimum confidence.
+- Confidence threshold — `base.py:964-973` — `AgentControl.confidence_threshold` (default 0.8) gates actions below minimum confidence.
 - Adversarial evaluator — `_adversarial_impl.py:120-191` — Runs 8 built-in attack vectors against governance interceptor. Produces per-category risk scores. Testing utility, not runtime enforcement.
 - Dry-run mode — `dry_run.py:63-104` — Shadow-mode evaluation that records what would happen without blocking.
 - Trust scoring — `agentmesh/reward/scoring.py:1-100` — 5-dimensional scoring (policy compliance, resource efficiency, output quality, security posture, collaboration health) with exponential moving average.
@@ -408,7 +408,7 @@ pathway. This finding warrants priority remediation.
 **Recommendations:**
 
 - Document the scope boundary: "The toolkit detects behavioral anomalies that correlate with overreliance (drift, trust decay) but does not verify factual accuracy. Fact-checking and grounding are application-layer concerns."
-- Make drift detection block-capable via `AgtRuntime.block_on_drift` flag.
+- Make drift detection block-capable via `AgentControl.block_on_drift` flag.
 - Explore cross-agent drift correlation for multi-agent deployments.
 
 ---

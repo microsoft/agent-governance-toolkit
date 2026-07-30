@@ -109,9 +109,9 @@ validation, versioning, conflict resolution, and multiple backend support.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Core policy runtime | `agent-governance-python/agt-policies/src/agt/policies/runtime.py` | `AgtRuntime` |
-| Adapter session runtime | `agent-governance-python/agt-policies/src/agt/policies/session.py` | `AdapterRuntimeSession` |
-| Manifest composition | `agent-governance-python/agt-policies/src/agt/policies/manifest.py` | `AgtManifest` |
+| Core policy runtime | `policy-engine/sdk/python/agent_control_specification/_client.py` | `AgentControl` |
+| Adapter session runtime | `policy-engine/sdk/python/agent_control_specification/_host.py` | `HostSession` |
+| Manifest composition | `policy-engine/sdk/python/agent_control_specification/validation.py` | ACS manifest |
 | AgentMesh policy engine | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy.py:317` | `PolicyEngine` |
 | AgentMesh policy evaluator | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy_evaluator.py:33` | `PolicyEvaluator` |
 | .NET policy engine | `agent-governance-dotnet/src/AgentGovernance/Policy/PolicyEngine.cs:16` | `PolicyEngine` |
@@ -121,7 +121,7 @@ validation, versioning, conflict resolution, and multiple backend support.
 | Semantic policy engine | `agent-governance-python/agent-os/src/agent_os/semantic_policy.py:248` | `SemanticPolicyEngine` |
 | IATP policy engine | `agent-governance-python/agent-os/modules/iatp/iatp/policy_engine.py:78` | `IATPPolicyEngine` |
 | Control-plane policy engine | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/policy_engine.py:178` | `PolicyEngine` |
-| Native composition | `agent-governance-python/agt-policies/src/agt/policies/manifest.py` | ACS `extends` |
+| Native composition | `policy-engine/sdk/python/agent_control_specification/validation.py` | ACS `extends` |
 | Policy schema (JSON) | `policy-engine/spec/schema/manifest.schema.json` | ACS manifest schema |
 | OPA integration | `agent-governance-python/agent-mesh/src/agentmesh/governance/opa.py` | OPA/Rego backend |
 | Cedar integration | `agent-governance-python/agent-mesh/src/agentmesh/governance/cedar.py` | Cedar backend |
@@ -281,7 +281,7 @@ to the eighth framework.
 | Execution context | `agent-governance-python/agent-os/src/agent_os/execution_context_policy.py:62` | `ContextualPolicyEngine` |
 | Stateless kernel context | `agent-governance-python/agent-os/src/agent_os/stateless.py` | `ExecutionContext` |
 | Governance tiers | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring 0–3 privilege separation |
-| Enforcement modes | `agent-governance-python/agt-policies/src/agt/policies/runtime.py` | ACS enforcement mode |
+| Enforcement modes | `policy-engine/sdk/python/agent_control_specification/_client.py` | ACS enforcement mode |
 | Context budget | `agent-governance-python/agent-os/src/agent_os/context_budget.py` | `ContextScheduler` |
 
 **How AGT addresses this subcategory:** `ContextualPolicyEngine` binds policy
@@ -554,7 +554,7 @@ operations upon failure.
 | Ring demotion | `agent-governance-python/agent-hypervisor/session/__init__.py` | `update_ring()` |
 | Trust-tier filtering | `agent-governance-python/agent-marketplace/src/agent_marketplace/trust_tiers.py` | `filter_capabilities()` |
 | Progressive delivery | `agent-governance-python/agent-sre/src/agent_sre/delivery/` | Canary deploys, GitOps |
-| Fail-closed runtime | `agent-governance-python/agt-policies/src/agt/policies/runtime.py` | Runtime error verdicts |
+| Fail-closed runtime | `policy-engine/sdk/python/agent_control_specification/_client.py` | Runtime error verdicts |
 | RL training governance | `agent-governance-python/agent-lightning/` | Policy rewards for RL training |
 
 **How AGT addresses this subcategory:** Trust-based capability delegation

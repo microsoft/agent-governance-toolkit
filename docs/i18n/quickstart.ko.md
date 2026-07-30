@@ -83,16 +83,16 @@ agt verify --badge
 `governed_agent.py` 파일을 생성합니다.
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="research-agent",
     session_id="quickstart-session",
 )
 
-result = session.evaluate_pre_tool_call(
+result = session.pre_tool_call(
     tool_name="delete_file",
     args={"path": "/etc/passwd"},
 )
@@ -120,9 +120,9 @@ policy:<reason-code>
 실무 환경에서는 인라인 코드 대신 YAML 파일로 정책을 정의하세요.
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 ```
 
 ### 첫 번째 거버넌스 에이전트 — TypeScript
@@ -169,10 +169,10 @@ Console.WriteLine($"Allowed: {result.Allowed}");  // False
 이 툴킷은 주요한 에이전트 프레임워크와 연동이 가능합니다. 다음은 LangChain 예시입니다.
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.integrations.langchain_adapter import LangChainKernel
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 kernel = LangChainKernel(runtime=runtime)
 ```
 

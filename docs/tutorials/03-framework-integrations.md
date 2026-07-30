@@ -12,9 +12,9 @@ runtime.
 ## Create the runtime
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 ```
 
 The manifest owns policies, tool catalogs, budgets, transforms, annotators, and
@@ -34,13 +34,13 @@ SDK.
 
 ## Session lifecycle
 
-Adapters create a session-scoped `AdapterRuntimeSession` and synchronize host
+Adapters create a session-scoped `HostSession` and synchronize host
 counters before each evaluation. Attempted tool calls are charged before
 policy evaluation.
 
 ```python
 context = kernel.create_context("agent-1")
-result = kernel.evaluate_pre_tool_call(
+result = kernel.pre_tool_call(
     context,
     tool_name="search",
     args={"query": "quarterly results"},
@@ -82,7 +82,7 @@ successful transform.
 
 ## Approval
 
-Register an approval resolver when constructing `AgtRuntime`. The resolver must
+Register an approval resolver when constructing `AgentControl`. The resolver must
 return an `ApprovalDecision` bound to the evaluation's enforced identity.
 Identity mismatch fails closed.
 

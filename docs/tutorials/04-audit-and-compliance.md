@@ -465,7 +465,7 @@ OWASP ASI 2026 Governance Verification
 =======================================
 ✅ ASI-01  Prompt Injection         NativeAdapterRuntime
 ✅ ASI-02  Insecure Tool Use        ToolAliasRegistry
-✅ ASI-03  Excessive Agency          AgtRuntime
+✅ ASI-03  Excessive Agency          AgentControl
 ✅ ASI-04  Unauthorized Escalation   EscalationPolicy
 ✅ ASI-05  Trust Boundary Violation  CardRegistry
 ✅ ASI-06  Insufficient Logging      AuditChain
@@ -513,7 +513,7 @@ Output:
 |---------|------|---------------------|
 | ASI-01 | Prompt Injection | `NativeAdapterRuntime` in `agent_os.integrations.base` |
 | ASI-02 | Insecure Tool Use | `ToolAliasRegistry` in `agent_os.integrations.tool_aliases` |
-| ASI-03 | Excessive Agency | `AgtRuntime` in `agent_os.integrations.base` |
+| ASI-03 | Excessive Agency | `AgentControl` in `agent_os.integrations.base` |
 | ASI-04 | Unauthorized Escalation | `EscalationPolicy` in `agent_os.integrations.escalation` |
 | ASI-05 | Trust Boundary Violation | `CardRegistry` in `agentmesh.trust.cards` |
 | ASI-06 | Insufficient Logging | `AuditChain` in `agentmesh.governance.audit` |

@@ -1,6 +1,6 @@
 # Smolagents with native ACS governance
 
-This example shows `SmolagentsKernel` consuming an `AgtRuntime` directly. The
+This example shows `SmolagentsKernel` consuming an `AgentControl` directly. The
 runnable script exercises input mediation without an LLM credential.
 
 ## Run
@@ -14,7 +14,7 @@ python examples/smolagents-governed/getting_started.py
 ## Integration pattern
 
 ```python
-runtime = AgtRuntime.from_manifest("policies/manifest.yaml")
+runtime = AgentControl.from_path(str("policies/manifest.yaml"))
 kernel = SmolagentsKernel(runtime=runtime)
 callback = kernel.as_step_callback()
 

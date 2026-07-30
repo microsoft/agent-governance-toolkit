@@ -24,7 +24,7 @@ schema and must be enforced by the selected containment backend.
 ## Native governance
 
 `create_session(..., runtime=runtime, config=config)` stores an
-`AdapterRuntimeSession`. Every `execute_code` call evaluates before the static
+`HostSession`. Every `execute_code` call evaluates before the static
 scan and before MXC is spawned.
 
 ## One-shot execution

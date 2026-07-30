@@ -265,7 +265,7 @@ class BoundedSemaphore:
 
 
 def get_adapter_runtime(runtime: Any) -> Any:
-    """Build the native adapter runtime seam from an ``AgtRuntime``."""
+    """Build the native adapter runtime seam from an ``AgentControl``."""
 
     from ._native_adapter_runtime import NativeAdapterRuntime
 

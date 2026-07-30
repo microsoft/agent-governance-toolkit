@@ -1,7 +1,7 @@
 # DeerFlow with native ACS governance
 
 This example implements DeerFlow's guardrail provider interface with
-`AgtRuntime`. Tool requests are normalized into an ACS input snapshot, then
+`AgentControl`. Tool requests are normalized into an ACS input snapshot, then
 evaluated by `policies/manifest.yaml` and its Rego bundle.
 
 ## Run

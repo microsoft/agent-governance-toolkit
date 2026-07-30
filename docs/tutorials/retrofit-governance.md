@@ -23,9 +23,9 @@ agt lint-policy policies/manifest.yaml
 ## 2. Construct the runtime
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 ```
 
 Runtime folder discovery is not supported. Resolve ACS `extends` before adapter
@@ -61,7 +61,7 @@ attached for trusted audit and dispatch code.
 
 ## 5. Add session and sandbox controls
 
-`AdapterRuntimeSession` owns counters. `SandboxConfig` owns host resource,
+`HostSession` owns counters. `SandboxConfig` owns host resource,
 network, filesystem, and tool-exposure settings. Keep both outside the manifest
 policy interpreter.
 

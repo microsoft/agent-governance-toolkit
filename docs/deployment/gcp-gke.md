@@ -89,7 +89,7 @@ kubectl rollout status deployment/agt-governance
 
 ## Using with Google ADK Agents
 
-AGT includes a native Google ADK adapter. Construct it with `AgtRuntime` and
+AGT includes a native Google ADK adapter. Construct it with `AgentControl` and
 mediate tool calls through the adapter. See
 [examples/quickstart/google_adk_governed.py](../../examples/quickstart/google_adk_governed.py).
 

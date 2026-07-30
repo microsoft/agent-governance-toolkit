@@ -17,7 +17,15 @@ from pathlib import Path
 
 import pytest
 
-from agt._harness.snapshot import pre_tool_call_snapshot
+from agent_control_specification import SnapshotBuilder
+
+
+def pre_tool_call_snapshot(*, agent_id, tool_name, args, **counters):
+    """Build a pre-tool-call snapshot with the given running counters."""
+    builder = SnapshotBuilder(agent_id=agent_id, **counters)
+    return builder.snapshot(
+        "pre_tool_call", tool_call={"name": tool_name, "args": args, "id": "call-1"}
+    )
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _STOCK_REGO_ROOT = _REPO_ROOT / "policy-engine" / "policy" / "lib"

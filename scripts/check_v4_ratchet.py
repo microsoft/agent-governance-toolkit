@@ -179,6 +179,8 @@ DOC_TOKENS: frozenset[str] = UNAMBIGUOUS_SYMBOLS | DOC_LITERAL_TOKENS
 # v4 may survive only in the migration tool and the removal plan doc.
 ALLOWED_V4_FILES: frozenset[str] = frozenset(
     {
+        # The migration tool's own README documents the v4 artifacts it reads.
+        "agent-governance-python/agt-policies/README.md",
         "agent-governance-python/agt-policies/src/agt/cli/migrate.py",
         "agent-governance-python/agt-policies/src/agt/cli/__main__.py",
         "agent-governance-python/agt-policies/src/agt/cli/__init__.py",

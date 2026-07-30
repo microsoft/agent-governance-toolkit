@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 from agentmesh.governance import AuditLog, FileAuditSink
 
 try:
@@ -57,7 +57,7 @@ class AGTGuardrailProvider:
         ).expanduser()
         self.audit_path = Path(audit_path or base_dir / "audit" / "deerflow-agt-audit.jsonl").expanduser()
 
-        self._runtime = AgtRuntime.from_manifest(self.manifest_path)
+        self._runtime = AgentControl.from_path(str(self.manifest_path))
 
         self.audit_path.parent.mkdir(parents=True, exist_ok=True)
         secret = _audit_secret()
@@ -144,8 +144,8 @@ class AGTGuardrailProvider:
         return context
 
     def _decision_from_result(self, result: Any) -> GuardrailDecision:
-        allowed = bool(result.is_allowed())
-        reason = result.reason_code or result.message
+        allowed = bool(result.verdict.decision.permits)
+        reason = result.verdict.reason or result.message
         policy_id = reason.removeprefix("policy:") if reason else None
 
         code = "agt.allowed" if allowed else "agt.denied"
@@ -158,7 +158,7 @@ class AGTGuardrailProvider:
             metadata={
                 "framework": self.framework,
                 "verdict": result.verdict,
-                "reason_code": result.reason_code,
+                "reason_code": result.verdict.reason,
             },
         )
 

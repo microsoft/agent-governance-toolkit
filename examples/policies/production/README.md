@@ -14,9 +14,9 @@ and output intervention points to a Rego package under `rego/`.
 ## Usage
 
 ```python
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime.from_manifest("enterprise.yaml")
+runtime = AgentControl.from_path(str("enterprise.yaml"))
 decision = runtime.evaluate(
     "input",
     {

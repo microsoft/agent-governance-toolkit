@@ -44,7 +44,7 @@ from typing import Any
 
 import yaml
 
-from agt.policies.manifest import AgtManifest
+from agent_control_specification import validate_manifest
 
 from ._migrate_bridge import MigrationPolicyInput, build_migrated_manifest
 from ._migrate_resolution import ResolutionError, resolve_manifest
@@ -493,7 +493,7 @@ class _LegacyVisitor(ast.NodeVisitor):
                             "Direct PolicyInterceptor subclasses are removed in "
                             "v5. Port the per-event logic to either an "
                             "intervention_point binding in your AGT manifest or a "
-                            "host-side wrapper around agt.policies.runtime."
+                            "host-side wrapper around agent_control_specification."
                         ),
                     )
                 )
@@ -754,7 +754,7 @@ def _migrate_governance_policy(
             manifest["policies"][policy_id]["bundle"] = str(
                 bundle_dir.resolve()
             )
-            manifest = AgtManifest.from_document(manifest).to_document()
+            validate_manifest(yaml.safe_dump(manifest, sort_keys=False))
             staged_manifest = staging / "manifest.yaml"
             staged_manifest.write_text(
                 yaml.safe_dump(manifest, sort_keys=False),
@@ -800,7 +800,7 @@ def _render_governance_rewrite_snippet(
 
     with::
 
-        runtime = AgtRuntime(Path("policies/<file>.manifest.yaml"))
+        control = AgentControl.from_path("policies/<file>.manifest.yaml")
         agent.attach_runtime(runtime)
 
     The snippet is purely informational — we never auto-rewrite Python
@@ -821,8 +821,8 @@ def _render_governance_rewrite_snippet(
         "#\n"
         "# v5 — replace the construction with:\n"
         "#     from pathlib import Path\n"
-        "#     from agt.policies.runtime import AgtRuntime\n"
-        f"#     runtime = AgtRuntime.from_manifest(Path({str(manifest_path)!r}))\n"
+        "#     from agent_control_specification import AgentControl\n"
+        f"#     control = AgentControl.from_path({str(manifest_path)!r})\n"
     )
 
 

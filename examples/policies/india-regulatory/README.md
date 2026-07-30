@@ -48,8 +48,8 @@ The shared ACS result adapter maps deny, escalate, audit, and allow outcomes to
 the runtime result contract. The jurisdiction router maps `IN` to these packs.
 
 ```python
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime.from_manifest("dpdp-data-protection.yaml")
+runtime = AgentControl.from_path(str("dpdp-data-protection.yaml"))
 result = runtime.evaluate("output", snapshot)
 ```

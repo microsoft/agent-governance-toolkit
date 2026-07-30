@@ -4,7 +4,7 @@
 
 from pathlib import Path
 
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
 
 SCENARIOS = (
@@ -18,22 +18,22 @@ SCENARIOS = (
 
 def run_lab() -> None:
     manifest = Path(__file__).with_name("lab1-manifest.yaml")
-    runtime = AgtRuntime(manifest)
-    session = AdapterRuntimeSession(
+    runtime = AgentControl.from_path(str(manifest))
+    session = HostSession(
         runtime,
         agent_id="workshop-agent",
         session_id="lab1",
     )
 
     for tool_name, token_count in SCENARIOS:
-        evaluation = session.evaluate_input(
+        evaluation = session.input(
             body={"tool_name": tool_name, "token_count": token_count}
         )
         print(
             f"{evaluation.verdict:5} "
             f"{tool_name:20} "
             f"tokens={token_count:<4} "
-            f"{evaluation.reason_code}"
+            f"{evaluation.verdict.reason}"
         )
 
 

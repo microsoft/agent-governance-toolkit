@@ -4,7 +4,7 @@
 
 These scenarios exercise the native :class:`PydanticAIKernel` and
 :class:`GovernanceCapability` surface routed through
-:class:`agt.policies.runtime.AgtRuntime` via the
+:class:`agent_control_specification.AgentControl` via the
 :class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
@@ -27,8 +27,8 @@ from typing import Any
 import pytest
 pytest.importorskip('agent_control_specification')
 pytest.importorskip('agent_os')
-from agt.policies import PolicyEvaluation
-from agt.policies.runtime import AgtRuntime, ApprovalDecision
+from agent_control_specification import InterventionPointResult
+from agent_control_specification import AgentControl, ApprovalResolution
 _MANIFEST = 'agent_control_specification_version: 0.3.0-alpha-agt\nmetadata:\n  name: pydantic_ai_adapter_scenarios\nextends: []\npolicies:\n  scenario_policy:\n    type: custom\n    adapter: pydantic_ai_adapter_scenarios_adapter\nintervention_points:\n  input:\n    policy_target: $.input.body\n    policy_target_kind: user_input\n    policy:\n      id: scenario_policy\n  pre_tool_call:\n    policy_target: $.tool_call.args\n    policy_target_kind: tool_args\n    tool_name_from: $.tool_call.name\n    policy:\n      id: scenario_policy\ntools:\n  search:\n    clearance: public\n'
 
 class _ScriptedPolicy:
@@ -49,9 +49,9 @@ def _write_manifest(tmp_path: Path) -> Path:
     path.write_text(_MANIFEST, encoding='utf-8')
     return path
 
-def _build_runtime(tmp_path: Path, verdicts: list[dict[str, Any]], *, approval_resolver=None) -> tuple[AgtRuntime, _ScriptedPolicy]:
+def _build_runtime(tmp_path: Path, verdicts: list[dict[str, Any]], *, approval_resolver=None) -> tuple[AgentControl, _ScriptedPolicy]:
     policy = _ScriptedPolicy(verdicts)
-    runtime = AgtRuntime(_write_manifest(tmp_path), policy_dispatcher=policy, approval_resolver=approval_resolver)
+    runtime = AgentControl.from_path(str(_write_manifest(tmp_path)), policy_dispatcher=policy, approval_resolver=approval_resolver)
     return (runtime, policy)
 
 def test_before_run_allow_path_forwards_prompt(tmp_path: Path) -> None:
@@ -72,7 +72,7 @@ def test_before_run_deny_path_raises_policy_violation(tmp_path: Path) -> None:
     capability = kernel.as_capability()
     with pytest.raises(PolicyViolationError) as excinfo:
         capability.before_run('tell me about secrets')
-    assert excinfo.value.evaluation_result.reason_code == 'policy:user_blocked_topic'
+    assert excinfo.value.evaluation_result.verdict.reason == 'user_blocked_topic'
 
 def test_before_run_transform_path_rewrites_prompt(tmp_path: Path) -> None:
     """A ``transform`` verdict rewrites the outbound prompt."""
@@ -88,10 +88,10 @@ def test_before_run_escalate_with_approving_resolver_forwards(tmp_path: Path) ->
     from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
+    def resolver(ip: str, result: InterventionPointResult) -> ApprovalResolution:
         captured['ip'] = ip
         captured['enforced_identity'] = result.enforced_identity
-        return ApprovalDecision.allow(result.enforced_identity)
+        return ApprovalResolution.allow(result.enforced_identity)
     runtime, _policy = _build_runtime(tmp_path, [{'decision': 'escalate', 'reason': 'human_approval_required'}], approval_resolver=resolver)
     kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()

@@ -4,13 +4,13 @@
 
 from pathlib import Path
 
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.integrations.openai_agents_sdk import OpenAIAgentsKernel
 
 
 def main() -> None:
     root = Path(__file__).resolve().parent
-    runtime = AgtRuntime.from_manifest(root / "policies" / "manifest.yaml")
+    runtime = AgentControl.from_path(str(root / "policies" / "manifest.yaml"))
     try:
         kernel = OpenAIAgentsKernel(runtime=runtime)
         context = kernel.create_context("openai-agents-example")

@@ -55,11 +55,8 @@ def main() -> int:
         with ZipFile(agt_wheel) as archive:
             names = set(archive.namelist())
             required = {
-                "agt/policies/manifest.py",
-                "agt/policies/result.py",
-                "agt/policies/runtime.py",
-                "agt/policies/session.py",
                 "agt/cli/_migrate_bridge.py",
+                "agt/cli/_migrate_re2.py",
                 "agt/cli/_stock_rego/approval.rego",
                 "agt/cli/_stock_rego/budgets.rego",
                 "agt/cli/_stock_rego/confidence.rego",
@@ -70,6 +67,10 @@ def main() -> int:
                 raise RuntimeError(f"agt-policies wheel missing {missing}")
             if any(name.startswith("agt/manifest_resolution/") for name in names):
                 raise RuntimeError("agt-policies wheel still exposes manifest_resolution")
+            # Policy evaluation belongs to the runtime, so the migration wheel
+            # must not ship a second policy layer alongside it.
+            if any(name.startswith("agt/policies/") for name in names):
+                raise RuntimeError("agt-policies wheel still exposes agt.policies")
 
         with ZipFile(core_wheel) as archive:
             names = set(archive.namelist())

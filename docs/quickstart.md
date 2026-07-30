@@ -30,16 +30,16 @@ manifest binds the Rego policy to native intervention points.
 ## Evaluate a tool call
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="quickstart-agent",
     session_id="quickstart-session",
 )
 
-evaluation = session.evaluate_pre_tool_call(
+evaluation = session.pre_tool_call(
     tool_name="delete_file",
     args={"path": "report.txt"},
 )
@@ -68,7 +68,7 @@ belong in the manifest rather than the adapter constructor.
 ```python
 from agent_os.exceptions import PolicyViolationError
 
-if not evaluation.is_allowed():
+if not evaluation.verdict.decision.permits:
     error = PolicyViolationError.from_evaluation_result(evaluation)
     print(str(error))
     print(error.evaluation_result.audit_record())

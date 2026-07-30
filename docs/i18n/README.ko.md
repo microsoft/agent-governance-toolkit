@@ -105,19 +105,19 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
   파괴적인 작업은 사람의 승인이 필요합니다
 ```
 
-또는 프로그래밍 방식 제어를 위해 전체 `AgtRuntime` API를 사용하세요:
+또는 프로그래밍 방식 제어를 위해 전체 `AgentControl` API를 사용하세요:
 
 <details>
-<summary><b>AgtRuntime 예제</b></summary>
+<summary><b>AgentControl 예제</b></summary>
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime, agent_id="agent-1", session_id="session-1"
 )
-result = session.evaluate_pre_tool_call(
+result = session.pre_tool_call(
     tool_name="delete_file", args={"path": "report.txt"}
 )
 ```

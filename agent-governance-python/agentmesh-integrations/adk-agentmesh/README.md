@@ -9,7 +9,7 @@ Policy enforcement, trust verification, and audit trails for
 
 ## What It Does
 
-`adk-agentmesh` implements the `AgtRuntime` protocol
+`adk-agentmesh` implements the `AgentControl` protocol
 ([google/adk-python#4897](https://github.com/google/adk-python/issues/4897))
 backed by the Agent Governance Toolkit's deterministic policy engine.
 
@@ -44,10 +44,10 @@ adk_governance:
 ### 2. Wire into your ADK agent
 
 ```python
-from adk_agentmesh import ADKPolicyEvaluator, GovernanceCallbacks
+from adk_agentmesh import ADKAgentControl, GovernanceCallbacks
 
 # Load policy
-evaluator = ADKPolicyEvaluator.from_config("policies/adk-agt-manifest.yaml")
+evaluator = ADKAgentControl.from_config("policies/adk-agt-manifest.yaml")
 callbacks = GovernanceCallbacks(evaluator)
 
 # Attach to ADK agent
@@ -67,9 +67,9 @@ agent = LlmAgent(
 
 ```python
 import asyncio
-from adk_agentmesh import ADKPolicyEvaluator
+from adk_agentmesh import ADKAgentControl
 
-evaluator = ADKPolicyEvaluator(
+evaluator = ADKAgentControl(
     blocked_tools=["execute_shell"],
     max_tool_calls=50,
     require_approval_for=["send_email"],
@@ -121,7 +121,7 @@ child_scope = parent_scope.narrow(
 Every governance decision is recorded:
 
 ```python
-evaluator = ADKPolicyEvaluator(blocked_tools=["dangerous_tool"])
+evaluator = ADKAgentControl(blocked_tools=["dangerous_tool"])
 
 # ... after agent runs ...
 
@@ -154,7 +154,7 @@ See the full sample policy at
 
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - [Google ADK](https://github.com/google/adk-python)
-- [AgtRuntime proposal (google/adk-python#4897)](https://github.com/google/adk-python/issues/4897)
+- [AgentControl proposal (google/adk-python#4897)](https://github.com/google/adk-python/issues/4897)
 
 ## License
 

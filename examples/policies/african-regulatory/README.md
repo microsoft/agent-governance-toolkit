@@ -128,9 +128,9 @@ for:
 ## Loading policies
 
 ```python
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime.from_manifest("ndpa-data-residency.yaml")
+runtime = AgentControl.from_path(str("ndpa-data-residency.yaml"))
 result = runtime.evaluate("pre_tool_call", snapshot)
 ```
 

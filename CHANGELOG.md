@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING: Python policy runtime now uses native ACS only.** Removed the
   compatibility bridge, pre-ACS rule and result types, runtime folder
   resolution, local framework policy interpreters, and legacy policy
-  generators. Framework adapters require `AgtRuntime`; sandbox providers use
+  generators. Framework adapters require `AgentControl`; sandbox providers use
   `runtime=` plus explicit `SandboxConfig`.
 
 ## [5.0.0] - 2026-06-25

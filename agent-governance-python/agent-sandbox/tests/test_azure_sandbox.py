@@ -33,7 +33,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 
 from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.aca_sandbox_provider import ACASandboxProvider
@@ -754,15 +754,11 @@ class _StubEvaluator:
         self.reason = reason
         self.calls: list[dict] = []
 
-    def evaluate_pre_tool_call(self, *, tool_name, args, call_id):
+    def pre_tool_call(self, *, tool_name, args, call_id):
         self.calls.append(
             {"tool_name": tool_name, "args": dict(args), "call_id": call_id}
         )
-        return PolicyEvaluation(
-            verdict="allow" if self.allow else "deny",
-            reason_code=self.reason,
-            message=self.reason,
-        )
+        return InterventionPointResult(verdict=Verdict(decision=Decision("allow" if self.allow else "deny"), reason=self.reason, message=self.reason))
 
 
 @pytest.fixture()
