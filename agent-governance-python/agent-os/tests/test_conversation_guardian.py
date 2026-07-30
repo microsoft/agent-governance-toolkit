@@ -530,7 +530,10 @@ class TestEdgeCases:
 # Evasion Resistance
 # =============================================================================
 
-from agent_os.integrations.conversation_guardian import normalize_text
+from agent_os.integrations.conversation_guardian import (
+    _INVISIBLE_RANGES,
+    normalize_text,
+)
 
 
 def _hidden(word: str, char: str) -> str:
@@ -624,11 +627,48 @@ class TestEvasionResistance:
             ("hangul filler", "\u3164"),
             ("variation selector 16", "\ufe0f"),
             ("zero width no-break space", "\ufeff"),
+            ("musical symbol begin beam", "\U0001d173"),
+            ("musical symbol end phrase", "\U0001d17a"),
             ("tag latin small letter a", "\U000e0061"),
         ],
     )
     def test_invisible_char_inside_keyword_is_stripped(self, name: str, char: str):
         assert normalize_text(_hidden("urgent", char)) == "urgent", name
+
+    def test_every_default_ignorable_range_is_covered(self):
+        """The table must cover the property its comment claims it is built from.
+
+        U+1D173..1D17A (musical symbol beam/phrase controls) were missing while
+        the neighbouring supplementary-plane ranges U+1BCA0..1BCA3 and
+        U+E0000..E0FFF were present, so the omission read as deliberate rather
+        than as a gap. Checking the property instead of a hand-picked sample
+        means the next range added to Default_Ignorable is caught here rather
+        than by whoever finds the evasion.
+
+        ``unicodedata`` does not expose Default_Ignorable_Code_Point, so the
+        expected set is spelled out from the Unicode data file (DerivedCoreProper
+        ties.txt). Ranges the module adds *beyond* the property -- the
+        interlinear annotation characters -- are intentionally not listed here;
+        this asserts coverage, not equality.
+        """
+        default_ignorable = (
+            (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C),
+            (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180F),
+            (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F),
+            (0x3164, 0x3164), (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF),
+            (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3),
+            (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF),
+        )
+        covered = {
+            cp for start, end in _INVISIBLE_RANGES for cp in range(start, end + 1)
+        }
+        missing = [
+            f"U+{cp:04X}"
+            for start, end in default_ignorable
+            for cp in range(start, end + 1)
+            if cp not in covered
+        ]
+        assert missing == [], f"Default_Ignorable code points not stripped: {missing}"
 
     @pytest.mark.parametrize(
         ("name", "char"),

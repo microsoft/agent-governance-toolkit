@@ -121,6 +121,7 @@ _INVISIBLE_RANGES: tuple[tuple[int, int], ...] = (
     # after this exception so the two do not drift apart.
     (0xFFF9, 0xFFFB),  # interlinear annotation anchor, separator, terminator
     (0x1BCA0, 0x1BCA3),  # shorthand format controls
+    (0x1D173, 0x1D17A),  # musical symbol beam and phrase controls
     (0xE0000, 0xE0FFF),  # tag characters, variation selectors supplement
 )
 
