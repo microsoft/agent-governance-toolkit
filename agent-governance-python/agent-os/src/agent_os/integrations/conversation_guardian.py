@@ -90,7 +90,8 @@ _HOMOGLYPH_MAP: dict[str, str] = {
 #
 # These are Unicode's Default_Ignorable_Code_Point ranges -- which is what
 # "renders as nothing" means normatively -- plus the invisible Hangul filler
-# letters. ``unicodedata`` does not expose that property, so the ranges are
+# letters and the interlinear annotation characters (see below).
+# ``unicodedata`` does not expose that property, so the ranges are
 # spelled out. Note they do not share one category: U+FE0F (variation selector)
 # and U+034F (combining grapheme joiner) are Mn, U+3164 (Hangul filler) is Lo,
 # and U+2065 is unassigned, so no single category test finds them all.
@@ -112,6 +113,13 @@ _INVISIBLE_RANGES: tuple[tuple[int, int], ...] = (
     (0xFEFF, 0xFEFF),  # zero width no-break space
     (0xFFA0, 0xFFA0),  # half width hangul filler
     (0xFFF0, 0xFFF8),  # unassigned, reserved as invisible
+    # U+FFF9..FFFB (interlinear annotation) are *not* Default_Ignorable, so they
+    # fall outside the property this list is otherwise derived from. They are
+    # included anyway: Unicode says they should not be exchanged in plain text
+    # and most renderers show nothing for them, so mid-keyword they evade every
+    # pattern here exactly like the ranges above. The test for them is named
+    # after this exception so the two do not drift apart.
+    (0xFFF9, 0xFFFB),  # interlinear annotation anchor, separator, terminator
     (0x1BCA0, 0x1BCA3),  # shorthand format controls
     (0xE0000, 0xE0FFF),  # tag characters, variation selectors supplement
 )
@@ -127,8 +135,13 @@ _INVISIBLE_CHARS = re.compile(
 def normalize_text(text: str) -> str:
     """Normalize text to defeat common evasion techniques.
 
-    Handles: unicode homoglyphs, leetspeak, zero-width characters,
+    Handles: unicode homoglyphs, leetspeak, invisible characters (every
+    range in ``_INVISIBLE_RANGES``, not only the zero-width ones),
     excessive whitespace, combining diacritics, fullwidth characters.
+
+    The return value is intended for matching only. It is lossy by design --
+    invisible characters are dropped rather than preserved -- so it must not be
+    stored or displayed in place of the original text.
     """
     # Strip invisible characters (see _INVISIBLE_RANGES). This has to run before
     # the compatibility decomposition below, which does not remove them, and one

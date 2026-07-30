@@ -605,20 +605,25 @@ class TestEvasionResistance:
     # words, which the whitespace collapse already handled -- the mid-word case
     # was never covered.) One per Unicode category involved, since no single
     # category test finds them all: Cf, Mn, Lo and unassigned are represented.
+    #
+    # Written as escape sequences, never as the characters themselves: pasted
+    # literally they are indistinguishable from an empty string in a diff, in a
+    # review, and in an editor, and a tool that trims "trailing whitespace"
+    # could silently delete one and turn a test green for the wrong reason.
     @pytest.mark.parametrize(
         ("name", "char"),
         [
-            ("soft hyphen", "­"),
-            ("combining grapheme joiner", "͏"),
-            ("arabic letter mark", "؜"),
-            ("mongolian vowel separator", "᠎"),
-            ("left-to-right mark", "‎"),
-            ("right-to-left isolate", "⁧"),
-            ("invisible plus", "⁤"),
-            ("unassigned invisible", "⁥"),
-            ("hangul filler", "ㅤ"),
-            ("variation selector 16", "️"),
-            ("zero width no-break space", "﻿"),
+            ("soft hyphen", "\u00ad"),
+            ("combining grapheme joiner", "\u034f"),
+            ("arabic letter mark", "\u061c"),
+            ("mongolian vowel separator", "\u180e"),
+            ("left-to-right mark", "\u200e"),
+            ("right-to-left isolate", "\u2067"),
+            ("invisible plus", "\u2064"),
+            ("unassigned invisible", "\u2065"),
+            ("hangul filler", "\u3164"),
+            ("variation selector 16", "\ufe0f"),
+            ("zero width no-break space", "\ufeff"),
             ("tag latin small letter a", "\U000e0061"),
         ],
     )
@@ -626,7 +631,26 @@ class TestEvasionResistance:
         assert normalize_text(_hidden("urgent", char)) == "urgent", name
 
     @pytest.mark.parametrize(
-        "char", ["­", "‎", "️", "ㅤ", "͏"]
+        ("name", "char"),
+        [
+            ("interlinear annotation anchor", "\ufff9"),
+            ("interlinear annotation separator", "\ufffa"),
+            ("interlinear annotation terminator", "\ufffb"),
+        ],
+    )
+    def test_non_default_ignorable_invisibles_are_also_stripped(self, name: str, char: str):
+        """U+FFF9..FFFB are the one group here that is not Default_Ignorable.
+
+        Every other range in ``_INVISIBLE_RANGES`` is derived from that
+        property. These three are not, so a future reader deriving the list
+        purely from Default_Ignorable would drop them -- and they evade just as
+        well, since Unicode says they should not be exchanged in plain text and
+        renderers show nothing for them.
+        """
+        assert normalize_text(_hidden("urgent", char)) == "urgent", name
+
+    @pytest.mark.parametrize(
+        "char", ["\u00ad", "\u200e", "\ufe0f", "\u3164", "\u034f", "\ufff9"]
     )
     def test_invisible_chars_do_not_evade_escalation_scoring(self, char: str):
         # An invisible character in each keyword took the score from 0.80 to
@@ -639,7 +663,7 @@ class TestEvasionResistance:
 
         assert c.score_message(evaded)[0] == c.score_message(clean)[0]
 
-    @pytest.mark.parametrize("char", ["­", "‎", "️"])
+    @pytest.mark.parametrize("char", ["\u00ad", "\u200e", "\ufe0f", "\ufffb"])
     def test_invisible_chars_do_not_evade_offensive_scoring(self, char: str):
         d = OffensiveIntentDetector()
         words = ["exfiltrate", "the", "data", "escalate", "privileges", "impersonate"]
@@ -652,7 +676,7 @@ class TestEvasionResistance:
         # End to end: the same message went from critical/quarantine to
         # none/none with one soft hyphen per keyword.
         words = ["exfiltrate", "the", "data", "escalate", "privileges", "impersonate"]
-        content = " ".join(_hidden(word, "­") for word in words)
+        content = " ".join(_hidden(word, "\u00ad") for word in words)
         guardian = ConversationGuardian()
 
         alert = guardian.analyze_message("c1", "a", "b", content)
