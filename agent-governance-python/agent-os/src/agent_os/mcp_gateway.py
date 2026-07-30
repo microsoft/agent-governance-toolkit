@@ -394,12 +394,29 @@ class MCPGateway:
                     "instruction_injection",
                     "error",
                 }
-                residual_tag = not (sanitize_failed or residual_credential) and any(
-                    threat.category in residual_block_categories
-                    for threat in self._response_scanner.scan_response(
-                        sanitized, tool_name
-                    ).threats
-                )
+                #
+                # scan_response converts its *own* internal failures into an
+                # "error" threat, but a scanner substituted by a host can raise
+                # before reaching that handler. The first scan is wrapped for
+                # exactly that reason; this one has to be too, or the injection
+                # verifier is the one call in the path whose crash escapes
+                # instead of failing closed.
+                residual_tag = not (sanitize_failed or residual_credential)
+                if residual_tag:
+                    try:
+                        residual_tag = any(
+                            threat.category in residual_block_categories
+                            for threat in self._response_scanner.scan_response(
+                                sanitized, tool_name
+                            ).threats
+                        )
+                    except Exception:
+                        logger.error(
+                            "Residual response re-scan error — failing closed | "
+                            "agent=%s tool=%s",
+                            agent_id, tool_name, exc_info=True,
+                        )
+                        residual_tag = True
                 if sanitize_failed or residual_credential or residual_tag:
                     decision = MCPResponseDecision(
                         allowed=False,
