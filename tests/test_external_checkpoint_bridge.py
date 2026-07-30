@@ -18,9 +18,11 @@ _EXAMPLE_DIR = _REPO_ROOT / "examples" / "external-checkpoint-bridge"
 _spec = importlib.util.spec_from_file_location(
     "external_checkpoint_bridge_demo", _EXAMPLE_DIR / "demo.py"
 )
-demo = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+assert _spec is not None
+assert _spec.loader is not None
+demo = importlib.util.module_from_spec(_spec)
 sys.modules["external_checkpoint_bridge_demo"] = demo
-_spec.loader.exec_module(demo)  # type: ignore[union-attr]
+_spec.loader.exec_module(demo)
 
 
 def test_stable_json_is_order_insensitive_and_unicode_preserving() -> None:
