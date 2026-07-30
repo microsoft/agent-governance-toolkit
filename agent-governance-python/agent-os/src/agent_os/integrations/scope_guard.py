@@ -121,7 +121,14 @@ def _get_diff_stats(
             # --end-of-options keeps any remaining option-shaped value from being
             # parsed as a flag, so the check above is a clear diagnostic rather
             # than the only thing standing between a flag and git's parser.
-            ["git", "diff", "--numstat", "--end-of-options", base_branch],  # noqa: S607 — known CLI tool path
+            #
+            # The trailing "--" forces revision parsing. Without it a value that
+            # is not a revision but does resolve as a *pathspec* -- "f0.txt",
+            # "*.md" -- makes git exit 0 with empty stdout, and empty stats read
+            # as a zero-line change: the same fail-open reached through the
+            # argument. With it, git exits 128 ("fatal: bad revision") and the
+            # returncode branch below turns that into a measurement error.
+            ["git", "diff", "--numstat", "--end-of-options", base_branch, "--"],  # noqa: S607 — known CLI tool path
             cwd=repo_path,
             capture_output=True,
             text=True,

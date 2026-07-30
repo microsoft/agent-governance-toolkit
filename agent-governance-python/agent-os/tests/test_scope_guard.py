@@ -453,7 +453,7 @@ class TestGetDiffStats:
         )
         _get_diff_stats("/repo", "main")
         argv = mock_run.call_args[0][0]
-        assert argv[-2:] == ["--end-of-options", "main"]
+        assert argv[-3:] == ["--end-of-options", "main", "--"]
 
 
 # ── real git — the fail-open, end to end ──────────────────────
@@ -507,6 +507,33 @@ class TestOptionShapedBaseBranchAgainstRealGit:
         assert error is not None
         assert (files, ins, dels) == ([], 0, 0)
         assert not sink.exists()
+
+    @pytest.mark.parametrize("base_branch", ["f0.txt", "*.md", "seed.txt"])
+    def test_pathspec_shaped_base_branch_is_an_error(self, over_limit_repo, base_branch):
+        """A non-revision that resolves as a *pathspec* must not read as empty.
+
+        ``--end-of-options`` stops git treating the value as a flag but does not
+        force revision parsing, so ``git diff --numstat --end-of-options
+        f0.txt`` exits 0 with empty stdout -- and empty stats are
+        indistinguishable from a zero-line change. This is the same fail-open as
+        the ``--output=`` case, reached through a value that never looks like an
+        option, so the ``startswith("-")`` guard cannot see it.
+
+        The trailing ``--`` makes it unambiguous: git exits 128 with "fatal: bad
+        revision", which the returncode branch already reports.
+        """
+        files, ins, dels, error = _get_diff_stats(str(over_limit_repo), base_branch)
+        assert error is not None, f"{base_branch!r} measured as a diff instead of failing"
+        assert (files, ins, dels) == ([], 0, 0)
+
+    def test_pathspec_shaped_base_branch_hard_fails(self, over_limit_repo):
+        """And the guard must not turn itself off for one."""
+        guard = ScopeGuard()
+        evaluation = guard.evaluate_from_git(
+            "agent-1", ScopeConfig(max_files=2, max_lines=10), str(over_limit_repo), "f0.txt"
+        )
+        assert evaluation.decision == "HARD_FAIL"  # was PASS
+        assert evaluation.error is not None
 
     def test_guard_hard_fails_instead_of_passing(self, over_limit_repo, tmp_path):
         # The consequence the reviewer flagged: the guard turned itself off.
