@@ -1,0 +1,17 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: healthcare-governance
+  version: "1.0"
+extends: []
+policies:
+  healthcare_safety:
+    type: rego
+    bundle: .
+    query: data.agt.examples.maf.healthcare.result
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: healthcare_safety

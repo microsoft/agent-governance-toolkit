@@ -53,16 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider fails closed (action denied). Without an `approval_provider`,
   behavior is unchanged from earlier in this release: actions remain
   denied with the same error message.
-- `agent_os.policies.backends.OPABackend` now strict-bool validates OPA
-  responses in both remote and CLI modes. A positive authorization
-  decision requires the JSON literal `true`; any other shape (missing
-  `result` field, non-object body, truthy strings like `"denied"`,
-  integers, non-empty dicts/lists, malformed JSON, HTTP errors,
-  subprocess non-zero exits, timeouts) fails closed with an explicit
-  error code (`malformed_response`, `missing_result`, `missing_expressions`).
-  Previously the code defaulted missing fields to `False` then cast
-  through `bool(value)`, which would silently authorize any truthy
-  non-bool value returned by a misconfigured or compromised OPA server.
 - `iatp.main` and `iatp.sidecar` `POST /proxy` `X-User-Override` header
   is now **double-gated**. The legacy behavior accepted any truthy
   value of the caller-supplied header as a bypass of policy and
@@ -99,15 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subclasses overriding it must accept `**kwargs` or update their signature.
 
 ### Added
-- **`BackendDecision` assurance fields**: optional `proof_artefact: str | None`
-  (content-address of an underlying proof, e.g. `sha256:…`) and
-  `verification_pointers: dict[str, str]` (named URLs for offline re-verification)
-  on `agent_os.policies.backends.BackendDecision`. High-assurance external
-  backends (SMT-verified gates, mechanised-proof PDPs, TEE-attested PDPs) can
-  populate them; `PolicyEvaluator._evaluate_flat` propagates non-empty values
-  into `PolicyDecision.audit_entry`. Fully additive — existing `OPABackend` and
-  `CedarBackend` are unaffected and audit consumers see no new keys until a
-  backend supplies them.
 - `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
   credentials. These tokens remain valid for the life of the process unless
   revoked explicitly.

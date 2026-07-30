@@ -73,7 +73,6 @@ pip install agentmesh-lightning        # 强化学习训练治理
 - **[Go 模块](../../agent-governance-golang/README.md)** — 提供策略、信任、审计与身份功能的 Go 模块
 - **[教程](../../docs/tutorials/)** — 涵盖策略、身份、集成、合规、SRE 与沙箱的分步指南
 - **[Azure 部署](../../docs/deployment/README.md)** — 支持 AKS, Azure AI Foundry, Container Apps, OpenClaw 边车
-- **[NVIDIA OpenShell 集成](../../docs/integrations/openshell.md)** — 将沙箱隔离与治理智能相结合
 - **[OWASP 合规](../../docs/compliance/owasp-agentic-top10-architecture.md)** — 完整覆盖 ASI-01 至 ASI-10 的映射
 - **[威胁模型](../../docs/security/threat-model.md)** — 包含信任边界、攻击面与 STRIDE 分析
 - **[架构](../../docs/ARCHITECTURE.md)** — 系统设计、安全模型与信任评分
@@ -194,16 +193,16 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 ```bash
 # 完整治理演示 (policy enforcement, audit, trust, cost, reliability)
-python examples/demos/maf_governance_demo.py
+python examples/maf-integration/01-loan-processing/python/main.py
 
 # 使用对抗性攻击场景运行
-python examples/demos/maf_governance_demo.py --include-attacks
+python examples/maf-integration/01-loan-processing/python/main.py --include-attacks
 ```
 
 ## 更多示例与样本
 
 - **[框架快速入门](../../examples/quickstart/)** — 单文件受治理代理适用于 LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK
-- **[教程 1: Policy Engine](../../docs/tutorials/01-policy-engine.md)** — 定义并执行治理策略
+- **教程 1: Policy Engine** — 定义并执行治理策略
 - **[教程 2: Trust & Identity](../../docs/tutorials/02-trust-and-identity.md)** — 零信任代理凭证
 - **[教程 3: Framework Integrations](../../docs/tutorials/03-framework-integrations.md)** — 为任何框架添加治理
 - **[教程 4: Audit & Compliance](../../docs/tutorials/04-audit-and-compliance.md)** — OWASP 合规与证明
@@ -217,33 +216,23 @@ python examples/demos/maf_governance_demo.py --include-attacks
 ### OPA/Rego (Agent OS)
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agent_control_specification import AgentControl, HostSession
 
-evaluator = PolicyEvaluator()
-evaluator.load_rego(rego_content="""
-package agentos
-default allow = false
-allow { input.tool_name == "web_search" }
-allow { input.role == "admin" }
-""")
-
-decision = evaluator.evaluate({"tool_name": "web_search", "role": "analyst"})
-# decision.allowed == True
+runtime = AgentControl.from_path("policies/rego-manifest.yaml")
+session = HostSession(
+    runtime, agent_id="agent-1", session_id="session-1"
+)
+decision = session.pre_tool_call(
+    tool_name="web_search", args={"query": "status"}
+)
 ```
 
 ### Cedar (Agent OS)
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agent_control_specification import AgentControl
 
-evaluator = PolicyEvaluator()
-evaluator.load_cedar(policy_content="""
-permit(principal, action == Action::"ReadData", resource);
-forbid(principal, action == Action::"DeleteFile", resource);
-""")
-
-decision = evaluator.evaluate({"tool_name": "read_data", "agent_id": "agent-1"})
-# decision.allowed == True
+runtime = AgentControl.from_path("policies/cedar-manifest.yaml")
 ```
 
 ### AgentMesh OPA/Cedar
