@@ -99,15 +99,29 @@ def _get_diff_stats(
 
     Args:
         repo_path: Path to a git repository or worktree.
-        base_branch: Branch to diff against.
+        base_branch: Branch to diff against. A value starting with ``-`` is
+            rejected as an error rather than passed to git, since git would read
+            it as a flag.
 
     Returns:
         Tuple of (file paths, total insertions, total deletions, error or None).
         On error the first three elements are empty and must not be used.
     """
+    # An option-shaped base_branch is a measurement error, not a revision. Left
+    # alone, ``--output=FILE`` sends the numstat to a file: stdout is empty, git
+    # exits 0, and the empty stats read as a zero-line change -- the same
+    # fail-open this function exists to close, reached through the argument
+    # instead of through git failing.
+    if base_branch.startswith("-"):
+        logger.warning("_get_diff_stats refused option-shaped base_branch %r", base_branch)
+        return [], 0, 0, f"base_branch {base_branch!r} is not a revision"
+
     try:
         result = subprocess.run(  # noqa: S603 — trusted subprocess in scope guard
-            ["git", "diff", "--numstat", base_branch],  # noqa: S607 — known CLI tool path
+            # --end-of-options keeps any remaining option-shaped value from being
+            # parsed as a flag, so the check above is a clear diagnostic rather
+            # than the only thing standing between a flag and git's parser.
+            ["git", "diff", "--numstat", "--end-of-options", base_branch],  # noqa: S607 — known CLI tool path
             cwd=repo_path,
             capture_output=True,
             text=True,

@@ -423,3 +423,101 @@ class TestGetDiffStats:
         files, ins, dels, error = _get_diff_stats("/repo")
         assert (files, ins, dels) == ([], 0, 0)
         assert error is not None
+
+    @pytest.mark.parametrize(
+        "base_branch",
+        [
+            # Diverts the numstat to a file: stdout empty, git exits 0. The
+            # fail-open this module closes, reached through the argument.
+            "--output=/tmp/diverted",
+            "--quiet",
+            "-s",
+            "--numstat=bogus",
+        ],
+    )
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_option_shaped_base_branch_is_an_error(self, mock_run, base_branch):
+        files, ins, dels, error = _get_diff_stats("/repo", base_branch)
+        assert (files, ins, dels) == ([], 0, 0)
+        assert error is not None
+        assert "not a revision" in error
+        # Rejected before git runs, so the flag never reaches the parser.
+        mock_run.assert_not_called()
+
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_passes_end_of_options_before_the_revision(self, mock_run):
+        # Second layer behind the check above: whatever reaches git is a
+        # revision, so a value that slipped through cannot act as a flag.
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="",
+        )
+        _get_diff_stats("/repo", "main")
+        argv = mock_run.call_args[0][0]
+        assert argv[-2:] == ["--end-of-options", "main"]
+
+
+# ── real git — the fail-open, end to end ──────────────────────
+
+
+def _git(repo, *args):
+    return subprocess.run(  # noqa: S603
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=False,  # noqa: S607
+    )
+
+
+@pytest.fixture
+def over_limit_repo(tmp_path):
+    """A repo whose working tree exceeds any small scope limit vs ``main``."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    if _git(repo, "init", "-q", "-b", "main").returncode != 0:
+        pytest.skip("git unavailable")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "test")
+    (repo / "seed.txt").write_text("seed\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "seed")
+    for i in range(30):
+        (repo / f"f{i}.txt").write_text("x\n" * 40)
+    _git(repo, "add", "-A")
+    return repo
+
+
+class TestOptionShapedBaseBranchAgainstRealGit:
+    """Mocks cannot show that git honours a diverting flag; real git can.
+
+    The measurement runs against a working tree of 30 files and 1200 inserted
+    lines, so a correct measurement cannot be confused with an empty one.
+    """
+
+    def test_honest_base_branch_measures_the_diff(self, over_limit_repo):
+        files, ins, dels, error = _get_diff_stats(str(over_limit_repo), "main")
+        assert error is None
+        assert len(files) == 30
+        assert ins == 1200
+
+    def test_output_flag_does_not_divert_the_measurement(self, over_limit_repo, tmp_path):
+        sink = tmp_path / "diverted.txt"
+        files, ins, dels, error = _get_diff_stats(
+            str(over_limit_repo), f"--output={sink}"
+        )
+        # Before the fix: git wrote the numstat into *sink*, left stdout empty
+        # and exited 0, so this returned ([], 0, 0, None) — an unmeasured diff
+        # reported as a measured empty one.
+        assert error is not None
+        assert (files, ins, dels) == ([], 0, 0)
+        assert not sink.exists()
+
+    def test_guard_hard_fails_instead_of_passing(self, over_limit_repo, tmp_path):
+        # The consequence the reviewer flagged: the guard turned itself off.
+        cfg = ScopeConfig(max_files=2, max_lines=10)
+        guard = ScopeGuard()
+        honest = guard.evaluate_from_git("agent-1", cfg, str(over_limit_repo), "main")
+        assert honest.decision == "HARD_FAIL"
+
+        sink = tmp_path / "diverted.txt"
+        diverted = guard.evaluate_from_git(
+            "agent-1", cfg, str(over_limit_repo), f"--output={sink}"
+        )
+        assert diverted.decision == "HARD_FAIL"  # was PASS
+        assert diverted.error is not None
