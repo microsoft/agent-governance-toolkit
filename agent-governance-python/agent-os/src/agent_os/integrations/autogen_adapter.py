@@ -640,7 +640,7 @@ class AutoGenKernel(BaseIntegration):
                     "Policy DENY (post_execute) on initiate_chat for %s: %s",
                     agent_id, reason,
                 )
-                raise PolicyViolationError(reason)
+                raise PolicyViolationError(reason or "denied by output policy")
             return result
 
         agent.initiate_chat = governed_initiate_chat
@@ -750,7 +750,7 @@ class AutoGenKernel(BaseIntegration):
                     "Policy DENY (post_execute) on receive for %s: %s",
                     agent_id, reason,
                 )
-                raise PolicyViolationError(reason)
+                raise PolicyViolationError(reason or "denied by output policy")
             return result
 
         agent.receive = governed_receive

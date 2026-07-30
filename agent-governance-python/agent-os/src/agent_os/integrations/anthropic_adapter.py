@@ -354,7 +354,9 @@ class _GovernedMessages:
         # replacement, so that path blocks as well.
         allowed, reason = self._kernel.post_execute(self._ctx, response)
         if not allowed:
-            raise PolicyViolationError(f"Response blocked by policy: {reason}")
+            raise PolicyViolationError(
+                f"Response blocked by policy: {reason or 'denied by output policy'}"
+            )
 
         return response
 
@@ -562,7 +564,9 @@ class GovernanceMessageHook:
         # replacement, so that path blocks as well.
         allowed, reason = self._kernel.post_execute(self._ctx, response)
         if not allowed:
-            raise PolicyViolationError(f"Response blocked by policy: {reason}")
+            raise PolicyViolationError(
+                f"Response blocked by policy: {reason or 'denied by output policy'}"
+            )
 
         return response
 

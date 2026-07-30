@@ -13,7 +13,7 @@ here rather than assumed.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -458,3 +458,34 @@ def test_anthropic_allowed_output_is_returned_unchanged() -> None:
     )
 
     assert str(response) == "all good"
+
+
+def test_autogen_output_deny_without_reason_gets_public_message() -> None:
+    """A deny whose reason is None must not surface "None" to callers."""
+    kernel = AutoGenKernel(runtime=_PerPointRuntime({"output": _deny()}))
+    agent = _ChattyAgent(_SECRET)
+    kernel.govern(agent)
+
+    with patch.object(kernel, "post_execute", return_value=(False, None)):
+        with pytest.raises(PolicyViolationError) as excinfo:
+            agent.initiate_chat(_named("peer"), message="hello")
+
+    assert "None" not in str(excinfo.value)
+    assert "denied by output policy" in str(excinfo.value)
+
+
+def test_anthropic_hook_output_deny_without_reason_gets_public_message() -> None:
+    """The anthropic hook path must also normalize a None deny reason."""
+    kernel = AnthropicKernel(runtime=_PerPointRuntime({"output": _deny()}))
+    hook = kernel.as_message_hook()
+
+    with patch.object(kernel, "post_execute", return_value=(False, None)):
+        with pytest.raises(PolicyViolationError) as excinfo:
+            hook.create(
+                _anthropic_client(_SECRET),
+                model="m",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+
+    assert "None" not in str(excinfo.value)
+    assert "denied by output policy" in str(excinfo.value)
