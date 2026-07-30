@@ -171,6 +171,7 @@ TypeScript — `agent-governance-typescript/tests/mesh-client-plaintext-downgrad
 | Test | Purpose |
 |---|---|
 | `one malformed pending message does not discard the rest of the batch` | A single poisoned entry in a relay-supplied `pending_messages` batch is surfaced and skipped rather than aborting the drain and silently suppressing the remaining mail. |
+| `a null pending entry does not abort the drain or suppress messages behind it` | Non-object entries (`null`, strings, numbers) in a relay-supplied batch are rejected, reported to `onError`, and skipped. Guards the isolation above against a `null` entry, where naively reading `msg.from` inside the catch throws a second time and the report is lost. |
 
 Python relay / store — `agent-governance-python/agent-mesh/tests/test_relay.py`:
 
