@@ -641,15 +641,20 @@ class TestEvasionResistance:
         U+1D173..1D17A (musical symbol beam/phrase controls) were missing while
         the neighbouring supplementary-plane ranges U+1BCA0..1BCA3 and
         U+E0000..E0FFF were present, so the omission read as deliberate rather
-        than as a gap. Checking the property instead of a hand-picked sample
-        means the next range added to Default_Ignorable is caught here rather
-        than by whoever finds the evasion.
+        than as a gap. Asserting against the whole property rather than a
+        hand-picked sample of it means a range dropped from ``_INVISIBLE_RANGES``
+        fails here instead of being found by whoever uses it to evade the
+        keyword scan.
 
-        ``unicodedata`` does not expose Default_Ignorable_Code_Point, so the
-        expected set is spelled out from the Unicode data file (DerivedCoreProper
-        ties.txt). Ranges the module adds *beyond* the property -- the
-        interlinear annotation characters -- are intentionally not listed here;
-        this asserts coverage, not equality.
+        ``unicodedata`` does not expose Default_Ignorable_Code_Point, so this is
+        a snapshot of the property, transcribed from Unicode's
+        ``DerivedCoreProperties.txt``. It is not read from Unicode data at run
+        time, so a range Unicode *adds* to the property in a future version has
+        to be added to the snapshot by hand -- update both together.
+
+        Ranges the module covers *beyond* the property -- the interlinear
+        annotation characters -- are intentionally not listed: this asserts
+        coverage, not equality.
         """
         default_ignorable = (
             (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C),
