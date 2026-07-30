@@ -33,6 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pending_messages` batch no longer aborts the drain; the failure is surfaced
   through the error handler and the remaining queued messages are still delivered.
 
+### Changed
+
+- **Displaced connections now close with a distinct WebSocket code.** When a second
+  connection authenticates for a DID, the relay closes the displaced socket with
+  `4006` (`WS_CLOSE_SESSION_REPLACED`) instead of `1000`. `1000` was reported by
+  `MeshClient` as a client-initiated close, making an involuntary takeover
+  indistinguishable from the agent calling `disconnect()` on itself — so a
+  displaced agent could neither detect nor report it. The new code is reported as
+  a server close and raised through `onError`, while still suppressing
+  auto-reconnect so the displaced and replacing sockets do not evict each other in
+  a loop. Hosts that previously matched on close code `1000` to detect replacement
+  should match `WS_CLOSE_SESSION_REPLACED` (exported from `mesh-client`) instead.
+
 ## [1.0.0-alpha.1] - 2026-02-01
 
 ### Added

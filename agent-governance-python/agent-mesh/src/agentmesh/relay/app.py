@@ -72,6 +72,18 @@ HEARTBEAT_INTERVAL = 30  # seconds
 OFFLINE_THRESHOLD = 90  # seconds — 3 missed heartbeats
 DID_POP_REPLAY_WINDOW = timedelta(minutes=5)
 
+# Close code sent to a socket that is being displaced because another
+# connection successfully authenticated for the same DID.
+#
+# This deliberately is NOT 1000 (Normal Closure). 1000 is indistinguishable
+# from the peer calling disconnect() on itself, so a displaced agent could not
+# tell "I closed this" from "someone else took over my mailbox" — an
+# unattributable, silent eviction. A distinct code in the private-use 4xxx
+# range lets the client report the takeover to its host. Clients must not
+# auto-reconnect on this code (see MeshClient.onclose): reconnecting would
+# displace the socket that just replaced them and start an eviction ping-pong.
+WS_CLOSE_SESSION_REPLACED = 4006
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -372,19 +384,28 @@ class RelayServer:
                 # before the dict overwrite. Without this, the old socket
                 # lingers as a "ghost" until the 90s heartbeat-eviction
                 # timer fires, during which time messages can be routed to
-                # a dead connection. Code 1000 is used instead of a custom
-                # 4xxx so the client treats this as a clean close and does
-                # NOT trigger its auto-reconnect loop (which would just
-                # race the new socket the same client just opened).
+                # a dead connection.
+                #
+                # The close code is WS_CLOSE_SESSION_REPLACED rather than 1000.
+                # 1000 avoided a reconnect race, but it also made a displaced
+                # agent unable to distinguish being taken over from having
+                # closed its own socket, so a mailbox takeover was silent and
+                # could not be detected or reported. The distinct code keeps
+                # the no-reconnect property (the client suppresses
+                # auto-reconnect for it) while making the eviction
+                # attributable, so a host can alert on it.
                 existing = self._connections.get(agent_did)
                 if existing is not None:
-                    logger.info(
-                        "Closing ghost connection for %s (session replaced)",
+                    logger.warning(
+                        "Closing ghost connection for %s (session replaced) — "
+                        "if this agent did not initiate a reconnect, another "
+                        "party authenticated for this DID",
                         agent_did,
                     )
                     try:
                         await existing.ws.close(
-                            code=1000, reason="session_replaced"
+                            code=WS_CLOSE_SESSION_REPLACED,
+                            reason="session_replaced",
                         )
                     except Exception:  # noqa: BLE001 - best-effort cleanup
                         pass

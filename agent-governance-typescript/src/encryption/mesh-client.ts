@@ -129,6 +129,21 @@ export interface MeshSession {
 type KnockResolver = { resolve: (accepted: boolean) => void; timer: ReturnType<typeof setTimeout> };
 
 /**
+ * WebSocket close code sent by the relay when another connection
+ * authenticates for the same DID and displaces this socket.
+ *
+ * Deliberately not 1000 (Normal Closure): 1000 is indistinguishable from the
+ * client closing its own socket, which made a mailbox takeover silent and
+ * unattributable. Clients receive this as a server-initiated close but must
+ * NOT auto-reconnect on it — reconnecting would displace the replacing socket
+ * and the two would evict each other in a loop.
+ *
+ * Must stay in sync with `WS_CLOSE_SESSION_REPLACED` in the relay
+ * (`agentmesh/relay/app.py`).
+ */
+export const WS_CLOSE_SESSION_REPLACED = 4006;
+
+/**
  * High-level mesh client for agent-to-agent communication.
  *
  * Manages WebSocket connection to the relay, session establishment
@@ -341,15 +356,36 @@ export class MeshClient {
           // Distinguish client-initiated disconnect (1000 Normal Closure) from server / network drops.
           const code = (event as CloseEvent | undefined)?.code;
           const isClientInitiated = code === 1000 || this.clientInitiatedClose;
+          // The relay sends WS_CLOSE_SESSION_REPLACED when another connection
+          // authenticated for this same DID and displaced this socket. It is
+          // genuinely server-initiated (so it is NOT reported as "client"),
+          // but it must not trigger auto-reconnect: reconnecting would displace
+          // the socket that just replaced us and the two would evict each other
+          // in a loop. Surface it through the error channel instead so the host
+          // can act — if this agent did not initiate a reconnect, then another
+          // party successfully authenticated as this DID.
+          const isSessionReplaced = code === WS_CLOSE_SESSION_REPLACED;
           const reason: "client" | "server" | "ws-error" = isClientInitiated ? "client" : "server";
           for (const h of this.disconnectHandlers) {
             try { h(reason, code); } catch { /* swallow handler errors */ }
+          }
+          if (isSessionReplaced) {
+            for (const h of this.errorHandlers) {
+              try {
+                h(
+                  "ws",
+                  this.activeDid,
+                  "session replaced: another connection authenticated for this DID; " +
+                    "not reconnecting to avoid an eviction loop",
+                );
+              } catch { /* swallow handler errors */ }
+            }
           }
           // Auto-reconnect on non-client closures (network drops, relay restart).
           // Mirrors vendored agentmesh-sdk patch #9: never give up by default,
           // exponential backoff capped at 60s. Caller can opt out via
           // autoReconnect: false in MeshClientOptions.
-          if (!isClientInitiated && this.autoReconnect) {
+          if (!isClientInitiated && !isSessionReplaced && this.autoReconnect) {
             this.scheduleReconnect();
           }
         }

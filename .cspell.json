@@ -94,6 +94,7 @@
     "Microtask",
     "headerless",
     "desync",
+    "starlette",
     "realpeerrealpeerrealpeerreal"
   ],
   "ignorePaths": [

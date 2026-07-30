@@ -10,8 +10,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 from nacl.signing import SigningKey
+from starlette.websockets import WebSocketDisconnect
 
-from agentmesh.relay.app import RelayServer
+from agentmesh.relay.app import RelayServer, WS_CLOSE_SESSION_REPLACED
 from agentmesh.relay.store import InMemoryInboxStore, StoredMessage
 
 
@@ -365,6 +366,103 @@ class TestRelayServer:
         # Nor is it queued under the impersonated identity.
         assert inbox.fetch_pending(victim_did) == []
         assert server.stats["messages_stored"] == 1
+
+    def test_ack_replayed_across_connections_is_scoped_to_recipient(self):
+        """Security hardening: ack ownership is evaluated per-frame against the
+        DID-PoP-verified identity of the connection the ack arrived on — not
+        against "some connected peer".
+
+        ``test_ack_from_non_recipient_is_ignored`` covers the sequential case
+        (Mallory connects, acks, disconnects; Bob connects later). This covers
+        the concurrent case: both peers are connected at the same time and the
+        SAME message id is acknowledged from both sockets. If ownership were ever
+        resolved from shared/ambient state rather than the receiving
+        connection's identity, the interleaving below would delete Bob's
+        message on Mallory's ack.
+        """
+        server = RelayServer()
+        inbox = server._inbox
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")          # the real recipient
+        mallory_did = _did_for("mallory")  # concurrently connected attacker
+
+        inbox.store(StoredMessage(
+            message_id="concurrent-1",
+            sender_did=alice_did,
+            recipient_did=bob_did,
+            payload=json.dumps({
+                "v": 1, "type": "message",
+                "from": alice_did, "to": bob_did,
+                "id": "concurrent-1", "ciphertext": "for-bob-only",
+            }),
+        ))
+
+        client = TestClient(server.app)
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+            # Bob is delivered his queued message but does NOT ack it yet.
+            msg = ws_bob.receive_json()
+            assert msg["id"] == "concurrent-1"
+
+            with client.websocket_connect("/ws") as ws_mallory:
+                ws_mallory.send_json(_connect_frame("mallory"))
+                # Mallory replays the id she just learned of, from her own
+                # authenticated socket, while Bob's socket is still open.
+                ws_mallory.send_json(
+                    {"v": 1, "type": "ack", "id": "concurrent-1"}
+                )
+                # Round-trip on Mallory's socket to force the ack to be
+                # processed before assertions.
+                ws_mallory.send_json(
+                    {"v": 1, "type": "heartbeat", "from": mallory_did}
+                )
+
+            # The replay across connections is rejected.
+            assert inbox.message_count == 1
+            assert [m.message_id for m in inbox.fetch_pending(bob_did)] == [
+                "concurrent-1"
+            ]
+            assert inbox.fetch_pending(mallory_did) == []
+
+            # Bob's own ack, on Bob's connection, still works.
+            ws_bob.send_json({"v": 1, "type": "ack", "id": "concurrent-1"})
+
+        assert inbox.message_count == 0
+
+    def test_replaced_session_uses_distinct_close_code(self):
+        """Observability: when a second connection authenticates for a DID, the
+        displaced socket must be closed with a code that is distinguishable from
+        a normal client-initiated close.
+
+        Previously this was 1000 (Normal Closure), which the client maps to
+        ``reason="client"`` — identical to the agent calling ``disconnect()``
+        itself. A displaced agent therefore could not tell "I closed this" from
+        "another party authenticated as me and took over my mailbox", so a
+        takeover was silent and could not be reported. WS_CLOSE_SESSION_REPLACED
+        keeps
+        the no-auto-reconnect property (the client suppresses reconnect for this
+        specific code) while making the eviction attributable.
+        """
+        server = RelayServer()
+        client = TestClient(server.app)
+        carol_did = _did_for("carol")
+
+        with client.websocket_connect("/ws") as ws_first:
+            ws_first.send_json(_connect_frame("carol"))
+            # Round-trip so the first connection is fully registered.
+            ws_first.send_json({"v": 1, "type": "heartbeat", "from": carol_did})
+
+            with client.websocket_connect("/ws") as ws_second:
+                ws_second.send_json(_connect_frame("carol"))
+                ws_second.send_json(
+                    {"v": 1, "type": "heartbeat", "from": carol_did}
+                )
+
+                with pytest.raises(WebSocketDisconnect) as excinfo:
+                    ws_first.receive_json()
+
+        assert excinfo.value.code == WS_CLOSE_SESSION_REPLACED
+        assert excinfo.value.code != 1000
 
     def test_missing_from_is_stamped_with_authenticated_identity(self):
         """Hygiene: a frame that omits ``from`` is stamped with the connect-time,

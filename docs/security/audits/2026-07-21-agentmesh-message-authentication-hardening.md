@@ -99,6 +99,29 @@ connection's verified `sender_did`. An `ack` referencing another agent's
 message id — an ack spray across guessed ids — no longer removes messages
 queued for a different agent.
 
+### 6. Relay: a displaced connection is closed with an attributable code
+
+When a second connection authenticates for a DID, the relay closes the previous
+socket so messages are not routed to a ghost connection. That close used code
+`1000` (Normal Closure), which `MeshClient` maps to `reason: "client"` — exactly
+what it reports when the agent calls `disconnect()` on itself.
+
+The consequence is a detection gap rather than an access-control gap: an agent
+that was displaced *involuntarily* could not distinguish being taken over from
+having closed its own socket, and it did not reconnect. Any successful
+impersonation of the connect handshake therefore produced a silent eviction of
+the legitimate owner that could not be detected or reported.
+
+The relay now closes displaced sockets with `WS_CLOSE_SESSION_REPLACED` (`4006`)
+and logs at warning level. `MeshClient` reports it as a server-initiated close
+and raises it through `onError`, so a host can alert on it, while still
+suppressing auto-reconnect for this specific code — reconnecting would displace
+the socket that just replaced it and the two would evict each other in a loop.
+
+This does not by itself prevent a takeover; it makes one observable. The
+underlying connect-frame proof-of-possession replay window is tracked separately
+(see *Known gaps*).
+
 ## Threat model impact
 
 These changes strengthen sender authentication and message-deletion access
@@ -112,6 +135,7 @@ decisions; they do not add new inputs, network exposure, or trust decisions.
 | Session downgrade | **Strengthened.** Once a peer has been end-to-end verified it is never moved to the plaintext path again, even if it is also allow-listed for plaintext and even if its session is subsequently torn down (ratchet desync, `knock_reject`, or an explicit `closeSession()`). The guarantee latches on `e2eVerifiedSet` rather than on the presence of a live channel, so it does not depend on enumerating every session-teardown path. |
 | Headerless encrypted frame | **Strengthened.** An encrypted frame with no ratchet header fails closed through the error handler instead of throwing out of the receive loop. |
 | Message-deletion access control (acks) | **Strengthened.** Only the message's own recipient — identified by the connection's verified DID — can acknowledge and delete it, so one agent can no longer delete another agent's queued messages. |
+| Takeover detectability | **Strengthened.** A displaced connection is closed with a distinct code (`WS_CLOSE_SESSION_REPLACED`) instead of `1000`, so an involuntary eviction is reported to the host as a server close and raised through `onError` rather than being indistinguishable from a self-initiated disconnect. Detection only — see *Known gaps* for the underlying replay window. |
 | New attack surface | **None.** No new inputs, endpoints, or trust decisions; each change narrows an existing decision to verified state. |
 | Backward compatibility | **Narrow.** Senders that relied on the `plaintext` wire flag to a peer *not* on the receiver's allowlist are now dropped; this was the vulnerable behavior. Operator-allowlisted plaintext peers with no encrypted session are unchanged. Compliant senders already set `from` to their own DID, so the `from` binding is a no-op for them. |
 
@@ -159,3 +183,47 @@ Python relay / store — `agent-governance-python/agent-mesh/tests/test_relay.py
 | `test_missing_from_is_stamped_with_authenticated_identity` | An omitted `from` is stamped with the sender's verified DID on delivery. |
 | `test_knock_accept_and_reject_from_binding_is_enforced` | `knock_accept` / `knock_reject` inherit the same `from` binding, so a KNOCK verdict cannot be forged for a DID the sender does not own. |
 | `test_spoofed_from_to_offline_recipient_is_not_stored` | The `from` binding also covers the offline path — a spoofed frame is not persisted into an offline recipient's inbox for later delivery. |
+| `test_ack_replayed_across_connections_is_scoped_to_recipient` | Ack ownership is resolved from the identity of the connection the frame arrived on, proven with the recipient and the attacker connected *concurrently* and the same message id acknowledged from both sockets. |
+| `test_replaced_session_uses_distinct_close_code` | A displaced socket is closed with `WS_CLOSE_SESSION_REPLACED`, not `1000`, so an involuntary takeover is distinguishable from a self-initiated disconnect. |
+
+`agent-governance-typescript/tests/mesh-client-auto-reconnect.test.ts`:
+
+| Test | Purpose |
+|---|---|
+| `session-replaced close (4006) is server-attributed, surfaced, and does NOT reconnect` | The client reports the displacement as a server close, raises it through `onError` so a host can alert on a takeover, and suppresses auto-reconnect so the displaced and replacing sockets do not evict each other in a loop. |
+
+## Known gaps
+
+Deliberately out of scope for this change, recorded so they are not lost. Both
+pre-date it and neither is introduced or worsened by it.
+
+### Connect-frame proof-of-possession is replayable within its window
+
+`_verify_connect_pop` (`agentmesh/relay/app.py`) signs only an ISO timestamp and
+accepts it inside a ±5 minute window. The signature is not bound to a
+server-issued nonce, to the relay URL, or to the TLS channel, so a captured
+connect frame can be replayed inside that window to authenticate as the
+captured DID. The consequences are real and are amplified by the ack-ownership
+control added here: a replayed connect frame owns the mailbox, so it passes the
+recipient check and can acknowledge — and therefore delete — the victim's queued
+messages, and it displaces the victim's live socket.
+
+The fix is a challenge-response nonce, or signing `relay_url || nonce` rather
+than a bare timestamp. That changes the connect handshake on both sides and is
+tracked separately.
+
+Mitigation in the meantime: the displacement is now observable
+(`WS_CLOSE_SESSION_REPLACED`, section 6), and the transport requires TLS in
+production, which prevents passive capture of connect frames on the wire.
+
+### Offline-store deduplication is keyed globally by message id
+
+`InMemoryInboxStore.store` (`agentmesh/relay/store.py`) treats `message_id` as
+globally unique rather than unique per recipient, so a message whose id already
+exists is dropped regardless of who it is addressed to. An attacker who could
+*predict* a future message id could pre-store it and suppress the real message.
+
+Not currently exploitable: ids are generated with `crypto.randomUUID()`
+(`mesh-client.ts`), a 122-bit random key space, so they cannot be predicted or
+enumerated. A correct fix re-keys `_messages` by `(recipient_did, message_id)`,
+which also changes `acknowledge` and `fetch_pending`, and is tracked separately.
