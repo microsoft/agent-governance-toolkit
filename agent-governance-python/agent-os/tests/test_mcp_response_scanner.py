@@ -143,12 +143,21 @@ def test_sanitize_response_output_contains_no_instruction_tag(payload: str):
     inner tag as "stripped" while handing back a live outer one, so a caller
     that trusts the returned content -- which is the entire purpose of
     `sanitize_response` -- forwarded a working injection to the model.
+
+    The payload text is asserted to survive because the fail-closed path returns
+    ``("", [error threat])`` and ``scan_response("")`` is safe: without it this
+    would also pass on a sanitizer that refused every payload it was given,
+    which is the opposite of what is being tested. Every payload here nests
+    tags around the same trailing marker, so a full strip leaves exactly that
+    marker and nothing else.
     """
     scanner = MCPResponseScanner()
 
     sanitized, removed = scanner.sanitize_response(payload, "tool")
 
+    assert sanitized == "PAYLOAD"
     assert removed
+    assert all(threat.category == "instruction_injection" for threat in removed)
     assert scanner.scan_response(sanitized, "tool").is_safe is True
 
 
