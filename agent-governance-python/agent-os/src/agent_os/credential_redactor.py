@@ -21,13 +21,54 @@ REDACTED_PLACEHOLDER = "[REDACTED]"
 # this group, redaction replaces only that span.
 _SECRET_GROUP = "secret"
 
-# JSON/YAML literals and bare numbers are not secrets. Without this guard the
-# keyword patterns match benign settings like ``{"secret": false}`` -- a common
-# visibility flag -- and the value class then consumed the following comma.
-_NOT_A_LITERAL = r"(?!(?:true|false|null|none|[+-]?[\d.]+)\s*(?:[,}\]\s]|$))"
+# Characters that terminate an unquoted value, as a character-class body.
+#
+# A JSON or YAML value ends at a structural character. A connection-string value
+# is delimited only by ``;``, so a comma or a brace inside one is an ordinary
+# password character and must not end the match.
+_JSON_VALUE_END = r"\s,;}\]"
+_CONNECTION_VALUE_END = r"\s;"
 
 
-def _keyword_value(keywords: str, floor: int, value_class: str | None = None) -> str:
+def _not_a_literal(value_end: str, *, numeric: bool) -> str:
+    """Build the guard that keeps a literal from being read as a secret.
+
+    ``"secret"`` and ``"token"`` name plenty of non-secret fields, so a keyword
+    pattern would otherwise match benign settings like ``{"secret": false}`` --
+    a common visibility flag -- and the value class would then consume the
+    following comma.
+
+    Args:
+        value_end: Character-class body for the delimiters that end a value.
+            This must be the same set the value class stops at: the guard only
+            rejects a literal that is the *whole* value, and it can only tell
+            where the value ends by the same rule the value itself uses. When
+            the two drifted apart, a value ending at a delimiter the guard did
+            not know about was matched while the same value at end-of-string was
+            not (``Password=12345678;`` redacted, ``Password=12345678`` leaked).
+        numeric: Whether a bare number counts as a literal. True for the
+            identifier-ish keywords (``token``, ``secret``, ``api_key``), whose
+            value is as likely to be an ID, a count or an expiry as a secret.
+            False for ``password`` and the key-material keywords, where a
+            digit-only value is a digit-only secret.
+
+    Returns:
+        A negative-lookahead pattern string, to be placed after the separator.
+    """
+    literals = r"true|false|null|none"
+    if numeric:
+        literals += r"|[+-]?[\d.]+"
+    return rf"(?!(?:{literals})\s*(?:[{value_end}]|$))"
+
+
+def _keyword_value(
+    keywords: str,
+    floor: int,
+    value_class: str | None = None,
+    *,
+    value_end: str = _JSON_VALUE_END,
+    numeric_is_literal: bool = True,
+) -> str:
     """Build a ``keyword <sep> value`` pattern whose value is a capture group.
 
     Args:
@@ -38,22 +79,38 @@ def _keyword_value(keywords: str, floor: int, value_class: str | None = None) ->
             one group is enough. When omitted the value is matched in three
             alternatives instead, so a *quoted* secret may contain the
             delimiters an unquoted one has to stop at: a quoted value runs to
-            its own closing quote, while a bare one stops at whitespace, ``;``
-            or a JSON structural character.
+            its own closing quote, while a bare one stops at ``value_end``.
+        value_end: Character-class body for the delimiters an unquoted value
+            stops at. Also drives the literal guard, so the two cannot drift.
+        numeric_is_literal: Passed to :func:`_not_a_literal`.
 
     Returns:
         A pattern string with the secret captured in a ``secret*`` group.
     """
     # An optional quote before the separator: in ``"api_key": "..."`` the
     # closing quote of the *key* falls between the keyword and the separator.
-    head = rf"(?i)(?<![A-Za-z0-9]){keywords}[\"']?\s*[:=]\s*{_NOT_A_LITERAL}"
+    guard = _not_a_literal(value_end, numeric=numeric_is_literal)
+    head = rf"(?i)(?<![A-Za-z0-9]){keywords}[\"']?\s*[:=]\s*{guard}"
     if value_class is not None:
         return rf"{head}[\"']?(?P<{_SECRET_GROUP}_bare>{value_class}{{{floor},}})"
+    # The unquoted branch excludes a quote only as its *first* character, which
+    # is what actually distinguishes it from the quoted branches. Excluding
+    # quotes throughout meant an apostrophe inside a connection-string password
+    # ended the value: ``Password=abcd'efgh`` leaked the ``'efgh`` tail, and
+    # ``Password=ab'cdefgh`` fell below the length floor and leaked entirely.
+    #
+    # ``(?<![,}\]])`` keeps the match from *ending* on a structural character
+    # while still allowing one inside the value. Where ``value_end`` already
+    # excludes them it is a no-op; where it does not (a connection string, whose
+    # only field separator is ``;``), it stops an unquoted value in a YAML flow
+    # mapping from consuming the delimiter that closes it and turning a redaction
+    # into a parse failure. A password whose last character really is ``,`` loses
+    # that one character from the redaction, which is not a meaningful leak.
     return (
         rf"{head}"
         rf"(?:\"(?P<{_SECRET_GROUP}_dq>[^\"]{{{floor},}})\""
         rf"|'(?P<{_SECRET_GROUP}_sq>[^']{{{floor},}})'"
-        rf"|(?P<{_SECRET_GROUP}_bare>[^\s\"';,}}\]]{{{floor},}}))"
+        rf"|(?![\"'])(?P<{_SECRET_GROUP}_bare>[^{value_end}]{{{floor},}})(?<![,}}\]]))"
     )
 
 
@@ -181,7 +238,13 @@ class CredentialRedactor:
             name="Connection string secret",
             pattern=re.compile(
                 _keyword_value(
-                    r"(?:password|passphrase|pwd|accountkey|sharedaccesssignature)", 4
+                    r"(?:password|passphrase|pwd|accountkey|sharedaccesssignature)",
+                    4,
+                    # A connection string separates fields with ``;`` only, and a
+                    # password is free to contain a comma, a brace or a quote.
+                    value_end=_CONNECTION_VALUE_END,
+                    # "password = 12345678" is a bad password, not a non-secret.
+                    numeric_is_literal=False,
                 )
             ),
         ),

@@ -426,11 +426,16 @@ def test_redaction_of_a_json_secret_leaves_the_other_fields_intact():
 
 
 def test_detects_azure_account_key_in_the_json_spelling():
-    text = '{"AccountKey": "abc123def456ghi789jkl012mno345pqr678stu901vw=="}'
+    key = "abc123def456ghi789jkl012mno345pqr678stu901vw=="
+    text = '{"AccountKey": "' + key + '"}'
 
     redacted = CredentialRedactor.redact(text)
 
-    assert "abc123def456ghi789jkl012mno345pqr678stu901vw" not in redacted
+    # Assert the full value, padding included. Checking the value minus its
+    # trailing "==" passes even when the match stops short of the padding, which
+    # is exactly the partial-redaction bug a boundary change can reintroduce.
+    assert key not in redacted
+    assert redacted == '{"AccountKey": "' + REDACTED_PLACEHOLDER + '"}'
     assert "Azure key" in CredentialRedactor.detect_credential_types(text)
 
 
@@ -494,6 +499,47 @@ def test_keyword_patterns_still_avoid_false_positives(text: str):
         (
             '{"api_key": "with,comma;inside!!"}',
             '{"api_key": "' + REDACTED_PLACEHOLDER + '"}',
+        ),
+        # A connection-string password is delimited by ``;``, so an apostrophe
+        # inside it is an ordinary password character. Excluding quotes from the
+        # bare branch made the whole assignment unmatchable when the apostrophe
+        # came early enough to leave fewer than 4 characters before it, and
+        # redacted only the head when it came later -- the tail leaked.
+        (
+            "Password=ab'cdefgh;Server=db",
+            f"Password={REDACTED_PLACEHOLDER};Server=db",
+        ),
+        (
+            "Password=abcd'efgh",
+            f"Password={REDACTED_PLACEHOLDER}",
+        ),
+        (
+            "Password=ab'cdefgh",
+            f"Password={REDACTED_PLACEHOLDER}",
+        ),
+        # A digit-only password is still a password. The literal guard rejects
+        # a bare number, but it has to reject it as a *value*, i.e. only where
+        # the number is the whole value -- and its terminator set has to admit
+        # every delimiter the value class stops at, not just some of them.
+        (
+            "Password=12345678",
+            f"Password={REDACTED_PLACEHOLDER}",
+        ),
+        (
+            "Password=12345678;Server=db",
+            f"Password={REDACTED_PLACEHOLDER};Server=db",
+        ),
+        # Letting a connection-string password contain ``,`` and ``}`` must not
+        # let an *unquoted* one consume the delimiter that closes the structure
+        # it sits in -- that turns a redaction back into a parse failure, which
+        # is the thing the secret-only span exists to prevent.
+        (
+            '{"password": hunter2xyz, "keep": 1}',
+            '{"password": ' + REDACTED_PLACEHOLDER + ', "keep": 1}',
+        ),
+        (
+            "{password: hunter2xyz}",
+            "{password: " + REDACTED_PLACEHOLDER + "}",
         ),
     ],
 )
