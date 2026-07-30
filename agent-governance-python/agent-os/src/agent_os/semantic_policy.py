@@ -114,37 +114,44 @@ class PolicyDenied(Exception):
 _SIGNALS_TR: dict[IntentCategory, list[tuple]] = {
     IntentCategory.DESTRUCTIVE_DATA: [
         (
-            r"\b(tüm|bütün)\s+(kayıtları|verileri|tabloları)\s+(sil|temizle|yok\s+et)\b",
+            r"\b(tüm|tum|bütün|butun)\s+"
+            r"(kayıtları|kayitlari|verileri|tabloları|tablolari)\s+"
+            r"(sil|temizle|yok\s+et)\b",
             0.8,
             "Turkish bulk data deletion",
         ),
     ],
     IntentCategory.DATA_EXFILTRATION: [
         (
-            r"\b(tüm|bütün)\s+(verileri|kayıtları)\s+(harici|dış)\s+"
-            r"(?:bir\s+)?(?:sunucuya|depoya)\s+(aktar|gönder|yükle)\b",
+            r"\b(tüm|tum|bütün|butun)\s+"
+            r"(verileri|kayıtları|kayitlari)\s+"
+            r"(harici|dış|dis)\s+"
+            r"(?:bir\s+)?(?:sunucuya|depoya)\s+"
+            r"(aktar|gönder|gonder|yükle|yukle)\b",
             0.8,
             "Turkish external data transfer",
         ),
     ],
     IntentCategory.PRIVILEGE_ESCALATION: [
         (
-            r"\b(yönetici|süper\s*kullanıcı|root)\s+"
-            r"(yetkisi|yetkilerini|erişimi)\s+(ver|tanı)\b",
+            r"\b(yönetici|yonetici|süper\s*kullanıcı|super\s*kullanici|root)\s+"
+            r"(yetkisi|yetkilerini|erisimi|erişimi)\s+"
+            r"(ver|tanı|tani)\b",
             0.8,
             "Turkish privileged access grant",
         ),
     ],
     IntentCategory.SYSTEM_MODIFICATION: [
         (
-            r"\b(sistemi|sunucuyu)\s+(kapat|yeniden\s+başlat|durdur)\b",
+            r"\b(sistemi|sunucuyu)\s+"
+            r"(kapat|yeniden\s+başlat|yeniden\s+baslat|durdur)\b",
             0.8,
             "Turkish system power or service action",
         ),
     ],
     IntentCategory.CODE_EXECUTION: [
         (
-            r"\b(kodu|komutu)\s+(çalıştır|yürüt)\b",
+            r"\b(kodu|komutu)\s+(çalıştır|calistir|yürüt|yurut)\b",
             0.8,
             "Turkish code or command execution",
         ),
