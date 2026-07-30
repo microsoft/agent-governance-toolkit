@@ -354,9 +354,10 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
         accessor: Rego expression for the field value, produced by
             ``_rego_field_accessor``.
         value: The comparison value from the rule condition.
-        action: The rule action (``"deny"`` or ``"allow"``). Governs
-            whether the ``_v != null`` guard is emitted for ``ne`` and
-            ``not_in``; all other operators are unaffected.
+        action: The rule action string, passed through from the rule as-is.
+            Only ``"deny"`` drops the ``_v != null`` guard for ``ne`` and
+            ``not_in``; every other action value (``"allow"``, ``"warn"``,
+            etc.) keeps the guard. All other operators are unaffected.
 
     Returns:
         Indented Rego body lines for a ``_match_i`` rule, or ``None``

@@ -66,14 +66,20 @@ _VALUE_TEST_OPERATORS = {
 }
 
 
-def _accepts_value(operator: str, expected: Any, value: Any) -> bool:
+def _accepts_value(
+    operator: str, expected: Any, value: Any, *, deny_polarity: bool = False
+) -> bool:
+    # deny_polarity mirrors the compiler: deny ne/not_in drop the _v != null
+    # guard and fire on an absent field (null sentinel), while allow ne/not_in
+    # keep the guard and never fire on null. The flag must be True exactly when
+    # the operator belongs to the parent deny side of the overlap check.
     try:
         if operator == "eq":
             return value == expected
         if operator == "ne":
-            # Mirrors the deny-polarity compiler fix: deny ne fires on None (no null
-            # guard), so None is a value that ne accepts in the overlap check.
-            return value != expected
+            if deny_polarity:
+                return value != expected
+            return value is not None and value != expected
         if operator == "gt":
             return value is not None and value > expected
         if operator == "gte":
@@ -85,9 +91,9 @@ def _accepts_value(operator: str, expected: Any, value: Any) -> bool:
         if operator == "in" and isinstance(expected, list):
             return value is not None and value in expected
         if operator == "not_in" and isinstance(expected, list):
-            # Same rationale as ne: deny not_in fires on None (null guard dropped),
-            # so None is accepted and must not be considered disjoint from an allow eq null.
-            return value not in expected
+            if deny_polarity:
+                return value not in expected
+            return value is not None and value not in expected
         if operator == "contains":
             return value is not None and expected in value
         if operator == "startswith":
@@ -171,6 +177,9 @@ def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> 
     if left_operator in {"matches", "regex"} or right_operator in {"matches", "regex"}:
         return False
 
+    # Left is always the parent deny condition and right the child allow
+    # condition (call order is preserved from _conditions_overlap through
+    # the compound recursion), so deny_polarity applies to left_operator only.
     if left_operator == "eq":
         if right_operator not in _VALUE_TEST_OPERATORS:
             return False
@@ -178,7 +187,9 @@ def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> 
     if right_operator == "eq":
         if left_operator not in _VALUE_TEST_OPERATORS:
             return False
-        return not _accepts_value(left_operator, left_value, right_value)
+        return not _accepts_value(
+            left_operator, left_value, right_value, deny_polarity=True
+        )
 
     if left_operator == "in" and isinstance(left_value, list):
         if not left_value:
@@ -194,7 +205,8 @@ def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> 
         if left_operator not in _VALUE_TEST_OPERATORS:
             return False
         return not any(
-            _accepts_value(left_operator, left_value, value) for value in right_value
+            _accepts_value(left_operator, left_value, value, deny_polarity=True)
+            for value in right_value
         )
 
     if left_operator == "not_in" and isinstance(left_value, list):

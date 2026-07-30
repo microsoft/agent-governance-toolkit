@@ -440,6 +440,68 @@ def test_merge_deny_not_in_child_allow_eq_null_dropped() -> None:
     )
 
 
+def test_merge_deny_eq_null_child_allow_ne_preserved() -> None:
+    """deny eq null and allow ne value are disjoint: allow ne keeps its null guard."""
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "region", "operator": "eq", "value": None},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "region", "operator": "ne", "value": "US"},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["child_allow", "org_deny"], (
+        "allow ne must be preserved: it keeps the null guard so it never fires "
+        "when the deny eq null fires"
+    )
+
+
+def test_merge_deny_eq_null_child_allow_not_in_preserved() -> None:
+    """deny eq null and allow not_in are disjoint: allow not_in keeps its null guard."""
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "region", "operator": "eq", "value": None},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "region", "operator": "not_in", "value": ["CN", "RU"]},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["child_allow", "org_deny"], (
+        "allow not_in must be preserved: it keeps the null guard so it never "
+        "fires when the deny eq null fires"
+    )
+
+
 def test_merge_contains_and_matches_overlap_drop_child_allow() -> None:
     parent = {
         "rules": [
@@ -1148,9 +1210,9 @@ def test_not_in_allow_keeps_null_guard() -> None:
 
 def test_positive_operators_unchanged_by_action() -> None:
     acc = _rego_field_accessor("amount")
-    for op in ("gt", "lt", "gte", "lte", "in"):
-        deny_clause = _rego_op_clause(op, acc, 100, action="deny")
-        allow_clause = _rego_op_clause(op, acc, 100, action="allow")
+    for op, value in (("gt", 100), ("lt", 100), ("gte", 100), ("lte", 100), ("in", [100, 200])):
+        deny_clause = _rego_op_clause(op, acc, value, action="deny")
+        allow_clause = _rego_op_clause(op, acc, value, action="allow")
         assert deny_clause == allow_clause, f"operator {op!r} should be unaffected by action"
         assert "_v != null" in deny_clause
 

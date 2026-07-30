@@ -146,7 +146,7 @@ class TestDenyNotInFailClosed:
 # guard is kept when action == "allow".
 
 def _allow_ne_then_deny_rego() -> str:
-    """allow ne fires only when field is present and matching; deny catches rest."""
+    """allow ne fires only when field is present and not equal; deny catches rest."""
     return _render_rego([
         {
             "name": "region_allow_non_us",
@@ -185,14 +185,24 @@ def _allow_not_in_then_deny_rego() -> str:
 
 
 class TestAllowPolarityGuardRetained:
-    def test_allow_ne_absent_field_does_not_fire(self, tmp_path: Path) -> None:
-        """allow ne must NOT fire when field is absent (null guard must stay)."""
+    def test_allow_ne_null_field_does_not_fire(self, tmp_path: Path) -> None:
+        """allow ne must NOT fire when field is explicitly null (guard must stay)."""
         verdict = _eval_verdict(
             tmp_path, _allow_ne_then_deny_rego(),
             {"tool_name": "transfer", "region": None},
         )
         assert verdict == "deny", (
             "allow ne fired on null field and preempted the deny — null guard missing"
+        )
+
+    def test_allow_ne_absent_field_does_not_fire(self, tmp_path: Path) -> None:
+        """allow ne must NOT fire when the field key is omitted entirely."""
+        verdict = _eval_verdict(
+            tmp_path, _allow_ne_then_deny_rego(),
+            {"tool_name": "transfer"},
+        )
+        assert verdict == "deny", (
+            "allow ne fired on absent field and preempted the deny — null guard missing"
         )
 
     def test_allow_ne_fires_on_non_matching_present_field(self, tmp_path: Path) -> None:
@@ -203,14 +213,24 @@ class TestAllowPolarityGuardRetained:
         )
         assert verdict == "allow"
 
-    def test_allow_not_in_absent_field_does_not_fire(self, tmp_path: Path) -> None:
-        """allow not_in must NOT fire when field is absent (null guard must stay)."""
+    def test_allow_not_in_null_field_does_not_fire(self, tmp_path: Path) -> None:
+        """allow not_in must NOT fire when field is explicitly null (guard must stay)."""
         verdict = _eval_verdict(
             tmp_path, _allow_not_in_then_deny_rego(),
             {"tool_name": "transfer", "region": None},
         )
         assert verdict == "deny", (
             "allow not_in fired on null field and preempted the deny — null guard missing"
+        )
+
+    def test_allow_not_in_absent_field_does_not_fire(self, tmp_path: Path) -> None:
+        """allow not_in must NOT fire when the field key is omitted entirely."""
+        verdict = _eval_verdict(
+            tmp_path, _allow_not_in_then_deny_rego(),
+            {"tool_name": "transfer"},
+        )
+        assert verdict == "deny", (
+            "allow not_in fired on absent field and preempted the deny — null guard missing"
         )
 
     def test_allow_not_in_fires_on_non_restricted_region(self, tmp_path: Path) -> None:
