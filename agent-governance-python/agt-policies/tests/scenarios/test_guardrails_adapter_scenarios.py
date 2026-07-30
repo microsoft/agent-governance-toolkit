@@ -3,7 +3,7 @@
 """Guardrails AI adapter end-to-end scenarios on the AGT 5.0 ACS runtime.
 
 These scenarios exercise the native :class:`GuardrailsKernel` surface routed
-through :class:`agt.policies.runtime.AgtRuntime` via the
+through :class:`agent_control_specification.AgentControl` via the
 :class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH`` or on ``guardrails-ai`` being
@@ -29,8 +29,8 @@ from typing import Any
 import pytest
 pytest.importorskip('agent_control_specification')
 pytest.importorskip('agent_os')
-from agt.policies import PolicyEvaluation
-from agt.policies.runtime import AgtRuntime, ApprovalDecision
+from agent_control_specification import InterventionPointResult
+from agent_control_specification import AgentControl, ApprovalResolution
 _MANIFEST = 'agent_control_specification_version: 0.3.0-alpha-agt\nmetadata:\n  name: guardrails_adapter_scenarios\nextends: []\npolicies:\n  scenario_policy:\n    type: custom\n    adapter: guardrails_adapter_scenarios_adapter\nintervention_points:\n  input:\n    policy_target: $.input.body\n    policy_target_kind: user_input\n    policy:\n      id: scenario_policy\n  output:\n    policy_target: $.response.content\n    policy_target_kind: assistant_output\n    policy:\n      id: scenario_policy\n'
 
 class _ScriptedPolicy:
@@ -51,12 +51,12 @@ def _write_manifest(tmp_path: Path) -> Path:
     path.write_text(_MANIFEST, encoding='utf-8')
     return path
 
-def _build_runtime(tmp_path: Path, verdicts: list[dict[str, Any]], *, approval_resolver=None) -> tuple[AgtRuntime, _ScriptedPolicy]:
+def _build_runtime(tmp_path: Path, verdicts: list[dict[str, Any]], *, approval_resolver=None) -> tuple[AgentControl, _ScriptedPolicy]:
     policy = _ScriptedPolicy(verdicts)
-    runtime = AgtRuntime(_write_manifest(tmp_path), policy_dispatcher=policy, approval_resolver=approval_resolver)
+    runtime = AgentControl.from_path(str(_write_manifest(tmp_path)), policy_dispatcher=policy, approval_resolver=approval_resolver)
     return (runtime, policy)
 
-def _kernel(runtime: AgtRuntime):
+def _kernel(runtime: AgentControl):
     from agent_os.integrations.guardrails_adapter import GuardrailsKernel
 
     return GuardrailsKernel(runtime=runtime)
@@ -95,10 +95,10 @@ def test_validate_input_escalate_with_approving_resolver_passes(tmp_path: Path) 
     """An ``escalate`` verdict that the resolver approves passes the validation."""
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
+    def resolver(ip: str, result: InterventionPointResult) -> ApprovalResolution:
         captured['ip'] = ip
         captured['enforced_identity'] = result.enforced_identity
-        return ApprovalDecision.allow(result.enforced_identity)
+        return ApprovalResolution.allow(result.enforced_identity)
     runtime, _policy = _build_runtime(tmp_path, [{'decision': 'escalate', 'reason': 'human_approval_required'}], approval_resolver=resolver)
     kernel = _kernel(runtime)
     result = kernel.validate_input('approve this please')

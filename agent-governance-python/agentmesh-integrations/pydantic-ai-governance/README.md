@@ -5,14 +5,14 @@ This package is deprecated. Install
 integration surface.
 
 Inline rule objects, decorators, and toolset wrappers are no longer provided.
-Use a native ACS manifest with `AgtRuntime`, then pass that runtime to the Agent
+Use a native ACS manifest with `AgentControl`, then pass that runtime to the Agent
 OS Pydantic AI adapter.
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 kernel = PydanticAIKernel(runtime=runtime)
 ```
 

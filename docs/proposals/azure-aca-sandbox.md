@@ -21,16 +21,16 @@ Detailed API behavior lives in
 ## Session flow
 
 1. Build `SandboxConfig` with explicit resource and egress settings.
-2. Build `AgtRuntime` from a native manifest when governance is required.
+2. Build `AgentControl` from a native manifest when governance is required.
 3. Call `create_session` with `runtime=` and `config=`.
 4. Call `execute_code`.
 5. Destroy the session and close the provider.
 
 ```python
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_sandbox import ACASandboxProvider, SandboxConfig
 
-runtime = AgtRuntime.from_manifest("manifest.yaml")
+runtime = AgentControl.from_path(str("manifest.yaml"))
 config = SandboxConfig(
     timeout_seconds=30,
     memory_mb=512,

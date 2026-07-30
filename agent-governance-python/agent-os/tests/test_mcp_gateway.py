@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 from agent_os.mcp_gateway import ApprovalStatus, GatewayConfig, MCPGateway
 from agent_os.mcp_protocols import InMemoryAuditSink, InMemoryRateLimitStore
 
@@ -16,9 +16,9 @@ class _Runtime:
         self.verdict = verdict
         self.snapshots: list[dict[str, Any]] = []
 
-    def evaluate(self, intervention_point: str, snapshot: dict[str, Any]) -> PolicyEvaluation:
+    async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
         self.snapshots.append(snapshot)
-        return PolicyEvaluation(verdict=self.verdict, reason_code='blocked' if self.verdict == 'deny' else '', message='runtime blocked request' if self.verdict == 'deny' else '', intervention_point=intervention_point)
+        return InterventionPointResult(verdict=Verdict(decision=Decision(self.verdict), reason='blocked' if self.verdict == 'deny' else '', message='runtime blocked request' if self.verdict == 'deny' else ''))
 
 class _ConcurrentStore:
 

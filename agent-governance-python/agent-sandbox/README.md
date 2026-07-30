@@ -19,7 +19,7 @@ Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-govern
 
 All five implement the same async + sync API (`create_session`,
 `execute_code`, `destroy_session`, plus `*_async` variants). Host controls use
-`SandboxConfig`. Policy decisions use an optional native `AgtRuntime`.
+`SandboxConfig`. Policy decisions use an optional native `AgentControl`.
 
 ## Installation
 
@@ -324,10 +324,10 @@ provider capabilities use `SandboxConfig`.
 | `NonoSandboxProvider` | Filtering proxy | Not supported, rejected |
 
 ```python
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_sandbox import SandboxConfig
 
-runtime = AgtRuntime.from_manifest("manifest.yaml")
+runtime = AgentControl.from_path(str("manifest.yaml"))
 config = SandboxConfig(
     timeout_seconds=90,
     memory_mb=2048,

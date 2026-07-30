@@ -31,7 +31,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 
 from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.mxc_sandbox_provider import (
@@ -469,12 +469,8 @@ class TestGuards:
 
     def test_policy_deny_blocks_execution(self, provider, fake_run):
         class _DenyEvaluator:
-            def evaluate_pre_tool_call(self, *, tool_name, args, call_id):
-                return PolicyEvaluation(
-                    verdict="deny",
-                    reason_code="nope",
-                    message="nope",
-                )
+            def pre_tool_call(self, *, tool_name, args, call_id):
+                return InterventionPointResult(verdict=Verdict(decision=Decision("deny"), reason="nope", message="nope"))
 
         handle = provider.create_session("agent-1")
         # Inject a denying evaluator into the live session.

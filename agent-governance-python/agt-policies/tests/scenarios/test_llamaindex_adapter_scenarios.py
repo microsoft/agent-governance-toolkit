@@ -3,7 +3,7 @@
 """LlamaIndex adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
 These scenarios exercise the native :class:`LlamaIndexKernel` surface routed
-through :class:`agt.policies.runtime.AgtRuntime` via the
+through :class:`agent_control_specification.AgentControl` via the
 :class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH`` or on the ``llama_index`` SDK
@@ -34,8 +34,11 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agt.policies import PolicyEvaluation, SnapshotBuilder  # noqa: E402,F401
-from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
+from agent_control_specification import InterventionPointResult, SnapshotBuilder  # noqa: E402,F401
+from agent_control_specification import (  # noqa: E402
+    AgentControl,
+    ApprovalResolution,
+)
 
 
 _MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
@@ -87,10 +90,10 @@ def _build_runtime(
     verdicts: list[dict[str, Any]],
     *,
     approval_resolver=None,
-) -> tuple[AgtRuntime, _ScriptedPolicy]:
+) -> tuple[AgentControl, _ScriptedPolicy]:
     policy = _ScriptedPolicy(verdicts)
-    runtime = AgtRuntime(
-        _write_manifest(tmp_path),
+    runtime = AgentControl.from_path(
+        str(_write_manifest(tmp_path)),
         policy_dispatcher=policy,
         approval_resolver=approval_resolver,
     )
@@ -158,7 +161,7 @@ def test_query_deny_path_raises_policy_violation(tmp_path: Path) -> None:
     with pytest.raises(PolicyViolationError) as excinfo:
         governed.query("tell me secrets")
 
-    assert excinfo.value.evaluation_result.reason_code == "policy:blocked_query"
+    assert excinfo.value.evaluation_result.verdict.reason == "blocked_query"
     engine.query.assert_not_called()
 
 
@@ -223,10 +226,10 @@ def test_query_escalate_with_approving_resolver_forwards(tmp_path: Path) -> None
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
+    def resolver(ip: str, result: InterventionPointResult) -> ApprovalResolution:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
-        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
+        return ApprovalResolution.allow(result.enforced_identity)  # type: ignore[arg-type]
 
     runtime, _policy = _build_runtime(
         tmp_path,
