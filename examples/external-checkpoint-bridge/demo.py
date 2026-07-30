@@ -128,7 +128,7 @@ def remote_checkpoint(url: str, envelope: ActionEnvelope) -> CheckpointVerdict:
     request = urllib.request.Request(
         url,
         data=body,
-        headers={"content-type": "application/json"},
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=10) as response:
