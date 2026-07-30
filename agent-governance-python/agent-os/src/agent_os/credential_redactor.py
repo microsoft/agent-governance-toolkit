@@ -61,14 +61,29 @@ def _not_a_literal(value_end: str, *, numeric: bool) -> str:
     return rf"(?!(?:{literals})\s*(?:[{value_end}]|$))"
 
 
-# A value that is wholly an unexpanded interpolation reference names a secret
-# without containing one. ``"api_key": "${MCP_API_KEY}"`` is the *config* that
-# reads a credential at startup, so redacting it destroys the reference and
-# tells the reader a secret was committed when none was.
-_INTERPOLATION_REFERENCE = (
-    r"(?![\"']?(?:\$\{[^{}]*\}|\{\{[^{}]*\}\}|%[A-Za-z_][A-Za-z0-9_]*%)"
-    r"[\"']?(?:[\s,;}\]]|$))"
-)
+def _not_an_interpolation_reference(value_end: str) -> str:
+    """Build the guard that exempts a value that is *wholly* an unexpanded reference.
+
+    ``"api_key": "${MCP_API_KEY}"`` is the config that reads a credential at
+    startup: it names one without containing one. Redacting it destroys the
+    reference and reports a leak that did not happen, which costs someone a
+    rotation.
+
+    Args:
+        value_end: Character-class body for the delimiters that end a value --
+            the same set the value class stops at, for the same reason
+            :func:`_not_a_literal` needs it. The guard exempts a reference only
+            when it is the *whole* value, and it can only tell where the value
+            ends by the rule the value itself uses. Hard-coding the JSON
+            delimiters here made ``Password=${DB_PASS},suffix`` read as wholly
+            a reference and skipped it, because in a connection string the
+            comma is an ordinary password character and the value runs on.
+
+    Returns:
+        A negative-lookahead pattern string, to be placed after the separator.
+    """
+    reference = r"\$\{[^{}]*\}|\{\{[^{}]*\}\}|%[A-Za-z_][A-Za-z0-9_]*%"
+    return rf"(?![\"']?(?:{reference})[\"']?(?:[{value_end}]|$))"
 
 
 def _separator(
@@ -105,13 +120,15 @@ def _separator(
     colon = rf":\s*{colon_floor_guard}"
     # An interpolation reference is not a secret under either separator: an
     # env-file line is written ``API_KEY=${MY_KEY}`` as often as a YAML one is
-    # written ``api_key: ${MY_KEY}``.
+    # written ``api_key: ${MY_KEY}``. Like the literal guard, it has to end the
+    # value by the caller's rule, not by the JSON one.
+    reference_guard = _not_an_interpolation_reference(value_end)
     colon_guard = word_guard if not numeric_is_literal else _not_a_literal(
         value_end, numeric=True
     )
     return (
-        rf"(?:{colon}{_INTERPOLATION_REFERENCE}{colon_guard}"
-        rf"|=\s*{_INTERPOLATION_REFERENCE}{word_guard})"
+        rf"(?:{colon}{reference_guard}{colon_guard}"
+        rf"|=\s*{reference_guard}{word_guard})"
     )
 
 

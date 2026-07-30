@@ -545,10 +545,35 @@ def test_keyword_patterns_still_avoid_false_positives(text: str):
         'api_key: "${MCP_API_KEY}' + _FAKE_SECRET_VALUE + '"',
         'api_key: "prefix${X}' + _FAKE_SECRET_VALUE + '"',
         'api_key: "{not-a-reference-' + _FAKE_SECRET_VALUE + '"',
+        # The reference guard has to end the value by the *caller's* rule. A
+        # connection-string value is delimited by ``;`` only, so a comma or a
+        # brace after the reference is part of the value and the whole thing is
+        # not a reference. Hard-coding the JSON delimiters in the guard let
+        # these read as wholly a reference and skipped them entirely.
+        "Password=${DB_PASS},suffix",
+        "Password=${DB_PASS}}real",
+        "password: ${DB_PASS},tail",
     ],
 )
 def test_a_reference_prefix_does_not_exempt_a_real_secret(text: str):
-    assert _FAKE_SECRET_VALUE not in CredentialRedactor.redact(text)
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_SECRET_VALUE not in redacted
+    assert redacted != text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Wholly a reference under the connection-string rule too: the value
+        # ends at ``;`` or at end-of-string, not at a comma.
+        "Password=${DB_PASS}",
+        "Password=${DB_PASS};Server=db",
+        "password: ${DB_PASS}",
+    ],
+)
+def test_a_connection_string_reference_is_still_exempt(text: str):
+    assert CredentialRedactor.redact(text) == text
 
 
 # ── redaction replaces the value, not the key ─────────────────
