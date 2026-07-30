@@ -58,6 +58,8 @@ pub mod trust;
 pub mod trust_support;
 pub mod types;
 
+pub use agent_control_specification::{AgentControl, Manifest};
+
 pub use agentmesh_mcp::mcp::*;
 pub use audit::AuditLogger;
 pub use control_support::{
@@ -93,11 +95,10 @@ pub use integration_support::{
     DiscoveryInventorySummary, DiscoveryReconciler, DiscoveryRecord, DiscoveryRiskAssessment,
     DiscoveryRiskLevel, DiscoveryRiskScorer, DiscoveryScanResult, DiscoveryScanner,
     DiscoveryStatus, DriftResult, ExecutionRequest, ExecutionResponse, FrameworkAdapter,
-    FrameworkExecutionResult, FrameworkGovernanceAdapter, FrameworkKind, FrameworkResponse,
-    GovernanceEvent, GovernanceEventType, GovernanceHook, GovernanceMiddleware, GovernancePattern,
-    GovernancePolicy, PatternType, ProcessSnapshot, PromptDefenseEvaluator, PromptDefenseFinding,
-    PromptDefenseReport, PromptRiskLevel, RegisteredAgent, ResponseGovernanceAssessment,
-    ShadowAgent,
+    FrameworkExecutionResult, FrameworkGovernanceAdapter, FrameworkHostConfig, FrameworkKind,
+    FrameworkResponse, GovernanceEvent, GovernanceEventType, GovernanceHook, GovernanceMiddleware,
+    ProcessSnapshot, PromptDefenseEvaluator, PromptDefenseFinding, PromptDefenseReport,
+    PromptRiskLevel, RegisteredAgent, ResponseGovernanceAssessment, ShadowAgent,
 };
 pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
 pub use policy::{PolicyEngine, PolicyError};

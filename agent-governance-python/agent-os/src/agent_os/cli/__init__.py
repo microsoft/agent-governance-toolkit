@@ -55,11 +55,7 @@ from .policy_checker import (  # noqa: F401 – re-export
     load_cli_policy_rules,
 )
 from .cmd_init import cmd_init  # noqa: F401 – re-export
-from .cmd_validate import (  # noqa: F401 – re-export
-    cmd_validate,
-    _load_json_schema,
-    _validate_yaml_with_line_numbers,
-)
+from .cmd_validate import cmd_validate  # noqa: F401 – re-export
 from .cmd_audit import cmd_audit, _export_audit_csv  # noqa: F401 – re-export
 from .cmd_policy import cmd_policy  # noqa: F401 – re-export
 
@@ -551,41 +547,30 @@ def main() -> int:
     hooks_parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
     # validate
-    validate_parser = subparsers.add_parser("validate", help="Validate policy YAML files")
-    validate_parser.add_argument("files", nargs="*", help="Files to validate")
+    validate_parser = subparsers.add_parser(
+        "validate", help="Validate native ACS manifests"
+    )
+    validate_parser.add_argument("files", nargs="*", help="Manifest files to validate")
     validate_parser.add_argument("--json", action="store_true", help="Output in JSON format")
     validate_parser.add_argument("--strict", action="store_true", help="Strict mode: treat warnings as errors")
 
 
-    # policy command — 'agentos policy validate <file>' with full JSON-Schema support
+    # Compatibility command spelling backed by the native ACS validator.
     policy_parser = subparsers.add_parser(
         "policy",
-        help="Policy-as-code tools: validate, test, and diff governance policies",
+        help="Native ACS policy tools",
     )
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
 
-    # agentos policy validate <file>
     pol_validate = policy_subparsers.add_parser(
         "validate",
-        help="Validate a policy YAML/JSON file against the schema",
+        help="Validate a native ACS manifest",
     )
-    pol_validate.add_argument("path", help="Path to the policy file to validate")
-
-    # agentos policy test <policy> <scenarios>
-    pol_test = policy_subparsers.add_parser(
-        "test",
-        help="Test a policy against a set of YAML scenarios",
+    pol_validate.add_argument("path", help="Path to the native manifest")
+    pol_validate.add_argument("--json", action="store_true", help="Output in JSON format")
+    pol_validate.add_argument(
+        "--strict", action="store_true", help="Treat warnings as errors"
     )
-    pol_test.add_argument("policy_path", help="Path to the policy file")
-    pol_test.add_argument("test_scenarios_path", help="Path to the test scenarios YAML")
-
-    # agentos policy diff <file1> <file2>
-    pol_diff = policy_subparsers.add_parser(
-        "diff",
-        help="Show differences between two policy files",
-    )
-    pol_diff.add_argument("path1", help="First policy file")
-    pol_diff.add_argument("path2", help="Second policy file")
 
     # serve command
     serve_parser = subparsers.add_parser(

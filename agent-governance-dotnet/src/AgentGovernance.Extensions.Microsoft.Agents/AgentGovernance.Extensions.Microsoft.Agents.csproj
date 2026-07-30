@@ -29,7 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AgentGovernance\AgentGovernance.csproj" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.13.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.15.0" />
   </ItemGroup>
 
 </Project>
