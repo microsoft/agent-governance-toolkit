@@ -51,9 +51,10 @@ action envelope that AGT sent.
 
 The `action_ref` is intentionally opaque in this demo. The full action envelope is
 sent to the checkpoint for review, while the proof object stores only the stable
-reference and verdict fields. Production deployments should use AGT's approved
-digest/signature APIs or an external verifier when a cryptographic proof is
-required.
+reference plus the checkpoint decision fields shown in the sample output:
+`decision_id`, `verdict`, and mapped `enforcement`. Production deployments should
+use AGT's approved digest/signature APIs or an external verifier when a
+cryptographic proof is required.
 
 ## Expected output
 
