@@ -70,6 +70,7 @@ type GovernanceResult struct {
 	TrustScore TrustScore
 	AuditEntry *AuditEntry
 	Allowed    bool
+	Approval   *ApprovalResult
 }
 
 // BackendDecision is the normalized result from an external policy backend.
@@ -92,9 +93,10 @@ type ExternalPolicyBackend interface {
 type Option func(*clientOptions)
 
 type clientOptions struct {
-	capabilities []string
-	trustConfig  *TrustConfig
-	policyRules  []PolicyRule
+	capabilities        []string
+	trustConfig         *TrustConfig
+	policyRules         []PolicyRule
+	approvalCoordinator *ApprovalCoordinator
 }
 
 // WithCapabilities sets capabilities on identity generation.
@@ -115,5 +117,12 @@ func WithTrustConfig(cfg TrustConfig) Option {
 func WithPolicyRules(rules []PolicyRule) Option {
 	return func(o *clientOptions) {
 		o.policyRules = rules
+	}
+}
+
+// WithApprovalCoordinator routes require_approval decisions through an approval chain.
+func WithApprovalCoordinator(coordinator *ApprovalCoordinator) Option {
+	return func(o *clientOptions) {
+		o.approvalCoordinator = coordinator
 	}
 }

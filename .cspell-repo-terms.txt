@@ -229,10 +229,12 @@ HMACSHA
 htek
 HTTPMCP
 httpx
+httptest
 hypercall
 Hyperlight
 hyperlightjs
 IATP
+IMDS
 idweb
 IGNORECASE
 importorskip
