@@ -549,7 +549,7 @@ class EscalationHandler:
         # above, and re-derives the decision from votes either way so a
         # raw req.decision set by a single approve()/deny() call never
         # leaks through without being checked against quorum).
-        if quorum and decision != EscalationDecision.PENDING:
+        if quorum:
             decision = (
                 (_tally_quorum(req.votes, quorum) if req else None)
                 or EscalationDecision.PENDING
