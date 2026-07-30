@@ -273,15 +273,49 @@ class MCPMessageSigner:
         return base64.b64encode(digest).decode("ascii")
 
     @staticmethod
+    def _canonical_field(value: str | None) -> str:
+        """Return *value* framed so it cannot be confused with its neighbours.
+
+        Each field is prefixed with its own length, so a separator appearing
+        inside a field is just one of that field's characters and cannot be read
+        as the end of it. ``None`` gets a distinct marker rather than being
+        folded into the empty string, so an absent sender and an empty sender
+        do not sign identically.
+        """
+        if value is None:
+            return "-"
+        return f"{len(value)}:{value}"
+
+    @classmethod
     def _build_canonical_string(
+        cls,
         *,
         nonce: str,
         timestamp: datetime,
         sender_id: str | None,
         payload: str,
     ) -> str:
+        """Return the injective canonical string that the HMAC covers.
+
+        Concatenating the fields with a plain ``|`` separator was ambiguous:
+        ``|`` is legal inside a payload and inside a sender id, so distinct
+        (nonce, timestamp, sender, payload) tuples produced the same canonical
+        string and therefore the same signature. An attacker holding one valid
+        envelope could move text across a field boundary and the forgery
+        verified -- e.g. ``sender="alice"`` with ``payload="alpha|beta"`` and
+        ``sender="alice|alpha"`` with ``payload="beta"`` both canonicalize to
+        ``alice|alpha|beta`` in the trailing fields.
+
+        Length-prefixing every field makes the encoding injective: the reader of
+        each field is told how many characters it has before reading them, so no
+        boundary can move. The timestamp is rendered before framing so it is
+        covered the same way as the rest.
+        """
         timestamp_ms = int(timestamp.timestamp() * 1000)
-        return f"{nonce}|{timestamp_ms}|{sender_id or ''}|{payload}"
+        return "|".join(
+            cls._canonical_field(field)
+            for field in (nonce, str(timestamp_ms), sender_id, payload)
+        )
 
     def _maybe_cleanup_locked(self, now: datetime) -> None:
         if now - self._last_cleanup >= self.nonce_cache_cleanup_interval:

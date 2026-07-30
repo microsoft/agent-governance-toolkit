@@ -43,6 +43,113 @@ def test_verify_detects_tampered_payload():
     assert "Invalid signature" in result.failure_reason
 
 
+def _reframe(envelope: MCPSignedEnvelope, *, payload=..., sender_id=...):
+    """Return *envelope* with fields moved but the signature kept as-is.
+
+    Models the whole of the attacker's capability: they hold one valid envelope
+    and may rewrite its fields, but cannot compute a new signature.
+    """
+    return MCPSignedEnvelope(
+        payload=envelope.payload if payload is ... else payload,
+        nonce=envelope.nonce,
+        timestamp=envelope.timestamp,
+        sender_id=envelope.sender_id if sender_id is ... else sender_id,
+        signature=envelope.signature,
+    )
+
+
+class TestCanonicalStringIsInjective:
+    """Field boundaries must not be movable inside the signed canonical string.
+
+    The canonical string was ``f"{nonce}|{timestamp_ms}|{sender_id or ''}|{payload}"``.
+    ``|`` is legal inside a payload and inside a sender id, so distinct
+    (nonce, timestamp, sender, payload) tuples collapsed to the same canonical
+    string and therefore the same HMAC. Holding one valid envelope was enough to
+    forge others: move text across a boundary and the signature still verified.
+
+    Each case uses a fresh verifier, since a real receiver has its own nonce
+    store and would not have seen the original envelope's nonce.
+    """
+
+    KEY = b"k" * 32
+
+    def _signer(self) -> MCPMessageSigner:
+        return MCPMessageSigner(self.KEY)
+
+    def test_text_moved_from_payload_into_sender_id(self):
+        # sender="alice" + payload="alpha|beta" and sender="alice|alpha" +
+        # payload="beta" both ended "...|alice|alpha|beta".
+        envelope = self._signer().sign_message("alpha|beta", sender_id="alice")
+        forged = _reframe(envelope, payload="beta", sender_id="alice|alpha")
+
+        result = self._signer().verify_message(forged)
+
+        assert result.is_valid is False
+        assert "Invalid signature" in result.failure_reason
+
+    def test_text_moved_from_sender_id_into_payload(self):
+        # The same shift in the other direction, which is the dangerous one: it
+        # prepends attacker-chosen text to the payload a consumer will act on.
+        envelope = self._signer().sign_message("x", sender_id="alice|INJECTED")
+        forged = _reframe(envelope, payload="INJECTED|x", sender_id="alice")
+
+        result = self._signer().verify_message(forged)
+
+        assert result.is_valid is False
+        assert result.payload is None
+
+    def test_absent_sender_is_not_an_empty_sender(self):
+        # ``sender_id or ''`` erased the difference, so an envelope signed with
+        # no sender verified as one sent by "".
+        envelope = self._signer().sign_message("p", sender_id=None)
+        forged = _reframe(envelope, sender_id="")
+
+        assert self._signer().verify_message(forged).is_valid is False
+
+    @pytest.mark.parametrize(
+        ("payload", "sender_id"),
+        [
+            ("plain", "agent-1"),
+            ("a|b|c", "x|y"),  # separator inside both fields
+            ("3:abc", "5:hello"),  # content shaped like the length prefix itself
+            ("-", "-"),  # content equal to the absent-value marker
+            ("{}", None),
+            ("unicode 中文 \U0001f600", "中文"),
+        ],
+    )
+    def test_round_trip_survives_framing(self, payload, sender_id):
+        # Fixing the ambiguity must not break any legitimate field content,
+        # including content that mimics the framing.
+        signer = self._signer()
+        result = signer.verify_message(signer.sign_message(payload, sender_id=sender_id))
+
+        assert result.is_valid is True
+        assert result.payload == payload
+        assert result.sender_id == sender_id
+
+    def test_distinct_field_tuples_never_share_a_canonical_string(self):
+        # The property the fix rests on: the encoding is injective, so two
+        # different tuples can never produce one signature.
+        timestamp = self._signer().sign_message("seed").timestamp
+        awkward = ["", "a", "|", "a|", "|a", "a|b", "1:a", "-", "2:ab"]
+        seen: dict[str, tuple] = {}
+        for nonce in ("n", "n|", "1:n"):
+            for sender_id in [*awkward, None]:
+                for payload in awkward:
+                    canonical = MCPMessageSigner._build_canonical_string(
+                        nonce=nonce,
+                        timestamp=timestamp,
+                        sender_id=sender_id,
+                        payload=payload,
+                    )
+                    key = (nonce, sender_id, payload)
+                    collided = seen.setdefault(canonical, key)
+                    assert collided == key, (
+                        f"collision: {collided} and {key} both encode to {canonical!r}"
+                    )
+        assert len(seen) == 3 * 10 * 9
+
+
 def test_verify_rejects_replay():
     signer = MCPMessageSigner(MCPMessageSigner.generate_key())
     envelope = signer.sign_message('{"method":"safe"}')
