@@ -473,26 +473,6 @@ class EscalationHandler:
             self._on_escalate(request)
         return request
 
-    def _quorum_outcome(self, req: EscalationRequest) -> EscalationDecision | None:
-        """Evaluate ``req.votes`` against ``req.quorum``. The quorum
-        config attached to this request at ``escalate()`` time, not
-        ``self.quorum``.
-
-        These can differ if ``self.quorum`` is reassigned after some
-        requests were already escalated, or if multiple
-        ``EscalationHandler`` instances (with different quorum configs)
-        share one backend. ``req.quorum`` is what actually governed
-        ``InMemoryApprovalQueue.approve``/``deny``'s finalization for
-        this specific request, so it (not the handler's current live
-        config) is the single source of truth here too.
-
-        Returns ``None`` (never satisfied) if this request has no
-        quorum configured.
-        """
-        if req.quorum is None:
-            return None
-        return _tally_quorum(req.votes, req.quorum)
-
     def resolve(self, request_id: str) -> EscalationDecision:
         """Check or wait for a resolution.
 
