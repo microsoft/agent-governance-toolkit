@@ -6,7 +6,8 @@ governance with an external checkpoint or verifier.
 The key idea is simple:
 
 1. AGT prepares a deterministic action envelope before a tool executes.
-2. The envelope is hashed so the external verdict is bound to the proposed action.
+2. The envelope gets a deterministic reference so the external verdict is bound to
+   the proposed action.
 3. A local or remote checkpoint returns a verdict: `allow`, `require_approval`, or `deny`.
 4. AGT remains the enforcement point and maps that verdict to execute, pause, or block.
 
@@ -41,11 +42,11 @@ The endpoint should accept a JSON action envelope and return JSON like:
   "verdict": "require_approval",
   "reason": "PII export requires human approval",
   "decision_id": "dec_123",
-  "action_hash": "..."
+  "action_ref": "..."
 }
 ```
 
-The demo rejects a remote response if the returned `action_hash` does not match the
+The demo rejects a remote response if the returned `action_ref` does not match the
 action envelope that AGT sent.
 
 ## Expected output
@@ -62,7 +63,7 @@ filesystem.delete_file         deny                block
 Sample proof object:
 {
   "decision_id": "local-...",
-  "action_hash": "...",
+  "action_ref": "...",
   "verdict": "require_approval",
   "enforcement": "pause_for_human_approval"
 }

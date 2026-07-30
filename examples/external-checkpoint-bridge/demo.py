@@ -18,7 +18,6 @@ Optional:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import urllib.parse
@@ -31,7 +30,7 @@ Enforcement = Literal["execute", "pause_for_human_approval", "block"]
 
 
 class ActionEnvelope(TypedDict):
-    action_hash: str
+    action_ref: str
     actor: str
     runtime: str
     tool_name: str
@@ -44,17 +43,12 @@ class CheckpointVerdict(TypedDict):
     verdict: Verdict
     reason: str
     decision_id: str
-    action_hash: str
+    action_ref: str
 
 
 def stable_json(value: Any) -> str:
     """Serialize JSON deterministically for hashing and checkpoint review."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
-
-
-def sha256_json(value: Any) -> str:
-    """Return a SHA-256 hash for a deterministic JSON value."""
-    return hashlib.sha256(stable_json(value).encode("utf-8")).hexdigest()
 
 
 def build_action_envelope(
@@ -66,8 +60,8 @@ def build_action_envelope(
     arguments: dict[str, Any],
     policy_id: str,
 ) -> ActionEnvelope:
-    """Build an action envelope whose hash excludes mutable review metadata."""
-    hash_input = {
+    """Build an action envelope whose stable ref excludes review metadata."""
+    ref_input = {
         "actor": actor,
         "runtime": runtime,
         "tool_name": tool_name,
@@ -76,8 +70,8 @@ def build_action_envelope(
         "policy_id": policy_id,
     }
     return {
-        "action_hash": sha256_json(hash_input),
-        **hash_input,
+        "action_ref": stable_json(ref_input),
+        **ref_input,
     }
 
 
@@ -99,8 +93,8 @@ def local_checkpoint(envelope: ActionEnvelope) -> CheckpointVerdict:
     return {
         "verdict": verdict,
         "reason": reason,
-        "decision_id": f"local-{envelope['action_hash'][:12]}",
-        "action_hash": envelope["action_hash"],
+        "decision_id": f"local-{envelope['tool_name']}",
+        "action_ref": envelope["action_ref"],
     }
 
 
@@ -121,18 +115,18 @@ def remote_checkpoint(url: str, envelope: ActionEnvelope) -> CheckpointVerdict:
         payload = response.read().decode("utf-8")
         verdict = json.loads(payload)
 
-    if verdict.get("action_hash") != envelope["action_hash"]:
+    if verdict.get("action_ref") != envelope["action_ref"]:
         raise ValueError(
-            "Remote checkpoint returned a verdict for a different action_hash."
+            "Remote checkpoint returned a verdict for a different action_ref."
         )
 
     return {
         "verdict": verdict["verdict"],
         "reason": verdict.get("reason", "External checkpoint returned no reason."),
         "decision_id": verdict.get(
-            "decision_id", f"remote-{envelope['action_hash'][:12]}"
+            "decision_id", f"remote-{envelope['tool_name']}"
         ),
-        "action_hash": envelope["action_hash"],
+        "action_ref": envelope["action_ref"],
     }
 
 
@@ -206,7 +200,7 @@ def main() -> None:
         proof_objects.append(
             {
                 "decision_id": verdict["decision_id"],
-                "action_hash": verdict["action_hash"],
+                "action_ref": verdict["action_ref"],
                 "verdict": verdict["verdict"],
                 "enforcement": enforcement,
             }

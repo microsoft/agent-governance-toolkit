@@ -45,7 +45,7 @@ def test_remote_checkpoint_requires_https_endpoint(url: str) -> None:
         demo.remote_checkpoint(url, _sample_envelope())
 
 
-def test_remote_checkpoint_rejects_action_hash_mismatch(
+def test_remote_checkpoint_rejects_action_ref_mismatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     envelope = _sample_envelope()
@@ -64,7 +64,7 @@ def test_remote_checkpoint_rejects_action_hash_mismatch(
                     "verdict": "allow",
                     "reason": "Approved by remote checkpoint.",
                     "decision_id": "dec_test",
-                    "action_hash": "different-action-hash",
+                    "action_ref": "different-action-ref",
                 }
             ).encode("utf-8")
 
@@ -75,7 +75,7 @@ def test_remote_checkpoint_rejects_action_hash_mismatch(
 
     monkeypatch.setattr(demo.urllib.request, "urlopen", fake_urlopen)
 
-    with pytest.raises(ValueError, match="different action_hash"):
+    with pytest.raises(ValueError, match="different action_ref"):
         demo.remote_checkpoint("https://checkpoint.example.com/review", envelope)
 
     assert observed == {
