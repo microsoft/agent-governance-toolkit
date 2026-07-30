@@ -20,7 +20,7 @@ Usage:
     # Or use the non-raising version
     check.is_allowed("execute_code")  # returns False
 
-That's it. No YAML, no PolicyEvaluator, no 42-second import.
+That's it. No YAML and no external policy runtime.
 Upgrade to the full stack when you need trust mesh, SRE, or compliance.
 """
 

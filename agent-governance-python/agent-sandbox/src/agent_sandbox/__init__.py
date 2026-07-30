@@ -7,23 +7,23 @@ Provides ``SandboxProvider``, the abstract base class for all sandbox
 backends, plus five built-in implementations:
 
 * :class:`DockerSandboxProvider` — hardened Docker containers with
-  policy-driven resource limits, tool/network proxies, and filesystem
+  explicit resource limits and filesystem
   checkpointing via ``docker commit``.
 * :class:`HyperLightSandboxProvider` — micro-VM isolation backed by the
   upstream `hyperlight-sandbox <https://github.com/hyperlight-dev/hyperlight-sandbox>`_
   project (CNCF Sandbox). Capability-bound tools and domains, with
   in-memory snapshots.
 * :class:`ACASandboxProvider` — Azure Container Apps (ACA)
-  managed sandbox sessions with host-side policy gating and Azure-side
+  managed sandbox sessions with native governance and Azure-side
   egress allowlist enforcement.
 * :class:`MxcSandboxProvider` — `MXC <https://github.com/microsoft/mxc>`_
   (Microsoft eXecution Container) native sandbox runner driven through
   its ``wxc-exec`` / ``lxc-exec`` / ``mxc-exec-mac`` binary, with
-  policy-driven filesystem and network configuration.
+  explicit filesystem and network configuration.
 * :class:`NonoSandboxProvider` — `nono <https://github.com/always-further/nono>`_
   capability-based sandbox enforced by OS-native kernel primitives
   (Landlock on Linux, Seatbelt on macOS) via its ``nono-py`` bindings,
-  with a policy-driven filtering network proxy. Linux/macOS only.
+  with a filtering network proxy. Linux/macOS only.
 """
 
 
@@ -67,14 +67,12 @@ try:
         HyperlightConfig,
         HyperLightSandboxProvider,
         SnapshotHandle,
-        hyperlight_config_from_policy,
     )
 except ImportError:
     HyperlightBackend = None  # type: ignore[assignment,misc]
     HyperlightConfig = None  # type: ignore[assignment,misc]
     HyperLightSandboxProvider = None  # type: ignore[assignment,misc]
     SnapshotHandle = None  # type: ignore[assignment,misc]
-    hyperlight_config_from_policy = None  # type: ignore[assignment]
 
 # Lazy import: ACASandboxProvider requires the optional
 # ``azure-sandbox`` (and optionally ``azure-mgmt-sandbox``) SDKs.
@@ -90,12 +88,10 @@ try:
     from agent_sandbox.mxc_sandbox_provider import (
         MxcConfig,
         MxcSandboxProvider,
-        mxc_config_from_policy,
     )
 except ImportError:
     MxcConfig = None  # type: ignore[assignment,misc]
     MxcSandboxProvider = None  # type: ignore[assignment,misc]
-    mxc_config_from_policy = None  # type: ignore[assignment]
 
 # Lazy import: NonoSandboxProvider requires the optional ``nono-py``
 # extension (Linux / macOS only).
@@ -103,12 +99,10 @@ try:
     from agent_sandbox.nono_sandbox_provider import (
         NonoConfig,
         NonoSandboxProvider,
-        nono_config_from_policy,
     )
 except ImportError:
     NonoConfig = None  # type: ignore[assignment,misc]
     NonoSandboxProvider = None  # type: ignore[assignment,misc]
-    nono_config_from_policy = None  # type: ignore[assignment]
 
 try:
     __version__ = version("agt-sandbox")
@@ -137,7 +131,4 @@ __all__ = [
     "SessionHandle",
     "SessionStatus",
     "SnapshotHandle",
-    "hyperlight_config_from_policy",
-    "mxc_config_from_policy",
-    "nono_config_from_policy",
 ]
