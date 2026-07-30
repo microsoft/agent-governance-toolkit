@@ -804,7 +804,7 @@ def _discarded_verdicts() -> list[str]:
     return found
 
 
-def test_the_fifth_census_recognises_a_discarded_verdict():
+def test_the_fifth_census_recognizes_a_discarded_verdict():
     """Guard against the matcher silently matching nothing and passing vacuously."""
     snippet = ast.parse(
         "def f(kernel, ctx, response):\n"
