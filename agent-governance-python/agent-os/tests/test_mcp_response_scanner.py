@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from agent_os.mcp_response_scanner import MCPResponseScanner
 
 # Fake Google API key built by concatenation so the contiguous literal never
@@ -122,6 +124,26 @@ def test_scan_response_emits_one_credential_threat_per_secret():
 
     credential_threats = [t for t in result.threats if t.category == "credential_leak"]
     assert len(credential_threats) == 1
+    # Both patterns now report the value alone, so the two spans are equal
+    # rather than nested. Deduplication keeps the first, and PATTERNS lists the
+    # specific patterns before the generic keyword ones -- so the finding names
+    # the credential rather than the catch-all that also happened to match.
+    assert credential_threats[0].matched_pattern == "Google API key"
+
+
+@pytest.mark.parametrize(
+    ("content", "expected_pattern"),
+    [
+        ("api_key=" + _FAKE_GOOGLE_KEY, "Google API key"),
+        ('{"api_key": "' + _FAKE_GOOGLE_KEY + '"}', "Google API key"),
+        ('{"token": "' + _FAKE_GOOGLE_KEY + '"}', "Google API key"),
+    ],
+)
+def test_equal_spans_collapse_to_the_specific_pattern(content: str, expected_pattern: str):
+    result = MCPResponseScanner().scan_response(content, "tool")
+
+    credential_threats = [t for t in result.threats if t.category == "credential_leak"]
+    assert [t.matched_pattern for t in credential_threats] == [expected_pattern]
 
 
 def test_scan_response_fails_closed(monkeypatch):

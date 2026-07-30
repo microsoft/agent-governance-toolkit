@@ -230,18 +230,28 @@ class MCPResponseScanner:
     def _deduplicate_credential_matches(
         matches: list[CredentialMatch],
     ) -> list[CredentialMatch]:
-        """Drop credential matches whose span is strictly inside a larger match.
+        """Drop credential matches that cover a span already reported.
 
         A single secret can match both a specific and a generic pattern (for
         example ``api_key=AIza...`` matches "Google API key" and "Generic API
         secret"). Keeping only the widest span per region avoids emitting
-        duplicate ``credential_leak`` findings for one secret. Matches with equal
-        spans or unknown offsets are all retained.
+        duplicate ``credential_leak`` findings for one secret.
+
+        Equal spans collapse to the first match, which is the more specific
+        pattern: ``CredentialRedactor.PATTERNS`` lists the prefix-anchored
+        patterns before the generic keyword ones. Two patterns reporting the
+        exact same span is the normal case for one secret, since a
+        keyword-anchored pattern reports the value rather than the whole
+        ``key: value`` pair. Matches with unknown offsets are all retained.
         """
         kept: list[CredentialMatch] = []
+        seen_spans: set[tuple[int, int]] = set()
         for index, match in enumerate(matches):
             if match.start < 0:
                 kept.append(match)
+                continue
+            span = (match.start, match.end)
+            if span in seen_spans:
                 continue
             match_size = match.end - match.start
             contained = any(
@@ -253,6 +263,7 @@ class MCPResponseScanner:
                 for other_index, other in enumerate(matches)
             )
             if not contained:
+                seen_spans.add(span)
                 kept.append(match)
         return kept
 

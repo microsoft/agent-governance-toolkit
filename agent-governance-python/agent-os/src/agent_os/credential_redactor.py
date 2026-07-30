@@ -13,6 +13,66 @@ logger = logging.getLogger(__name__)
 
 REDACTED_PLACEHOLDER = "[REDACTED]"
 
+# Name of the optional group that marks the secret itself inside a
+# keyword-anchored pattern. Detection needs the keyword for context, but
+# replacing the whole match would take the key and separator with it:
+# ``{"api_key": "S", "keep": 1}`` became ``{"[REDACTED]", "keep": 1}``, so a
+# redaction turned parseable output into a parse failure. When a pattern defines
+# this group, redaction replaces only that span.
+_SECRET_GROUP = "secret"
+
+# JSON/YAML literals and bare numbers are not secrets. Without this guard the
+# keyword patterns match benign settings like ``{"secret": false}`` -- a common
+# visibility flag -- and the value class then consumed the following comma.
+_NOT_A_LITERAL = r"(?!(?:true|false|null|none|[+-]?[\d.]+)\s*(?:[,}\]\s]|$))"
+
+
+def _keyword_value(keywords: str, floor: int, value_class: str | None = None) -> str:
+    """Build a ``keyword <sep> value`` pattern whose value is a capture group.
+
+    Args:
+        keywords: Alternation of anchor keywords, already grouped.
+        floor: Minimum value length.
+        value_class: Character class for the value. When the value has a known
+            alphabet (base64, say) that already excludes quotes and delimiters,
+            one group is enough. When omitted the value is matched in three
+            alternatives instead, so a *quoted* secret may contain the
+            delimiters an unquoted one has to stop at: a quoted value runs to
+            its own closing quote, while a bare one stops at whitespace, ``;``
+            or a JSON structural character.
+
+    Returns:
+        A pattern string with the secret captured in a ``secret*`` group.
+    """
+    # An optional quote before the separator: in ``"api_key": "..."`` the
+    # closing quote of the *key* falls between the keyword and the separator.
+    head = rf"(?i)(?<![A-Za-z0-9]){keywords}[\"']?\s*[:=]\s*{_NOT_A_LITERAL}"
+    if value_class is not None:
+        return rf"{head}[\"']?(?P<{_SECRET_GROUP}_bare>{value_class}{{{floor},}})"
+    return (
+        rf"{head}"
+        rf"(?:\"(?P<{_SECRET_GROUP}_dq>[^\"]{{{floor},}})\""
+        rf"|'(?P<{_SECRET_GROUP}_sq>[^']{{{floor},}})'"
+        rf"|(?P<{_SECRET_GROUP}_bare>[^\s\"';,}}\]]{{{floor},}}))"
+    )
+
+
+# The alternatives of _keyword_value, in match order.
+_SECRET_GROUPS = (f"{_SECRET_GROUP}_dq", f"{_SECRET_GROUP}_sq", f"{_SECRET_GROUP}_bare")
+
+
+def _secret_span(match: re.Match[str]) -> tuple[int, int]:
+    """Return the span to redact: the secret group if the pattern defines one.
+
+    Falls back to the whole match, which is correct for the prefix-anchored
+    patterns (``ghp_...``, ``AKIA...``) where the match *is* the secret.
+    """
+    groups = match.re.groupindex
+    for name in _SECRET_GROUPS:
+        if name in groups and match.group(name) is not None:
+            return match.span(name)
+    return match.span()
+
 
 @dataclass(frozen=True)
 class CredentialPattern:
@@ -79,15 +139,17 @@ class CredentialRedactor:
             # "secret" inside "aws_secret_access_key" has no word boundary.
             name="AWS secret access key",
             pattern=re.compile(
-                r"(?i)aws[_ -]?secret[_ -]?access[_ -]?key"
-                r"[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9/+=]{40,}"
+                _keyword_value(
+                    r"aws[_ -]?secret[_ -]?access[_ -]?key", 40, r"[A-Za-z0-9/+=]"
+                )
             ),
         ),
         CredentialPattern(
             name="Azure key",
             pattern=re.compile(
-                r"(?i)(?:accountkey|sharedaccesskey|azure[_-]?key)"
-                r"[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9+/=]{20,}"
+                _keyword_value(
+                    r"(?:accountkey|sharedaccesskey|azure[_-]?key)", 20, r"[A-Za-z0-9+/=]"
+                )
             ),
         ),
         CredentialPattern(
@@ -115,13 +177,12 @@ class CredentialRedactor:
         CredentialPattern(
             # Also accepts ``:`` and quotes so the JSON and YAML spellings of a
             # password field are covered, not just the ``key=value`` of a
-            # connection string. The value class excludes the quote characters so
-            # a quoted value stops at its own closing quote rather than running
-            # into the rest of the object.
+            # connection string.
             name="Connection string secret",
             pattern=re.compile(
-                r"(?i)(?<![A-Za-z0-9])(?:password|passphrase|pwd|accountkey|sharedaccesssignature)"
-                r"[\"']?\s*[:=]\s*[\"']?[^;\s\"']{4,}"
+                _keyword_value(
+                    r"(?:password|passphrase|pwd|accountkey|sharedaccesssignature)", 4
+                )
             ),
         ),
         CredentialPattern(
@@ -153,15 +214,16 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}\b"),
         ),
         CredentialPattern(
-            # ``\b`` sits before the optional closing quote, not after it: in
-            # ``"api_key": "..."`` the quote falls between the keyword and the
-            # separator, and a pattern that goes straight from the keyword to
-            # ``\s*[:=]`` never matches the JSON spelling — which is the shape
-            # most MCP tool output arrives in.
+            # The optional quote sits before the separator, not after the
+            # keyword's word boundary: in ``"api_key": "..."`` the quote falls
+            # between the keyword and the separator, and a pattern that goes
+            # straight from the keyword to ``\s*[:=]`` never matches the JSON
+            # spelling — the shape most MCP tool output arrives in.
             name="Generic API secret",
             pattern=re.compile(
-                r"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|client[_-]?secret|secret|token)\b"
-                r"['\"]?\s*[:=]\s*['\"]?[^\s'\";]{6,}"
+                _keyword_value(
+                    r"(?:api[_-]?key|client[_-]?secret|secret|token)", 6
+                )
             ),
         ),
     )
@@ -403,12 +465,17 @@ class CredentialRedactor:
         matches: list[CredentialMatch] = []
         for credential_pattern in cls.PATTERNS:
             for match in credential_pattern.pattern.finditer(value):
+                # For a keyword-anchored pattern the reported span is the secret
+                # alone, not the ``key: value`` pair that located it. The keyword
+                # is context for detection; only the value is sensitive, and
+                # redaction replaces exactly the span reported here.
+                start, end = _secret_span(match)
                 matches.append(
                     CredentialMatch(
                         name=credential_pattern.name,
-                        matched_text=match.group(0),
-                        start=match.start(),
-                        end=match.end(),
+                        matched_text=value[start:end],
+                        start=start,
+                        end=end,
                     )
                 )
         return matches

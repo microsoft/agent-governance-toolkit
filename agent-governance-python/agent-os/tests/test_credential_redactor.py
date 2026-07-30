@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -71,7 +72,10 @@ def test_redact_dictionary_alias_redacts_nested_values():
 
     assert redacted["headers"]["authorization"] == REDACTED_PLACEHOLDER
     assert redacted["items"][0] == "safe value"
-    assert redacted["items"][1] == REDACTED_PLACEHOLDER
+    # The anchor keyword survives; only the value is replaced. "secret-value"
+    # is what had to disappear, and the reader still learns which field it was.
+    assert redacted["items"][1] == f"api_key={REDACTED_PLACEHOLDER}"
+    assert "secret-value" not in redacted["items"][1]
 
 
 def test_clean_values_remain_unchanged():
@@ -444,8 +448,91 @@ def test_detects_azure_account_key_in_the_json_spelling():
         "topsecret=abcdefghijkl",
         # A separator with nothing after it.
         '{"password":}',
+        # "secret" and "token" name plenty of non-secret fields. A literal or a
+        # bare number is not a credential, and matching one also swallowed the
+        # following comma.
+        '{"secret": false}',
+        '{"secret": false, "keep": 1}',
+        '{"token": true}',
+        '{"secret": null}',
+        '{"token": 12345678}',
+        '{"expires_token": -1}',
+        "token: null",
+        "password = false",
     ],
 )
 def test_keyword_patterns_still_avoid_false_positives(text: str):
     assert CredentialRedactor.redact(text) == text
     assert CredentialRedactor.contains_credentials(text) is False
+
+
+# ── redaction replaces the value, not the key ─────────────────
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            '{"api_key": "' + _FAKE_SECRET_VALUE + '", "keep": 1}',
+            '{"api_key": "' + REDACTED_PLACEHOLDER + '", "keep": 1}',
+        ),
+        (
+            '{"password": "hunter2xyz", "keep": 1}',
+            '{"password": "' + REDACTED_PLACEHOLDER + '", "keep": 1}',
+        ),
+        (
+            "{'client_secret': '" + _FAKE_SECRET_VALUE + "'}",
+            "{'client_secret': '" + REDACTED_PLACEHOLDER + "'}",
+        ),
+        # The key=value spelling keeps working the same way.
+        ("password=hunter2xyz;Server=db", f"password={REDACTED_PLACEHOLDER};Server=db"),
+        (
+            "api_key=" + _FAKE_SECRET_VALUE,
+            f"api_key={REDACTED_PLACEHOLDER}",
+        ),
+        # A quoted value may contain the delimiters a bare one stops at.
+        (
+            '{"api_key": "with,comma;inside!!"}',
+            '{"api_key": "' + REDACTED_PLACEHOLDER + '"}',
+        ),
+    ],
+)
+def test_keyword_redaction_replaces_only_the_value(text: str, expected: str):
+    """The keyword locates the secret; it is not itself sensitive.
+
+    Replacing the whole match took the key and separator with it, so
+    ``{"api_key": "S", "keep": 1}`` became ``{"[REDACTED]", "keep": 1}``. The
+    secret was gone, but the output was no longer parseable JSON -- anything
+    downstream that re-parses sanitized MCP output saw a redaction as a parse
+    failure.
+    """
+    assert CredentialRedactor.redact(text) == expected
+
+
+def test_redacted_json_still_parses():
+    text = (
+        '{"user": "alice", "api_key": "' + _FAKE_SECRET_VALUE + '", '
+        '"password": "hunter2xyz", "visible_secret": false, "retries": 3}'
+    )
+
+    parsed = json.loads(CredentialRedactor.redact(text))
+
+    assert parsed["api_key"] == REDACTED_PLACEHOLDER
+    assert parsed["password"] == REDACTED_PLACEHOLDER
+    assert parsed["user"] == "alice"
+    assert parsed["retries"] == 3
+    # A visibility flag is not a secret and must survive as a real boolean.
+    assert parsed["visible_secret"] is False
+
+
+def test_reported_span_is_the_secret_not_the_pair():
+    # find_matches drives redaction, so the span it reports has to be the
+    # value alone; matched_text must not carry the key either.
+    text = '{"api_key": "' + _FAKE_SECRET_VALUE + '"}'
+
+    matches = [m for m in CredentialRedactor.find_matches(text) if "API" in m.name]
+
+    assert matches, "the generic keyword pattern should match"
+    match = matches[0]
+    assert match.matched_text == _FAKE_SECRET_VALUE
+    assert text[match.start : match.end] == _FAKE_SECRET_VALUE
