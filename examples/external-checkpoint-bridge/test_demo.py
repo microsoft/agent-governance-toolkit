@@ -32,6 +32,17 @@ def _sample_envelope() -> demo.ActionEnvelope:
     )
 
 
+def test_action_ref_is_stable_and_opaque() -> None:
+    first = _sample_envelope()
+    second = _sample_envelope()
+
+    assert first["action_ref"] == second["action_ref"]
+    assert first["action_ref"].startswith("agt-demo-ref:")
+    assert "record_limit" not in first["action_ref"]
+    assert "contains_pii" not in first["action_ref"]
+    assert "customer" not in first["action_ref"].lower()
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -82,3 +93,80 @@ def test_remote_checkpoint_rejects_action_ref_mismatch(
         "url": "https://checkpoint.example.com/review",
         "timeout": 10,
     }
+
+
+@pytest.mark.parametrize(
+    ("payload", "match"),
+    [
+        ("not-json", "invalid JSON"),
+        ("[]", "JSON object"),
+        (
+            json.dumps(
+                {
+                    "verdict": "escalate",
+                    "reason": "Unsupported verdict.",
+                    "decision_id": "dec_test",
+                    "action_ref": "use-envelope-ref",
+                }
+            ),
+            "verdict must be one of",
+        ),
+        (
+            json.dumps(
+                {
+                    "verdict": "allow",
+                    "reason": "",
+                    "decision_id": "dec_test",
+                    "action_ref": "use-envelope-ref",
+                }
+            ),
+            "reason must be",
+        ),
+        (
+            json.dumps(
+                {
+                    "verdict": "allow",
+                    "reason": "Approved.",
+                    "decision_id": "",
+                    "action_ref": "use-envelope-ref",
+                }
+            ),
+            "decision_id must be",
+        ),
+    ],
+)
+def test_parse_remote_verdict_rejects_malformed_payloads(
+    payload: str, match: str
+) -> None:
+    envelope = _sample_envelope()
+    payload = payload.replace("use-envelope-ref", envelope["action_ref"])
+
+    with pytest.raises(ValueError, match=match):
+        demo.parse_remote_verdict(payload, envelope)
+
+
+def test_parse_remote_verdict_accepts_valid_payload() -> None:
+    envelope = _sample_envelope()
+    verdict = demo.parse_remote_verdict(
+        json.dumps(
+            {
+                "verdict": "require_approval",
+                "reason": "PII export requires human approval.",
+                "decision_id": "dec_test",
+                "action_ref": envelope["action_ref"],
+            }
+        ),
+        envelope,
+    )
+
+    assert verdict == {
+        "verdict": "require_approval",
+        "reason": "PII export requires human approval.",
+        "decision_id": "dec_test",
+        "action_ref": envelope["action_ref"],
+    }
+
+
+def test_map_to_enforcement_rejects_unknown_verdict() -> None:
+    with pytest.raises(ValueError, match="Unsupported checkpoint verdict"):
+        demo.map_to_enforcement("escalate")  # type: ignore[arg-type]
