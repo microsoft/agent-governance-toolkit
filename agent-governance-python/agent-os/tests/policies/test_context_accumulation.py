@@ -99,3 +99,47 @@ def test_obligations_keep_envelope_restrictions_and_add_new_ones():
         "no_print",
         "no_external_export",
     }
+
+
+# A rule that adds a gating restriction WITHOUT lifting sensitivity to the
+# floor. This is the combination that slipped through: the token is in the
+# aggregation result but not yet on the envelope, and the floor never fires.
+LOW_SENSITIVITY_RESTRICTING_RULESET = AggregationRuleSet(
+    rules=(
+        AggregationRule(
+            name="pii_location_no_export",
+            all_labels=frozenset({"pii", "location"}),
+            sets_sensitivity=DC.CONFIDENTIAL,
+            adds_restrictions=frozenset({"no_external_export"}),
+        ),
+    )
+)
+
+
+def test_rule_added_restriction_gates_below_the_floor():
+    # Sensitivity stays at CONFIDENTIAL, below the RESTRICTED floor, so the
+    # floor cannot be what gates this. The rule's restriction token must.
+    e = _env({"pii", "location"}, sens=DC.INTERNAL)
+    decision = decide_next(e, "export", LOW_SENSITIVITY_RESTRICTING_RULESET, 99)
+    assert decision.aggregate_sensitivity == DC.CONFIDENTIAL
+    assert decision.outcome == ContextOutcome.CONSTRAIN
+    assert {o.key for o in decision.obligations.obligations} == {"no_external_export"}
+
+
+def test_unrelated_action_is_not_gated_by_someone_elses_restriction():
+    # The gate is per-action: a restriction token that does not map to this
+    # action must not constrain it.
+    e = _env({"pii", "location"}, sens=DC.INTERNAL)
+    decision = decide_next(e, "memory_write", LOW_SENSITIVITY_RESTRICTING_RULESET, 99)
+    assert decision.outcome != ContextOutcome.CONSTRAIN
+
+
+def test_floor_gated_decision_always_names_an_obligation():
+    # No rule fires here, so there are no accumulated restrictions -- but the
+    # floor still gates the action. CONSTRAIN with an empty obligation set is a
+    # no-op for a host that enforces via obligations, so the gating token for
+    # the action is named instead.
+    e = _env({"pii"}, sens=DC.RESTRICTED)
+    decision = decide_next(e, "export", RULESET, 99)
+    assert decision.outcome == ContextOutcome.CONSTRAIN
+    assert {o.key for o in decision.obligations.obligations} == {"no_external_export"}
