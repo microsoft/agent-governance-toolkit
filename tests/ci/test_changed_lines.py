@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -169,4 +170,66 @@ def test_missing_merge_base_falls_back_to_the_base_tip(tmp_path: Path, capsys: p
     git(repo, "commit", "--quiet", "--message", "only commit")
 
     assert changed_lines.resolve_merge_base(repo, "refs/heads/no-such-branch") == "refs/heads/no-such-branch"
-    assert "cannot resolve merge base" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "cannot resolve merge base" in captured.err
+    # And nothing on stdout: that is the result channel when `--output` is
+    # omitted, so a warning there is consumed as a changed file name.
+    assert captured.out == ""
+
+
+def test_warning_does_not_contaminate_the_result_on_stdout(tmp_path: Path) -> None:
+    """The warning must not be readable as output data.
+
+    Asserted end to end through the CLI rather than on ``resolve_merge_base``
+    alone, because that is where the two streams meet: without ``--output`` the
+    result is written to stdout, so a caller doing ``for f in $(changed_lines
+    ... --mode changed-files)`` would treat the words of the warning as file
+    names.
+
+    The spell-check workflow passes ``--output`` and so was never affected;
+    ``--output`` is optional, and the fallback exists for exactly the shallow
+    clone a CI job runs in, so the two meet in any *other* caller that reads
+    stdout.
+    """
+    # Two unrelated root commits: the base ref resolves, so the fallback `git
+    # diff` against its tip succeeds, but there is no merge base to find. A
+    # ref that does not exist at all would fail the fallback diff too and never
+    # reach the point this test is about.
+    repo = tmp_path / "solo"
+    repo.mkdir()
+    git(repo, "init", "--quiet", "--initial-branch=main")
+    git(repo, "config", "user.email", "ci@example.invalid")
+    git(repo, "config", "user.name", "CI")
+    (repo / "seed.md").write_text("Unrelated root.\n", encoding="utf-8")
+    git(repo, "add", "seed.md")
+    git(repo, "commit", "--quiet", "--message", "unrelated root")
+    git(repo, "checkout", "--quiet", "--orphan", "work")
+    git(repo, "rm", "--quiet", "-rf", ".")
+    (repo / "notes.md").write_text("Only history.\n", encoding="utf-8")
+    git(repo, "add", "notes.md")
+    git(repo, "commit", "--quiet", "--message", "only commit")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--base",
+            "refs/heads/main",
+            "--extensions",
+            ".md",
+            "--mode",
+            "changed-files",
+            "--repo",
+            str(repo),
+        ],
+        check=False,
+        capture_output=True,
+        encoding="utf-8",
+    )
+
+    assert result.returncode == 0
+    assert "cannot resolve merge base" in result.stderr
+    assert "warning" not in result.stdout
+    # Every stdout line is still a path the diff produced, not prose.
+    for line in result.stdout.splitlines():
+        assert line == "notes.md", f"stdout carried a non-path line: {line!r}"

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -71,7 +72,13 @@ def resolve_merge_base(repo: Path, base: str) -> str:
         # this script always used. Over-reporting is the safe direction for the
         # checks built on this -- they flag too much rather than miss something.
         message = result.stderr.strip() or f"git merge-base exited {result.returncode}"
-        print(f"warning: cannot resolve merge base with {base} ({message}); diffing against its tip instead")
+        # stderr, not stdout: without `--output` this script emits its result on
+        # stdout, so a warning printed there is read back as one of the changed
+        # file names (or as an added line) by whatever consumes it.
+        print(
+            f"warning: cannot resolve merge base with {base} ({message}); diffing against its tip instead",
+            file=sys.stderr,
+        )
         return base
     return result.stdout.strip() or base
 
