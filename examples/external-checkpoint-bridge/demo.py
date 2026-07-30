@@ -51,7 +51,13 @@ class CheckpointVerdict(TypedDict):
 
 def stable_json(value: Any) -> str:
     """Serialize JSON deterministically for checkpoint review."""
-    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
 
 
 def action_ref_for(value: Any) -> str:
