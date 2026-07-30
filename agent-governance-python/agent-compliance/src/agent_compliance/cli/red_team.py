@@ -308,13 +308,15 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
 
     experiment.complete()
 
+    overall_pass = all(r.passed for r in results)
+
     # Format output
     if output_json:
         data = {
             "target": target,
             "experiment_id": experiment.experiment_id,
             "playbooks_run": len(results),
-            "overall_passed": all(r.passed for r in results),
+            "overall_passed": overall_pass,
             "results": [
                 {
                     "playbook_id": r.playbook.playbook_id,
@@ -342,7 +344,6 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
         click.echo(f"  Target: {target}")
         click.echo(f"  Experiment: {experiment.experiment_id}\n")
 
-        overall_pass = True
         for r in results:
             icon = "+" if r.passed else "!"
             click.echo(f"  [{icon}] {r.playbook.name}")
@@ -354,8 +355,6 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
                 click.echo(f"        [{step_icon}] {step.name}: {result.value}")
 
             click.echo()
-            if not r.passed:
-                overall_pass = False
 
         click.echo(f"  {'─'*56}")
         total = len(results)
@@ -363,7 +362,7 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
         click.echo(f"  Results: {passed_count}/{total} playbooks passed")
         click.echo(f"  Overall: {'PASS' if overall_pass else 'FAIL'}\n")
 
-    if not all(r.resilience_score >= threshold for r in results):
+    if not overall_pass:
         raise SystemExit(1)
 
 
