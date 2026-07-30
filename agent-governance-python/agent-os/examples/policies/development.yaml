@@ -1,0 +1,28 @@
+version: "1.0"
+name: development
+description: Relaxed policy for local development and experimentation
+
+rules:
+  - name: max_tokens
+    condition:
+      field: token_count
+      operator: gt
+      value: 16384
+    action: deny
+    priority: 100
+    message: Token count exceeds generous dev limit of 16384
+
+  - name: max_tool_calls
+    condition:
+      field: tool_call_count
+      operator: gt
+      value: 50
+    action: deny
+    priority: 99
+    message: Tool call count exceeds dev limit of 50
+
+defaults:
+  action: allow
+  max_tokens: 16384
+  max_tool_calls: 50
+  confidence_threshold: 0.5

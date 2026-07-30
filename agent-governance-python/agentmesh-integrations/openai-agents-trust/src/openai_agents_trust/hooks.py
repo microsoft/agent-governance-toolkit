@@ -13,7 +13,7 @@ from agents.run_context import AgentHookContext, RunContextWrapper
 from agents.tool import Tool
 from agent_control_specification import Decision, HostSession
 
-from .audit import AuditLog
+from .audit import AuditLog, audit_record as _audit_record
 from .trust import TrustScorer
 
 
@@ -75,8 +75,8 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
         self.audit_log.record(
             agent_id=agent.name,
             action="agent_start",
-            decision=evaluation.verdict,
-            details=evaluation.audit_record(),
+            decision=evaluation.verdict.decision.value,
+            details=_audit_record(evaluation),
         )
 
     async def on_agent_end(
@@ -89,8 +89,8 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
         self.audit_log.record(
             agent_id=agent.name,
             action="agent_end",
-            decision=evaluation.verdict,
-            details={"duration_ms": round(duration * 1000, 2), **evaluation.audit_record()},
+            decision=evaluation.verdict.decision.value,
+            details={"duration_ms": round(duration * 1000, 2), **_audit_record(evaluation)},
         )
 
     async def on_tool_start(
@@ -111,8 +111,8 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
         self.audit_log.record(
             agent_id=agent.name,
             action=f"tool_start:{tool.name}",
-            decision=evaluation.verdict,
-            details={"call_count": count, **evaluation.audit_record()},
+            decision=evaluation.verdict.decision.value,
+            details={"call_count": count, **_audit_record(evaluation)},
         )
         self._require_allowed(evaluation)
         self._tool_call_counts[agent.name] = count
@@ -133,8 +133,8 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
         self.audit_log.record(
             agent_id=agent.name,
             action=f"tool_end:{tool.name}",
-            decision=evaluation.verdict,
-            details=evaluation.audit_record(),
+            decision=evaluation.verdict.decision.value,
+            details=_audit_record(evaluation),
         )
         self._require_allowed(evaluation)
 

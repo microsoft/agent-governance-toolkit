@@ -1,0 +1,37 @@
+version: "1.0"
+name: default
+description: Standard governance policy for general-purpose agents
+
+rules:
+  - name: max_tokens
+    condition:
+      field: token_count
+      operator: gt
+      value: 4096
+    action: deny
+    priority: 100
+    message: Token count exceeds the default limit of 4096
+
+  - name: max_tool_calls
+    condition:
+      field: tool_call_count
+      operator: gt
+      value: 10
+    action: deny
+    priority: 99
+    message: Tool call count exceeds the default limit of 10
+
+  - name: confidence_threshold
+    condition:
+      field: confidence
+      operator: lt
+      value: 0.8
+    action: deny
+    priority: 90
+    message: Confidence score is below the minimum threshold of 0.8
+
+defaults:
+  action: allow
+  max_tokens: 4096
+  max_tool_calls: 10
+  confidence_threshold: 0.8

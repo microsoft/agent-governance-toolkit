@@ -1,0 +1,29 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: environment-policy
+description: Rules that change based on the deployment environment
+
+rules:
+  - name: block-production
+    condition:
+      field: environment
+      operator: eq
+      value: production
+    action: deny
+    priority: 100
+    message: "Production environment: all agent actions require approval"
+
+  - name: allow-development
+    condition:
+      field: environment
+      operator: eq
+      value: development
+    action: allow
+    priority: 90
+    message: "Development environment: agents can act freely"
+
+defaults:
+  action: deny
+  max_tool_calls: 5

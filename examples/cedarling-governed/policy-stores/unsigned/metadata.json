@@ -1,0 +1,10 @@
+{
+  "cedar_version": "4.4.0",
+  "policy_store": {
+    "id": "a61ced1196e0ed4e8a3601ceda121ec0",
+    "name": "CedarlingGovernedExampleUnsigned",
+    "description": "Local policy store for the AGT cedarling-governed example (unsigned auth)",
+    "version": "1.0.0",
+    "created_date": "2026-06-08T00:00:00Z"
+  }
+}

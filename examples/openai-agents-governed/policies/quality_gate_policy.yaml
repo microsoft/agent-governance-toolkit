@@ -1,0 +1,74 @@
+# Quality Gate — Governance Policy
+#
+# IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: "quality-gate-governance"
+description: >
+  Quality gate policy for the OpenAI Agents SDK publisher agent.
+  Blocks publication unless content has been reviewed, meets minimum
+  trust thresholds, and passes format checks.
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+rules:
+  # ── Publication Gate ────────────────────────────────────────────────────
+  - name: "block-unreviewed-publish"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "publish without review"
+    action: "deny"
+    priority: 200
+    message: "Content must be reviewed by the editor before publishing"
+
+  - name: "block-draft-publish"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "DRAFT"
+    action: "deny"
+    priority: 180
+    message: "Draft content cannot be published — requires editor approval"
+
+  # ── Content Safety ──────────────────────────────────────────────────────
+  - name: "block-profanity"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '\b(placeholder_profanity_pattern)\b'
+    action: "deny"
+    priority: 190
+    message: "Content contains prohibited language"
+
+  # ── Minimum Length Gate ─────────────────────────────────────────────────
+  - name: "allow-reviewed-content"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "REVIEWED"
+    action: "allow"
+    priority: 100
+    message: "Content has been reviewed and is cleared for publishing"
+
+  # ── Audit Everything ────────────────────────────────────────────────────
+  - name: "audit-all-publish-actions"
+    condition:
+      field: "message_count"
+      operator: "gte"
+      value: 0
+    action: "audit"
+    priority: 10
+    message: "All publish actions are audit-logged"
+
+defaults:
+  action: "allow"
+  max_tokens: 8192
+  max_tool_calls: 5
+  confidence_threshold: 0.9

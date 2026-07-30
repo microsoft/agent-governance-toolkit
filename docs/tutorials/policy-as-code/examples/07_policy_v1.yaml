@@ -1,0 +1,67 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Chapter 7: Policy Versioning — version 1.0 baseline.
+#
+# This is the same combined policy from Chapter 6, representing
+# the current production state before any updates.
+
+version: "1.0"
+name: production-policy
+description: >
+  Company-wide production policy — version 1.0 baseline.
+  Covers allow, deny, and escalation tiers for all five tools.
+
+rules:
+  # Tier 1: Always denied — irreversibly destructive
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Destructive action: deleting databases is never allowed"
+
+  # Tier 2: Escalation — needs human review
+  - name: escalate-transfer-funds
+    condition:
+      field: tool_name
+      operator: eq
+      value: transfer_funds
+    action: deny
+    priority: 90
+    message: "Sensitive action: transfer_funds requires human approval"
+
+  - name: escalate-send-email
+    condition:
+      field: tool_name
+      operator: eq
+      value: send_email
+    action: deny
+    priority: 85
+    message: "Sensitive action: send_email requires human approval"
+
+  # Tier 3: Always allowed — safe, read-only actions
+  - name: allow-search-documents
+    condition:
+      field: tool_name
+      operator: eq
+      value: search_documents
+    action: allow
+    priority: 80
+    message: "Safe action: searching documents is always allowed"
+
+  # Tier 4: Explicit deny — restricted access
+  - name: block-write-file
+    condition:
+      field: tool_name
+      operator: eq
+      value: write_file
+    action: deny
+    priority: 70
+    message: "Write access is not permitted for this agent"
+
+defaults:
+  action: allow
+  max_tool_calls: 10

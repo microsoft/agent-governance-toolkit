@@ -1,0 +1,31 @@
+version: "1.0"
+name: trust-handoff
+description: Require a minimum trust score before allowing agent-to-agent handoffs.
+scope: mesh
+rules:
+  - id: deny-low-trust-handoff
+    action: deny
+    priority: 100
+    conditions:
+      - field: trust_score
+        operator: lt
+        value: 0.7
+  - id: escalate-medium-trust
+    action: escalate
+    priority: 80
+    conditions:
+      - field: trust_score
+        operator: lt
+        value: 0.9
+  - id: allow-high-trust
+    action: allow
+    priority: 50
+    conditions:
+      - field: trust_score
+        operator: gt
+        value: 0.9
+metadata:
+  author: trust-team
+  tags:
+    - handoff
+    - multi-agent

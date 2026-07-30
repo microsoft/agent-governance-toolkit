@@ -1,0 +1,29 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: my-first-policy
+description: A simple policy that blocks dangerous agent actions
+
+rules:
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Deleting databases is not allowed"
+
+  - name: block-send-email
+    condition:
+      field: tool_name
+      operator: eq
+      value: send_email
+    action: deny
+    priority: 90
+    message: "Sending emails requires approval"
+
+defaults:
+  action: allow
+  max_tool_calls: 10

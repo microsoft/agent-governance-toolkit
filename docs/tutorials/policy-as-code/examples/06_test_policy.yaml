@@ -1,0 +1,73 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Chapter 6: Policy Testing — a combined policy for automated testing.
+#
+# This policy merges the governance concepts from Chapters 1-5 into a
+# single file so that test scenarios can verify every decision tier:
+#   - Always allowed  (search_documents)
+#   - Always denied   (delete_database)
+#   - Escalation      (transfer_funds, send_email)
+#   - Explicit deny   (write_file)
+#   - Default allow   (anything not listed)
+
+version: "1.0"
+name: test-policy
+description: >
+  Combined policy for automated testing.  Covers allow, deny,
+  escalation-tagged deny, and default-allow so that test scenarios
+  can verify every decision path in one pass.
+
+rules:
+  # Tier 1: Always denied — irreversibly destructive
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Destructive action: deleting databases is never allowed"
+
+  # Tier 2: Escalation — needs human review
+  - name: escalate-transfer-funds
+    condition:
+      field: tool_name
+      operator: eq
+      value: transfer_funds
+    action: deny
+    priority: 90
+    message: "Sensitive action: transfer_funds requires human approval"
+
+  - name: escalate-send-email
+    condition:
+      field: tool_name
+      operator: eq
+      value: send_email
+    action: deny
+    priority: 85
+    message: "Sensitive action: send_email requires human approval"
+
+  # Tier 3: Always allowed — safe, read-only actions
+  - name: allow-search-documents
+    condition:
+      field: tool_name
+      operator: eq
+      value: search_documents
+    action: allow
+    priority: 80
+    message: "Safe action: searching documents is always allowed"
+
+  # Tier 4: Explicit deny — not needed by this agent
+  - name: block-write-file
+    condition:
+      field: tool_name
+      operator: eq
+      value: write_file
+    action: deny
+    priority: 70
+    message: "Write access is not permitted for this agent"
+
+defaults:
+  action: allow
+  max_tool_calls: 10

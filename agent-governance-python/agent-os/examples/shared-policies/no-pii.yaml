@@ -1,0 +1,31 @@
+version: "1.0"
+name: no-pii
+description: Deny actions whose content contains common PII patterns (SSN, email, credit card).
+scope: agent
+rules:
+  - id: deny-ssn
+    action: deny
+    priority: 100
+    conditions:
+      - field: content
+        operator: matches
+        value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+  - id: deny-credit-card
+    action: deny
+    priority: 99
+    conditions:
+      - field: content
+        operator: matches
+        value: "\\b\\d{4}[- ]?\\d{4}[- ]?\\d{4}[- ]?\\d{4}\\b"
+  - id: audit-email
+    action: audit
+    priority: 50
+    conditions:
+      - field: content
+        operator: matches
+        value: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+metadata:
+  author: governance-team
+  tags:
+    - privacy
+    - compliance

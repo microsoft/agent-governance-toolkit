@@ -1,0 +1,38 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: reader-policy
+description: Restrictive policy for read-only agents
+
+rules:
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Reader agents cannot delete databases"
+
+  - name: block-send-email
+    condition:
+      field: tool_name
+      operator: eq
+      value: send_email
+    action: deny
+    priority: 90
+    message: "Reader agents cannot send emails"
+
+  - name: block-write-file
+    condition:
+      field: tool_name
+      operator: eq
+      value: write_file
+    action: deny
+    priority: 80
+    message: "Reader agents cannot write files"
+
+defaults:
+  action: allow
+  max_tool_calls: 10

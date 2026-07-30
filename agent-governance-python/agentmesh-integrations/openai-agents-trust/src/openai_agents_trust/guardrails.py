@@ -13,7 +13,7 @@ from agents.items import TResponseInputItem
 from agents.run_context import RunContextWrapper
 from agent_control_specification import Decision, HostSession
 
-from .audit import AuditLog
+from .audit import AuditLog, audit_record as _audit_record
 from .identity import AgentIdentity
 from .trust import TrustScorer
 
@@ -97,11 +97,11 @@ def governance_input_guardrail(config: RuntimeGuardrailConfig) -> InputGuardrail
             config.audit_log.record(
                 agent_id=agent.name,
                 action="input_check",
-                decision=evaluation.verdict,
-                details=evaluation.audit_record(),
+                decision=evaluation.verdict.decision.value,
+                details=_audit_record(evaluation),
             )
         return GuardrailFunctionOutput(
-            output_info=evaluation.audit_record(),
+            output_info=_audit_record(evaluation),
             tripwire_triggered=_should_trip(evaluation),
         )
 
@@ -117,11 +117,11 @@ def governance_output_guardrail(config: RuntimeGuardrailConfig) -> OutputGuardra
             config.audit_log.record(
                 agent_id=agent.name,
                 action="output_check",
-                decision=evaluation.verdict,
-                details=evaluation.audit_record(),
+                decision=evaluation.verdict.decision.value,
+                details=_audit_record(evaluation),
             )
         return GuardrailFunctionOutput(
-            output_info=evaluation.audit_record(),
+            output_info=_audit_record(evaluation),
             tripwire_triggered=_should_trip(evaluation),
         )
 

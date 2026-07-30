@@ -1,0 +1,64 @@
+version: "1.0"
+name: strict
+description: Production safety policy with tight limits and audit requirements
+
+rules:
+  - name: max_tokens
+    condition:
+      field: token_count
+      operator: gt
+      value: 2048
+    action: deny
+    priority: 100
+    message: Token count exceeds production limit of 2048
+
+  - name: max_tool_calls
+    condition:
+      field: tool_call_count
+      operator: gt
+      value: 5
+    action: deny
+    priority: 99
+    message: Tool call count exceeds production limit of 5
+
+  - name: block_exec
+    condition:
+      field: tool_name
+      operator: eq
+      value: execute_code
+    action: block
+    priority: 98
+    message: Code execution is blocked in production
+
+  - name: block_shell
+    condition:
+      field: tool_name
+      operator: eq
+      value: run_shell
+    action: block
+    priority: 97
+    message: Shell access is blocked in production
+
+  - name: confidence_threshold
+    condition:
+      field: confidence
+      operator: lt
+      value: 0.95
+    action: deny
+    priority: 90
+    message: Confidence score is below the production threshold of 0.95
+
+  - name: audit_all_tool_calls
+    condition:
+      field: tool_name
+      operator: ne
+      value: ""
+    action: audit
+    priority: 50
+    message: Auditing tool call for compliance
+
+defaults:
+  action: deny
+  max_tokens: 2048
+  max_tool_calls: 5
+  confidence_threshold: 0.95

@@ -44,10 +44,10 @@ adk_governance:
 ### 2. Wire into your ADK agent
 
 ```python
-from adk_agentmesh import ADKAgentControl, GovernanceCallbacks
+from adk_agentmesh import ADKPolicyEvaluator, GovernanceCallbacks
 
 # Load policy
-evaluator = ADKAgentControl.from_config("policies/adk-agt-manifest.yaml")
+evaluator = ADKPolicyEvaluator.from_config("policies/adk-agt-manifest.yaml")
 callbacks = GovernanceCallbacks(evaluator)
 
 # Attach to ADK agent
@@ -67,9 +67,9 @@ agent = LlmAgent(
 
 ```python
 import asyncio
-from adk_agentmesh import ADKAgentControl
+from adk_agentmesh import ADKPolicyEvaluator
 
-evaluator = ADKAgentControl(
+evaluator = ADKPolicyEvaluator(
     blocked_tools=["execute_shell"],
     max_tool_calls=50,
     require_approval_for=["send_email"],
@@ -121,7 +121,7 @@ child_scope = parent_scope.narrow(
 Every governance decision is recorded:
 
 ```python
-evaluator = ADKAgentControl(blocked_tools=["dangerous_tool"])
+evaluator = ADKPolicyEvaluator(blocked_tools=["dangerous_tool"])
 
 # ... after agent runs ...
 

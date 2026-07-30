@@ -1,0 +1,35 @@
+version: "1.0"
+name: rate-limited-tools
+description: Rate-limit specific tools to prevent abuse.
+scope: tool
+rules:
+  - id: rate-limit-web-search
+    action: rate_limit
+    priority: 80
+    conditions:
+      - field: tool_name
+        operator: eq
+        value: web_search
+      - field: token_count
+        operator: gt
+        value: 2000
+  - id: rate-limit-code-exec
+    action: rate_limit
+    priority: 90
+    conditions:
+      - field: tool_name
+        operator: eq
+        value: code_execution
+  - id: allow-read-tools
+    action: allow
+    priority: 10
+    conditions:
+      - field: tool_name
+        operator: in
+        value:
+          - file_read
+          - list_files
+          - search
+metadata:
+  author: platform-team
+  max_calls_per_minute: 10

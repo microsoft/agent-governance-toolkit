@@ -1,0 +1,20 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: admin-policy
+description: Permissive policy for admin agents — only the most dangerous actions are blocked
+
+rules:
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Nobody is allowed to delete databases"
+
+defaults:
+  action: allow
+  max_tool_calls: 50
