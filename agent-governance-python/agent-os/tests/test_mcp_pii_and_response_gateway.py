@@ -203,7 +203,7 @@ class TestGatewayResponseSanitize:
         decision = gw.intercept_tool_response('a1', 'tool', text)
         assert glued not in (decision.content or '')
 
-    def test_failed_residual_rescan_blocks_instead_of_allowing(self, monkeypatch):
+    def test_failed_residual_re_scan_blocks_instead_of_allowing(self, monkeypatch):
         """A re-scan that could not run is not a re-scan that passed.
 
         The residual check exists because `sanitize_response` is not trusted to
@@ -224,13 +224,13 @@ class TestGatewayResponseSanitize:
         real = scanner._scan_exfiltration_urls
         calls = {"n": 0}
 
-        def fail_on_rescan(*args, **kwargs):
+        def fail_on_re_scan(*args, **kwargs):
             calls["n"] += 1
             if calls["n"] > 1:
                 raise RuntimeError("scanner crash during residual re-scan")
             return real(*args, **kwargs)
 
-        monkeypatch.setattr(scanner, "_scan_exfiltration_urls", fail_on_rescan)
+        monkeypatch.setattr(scanner, "_scan_exfiltration_urls", fail_on_re_scan)
         decision = gw.intercept_tool_response(
             "a1", "tool", "<instruction>evil</instruction> safe text"
         )
@@ -317,7 +317,7 @@ class TestGatewayResponseSanitize:
         assert decision.action == 'blocked'
         assert decision.content is None
 
-    def test_residual_rescan_that_raises_fails_closed(self):
+    def test_residual_re_scan_that_raises_fails_closed(self):
         """A crashing re-scan must block, not propagate out of the gateway.
 
         `scan_response` turns its own internal failures into an "error" threat,
@@ -332,7 +332,7 @@ class TestGatewayResponseSanitize:
         because the *verifier* could not run, not because the response was
         already known to be unsafe.
         """
-        class _RescanRaises(MCPResponseScanner):
+        class _ReScanRaises(MCPResponseScanner):
             def __init__(self) -> None:
                 super().__init__()
                 self.calls = 0
@@ -343,7 +343,7 @@ class TestGatewayResponseSanitize:
                     raise RuntimeError('re-scan unavailable')
                 return super().scan_response(text, tool_name)
 
-        scanner = _RescanRaises()
+        scanner = _ReScanRaises()
         gw = MCPGateway(_Runtime(), enable_builtin_sanitization=False,
                         response_policy=ResponsePolicy.SANITIZE,
                         response_scanner=scanner)
