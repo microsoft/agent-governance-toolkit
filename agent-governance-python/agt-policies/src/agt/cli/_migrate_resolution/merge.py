@@ -71,7 +71,9 @@ def _accepts_value(operator: str, expected: Any, value: Any) -> bool:
         if operator == "eq":
             return value == expected
         if operator == "ne":
-            return value is not None and value != expected
+            # Mirrors the deny-polarity compiler fix: deny ne fires on None (no null
+            # guard), so None is a value that ne accepts in the overlap check.
+            return value != expected
         if operator == "gt":
             return value is not None and value > expected
         if operator == "gte":
@@ -83,7 +85,9 @@ def _accepts_value(operator: str, expected: Any, value: Any) -> bool:
         if operator == "in" and isinstance(expected, list):
             return value is not None and value in expected
         if operator == "not_in" and isinstance(expected, list):
-            return value is not None and value not in expected
+            # Same rationale as ne: deny not_in fires on None (null guard dropped),
+            # so None is accepted and must not be considered disjoint from an allow eq null.
+            return value not in expected
         if operator == "contains":
             return value is not None and expected in value
         if operator == "startswith":

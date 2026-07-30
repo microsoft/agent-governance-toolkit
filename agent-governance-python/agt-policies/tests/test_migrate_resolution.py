@@ -380,6 +380,66 @@ def test_merge_preserves_provably_disjoint_ne_child_allow() -> None:
     assert [rule["name"] for rule in merged] == ["child_allow", "org_deny"]
 
 
+def test_merge_deny_ne_child_allow_eq_null_dropped() -> None:
+    """deny ne fires on absent field (null guard dropped); allow eq null overlaps."""
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "content_hash", "operator": "ne", "value": "sha256:REGISTERED"},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "content_hash", "operator": "eq", "value": None},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"], (
+        "allow eq null must be dropped: deny ne fires on absent field and would be preempted"
+    )
+
+
+def test_merge_deny_not_in_child_allow_eq_null_dropped() -> None:
+    """deny not_in fires on absent field (null guard dropped); allow eq null overlaps."""
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "region", "operator": "not_in", "value": ["US", "EU"]},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "region", "operator": "eq", "value": None},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"], (
+        "allow eq null must be dropped: deny not_in fires on absent field and would be preempted"
+    )
+
+
 def test_merge_contains_and_matches_overlap_drop_child_allow() -> None:
     parent = {
         "rules": [
