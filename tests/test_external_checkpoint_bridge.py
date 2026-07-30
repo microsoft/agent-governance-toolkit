@@ -58,6 +58,12 @@ def test_action_ref_is_stable_and_opaque() -> None:
     assert "customer" not in first["action_ref"].lower()
 
 
+def test_local_checkpoint_returns_all_demo_verdicts() -> None:
+    verdicts = [demo.local_checkpoint(envelope)["verdict"] for envelope in demo.sample_actions()]
+
+    assert verdicts == ["allow", "require_approval", "deny"]
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -178,6 +184,55 @@ def test_parse_remote_verdict_accepts_valid_payload() -> None:
         "verdict": "require_approval",
         "reason": "PII export requires human approval.",
         "decision_id": "dec_test",
+        "action_ref": envelope["action_ref"],
+    }
+
+
+def test_review_action_uses_local_checkpoint_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("EXTERNAL_CHECKPOINT_URL", raising=False)
+    envelope = _sample_envelope()
+
+    verdict = demo.review_action(envelope)
+
+    assert verdict["verdict"] == "require_approval"
+    assert verdict["action_ref"] == envelope["action_ref"]
+
+
+def test_review_action_uses_remote_checkpoint_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    envelope = _sample_envelope()
+    monkeypatch.setenv("EXTERNAL_CHECKPOINT_URL", "https://checkpoint.example.com/review")
+
+    class FakeResponse:
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "verdict": "allow",
+                    "reason": "Approved by remote checkpoint.",
+                    "decision_id": "dec_remote",
+                    "action_ref": envelope["action_ref"],
+                }
+            ).encode("utf-8")
+
+    monkeypatch.setattr(
+        demo.urllib.request, "urlopen", lambda _request, timeout: FakeResponse()
+    )
+
+    verdict = demo.review_action(envelope)
+
+    assert verdict == {
+        "verdict": "allow",
+        "reason": "Approved by remote checkpoint.",
+        "decision_id": "dec_remote",
         "action_ref": envelope["action_ref"],
     }
 
