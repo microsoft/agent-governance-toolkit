@@ -328,7 +328,9 @@ class ScopeGuard:
         :attr:`ScopeEvaluation.error` set, because an unmeasured change is not a
         change within scope. ``config.mode == "off"`` still short-circuits to
         ``PASS``: the operator has opted out of the check, so there is nothing to
-        fail closed on.
+        fail closed on. The measurement failure is still carried on the
+        ``PASS`` result's :attr:`ScopeEvaluation.error`, so the audit trail
+        records that the diff was unreadable rather than that it was clean.
 
         Args:
             agent_id: Unique agent identifier.
@@ -352,6 +354,27 @@ class ScopeGuard:
                 max_lines=config.max_lines,
                 drift_indicators=drift_indicators or [],
                 reason=f"scope could not be measured: {error}",
+                error=error,
+            )
+            self._record(agent_id, evaluation)
+            return evaluation
+        if error is not None:
+            # mode="off" with an unreadable diff. The decision stands -- the
+            # operator opted out, so there is nothing to fail closed on -- but
+            # its zero counts come from a failed measurement, not a clean tree.
+            # Built here rather than via evaluate() so error reaches _record and
+            # the audit event says which of the two it was.
+            evaluation = ScopeEvaluation(
+                decision="PASS",
+                files_changed=0,
+                lines_changed=0,
+                max_files=config.max_files,
+                max_lines=config.max_lines,
+                drift_indicators=drift_indicators or [],
+                reason=(
+                    f"Scope guard disabled (mode=off); scope could not be "
+                    f"measured: {error}"
+                ),
                 error=error,
             )
             self._record(agent_id, evaluation)

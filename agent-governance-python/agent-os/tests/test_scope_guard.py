@@ -304,6 +304,42 @@ class TestEvaluateFromGitFailsClosed:
         assert result.decision == "PASS"
 
     @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_mode_off_records_that_the_diff_was_unmeasurable(self, mock_run):
+        # The PASS is correct, but its zero counts come from a failed
+        # measurement rather than a clean tree. Reporting error=None there makes
+        # the two indistinguishable in the audit trail.
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=128, stdout="", stderr="fatal: bad revision",
+        )
+        engine = MagicMock()
+        cfg = ScopeConfig(max_files=10, max_lines=500, mode="off")
+        result = ScopeGuard(policy_engine=engine).evaluate_from_git(
+            "agent-1", cfg, "/repo", "main"
+        )
+        assert result.decision == "PASS"
+        assert result.error is not None
+        assert "could not be measured" in result.reason
+        assert "mode=off" in result.reason
+
+        event = engine.record_event.call_args[0][0]
+        assert event["decision"] == "PASS"
+        assert event["error"] is not None
+
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_mode_off_with_a_readable_diff_reports_no_error(self, mock_run):
+        # The other side: opting out of a check that could have run is not a
+        # measurement failure, so error stays None.
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="20\t5\tsrc/a.py\n", stderr="",
+        )
+        cfg = ScopeConfig(max_files=1, max_lines=1, mode="off")
+        result = self.guard.evaluate_from_git("agent-1", cfg, "/repo", "main")
+        assert result.decision == "PASS"
+        assert result.error is None
+        assert result.files_changed == 1
+        assert result.lines_changed == 25
+
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
     def test_failure_is_recorded_to_the_policy_engine(self, mock_run):
         # The audit trail has to show the block; a governance decision that no
         # one can see afterwards is not much better than no decision.
