@@ -35,13 +35,13 @@ Azure AI Foundry Agent Service uses the Microsoft Agent Framework (MAF) under th
 │  │       │                                            │  │
 │  │       ▼                                            │  │
 │  │  ┌──────────────────────┐                          │  │
-│  │  │ GovernancePolicyMW   │ ← Policy enforcement     │  │
+│  │  │ RuntimeGovernanceMiddleware   │ ← Policy enforcement     │  │
 │  │  ├──────────────────────┤                          │  │
-│  │  │ CapabilityGuardMW    │ ← Tool allow/deny lists  │  │
+│  │  │ CapabilityGuardMiddleware    │ ← Tool allow/deny lists  │  │
 │  │  ├──────────────────────┤                          │  │
-│  │  │ AuditTrailMW         │ ← Tamper-proof logging   │  │
+│  │  │ AuditTrailMiddleware         │ ← Tamper-proof logging   │  │
 │  │  ├──────────────────────┤                          │  │
-│  │  │ RogueDetectionMW     │ ← Behavioral anomaly     │  │
+│  │  │ RogueDetectionMiddleware     │ ← Behavioral anomaly     │  │
 │  │  └──────────────────────┘                          │  │
 │  │       │                                            │  │
 │  │       ▼                                            │  │
@@ -58,7 +58,7 @@ The toolkit's MAF adapter (`agent_os.integrations.maf_adapter`) provides four co
 
 | Middleware | MAF Type | What It Does |
 |-----------|----------|-------------|
-| **GovernancePolicyMiddleware** | `AgentMiddleware` | Enforces declarative policies: token limits, rate limiting, blocked patterns, content safety |
+| **RuntimeGovernanceMiddleware** | `AgentMiddleware` | Enforces declarative policies: token limits, rate limiting, blocked patterns, content safety |
 | **CapabilityGuardMiddleware** | `FunctionMiddleware` | Tool-level allow/deny lists and capability sandboxing |
 | **AuditTrailMiddleware** | `AgentMiddleware` | Tamper-proof audit logging of every agent action |
 | **RogueDetectionMiddleware** | `FunctionMiddleware` | Behavioral anomaly detection with configurable risk thresholds |
@@ -114,14 +114,14 @@ That's it. Every tool call the agent makes now passes through the governance pip
 ```python
 from agent_framework import Agent
 from agent_os.integrations.maf_adapter import (
-    GovernancePolicyMiddleware,
+    RuntimeGovernanceMiddleware,
     CapabilityGuardMiddleware,
     AuditTrailMiddleware,
     RogueDetectionMiddleware,
 )
 
 # 1. Policy enforcement
-policy_mw = GovernancePolicyMiddleware(
+policy_mw = RuntimeGovernanceMiddleware(
     policy_directory="policies/",
     max_tokens_per_turn=4096,
     rate_limit_per_minute=60,
@@ -164,12 +164,12 @@ agent = Agent(
 
 ## Middleware Reference
 
-### GovernancePolicyMiddleware
+### RuntimeGovernanceMiddleware
 
 Enforces declarative policies loaded from YAML files or configured inline.
 
 ```python
-GovernancePolicyMiddleware(
+RuntimeGovernanceMiddleware(
     policy_directory="policies/",     # Path to YAML policy files
     max_tokens_per_turn=4096,         # Token limit per agent turn
     rate_limit_per_minute=100,        # Max tool calls per minute

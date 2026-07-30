@@ -9,10 +9,10 @@ Policy checkpoints use the native ACS runtime through the Agent OS LangGraph
 adapter.
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.integrations.langgraph_adapter import LangGraphKernel
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 kernel = LangGraphKernel(runtime=runtime)
 ```
 

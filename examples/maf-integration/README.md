@@ -17,7 +17,7 @@ integration patterns in Python and .NET.
 ## Python
 
 Each Python folder contains a runnable `main.py`, a native ACS manifest, and a
-Rego policy. The script creates `AgtRuntime`, passes it to `MAFKernel`, and
+Rego policy. The script creates `AgentControl`, passes it to `MAFKernel`, and
 evaluates one allowed and one denied request.
 
 ```bash

@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Native adapter-facing orchestration over ``AdapterRuntimeSession``."""
+"""Native adapter-facing orchestration over the ACS host session."""
 
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ POINT_NOT_CONFIGURED = "runtime_error:intervention_point_unknown"
 
 @dataclass(frozen=True)
 class NativeAdapterResult:
-    """Adapter decision backed by the native ``PolicyEvaluation`` contract."""
+    """Adapter decision backed by an ACS ``InterventionPointResult``."""
 
     evaluation: Any
 
@@ -140,15 +140,15 @@ class NativeAdapterResult:
 
     @property
     def allowed(self) -> bool:
-        return bool(self.evaluation.is_allowed())
+        return bool(self.evaluation.verdict.decision.permits)
 
     @property
     def verdict(self) -> str:
-        return str(self.evaluation.verdict)
+        return str(self.evaluation.verdict.decision.value)
 
     @property
     def reason(self) -> str:
-        reason = str(self.evaluation.reason_code or "")
+        reason = str(self.evaluation.verdict.reason or "")
         return reason.removeprefix("policy:")
 
     @property
@@ -161,7 +161,7 @@ class NativeAdapterResult:
 
     @property
     def transform(self) -> Any | None:
-        return self.evaluation.transform
+        return self.evaluation.verdict.transform
 
     @property
     def permits_unchanged(self) -> bool:
@@ -177,15 +177,31 @@ class NativeAdapterResult:
 
     @property
     def transformed_value(self) -> Any:
+        """The value the runtime applied, falling back to what it asked for."""
+        if self.evaluation.transformed_policy_target_applied:
+            return self.evaluation.transformed_policy_target
         transform = self.transform
-        if transform is None:
-            return None
-        applied_value = getattr(transform, "applied_value", None)
-        return applied_value if applied_value is not None else transform.value
+        return None if transform is None else transform.value
 
     @property
     def public_message(self) -> str:
-        return str(self.evaluation.public_error_message())
+        """A denial message that leaks neither policy nor user content."""
+        if self.verdict == "escalate":
+            return "Request requires policy approval."
+        if self.reason.startswith("runtime_error:"):
+            return "Policy evaluation failed closed."
+        return "Request blocked by policy."
+
+    def audit_record(self) -> dict[str, Any]:
+        """The restricted payload adapters attach to a violation."""
+        return {
+            "schema_version": "agt.policy_evaluation.v1",
+            "verdict": self.verdict,
+            "reason_code": self.reason,
+            "message": str(self.evaluation.verdict.message or ""),
+            "input_identity": self.input_identity,
+            "enforced_identity": self.enforced_identity,
+        }
 
     def to_policy_violation(self, error_type: Any) -> Exception:
         if self.transform is not None:
@@ -197,7 +213,9 @@ class NativeAdapterResult:
                 "policy returned a transform this integration cannot apply, "
                 f"so the original value was refused (reason={self.reason})"
             )
-        return error_type.from_evaluation_result(self.evaluation)
+        error = error_type(self.public_message, "POLICY_VIOLATION", self.audit_record())
+        error.evaluation_result = self.evaluation
+        return error
 
 
 class NativeAdapterRuntime:
@@ -205,7 +223,7 @@ class NativeAdapterRuntime:
 
     def __init__(self, runtime: Any) -> None:
         if runtime is None:
-            raise TypeError("NativeAdapterRuntime requires AgtRuntime")
+            raise TypeError("NativeAdapterRuntime requires an AgentControl")
         self._runtime = runtime
         self._sessions: dict[str, Any] = {}
 
@@ -214,21 +232,23 @@ class NativeAdapterRuntime:
         return self._runtime
 
     def _session_for(self, ctx: _ContextLike) -> Any:
-        from agt.policies.session import AdapterRuntimeSession
+        from agent_control_specification import HostSession
 
         key = ctx.session_id or ctx.agent_id
         session = self._sessions.get(key)
         if session is None:
-            session = AdapterRuntimeSession(
+            session = HostSession(
                 self._runtime,
                 agent_id=ctx.agent_id,
                 session_id=ctx.session_id or f"{ctx.agent_id}-session",
             )
             self._sessions[key] = session
-        session.synchronize_counters(
-            tool_call_count=int(ctx.call_count),
-            token_count=int(ctx.total_tokens),
-        )
+        # Raise the session counters to whatever the host has observed without
+        # moving them backward: the session charges attempted tool calls that
+        # the adapter context does not know about yet.
+        builder = session.builder
+        builder.tool_call_count = max(builder.tool_call_count, int(ctx.call_count))
+        builder.token_count = max(builder.token_count, int(ctx.total_tokens))
         return session
 
     def record_post_execute(
@@ -240,7 +260,7 @@ class NativeAdapterRuntime:
     ) -> None:
         """Record tokens while avoiding a second native attempted-call charge."""
         del tool_calls
-        self._session_for(ctx).record_usage(tokens=int(tokens))
+        self._session_for(ctx).builder.record_tokens(int(tokens))
 
     def evaluate_input(
         self,
@@ -250,10 +270,14 @@ class NativeAdapterRuntime:
         source: str = "user",
         headers: dict[str, str] | None = None,
     ) -> NativeAdapterResult:
-        evaluation = self._session_for(ctx).evaluate_input(
-            body=body if isinstance(body, str | dict) else str(body),
-            source=source,
-            headers=headers,
+        evaluation = self._session_for(ctx).evaluate(
+            "input",
+            input={
+                "body": body if isinstance(body, str | dict) else str(body),
+                "source": source,
+                "headers": dict(headers or {}),
+                "ifc": {"source_labels": []},
+            },
         )
         return NativeAdapterResult(evaluation)
 
@@ -265,11 +289,15 @@ class NativeAdapterRuntime:
         args: Mapping[str, Any],
         call_id: str = "call-1",
     ) -> NativeAdapterResult:
-        evaluation = self._session_for(ctx).evaluate_pre_tool_call(
-            tool_name=tool_name,
-            args=args,
-            call_id=call_id,
-        )
+        session = self._session_for(ctx)
+        snapshot_body = {
+            "tool_call": {"name": tool_name, "args": dict(args), "id": call_id}
+        }
+        # The engine reads budgets as of the start of the evaluation, so the
+        # attempt is charged after the snapshot is built and before the next
+        # intervention point sees it.
+        evaluation = session.evaluate("pre_tool_call", **snapshot_body)
+        session.builder.record_tool_call()
         return NativeAdapterResult(evaluation)
 
     def evaluate_post_tool_call(
@@ -283,13 +311,10 @@ class NativeAdapterRuntime:
         duration_ms: float = 0.0,
         call_id: str = "call-1",
     ) -> NativeAdapterResult:
-        evaluation = self._session_for(ctx).evaluate_post_tool_call(
-            tool_name=tool_name,
-            args=args,
-            result=result,
-            error=error,
-            duration_ms=duration_ms,
-            call_id=call_id,
+        evaluation = self._session_for(ctx).evaluate(
+            "post_tool_call",
+            tool_call={"name": tool_name, "args": dict(args), "id": call_id},
+            tool_result={"value": result, "error": error, "duration_ms": duration_ms},
         )
         return NativeAdapterResult(evaluation)
 
@@ -303,12 +328,12 @@ class NativeAdapterRuntime:
         request_id: str = "req-1",
         model_vendor: str = "test",
     ) -> NativeAdapterResult:
-        evaluation = self._session_for(ctx).evaluate_pre_model_call(
-            model_name=model_name,
+        evaluation = self._session_for(ctx).evaluate(
+            "pre_model_call",
+            model={"name": model_name, "vendor": model_vendor, "params": {}},
             messages=messages,
-            tools=tools,
+            tools=tools or [],
             request_id=request_id,
-            model_vendor=model_vendor,
         )
         return NativeAdapterResult(evaluation)
 
@@ -322,12 +347,12 @@ class NativeAdapterRuntime:
         request_id: str = "req-1",
         model_vendor: str = "test",
     ) -> NativeAdapterResult:
-        evaluation = self._session_for(ctx).evaluate_post_model_call(
-            model_name=model_name,
-            response=response,
-            usage=usage,
+        evaluation = self._session_for(ctx).evaluate(
+            "post_model_call",
+            model={"name": model_name, "vendor": model_vendor},
             request_id=request_id,
-            model_vendor=model_vendor,
+            response=response,
+            usage=usage or {"prompt_tokens": 0, "completion_tokens": 0},
         )
         return NativeAdapterResult(evaluation)
 
@@ -338,9 +363,13 @@ class NativeAdapterRuntime:
         content: Any,
         message_chain: list[dict[str, Any]] | None = None,
     ) -> NativeAdapterResult:
-        evaluation = self._session_for(ctx).evaluate_output(
-            content=content if isinstance(content, str | dict) else str(content),
-            message_chain=message_chain,
+        evaluation = self._session_for(ctx).evaluate(
+            "output",
+            response={
+                "content": content if isinstance(content, str | dict) else str(content),
+                "ifc": {"result_labels": []},
+            },
+            message_chain=message_chain or [],
         )
         return NativeAdapterResult(evaluation)
 

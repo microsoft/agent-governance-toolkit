@@ -21,9 +21,9 @@ The command writes:
 ## Load
 
 ```python
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime.from_manifest(
+runtime = AgentControl.from_manifest(
     "examples/atr-community-rules/atr_community_manifest.yaml"
 )
 result = runtime.evaluate("input", snapshot)

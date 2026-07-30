@@ -1,10 +1,10 @@
-# AGT-RESOLUTION-1.0.md — AGT manifest resolution layer
+# AGT-RESOLUTION-1.0.md — migration-only governance resolution
 
-**Status:** Draft. **Version:** `1.0.0-alpha`. **Layer:** above the engine, below the framework adapters.
+**Status:** Migration-only. **Version:** `1.0.0-alpha`. **Layer:** one-way v4 conversion.
 
-This document specifies the AGT-side manifest resolution layer. Per the user
-decision in Q6, AGT keeps the folder discovery + scope filter + merge feature
-from v4 but runs it in the host before the engine is called.
+This document specifies how `agt migrate v4-to-v5` reads the removed folder
+discovery, scope, and merge format once and emits a flat native ACS manifest.
+Runtime modules do not import or execute this algorithm.
 
 ## 1. Inputs and outputs
 
@@ -30,13 +30,12 @@ host:
    `governance.yml`. If found, add to the candidate list.
 3. Stop at `root` (inclusive). If the resolved `action_path` is not under
    `root` (symlinks, `..` segments, attacker-influenced inputs), the
-   resolution layer MUST fail closed with the reserved reason
-   `runtime_error:resolution_path_traversal` (see §3). The engine is then
-   never called for this evaluation.
+   migration MUST stop with the `resolution_path_traversal` diagnostic.
 
-This matches the v4 `agent_os.policies.discovery.discover_policies` behaviour
-exactly except for the path-traversal handling: v4 returned an empty list,
-which let downstream code default to allow. v5 fails closed.
+This matches the removed v4
+`agent_os.policies.discovery.discover_policies` behavior except for path
+traversal. The old code returned an empty list. Migration refuses to emit an
+artifact.
 
 ### 2.2 Inherit-truncation
 
@@ -115,52 +114,37 @@ limits: { ... }                           # merged limits
 approval: { ... }                         # merged approval config (last writer wins)
 ```
 
-The resolution layer MUST write the bundle to a host-writable directory and
-clean it up at session end. The bundle path SHOULD be inside the project's
-build directory, not the project's source tree.
+The migration command MUST stage the bundle outside the final output path and
+publish it only after project-wide preflight succeeds. It MUST NOT overwrite
+an existing manifest, bundle, or backup.
 
 ## 3. Failure modes
 
-All failures in the resolution layer MUST cause the engine call to fail closed
-with a deny decision and one of these reasons:
+All failures stop migration and produce one of these report diagnostics. No
+engine is constructed.
 
-| Reason | Cause |
+| Diagnostic | Cause |
 | --- | --- |
-| `runtime_error:resolution_path_traversal` | `action_path` resolved outside `root`. |
-| `runtime_error:resolution_cycle` | An `extends` cycle was detected during translation. |
-| `runtime_error:resolution_invalid_governance` | A `governance.yaml` failed validation. |
-| `runtime_error:resolution_merge_conflict` | Two non-rule sections (e.g., conflicting `approval` blocks) could not be merged. |
-
-These reasons are AGT-host-level. They MUST be reported through the engine's
-telemetry sink as `policy.failed` events with `policy_id: agt_resolution`.
+| `resolution_path_traversal` | `action_path` resolved outside `root`. |
+| `resolution_cycle` | An `extends` cycle was detected during translation. |
+| `resolution_invalid_governance` | A `governance.yaml` failed validation. |
+| `resolution_merge_conflict` | Two non-rule sections could not be merged. |
 
 ## 4. Cache
 
-The resolution layer MAY cache its output keyed on the canonical hash of all
-input governance.yaml file contents. Cache eviction is host-defined.
+The migration command does not cache output. Existing output paths are a hard
+error.
 
 ## 5. Empty manifest
 
-There is no fallback empty manifest. A workspace with no `governance.yaml`
-files anywhere from `action_path` up to `root` SHOULD be configured with a
-single `governance.yaml` at the root that establishes a default verdict for
-all intervention points. A workspace whose discovery returns an empty
-candidate list MAY (host policy) either:
-
-1. Fail closed with `runtime_error:resolution_invalid_governance` so that
-   missing governance is an explicit deployment error, or
-2. Substitute a host-supplied default manifest registered at host startup.
-
-The previous "default to empty manifest that allows" behaviour from
-`plan v2` is removed because it implicitly opened a fail-open path.
+There is no fallback empty manifest. If discovery finds no governance file,
+the migration report records no chain. Users author a native ACS manifest
+directly.
 
 ## 6. Interaction with ACS `extends`
 
-The engine's own `extends` machinery (ACS §2.2) is NOT invoked when AGT hosts
-use the resolution layer. AGT manifests always carry `extends: []`. A caller
-that wants direct ACS semantics MAY skip the resolution layer and pass a
-manifest with non-empty `extends` to the engine; the engine handles it per
-§2.2.
+The emitted flat manifest carries `extends: []`. After migration, users MAY
+replace flat composition with native ACS `extends`.
 
 ## 7. Implementation pointers (M3)
 
@@ -168,8 +152,8 @@ The Python implementation lives at:
 
 | File | Role |
 | --- | --- |
-| `agt/manifest_resolution/discover.py` | §2.1 + §2.2 |
-| `agt/manifest_resolution/scope.py` | §2.3 |
-| `agt/manifest_resolution/merge.py` | §2.4 |
-| `agt/manifest_resolution/translate.py` | §2.5 |
-| `agt/manifest_resolution/__init__.py` | `resolve_manifest()` entry point |
+| `agt/cli/_migrate_resolution/discover.py` | §2.1 + §2.2 |
+| `agt/cli/_migrate_resolution/scope.py` | §2.3 |
+| `agt/cli/_migrate_resolution/merge.py` | §2.4 |
+| `agt/cli/_migrate_resolution/build.py` | §2.5 |
+| `agt/cli/_migrate_resolution/__init__.py` | `resolve_manifest()` entry point |

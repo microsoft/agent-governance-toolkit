@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 
 from agent_os.integrations.a2a_adapter import (
     A2AEvaluation,
@@ -18,13 +18,10 @@ from agent_os.integrations.a2a_adapter import (
 class _AllowRuntime:
     manifest = None
 
-    def evaluate(
-        self, intervention_point: str, snapshot: dict[str, Any]
-    ) -> PolicyEvaluation:
-        return PolicyEvaluation(
-            verdict="allow",
-            intervention_point=intervention_point,
-        )
+    async def evaluate_intervention_point(
+        self, intervention_point, snapshot, mode=None
+    ):
+        return InterventionPointResult(verdict=Verdict(decision=Decision("allow")))
 
     def close(self) -> None:
         pass

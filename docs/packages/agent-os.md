@@ -117,7 +117,7 @@ Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security
 
 | Risk | Coverage | Module |
 |------|----------|--------|
-| ASI01 Agent Goal Hijack | ✅ Full | `AgtRuntime.blocked_patterns` |
+| ASI01 Agent Goal Hijack | ✅ Full | `AgentControl.blocked_patterns` |
 | ASI02 Tool Misuse | ✅ Full | `MCPGateway` — tool filtering, rate limiting, audit |
 | ASI03 Identity & Privilege | ✅ Full | `require_human_approval`, RBAC policies |
 | ASI04 Supply Chain | ✅ Full | AI-BOM v2.0 — model + data + weights provenance |
@@ -183,17 +183,17 @@ git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-gove
 ### Policy enforcement with custom rules
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime, agent_id="database-agent", session_id="session-1"
 )
-result = session.evaluate_pre_tool_call(
+result = session.pre_tool_call(
     tool_name="database_query",
     args={"query": "DROP TABLE users"},
 )
-assert not result.is_allowed()
+assert not result.verdict.decision.permits
 ```
 
 ### Audit logging

@@ -1,3 +1,9 @@
+---
+title: v4 Policy Language Removal
+last_reviewed: 2026-07-12
+owner: agent-governance
+---
+
 # v4 policy-language removal
 
 AGT is removing the legacy v4 policy language so the ACS (v5) policy layer
@@ -9,15 +15,15 @@ is a breaking change for v4 users.
 
 | Symbol | Home | Replacement |
 |--------|------|-------------|
-| `GovernancePolicy`, `PatternType` | `agent_os/integrations/base.py` | ACS manifest plus `AgtRuntime` |
-| `PolicyInterceptor`, `ExecutionContext` | `agent_os/integrations/base.py` | `AdapterRuntimeSession` over `AgtRuntime` |
+| `GovernancePolicy`, `PatternType` | `agent_os/integrations/base.py` | ACS manifest plus `AgentControl` |
+| `PolicyInterceptor`, `ExecutionContext` | `agent_os/integrations/base.py` | `HostSession` over `AgentControl` |
 | `ViolationCategory`, `PolicyCheckResult` | `agent_os/policies/decision.py` | native v5 result and error contracts |
 | `PolicyDocument`, `PolicyAction`, `CedarBackend` | `agent_os/policies/` | ACS `policies.type: cedar` and native manifests |
 | `governance_to_acs_manifest` | `agt/policies/bridge.py` | migration tool only |
 | `governance_to_document` | `agent_os/policies/bridge.py` | deleted |
-| `get_runtime_bridge`, `AdapterRuntimeBridge` | `agent_os/integrations/_v5_runtime_bridge.py` | `AdapterRuntimeSession` |
+| `get_runtime_bridge`, `AdapterRuntimeBridge` | `agent_os/integrations/_v5_runtime_bridge.py` | `HostSession` |
 | `to_v4_check_result` | `agt/policies/result.py` | deleted |
-| runtime `governance.yaml` resolution (`resolution_root`) | `agt/manifest_resolution/` | deleted, migration flattens once |
+| runtime `governance.yaml` resolution | private `agt.cli` migrator | migration flattens once |
 
 ## The one allowed home
 
@@ -37,7 +43,7 @@ breaking release.
 0. Semantic inventory and CI ratchet across Python, Rust, and TypeScript.
 1. Define native v5 result, error, audit, typed manifest, and adapter
    enforcement contracts. Audit every `GovernancePolicy` field.
-2. Extract an ACS-native `AdapterRuntimeSession` from the v4 runtime bridge and
+2. Extract an ACS-native `HostSession` from the v4 runtime bridge and
    isolate and harden the migration translator.
 3. Migrate every runtime-bridge consumer as green vertical slices with tests
    and examples.
@@ -85,13 +91,14 @@ normative specs.
 
 ## Phase 1 native contracts
 
-`AgtRuntime.from_manifest(...)` is the canonical runtime constructor. It
-accepts a path, YAML text, a mapping, or `AgtManifest`. Paths carry their parent
-directory as provenance. Other inputs must provide `base_dir` when they contain
-relative bundle, data, prompt, Cedar, or `extends` references. The runtime never
-falls back to the current working directory.
+`AgentControl.from_path(str(...))` is the canonical runtime constructor and
+takes a filesystem path. A path carries its parent directory as provenance, so
+relative bundle, data, prompt, Cedar, and `extends` references resolve against
+the manifest rather than the current working directory. For a manifest already
+in memory use `AgentControl.from_native`; `from_url` and `from_manifest_chain`
+cover the remote and layered cases.
 
-`AgtManifest` is a lossless typed representation of AGT-MANIFEST-1.0. It
+The parsed manifest is a lossless representation of AGT-MANIFEST-1.0. It
 performs structural validation and preserves policy, tool, annotator, resolver,
 and host extension fields. It does not accept intent-level fields such as
 `max_tokens`, `allowed_tools`, or `blocked_patterns`, and it never synthesizes
@@ -103,9 +110,10 @@ The model preserves the AGT `limits` section, but runtime construction rejects
 it until the Python SDK can enforce those values. Silently accepting an
 unenforced security limit is not allowed.
 
-`AgtRuntime.evaluate(...)` returns the native immutable `PolicyEvaluation`.
-The stable fields are `verdict`, `reason_code`, `message`,
-`intervention_point`, `transform`, `evidence`, `result_labels`,
+`AgentControl.evaluate_intervention_point(...)` returns an immutable
+`InterventionPointResult`. Its `verdict` carries `decision`, `reason`,
+`message`, `transform`, `evidence`, and `result_labels`; the result itself
+carries `transformed_policy_target`, `transformed_policy_target_applied`,
 `input_identity`, and `enforced_identity`. Its audit envelope uses schema
 `agt.policy_evaluation.v1`. ACS does not currently expose `policy_id` or
 `rule_id` on `InterventionPointResult`, so neither field appears in this
@@ -114,7 +122,7 @@ Policy-authored `message` remains restricted audit detail.
 `PolicyViolationError.from_evaluation_result(...)` emits a stable sanitized
 public message instead of copying policy or user content into exception text.
 
-The existing `AgtRuntime(...)`, `evaluate_intervention_point(...)`, and
+The existing `AgentControl(...)`, `evaluate_intervention_point(...)`, and
 `EvaluationResult` remain temporary bridge-only compatibility surfaces. Phase 2
 moves adapters to the native result. Phase 6 removes the compatibility surface.
 
@@ -122,11 +130,11 @@ moves adapters to the native result. Phase 6 removes the compatibility surface.
 
 | Concern | Native contract |
 |---------|-----------------|
-| Required intervention points | Every adapter declares them and calls `AgtManifest.validate_for(...)` before execution. A missing required point is a construction error, never a runtime allow fallback. |
+| Required intervention points | Every adapter declares them and the runtime contract is checked before execution. A missing required point is a construction error, never a runtime allow fallback. |
 | Tool catalog | `manifest` requires static `tools`, `host_dynamic` is synchronized by the host, and `optional` imposes no catalog requirement. |
 | Transform | Each adapter declares the intervention points where it can apply a transform. The shared adapter session applies it before forwarding the payload. |
-| Approval | `AgtRuntime` owns the resolver and timeout behavior. An adapter given a runtime cannot also accept competing resolver configuration. |
-| Budgets | Attempted calls consume tool-call budget, including denied and failed attempts. Session counters live in the adapter session, not `AgtRuntime`. |
+| Approval | `AgentControl` owns the resolver and timeout behavior. An adapter given a runtime cannot also accept competing resolver configuration. |
+| Budgets | Attempted calls consume tool-call budget, including denied and failed attempts. Session counters live in the adapter session, not `AgentControl`. |
 | Runtime sharing | One runtime may be shared when host dispatchers and approval callbacks are thread-safe. Session snapshots and counters are never stored on the runtime. |
 | Fail direction | Invalid manifests, missing required bindings, dispatcher errors, and approval errors fail closed. The native path does not rewrite unknown intervention points or tools to allow. |
 
@@ -157,10 +165,10 @@ host configuration and must not be silently dropped.
 
 ## Phase 2 extraction boundaries
 
-`AdapterRuntimeSession` now owns one session's `SnapshotBuilder`, counters, and
+`HostSession` now owns one session's `SnapshotBuilder`, counters, and
 native intervention-point calls. It reserves attempted tool calls before
 execution so denied and failed attempts consume budget, records model tokens
-after `post_model_call`, and serializes only counter mutation. `AgtRuntime`
+after `post_model_call`, and serializes only counter mutation. `AgentControl`
 remains session-free and shareable under the Phase 1 callback thread-safety
 contract.
 
@@ -174,10 +182,97 @@ The one-way `GovernancePolicy` translator lives under `agt.cli` and has no
 runtime import path. It accepts exact literal fields and exact
 `PatternType.SUBSTRING`, `PatternType.REGEX`, and `PatternType.GLOB` forms.
 Dynamic expressions, host-only settings, invalid patterns, unsupported fields,
-and existing outputs refuse migration. The generated manifest is validated as
-`AgtManifest` before an atomic write. Differential tests compare every
+and existing outputs refuse migration. The generated manifest is validated with
+`validate_manifest` before an atomic write. Differential tests compare every
 supported construct with the frozen runtime bridge so defaults and boundary
 semantics cannot drift during the transition. REGEX and GLOB use OPA's Go RE2
 validator, and GLOB uses the RE2 `\z` end anchor rather than Python's unsupported
 `\Z`. Both constructor and governance-chain migrations refuse existing
 manifests, bundles, and backups instead of overwriting them.
+
+## Phase 3 adapter cutover
+
+The 17 bridge-backed framework adapters now accept a public native `runtime`
+argument and route their model, tool, stream, and output intervention points
+through `NativeAdapterRuntime` and `HostSession`. Agent Shield uses
+`agt_runtime` because its existing positional `runtime` names the Agent Shield
+SDK object. A2A, Agent Shield, Anthropic, AutoGen, Bedrock, CrewAI, Gemini,
+Google ADK, Guardrails, LangChain, LlamaIndex, MAF, Mistral, OpenAI, PydanticAI,
+Semantic Kernel, and Smolagents no longer import or evaluate through
+`AdapterRuntimeBridge` or `BridgeResult`. Their only remaining dependency on
+`_v5_runtime_bridge` is the constructor selector for the temporary policy
+compatibility edge.
+
+Native denials attach `evaluation_result` and the
+`agt.policy_evaluation.v1` audit record to `PolicyViolationError`. The
+temporary policy-based edge still attaches `check_result`, selected by one
+shared result dispatcher. Transforms remain native objects in both paths.
+The runtime owns approval configuration. An adapter may omit
+`approval_resolver` or repeat the identical callback for transition code, but a
+different callback is rejected at construction.
+
+The old `policy` and private `_runtime` arguments remain only to keep the
+development tree green until the single public breaking cut in Phase 6.
+Convenience wrappers also accept `runtime`. Their policy path is not the native
+default and is removed with the compatibility bridge. OpenAI Agents SDK and
+LangGraph now expose native runtime hook paths while retaining their
+checkpoint, handoff, audit, and wrapper behavior host-side.
+
+## Phase 4 runtime cleanup
+
+Runtime governance folder discovery has been removed. The resolver, its
+contract, and its tests live only under `agt.cli._migrate_resolution`.
+`AgentControl` no longer accepts `resolution_root`, `agt.manifest_resolution` is
+not public, and the OPA scenario harness no longer synthesizes runtime policy
+from `governance.yaml`. Native composition uses ACS `extends`.
+
+The Rust core and SDK parity fixtures no longer expose migration-only
+`runtime_error:resolution_*` variants. The migration command keeps equivalent
+diagnostics privately for report generation.
+
+OpenAI Agents SDK hooks evaluate input, tool calls, tool results, and output
+through `NativeAdapterRuntime` when given `runtime`. LangGraph evaluates node
+state and tool calls natively and fingerprints the runtime manifest plus
+registered tool hashes. Their non-policy semantics such as handoff limits,
+checkpoint metadata, node wrapping, and audit events remain host-owned.
+
+## Phase 5 language and packaging rewrite
+
+The Rust `FrameworkGovernanceAdapter` now accepts native `AgentControl`,
+`Manifest`, and explicit `FrameworkHostConfig`. The removed local policy and
+pattern types are no longer exported. Legacy-shaped YAML fails manifest
+validation instead of receiving an in-process translation.
+
+The Mastra package now requires the Node ACS package and delegates every tool
+call to `AgentControl.runTool`. Trust and tamper-evident audit remain Mastra
+middleware. Policy decisions, transforms, approval, and tool catalogs come
+from the ACS manifest.
+
+The consolidated Python core wheel declares `agt-policies` because it
+force-includes the native adapter modules. A wheel inspection gate builds both
+artifacts, verifies the dependency metadata, confirms native session/runtime
+modules and migration Rego resources are packaged, and rejects a public
+`manifest_resolution` package.
+
+## Phase 6 atomic removal
+
+The public compatibility cut removes the runtime bridge, the central
+`GovernancePolicy` contract, compatibility result and decision types, legacy
+policy loaders and backends, and runtime folder resolution. Framework adapters
+now require a native ACS runtime. Native denials use the canonical
+`PolicyViolationError` and retain the structured `PolicyEvaluation`.
+
+The old intent-policy fields no longer have runtime implementations. The
+Haystack integration's local checker and similar framework-local policy
+interpreters are removed rather than renamed. Conversion support remains only
+under `agt.cli`, where the one-way migration command translates supported
+literal inputs and refuses ambiguous cases.
+
+The AgentMesh Wire Protocol policy engine is a separate retained product. Its
+Python implementation and TypeScript, Go, and .NET ports use the AgentMesh
+rule schema and cross-language parity tests. They are not adapters for the
+removed intent-policy contract and are outside this migration.
+
+The ratchet baseline is zero outside the migration allowlist. Its structural
+checks also detect renamed intent-policy interpreters and distinguish retained
+AgentMesh rule documents from removed policy data.

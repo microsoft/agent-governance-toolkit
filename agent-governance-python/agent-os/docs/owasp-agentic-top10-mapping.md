@@ -19,16 +19,16 @@ The mapping below identifies the primary control surface for each risk.
 ## Native policy example
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/owasp-manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/owasp-manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="owasp-agent",
     session_id="owasp-session",
 )
 
-evaluation = session.evaluate_pre_tool_call(
+evaluation = session.pre_tool_call(
     tool_name="execute_code",
     args={"code": "untrusted input"},
 )

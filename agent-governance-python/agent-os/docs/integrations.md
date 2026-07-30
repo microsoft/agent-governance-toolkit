@@ -7,10 +7,10 @@ through the intervention points it supports.
 ## Runtime setup
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.integrations.langchain_adapter import LangChainKernel
 
-runtime = AgtRuntime("policies/manifest.yaml")
+runtime = AgentControl.from_path("policies/manifest.yaml")
 kernel = LangChainKernel(runtime=runtime)
 ```
 
@@ -50,13 +50,13 @@ before execution. Unresolved `extends` entries must be resolved before adapter
 preflight.
 
 ```python
-from agt.policies import AdapterManifestContract, AdapterRuntimeSession
+from agent_control_specification import AdapterManifestContract, HostSession
 
 contract = AdapterManifestContract(
     name="example",
     required_intervention_points=frozenset({"input", "pre_tool_call", "output"}),
 )
-session = AdapterRuntimeSession(
+session = HostSession(
     runtime,
     agent_id="agent-1",
     session_id="session-1",
@@ -76,8 +76,8 @@ The structured `PolicyEvaluation` remains available through
 from agent_os.exceptions import PolicyViolationError
 
 try:
-    result = session.evaluate_input(body="user request")
-    if not result.is_allowed():
+    result = session.input("user request")
+    if not result.verdict.decision.permits:
         raise PolicyViolationError.from_evaluation_result(result)
 except PolicyViolationError as error:
     print(str(error))
@@ -86,8 +86,8 @@ except PolicyViolationError as error:
 
 ## Lifecycle ownership
 
-`AgtRuntime` is policy-state-free and may be shared when host dispatchers and
-approval callbacks are thread-safe. `AdapterRuntimeSession` owns session
+`AgentControl` is policy-state-free and may be shared when host dispatchers and
+approval callbacks are thread-safe. `HostSession` owns session
 counters and charges attempted tool calls before evaluation.
 
 See [Framework Adapter Contract](../../../docs/specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md)

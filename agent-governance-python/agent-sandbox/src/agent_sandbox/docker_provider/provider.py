@@ -434,9 +434,9 @@ class DockerSandboxProvider(SandboxProvider):
 
         evaluator = None
         if runtime is not None:
-            from agt.policies.session import AdapterRuntimeSession
+            from agent_control_specification import HostSession
 
-            evaluator = AdapterRuntimeSession(
+            evaluator = HostSession(
                 runtime, agent_id=agent_id, session_id=session_id
             )
 
@@ -510,20 +510,20 @@ class DockerSandboxProvider(SandboxProvider):
             }
             if context:
                 eval_ctx.update(context)
-            decision = evaluator.evaluate_pre_tool_call(
+            decision = evaluator.pre_tool_call(
                 tool_name="sandbox_execute", args=eval_ctx, call_id=uuid.uuid4().hex[:8]
             )
             # A transform verdict permits but carries a replacement, and this
             # gate cannot rewrite the code it is about to execute. Treating it
             # as allowed would run the original, so it is refused instead.
-            if decision.transform is not None:
+            if decision.verdict.decision.applies_transform:
                 raise PermissionError(
                     "Governance returned a transform verdict, which the sandbox "
                     "cannot apply to code it is about to execute"
                 )
-            if not decision.is_allowed():
+            if not decision.verdict.decision.permits:
                 raise PermissionError(
-                    f"Governance denied: {decision.message or decision.reason_code}"
+                    f"Governance denied: {decision.verdict.message or decision.verdict.reason}"
                 )
 
         enforce_no_subprocess_execution(code)

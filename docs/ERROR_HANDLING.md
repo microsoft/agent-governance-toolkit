@@ -36,20 +36,23 @@ except PolicyViolationError as e:
 | `agent_id` | `str\|None` | Identity of the agent that attempted the action |
 | `context` | `dict` | Additional context fields matched by the rule |
 
-### PolicyLoadError
+### Manifest validation errors
 
-Raised when a policy document fails to parse or validate.
+`validate_manifest` raises `RuntimeError` when a manifest fails to parse or
+validate. There is no dedicated `PolicyLoadError` type.
 
 ```python
-from agent_os.exceptions import PolicyLoadError
+from pathlib import Path
 
+from agent_control_specification import validate_manifest
+
+path = Path("policies/my-policy.yaml")
 try:
-    policies = PolicyDocument.load_from_file("policies/my-policy.yaml")
-except PolicyLoadError as e:
-    print(f"Failed to load policy: {e.message}")
-    print(f"File: {e.filename}")
-    print(f"Line: {e.line_number}")
-    print(f"Schema violations: {e.schema_errors}")
+    validate_manifest(path.read_text(encoding="utf-8"))
+except RuntimeError as exc:
+    # The runtime reports the offending field in the message, prefixed with
+    # runtime_error:manifest_invalid.
+    print(f"Failed to load {path}: {exc}")
 ```
 
 ### AuditWriteError
@@ -87,18 +90,20 @@ except TrustScoreError as e:
 Catch policy load errors at startup to fail fast with a clear message.
 
 ```python
-import yaml
+from pathlib import Path
+from typing import Any
 
-def load_policies(policy_paths: list[str]) -> list[PolicyDocument]:
-    policies = []
-    for path in policy_paths:
+from agent_control_specification import parse_manifest
+
+
+def load_manifests(paths: list[str]) -> list[dict[str, Any]]:
+    manifests = []
+    for path in paths:
         try:
-            with open(path) as f:
-                data = yaml.safe_load(f)
-            policies.append(PolicyDocument.from_dict(data))
-        except PolicyLoadError as e:
-            raise RuntimeError(f"Policy load failed for '{path}': {e.message}") from e
-    return policies
+            manifests.append(parse_manifest(Path(path).read_text(encoding="utf-8")))
+        except (OSError, RuntimeError) as exc:
+            raise RuntimeError(f"Manifest load failed for {path!r}: {exc}") from exc
+    return manifests
 ```
 
 ### Pattern 2: Graceful Degradation on Audit Failure

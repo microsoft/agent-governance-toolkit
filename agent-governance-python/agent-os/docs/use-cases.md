@@ -1,16 +1,16 @@
 # Agent OS Use Cases
 
 These use cases share one deployment model. Governance is declared in a native
-ACS manifest and enforced through `AgtRuntime` plus an
-`AdapterRuntimeSession`.
+ACS manifest and enforced through `AgentControl` plus an
+`HostSession`.
 
 ## Common runtime
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="agent-1",
     session_id="session-1",
@@ -28,7 +28,7 @@ Bind secret detection and unsafe-operation policies to `input`,
 catalog, then evaluate each attempted tool call before execution.
 
 ```python
-evaluation = session.evaluate_pre_tool_call(
+evaluation = session.pre_tool_call(
     tool_name="write_file",
     args={"path": "src/app.py", "content": "replacement"},
 )
@@ -47,7 +47,7 @@ Relevant examples are under
 
 ## Multi-agent research
 
-Create one `AdapterRuntimeSession` per agent session. Share the underlying
+Create one `HostSession` per agent session. Share the underlying
 runtime only when its dispatchers and approval callback are thread-safe.
 AgentMesh trust and transport controls remain separate from ACS policy
 evaluation.
@@ -92,7 +92,7 @@ agt test policies/manifest.yaml policies/fixtures.json
 | Concern | Native owner |
 |---------|--------------|
 | Policy definitions and composition | ACS manifest and `extends` |
-| Session budgets | `AdapterRuntimeSession` |
+| Session budgets | `HostSession` |
 | Framework lifecycle and audit hooks | Agent OS adapter |
 | Sandbox resources and egress | `SandboxConfig` |
 | Multi-agent trust and transport | AgentMesh |

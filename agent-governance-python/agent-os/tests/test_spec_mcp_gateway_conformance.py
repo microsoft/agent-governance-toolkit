@@ -12,7 +12,7 @@ import unittest
 import warnings
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 from agent_os.mcp_gateway import ApprovalStatus, MCPGateway, ResponsePolicy
 from agent_os.mcp_response_scanner import MCPResponseScanner, MCPResponseScanResult, MCPResponseThreat
 from agent_os.mcp_security import MCPSecurityScanner, MCPSeverity, MCPThreatType, ScanResult, ToolFingerprint
@@ -31,12 +31,9 @@ class _Runtime:
         self.verdict = verdict
         self.reason_code = reason_code
 
-    def evaluate(self, intervention_point, snapshot):
-        return PolicyEvaluation(
-            verdict=self.verdict,
-            reason_code=self.reason_code,
-            intervention_point=intervention_point,
-        )
+    async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
+        return InterventionPointResult(verdict=Verdict(decision=Decision(self.verdict),
+            reason=self.reason_code))
 
 def _make_gateway(**kwargs) -> MCPGateway:
     """Create an MCPGateway with an allow-all native runtime."""

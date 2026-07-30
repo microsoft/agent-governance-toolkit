@@ -1,6 +1,6 @@
 # OpenAI Agents SDK with native ACS governance
 
-This example shows `OpenAIAgentsKernel` using a native `AgtRuntime`. The
+This example shows `OpenAIAgentsKernel` using a native `AgentControl`. The
 runnable script exercises the adapter without making a network request.
 
 ## Run
@@ -14,7 +14,7 @@ python examples/openai-agents-governed/getting_started.py
 ## Integration pattern
 
 ```python
-runtime = AgtRuntime.from_manifest("policies/manifest.yaml")
+runtime = AgentControl.from_path(str("policies/manifest.yaml"))
 kernel = OpenAIAgentsKernel(runtime=runtime)
 hooks = kernel.as_hooks()
 
