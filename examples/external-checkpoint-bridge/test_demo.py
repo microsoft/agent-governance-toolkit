@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,19 @@ _spec = importlib.util.spec_from_file_location(
 demo = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
 sys.modules["external_checkpoint_bridge_demo"] = demo
 _spec.loader.exec_module(demo)  # type: ignore[union-attr]
+
+
+def test_stable_json_is_order_insensitive_and_unicode_preserving() -> None:
+    left = {"b": 2, "a": "東京"}
+    right = {"a": "東京", "b": 2}
+
+    assert demo.stable_json(left) == demo.stable_json(right)
+    assert demo.stable_json(left) == '{"a":"東京","b":2}'
+
+
+def test_stable_json_rejects_non_standard_numbers() -> None:
+    with pytest.raises(ValueError, match="Out of range float values"):
+        demo.stable_json({"value": math.nan})
 
 
 def _sample_envelope() -> demo.ActionEnvelope:
