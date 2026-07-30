@@ -132,8 +132,7 @@ def _tally_quorum(
 
     Returns ``ALLOW``/``DENY`` once enough votes are in to decide, or
     ``None`` if quorum hasn't been satisfied yet. Denials are checked
-    before approvals, matching ``EscalationHandler._quorum_outcome``,
-    which delegates here. Also used directly by
+    before approvals. Also used directly by
     ``InMemoryApprovalQueue.approve``/``deny`` so a stored request's
     ``decision`` only finalizes once quorum is actually met, instead of
     on the first vote, keeping ``req.decision`` and ``list_pending()``
