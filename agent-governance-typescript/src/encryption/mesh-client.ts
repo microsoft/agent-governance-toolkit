@@ -959,20 +959,34 @@ export class MeshClient {
    * Each message is dispatched through the standard handleMessage path.
    */
   private async handlePendingMessages(frame: Record<string, unknown>): Promise<void> {
-    const messages = frame.messages as Array<Record<string, unknown>> | undefined;
-    if (!messages || !Array.isArray(messages)) return;
+    // Typed as unknown[] rather than Record<string, unknown>[] because this is
+    // relay-supplied JSON: entries can legally be null or primitives, and the
+    // stricter type would be a lie that hides the validation below.
+    const messages = frame.messages;
+    if (!Array.isArray(messages)) return;
 
     for (const msg of messages) {
+      const isFrameShaped = typeof msg === "object" && msg !== null && !Array.isArray(msg);
+      // Extract the peer *before* the try and without dereferencing a
+      // possibly-null entry. Doing it inside the catch would throw on a null
+      // entry, and that throw would be absorbed by the handler guard below,
+      // losing the drop report entirely.
+      const rawFrom = isFrameShaped ? (msg as Record<string, unknown>).from : undefined;
+      const peer = typeof rawFrom === "string" ? rawFrom : "";
+
       // Isolate each queued message: the batch is relay-supplied, so a single
       // malformed entry (e.g. ciphertext that fails JSON.parse) must not abort
       // the loop and silently discard the remaining pending mail. Surface the
       // failure and continue draining.
       try {
-        await this.handleMessage(msg);
+        if (!isFrameShaped) {
+          throw new Error(`expected a frame object, got ${msg === null ? "null" : typeof msg}`);
+        }
+        await this.handleMessage(msg as Record<string, unknown>);
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         for (const h of this.errorHandlers) {
-          try { h("frame", String(msg.from ?? ""), `pending message dropped: ${detail}`); } catch { /* swallow */ }
+          try { h("frame", peer, `pending message dropped: ${detail}`); } catch { /* swallow */ }
         }
       }
     }
