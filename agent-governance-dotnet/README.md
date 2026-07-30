@@ -172,6 +172,84 @@ engine.LoadCedar(
         """);
 ```
 
+### Action-Bound Approval Chains
+
+`require_approval` decisions can be routed through the ADR-0030 approval protocol. The protocol binds approval to the exact agent, subject, operation, target, parameters, policy version, and chain version. It persists pending requests, records hash-linked entries, fails closed on timeout or malformed responses, and revalidates and consumes a terminal allow immediately before execution.
+
+```csharp
+using AgentGovernance.Approvals;
+
+var store = new InMemoryApprovalStore();
+var audit = new InMemoryApprovalAuditSink();
+var chain = new ApprovalChain
+{
+    ChainId = "production-writes",
+    Version = "3",
+    Stages = new[]
+    {
+        new ApprovalStage
+        {
+            StageIndex = 0,
+            AllowedIdentities = new[] { "did:web:example.com:users:alice" }
+        }
+    }
+};
+var coordinator = new ApprovalCoordinator(
+    chain,
+    store,
+    new ApprovalCoordinatorOptions
+    {
+        PolicyRuleId = "production-db-writes",
+        PolicyVersion = "2026.07.17",
+        RequestTtl = TimeSpan.FromMinutes(10),
+        AuditSink = audit
+    });
+
+var binding = new ActionBinding
+{
+    Operation = "tool.invoke",
+    AgentId = "did:agent:123",
+    SubjectId = "user-456",
+    Target = new ActionTarget
+    {
+        ToolName = "sql_execute",
+        ToolSchemaVersion = "2",
+        Resource = "prod-db"
+    },
+    Parameters = new Dictionary<string, object?>
+    {
+        ["statement"] = "UPDATE accounts SET status = ? WHERE id = ?",
+        ["values"] = new object[] { "closed", 42 }
+    }
+};
+
+var opened = coordinator.OpenRequest(binding);
+
+// Call SubmitEntry only after the caller has authenticated this principal.
+coordinator.SubmitEntry(
+    opened.Request.ApprovalRequestId,
+    stageIndex: 0,
+    new ApprovalVote
+    {
+        ApproverKind = ApproverKind.Human,
+        ApproverIdentity = "did:web:example.com:users:alice",
+        IdentityAssurance = "oidc",
+        Decision = ApprovalEntryDecision.Allow,
+        ReasonCode = "reviewed-production-change"
+    });
+
+var execution = coordinator.ValidateForExecution(
+    opened.Request.ApprovalRequestId,
+    binding);
+
+if (!execution.Allowed)
+{
+    throw new InvalidOperationException(execution.ReasonCode);
+}
+```
+
+For remote workflows, attach a `WebhookApprover` to an `ApprovalStage`. Its versioned payload carries the request and action digests, policy and chain versions, and expiry. Approve responses are accepted only when a supplied `WebhookResponseVerifier` returns an identity established through authenticated transport or a verified assertion. LLM entries are advisory and cannot authorize or deny execution. A chain with no required non-advisory stage fails closed with `no_required_approval_stage`; this intentionally avoids the vacuous-allow behavior in the current Python implementation and matches the safer Go parity behavior.
+
 ### Rate Limiting
 
 Sliding window rate limiter integrated into the policy engine:
