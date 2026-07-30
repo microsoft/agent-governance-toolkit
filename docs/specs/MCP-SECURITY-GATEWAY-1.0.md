@@ -580,8 +580,8 @@ A signed envelope MUST contain:
 | --- | --- | --- | --- | --- |
 | `payload` | string | Yes | -- | The message payload (JSON string) |
 | `nonce` | string | Yes | -- | Unique nonce for replay protection |
-| `timestamp` | string | Yes | -- | ISO 8601 UTC timestamp |
-| `signature` | string | Yes | -- | HMAC-SHA256 signature (hex-encoded) |
+| `timestamp` | timestamp | Yes | -- | Timezone-aware UTC instant; ISO 8601 when serialized |
+| `signature` | string | Yes | -- | HMAC-SHA256 signature (base64-encoded) |
 | `sender_id` | string or null | No | null | Optional sender identifier |
 
 **[Pure Specification]**
@@ -589,14 +589,50 @@ A signed envelope MUST contain:
 ### 7.4 Signature Computation
 
 The HMAC-SHA256 signature MUST be computed over a canonical string
-constructed by concatenating the following fields with a separator:
+that encodes the fields *injectively*: no two distinct
+(nonce, timestamp, sender_id, payload) tuples may produce the same
+canonical string. Plain concatenation, with or without a separator,
+does not satisfy this -- any separator character is also legal inside a
+payload and inside a sender id, so a field boundary can be moved and
+the signature still verifies.
+
+Each field MUST therefore be framed with its own length in characters,
+and the fields MUST be joined in the order below:
 
 ```
-canonical = payload + nonce + timestamp + (sender_id or "")
-signature = HMAC-SHA256(signing_key, canonical)
+field(v)  = "-"                    if v is null
+          = len(v) + ":" + v       otherwise
+
+canonical = field(nonce)     + "|" +
+            field(timestamp) + "|" +
+            field(sender_id) + "|" +
+            field(payload)
+
+signature = HMAC-SHA256(signing_key, UTF-8(canonical))
 ```
 
-The signature MUST be hex-encoded. **[Pure Specification]**
+`timestamp` MUST be rendered as integer milliseconds since the Unix
+epoch before framing, so that it is covered exactly like the other
+fields.
+
+A null `sender_id` MUST use the `-` marker rather than being folded
+into the empty string, so that an absent sender and a present-but-empty
+sender do not sign identically.
+
+The signature MUST be base64-encoded. **[Pure Specification]**
+
+Example, for nonce `n1`, timestamp `1785448158059`, sender `alice` and
+payload `{"a":1}`:
+
+```
+2:n1|13:1785448158059|5:alice|7:{"a":1}
+```
+
+Implementations MUST NOT accept signatures computed over the earlier
+plain-concatenation form. Accepting both would preserve the forgery: an
+attacker chooses which form their envelope claims to be, so a verifier
+that still honours the old form remains exploitable. See
+`BREAKING_CHANGES.md`.
 
 ### 7.5 Sign Message
 

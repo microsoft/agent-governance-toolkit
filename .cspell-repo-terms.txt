@@ -965,3 +965,4 @@ zoneinfo
 
 # --- Canonical-encoding math terms ---
 injective
+injectively

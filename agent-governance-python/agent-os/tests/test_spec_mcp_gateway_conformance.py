@@ -10,7 +10,7 @@ Tests marked [Default Implementation] verify reference defaults.
 from __future__ import annotations
 import unittest
 import warnings
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from agent_control_specification import Decision, InterventionPointResult, Verdict
 from agent_os.mcp_gateway import ApprovalStatus, MCPGateway, ResponsePolicy
@@ -318,6 +318,51 @@ class TestMessageSigning(unittest.TestCase):
         self.assertIsNotNone(envelope.timestamp)
         self.assertIsNotNone(envelope.signature)
         self.assertEqual(envelope.sender_id, 'agent-1')
+
+    def test_canonical_string_matches_the_spec(self):
+        """S7.4 -- Canonical string is the length-framed encoding in the spec.
+
+        Asserted against the literal from the spec rather than against
+        whatever the implementation produces. Nothing else here reads the
+        canonical string, which is how the spec came to document a plain
+        concatenation the code had stopped using -- other SDKs sign
+        against the spec, so a silent divergence makes them incompatible.
+        """
+        canonical = MCPMessageSigner._build_canonical_string(
+            nonce='n1',
+            timestamp=datetime.fromtimestamp(1785448158.059, tz=timezone.utc),
+            sender_id='alice',
+            payload='{"a":1}',
+        )
+        self.assertEqual(canonical, '2:n1|13:1785448158059|5:alice|7:{"a":1}')
+
+    def test_absent_and_empty_sender_sign_differently(self):
+        """S7.4 -- A null sender_id uses the marker, not the empty string."""
+        args = {
+            'nonce': 'n',
+            'timestamp': datetime(2026, 1, 1, tzinfo=timezone.utc),
+            'payload': 'p',
+        }
+        absent = MCPMessageSigner._build_canonical_string(sender_id=None, **args)
+        empty = MCPMessageSigner._build_canonical_string(sender_id='', **args)
+        self.assertEqual(absent, '1:n|13:1767225600000|-|1:p')
+        self.assertEqual(empty, '1:n|13:1767225600000|0:|1:p')
+
+    def test_signature_is_base64_encoded(self):
+        """S7.4 -- The signature is base64, not hex.
+
+        A hex-encoded 32-byte digest is also a valid base64 alphabet
+        string, so this checks the round trip and the length rather than
+        the character set.
+        """
+        import base64
+
+        signature = self.signer.sign_message('data').signature
+        self.assertEqual(
+            base64.b64encode(base64.b64decode(signature)).decode('ascii'),
+            signature,
+        )
+        self.assertEqual(len(signature), 44)
 
     def test_tampered_signature_rejected(self):
         """S7.5 -- Tampered signature is rejected."""
