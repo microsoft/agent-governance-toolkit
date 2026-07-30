@@ -2,6 +2,11 @@
 # Licensed under the MIT License.
 """Tests for credential redaction helpers."""
 
+# Fake passwords and a deliberately non-matching keyword, used only as fixtures
+# below. ``topsecret=`` is the negative case for the ``(?<![A-Za-z0-9])``
+# lookbehind, so it has to be spelled as one word to be the fixture it is.
+# cspell:ignore efgh cdefgh topsecret
+
 from __future__ import annotations
 
 import json

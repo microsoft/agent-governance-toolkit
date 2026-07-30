@@ -2,6 +2,10 @@
 # Licensed under the MIT License.
 """Credential redaction and PII/CRI detection for MCP audit and response safety."""
 
+# Fake passwords quoted in the comments below, chosen so the apostrophe falls at
+# a different offset in each. Not words.
+# cspell:ignore efgh cdefgh
+
 from __future__ import annotations
 
 import logging

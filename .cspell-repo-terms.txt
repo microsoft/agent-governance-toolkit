@@ -209,6 +209,7 @@ gmtime
 gomod
 GOPROXY
 governancepolicy
+groupindex
 grpc
 GRPC
 gvisor
