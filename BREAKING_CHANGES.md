@@ -5,6 +5,62 @@ entries appear first.
 
 ---
 
+## MCP message signatures use a new canonical string; signers and verifiers must be upgraded together
+
+**Date:** TBD
+
+**Affected**
+
+- anything using `agent_os.MCPMessageSigner` to sign or verify MCP envelopes
+- envelopes already signed and stored, if they are verified after the upgrade
+- a deployment where signer and verifier are separate processes, upgraded
+  independently
+
+**What changed**
+
+`_build_canonical_string` joined the signed fields with a plain `|`:
+
+```python
+f"{nonce}|{timestamp_ms}|{sender_id or ''}|{payload}"
+```
+
+`|` is legal inside a payload and inside a sender id, so the encoding was not
+injective — distinct field tuples produced the same canonical string and
+therefore the same HMAC. Every field is now length-prefixed and `None` gets a
+marker distinct from the empty string.
+
+**Why it cannot be made compatible**
+
+The old format is what the forgery exploits. Accepting it as a fallback during
+verification would keep the vulnerability, because an attacker chooses which
+format their envelope claims to be. There is therefore no migration window: this
+is a correctness change to what the signature means, not a format upgrade.
+
+**What consumers need to do**
+
+- Upgrade signers and verifiers together. An envelope signed by an older version
+  does not verify against this one, and vice versa; verification returns a
+  failure result rather than raising.
+- Re-sign anything stored signed and verified later. There is no way to convert
+  an old signature without the signing key.
+- No API change. `sign_message` and `verify_message` keep their signatures and
+  their return types; only the bytes under the HMAC differ.
+
+**Security impact if not upgraded**
+
+Under the old format an attacker holding one valid envelope could forge others
+without the key by moving text across a field boundary, including prepending
+attacker-chosen text to the payload a consumer acts on:
+
+```
+signed:  sender_id="alice|INJECTED", payload="x"
+forged:  sender_id="alice",          payload="INJECTED|x"   -> verified
+```
+
+An envelope signed with `sender_id=None` also verified as one sent by `""`.
+
+---
+
 ## `agt.policies` is removed; hosts call the ACS runtime directly
 
 **Date:** TBD
