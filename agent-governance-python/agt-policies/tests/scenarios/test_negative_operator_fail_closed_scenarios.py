@@ -138,3 +138,85 @@ class TestDenyNotInFailClosed:
     def test_second_listed_region_allows(self, tmp_path: Path) -> None:
         verdict = _eval_verdict(tmp_path, _deny_not_in_rego(), {"region": "EU"})
         assert verdict == "allow"
+
+
+# ── allow polarity: null guard must be retained ───────────────────────
+# An allow rule that fires on a missing field preempts a later deny in
+# the first-match-wins chain, which is itself a fail-open. Verify the
+# guard is kept when action == "allow".
+
+def _allow_ne_then_deny_rego() -> str:
+    """allow ne fires only when field is present and matching; deny catches rest."""
+    return _render_rego([
+        {
+            "name": "region_allow_non_us",
+            "condition": {"field": "region", "operator": "ne", "value": "US"},
+            "action": "allow",
+            "priority": 20,
+            "message": "",
+        },
+        {
+            "name": "catch_all_deny",
+            "condition": {"field": "tool_name", "operator": "exists", "value": None},
+            "action": "deny",
+            "priority": 10,
+            "message": "denied by catch-all",
+        },
+    ])
+
+
+def _allow_not_in_then_deny_rego() -> str:
+    return _render_rego([
+        {
+            "name": "region_allow_not_in_restricted",
+            "condition": {"field": "region", "operator": "not_in", "value": ["CN", "RU"]},
+            "action": "allow",
+            "priority": 20,
+            "message": "",
+        },
+        {
+            "name": "catch_all_deny",
+            "condition": {"field": "tool_name", "operator": "exists", "value": None},
+            "action": "deny",
+            "priority": 10,
+            "message": "denied by catch-all",
+        },
+    ])
+
+
+class TestAllowPolarityGuardRetained:
+    def test_allow_ne_absent_field_does_not_fire(self, tmp_path: Path) -> None:
+        """allow ne must NOT fire when field is absent (null guard must stay)."""
+        verdict = _eval_verdict(
+            tmp_path, _allow_ne_then_deny_rego(),
+            {"tool_name": "transfer", "region": None},
+        )
+        assert verdict == "deny", (
+            "allow ne fired on null field and preempted the deny — null guard missing"
+        )
+
+    def test_allow_ne_fires_on_non_matching_present_field(self, tmp_path: Path) -> None:
+        """allow ne fires correctly when field is present and != value."""
+        verdict = _eval_verdict(
+            tmp_path, _allow_ne_then_deny_rego(),
+            {"tool_name": "transfer", "region": "EU"},
+        )
+        assert verdict == "allow"
+
+    def test_allow_not_in_absent_field_does_not_fire(self, tmp_path: Path) -> None:
+        """allow not_in must NOT fire when field is absent (null guard must stay)."""
+        verdict = _eval_verdict(
+            tmp_path, _allow_not_in_then_deny_rego(),
+            {"tool_name": "transfer", "region": None},
+        )
+        assert verdict == "deny", (
+            "allow not_in fired on null field and preempted the deny — null guard missing"
+        )
+
+    def test_allow_not_in_fires_on_non_restricted_region(self, tmp_path: Path) -> None:
+        """allow not_in fires correctly when field is present and not in the set."""
+        verdict = _eval_verdict(
+            tmp_path, _allow_not_in_then_deny_rego(),
+            {"tool_name": "transfer", "region": "US"},
+        )
+        assert verdict == "allow"

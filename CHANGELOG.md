@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`agt-policies`: deny rules using `ne`/`not_in` now fail closed when the checked field is absent.** The `_migrate_resolution` rule compiler used a chained `object.get` form that produced OPA `undefined` (not `null`) when an intermediate path segment was missing, causing `_match_i` to silently not fire and fall through to `default verdict := allow`. Additionally, the `_v != null` guard was applied unconditionally on `ne`/`not_in`, allowing a caller to bypass any such deny rule by omitting the field. Fixed by switching to the array-path `object.get(input.snapshot, [...], null)` form and making the null guard polarity-aware (dropped for `deny`, retained for `allow`). The `allow` polarity guard is critical: an `allow` rule that fires on a missing field can preempt a later `deny` in the first-match-wins chain.
+
 ### Added
 - **ACS artifact validation API** - added one bounded Rust-core validator for canonical manifest schema checks, typed ACS semantics, and OPA Rego parsing, exposed with the same structured result through Rust, Python, Node, and .NET. The `acs-generator` CLI now consumes this shared SDK surface.
 
