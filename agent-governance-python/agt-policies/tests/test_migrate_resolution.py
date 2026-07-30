@@ -1017,3 +1017,139 @@ def test_resolution_error_message_includes_reason_string() -> None:
     err = ResolutionError.path_traversal("detail-x")
     assert "runtime_error:resolution_path_traversal" in str(err)
     assert "detail-x" in str(err)
+
+
+# ── _rego_field_accessor and _rego_op_clause fail-closed regression ──
+# Regression for the fail-open vulnerability re-introduced by the v4-removal
+# migration (PR #3451). Both root causes from #3297 were reproduced in
+# _migrate_resolution/build.py: chained object.get and the unconditional
+# _v != null guard on ne/not_in. Tests mirror the OPA 1.18.2 live
+# confirmation run on 2026-07-30.
+
+
+from agt.cli._migrate_resolution.build import (
+    _rego_field_accessor,
+    _rego_op_clause,
+    _render_rego,
+)
+
+
+# ── array-path accessor shape ────────────────────────────────────────
+
+def test_accessor_single_segment_uses_array_path() -> None:
+    out = _rego_field_accessor("content_hash")
+    assert out == 'object.get(input.snapshot, ["content_hash"], null)'
+
+
+def test_accessor_nested_segment_uses_array_path() -> None:
+    out = _rego_field_accessor("tool_call.content_hash")
+    assert out == 'object.get(input.snapshot, ["tool_call", "content_hash"], null)'
+
+
+def test_accessor_rejects_injection_segment() -> None:
+    assert _rego_field_accessor("tool_call.bad-seg!") is None
+
+
+def test_accessor_empty_field_returns_snapshot_root() -> None:
+    assert _rego_field_accessor("") == "input.snapshot"
+
+
+def test_accessor_three_levels() -> None:
+    out = _rego_field_accessor("a.b.c")
+    assert out == 'object.get(input.snapshot, ["a", "b", "c"], null)'
+
+
+# ── polarity-aware op clause ─────────────────────────────────────────
+
+def test_ne_deny_drops_null_guard() -> None:
+    acc = _rego_field_accessor("content_hash")
+    clause = _rego_op_clause("ne", acc, "sha256:REG", action="deny")
+    assert "_v != null" not in clause
+    assert '_v != "sha256:REG"' in clause
+
+
+def test_ne_allow_keeps_null_guard() -> None:
+    acc = _rego_field_accessor("content_hash")
+    clause = _rego_op_clause("ne", acc, "sha256:REG", action="allow")
+    assert "_v != null" in clause
+
+
+def test_not_in_deny_drops_null_guard() -> None:
+    acc = _rego_field_accessor("region")
+    clause = _rego_op_clause("not_in", acc, ["US", "EU"], action="deny")
+    assert "_v != null" not in clause
+    assert "not _v in" in clause
+
+
+def test_not_in_allow_keeps_null_guard() -> None:
+    acc = _rego_field_accessor("region")
+    clause = _rego_op_clause("not_in", acc, ["US", "EU"], action="allow")
+    assert "_v != null" in clause
+
+
+def test_positive_operators_unchanged_by_action() -> None:
+    acc = _rego_field_accessor("amount")
+    for op in ("gt", "lt", "gte", "lte", "in"):
+        deny_clause = _rego_op_clause(op, acc, 100, action="deny")
+        allow_clause = _rego_op_clause(op, acc, 100, action="allow")
+        assert deny_clause == allow_clause, f"operator {op!r} should be unaffected by action"
+        assert "_v != null" in deny_clause
+
+
+# ── end-to-end rendered Rego shape ───────────────────────────────────
+
+def _render_deny_ne_rule(field: str, value: str) -> str:
+    return _render_rego([{
+        "name": "pin_check",
+        "condition": {"field": field, "operator": "ne", "value": value},
+        "action": "deny",
+        "priority": 10,
+        "message": "content hash must match pin",
+    }])
+
+
+def _render_allow_ne_rule(field: str, value: str) -> str:
+    return _render_rego([{
+        "name": "region_allow",
+        "condition": {"field": field, "operator": "ne", "value": value},
+        "action": "allow",
+        "priority": 10,
+        "message": "",
+    }])
+
+
+def test_render_deny_ne_emits_array_path_accessor() -> None:
+    rego = _render_deny_ne_rule("tool_call.content_hash", "sha256:REG")
+    assert 'object.get(input.snapshot, ["tool_call", "content_hash"], null)' in rego
+
+
+def test_render_deny_ne_omits_null_guard() -> None:
+    rego = _render_deny_ne_rule("tool_call.content_hash", "sha256:REG")
+    assert "_v != null" not in rego
+
+
+def test_render_allow_ne_keeps_null_guard() -> None:
+    rego = _render_allow_ne_rule("region", "US")
+    assert "_v != null" in rego
+
+
+def test_render_deny_not_in_omits_null_guard() -> None:
+    rego = _render_rego([{
+        "name": "region_pin",
+        "condition": {"field": "region", "operator": "not_in", "value": ["US", "EU"]},
+        "action": "deny",
+        "priority": 10,
+        "message": "",
+    }])
+    assert "_v != null" not in rego
+
+
+def test_render_allow_not_in_keeps_null_guard() -> None:
+    rego = _render_rego([{
+        "name": "region_allow",
+        "condition": {"field": "region", "operator": "not_in", "value": ["US", "EU"]},
+        "action": "allow",
+        "priority": 10,
+        "message": "",
+    }])
+    assert "_v != null" in rego
