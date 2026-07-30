@@ -62,6 +62,10 @@ class ScopeEvaluation:
         drift_indicators: Drift indicator dicts passed in for audit.
         reason: Human-readable explanation of the decision.
         excess_files: File paths that exceed the file limit.
+        error: Set when the scope could not be measured at all, in which case
+            ``decision`` is ``"HARD_FAIL"`` and the counts are meaningless.
+            Lets a caller tell "the change is too large" apart from "we do not
+            know how large the change is" — both block, for different reasons.
     """
 
     decision: str
@@ -72,6 +76,7 @@ class ScopeEvaluation:
     drift_indicators: list[dict[str, Any]] = field(default_factory=list)
     reason: str = ""
     excess_files: list[str] = field(default_factory=list)
+    error: str | None = None
 
 
 def _escalate(current: str, proposed: str) -> str:
@@ -84,15 +89,21 @@ def _escalate(current: str, proposed: str) -> str:
 
 def _get_diff_stats(
     repo_path: str, base_branch: str = "main"
-) -> tuple[list[str], int, int]:
-    """Return ``(changed_files, insertions, deletions)`` via ``git diff --numstat``.
+) -> tuple[list[str], int, int, str | None]:
+    """Return ``(changed_files, insertions, deletions, error)`` via ``git diff --numstat``.
+
+    The fourth element is ``None`` on success and a short description of what
+    went wrong otherwise. It has to be reported rather than folded into empty
+    stats: "the diff is empty" and "we could not read the diff" produce the same
+    ``([], 0, 0)`` but must not produce the same scope decision.
 
     Args:
         repo_path: Path to a git repository or worktree.
         base_branch: Branch to diff against.
 
     Returns:
-        Tuple of (file paths, total insertions, total deletions).
+        Tuple of (file paths, total insertions, total deletions, error or None).
+        On error the first three elements are empty and must not be used.
     """
     try:
         result = subprocess.run(  # noqa: S603 — trusted subprocess in scope guard
@@ -102,22 +113,52 @@ def _get_diff_stats(
             text=True,
             timeout=30,
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
-        logger.warning("_get_diff_stats failed: %s", exc)
-        return [], 0, 0
+    except subprocess.TimeoutExpired:
+        logger.warning("_get_diff_stats timed out after 30s in %r", repo_path)
+        return [], 0, 0, "git diff timed out after 30s"
+    except OSError as exc:
+        # FileNotFoundError when git is not installed; NotADirectoryError or
+        # PermissionError when repo_path is wrong or unreadable.
+        logger.warning("_get_diff_stats could not run git in %r: %s", repo_path, exc)
+        return [], 0, 0, f"could not run git: {exc}"
+
+    if result.returncode != 0:
+        # ``git diff`` without ``--exit-code`` returns 0 whether or not there are
+        # differences, so a nonzero status is always a failure -- most often an
+        # unknown base branch (a shallow clone that never fetched it) or a path
+        # that is not a repository. Both previously produced empty stats.
+        detail = result.stderr.strip().splitlines()
+        logger.warning(
+            "git diff against %r in %r exited %d: %s",
+            base_branch, repo_path, result.returncode, detail[0] if detail else "",
+        )
+        return (
+            [],
+            0,
+            0,
+            f"git diff against {base_branch!r} exited {result.returncode}: "
+            f"{detail[0] if detail else 'no output'}",
+        )
 
     files: list[str] = []
     insertions = 0
     deletions = 0
     for line in result.stdout.strip().splitlines():
         parts = line.split("\t")
-        if len(parts) == 3:
-            ins = int(parts[0]) if parts[0] != "-" else 0
-            dels = int(parts[1]) if parts[1] != "-" else 0
-            insertions += ins
-            deletions += dels
-            files.append(parts[2])
-    return files, insertions, deletions
+        # A row we cannot parse is under-measurement, not absence: dropping it
+        # lowers the totals the limits are checked against, so it is an error
+        # for the same reason a failed invocation is.
+        if len(parts) != 3:
+            return [], 0, 0, f"unparseable numstat row: {line!r}"
+        try:
+            ins = 0 if parts[0] == "-" else int(parts[0])
+            dels = 0 if parts[1] == "-" else int(parts[1])
+        except ValueError:
+            return [], 0, 0, f"unparseable numstat counts: {line!r}"
+        insertions += ins
+        deletions += dels
+        files.append(parts[2])
+    return files, insertions, deletions, None
 
 
 class ScopeGuard:
@@ -146,6 +187,10 @@ class ScopeGuard:
         drift_indicators: Optional[list[dict[str, Any]]] = None,
     ) -> ScopeEvaluation:
         """Evaluate whether an agent's changes are within scope.
+
+        Callers that measure the diff themselves are responsible for the
+        measurement being complete; :meth:`evaluate_from_git` measures it here
+        and fails closed when it cannot.
 
         Decision logic:
             1. ``config.mode == "off"`` → always ``PASS``.
@@ -258,6 +303,12 @@ class ScopeGuard:
     ) -> ScopeEvaluation:
         """Convenience wrapper that reads diff stats from *repo_path*.
 
+        If the diff cannot be read the result is ``HARD_FAIL`` with
+        :attr:`ScopeEvaluation.error` set, because an unmeasured change is not a
+        change within scope. ``config.mode == "off"`` still short-circuits to
+        ``PASS``: the operator has opted out of the check, so there is nothing to
+        fail closed on.
+
         Args:
             agent_id: Unique agent identifier.
             config: Scope configuration.
@@ -268,9 +319,22 @@ class ScopeGuard:
         Returns:
             A :class:`ScopeEvaluation`.
         """
-        changed_files, insertions, deletions = _get_diff_stats(
+        changed_files, insertions, deletions, error = _get_diff_stats(
             repo_path, base_branch
         )
+        if error is not None and config.mode != "off":
+            evaluation = ScopeEvaluation(
+                decision="HARD_FAIL",
+                files_changed=0,
+                lines_changed=0,
+                max_files=config.max_files,
+                max_lines=config.max_lines,
+                drift_indicators=drift_indicators or [],
+                reason=f"scope could not be measured: {error}",
+                error=error,
+            )
+            self._record(agent_id, evaluation)
+            return evaluation
         return self.evaluate(
             agent_id=agent_id,
             config=config,
@@ -297,6 +361,9 @@ class ScopeGuard:
                     "lines_changed": evaluation.lines_changed,
                     "max_lines": evaluation.max_lines,
                     "reason": evaluation.reason,
+                    # Present so an audit trail can distinguish a measured
+                    # over-limit change from an unmeasurable one.
+                    "error": evaluation.error,
                 }
             )
         except Exception:  # pragma: no cover — best-effort audit
