@@ -20,7 +20,7 @@ Every AI governance solution I have seen before this one operates on the same br
 
 The academic literature is brutal on this approach. The README cites Andriushchenko et al showing 100 percent attack success rates on GPT-4o, GPT-3.5, Claude 3, and Llama-3. But the actual numbers do not matter as much as the structural problem, which is that prompt level safety is a polite request to a stochastic system. You cannot guarantee behavior from a language model. You can only influence it.
 
-AGT does something different. It does not try to influence the model. It makes the bad action structurally impossible at the code level. Every tool call, every message send, every delegation is intercepted in deterministic application code before the models intent reaches the wire. When the ACS runtime returns a deny verdict, the action does not become unlikely. It becomes impossible. There is no code path that can execute a denied tool call. The Rust core literally panics safely into a denial if something goes wrong. It fails closed by design, not by accident.
+AGT does something different. It does not try to influence the model. It makes the bad action structurally impossible at the code level. Every tool call, every message send, every delegation is intercepted in deterministic application code before the model's intent reaches the wire. When the ACS runtime returns a deny verdict (in `enforce` mode), the host blocks the action. Panics from annotators or policy dispatchers are caught via `catch_unwind` and converted into deny verdicts, so the runtime fails closed by design, not by accident.
 
 ## What the ACS Runtime Actually Does
 
