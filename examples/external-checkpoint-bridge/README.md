@@ -6,8 +6,8 @@ governance with an external checkpoint or verifier.
 The key idea is simple:
 
 1. AGT prepares a deterministic action envelope before a tool executes.
-2. The envelope gets a deterministic reference so the external verdict is bound to
-   the proposed action.
+2. The envelope gets an opaque deterministic reference so the external verdict is
+   bound to the proposed action without copying raw arguments into proof objects.
 3. A local or remote checkpoint returns a verdict: `allow`, `require_approval`, or `deny`.
 4. AGT remains the enforcement point and maps that verdict to execute, pause, or block.
 
@@ -49,6 +49,12 @@ The endpoint should accept a JSON action envelope and return JSON like:
 The demo rejects a remote response if the returned `action_ref` does not match the
 action envelope that AGT sent.
 
+The `action_ref` is intentionally opaque in this demo. The full action envelope is
+sent to the checkpoint for review, while the proof object stores only the stable
+reference and verdict fields. Production deployments should use AGT's approved
+digest/signature APIs or an external verifier when a cryptographic proof is
+required.
+
 ## Expected output
 
 ```text
@@ -72,6 +78,7 @@ Sample proof object:
 ## What this proves
 
 - External governance is bound to the exact action envelope, not a free-form label.
+- Proof objects avoid storing raw tool arguments in the action reference.
 - The runtime can pause for approval before execution when an external checkpoint
   requires it.
 - A verifier can participate without becoming the runtime enforcement layer.
