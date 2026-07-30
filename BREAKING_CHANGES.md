@@ -15,6 +15,12 @@ entries appear first.
   `MerkleAuditChain.add_entry`, `MerkleAuditChain.get_root_hash`,
   `AuditLog.export` (`merkle_root` / `chain_root` fields), and Merkle inclusion
   proofs from `MerkleAuditChain.get_proof`.
+- `agent-governance-python` (`agentmesh.governance.trace_sink`):
+  `session_to_trust_record` and `TRACEAuditSink.emit`, which derive the TRACE
+  Trust Record `runtime.measurement` (and, when `build_provenance_digest` is
+  unset, `build_provenance.digest`) from the Merkle root.
+- `agent-governance-python` (`agentmesh.services.audit`):
+  `AuditService.summary` (`root_hash` field).
 
 **What changed:**
 
@@ -37,6 +43,14 @@ mismatch when re-verifying old exports against a current build. Re-export and
 re-anchor any archived roots, or pin the prior version to verify pre-existing
 evidence. Entry hashes and the linear `previous_hash` chain (`verify_chain`) are
 unchanged.
+
+The TRACE Trust Records emitted by `TRACEAuditSink` carry this root in
+`runtime.measurement` and are Ed25519-signed before being written out for
+external relying parties. For the affected chain sizes a relying party that
+re-derives the measurement from the same audit entries now computes a different
+value, so those records must be re-issued (rebuilt and re-signed), not merely
+re-exported. `AuditService.summary()` likewise reports the new `root_hash` for
+the affected sizes.
 
 ---
 
