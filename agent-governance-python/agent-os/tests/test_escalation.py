@@ -276,7 +276,7 @@ class TestQuorumResolution:
         instead of repeating the earlier default.
         """
 
-        class _NonBlockingBackend(ApprovalBackend):
+        class _NonBlockingBackend:
             def __init__(self):
                 self._inner = InMemoryApprovalQueue()
 
@@ -324,7 +324,7 @@ class TestQuorumResolution:
         message so a future fix or regression is visible here first.
         """
 
-        class _NonBlockingBackend(ApprovalBackend):
+        class _NonBlockingBackend:
             """Wraps an in-memory queue but is deliberately NOT an
             InMemoryApprovalQueue, so EscalationHandler treats it as a
             single-poll backend like WebhookApprovalBackend does."""
