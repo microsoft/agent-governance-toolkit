@@ -2,20 +2,20 @@
 # Licensed under the MIT License.
 """Gemini adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
-These scenarios exercise the v4 :class:`GeminiKernel` and
+These scenarios exercise the native :class:`GeminiKernel` and
 :class:`GovernedGeminiModel` surface routed through
-:class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+:class:`agent_control_specification.AgentControl` via the
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH`` or on the ``google-generativeai``
 SDK being installed.
 
 Each test covers one of the AGT verdicts that the adapter must
-translate back to its v4 surface:
+expose through its native surface:
 
 - ``allow`` -> Gemini sees the original prompt.
 - ``deny`` -> the adapter raises
-  :class:`PolicyViolationError.from_check_result(...)`.
+  :class:`PolicyViolationError` with its native evaluation attached.
 - ``transform`` -> the adapter rewrites the outbound prompt or tool
   arguments with the AGT D1.1 ``{path, value}`` payload before calling
   the Gemini client.
@@ -35,8 +35,11 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agt.policies import EvaluationResult, SnapshotBuilder  # noqa: E402,F401
-from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
+from agent_control_specification import InterventionPointResult, SnapshotBuilder  # noqa: E402,F401
+from agent_control_specification import (  # noqa: E402
+    AgentControl,
+    ApprovalResolution,
+)
 
 
 _MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
@@ -57,6 +60,11 @@ intervention_points:
     policy_target: $.tool_call.args
     policy_target_kind: tool_args
     tool_name_from: $.tool_call.name
+    policy:
+      id: scenario_policy
+  output:
+    policy_target: $.response.content
+    policy_target_kind: assistant_output
     policy:
       id: scenario_policy
 tools:
@@ -92,10 +100,10 @@ def _build_runtime(
     verdicts: list[dict[str, Any]],
     *,
     approval_resolver=None,
-) -> tuple[AgtRuntime, _ScriptedPolicy]:
+) -> tuple[AgentControl, _ScriptedPolicy]:
     policy = _ScriptedPolicy(verdicts)
-    runtime = AgtRuntime(
-        _write_manifest(tmp_path),
+    runtime = AgentControl.from_path(
+        str(_write_manifest(tmp_path)),
         policy_dispatcher=policy,
         approval_resolver=approval_resolver,
     )
@@ -143,14 +151,21 @@ def test_generate_content_allow_path_forwards_to_gemini(tmp_path: Path) -> None:
 
     gemini_mod._HAS_GENAI = True
 
-    runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = GeminiKernel(_runtime=runtime)
+    runtime, policy = _build_runtime(
+        tmp_path,
+        [
+            {"decision": "allow"},  # input
+            {"decision": "allow"},  # output (post-execute)
+        ],
+    )
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
     governed.generate_content("what is the weather today?")
 
-    assert len(policy.invocations) == 1
+    # The manifest binds input and output, so the adapter evaluates both.
+    assert len(policy.invocations) == 2
     model.generate_content.assert_called_once()
     sent = model.generate_content.call_args.args
     assert sent[0] == "what is the weather today?"
@@ -173,14 +188,14 @@ def test_generate_content_deny_path_raises_policy_violation(tmp_path: Path) -> N
             }
         ],
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
     with pytest.raises(PolicyViolationError) as excinfo:
         governed.generate_content("tell me about secrets")
 
-    assert excinfo.value.check_result.reason == "user_blocked_topic"
+    assert excinfo.value.evaluation_result.verdict.reason == "user_blocked_topic"
     model.generate_content.assert_not_called()
 
 
@@ -201,10 +216,11 @@ def test_generate_content_transform_path_redacts_outbound_prompt(tmp_path: Path)
                     "path": "$policy_target",
                     "value": "Customer SSN is [REDACTED]",
                 },
-            }
+            },
+            {"decision": "allow"},  # output (post-execute)
         ],
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
@@ -227,17 +243,20 @@ def test_generate_content_escalate_with_approving_resolver_forwards(
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: InterventionPointResult) -> ApprovalResolution:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
-        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
+        return ApprovalResolution.allow(result.enforced_identity)  # type: ignore[arg-type]
 
     runtime, _policy = _build_runtime(
         tmp_path,
-        [{"decision": "escalate", "reason": "human_approval_required"}],
+        [
+            {"decision": "escalate", "reason": "human_approval_required"},
+            {"decision": "allow"},  # output (post-execute)
+        ],
         approval_resolver=resolver,
     )
-    kernel = GeminiKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
@@ -257,10 +276,13 @@ def test_generate_content_escalate_with_no_resolver_denies(tmp_path: Path) -> No
 
     runtime, _policy = _build_runtime(
         tmp_path,
-        [{"decision": "escalate", "reason": "human_approval_required"}],
+        [
+            {"decision": "escalate", "reason": "human_approval_required"},
+            {"decision": "allow"},  # output (post-execute)
+        ],
         approval_resolver=None,
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
@@ -292,9 +314,10 @@ def test_function_call_transform_rewrites_args(tmp_path: Path) -> None:
                     "value": {"city": "[REDACTED]"},
                 },
             },
+            {"decision": "allow"},  # output (post-execute)
         ],
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     response = _make_function_call_response("get_weather", {"city": "Seattle"})
     model = _make_gemini_model(response=response)
     governed = kernel.wrap(model)
@@ -325,7 +348,7 @@ def test_function_call_deny_path_raises_policy_violation(tmp_path: Path) -> None
             },
         ],
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     response = _make_function_call_response("get_weather", {"city": "Seattle"})
     model = _make_gemini_model(response=response)
     governed = kernel.wrap(model)
@@ -333,4 +356,4 @@ def test_function_call_deny_path_raises_policy_violation(tmp_path: Path) -> None
     with pytest.raises(PolicyViolationError) as excinfo:
         governed.generate_content("weather please")
 
-    assert excinfo.value.check_result.reason == "tool_args_forbidden"
+    assert excinfo.value.evaluation_result.verdict.reason == "tool_args_forbidden"

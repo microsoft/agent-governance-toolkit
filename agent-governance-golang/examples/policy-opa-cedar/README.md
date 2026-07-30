@@ -8,7 +8,7 @@ fail-closed behaviour when a backend returns an error.
 
 Covers
 [`policy_backends.go`](../../packages/agentmesh/policy_backends.go):
-`NewOPABackend`, `NewCedarBackend`, `LoadRego`, `LoadCedar`, the
+`NewOPABackend`, `NewCedarlingDecision`, `LoadRego`, `LoadCedar`, the
 `OPAOptions` / `CedarOptions` configs, and the `OPABuiltin` /
 `OPACLI` / `CedarBuiltin` modes.
 

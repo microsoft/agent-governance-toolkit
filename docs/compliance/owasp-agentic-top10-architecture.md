@@ -1,6 +1,6 @@
 ---
 title: OWASP Agentic Security Initiative Reference Architecture
-last_reviewed: 2026-06-10
+last_reviewed: 2026-07-11
 owner: agt-maintainers
 ---
 
@@ -30,9 +30,9 @@ it is not an eleventh entry in the official OWASP list.
 
 | ASI ID | Risk Title | Coverage | Primary AGT Component |
 |--------|-----------|----------|----------------------|
-| ASI01 | Agent Goal Hijack | ✅ Full | `governanceMiddleware` — `blockedPatterns` |
-| ASI02 | Tool Misuse and Exploitation | ✅ Full | `createGovernedTool` — allow/deny-lists |
-| ASI03 | Identity and Privilege Abuse | ✅ Full | PII redaction, RBAC in policy YAML |
+| ASI01 | Agent Goal Hijack | ✅ Full | ACS input annotators and policy bindings |
+| ASI02 | Tool Misuse and Exploitation | ✅ Full | ACS tool catalog and `AgentControl.runTool` |
+| ASI03 | Identity and Privilege Abuse | ✅ Full | ACS labels, identity binding, and host RBAC |
 | ASI04 | Agentic Supply Chain | ⚠️ Partial | Policy YAML tool pinning; no SBOM |
 | ASI05 | Unexpected Code Execution | ✅ Full | Static reviewer detects pickle/eval |
 | ASI06 | Memory and Context Poisoning | ⚠️ Partial | Audit hash-chain; no memory sandbox |
@@ -77,13 +77,14 @@ flowchart TD
 
 **Risk:** Adversarial inputs override an agent's intended goal.
 
-**AGT Mitigation:** The `governanceMiddleware` applies `blockedPatterns` (regex)
-to every inbound message before it reaches the LLM. Patterns are loaded from
-the policy YAML at runtime — not hardcoded in source.
+**AGT Mitigation:** ACS evaluates the `input` intervention point before model
+execution. Manifests bind classifier, endpoint, or Rego policies and preserve
+the input and enforced identities for audit.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/governance/middleware.py` — `_check_blocked_patterns()`
-- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `no-prompt-injection-guards`
+- `policy-engine/spec/SPECIFICATION.md` input intervention-point contract
+- `policy-engine/sdk/node/src/index.ts` `AgentControl.evaluateInterventionPoint`
+- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` rule `no-prompt-injection-guards`
 
 **Coverage:** ✅ Full
 
@@ -93,13 +94,15 @@ the policy YAML at runtime — not hardcoded in source.
 
 **Risk:** An agent invokes tools in unintended or dangerous ways.
 
-**AGT Mitigation:** `createGovernedTool` wraps every tool with allow-list /
-deny-list enforcement and per-tool rate limits. The static reviewer flags
-unguarded `.execute()` calls.
+**AGT Mitigation:** `createGovernedTool` delegates every invocation to
+`AgentControl.runTool`. The ACS manifest tool catalog and bound policies
+mediate both pre-tool and post-tool intervention points. The static reviewer
+flags unguarded `.execute()` calls.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/governance/tool_wrapper.py`
-- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rules `unguarded-tool-execution`, `no-tool-allowlist`
+- `policy-engine/spec/schema/manifest.schema.json` tool catalog
+- `policy-engine/sdk/node/src/index.ts` `AgentControl.runTool`
+- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` rules `unguarded-tool-execution`, `no-tool-allowlist`
 
 **Coverage:** ✅ Full
 
@@ -109,12 +112,14 @@ unguarded `.execute()` calls.
 
 **Risk:** Agents acquire privileges beyond their role, exposing sensitive data.
 
-**AGT Mitigation:** PII redaction middleware strips sensitive fields before
-forwarding. Policy YAML supports field-level `pii_fields` configuration.
+**AGT Mitigation:** ACS annotators and policy bindings inspect sensitive
+content before execution. The runtime binds input and enforced identities so
+hosts can audit transforms and approval decisions.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/governance/middleware.py` — `_redact_pii()`
-- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-pii-redaction`
+- `policy-engine/spec/SPECIFICATION.md` identity and annotator contracts
+- `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py`
+- `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py`
 
 **Coverage:** ✅ Full
 
@@ -197,8 +202,9 @@ verification in multi-agent orchestration code.
 failures, preventing cascade. Rate limiting caps per-minute tool invocations.
 
 **Evidence:**
-- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-circuit-breaker`
-- `agent-governance-python/agent-os/src/agent_os/governance/middleware.py` — `_rate_limit_check()`
+- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` rule `missing-circuit-breaker`
+- `agent-governance-python/agent-os/src/agent_os/_circuit_breaker_impl.py`
+- `agent-governance-python/agent-os/src/agent_os/integrations/rate_limiter.py`
 
 **Coverage:** ✅ Full
 

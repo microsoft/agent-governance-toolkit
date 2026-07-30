@@ -68,7 +68,7 @@ Rego emission::
 Calling convention (caller's evaluation context)::
 
     {
-        "agent_id":       "<string>",   # consumed by AGT's CedarBackend wrapper
+        "agent_id":       "<string>",   # consumed by the ACS Cedar policy input
         "tool_name":      "<snake>",    # mapped to Action::"<PascalCase>" by AGT
         "resource":       "<string>",   # Cedar entity id; Rego full string
         "principal_role": "<string>",   # discriminator for role gating

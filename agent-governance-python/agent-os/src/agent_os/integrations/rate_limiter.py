@@ -1,9 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tool-call rate limiting tied to governance policy.
+"""Host-side token-bucket rate limiting for tool calls.
 
-This module enforces token-bucket limits for tool invocations, optionally scoped
-per agent and governed by ``GovernancePolicy.max_tool_calls``.
+Limits may be scoped per agent.
 
 See also:
     - hypervisor.security.rate_limiter: runtime-layer per-agent/per-ring limits.
@@ -15,9 +14,6 @@ See also:
 import threading
 import time
 from dataclasses import dataclass
-from typing import Optional
-
-from .base import GovernancePolicy
 
 
 @dataclass(frozen=True)
@@ -37,8 +33,6 @@ class RateLimiter:
         time_window: Duration of the time window in seconds.
         per_agent: If ``True``, limits are tracked independently per agent.
             If ``False``, a single global bucket is used for all agents.
-        policy: Optional GovernancePolicy whose ``max_tool_calls`` overrides
-            *max_calls*.
     """
 
     _GLOBAL_KEY = "__global__"
@@ -48,14 +42,13 @@ class RateLimiter:
         max_calls: int = 10,
         time_window: float = 60.0,
         per_agent: bool = True,
-        policy: Optional[GovernancePolicy] = None,
     ) -> None:
         if max_calls <= 0:
             raise ValueError("max_calls must be positive")
         if time_window <= 0:
             raise ValueError("time_window must be positive")
 
-        self._max_calls = policy.max_tool_calls if policy is not None else max_calls
+        self._max_calls = max_calls
         self._time_window = float(time_window)
         self._per_agent = per_agent
         self._lock = threading.Lock()

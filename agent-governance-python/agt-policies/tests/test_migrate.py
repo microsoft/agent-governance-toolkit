@@ -27,7 +27,7 @@ import pytest
 import yaml
 
 from agt.cli import migrate as migrate_mod
-from agt.policies import AgtManifest
+from agent_control_specification import parse_manifest
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +477,7 @@ policy = GovernancePolicy(
     bundle = Path(data["policies"]["billing_bot"]["bundle"])
     assert bundle.is_dir()
     assert (bundle / "billing_bot.rego").is_file()
-    assert AgtManifest.from_path(out).to_document() == data
+    assert parse_manifest(out.read_text(encoding="utf-8")) == data
 
 
 def test_governance_policy_defaults_are_migrated_exactly(tmp_path: Path) -> None:
@@ -495,9 +495,11 @@ policy = GovernancePolicy()
     finding = report.governance_policies[0]
     assert finding.manual_review == []
     assert finding.manifest_path is not None
-    manifest = AgtManifest.from_path(finding.manifest_path)
-    policy = manifest.policies["default_bot"]
-    rego = (Path(policy.bundle) / "default_bot.rego").read_text(
+    manifest = parse_manifest(
+        Path(finding.manifest_path).read_text(encoding="utf-8")
+    )
+    policy = manifest["policies"]["default_bot"]
+    rego = (Path(policy["bundle"]) / "default_bot.rego").read_text(
         encoding="utf-8"
     )
     assert '"token_count": 4096' in rego
@@ -524,8 +526,10 @@ policy = GovernancePolicy(
 
     finding = report.governance_policies[0]
     assert finding.manual_review == []
-    manifest = AgtManifest.from_path(finding.manifest_path)
-    rego = Path(manifest.policies["patterns"].bundle, "patterns.rego").read_text(
+    manifest = parse_manifest(
+        Path(finding.manifest_path).read_text(encoding="utf-8")
+    )
+    rego = Path(manifest["policies"]["patterns"]["bundle"], "patterns.rego").read_text(
         encoding="utf-8"
     )
     assert "secret-[0-9]+" in rego
@@ -874,7 +878,7 @@ policy = GovernancePolicy(name="x")
     real_import = __builtins__["__import__"] if isinstance(__builtins__, dict) else __import__
 
     def fake_import(name, *args, **kwargs):  # type: ignore[no-untyped-def]
-        if name == "agt.policies.bridge":
+        if name == "agt.cli._migrate_bridge":
             raise ImportError("simulated missing bridge")
         return real_import(name, *args, **kwargs)
 
@@ -885,4 +889,4 @@ policy = GovernancePolicy(name="x")
     assert finding.manual_review == []
     assert finding.manifest_path is not None
     assert finding.manifest_path.is_file()
-    assert "agt.policies.bridge" not in finding.rewrite_snippet
+    assert "agt.cli._migrate_bridge" not in finding.rewrite_snippet
