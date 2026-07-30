@@ -983,6 +983,8 @@ MCIT
 # Mauritius (no new abbreviations beyond PDPC)
 # Shared currency / country codes used in messages
 GHA
+# Fictitious order-reference prefix used in a Ghana Card regex regression test
+SGHA
 RWF
 EGP
 MUR
@@ -1000,6 +1002,7 @@ registr
 قومي
 رقم
 # URL hostnames in policy file references
+hostnames
 dataprotection
 # dorny/paths-filter — GitHub Actions dependency used in policy-validation.yml
 dorny

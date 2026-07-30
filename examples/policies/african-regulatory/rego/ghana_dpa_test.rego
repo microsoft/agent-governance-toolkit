@@ -79,6 +79,19 @@ test_allow_ghana_card_label_only_no_id if {
 	}
 }
 
+# An unrelated identifier that happens to contain "GHA" followed by 10 digits
+# as a substring (e.g. an order/tracking reference) must not false-positive
+# deny — regression test for the missing \b anchor (probe-confirmed review
+# finding: "SGHA1721234567" matched GHA[0-9]{10} before the fix).
+test_allow_unrelated_reference_containing_gha_digits if {
+	count(ghana_dpa.deny) == 0 with input as {
+		"action": "respond",
+		"params": {},
+		"output": "Your order reference is SGHA1721234567.",
+		"context": {},
+	}
+}
+
 # ── Deny: cross-border to non-permitted region ────────────────────
 
 test_deny_us_east_cross_border if {

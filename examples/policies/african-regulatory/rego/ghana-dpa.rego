@@ -91,7 +91,7 @@ deny contains msg if {
 # NIA Act 707: Block Ghana Card national ID in output
 # Format: GHA-XXXXXXXXX-X (GHA prefix + 9 digits + 1 check digit)
 deny contains msg if {
-	regex.match(`(?i)((ghana\s+(card|id|national\s+id)[\s:#-]{0,5})?(GHA-[0-9]{9}-[0-9]|GHA[0-9]{10}))`, input.output)
+	regex.match(`(?:(?i:ghana\s+(?:card|id|national\s+id))[\s:#-]{0,5})?\b(?:GHA-[0-9]{9}-[0-9]|GHA[0-9]{10})\b`, input.output)
 	msg := "Ghana DPA Act 843 / NIA Act 707: Ghana Card national ID detected in agent output — blocked to prevent identity data exposure"
 }
 
