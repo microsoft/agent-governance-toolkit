@@ -502,6 +502,89 @@ def test_merge_deny_eq_null_child_allow_not_in_preserved() -> None:
     )
 
 
+def test_merge_deny_and_eqnull_ne_sibling_eqnull_first_drops_child_allow() -> None:
+    """Deny ``and[eq null, ne X]`` fires on an absent field; overlap must drop child.
+
+    Regression for the polarity-by-position bug (liamcrumm review of #3529):
+    ``_condition_unsatisfiable`` compares the two ``and`` siblings as a peer
+    pair, not a deny/allow overlap. With this sibling order the pre-fix code
+    applied allow (guarded) semantics to the deny ``ne`` and wrongly declared
+    the deny condition unsatisfiable, so the overlapping child allow survived —
+    a fail-open. Polarity is now taken from the rule (deny), not the position.
+    """
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {
+                    "and": [
+                        {"field": "region", "operator": "eq", "value": None},
+                        {"field": "region", "operator": "ne", "value": "US"},
+                    ]
+                },
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "region", "operator": "eq", "value": None},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"], (
+        "deny and[eq null, ne X] fires on region==null; child allow eq null "
+        "overlaps and must be dropped regardless of sibling order"
+    )
+
+
+def test_merge_deny_and_ne_eqnull_sibling_order_independent() -> None:
+    """Same deny as above with the siblings reversed: result must be identical.
+
+    Locks in order-independence — the pre-fix code happened to be correct for
+    this ordering only, which is why the bug was latent.
+    """
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {
+                    "and": [
+                        {"field": "region", "operator": "ne", "value": "US"},
+                        {"field": "region", "operator": "eq", "value": None},
+                    ]
+                },
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "region", "operator": "eq", "value": None},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"], (
+        "sibling order must not change the merge outcome"
+    )
+
+
 def test_merge_contains_and_matches_overlap_drop_child_allow() -> None:
     parent = {
         "rules": [
