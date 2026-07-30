@@ -1165,7 +1165,7 @@ def _jsonrpc_request(
         "method": method,
         "params": params or {},
     }
-    if meta:
+    if meta is not None:
         payload["_meta"] = dict(meta)
     return payload
 
