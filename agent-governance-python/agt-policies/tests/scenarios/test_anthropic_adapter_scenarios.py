@@ -57,6 +57,11 @@ intervention_points:
     tool_name_from: $.tool_call.name
     policy:
       id: scenario_policy
+  output:
+    policy_target: $.response.content
+    policy_target_kind: assistant_output
+    policy:
+      id: scenario_policy
 tools:
   web_search:
     clearance: public
@@ -117,7 +122,13 @@ def test_hook_create_allow_path_forwards_to_anthropic(tmp_path: Path) -> None:
     """An ``allow`` verdict lets Anthropic see the original message content."""
     from agent_os.integrations.anthropic_adapter import AnthropicKernel
 
-    runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
+    runtime, policy = _build_runtime(
+        tmp_path,
+        [
+            {"decision": "allow"},  # input
+            {"decision": "allow"},  # output (post-execute)
+        ],
+    )
     kernel = AnthropicKernel(runtime=runtime)
     hook = kernel.as_message_hook()
     client = _make_client()
@@ -129,7 +140,8 @@ def test_hook_create_allow_path_forwards_to_anthropic(tmp_path: Path) -> None:
         messages=[{"role": "user", "content": "Hello, Claude"}],
     )
 
-    assert len(policy.invocations) == 1
+    # The manifest binds input and output, so the hook evaluates both.
+    assert len(policy.invocations) == 2
     client.messages.create.assert_called_once()
     sent = client.messages.create.call_args.kwargs
     assert sent["messages"][0]["content"] == "Hello, Claude"
@@ -182,7 +194,8 @@ def test_hook_create_transform_path_redacts_outbound_message(tmp_path: Path) -> 
                     "path": "$policy_target",
                     "value": "Customer SSN is [REDACTED]",
                 },
-            }
+            },
+            {"decision": "allow"},  # output (post-execute)
         ],
     )
     kernel = AnthropicKernel(runtime=runtime)
@@ -214,7 +227,10 @@ def test_hook_create_escalate_with_approving_resolver_forwards(tmp_path: Path) -
 
     runtime, _policy = _build_runtime(
         tmp_path,
-        [{"decision": "escalate", "reason": "human_approval_required"}],
+        [
+            {"decision": "escalate", "reason": "human_approval_required"},
+            {"decision": "allow"},  # output (post-execute)
+        ],
         approval_resolver=resolver,
     )
     kernel = AnthropicKernel(runtime=runtime)
