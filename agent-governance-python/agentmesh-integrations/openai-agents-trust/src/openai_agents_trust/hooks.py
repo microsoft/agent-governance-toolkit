@@ -97,6 +97,10 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
         self, context: RunContextWrapper[Any], agent: Agent[Any], tool: Tool
     ) -> None:
         count = self._tool_call_counts.get(agent.name, 0) + 1
+        # The openai-agents lifecycle hook signature does not carry the
+        # tool-call arguments, so args is always empty here: policy rules that
+        # condition on tool arguments never match on this path. Enforce them
+        # via the guardrail integration instead.
         evaluation = self._session(agent.name).pre_tool_call(
             tool_name=tool.name,
             args={},
@@ -116,6 +120,8 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
     async def on_tool_end(
         self, context: RunContextWrapper[Any], agent: Agent[Any], tool: Tool, result: str
     ) -> None:
+        # As in on_tool_start: the hook signature does not carry the tool-call
+        # arguments, so arg-conditioned policy rules never match on this path.
         evaluation = self._session(agent.name).post_tool_call(
             tool_name=tool.name,
             args={},
