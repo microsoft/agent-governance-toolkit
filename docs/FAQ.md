@@ -132,7 +132,7 @@ In practice:
 | OpenAI Agents SDK | Middleware | `OpenAIAgentsKernel` | Async hooks on tool calls. Published on PyPI (`agentmesh-openai-agents-trust`). |
 | Google ADK | Adapter | `GoogleADKKernel` | Plugin-style integration via ADK's extension system. |
 | LlamaIndex | Middleware | `LlamaIndexAdapter` | `TrustedAgentWorker` + `TrustGatedQueryEngine` merged upstream. |
-| Haystack | Pipeline | `haystack_agentmesh` | `TrustGate` + `AuditLogger` pipeline components. |
+| Haystack | Pipeline | `TrustedPipeline` | `TrustGateComponent` + `TrustAgentComponent` in `agentmesh.integrations.haystack`. |
 | Dify | Plugin | `DifyPlugin` | Install from Dify Marketplace. Zero-code governance. |
 | Azure AI Foundry | Deployment Guide | MAF Middleware | `RuntimeGovernanceMiddleware`, `CapabilityGuardMiddleware`, `AuditTrailMiddleware`, `RogueDetectionMiddleware`. |
 
