@@ -8,7 +8,7 @@ tests run without a hypervisor and without the real package installed.
 
 Coverage targets:
 
-* Configuration: :class:`HyperlightConfig`, ``hyperlight_config_from_policy``.
+* Configuration through :class:`HyperlightConfig` and :class:`SandboxConfig`.
 * Construction: SDK probe, backend validation, hypervisor-absence path.
 * Lifecycle: create/execute/destroy, session reuse, status, cancel.
 * Capabilities: ``register_tool`` / ``allow_domain`` calls match policy.
@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 import sys
 import types
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -157,28 +156,21 @@ def provider(fake_sdk):
     )
 
 
-def _make_policy(
+def _make_config(
     *,
     tool_allowlist: list[str] | None = None,
     network_allowlist: list[str] | None = None,
     max_memory_mb: int | None = None,
     timeout_seconds: float | None = None,
 ):
-    """Build a duck-typed policy stand-in. PolicyEvaluator import will
-    fail (agent-os-kernel not installed in this test env), so the
-    provider runs without a host-side gate — exactly what we want for
-    the capability-binding tests.
-    """
-    defaults = SimpleNamespace(
-        max_memory_mb=max_memory_mb if max_memory_mb is not None else 256,
-        timeout_seconds=(
-            timeout_seconds if timeout_seconds is not None else 30
-        ),
-    )
-    return SimpleNamespace(
-        defaults=defaults,
+    """Build explicit host configuration for capability tests."""
+    hosts = list(network_allowlist or [])
+    return SandboxConfig(
+        memory_mb=max_memory_mb if max_memory_mb is not None else 256,
+        timeout_seconds=timeout_seconds if timeout_seconds is not None else 30,
         tool_allowlist=tool_allowlist or [],
-        network_allowlist=network_allowlist or [],
+        network_enabled=bool(hosts),
+        network_allowlist=hosts,
     )
 
 
@@ -256,59 +248,6 @@ class TestHyperlightConfig:
         )
         assert cfg.backend == "hyperlightjs"
         assert cfg.module is None
-
-
-class TestPolicyToConfig:
-    def test_resource_caps_extracted(self):
-        from agent_sandbox.hyperlight_provider import (
-            hyperlight_config_from_policy,
-        )
-
-        policy = _make_policy(max_memory_mb=128, timeout_seconds=45)
-        cfg = hyperlight_config_from_policy(policy)
-        assert cfg.heap_size_bytes == 128 * 1024 * 1024
-        assert cfg.max_execution_time_ms == 45_000
-
-    def test_missing_defaults_keeps_base(self):
-        from agent_sandbox.hyperlight_provider import (
-            HyperlightConfig,
-            hyperlight_config_from_policy,
-        )
-
-        policy = SimpleNamespace()  # no defaults attr
-        base = HyperlightConfig(heap_size_bytes=999_999)
-        cfg = hyperlight_config_from_policy(policy, base=base)
-        assert cfg.heap_size_bytes == 999_999
-
-    def test_sandbox_mounts_picked_up(self):
-        from agent_sandbox.hyperlight_provider import (
-            hyperlight_config_from_policy,
-        )
-
-        policy = SimpleNamespace(
-            defaults=SimpleNamespace(),
-            sandbox_mounts=SimpleNamespace(
-                input_dir="/in", output_dir="/out"
-            ),
-        )
-        cfg = hyperlight_config_from_policy(policy)
-        assert cfg.input_dir == "/in"
-        assert cfg.output_dir == "/out"
-
-    def test_invalid_defaults_ignored(self):
-        from agent_sandbox.hyperlight_provider import (
-            hyperlight_config_from_policy,
-        )
-
-        policy = SimpleNamespace(
-            defaults=SimpleNamespace(
-                max_memory_mb=-5, timeout_seconds="bogus"
-            )
-        )
-        cfg = hyperlight_config_from_policy(policy)
-        # Falls back to defaults, no crash.
-        assert cfg.heap_size_bytes == 64 * 1024 * 1024
-        assert cfg.max_execution_time_ms == 60_000
 
 
 # =========================================================================
@@ -444,33 +383,33 @@ class TestSessionLifecycle:
 
 
 class TestCapabilityBinding:
-    def test_no_policy_means_no_tools_no_domains(self, provider):
+    def test_default_config_means_no_tools_no_domains(self, provider):
         provider.create_session("agent-1")
         sb = _FakeSandbox.instances[-1]
         assert sb.tools == {}
         assert sb.allowed_domains == []
 
     def test_tool_allowlist_registers_only_allowed(self, provider):
-        policy = _make_policy(tool_allowlist=["web_search", "read_doc"])
-        provider.create_session("agent-1", policy=policy)
+        config = _make_config(tool_allowlist=["web_search", "read_doc"])
+        provider.create_session("agent-1", config=config)
         sb = _FakeSandbox.instances[-1]
         assert set(sb.tools) == {"web_search", "read_doc"}
         assert "delete_doc" not in sb.tools
 
     def test_unknown_tool_in_allowlist_fails_closed(self, provider):
-        policy = _make_policy(tool_allowlist=["web_search", "ghost_tool"])
+        config = _make_config(tool_allowlist=["web_search", "ghost_tool"])
         with pytest.raises(ValueError, match="not registered with the provider"):
-            provider.create_session("agent-1", policy=policy)
+            provider.create_session("agent-1", config=config)
         # No sandbox should remain registered after the failed creation.
         assert provider.get_session_status("agent-1", "any") == (
             SessionStatus.DESTROYED
         )
 
     def test_network_allowlist_calls_allow_domain(self, provider):
-        policy = _make_policy(
+        config = _make_config(
             network_allowlist=["https://api.arxiv.org", "https://pypi.org"]
         )
-        provider.create_session("agent-1", policy=policy)
+        provider.create_session("agent-1", config=config)
         sb = _FakeSandbox.instances[-1]
         assert sb.allowed_domains == [
             "https://api.arxiv.org",
@@ -478,24 +417,25 @@ class TestCapabilityBinding:
         ]
 
     def test_empty_network_allowlist_means_no_domains(self, provider):
-        policy = _make_policy(network_allowlist=[])
-        provider.create_session("agent-1", policy=policy)
+        provider.create_session(
+            "agent-1", config=_make_config(network_allowlist=[])
+        )
         sb = _FakeSandbox.instances[-1]
         assert sb.allowed_domains == []
 
     def test_register_tool_failure_tears_down_sandbox(self, provider):
         _FakeSandbox.raise_on_register = True
-        policy = _make_policy(tool_allowlist=["web_search"])
+        config = _make_config(tool_allowlist=["web_search"])
         with pytest.raises(RuntimeError, match="register_tool"):
-            provider.create_session("agent-1", policy=policy)
+            provider.create_session("agent-1", config=config)
         # The transient sandbox should have been closed.
         assert _FakeSandbox.instances[-1].closed is True
 
     def test_allow_domain_failure_tears_down_sandbox(self, provider):
         _FakeSandbox.raise_on_allow = True
-        policy = _make_policy(network_allowlist=["https://x.test"])
+        config = _make_config(network_allowlist=["https://x.test"])
         with pytest.raises(RuntimeError, match="allow_domain"):
-            provider.create_session("agent-1", policy=policy)
+            provider.create_session("agent-1", config=config)
         assert _FakeSandbox.instances[-1].closed is True
 
     def test_nanvix_rejects_tools_or_network(self, fake_sdk):
@@ -508,12 +448,12 @@ class TestCapabilityBinding:
         )
         with pytest.raises(ValueError, match="nanvix"):
             p.create_session(
-                "agent-1", policy=_make_policy(tool_allowlist=["x"])
+                "agent-1", config=_make_config(tool_allowlist=["x"])
             )
         with pytest.raises(ValueError, match="nanvix"):
             p.create_session(
                 "agent-1",
-                policy=_make_policy(network_allowlist=["https://x.test"]),
+                config=_make_config(network_allowlist=["https://x.test"]),
             )
 
 

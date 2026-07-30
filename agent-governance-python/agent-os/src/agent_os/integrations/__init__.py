@@ -85,7 +85,6 @@ _LAZY_ADAPTER_MAP: dict[str, tuple[str, str]] = {
     "ADKAuditEvent": (".google_adk_adapter", "AuditEvent"),
     "ADKGovernancePlugin": (".google_adk_adapter", "GovernancePlugin"),
     "GoogleADKKernel": (".google_adk_adapter", "GoogleADKKernel"),
-    "ADKPolicyConfig": (".google_adk_adapter", "PolicyConfig"),
     "GuardrailsKernel": (".guardrails_adapter", "GuardrailsKernel"),
     "LangChainGovernanceMiddleware": (".langchain_adapter", "GovernanceMiddleware"),
     "LangChainKernel": (".langchain_adapter", "LangChainKernel"),
@@ -93,7 +92,7 @@ _LAZY_ADAPTER_MAP: dict[str, tuple[str, str]] = {
     "LangGraphGovernedGraph": (".langgraph_adapter", "GovernedGraph"),
     "MAFAuditTrailMiddleware": (".maf_adapter", "AuditTrailMiddleware"),
     "MAFCapabilityGuardMiddleware": (".maf_adapter", "CapabilityGuardMiddleware"),
-    "MAFGovernancePolicyMiddleware": (".maf_adapter", "GovernancePolicyMiddleware"),
+    "MAFRuntimeGovernanceMiddleware": (".maf_adapter", "RuntimeGovernanceMiddleware"),
     "MAFRogueDetectionMiddleware": (".maf_adapter", "RogueDetectionMiddleware"),
     "maf_create_governance_middleware": (".maf_adapter", "create_governance_middleware"),
     "FirewallMode": (".llamafirewall", "FirewallMode"),
@@ -126,14 +125,12 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 from .base import (
-    AsyncGovernedWrapper,
+    AdapterExecutionState,
     BaseIntegration,
     BoundedSemaphore,
     CompositeInterceptor,
     ContentHashInterceptor,
     DriftResult,
-    GovernancePolicy,
-    PolicyInterceptor,
     ToolCallInterceptor,
     ToolCallRequest,
     ToolCallResult,
@@ -155,9 +152,7 @@ from .escalation import (
     DefaultTimeoutAction,
     EscalationDecision,
     EscalationHandler,
-    EscalationPolicy,
     EscalationRequest,
-    EscalationResult,
     InMemoryApprovalQueue,
     QuorumConfig,
     WebhookApprovalBackend,
@@ -165,24 +160,20 @@ from .escalation import (
 from .compat import CompatReport, check_compatibility, doctor, warn_on_import
 from .health import ComponentHealth, HealthChecker, HealthReport, HealthStatus
 from .logging import GovernanceLogger, JSONFormatter, get_logger
-from .policy_compose import PolicyHierarchy, compose_policies, override_policy
 from .rate_limiter import RateLimiter, RateLimitStatus
-from .templates import PolicyTemplates
 from .token_budget import TokenBudgetStatus, TokenBudgetTracker
 from .tool_aliases import ToolAliasRegistry
 from .webhooks import DeliveryRecord, WebhookConfig, WebhookEvent, WebhookNotifier
 
 __all__ = [
     # Base
-    "AsyncGovernedWrapper",
+    "AdapterExecutionState",
     "BaseIntegration",
     "DriftResult",
-    "GovernancePolicy",
     # Tool Call Interceptor (vendor-neutral)
     "ToolCallInterceptor",
     "ToolCallRequest",
     "ToolCallResult",
-    "PolicyInterceptor",
     "CompositeInterceptor",
     # Backpressure / Concurrency
     "BoundedSemaphore",
@@ -223,7 +214,6 @@ __all__ = [
     "GoogleADKKernel",
     "ADKGovernancePlugin",
     "ADKExecutionContext",
-    "ADKPolicyConfig",
     "ADKAuditEvent",
     # A2A (Agent-to-Agent)
     "A2AGovernanceAdapter",
@@ -245,7 +235,7 @@ __all__ = [
     "SmolagentsKernel",
     "SmolagentsGovernanceCallback",
     # Microsoft Agent Framework (MAF)
-    "MAFGovernancePolicyMiddleware",
+    "MAFRuntimeGovernanceMiddleware",
     "MAFCapabilityGuardMiddleware",
     "MAFAuditTrailMiddleware",
     "MAFRogueDetectionMiddleware",
@@ -264,10 +254,8 @@ __all__ = [
     "DryRunDecision",
     "DryRunCollector",
     # Escalation (Human-in-the-Loop)
-    "EscalationPolicy",
     "EscalationHandler",
     "EscalationRequest",
-    "EscalationResult",
     "EscalationDecision",
     "DefaultTimeoutAction",
     "ApprovalBackend",
@@ -284,16 +272,12 @@ __all__ = [
     "RateLimiter",
     "RateLimitStatus",
     # Policy Templates
-    "PolicyTemplates",
     # Webhooks
     "WebhookConfig",
     "WebhookEvent",
     "WebhookNotifier",
     "DeliveryRecord",
     # Policy Composition
-    "compose_policies",
-    "PolicyHierarchy",
-    "override_policy",
     # Exceptions
     "AgentOSError",
     "PolicyError",

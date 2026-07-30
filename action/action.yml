@@ -13,15 +13,19 @@ inputs:
     required: false
     default: 'governance-verify'
   policy-path:
-    description: 'Path to YAML policy file(s) for policy-evaluate command'
+    description: 'Path to a native ACS manifest for policy-evaluate'
     required: false
     default: ''
+  intervention-point:
+    description: 'ACS intervention point used by policy-evaluate'
+    required: false
+    default: 'pre_tool_call'
   manifest-path:
     description: 'Path to plugin manifest for marketplace-verify command'
     required: false
     default: ''
   context-json:
-    description: 'JSON string of evaluation context for policy-evaluate (e.g. {"tool_name": "web_search"})'
+    description: 'JSON snapshot passed to the selected intervention point'
     required: false
     default: ''
   output-format:
@@ -85,6 +89,19 @@ runs:
         fi
         python -m pip install --quiet --no-cache-dir --disable-pip-version-check "agent-governance-toolkit[full]==$AGT_TOOLKIT_VERSION"
 
+    - name: Install OPA for native policy evaluation
+      if: inputs.command == 'policy-evaluate' || inputs.command == 'all'
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
+          --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+          "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+        echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
+        chmod +x "$RUNNER_TEMP/opa"
+        echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
+        echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
     - name: Run governance check
       id: run
       shell: bash
@@ -93,6 +110,7 @@ runs:
         AGT_FORMAT: ${{ inputs.output-format }}
         AGT_MANIFEST_PATH: ${{ inputs.manifest-path }}
         AGT_POLICY_PATH: ${{ inputs.policy-path }}
+        AGT_INTERVENTION_POINT: ${{ inputs.intervention-point }}
         AGT_CONTEXT_JSON: ${{ inputs.context-json }}
       run: |
         set +e
@@ -141,27 +159,25 @@ runs:
               echo "::error::policy-path is required for policy-evaluate command"
               exit 1
             fi
-            echo "📋 Evaluating policy: $POLICY"
-            OUTPUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$CONTEXT" python -c "
+            echo "📋 Evaluating native manifest: $POLICY"
+            OUTPUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$CONTEXT" AGT_IP="$AGT_INTERVENTION_POINT" python -c "
         import json, sys, os
 
-        from agent_os.policies import PolicyEvaluator
-
-        evaluator = PolicyEvaluator()
-        evaluator.load_policies(os.environ['AGT_POLICY'])
+        from agt.policies import AgtRuntime
 
         ctx_raw = os.environ.get('AGT_CONTEXT', '')
-        context = json.loads(ctx_raw) if ctx_raw else {}
-        decision = evaluator.evaluate(context)
+        snapshot = json.loads(ctx_raw) if ctx_raw else {}
+        runtime = AgtRuntime(os.environ['AGT_POLICY'])
+        decision = runtime.evaluate(os.environ['AGT_IP'], snapshot)
 
         result = {
-            'allowed': decision.allowed,
-            'action': decision.action,
-            'reason': decision.reason,
-            'matched_rule': decision.matched_rule,
+            'allowed': decision.is_allowed(),
+            'verdict': decision.verdict,
+            'reason_code': decision.reason_code,
+            'message': decision.message,
         }
         print(json.dumps(result, indent=2))
-        sys.exit(0 if decision.allowed else 1)
+        sys.exit(0 if decision.is_allowed() else 1)
         " 2>&1)
             EXIT_CODE=$?
             if [ $EXIT_CODE -ne 0 ]; then
@@ -197,16 +213,15 @@ runs:
             POLICY="$AGT_POLICY_PATH"
             if [ -n "$POLICY" ]; then
               echo "--- Policy Evaluation ---"
-              PE_OUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$AGT_CONTEXT_JSON" python -c "
+              PE_OUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$AGT_CONTEXT_JSON" AGT_IP="$AGT_INTERVENTION_POINT" python -c "
         import json, sys, os
-        from agent_os.policies import PolicyEvaluator
-        evaluator = PolicyEvaluator()
-        evaluator.load_policies(os.environ['AGT_POLICY'])
+        from agt.policies import AgtRuntime
         ctx_raw = os.environ.get('AGT_CONTEXT', '')
-        context = json.loads(ctx_raw) if ctx_raw else {}
-        decision = evaluator.evaluate(context)
-        print(json.dumps({'allowed': decision.allowed, 'action': decision.action, 'reason': decision.reason}, indent=2))
-        sys.exit(0 if decision.allowed else 1)
+        snapshot = json.loads(ctx_raw) if ctx_raw else {}
+        runtime = AgtRuntime(os.environ['AGT_POLICY'])
+        decision = runtime.evaluate(os.environ['AGT_IP'], snapshot)
+        print(json.dumps({'allowed': decision.is_allowed(), 'verdict': decision.verdict, 'reason_code': decision.reason_code, 'message': decision.message}, indent=2))
+        sys.exit(0 if decision.is_allowed() else 1)
         " 2>&1)
               PE_EXIT=$?
               echo "$PE_OUT"

@@ -24,9 +24,13 @@ Public surface:
   allowlist from a generated OpenAPI document.
 * :data:`CAPABILITY_EXTENSION_KEY` - the OpenAPI extension key (``x-capability-flags``).
 * :data:`CAPABILITY_FLAGS_ATTR` - the endpoint attribute name (``__capability_flags__``).
+* :func:`create_app` - the FastAPI reference adapter factory. Imported lazily (it requires
+  FastAPI) so the capability library above stays importable without FastAPI installed.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from agentmesh.engine_api.capabilities import (
     CAPABILITY_FLAGS_ATTR,
@@ -39,11 +43,24 @@ from agentmesh.engine_api.openapi import (
     inject_capability_extension,
 )
 
+if TYPE_CHECKING:  # pragma: no cover - import resolved by type checkers only
+    from agentmesh.engine_api.app import create_app
+
 __all__ = [
     "CAPABILITY_EXTENSION_KEY",
     "CAPABILITY_FLAGS_ATTR",
     "CapabilityFlags",
     "capability_flags",
+    "create_app",
     "derive_studio_client_allowlist",
     "inject_capability_extension",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily expose :func:`create_app` without a package-level FastAPI import (PEP 562)."""
+    if name == "create_app":
+        from agentmesh.engine_api.app import create_app
+
+        return create_app
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
