@@ -346,8 +346,22 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
     rule that fires on a missing field is itself fail-open and can
     preempt a later deny in the first-match-wins chain.
 
-    Returns None for unsupported operators; the caller emits a
-    fail-closed deny in place of the rule.
+    Args:
+        operator: Comparison operator string (``"eq"``, ``"ne"``,
+            ``"gt"``, ``"lt"``, ``"gte"``, ``"lte"``, ``"in"``,
+            ``"not_in"``, ``"exists"``, ``"contains"``,
+            ``"startswith"``, ``"endswith"``, ``"matches"``/``"regex"``).
+        accessor: Rego expression for the field value, produced by
+            ``_rego_field_accessor``.
+        value: The comparison value from the rule condition.
+        action: The rule action (``"deny"`` or ``"allow"``). Governs
+            whether the ``_v != null`` guard is emitted for ``ne`` and
+            ``not_in``; all other operators are unaffected.
+
+    Returns:
+        Indented Rego body lines for a ``_match_i`` rule, or ``None``
+        for unsupported operators. The caller emits a fail-closed deny
+        in place of any rule that returns ``None``.
     """
     literal = json.dumps(value)
     indent = "    "
