@@ -71,9 +71,15 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}\b"),
         ),
         CredentialPattern(
+            # Both branches share one trailing assertion, so it must not exclude
+            # a character either value class already excludes: the classic
+            # ``gh?_`` class stops at ``_``, so ``(?![A-Za-z0-9_])`` left no
+            # shorter match ending before ``_`` and ``ghp_..._old`` was not
+            # redacted at all. ``github_pat_`` includes ``_`` in its class, so it
+            # consumes the suffix and is unaffected either way.
             name="GitHub token",
             pattern=re.compile(
-                r"(?<![A-Za-z0-9])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])"
+                r"(?<![A-Za-z0-9])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9])"
             ),
         ),
         CredentialPattern(

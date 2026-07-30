@@ -151,10 +151,27 @@ def test_redacts_supported_github_token_prefixes(token: str):
 
 
 @pytest.mark.parametrize(
+    "prefix", ["ghp", "ghs", "gho", "ghu", "ghr"],
+)
+def test_redacts_classic_github_token_with_trailing_underscore(prefix: str):
+    """A trailing "_" ends a classic token; it does not disqualify it.
+
+    A row asserting the opposite used to live in the false-positive table
+    below, which encoded the leak as intended behaviour: the classic body class
+    stops at "_", so a token followed by "_" is a complete token followed by a
+    separator -- exactly the ``_old`` / ``_backup`` annotation this pattern has
+    to survive.
+    """
+    token = _fake_github_token(prefix)
+
+    assert CredentialRedactor.redact(f"{token}_") == f"{REDACTED_PLACEHOLDER}_"
+    assert "GitHub token" in CredentialRedactor.detect_credential_types(f"{token}_")
+
+
+@pytest.mark.parametrize(
     "text",
     [
         f"x{_fake_github_token('ghp')}",
-        f"{_fake_github_token('ghs')}_",
         "gho_short",
         "github_pat_short",
         "notgithub_pat_FAKE_FOR_TESTING_0000000000000000000000",
@@ -363,6 +380,16 @@ _FAKE_BASIC_B64 = "YWxhZGRpbjpvcGVuc2VzYW1l"
         (f"rotate {_FAKE_GOOGLE_KEY}_v2 today", _FAKE_GOOGLE_KEY),
         # Stripe's value class excludes "_", so {10,} cannot absorb the suffix.
         ("stripe=sk_live_FakeTestKey0000_rotated", "sk_live_FakeTestKey0000"),
+        # The classic GitHub token had the same class/assertion disagreement
+        # about "_" that this change fixes elsewhere: its body class stops at
+        # "_" while the shared trailing assertion excluded "_" as well, so the
+        # whole token leaked. All five classic prefixes share the one pattern.
+        (f"{_fake_github_token('ghp')}_old", _fake_github_token("ghp")),
+        (f"{_fake_github_token('gho')}_rotated", _fake_github_token("gho")),
+        (
+            f'{{"{_fake_github_token("ghu")}_backup": "unused"}}',
+            _fake_github_token("ghu"),
+        ),
         # Both Basic-auth alternatives kept \b on the *left* edge, the very case
         # the lookbehind was introduced for everywhere else.
         (f"auth_Basic {_FAKE_BASIC_B64}", _FAKE_BASIC_B64),
@@ -398,6 +425,12 @@ def test_redacts_secret_glued_to_a_following_word_character(text: str, secret: s
         "Basic short",
         # A URL with no userinfo.
         "https://example.com/path",
+        # A classic GitHub token glued on the left is still an alphanumeric word.
+        # No right-edge row here: the body is {20,}, so one more alphanumeric is
+        # a longer valid token rather than a false positive -- unlike the
+        # fixed-length keys above.
+        f"x{_fake_github_token('ghp')}",
+        "ghp_TOOSHORT",
     ],
 )
 def test_trailing_anchor_does_not_widen_the_match(text: str):
