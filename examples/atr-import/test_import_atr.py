@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-from agt.policies import AgtManifest
+from agent_control_specification import validate_manifest
 
 
 def _module():
@@ -54,7 +54,7 @@ def test_compiles_one_manifest_per_category(tmp_path: Path) -> None:
 
     assert result["total_compiled_rules"] == 2
     for path in output.glob("*.yaml"):
-        AgtManifest.from_path(path)
+        validate_manifest(path.read_text(encoding="utf-8"))
 
 
 def test_category_and_severity_filters(tmp_path: Path) -> None:

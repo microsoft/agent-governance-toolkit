@@ -46,7 +46,7 @@ ruff format .
 
 | File | Purpose |
 |------|---------|
-| `src/agent_os/integrations/base.py` | Core governance — AgtRuntime, BaseIntegration, NativeAdapterRuntime, event hooks |
+| `src/agent_os/integrations/base.py` | Core governance — AgentControl, BaseIntegration, NativeAdapterRuntime, event hooks |
 | `src/agent_os/integrations/profiling.py` | @profile_governance decorator |
 | `src/agent_os/base_agent.py` | Base agent class with audit logging |
 | `src/agent_os/stateless.py` | Stateless agent with optional Redis |
@@ -57,14 +57,14 @@ ruff format .
 
 - All public APIs must have type hints (`mypy --strict`)
 - Use `dataclass` or Pydantic `BaseModel` for data structures
-- Construct `AgtRuntime` from a native ACS manifest or `AgtManifest`.
-- Keep per-session counters in `AdapterRuntimeSession`, not `AgtRuntime`.
+- Construct `AgentControl` from an ACS manifest path with `AgentControl.from_path`.
+- Keep per-session counters in `HostSession`, not `AgentControl`.
 - Event types: `GovernanceEventType.POLICY_CHECK`, `.POLICY_VIOLATION`, `.TOOL_CALL_BLOCKED`, `.CHECKPOINT_CREATED`
 - Tests go in `tests/` (unit) or `modules/*/tests/` (module-specific)
 
 ## Native policy evaluation
 
-Framework adapters route intervention points through `AdapterRuntimeSession` and
+Framework adapters route intervention points through `HostSession` and
 receive `PolicyEvaluation`. Raise the canonical
 `PolicyViolationError.from_evaluation_result(result)` for denied or escalated
 results. Hosts should surface `str(error)` and use
@@ -73,8 +73,8 @@ results. Hosts should surface `str(error)` and use
 ```python
 from agent_os.exceptions import PolicyViolationError
 
-result = session.evaluate_input(body=input_data)
-if not result.is_allowed():
+result = session.input(input_data)
+if not result.verdict.decision.permits:
     raise PolicyViolationError.from_evaluation_result(result)
 ```
 

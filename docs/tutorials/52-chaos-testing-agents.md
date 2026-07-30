@@ -12,10 +12,10 @@ in production.
 ## Setup
 
 ```python
-from agt.policies import AdapterRuntimeSession, AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("policies/chaos-manifest.yaml")
-session = AdapterRuntimeSession(
+runtime = AgentControl.from_path("policies/chaos-manifest.yaml")
+session = HostSession(
     runtime,
     agent_id="chaos-agent",
     session_id="chaos-session",
@@ -35,11 +35,11 @@ Verify the session charges the attempted call and subsequent evaluations see
 the updated counter.
 
 ```python
-pre = session.evaluate_pre_tool_call(
+pre = session.pre_tool_call(
     tool_name="query_service",
     args={"query": "status"},
 )
-if pre.is_allowed():
+if pre.verdict.decision.permits:
     post = session.evaluate_post_tool_call(
         tool_name="query_service",
         args={"query": "status"},

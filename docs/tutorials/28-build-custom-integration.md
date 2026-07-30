@@ -39,7 +39,7 @@ class ExampleKernel(BaseIntegration):
         tool_name: str,
         arguments: dict[str, Any],
     ):
-        return self._adapter_runtime.evaluate_pre_tool_call(
+        return self._adapter_runtime.pre_tool_call(
             context,
             tool_name=tool_name,
             args=arguments,
@@ -71,7 +71,7 @@ if not result.allowed:
 ## Session state
 
 Use the shared adapter runtime seam so each framework session receives one
-`AdapterRuntimeSession`. Synchronize host counters but do not duplicate native
+`HostSession`. Synchronize host counters but do not duplicate native
 attempted-call charging.
 
 ## Manifest contract

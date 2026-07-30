@@ -77,9 +77,12 @@ def evaluate_governance_cli() -> int:
     args = parser.parse_args()
 
     try:
-        from agt.policies import AgtRuntime
-        runtime = AgtRuntime.from_manifest(Path(args.manifest))
-    except (ImportError, OSError, ValueError) as exc:
+        from agent_control_specification import AgentControl
+        runtime = AgentControl.from_path(str(Path(args.manifest)))
+    except (ImportError, OSError, ValueError, RuntimeError) as exc:
+        # The native loader reports an invalid manifest as RuntimeError
+        # (runtime_error:manifest_invalid). The wrapper this replaced raised a
+        # ValidationError, which is a ValueError, so the old catch was enough.
         print(f"Unable to load native governance runtime: {exc}", file=sys.stderr)
         return 1
 

@@ -50,6 +50,6 @@ Common issues:
 ## Closing questions
 
 - Which controls belong in `SandboxConfig`?
-- Which state belongs in `AdapterRuntimeSession`?
+- Which state belongs in `HostSession`?
 - Which failures must deny rather than fall back?
 - Which audit data may be shown publicly?

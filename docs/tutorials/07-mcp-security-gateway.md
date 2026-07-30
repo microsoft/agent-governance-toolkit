@@ -12,10 +12,10 @@ controls.
 ## Create the gateway
 
 ```python
-from agt.policies import AgtRuntime
+from agent_control_specification import AgentControl
 from agent_os.mcp_gateway import MCPGateway
 
-runtime = AgtRuntime("policies/mcp-manifest.yaml")
+runtime = AgentControl.from_path("policies/mcp-manifest.yaml")
 gateway = MCPGateway(
     runtime,
     denied_tools=["shell"],

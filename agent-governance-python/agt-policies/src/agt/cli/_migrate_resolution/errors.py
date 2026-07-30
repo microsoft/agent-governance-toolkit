@@ -1,12 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Reserved resolution-layer errors per SPECIFICATION.md §16.
+"""Migration-report diagnostics for the removed governance resolver.
 
-The reserved reason strings here match the Rust core's
-``runtime_error:resolution_*`` codes one for one. The resolution layer
-runs on the host side; it raises these errors before the engine is
-called, and the host MUST translate them into a fail-closed deny when
-surfacing to the agent caller.
+These stable strings classify one-way migration failures. They are not ACS
+runtime reasons and are never returned by the policy engine.
 """
 
 from __future__ import annotations
@@ -15,11 +12,7 @@ from enum import Enum
 
 
 class ResolutionReason(str, Enum):
-    """The reserved set of resolution-layer fail-closed reasons.
-
-    Equivalent to the Rust core ``RuntimeError::Resolution*`` variants
-    that the host wrapper materializes when resolution fails.
-    """
+    """Stable diagnostic categories emitted by ``agt migrate v4-to-v5``."""
 
     PATH_TRAVERSAL = "runtime_error:resolution_path_traversal"
     CYCLE = "runtime_error:resolution_cycle"
@@ -28,13 +21,12 @@ class ResolutionReason(str, Enum):
 
 
 class ResolutionError(Exception):
-    """Raised by the resolution layer when it refuses to produce a manifest.
+    """Raised when migration refuses to produce a native manifest.
 
     Attributes:
         reason: One of :class:`ResolutionReason`.
-        detail: Free-form human-readable explanation. The host MAY surface
-            this in logs; it MUST NOT include user-supplied content that
-            could carry secrets.
+        detail: Human-readable migration detail. It must not include raw
+            sensitive payloads.
     """
 
     __slots__ = ("reason", "detail")

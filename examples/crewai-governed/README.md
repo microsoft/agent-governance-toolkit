@@ -1,6 +1,6 @@
 # CrewAI with native ACS governance
 
-This example shows the CrewAI adapter consuming an `AgtRuntime` directly.
+This example shows the CrewAI adapter consuming an `AgentControl` directly.
 It exercises the same input mediation used by CrewAI native hooks without
 requiring an LLM credential.
 
@@ -18,7 +18,7 @@ request.
 ## Integration pattern
 
 ```python
-runtime = AgtRuntime.from_manifest("policies/manifest.yaml")
+runtime = AgentControl.from_path(str("policies/manifest.yaml"))
 kernel = CrewAIKernel(runtime=runtime)
 hooks = kernel.as_hooks()
 hooks.register()

@@ -11,7 +11,7 @@ to agent actions. It exercises the real implementations from all three packages:
 
 | Package | Component tested |
 |---------|-----------------|
-| `agt-policies` | `AgtRuntime` — native ACS runtime |
+| `agt-policies` | `AgentControl` — native ACS runtime |
 | `agent-mesh` | `TrustPolicyEvaluator` — trust-score-based policy DSL |
 | `agent-mesh` | `AuditLog` / `MerkleAuditChain` — append-only Merkle audit |
 | `agent-mesh` | `CredentialManager` — ephemeral credential issuance & validation |

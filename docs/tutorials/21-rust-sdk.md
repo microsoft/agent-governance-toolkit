@@ -157,7 +157,7 @@ the core client:
 ```rust
 use agentmesh::{
     ComplianceEngine, ComplianceFramework, ExecutionRequest, ExecutionResponse,
-    FrameworkGovernanceAdapter, FrameworkKind, GovernanceHook, AgtRuntime,
+    FrameworkGovernanceAdapter, FrameworkKind, GovernanceHook, AgentControl,
     KillSwitchRegistry, KillSwitchReason, KillSwitchScope, PromptDefenseEvaluator,
     RewardEngine, TrustHandshake,
 };
@@ -185,9 +185,9 @@ let kill_switches = KillSwitchRegistry::new();
 let handshake = TrustHandshake::new("did:mesh:controller", None, None);
 let adapter = FrameworkGovernanceAdapter::for_tower(
     ReadOnlyHook,
-    AgtRuntime {
+    AgentControl {
         allowed_tools: vec!["read_file".into()],
-        ..AgtRuntime::default()
+        ..AgentControl::default()
     },
 );
 

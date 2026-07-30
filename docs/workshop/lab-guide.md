@@ -36,7 +36,7 @@ Run a native manifest and observe allow and deny verdicts for tool-shaped input.
 ### Discussion
 
 - Why does the manifest own the policy binding?
-- Why does `AdapterRuntimeSession` own counters?
+- Why does `HostSession` own counters?
 - What would happen if the policy dispatcher or OPA process failed?
 
 ## Lab 2 - Multi-Agent Trust
@@ -76,7 +76,7 @@ The two labs demonstrate separate control planes:
 | Control | Owner |
 |---------|-------|
 | Policy definitions and intervention points | Native ACS manifest |
-| Session counters | `AdapterRuntimeSession` |
+| Session counters | `HostSession` |
 | Agent identity and trust | AgentMesh |
 | Framework lifecycle ordering | Agent OS adapter |
 | Resource and network isolation | `SandboxConfig` |

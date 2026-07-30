@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agt.policies import AgtManifest
+from agent_control_specification import validate_manifest
 
 
 def _module():
@@ -54,7 +54,7 @@ def test_compiles_native_manifest_and_rego(tmp_path: Path) -> None:
     output = tmp_path / "manifest.yaml"
     module.write_compiled(output, compiled)
 
-    AgtManifest.from_path(output)
+    validate_manifest(output.read_text(encoding="utf-8"))
     assert compiled.pattern_count == 1
     assert "agent_control_specification_version" in output.read_text()
     assert "package agt.examples.atr.community" in compiled.rego

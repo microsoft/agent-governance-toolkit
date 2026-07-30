@@ -78,7 +78,7 @@ aws ecs create-service \
 ## Using with AWS Bedrock Agents
 
 AGT works with any agent framework. For Bedrock agents, construct
-`BedrockKernel` with `AgtRuntime`. See
+`BedrockKernel` with `AgentControl`. See
 [examples/quickstart/govern_in_60_seconds.py](../../examples/quickstart/govern_in_60_seconds.py).
 
 ## See Also

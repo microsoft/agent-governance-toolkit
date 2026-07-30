@@ -9,8 +9,7 @@ project to the v5 shape (``--write``).
 The algorithm follows ``plan.md`` §5 / milestone M6.S1:
 
 1. Find legacy artifacts under the project root.
-2. For every governance.yaml chain, run
-   :func:`agt.manifest_resolution.resolve_manifest` and persist the
+2. For every governance.yaml chain, run the private migration resolver and persist the
    resulting flat ACS manifest + generated Rego bundle.
 3. For every ``GovernancePolicy(...)`` constructor call, accept only exact
    literals, translate them through the private one-way migrator, and refuse
@@ -23,9 +22,8 @@ The algorithm follows ``plan.md`` §5 / milestone M6.S1:
 7. Render a Markdown report (printed to stdout, optionally written
    via ``--write-report``).
 
-The CLI is deliberately stdlib + pyyaml only — the only third-party
-imports are the same ones the rest of agt-policies already depends on
-through ``manifest_resolution`` and ``policies.bridge``.
+The CLI is deliberately stdlib + pyyaml only. Its private resolver and
+translator use the same dependencies already declared by `agt-policies`.
 """
 
 from __future__ import annotations
@@ -46,10 +44,10 @@ from typing import Any
 
 import yaml
 
-from agt.manifest_resolution import ResolutionError, resolve_manifest
-from agt.policies.manifest import AgtManifest
+from agent_control_specification import validate_manifest
 
 from ._migrate_bridge import MigrationPolicyInput, build_migrated_manifest
+from ._migrate_resolution import ResolutionError, resolve_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +217,7 @@ def _find_governance_chains(root: Path) -> list[Path]:
 
     A "chain root" is the directory containing the **most-specific**
     governance file in a path — i.e. the directory we would pass as
-    ``action_path`` to :func:`agt.manifest_resolution.resolve_manifest`.
+    ``action_path`` to the private migration resolver.
     Directories that already have a v5 ``manifest.yaml`` sitting next to
     the governance file are still reported so the migration is idempotent
     (the run is a no-op when ``--write`` already happened).
@@ -495,7 +493,7 @@ class _LegacyVisitor(ast.NodeVisitor):
                             "Direct PolicyInterceptor subclasses are removed in "
                             "v5. Port the per-event logic to either an "
                             "intervention_point binding in your AGT manifest or a "
-                            "host-side wrapper around agt.policies.runtime."
+                            "host-side wrapper around agent_control_specification."
                         ),
                     )
                 )
@@ -756,7 +754,7 @@ def _migrate_governance_policy(
             manifest["policies"][policy_id]["bundle"] = str(
                 bundle_dir.resolve()
             )
-            manifest = AgtManifest.from_document(manifest).to_document()
+            validate_manifest(yaml.safe_dump(manifest, sort_keys=False))
             staged_manifest = staging / "manifest.yaml"
             staged_manifest.write_text(
                 yaml.safe_dump(manifest, sort_keys=False),
@@ -802,7 +800,7 @@ def _render_governance_rewrite_snippet(
 
     with::
 
-        runtime = AgtRuntime(Path("policies/<file>.manifest.yaml"))
+        control = AgentControl.from_path("policies/<file>.manifest.yaml")
         agent.attach_runtime(runtime)
 
     The snippet is purely informational — we never auto-rewrite Python
@@ -823,8 +821,8 @@ def _render_governance_rewrite_snippet(
         "#\n"
         "# v5 — replace the construction with:\n"
         "#     from pathlib import Path\n"
-        "#     from agt.policies.runtime import AgtRuntime\n"
-        f"#     runtime = AgtRuntime.from_manifest(Path({str(manifest_path)!r}))\n"
+        "#     from agent_control_specification import AgentControl\n"
+        f"#     control = AgentControl.from_path({str(manifest_path)!r})\n"
     )
 
 
