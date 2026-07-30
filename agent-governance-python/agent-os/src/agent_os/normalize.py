@@ -17,6 +17,16 @@ Design goals:
 
 * **Deterministic & idempotent**: ``normalize(normalize(x).text).text ==
   normalize(x).text``.
+
+  One exception, always announced: when nesting is deeper than
+  ``max_decode_depth`` the result is tagged
+  :attr:`Transform.DECODE_DEPTH_CAPPED`, and re-normalizing that output peels
+  the next layers. Idempotency holds for every result *not* carrying that tag,
+  so a caller that needs the invariant should treat the tag as "not yet
+  canonical" rather than re-normalizing blindly. The cap exists to bound work on
+  adversarial input; the tag is what makes the incompleteness visible to policy
+  instead of silent. This is a property of the depth cap itself and applies on
+  any input that reaches it.
 * **Benign-safe**: every aggressive transform fires only under a guard, so
   legitimate inputs (percentages, ``&amp;``, real base64, code, structured
   data) pass through unchanged. Decoders additionally require a printable-
@@ -404,15 +414,46 @@ def _has_decode_benefit(before: str, after: str) -> bool:
 
     This cannot loosen the guard into benign text: revealing a decodable blob is
     strictly narrower than revealing arbitrary printable text -- a contiguous,
-    non-whitespace, >= 16 char run of base64 or hex alphabet -- and the caller
-    only proceeds if that blob then decodes to printable content of its own.
+    non-whitespace, >= 16 char run of base64 or hex alphabet whose length the
+    base64/hex layer will actually accept.
+
+    Note what this does *not* promise. The revealed blob is one the base64/hex
+    layer will *attempt*; that layer still applies its own printable-ratio test
+    and may reject the result, in which case this outer decode has already been
+    accepted and the text stays decoded one layer. That is the intended
+    trade-off -- an ambiguous layer wrapping a decodable blob is evidence of
+    obfuscation whether or not the inner payload turns out to be printable --
+    but it is a weaker guarantee than "the blob then decodes cleanly".
     """
     if _english_score(after) > _english_score(before):
         return True
     # No English gain: accept only if the decode exposed something the base64/hex
     # layer will unwrap on the next pass. Without this, a decode whose output is
     # another encoding can never show a benefit and the nesting survives.
-    return _looks_encoded(after) and not _looks_encoded(before)
+    return _decode_attemptable(after) and not _decode_attemptable(before)
+
+
+def _decode_attemptable(s: str) -> bool:
+    """Return True if the base64/hex layer of :func:`_try_decode_once` would try ``s``.
+
+    Deliberately stricter than :func:`_looks_encoded`, which omits the length
+    congruences and so calls a 19-char base64-alphabet run "encoded" even though
+    the base64 layer requires ``len % 4 == 0`` and the hex layer ``len % 2 == 0``
+    and neither would touch it. :func:`_has_decode_benefit` needs the real
+    criteria: accepting an ambiguous outer decode because it revealed a blob is
+    only justified if that blob is one the next pass can act on.
+
+    :func:`_looks_encoded` keeps its looser definition, which is right for the
+    ``DECODE_REJECTED`` tag -- there the question is whether the input *looked*
+    like a payload worth reporting, not whether a decoder would run.
+    """
+    t = s.strip()
+    if not t or any(c.isspace() for c in t) or len(t) < 16:
+        return False
+    if _is_base64(t) and len(t) % 4 == 0:
+        return True
+    hexs = t[2:] if t.startswith(("0x", "0X")) else t
+    return _is_hex(hexs) and len(hexs) % 2 == 0
 
 
 def _looks_encoded(s: str) -> bool:
