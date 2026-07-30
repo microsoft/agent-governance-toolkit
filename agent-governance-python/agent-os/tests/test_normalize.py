@@ -9,8 +9,9 @@ checkable test-by-test.
 
 # Base64 fixtures whose exact spelling is the test. ``QUJDREVGR0hJSktMTU5P``
 # is the length-and-padding-valid string ``_decode_attemptable`` must accept and
-# ``QUJDRA==`` the one it must reject. Declared here because ``cspell:ignore``
-# applies from its own line onward.
+# ``QUJDRA==`` the one it must reject. Declared at the top by convention, not by
+# necessity: ``cspell:ignore`` scopes to the whole document, so it covers a word
+# that appears above it too.
 # cspell:ignore QUJDREVGR QUJDRA
 
 from __future__ import annotations
