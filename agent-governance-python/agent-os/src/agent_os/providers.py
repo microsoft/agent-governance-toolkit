@@ -96,23 +96,14 @@ def get_self_correction_kernel(**kwargs: Any):
 
 
 def get_governance_runtime(manifest: Any, **kwargs: Any):
-    """Get the native governance runtime, preferring a registered provider.
-
-    ``manifest`` may be a filesystem path or an already-parsed manifest. A
-    mapping goes to ``AgentControl.from_native``; stringifying it would produce
-    a path that cannot exist and an error naming the wrong problem.
-    """
+    """Get the native governance runtime, preferring a registered provider."""
     provider = _discover_provider(PROVIDER_GROUPS["governance_runtime"])
     if provider is not None:
         return provider(manifest=manifest, **kwargs)
 
-    from collections.abc import Mapping
+    from agt.policies import AgtRuntime
 
-    from agent_control_specification import AgentControl
-
-    if isinstance(manifest, Mapping):
-        return AgentControl.from_native(manifest, **kwargs)
-    return AgentControl.from_path(str(manifest), **kwargs)
+    return AgtRuntime.from_manifest(manifest, **kwargs)
 
 
 def get_context_service(**kwargs: Any):

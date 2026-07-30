@@ -160,14 +160,14 @@ def replay(
     fixture_path: str | Path,
 ) -> ReplayReport:
     """Replay fixtures against a native ACS manifest and return a report."""
-    from agent_control_specification import AgentControl, run_sync
+    from agt.policies import AgtRuntime
 
     manifest_path = Path(manifest_path)
     fixture_path = Path(fixture_path)
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest path not found: {manifest_path}")
 
-    runtime = AgentControl.from_path(str(manifest_path))
+    runtime = AgtRuntime.from_manifest(manifest_path)
     fixtures = _load_fixtures(fixture_path)
     report = ReplayReport()
 
@@ -222,10 +222,8 @@ def replay(
                     "input": {"body": raw_input},
                 }
 
-            evaluation = run_sync(
-                runtime.evaluate_intervention_point(intervention_point, snapshot)
-            )
-            actual_verdict = evaluation.verdict.decision.value
+            evaluation = runtime.evaluate(intervention_point, snapshot)
+            actual_verdict = evaluation.verdict
             passed = True
             if expected_verdict is not None and actual_verdict != expected_verdict:
                 passed = False
@@ -247,7 +245,7 @@ def replay(
                 )
             )
     finally:
-        pass
+        runtime.close()
 
     return report
 

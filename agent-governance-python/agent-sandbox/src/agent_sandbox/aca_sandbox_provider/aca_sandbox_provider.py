@@ -479,9 +479,9 @@ class ACASandboxProvider(SandboxProvider):
             )
 
         if runtime is not None:
-            from agent_control_specification import HostSession
+            from agt.policies.session import AdapterRuntimeSession
 
-            evaluator = HostSession(
+            evaluator = AdapterRuntimeSession(
                 runtime, agent_id=agent_id, session_id=f"aca-{agent_id}"
             )
 
@@ -623,19 +623,19 @@ class ACASandboxProvider(SandboxProvider):
             }
             if context:
                 eval_ctx.update(context)
-            decision = evaluator.pre_tool_call(
+            decision = evaluator.evaluate_pre_tool_call(
                 tool_name="sandbox_execute", args=eval_ctx, call_id=uuid.uuid4().hex[:8]
             )
             # A transform verdict permits but carries a replacement, and this
             # gate cannot rewrite the code it is about to execute. Treating it
             # as allowed would run the original, so it is refused instead.
-            if decision.verdict.decision.applies_transform:
+            if decision.transform is not None:
                 raise PermissionError(
                     "Governance returned a transform verdict, which the sandbox "
                     "cannot apply to code it is about to execute"
                 )
-            if not decision.verdict.decision.permits:
-                raise PermissionError(f"Governance denied: {decision.verdict.message or decision.verdict.reason}")
+            if not decision.is_allowed():
+                raise PermissionError(f"Governance denied: {decision.message or decision.reason_code}")
 
         enforce_no_subprocess_execution(code)
 

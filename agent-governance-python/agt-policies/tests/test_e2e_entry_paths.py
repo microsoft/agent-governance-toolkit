@@ -19,11 +19,8 @@ pytest.importorskip("agent_control_specification._native")
 
 from agent_control_specification import AgentControl, Decision, InterventionPoint  # noqa: E402
 
-from agent_control_specification import (  # noqa: E402
-    HostSession,
-    SnapshotBuilder,
-)
-from agent_control_specification import ApprovalResolution  # noqa: E402
+from agt.policies import SnapshotBuilder  # noqa: E402
+from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -57,10 +54,7 @@ def _pre_tool_snapshot(
         session_id="s-1",
         tool_call_count=tool_call_count,
         token_count=token_count,
-    ).snapshot(
-        "pre_tool_call",
-        tool_call={"name": tool_name, "args": args or {}, "id": "call-1"},
-    )
+    ).pre_tool_call(tool_name=tool_name, args=args or {})
 
 def _write_budget_rego_manifest(tmp_path: Path) -> Path:
     bundle = tmp_path / "budget_bundle"
@@ -232,26 +226,25 @@ approval:
 
     blocker = threading.Event()
 
-    def resolver(ip: str, result: Any) -> ApprovalResolution:
+    def resolver(ip: str, result: Any) -> ApprovalDecision:
         blocker.wait()
-        return ApprovalResolution.allow(result.enforced_identity)
+        return ApprovalDecision.allow(result.enforced_identity)
 
-    control = AgentControl.from_path(
-        str(manifest_path),
+    runtime = AgtRuntime(
+        manifest_path,
         policy_dispatcher=EscalatingPolicy(),
         approval_resolver=resolver,
-    )
-    session = HostSession(
-        control, agent_id="bot", session_id="s-1", approval_timeout_seconds=1
     )
 
     started = time.monotonic()
     try:
-        result = session.pre_tool_call(tool_name="lookup", args={})
+        result = runtime.evaluate_intervention_point(
+            "pre_tool_call", _pre_tool_snapshot("lookup")
+        )
     finally:
         blocker.set()
     elapsed = time.monotonic() - started
 
     assert elapsed < 1.5
-    assert result.verdict.decision.value == "deny"
-    assert result.verdict.reason == "runtime_error:approval_timeout"
+    assert result.verdict == "deny"
+    assert result.reason_code == "runtime_error:approval_timeout"

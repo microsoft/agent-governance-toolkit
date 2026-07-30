@@ -24,12 +24,8 @@ from _framework_stubs import install as _install_framework_stubs
 
 _install_framework_stubs()
 
-from agent_control_specification import (  # noqa: E402
-    Decision,
-    InterventionPointResult,
-    Transform,
-    Verdict,
-)
+from agt.policies import PolicyEvaluation  # noqa: E402
+from agt.policies.result import TransformResult  # noqa: E402
 
 from agent_os.exceptions import PolicyViolationError  # noqa: E402
 from agent_os.integrations.anthropic_adapter import AnthropicKernel  # noqa: E402
@@ -57,38 +53,34 @@ class _StubRuntime:
 
     manifest = None
 
-    def __init__(self, result: InterventionPointResult) -> None:
+    def __init__(self, result: PolicyEvaluation) -> None:
         self._result = result
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    async def evaluate_intervention_point(
-        self, intervention_point: Any, snapshot: dict[str, Any], mode: Any = None
-    ) -> InterventionPointResult:
+    def evaluate(
+        self, intervention_point: str, snapshot: dict[str, Any]
+    ) -> PolicyEvaluation:
         name = getattr(intervention_point, "value", str(intervention_point))
         self.calls.append((name, snapshot))
-        return self._result
+        return self._result.model_copy(update={"intervention_point": name})
 
     def close(self) -> None:  # pragma: no cover - adapters may not close
         pass
 
 
-def _allow() -> InterventionPointResult:
-    return InterventionPointResult(verdict=Verdict(decision=Decision.ALLOW))
+def _allow() -> PolicyEvaluation:
+    return PolicyEvaluation(verdict="allow")
 
 
-def _deny() -> InterventionPointResult:
-    return InterventionPointResult(
-        verdict=Verdict(decision=Decision.DENY, reason="pii-block", message=_SECRET)
-    )
+def _deny() -> PolicyEvaluation:
+    return PolicyEvaluation(verdict="deny", reason_code="pii-block", message=_SECRET)
 
 
-def _transform(value: str) -> InterventionPointResult:
-    return InterventionPointResult(
-        verdict=Verdict(
-            decision=Decision.TRANSFORM,
-            reason="redact",
-            transform=Transform(path="input.body", value=value),
-        )
+def _transform(value: str) -> PolicyEvaluation:
+    return PolicyEvaluation(
+        verdict="transform",
+        reason_code="redact",
+        transform=TransformResult(path="input.body", value=value),
     )
 
 
@@ -120,7 +112,7 @@ _OUTPUT_KERNELS = [
 _IDS = [label for label, _ in _KERNELS]
 
 
-def _build(factory: Any, result: InterventionPointResult) -> tuple[Any, _StubRuntime]:
+def _build(factory: Any, result: PolicyEvaluation) -> tuple[Any, _StubRuntime]:
     runtime = _StubRuntime(result)
     return factory(runtime), runtime
 

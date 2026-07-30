@@ -45,7 +45,7 @@ import os
 from types import SimpleNamespace
 
 import pytest
-from agent_control_specification import Decision, InterventionPointResult, Verdict
+from agt.policies.result import PolicyEvaluation
 
 def _hyperlight_runnable() -> tuple[bool, str]:
     if os.environ.get('AGT_HYPERLIGHT_INTEGRATION') != '1':
@@ -72,7 +72,7 @@ class _AllowRuntime:
     network_allowlist = ["https://example.com"]
 
     def evaluate(self, intervention_point, snapshot):
-        return InterventionPointResult(verdict=Verdict(decision=Decision("allow")))
+        return PolicyEvaluation(verdict="allow")
 
     def close(self):
         return None

@@ -15,7 +15,7 @@ import ntpath
 import threading
 from unittest.mock import MagicMock, patch
 import pytest
-from agent_control_specification import Decision, InterventionPointResult, Verdict
+from agt.policies.result import PolicyEvaluation
 from agent_sandbox._hardening import BLOCKED_ENV_VARS as _BLOCKED_ENV_VARS, is_protected_path as _is_protected_path, sanitize_env_vars as _sanitize_env_vars, validate_mount_path as _validate_mount_path
 from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.docker_provider.provider import DockerSandboxProvider, _validate_resource_name
@@ -356,8 +356,12 @@ class TestDockerExecuteCode:
         class DenyRuntime:
             manifest = None
 
-            async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
-                return InterventionPointResult(verdict=Verdict(decision=Decision('deny'), reason='sandbox_denied', message='blocked by native runtime'))
+            def evaluate(self, intervention_point, snapshot):
+                return PolicyEvaluation(
+                    verdict='deny',
+                    reason_code='sandbox_denied',
+                    message='blocked by native runtime',
+                )
 
             def close(self):
                 return None

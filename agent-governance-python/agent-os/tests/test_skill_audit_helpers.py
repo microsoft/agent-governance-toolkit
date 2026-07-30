@@ -14,7 +14,7 @@ from agent_os.integrations.base import BaseIntegration, GovernanceEventType
 class _Runtime:
     manifest = None
 
-    async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
+    def evaluate(self, intervention_point, snapshot):
         raise AssertionError("audit helper tests must not evaluate policy")
 
     def close(self):

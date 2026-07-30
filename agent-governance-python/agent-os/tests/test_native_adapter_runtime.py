@@ -7,12 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from agent_control_specification import (
-    Decision,
-    InterventionPointResult,
-    Transform,
-    Verdict,
-)
+from agt.policies import PolicyEvaluation, TransformResult
 
 from agent_os.exceptions import PolicyViolationError
 from agent_os.integrations._native_adapter_runtime import (
@@ -33,7 +28,7 @@ class _Runtime:
 
     def __init__(
         self,
-        evaluation: InterventionPointResult,
+        evaluation: PolicyEvaluation,
         *,
         approval_resolver: Any | None = None,
     ) -> None:
@@ -41,11 +36,13 @@ class _Runtime:
         self._approval_resolver = approval_resolver
         self.snapshots: list[dict[str, Any]] = []
 
-    async def evaluate_intervention_point(
-        self, intervention_point, snapshot, mode=None
-    ):
+    def evaluate(
+        self, intervention_point: str, snapshot: dict[str, Any]
+    ) -> PolicyEvaluation:
         self.snapshots.append(snapshot)
-        return self.evaluation
+        return self.evaluation.model_copy(
+            update={"intervention_point": intervention_point}
+        )
 
     def close(self) -> None:
         pass
@@ -54,7 +51,11 @@ class _Runtime:
 def test_native_result_raises_native_policy_violation() -> None:
     runtime = NativeAdapterRuntime(
         _Runtime(
-            InterventionPointResult(verdict=Verdict(decision=Decision.DENY, reason="blocked", message="restricted detail"))
+            PolicyEvaluation(
+                verdict="deny",
+                reason_code="blocked",
+                message="restricted detail",
+            )
         )
     )
 
@@ -69,11 +70,9 @@ def test_native_result_raises_native_policy_violation() -> None:
 def test_native_result_exposes_transform_without_legacy_conversion() -> None:
     runtime = NativeAdapterRuntime(
         _Runtime(
-            InterventionPointResult(
-                verdict=Verdict(
-                    decision=Decision.TRANSFORM,
-                    transform=Transform(path="$policy_target", value="safe"),
-                )
+            PolicyEvaluation(
+                verdict="transform",
+                transform=TransformResult(path="$policy_target", value="safe"),
             )
         )
     )
@@ -88,13 +87,13 @@ def test_native_result_exposes_transform_without_legacy_conversion() -> None:
 def test_native_result_exposes_materialized_nested_transform() -> None:
     runtime = NativeAdapterRuntime(
         _Runtime(
-            InterventionPointResult(
-                verdict=Verdict(
-                    decision=Decision.TRANSFORM,
-                    transform=Transform(path="$policy_target.secret", value="[REDACTED]"),
+            PolicyEvaluation(
+                verdict="transform",
+                transform=TransformResult(
+                    path="$policy_target.secret",
+                    value="[REDACTED]",
+                    applied_value={"secret": "[REDACTED]", "safe": "visible"},
                 ),
-                transformed_policy_target={"secret": "[REDACTED]", "safe": "visible"},
-                transformed_policy_target_applied=True,
             )
         )
     )
@@ -112,7 +111,7 @@ def test_native_result_exposes_materialized_nested_transform() -> None:
 
 
 def test_native_path_charges_attempts_and_records_tokens_once() -> None:
-    source = _Runtime(InterventionPointResult(verdict=Verdict(decision=Decision.ALLOW)))
+    source = _Runtime(PolicyEvaluation(verdict="allow"))
     runtime = NativeAdapterRuntime(source)
     context = _Context()
 

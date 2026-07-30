@@ -9,7 +9,7 @@ treating ``transform`` as allowed would execute the original text while the
 policy believed it had been rewritten. A policy that redacts a credential out
 of a snippet would not redact it.
 
-These drive the real ``execute_code`` gate with a real ACS ``Verdict``
+These drive the real ``execute_code`` gate with a real ``PolicyEvaluation``
 against providers whose session state is pre-seeded, so no daemon, VM, or
 cloud backend is needed to reach the branch under test. The five providers
 carry the evaluator two different ways (an ``_evaluators`` map keyed by session
@@ -23,27 +23,20 @@ import types
 
 import pytest
 
-from agent_control_specification import (
-    Decision,
-    InterventionPointResult,
-    Verdict,
-)
-
-
-def _result(decision: Decision, **kwargs: object) -> InterventionPointResult:
-    return InterventionPointResult(verdict=Verdict(decision=decision, **kwargs))
+from agt.policies import PolicyEvaluation
+from agt.policies.result import TransformResult
 
 
 class _StubEvaluator:
     """Return one fixed verdict, recording whether the gate consulted it."""
 
-    def __init__(self, result: InterventionPointResult) -> None:
-        self._result = result
+    def __init__(self, evaluation: PolicyEvaluation) -> None:
+        self._evaluation = evaluation
         self.calls: list[str] = []
 
-    def pre_tool_call(self, **kwargs: object) -> InterventionPointResult:
+    def evaluate_pre_tool_call(self, **kwargs: object) -> PolicyEvaluation:
         self.calls.append(str(kwargs.get("tool_name")))
-        return self._result
+        return self._evaluation
 
 
 def _seed_map_style(cls, evaluator, *session_attrs: str):
@@ -106,7 +99,12 @@ IDS = [c[0] for c in CASES]
 
 @pytest.mark.parametrize("name,seed", CASES, ids=IDS)
 def test_transform_verdict_is_refused(name, seed):
-    evaluator = _StubEvaluator(_result(Decision.TRANSFORM))
+    evaluator = _StubEvaluator(
+        PolicyEvaluation(
+            verdict="transform",
+            transform=TransformResult(path="args.code", value="print('redacted')"),
+        )
+    )
     provider = seed(evaluator)
 
     with pytest.raises(PermissionError) as excinfo:
@@ -119,7 +117,9 @@ def test_transform_verdict_is_refused(name, seed):
 
 @pytest.mark.parametrize("name,seed", CASES, ids=IDS)
 def test_deny_verdict_is_still_refused(name, seed):
-    evaluator = _StubEvaluator(_result(Decision.DENY, reason="tool_denied"))
+    evaluator = _StubEvaluator(
+        PolicyEvaluation(verdict="deny", reason_code="tool_denied")
+    )
     provider = seed(evaluator)
 
     with pytest.raises(PermissionError) as excinfo:
@@ -132,7 +132,7 @@ def test_deny_verdict_is_still_refused(name, seed):
 @pytest.mark.parametrize("name,seed", CASES, ids=IDS)
 def test_allow_verdict_passes_the_gate(name, seed):
     """The guard must reject only transform, not every permitting verdict."""
-    evaluator = _StubEvaluator(_result(Decision.ALLOW))
+    evaluator = _StubEvaluator(PolicyEvaluation(verdict="allow"))
     provider = seed(evaluator)
 
     # Past the gate the call fails on the absent backend, which is the point:

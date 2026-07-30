@@ -4,7 +4,7 @@
 
 These scenarios exercise the native :class:`AutoGenKernel` and
 :class:`GovernanceInterventionHandler` surface routed through
-:class:`agent_control_specification.AgentControl` via the
+:class:`agt.policies.runtime.AgtRuntime` via the
 :class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
@@ -69,11 +69,8 @@ if "autogen_core" not in sys.modules:
     sys.modules["autogen_core.intervention"] = _intervention_mod
 
 
-from agent_control_specification import InterventionPointResult  # noqa: E402
-from agent_control_specification import (  # noqa: E402
-    AgentControl,
-    ApprovalResolution,
-)
+from agt.policies import PolicyEvaluation  # noqa: E402
+from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
 _MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
@@ -129,10 +126,10 @@ def _build_runtime(
     verdicts: list[dict[str, Any]],
     *,
     approval_resolver=None,
-) -> tuple[AgentControl, _ScriptedPolicy]:
+) -> tuple[AgtRuntime, _ScriptedPolicy]:
     policy = _ScriptedPolicy(verdicts)
-    runtime = AgentControl.from_path(
-        str(_write_manifest(tmp_path)),
+    runtime = AgtRuntime(
+        _write_manifest(tmp_path),
         policy_dispatcher=policy,
         approval_resolver=approval_resolver,
     )
@@ -229,10 +226,10 @@ def test_on_send_escalate_with_approving_resolver_forwards(tmp_path: Path) -> No
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: InterventionPointResult) -> ApprovalResolution:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
-        return ApprovalResolution.allow(result.enforced_identity)  # type: ignore[arg-type]
+        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
 
     runtime, _policy = _build_runtime(
         tmp_path,

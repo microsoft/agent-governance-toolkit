@@ -8,22 +8,20 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_control_specification import (
-    Decision,
-    InterventionPointResult,
-    Verdict,
-)
+import agt.policies as policies
 
 from agent_compliance.policy_test import FixtureResult, ReplayReport, _load_fixtures, replay
 
 
 class _Runtime:
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
+    def __init__(self, reason_code: str) -> None:
+        self.reason_code = reason_code
 
-    async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
-        return InterventionPointResult(
-            verdict=Verdict(decision=Decision.DENY, reason=self.reason)
+    def evaluate(self, intervention_point: str, snapshot: dict) -> policies.PolicyEvaluation:
+        return policies.PolicyEvaluation(
+            verdict="deny",
+            reason_code=self.reason_code,
+            intervention_point=intervention_point,
         )
 
     def close(self) -> None:
@@ -65,12 +63,10 @@ def test_replay_preserves_metadata_without_inventing_rule_identity(
     )
     class RuntimeFactory:
         @staticmethod
-        def from_path(path):
+        def from_manifest(path):
             return _Runtime("policy:deny-dangerous-ddl")
 
-    import agent_control_specification as acs
-
-    with patch.object(acs, "AgentControl", RuntimeFactory):
+    with patch.dict(vars(policies), {"AgtRuntime": RuntimeFactory}):
         report = replay(manifest, fixture)
     assert report.ok
     assert report.results[0].resolution_metadata == {

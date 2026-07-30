@@ -4,7 +4,7 @@
 
 These scenarios exercise the native :class:`MAFKernel` and
 :class:`RuntimeGovernanceMiddleware` + :class:`CapabilityGuardMiddleware`
-surface routed through :class:`agent_control_specification.AgentControl` via the
+surface routed through :class:`agt.policies.runtime.AgtRuntime` via the
 :class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
@@ -42,11 +42,8 @@ pytest.importorskip("agent_os")
 # mirroring the adapter's own except-ImportError fallback.
 sys.modules.setdefault("agent_framework", types.ModuleType("agent_framework"))
 
-from agent_control_specification import InterventionPointResult  # noqa: E402
-from agent_control_specification import (  # noqa: E402
-    AgentControl,
-    ApprovalResolution,
-)
+from agt.policies import PolicyEvaluation  # noqa: E402
+from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
 _MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
@@ -102,10 +99,10 @@ def _build_runtime(
     verdicts: list[dict[str, Any]],
     *,
     approval_resolver=None,
-) -> tuple[AgentControl, _ScriptedPolicy]:
+) -> tuple[AgtRuntime, _ScriptedPolicy]:
     policy = _ScriptedPolicy(verdicts)
-    runtime = AgentControl.from_path(
-        str(_write_manifest(tmp_path)),
+    runtime = AgtRuntime(
+        _write_manifest(tmp_path),
         policy_dispatcher=policy,
         approval_resolver=approval_resolver,
     )
@@ -191,7 +188,7 @@ def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
     call_next.assert_not_awaited()
     bridge_result = ctx.metadata["governance_decision"]
     assert bridge_result.allowed is False
-    assert bridge_result.evaluation.verdict.reason == "user_blocked_topic"
+    assert bridge_result.evaluation.reason_code == "policy:user_blocked_topic"
 
 
 def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> None:
@@ -238,10 +235,10 @@ def test_policy_middleware_escalate_with_resolver_forwards(tmp_path: Path) -> No
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: InterventionPointResult) -> ApprovalResolution:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
-        return ApprovalResolution.allow(result.enforced_identity)  # type: ignore[arg-type]
+        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
 
     runtime, _policy = _build_runtime(
         tmp_path,

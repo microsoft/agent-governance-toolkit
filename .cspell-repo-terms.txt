@@ -880,6 +880,10 @@ unvalidated
 userinfo
 winres
 worktree
+commonpath
+mktemp
+mkstemp
+fdopen
 
 # --- African regulatory policy terms ---
 POPIA
@@ -953,3 +957,6 @@ asdict
 # --- Docker / BuildKit toolchain terms ---
 moby
 buildkit
+
+# discarded-verdict census (tests/test_transform_never_dropped.py)
+DISCARDABLE

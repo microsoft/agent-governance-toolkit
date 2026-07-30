@@ -24,10 +24,10 @@ agt lint-policy policies/manifest.yaml
 ## Construct the adapter
 
 ```python
-from agent_control_specification import AgentControl
+from agt.policies import AgtRuntime
 from agent_os.integrations.maf_adapter import MAFKernel
 
-runtime = AgentControl.from_path("policies/manifest.yaml")
+runtime = AgtRuntime("policies/manifest.yaml")
 kernel = MAFKernel(runtime=runtime)
 ```
 

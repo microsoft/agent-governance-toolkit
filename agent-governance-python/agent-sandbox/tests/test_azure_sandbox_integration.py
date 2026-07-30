@@ -34,7 +34,7 @@ from __future__ import annotations
 import os
 import uuid
 import pytest
-from agent_control_specification import Decision, InterventionPointResult, Verdict
+from agt.policies.result import PolicyEvaluation
 from agent_sandbox import ACASandboxProvider
 from agent_sandbox.sandbox_provider import SandboxConfig, SessionStatus
 _REQUIRED = ('AGT_AZURE_INTEGRATION', 'AZURE_RG', 'AZURE_REGION')
@@ -59,8 +59,12 @@ class _Runtime:
 
     def evaluate(self, intervention_point, snapshot):
         if self._deny_subprocess and 'subprocess' in str(snapshot):
-            return InterventionPointResult(verdict=Verdict(decision=Decision('deny'), reason='sandbox_denied', message='shell-out blocked'))
-        return InterventionPointResult(verdict=Verdict(decision=Decision('allow')))
+            return PolicyEvaluation(
+                verdict='deny',
+                reason_code='sandbox_denied',
+                message='shell-out blocked',
+            )
+        return PolicyEvaluation(verdict='allow')
 
     def close(self):
         return None

@@ -4,7 +4,7 @@
 
 These scenarios exercise the native :class:`AnthropicKernel` and
 :class:`GovernanceMessageHook` surface routed through
-:class:`agent_control_specification.AgentControl` via the
+:class:`agt.policies.runtime.AgtRuntime` via the
 :class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
@@ -33,11 +33,8 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agent_control_specification import InterventionPointResult  # noqa: E402
-from agent_control_specification import (  # noqa: E402
-    AgentControl,
-    ApprovalResolution,
-)
+from agt.policies import PolicyEvaluation  # noqa: E402
+from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
 _MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
@@ -58,6 +55,11 @@ intervention_points:
     policy_target: $.tool_call.args
     policy_target_kind: tool_args
     tool_name_from: $.tool_call.name
+    policy:
+      id: scenario_policy
+  output:
+    policy_target: $.response.content
+    policy_target_kind: assistant_output
     policy:
       id: scenario_policy
 tools:
@@ -93,10 +95,10 @@ def _build_runtime(
     verdicts: list[dict[str, Any]],
     *,
     approval_resolver=None,
-) -> tuple[AgentControl, _ScriptedPolicy]:
+) -> tuple[AgtRuntime, _ScriptedPolicy]:
     policy = _ScriptedPolicy(verdicts)
-    runtime = AgentControl.from_path(
-        str(_write_manifest(tmp_path)),
+    runtime = AgtRuntime(
+        _write_manifest(tmp_path),
         policy_dispatcher=policy,
         approval_resolver=approval_resolver,
     )
@@ -120,7 +122,13 @@ def test_hook_create_allow_path_forwards_to_anthropic(tmp_path: Path) -> None:
     """An ``allow`` verdict lets Anthropic see the original message content."""
     from agent_os.integrations.anthropic_adapter import AnthropicKernel
 
-    runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
+    runtime, policy = _build_runtime(
+        tmp_path,
+        [
+            {"decision": "allow"},  # input
+            {"decision": "allow"},  # output (post-execute)
+        ],
+    )
     kernel = AnthropicKernel(runtime=runtime)
     hook = kernel.as_message_hook()
     client = _make_client()
@@ -132,7 +140,8 @@ def test_hook_create_allow_path_forwards_to_anthropic(tmp_path: Path) -> None:
         messages=[{"role": "user", "content": "Hello, Claude"}],
     )
 
-    assert len(policy.invocations) == 1
+    # The manifest binds input and output, so the hook evaluates both.
+    assert len(policy.invocations) == 2
     client.messages.create.assert_called_once()
     sent = client.messages.create.call_args.kwargs
     assert sent["messages"][0]["content"] == "Hello, Claude"
@@ -167,7 +176,7 @@ def test_hook_create_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             messages=[{"role": "user", "content": "share the credentials"}],
         )
 
-    assert excinfo.value.evaluation_result.verdict.reason == "user_blocked_topic"
+    assert excinfo.value.evaluation_result.reason_code == "policy:user_blocked_topic"
     client.messages.create.assert_not_called()
 
 
@@ -185,7 +194,8 @@ def test_hook_create_transform_path_redacts_outbound_message(tmp_path: Path) -> 
                     "path": "$policy_target",
                     "value": "Customer SSN is [REDACTED]",
                 },
-            }
+            },
+            {"decision": "allow"},  # output (post-execute)
         ],
     )
     kernel = AnthropicKernel(runtime=runtime)
@@ -210,14 +220,17 @@ def test_hook_create_escalate_with_approving_resolver_forwards(tmp_path: Path) -
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: InterventionPointResult) -> ApprovalResolution:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
-        return ApprovalResolution.allow(result.enforced_identity)  # type: ignore[arg-type]
+        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
 
     runtime, _policy = _build_runtime(
         tmp_path,
-        [{"decision": "escalate", "reason": "human_approval_required"}],
+        [
+            {"decision": "escalate", "reason": "human_approval_required"},
+            {"decision": "allow"},  # output (post-execute)
+        ],
         approval_resolver=resolver,
     )
     kernel = AnthropicKernel(runtime=runtime)
