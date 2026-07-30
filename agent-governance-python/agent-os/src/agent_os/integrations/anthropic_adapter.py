@@ -348,8 +348,15 @@ class _GovernedMessages:
                         # land, so proceeding would run the original.
                         raise tool_result.to_policy_violation(PolicyViolationError) from exc
 
-        # Post-execute bookkeeping
-        self._kernel.post_execute(self._ctx, response)
+        # Output mediation: a deny here must stop the response being
+        # disclosed to the caller. ``post_execute`` reports a transform as
+        # refused because this two-value contract cannot carry the
+        # replacement, so that path blocks as well.
+        allowed, reason = self._kernel.post_execute(self._ctx, response)
+        if not allowed:
+            raise PolicyViolationError(
+                f"Response blocked by policy: {reason or 'denied by output policy'}"
+            )
 
         return response
 
@@ -551,8 +558,15 @@ class GovernanceMessageHook:
                         # land, so proceeding would run the original.
                         raise tool_result.to_policy_violation(PolicyViolationError) from exc
 
-        # Record host completion after output mediation.
-        self._kernel.post_execute(self._ctx, response)
+        # Output mediation: a deny here must stop the response being
+        # disclosed to the caller. ``post_execute`` reports a transform as
+        # refused because this two-value contract cannot carry the
+        # replacement, so that path blocks as well.
+        allowed, reason = self._kernel.post_execute(self._ctx, response)
+        if not allowed:
+            raise PolicyViolationError(
+                f"Response blocked by policy: {reason or 'denied by output policy'}"
+            )
 
         return response
 

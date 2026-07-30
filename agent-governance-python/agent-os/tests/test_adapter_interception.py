@@ -13,7 +13,7 @@ here rather than assumed.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -272,3 +272,220 @@ async def test_autogen_on_send_drops_pii_even_when_policy_allows(
     result = await handler.on_send(message)
 
     assert result is DropMessage
+
+
+# ── Output verdict enforcement at the post_execute seam ───────────────
+#
+# Four adapter call sites evaluated the output intervention point via
+# ``kernel.post_execute(...)`` and discarded the returned (allowed, reason)
+# tuple, so an output deny still disclosed the response and an output
+# transform was silently dropped. These tests pin the fixed behaviour on
+# the surfaces a caller actually drives: the deprecated Anthropic wrap
+# proxy, the recommended Anthropic message hook, and the AutoGen legacy
+# ``govern()`` patches for ``initiate_chat`` and ``receive``.
+
+from agent_os.exceptions import PolicyViolationError  # noqa: E402
+
+_SECRET = "SECRET-TOKEN-XYZ-99"
+
+
+class _PerPointRuntime(_StubRuntime):
+    """A stub runtime that answers per intervention point, allowing elsewhere."""
+
+    def __init__(self, overrides: dict[str, PolicyEvaluation]) -> None:
+        super().__init__(_allow())
+        self._overrides = overrides
+
+    def evaluate(
+        self, intervention_point: str, snapshot: dict[str, Any]
+    ) -> PolicyEvaluation:
+        name = getattr(intervention_point, "value", str(intervention_point))
+        self.calls.append((name, snapshot))
+        result = self._overrides.get(name, self._result)
+        return result.model_copy(update={"intervention_point": name})
+
+
+def _output_transform() -> PolicyEvaluation:
+    return PolicyEvaluation(
+        verdict="transform",
+        reason_code="redact",
+        transform=TransformResult(path="output.content", value="[redacted]"),
+    )
+
+
+class _AnthropicResponse:
+    """A minimal Anthropic-shaped response carrying a secret payload."""
+
+    def __init__(self, text: str) -> None:
+        self.id = "msg-1"
+        self.content: list[Any] = []
+        self.usage = None
+        self._text = text
+
+    def __str__(self) -> str:
+        return self._text
+
+
+def _anthropic_client(text: str) -> MagicMock:
+    client = MagicMock()
+    client.messages.create.return_value = _AnthropicResponse(text)
+    return client
+
+
+def test_anthropic_wrap_blocks_denied_output() -> None:
+    """The governed proxy must not disclose a response the output point denies."""
+    kernel = AnthropicKernel(runtime=_PerPointRuntime({"output": _deny()}))
+    governed = kernel.wrap(_anthropic_client(_SECRET))
+
+    with pytest.raises(PolicyViolationError) as excinfo:
+        governed.messages.create(
+            model="m", messages=[{"role": "user", "content": "hi"}]
+        )
+
+    assert _SECRET not in str(excinfo.value)
+    assert "blocked by policy" in str(excinfo.value)
+
+
+def test_anthropic_hook_create_blocks_denied_output() -> None:
+    """The message hook must not disclose a response the output point denies."""
+    kernel = AnthropicKernel(runtime=_PerPointRuntime({"output": _deny()}))
+    hook = kernel.as_message_hook()
+
+    with pytest.raises(PolicyViolationError) as excinfo:
+        hook.create(
+            _anthropic_client(_SECRET),
+            model="m",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+    assert _SECRET not in str(excinfo.value)
+    assert "blocked by policy" in str(excinfo.value)
+
+
+def test_anthropic_hook_refuses_output_transform_it_cannot_apply() -> None:
+    """``post_execute`` answers with a tuple, so it has nowhere to carry the
+    replacement; the response must be refused rather than forwarded as-is."""
+    kernel = AnthropicKernel(
+        runtime=_PerPointRuntime({"output": _output_transform()})
+    )
+    hook = kernel.as_message_hook()
+
+    with pytest.raises(PolicyViolationError) as excinfo:
+        hook.create(
+            _anthropic_client(_SECRET),
+            model="m",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+    assert _SECRET not in str(excinfo.value)
+    assert "transform_not_applicable" in str(excinfo.value)
+
+
+class _ChattyAgent:
+    """Minimal AutoGen-shaped agent whose calls return a fixed reply."""
+
+    def __init__(self, reply: str, name: str = "agent-1") -> None:
+        self.name = name
+        self._reply = reply
+
+    def initiate_chat(self, recipient: Any, message: Any = None, **kwargs: Any) -> Any:
+        return self._reply
+
+    def generate_reply(self, messages: Any = None, sender: Any = None, **kwargs: Any) -> Any:
+        return self._reply
+
+    def receive(self, message: Any, sender: Any, **kwargs: Any) -> Any:
+        return self._reply
+
+
+def test_autogen_initiate_chat_blocks_denied_output() -> None:
+    """A denied chat result raises instead of being returned to the caller."""
+    kernel = AutoGenKernel(runtime=_PerPointRuntime({"output": _deny()}))
+    agent = _ChattyAgent(_SECRET)
+    kernel.govern(agent)
+
+    with pytest.raises(PolicyViolationError) as excinfo:
+        agent.initiate_chat(_named("peer"), message="hello")
+
+    assert _SECRET not in str(excinfo.value)
+
+
+def test_autogen_receive_blocks_denied_output() -> None:
+    """A denied receive result raises instead of being returned to the caller."""
+    kernel = AutoGenKernel(runtime=_PerPointRuntime({"output": _deny()}))
+    agent = _ChattyAgent(_SECRET)
+    kernel.govern(agent)
+
+    with pytest.raises(PolicyViolationError) as excinfo:
+        agent.receive("hello", _named("peer"))
+
+    assert _SECRET not in str(excinfo.value)
+
+
+def test_autogen_initiate_chat_refuses_output_transform_it_cannot_apply() -> None:
+    """``post_execute`` cannot carry the replacement, so the result is refused."""
+    kernel = AutoGenKernel(
+        runtime=_PerPointRuntime({"output": _output_transform()})
+    )
+    agent = _ChattyAgent(_SECRET)
+    kernel.govern(agent)
+
+    with pytest.raises(PolicyViolationError) as excinfo:
+        agent.initiate_chat(_named("peer"), message="hello")
+
+    assert _SECRET not in str(excinfo.value)
+    assert "transform_not_applicable" in str(excinfo.value)
+
+
+def test_autogen_allowed_output_is_returned_unchanged() -> None:
+    """The consumed verdict must not turn allows into blocks."""
+    kernel = AutoGenKernel(runtime=_PerPointRuntime({}))
+    agent = _ChattyAgent("all good")
+    kernel.govern(agent)
+
+    assert agent.initiate_chat(_named("peer"), message="hello") == "all good"
+    assert agent.receive("hello", _named("peer")) == "all good"
+
+
+def test_anthropic_allowed_output_is_returned_unchanged() -> None:
+    """The consumed verdict must not turn allows into blocks."""
+    kernel = AnthropicKernel(runtime=_PerPointRuntime({}))
+    hook = kernel.as_message_hook()
+    client = _anthropic_client("all good")
+
+    response = hook.create(
+        client, model="m", messages=[{"role": "user", "content": "hi"}]
+    )
+
+    assert str(response) == "all good"
+
+
+def test_autogen_output_deny_without_reason_gets_public_message() -> None:
+    """A deny whose reason is None must not surface "None" to callers."""
+    kernel = AutoGenKernel(runtime=_PerPointRuntime({"output": _deny()}))
+    agent = _ChattyAgent(_SECRET)
+    kernel.govern(agent)
+
+    with patch.object(kernel, "post_execute", return_value=(False, None)):
+        with pytest.raises(PolicyViolationError) as excinfo:
+            agent.initiate_chat(_named("peer"), message="hello")
+
+    assert "None" not in str(excinfo.value)
+    assert "denied by output policy" in str(excinfo.value)
+
+
+def test_anthropic_hook_output_deny_without_reason_gets_public_message() -> None:
+    """The anthropic hook path must also normalize a None deny reason."""
+    kernel = AnthropicKernel(runtime=_PerPointRuntime({"output": _deny()}))
+    hook = kernel.as_message_hook()
+
+    with patch.object(kernel, "post_execute", return_value=(False, None)):
+        with pytest.raises(PolicyViolationError) as excinfo:
+            hook.create(
+                _anthropic_client(_SECRET),
+                model="m",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+
+    assert "None" not in str(excinfo.value)
+    assert "denied by output policy" in str(excinfo.value)

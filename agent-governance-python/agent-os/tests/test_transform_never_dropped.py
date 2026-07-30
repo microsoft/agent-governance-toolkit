@@ -741,3 +741,91 @@ def test_a_target_that_takes_no_write_is_not_passed_over():
         "forwarded with no exception raised: " + ", ".join(skipped) + ". "
         "Refuse on the other branch, or track whether the write landed."
     )
+
+
+# ── census 5: a verdict that is never read is a verdict that never ran ────
+
+
+DISCARDABLE = EVAL_METHODS | {"pre_execute", "post_execute"}
+
+
+def _discarded_verdicts_in(tree: ast.AST, label: str) -> list[str]:
+    """Evaluation calls in *tree* whose verdict is discarded outright.
+
+    The four censuses above judge how a consumer handles the verdict it
+    holds. This catches the consumer that never holds one: the call sits as
+    a bare expression statement (or its result is assigned to ``_``), so the
+    ``(allowed, reason)`` tuple or result object is built and thrown away. A
+    deny then blocks nothing and a transform is never applied — the action
+    already ran, and the caller forwards its result as if it had been
+    permitted. Four adapter output sites shipped exactly this shape, as
+    ``kernel.post_execute(ctx, response)`` on a statement line, so an output
+    deny still disclosed the response.
+
+    ``pre_execute``/``post_execute`` are included alongside the evaluate_*
+    seams: they are the tuple-contract fronts for ``evaluate_input`` and
+    ``evaluate_output``, and every one of the live drops went through them.
+    """
+    found = []
+    for node in ast.walk(tree):
+        call = None
+        if isinstance(node, ast.Expr):
+            call = node.value
+        elif isinstance(node, ast.Assign) and all(
+            isinstance(t, ast.Name) and t.id == "_" for t in node.targets
+        ):
+            call = node.value
+        if isinstance(call, ast.Await):
+            call = call.value
+        if not isinstance(call, ast.Call):
+            continue
+        func = call.func
+        name = (
+            func.attr
+            if isinstance(func, ast.Attribute)
+            else func.id if isinstance(func, ast.Name) else None
+        )
+        if name in DISCARDABLE:
+            found.append(f"{label}:{node.lineno} {name}")
+    return found
+
+
+def _discarded_verdicts() -> list[str]:
+    found = []
+    for path in sorted(SRC.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if not any(m in text for m in DISCARDABLE):
+            continue
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:  # pragma: no cover - the repo does not ship these
+            continue
+        found.extend(_discarded_verdicts_in(tree, str(path.relative_to(SRC))))
+    return found
+
+
+def test_the_fifth_census_recognizes_a_discarded_verdict():
+    """Guard against the matcher silently matching nothing and passing vacuously."""
+    snippet = ast.parse(
+        "def f(kernel, ctx, response):\n"
+        "    kernel.post_execute(ctx, response)\n"
+        "    _ = kernel.evaluate_output(ctx, content=response)\n"
+        "    return response\n"
+        "async def g(kernel, ctx, body):\n"
+        "    await kernel.pre_execute(ctx, body)\n"
+    )
+
+    hits = _discarded_verdicts_in(snippet, "snippet.py")
+
+    assert len(hits) == 3, hits
+
+
+def test_no_evaluation_verdict_is_discarded():
+    dropped = _discarded_verdicts()
+
+    assert not dropped, (
+        "these evaluate a policy and discard the verdict, so a deny blocks "
+        "nothing and a transform is never applied while the caller forwards "
+        "the result as permitted: " + ", ".join(dropped) + ". Consume the "
+        "verdict: block on deny and apply or refuse a transform."
+    )

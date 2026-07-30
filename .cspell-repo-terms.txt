@@ -957,3 +957,6 @@ asdict
 # --- Docker / BuildKit toolchain terms ---
 moby
 buildkit
+
+# discarded-verdict census (tests/test_transform_never_dropped.py)
+DISCARDABLE

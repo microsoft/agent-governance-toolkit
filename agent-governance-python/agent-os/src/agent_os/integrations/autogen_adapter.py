@@ -634,7 +634,13 @@ class AutoGenKernel(BaseIntegration):
                     return None
                 raise
 
-            kernel.post_execute(ctx, result)
+            valid, reason = kernel.post_execute(ctx, result)
+            if not valid:
+                logger.info(
+                    "Policy DENY (post_execute) on initiate_chat for %s: %s",
+                    agent_id, reason,
+                )
+                raise PolicyViolationError(reason or "denied by output policy")
             return result
 
         agent.initiate_chat = governed_initiate_chat
@@ -738,7 +744,13 @@ class AutoGenKernel(BaseIntegration):
                     return None
                 raise
 
-            kernel.post_execute(ctx, result)
+            valid, reason = kernel.post_execute(ctx, result)
+            if not valid:
+                logger.info(
+                    "Policy DENY (post_execute) on receive for %s: %s",
+                    agent_id, reason,
+                )
+                raise PolicyViolationError(reason or "denied by output policy")
             return result
 
         agent.receive = governed_receive
