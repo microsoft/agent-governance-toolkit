@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **ACS architecture analysis** -- added `docs/analysis/what-makes-agt-unique.md`, a deep-dive analysis of the ACS runtime covering the fail-closed theorem, the identity model, the annotator pipeline, multi-engine policy backends, the SRE layer, and OWASP coverage -- explaining why deterministic code-level enforcement is the key differentiator.
 - **ACS artifact validation API** - added one bounded Rust-core validator for canonical manifest schema checks, typed ACS semantics, and OPA Rego parsing, exposed with the same structured result through Rust, Python, Node, and .NET. The `acs-generator` CLI now consumes this shared SDK surface.
 
 ### Changed
