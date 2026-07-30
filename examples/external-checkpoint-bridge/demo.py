@@ -23,10 +23,13 @@ import os
 import urllib.parse
 import urllib.request
 from typing import Any, Literal, TypedDict
+from uuid import UUID, uuid5
 
 
 Verdict = Literal["allow", "require_approval", "deny"]
 Enforcement = Literal["execute", "pause_for_human_approval", "block"]
+ACTION_REF_NAMESPACE = UUID("7c9f4db5-99e0-44a7-a2f3-4f1d84d3f8f6")
+ALLOWED_VERDICTS: set[str] = {"allow", "require_approval", "deny"}
 
 
 class ActionEnvelope(TypedDict):
@@ -47,8 +50,19 @@ class CheckpointVerdict(TypedDict):
 
 
 def stable_json(value: Any) -> str:
-    """Serialize JSON deterministically for hashing and checkpoint review."""
+    """Serialize JSON deterministically for checkpoint review."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def action_ref_for(value: Any) -> str:
+    """Return an opaque deterministic reference for a proposed action.
+
+    The demo keeps raw arguments inside the action envelope sent for review, but
+    avoids copying those arguments into the reference stored in proof objects.
+    Production deployments should use the SDK's approved digest/signature APIs
+    or an external verifier for cryptographic proof material.
+    """
+    return f"agt-demo-ref:{uuid5(ACTION_REF_NAMESPACE, stable_json(value))}"
 
 
 def build_action_envelope(
@@ -70,7 +84,7 @@ def build_action_envelope(
         "policy_id": policy_id,
     }
     return {
-        "action_ref": stable_json(ref_input),
+        "action_ref": action_ref_for(ref_input),
         **ref_input,
     }
 
@@ -113,19 +127,49 @@ def remote_checkpoint(url: str, envelope: ActionEnvelope) -> CheckpointVerdict:
     )
     with urllib.request.urlopen(request, timeout=10) as response:
         payload = response.read().decode("utf-8")
-        verdict = json.loads(payload)
 
-    if verdict.get("action_ref") != envelope["action_ref"]:
+    return parse_remote_verdict(payload, envelope)
+
+
+def parse_remote_verdict(payload: str, envelope: ActionEnvelope) -> CheckpointVerdict:
+    """Validate and normalize a remote checkpoint response.
+
+    Remote checkpoints are optional in this example, so malformed responses
+    should fail closed with a clear error rather than surfacing incidental
+    `KeyError` or `AttributeError` exceptions.
+    """
+    try:
+        raw_verdict = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Remote checkpoint returned invalid JSON.") from exc
+
+    if not isinstance(raw_verdict, dict):
+        raise ValueError("Remote checkpoint response must be a JSON object.")
+
+    remote_action_ref = raw_verdict.get("action_ref")
+    if remote_action_ref != envelope["action_ref"]:
         raise ValueError(
             "Remote checkpoint returned a verdict for a different action_ref."
         )
 
+    verdict = raw_verdict.get("verdict")
+    if verdict not in ALLOWED_VERDICTS:
+        raise ValueError(
+            "Remote checkpoint verdict must be one of: allow, require_approval, deny."
+        )
+
+    reason = raw_verdict.get("reason", "External checkpoint returned no reason.")
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("Remote checkpoint reason must be a non-empty string.")
+
+    decision_id = raw_verdict.get("decision_id", f"remote-{envelope['tool_name']}")
+    if not isinstance(decision_id, str) or not decision_id.strip():
+        raise ValueError("Remote checkpoint decision_id must be a non-empty string.")
+
     return {
-        "verdict": verdict["verdict"],
-        "reason": verdict.get("reason", "External checkpoint returned no reason."),
-        "decision_id": verdict.get(
-            "decision_id", f"remote-{envelope['tool_name']}"
-        ),
+        "verdict": verdict,
+        "reason": reason,
+        "decision_id": decision_id,
         "action_ref": envelope["action_ref"],
     }
 
@@ -144,7 +188,9 @@ def map_to_enforcement(verdict: Verdict) -> Enforcement:
         return "execute"
     if verdict == "require_approval":
         return "pause_for_human_approval"
-    return "block"
+    if verdict == "deny":
+        return "block"
+    raise ValueError(f"Unsupported checkpoint verdict: {verdict!r}")
 
 
 def sample_actions() -> list[ActionEnvelope]:
