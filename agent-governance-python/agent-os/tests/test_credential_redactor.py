@@ -21,10 +21,19 @@ def _fake_github_token(prefix: str) -> str:
 _FAKE_GOOGLE_KEY = "AIza" + "SyD1234567890abcdefghijklmnopqrstuv"
 
 
+# The first body line of every fake PEM block in this module. Both block
+# builders below share it so that a test asserting the body is gone can be
+# written against either one: test_redacts_gcp_service_account_json builds its
+# key with _fake_pem_block and then asserts on _FAKE_PEM_BODY, which only holds
+# while the two agree. Sharing one constant makes them agree by construction
+# rather than by a reader noticing two copies.
+_FAKE_PEM_BODY = "VGhpcyBpcyBub3QgYSByZWFsIGtleS4="
+
+
 def _fake_pem_block(label: str) -> str:
     return (
         f"-----BEGIN {label}-----\n"
-        "VGhpcyBpcyBub3QgYSByZWFsIGtleS4=\n"
+        f"{_FAKE_PEM_BODY}\n"
         "QWxsIHZhbHVlcyBhcmUgZmFrZSBmb3IgdGVzdGluZy4=\n"
         f"-----END {label}-----"
     )
@@ -359,9 +368,6 @@ def test_scan_and_redact_empty_input():
     assert CredentialRedactor.scan_and_redact("") == ("", [])
 
 
-_FAKE_PEM_BODY = "VGhpcyBpcyBub3QgYSByZWFsIGtleS4="
-
-
 def _fake_pem_block_with(label: str, separator: str) -> str:
     """A PEM block whose line breaks have been replaced by ``separator``."""
     return (
@@ -420,10 +426,13 @@ def test_redacts_gcp_service_account_json():
     assert "example-project" in redacted
 
 
-@pytest.mark.parametrize(
-    "separator",
-    ["\n", "\n", ""],
-)
+# Every separator the widened pattern accepts. The negative tests below must
+# cover the same set as the positive one, or widening could start matching a
+# public key or a mismatched label in exactly the encoding left untested.
+_ALL_SEPARATORS = ["\n", "\r\n", "\\n", "", " "]
+
+
+@pytest.mark.parametrize("separator", _ALL_SEPARATORS)
 def test_still_ignores_non_private_pem_in_every_encoding(separator: str):
     """Widening the separator must not start matching public keys."""
     text = _fake_pem_block_with("PUBLIC KEY", separator)
@@ -432,10 +441,7 @@ def test_still_ignores_non_private_pem_in_every_encoding(separator: str):
     assert CredentialRedactor.contains_credentials(text) is False
 
 
-@pytest.mark.parametrize(
-    "separator",
-    ["\n", "\n", ""],
-)
+@pytest.mark.parametrize("separator", _ALL_SEPARATORS)
 def test_still_requires_matching_begin_and_end_labels(separator: str):
     """Widening the separator must not let mismatched labels through."""
     text = (
