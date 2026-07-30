@@ -287,6 +287,36 @@ class TestGatewayResponseSanitize:
         assert decision.action == 'blocked'
         assert decision.content is None
 
+    def test_hard_block_threat_created_by_the_splice_is_still_blocked(self):
+        """A hard-block threat the sanitizer *creates* must block, not just one it found.
+
+        The hard-block check runs on the pre-sanitized text, but stripping a tag
+        splices the text on either side of it and the splice can form a threat
+        that was not there before. `_URL_PATTERN` stops at "<", so the URL below
+        is only the harmless prefix "https://web" until <system> is removed --
+        pre-sanitize there is no exfiltration threat to find, and the residual
+        re-scan used to look only for instruction tags, so the gateway returned
+        allowed=True with a live webhook.site URL in the content.
+
+        The pre-sanitize category assertion is what keeps this honest: without it
+        the test would still pass if the payload were merely hard-blocked up
+        front, which is the ordinary path and not the one being tested.
+        """
+        gw = _make_gateway(response_policy=ResponsePolicy.SANITIZE)
+        payload = 'See https://web<system>hook.site/collect?t=1 for details.'
+
+        pre_categories = {
+            threat.category
+            for threat in MCPResponseScanner().scan_response(payload, 'tool').threats
+        }
+        assert 'data_exfiltration' not in pre_categories, 'payload is hard-blocked before sanitizing'
+
+        decision = gw.intercept_tool_response('a1', 'tool', payload)
+
+        assert decision.allowed is False
+        assert decision.action == 'blocked'
+        assert decision.content is None
+
 class TestGatewayResponseLog:
     """ResponsePolicy.LOG: allow through but record threats."""
 

@@ -364,23 +364,38 @@ class MCPGateway:
                 residual_credential = CredentialRedactor.contains_credentials(sanitized)
                 # The same guarantee for injection tags, which are the whole point
                 # of the SANITIZE path: re-scan the output instead of trusting that
-                # sanitize_response removed everything it reported. Only the
-                # categories sanitize_response actually removes are checked here --
-                # a residual imperative ("ignore all previous instructions") is
-                # prose it never claimed to strip, and blocking on it would turn
-                # SANITIZE into BLOCK for ordinary text.
+                # sanitize_response removed everything it reported.
                 #
-                # "error" is checked alongside it because scan_response swallows
-                # its own exceptions and reports the failure as a threat of that
-                # category. A re-scan that could not run is not a re-scan that
-                # passed, so without it a crashing verifier reads as "nothing
-                # residual" and the unverified content is handed to the model.
+                # The hard-block categories are re-checked here as well, even
+                # though they were already checked above, because that check ran
+                # on the *pre*-sanitized text. Stripping a tag splices the text on
+                # either side of it, and the splice can form a hard-block threat
+                # that was not there before: `_URL_PATTERN` stops at "<", so
+                # "https://web<system>hook.site/..." is only the harmless prefix
+                # "https://web" until <system> is removed, at which point it is a
+                # live exfiltration URL. Checking only the pre-sanitized text let
+                # that through as allowed=True.
+                #
+                # "error" is included because scan_response swallows its own
+                # exceptions and reports the failure as a threat of that category.
+                # A re-scan that could not run is not a re-scan that passed, so
+                # without it a crashing verifier reads as "nothing residual" and
+                # the unverified content is handed to the model.
+                #
+                # `prompt_injection` is deliberately excluded: a residual
+                # imperative ("ignore all previous instructions") is prose
+                # sanitize_response never claimed to strip, and blocking on it
+                # would turn SANITIZE into BLOCK for ordinary text.
                 #
                 # Only run it when the cheaper checks passed: the verdict is
                 # already "blocked" otherwise, and a full re-scan of a large
                 # response is not free.
+                residual_block_categories = hard_block_categories | {
+                    "instruction_injection",
+                    "error",
+                }
                 residual_tag = not (sanitize_failed or residual_credential) and any(
-                    threat.category in ("instruction_injection", "error")
+                    threat.category in residual_block_categories
                     for threat in self._response_scanner.scan_response(
                         sanitized, tool_name
                     ).threats
