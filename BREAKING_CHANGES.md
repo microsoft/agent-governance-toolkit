@@ -187,7 +187,7 @@ The Python runtime no longer carries its own rule model, its own evaluators and
 external backends, or the bridge that translated between that model and ACS.
 The ACS runtime evaluates policy, so the parallel model and every helper that
 converted between the two are gone rather than deprecated. Framework
-adapters take an `AgtRuntime`. Sandbox providers take `runtime=` alongside an
+adapters take an `AgentControl`. Sandbox providers take `runtime=` alongside an
 explicit `SandboxConfig` instead of deriving one from a policy document.
 
 These 75 public names are removed. The list is computed from the export diff
@@ -259,7 +259,7 @@ the limit by one to keep the behaviour you have.
 
 **Migration**
 
-Run `agt migrate` on a supported literal policy, then build an `AgtRuntime`
+Run `agt migrate` on a supported literal policy, then build an `AgentControl`
 from the manifest it writes. Sandbox resources, mounts, network settings, and
 tool exposure move into `SandboxConfig`. Read `evaluation_result` and the ACS audit
 record where you used to read the compatibility exception fields.
