@@ -31,11 +31,30 @@ authenticated.
 
 ### 2. MeshClient: an established encrypted session is never silently downgraded
 
-Even for a peer that *is* on the plaintext allowlist, if an encrypted session
-already exists for it (`this.sessions.get(from)?.channel`), an inbound
-plaintext frame is a downgrade of that live channel and is dropped rather than
-processed. A negotiated encrypted session can no longer be pushed back to the
-no-crypto path by a later plaintext frame.
+Even for a peer that *is* on the plaintext allowlist, once that peer has been
+end-to-end verified the plaintext path is permanently closed for it.
+
+A live-channel check alone (`this.sessions.get(from)?.channel`) is **not**
+sufficient, and relying on it was the original form of this hardening. Several
+paths delete the session, and each one re-opens the plaintext gate for a peer
+that had already been cryptographically verified:
+
+* the Gap-G3 ratchet-desync handler calls `closeSession()` after a single
+  decrypt failure — a malicious relay forces that with one garbage-ciphertext
+  frame and downgrades with the next (a two-frame attack);
+* `handleKnockReject()` calls `closeSession()` on an **unauthenticated**
+  `knock_reject` frame — the same downgrade in a single frame, with no crypto
+  interaction at all.
+
+The gate therefore also latches on `e2eVerifiedSet`, which is only ever added
+to and never cleared. Once a peer has produced a successfully decrypted frame,
+it can never again be handled as plaintext for the lifetime of the client,
+regardless of how (or how often) its session is torn down. This makes the
+guarantee teardown-path-agnostic rather than dependent on enumerating every
+current call site of `closeSession()`.
+
+A peer that is allow-listed for plaintext and has *never* been E2E-verified is
+unaffected and continues to receive plaintext normally.
 
 ### 3. MeshClient: encrypted frames must carry a ratchet header
 
@@ -90,7 +109,7 @@ decisions; they do not add new inputs, network exposure, or trust decisions.
 |---|---|
 | Sender authentication (spoofed `from`) | **Strengthened.** A frame's `from` is bound to the connect-time, DID proof-of-possession-verified identity, so a peer cannot be attributed a DID it does not own. An omitted `from` is stamped with the verified identity rather than forwarded absent. |
 | Plaintext downgrade (wire flag) | **Closed.** The no-crypto path is selected only from the receiver's own allowlist; the sender-controlled `plaintext` flag can no longer bypass X3DH / Double Ratchet / AEAD. |
-| Session downgrade | **Strengthened.** A peer with an established encrypted session is never silently moved to the plaintext path, even if it is also allow-listed for plaintext. |
+| Session downgrade | **Strengthened.** Once a peer has been end-to-end verified it is never moved to the plaintext path again, even if it is also allow-listed for plaintext and even if its session is subsequently torn down (ratchet desync, `knock_reject`, or an explicit `closeSession()`). The guarantee latches on `e2eVerifiedSet` rather than on the presence of a live channel, so it does not depend on enumerating every session-teardown path. |
 | Headerless encrypted frame | **Strengthened.** An encrypted frame with no ratchet header fails closed through the error handler instead of throwing out of the receive loop. |
 | Message-deletion access control (acks) | **Strengthened.** Only the message's own recipient — identified by the connection's verified DID — can acknowledge and delete it, so one agent can no longer delete another agent's queued messages. |
 | New attack surface | **None.** No new inputs, endpoints, or trust decisions; each change narrows an existing decision to verified state. |
@@ -100,7 +119,8 @@ decisions; they do not add new inputs, network exposure, or trust decisions.
 
 - **No downgrade negotiation.** In every case the receiver decides from its own
   verified state (its `plaintextPeers` allowlist, its session table, its
-  connect-time DID proof-of-possession), so there is no field an attacker can
+  `e2eVerifiedSet` latch, its connect-time DID proof-of-possession), so there is
+  no field an attacker can
   set to force a weaker path; a mismatched peer fails closed.
 - **Consistent enforcement point.** Knock frames (`knock`, `knock_accept`,
   `knock_reject`) route through `_handle_message`, so the `from` binding covers
@@ -117,6 +137,16 @@ TypeScript — `agent-governance-typescript/tests/mesh-client-plaintext-downgrad
 | `allow-listed plaintext peer with a live encrypted session: plaintext frame is dropped` | Allowlist membership does not permit downgrading an existing session. |
 | `no regression: allow-listed plaintext peer without a session is still delivered` | Legitimate operator-allowlisted plaintext delivery still works. |
 | `plaintext handling is never selected by the wire flag alone` | Path selection depends only on receiver configuration. |
+| `two-frame desync must not re-open the plaintext gate for an E2E-verified peer` | A forced ratchet desync tears the session down, but the `e2eVerifiedSet` latch keeps the plaintext path closed on the following frame. |
+| `injected knock_reject must not re-open the plaintext gate for an E2E-verified peer` | An unauthenticated `knock_reject` deletes the session but still cannot re-open the plaintext path. |
+| `a peer latched by a real decrypt is refused plaintext after session teardown` | The latch is set by the production decrypt path (not test seeding) and outlives an explicit `closeSession()`. |
+| `no regression: never-verified allow-listed peer still receives plaintext after a teardown` | The latch keys on E2E verification, not on "has ever had a session" — legitimate plaintext peers are unaffected. |
+
+`agent-governance-typescript/tests/mesh-client-malformed-frame.test.ts`:
+
+| Test | Purpose |
+|---|---|
+| `one malformed pending message does not discard the rest of the batch` | A single poisoned entry in a relay-supplied `pending_messages` batch is surfaced and skipped rather than aborting the drain and silently suppressing the remaining mail. |
 
 Python relay / store — `agent-governance-python/agent-mesh/tests/test_relay.py`:
 
@@ -127,3 +157,5 @@ Python relay / store — `agent-governance-python/agent-mesh/tests/test_relay.py
 | `test_spoofed_from_is_dropped` | A `message` frame whose `from` does not match the verified connection identity is dropped. |
 | `test_spoofed_knock_from_is_dropped` | The same binding applies to knock frames. |
 | `test_missing_from_is_stamped_with_authenticated_identity` | An omitted `from` is stamped with the sender's verified DID on delivery. |
+| `test_knock_accept_and_reject_from_binding_is_enforced` | `knock_accept` / `knock_reject` inherit the same `from` binding, so a KNOCK verdict cannot be forged for a DID the sender does not own. |
+| `test_spoofed_from_to_offline_recipient_is_not_stored` | The `from` binding also covers the offline path — a spoofed frame is not persisted into an offline recipient's inbox for later delivery. |

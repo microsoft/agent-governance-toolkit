@@ -73,6 +73,12 @@ function makeClient(overrides?: Partial<MeshClientOptions>): MeshClient {
 /** Minimal fake ratchet channel whose receive() must never be invoked. */
 interface FakeChannel {
   receive: (message: unknown) => Uint8Array;
+  /**
+   * A real DoubleRatchet channel exposes close(); closeSession() calls it
+   * before deleting the session. Omitting it makes closeSession() throw and
+   * silently skip the delete, which would mask session-teardown regressions.
+   */
+  close: () => void;
 }
 
 interface MeshClientInternals {
@@ -88,6 +94,7 @@ interface MeshClientInternals {
   >;
   knockAccepted: Set<string>;
   preKnockBuffer: Map<string, unknown[]>;
+  e2eVerifiedSet: Set<string>;
 }
 
 function internals(client: MeshClient): MeshClientInternals {
@@ -115,6 +122,7 @@ function injectEncryptedSession(
       if (receiveImpl) return receiveImpl(message);
       throw new Error("ratchet channel.receive() must not be invoked for a forged plaintext frame");
     },
+    close: () => { /* no-op: real channels release ratchet state here */ },
   };
   internals(client).sessions.set(peerDid, {
     peerId: peerDid,
@@ -344,5 +352,129 @@ describe("MeshClient plaintext-downgrade / sender-spoof hardening", () => {
     ).toBe(true);
     // ...and NOT parked in the pre-KNOCK buffer.
     expect(internals(client).preKnockBuffer.has(peer)).toBe(false);
+  });
+
+  // ── Downgrade-after-teardown latch (review finding, mesh-client.ts:801) ──
+  //
+  // Gating the plaintext branch on a live `session.channel` alone is not
+  // sufficient: any path that DELETES the session re-opens the gate for a peer
+  // that was already cryptographically verified. Two such paths exist, so the
+  // gate additionally latches on `e2eVerifiedSet`.
+
+  /** Well-formed ratchet header, garbage ciphertext — passes the header check,
+   *  then fails inside channel.receive() and trips the Gap-G3 desync teardown. */
+  function garbageCiphertextFrame(from: string, id: string): Record<string, unknown> {
+    return {
+      v: 1,
+      type: "message",
+      from,
+      to: SELF_DID,
+      id,
+      ts: new Date().toISOString(),
+      header: { dh: btoa("well-formed-but-wrong"), pn: 0, n: 0 },
+      ciphertext: btoa("garbage"),
+    };
+  }
+
+  // Vector A — two-frame sequence: force a ratchet desync (which tears the
+  // session down), then downgrade on the following frame.
+  test("two-frame desync must not re-open the plaintext gate for an E2E-verified peer", async () => {
+    const peer = "did:agentmesh:peer-a";
+    const client = makeClient({ plaintextPeers: [peer] });
+    const received: Array<{ payload: unknown; isPlaintext: boolean }> = [];
+    const errors: Array<{ kind: string }> = [];
+    client.onMessage((_from, payload, isPlaintext) => received.push({ payload, isPlaintext }));
+    client.onError((kind) => errors.push({ kind }));
+
+    await client.connect();
+    injectEncryptedSession(client, peer);
+    internals(client).e2eVerifiedSet.add(peer);
+
+    // Frame 1 — desync tears down the session (verified below).
+    lastMockWs!.simulateFrame(garbageCiphertextFrame(peer, "desync-1"));
+    await tick();
+    expect(errors).toContainEqual({ kind: "session_desync" });
+    expect(internals(client).sessions.get(peer)).toBeUndefined();
+
+    // Frame 2 — the gate must stay closed even though the session is gone.
+    lastMockWs!.simulateFrame(plaintextFrame(peer, { cmd: "transfer", amount: 999999 }));
+    await tick();
+
+    expect(received).toHaveLength(0);
+  });
+
+  // Vector B — one frame: `knock_reject` is dispatched without authentication
+  // and calls closeSession(frame.from), so a malicious relay can delete the
+  // session without any crypto interaction at all.
+  test("injected knock_reject must not re-open the plaintext gate for an E2E-verified peer", async () => {
+    const peer = "did:agentmesh:peer-a";
+    const client = makeClient({ plaintextPeers: [peer] });
+    const received: Array<{ payload: unknown; isPlaintext: boolean }> = [];
+    client.onMessage((_from, payload, isPlaintext) => received.push({ payload, isPlaintext }));
+
+    await client.connect();
+    injectEncryptedSession(client, peer);
+    internals(client).e2eVerifiedSet.add(peer);
+
+    lastMockWs!.simulateFrame({ v: 1, type: "knock_reject", from: peer, to: SELF_DID });
+    await tick();
+    expect(internals(client).sessions.get(peer)).toBeUndefined();
+
+    lastMockWs!.simulateFrame(plaintextFrame(peer, { cmd: "exfiltrate" }));
+    await tick();
+
+    expect(received).toHaveLength(0);
+  });
+
+  // End-to-end form of the latch: the peer is marked E2E-verified by genuinely
+  // decrypting a frame through the production code path (not by seeding the
+  // set), and is then permanently refused plaintext after a teardown.
+  test("a peer latched by a real decrypt is refused plaintext after session teardown", async () => {
+    const peer = "did:agentmesh:peer-a";
+    const client = makeClient({ plaintextPeers: [peer] });
+    const received: Array<{ payload: unknown; isPlaintext: boolean }> = [];
+    client.onMessage((_from, payload, isPlaintext) => received.push({ payload, isPlaintext }));
+
+    await client.connect();
+
+    // 1. A genuine encrypted frame decrypts -> sets e2eVerifiedSet via real code.
+    injectEncryptedSession(client, peer, () =>
+      new TextEncoder().encode(JSON.stringify({ text: "hello-encrypted" })),
+    );
+    lastMockWs!.simulateFrame(encryptedFrame(peer, { ciphertext: "opaque" }));
+    await tick();
+    expect(received).toEqual([{ payload: { text: "hello-encrypted" }, isPlaintext: false }]);
+    expect(internals(client).e2eVerifiedSet.has(peer)).toBe(true);
+
+    // 2. Tear the session down out-of-band.
+    client.closeSession(peer);
+    expect(internals(client).sessions.get(peer)).toBeUndefined();
+
+    // 3. Plaintext is still refused — the latch outlives the session.
+    lastMockWs!.simulateFrame(plaintextFrame(peer, { cmd: "downgrade" }));
+    await tick();
+
+    expect(received).toHaveLength(1); // still only the decrypted message
+  });
+
+  // The latch must key on E2E verification, not on "has ever had a session":
+  // an allow-listed peer that was never cryptographically verified keeps working.
+  test("no regression: never-verified allow-listed peer still receives plaintext after a teardown", async () => {
+    const peer = "did:agentmesh:peer-a";
+    const client = makeClient({ plaintextPeers: [peer] });
+    const received: Array<{ payload: unknown; isPlaintext: boolean }> = [];
+    client.onMessage((_from, payload, isPlaintext) => received.push({ payload, isPlaintext }));
+
+    await client.connect();
+
+    // Session exists but no frame was ever decrypted -> not E2E-verified.
+    injectEncryptedSession(client, peer);
+    client.closeSession(peer);
+    expect(internals(client).e2eVerifiedSet.has(peer)).toBe(false);
+
+    lastMockWs!.simulateFrame(plaintextFrame(peer, { text: "legit-plaintext" }));
+    await tick();
+
+    expect(received).toEqual([{ payload: { text: "legit-plaintext" }, isPlaintext: true }]);
   });
 });

@@ -153,4 +153,53 @@ describe("MeshClient malformed frame handling", () => {
       process.off("unhandledRejection", listener);
     }
   });
+
+  // handlePendingMessages drains a relay-supplied batch. A single poisoned
+  // entry must not abort the drain and silently discard the rest of the
+  // mailbox — otherwise one malformed queued message (or a malicious relay
+  // deliberately placing one first) suppresses every message behind it.
+  test("one malformed pending message does not discard the rest of the batch", async () => {
+    const peer = "did:agentmesh:peer-a";
+    const client = makeClient({ plaintextPeers: [peer] });
+    const received: unknown[] = [];
+    const errors: Array<{ kind: string; detail: string }> = [];
+    client.onMessage((from, payload) => received.push({ from, payload }));
+    client.onError((kind, _from, detail) => errors.push({ kind, detail }));
+
+    await client.connect();
+
+    const msg = (id: string, ciphertext: string) => ({
+      v: 1,
+      type: "message",
+      from: peer,
+      to: "did:agentmesh:test-agent",
+      id,
+      ts: new Date().toISOString(),
+      ciphertext,
+      plaintext: true,
+    });
+
+    lastMockWs!.simulateFrame({
+      v: 1,
+      type: "pending_messages",
+      messages: [
+        // Poisoned first entry: atob() throws inside handleMessage.
+        msg("pending-bad", "***not-base64***"),
+        msg("pending-good-1", btoa(JSON.stringify({ text: "one" }))),
+        msg("pending-good-2", btoa(JSON.stringify({ text: "two" }))),
+      ],
+    });
+
+    await new Promise((r) => setTimeout(r, 80));
+
+    // Both well-formed messages behind the poisoned one are still delivered.
+    expect(received).toEqual([
+      { from: peer, payload: { text: "one" } },
+      { from: peer, payload: { text: "two" } },
+    ]);
+    // And the failure is surfaced rather than swallowed silently.
+    expect(errors.some((e) => e.kind === "frame" && /pending message dropped/.test(e.detail))).toBe(
+      true,
+    );
+  });
 });

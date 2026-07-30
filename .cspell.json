@@ -93,6 +93,7 @@
     "onclose",
     "Microtask",
     "headerless",
+    "desync",
     "realpeerrealpeerrealpeerreal"
   ],
   "ignorePaths": [

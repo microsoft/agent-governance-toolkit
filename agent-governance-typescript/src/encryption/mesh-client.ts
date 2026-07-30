@@ -798,16 +798,36 @@ export class MeshClient {
     // `from` DID. Gate on isPlaintextPeer only; a peer that is not explicitly
     // allow-listed for plaintext always takes the encrypted path below and is
     // dropped if it cannot be cryptographically authenticated.
-    if (this.isPlaintextPeer(from) && !this.sessions.get(from)?.channel) {
+    if (
+      this.isPlaintextPeer(from) &&
+      !this.sessions.get(from)?.channel &&
+      !this.e2eVerifiedSet.has(from)
+    ) {
       // Legacy plaintext — taken ONLY for an operator-allow-listed peer that has
-      // no negotiated encrypted session. Once a live channel exists for the peer
-      // we deliberately fall through to the encrypted path instead of handling
-      // the frame as plaintext: a genuine encrypted frame is decrypted via the
-      // ratchet, while a plaintext / headerless downgrade frame fails closed on
-      // the missing-ratchet-header check below. This keeps downgrade protection
-      // (an established session is never silently downgraded to no-crypto) while
-      // no longer black-holing legitimate encrypted traffic from a peer that is
-      // also allow-listed for plaintext.
+      // no negotiated encrypted session AND has never been E2E-verified.
+      //
+      // The `e2eVerifiedSet` term is a one-way latch and is load-bearing. A live
+      // `session.channel` is NOT sufficient on its own, because several paths
+      // delete the session and would otherwise re-open this gate for a peer that
+      // had already been cryptographically verified:
+      //   * the Gap-G3 ratchet-desync handler below calls closeSession() after a
+      //     single decrypt failure — a malicious relay can force that with one
+      //     garbage-ciphertext frame and then downgrade with the next frame;
+      //   * handleKnockReject() calls closeSession() on an unauthenticated
+      //     `knock_reject` frame — a one-frame variant of the same attack;
+      //   * any future teardown path would silently inherit the same weakness.
+      // Latching on e2eVerifiedSet (which is only ever added to, never cleared)
+      // makes the guarantee teardown-path-agnostic: once a peer has produced a
+      // successfully decrypted frame, it can never again be handled as plaintext
+      // for the lifetime of this client.
+      //
+      // Once a live channel exists for the peer we deliberately fall through to
+      // the encrypted path instead of handling the frame as plaintext: a genuine
+      // encrypted frame is decrypted via the ratchet, while a plaintext /
+      // headerless downgrade frame fails closed on the missing-ratchet-header
+      // check below. This keeps downgrade protection while no longer
+      // black-holing legitimate encrypted traffic from a peer that is also
+      // allow-listed for plaintext.
       payload = JSON.parse(atob(frame.ciphertext as string));
       isPlaintext = true;
     } else {
@@ -907,7 +927,18 @@ export class MeshClient {
     if (!messages || !Array.isArray(messages)) return;
 
     for (const msg of messages) {
-      await this.handleMessage(msg);
+      // Isolate each queued message: the batch is relay-supplied, so a single
+      // malformed entry (e.g. ciphertext that fails JSON.parse) must not abort
+      // the loop and silently discard the remaining pending mail. Surface the
+      // failure and continue draining.
+      try {
+        await this.handleMessage(msg);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        for (const h of this.errorHandlers) {
+          try { h("frame", String(msg.from ?? ""), `pending message dropped: ${detail}`); } catch { /* swallow */ }
+        }
+      }
     }
   }
 

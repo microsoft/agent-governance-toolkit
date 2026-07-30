@@ -286,6 +286,86 @@ class TestRelayServer:
                 assert msg["id"] == "knock-legit"
                 assert msg["from"] == alice_did
 
+    def test_knock_accept_and_reject_from_binding_is_enforced(self):
+        """Security hardening: ``knock_accept`` / ``knock_reject`` are dispatched
+        through the same relay path as ``knock`` and ``message``, so they must
+        inherit the same ``from``-binding. A refactor that routed either type
+        around ``_handle_message`` would let a connected peer forge a KNOCK
+        verdict attributed to a DID it does not own — spoofing an *accept* to
+        bootstrap an unauthorized session, or a *reject* to tear a live one down.
+        """
+        server = RelayServer()
+        client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
+        victim_did = _did_for("victim")  # a DID Alice does NOT own
+
+        with client.websocket_connect("/ws") as ws_bob:
+            ws_bob.send_json(_connect_frame("bob"))
+
+            with client.websocket_connect("/ws") as ws_alice:
+                ws_alice.send_json(_connect_frame("alice"))
+
+                for frame_type in ("knock_accept", "knock_reject"):
+                    # Spoofed verdict naming a DID Alice does not own.
+                    ws_alice.send_json({
+                        "v": 1, "type": frame_type,
+                        "from": victim_did, "to": bob_did,
+                        "id": f"{frame_type}-spoof", "knock_id": "k-1",
+                    })
+                    # Legit verdict from Alice's real identity.
+                    ws_alice.send_json({
+                        "v": 1, "type": frame_type,
+                        "from": alice_did, "to": bob_did,
+                        "id": f"{frame_type}-legit", "knock_id": "k-1",
+                    })
+
+                    # Bob's next frame of this type is the legit one — the
+                    # spoofed verdict never arrives.
+                    msg = ws_bob.receive_json()
+                    assert msg["type"] == frame_type
+                    assert msg["id"] == f"{frame_type}-legit"
+                    assert msg["from"] == alice_did
+
+    def test_spoofed_from_to_offline_recipient_is_not_stored(self):
+        """Security hardening: the ``from``-binding must cover the OFFLINE path
+        too. ``test_spoofed_from_is_dropped`` proves a spoofed frame is not
+        forwarded to a *connected* recipient; this proves it is not persisted
+        into the recipient's inbox either. Without it, a spoofed frame would be
+        silently queued and later delivered with a forged ``from`` the next time
+        the victim connects — the same attack, merely deferred.
+        """
+        server = RelayServer()
+        inbox = server._inbox
+        client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")        # never connects — offline
+        victim_did = _did_for("victim")  # impersonated DID
+
+        with client.websocket_connect("/ws") as ws_alice:
+            ws_alice.send_json(_connect_frame("alice"))
+
+            # Bob is offline, so both frames take the store-offline path.
+            ws_alice.send_json({
+                "v": 1, "type": "message",
+                "from": victim_did, "to": bob_did,
+                "id": "spoof-offline-1", "ciphertext": "forged",
+            })
+            ws_alice.send_json({
+                "v": 1, "type": "message",
+                "from": alice_did, "to": bob_did,
+                "id": "legit-offline-1", "ciphertext": "genuine",
+            })
+
+        pending = inbox.fetch_pending(bob_did)
+        ids = [m.message_id for m in pending]
+        assert "spoof-offline-1" not in ids
+        assert ids == ["legit-offline-1"]
+        assert all(m.sender_did == alice_did for m in pending)
+        # Nor is it queued under the impersonated identity.
+        assert inbox.fetch_pending(victim_did) == []
+        assert server.stats["messages_stored"] == 1
+
     def test_missing_from_is_stamped_with_authenticated_identity(self):
         """Hygiene: a frame that omits ``from`` is stamped with the connect-time,
         DID-PoP-verified sender identity before it is forwarded/stored, so
@@ -447,6 +527,10 @@ class TestRelayServer:
 
         # The message survives Mallory's ack — she is not the recipient.
         assert inbox.message_count == 1
+        # ...and it is still queued for Bob, not reassigned to Mallory: a
+        # rejected ack must leave the recipient index untouched.
+        assert inbox.fetch_pending(mallory_did) == []
+        assert [m.message_id for m in inbox.fetch_pending(bob_did)] == ["victim-msg-1"]
 
         # Bob connects and still receives his message, then legitimately acks.
         with client.websocket_connect("/ws") as ws_bob:

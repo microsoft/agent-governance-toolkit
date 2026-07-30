@@ -12,16 +12,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AgentMesh transport message authentication.** `MeshClient` no longer lets a
   sender-supplied `plaintext` wire flag select the legacy no-crypto receive path;
   whether an inbound message is treated as plaintext is decided solely by the
-  receiver's own `plaintextPeers` configuration. A live encrypted session can no
-  longer be downgraded to plaintext, and an encrypted frame that is missing its
-  ratchet header is now dropped before the pre-KNOCK buffer instead of being
-  buffered until TTL eviction.
+  receiver's own `plaintextPeers` configuration. Once a peer has been end-to-end
+  verified it can never be handled as plaintext again — the check latches on the
+  E2E-verified set rather than on a live session, so tearing the session down
+  (ratchet desync or an unauthenticated `knock_reject`) cannot re-open the
+  plaintext path. An encrypted frame that is missing its ratchet header is now
+  dropped before the pre-KNOCK buffer instead of being buffered until TTL
+  eviction.
 - **Relay sender-identity binding.** The relay binds the frame `from` field to the
   connection's cryptographically verified DID identity for message and knock
-  frames, so a connected peer can no longer emit frames under another agent's DID.
+  frames (including `knock_accept` / `knock_reject`, and on the offline store
+  path), so a connected peer can no longer emit frames under another agent's DID.
 - **Relay acknowledgement ownership.** `InboxStore.acknowledge` enforces recipient
   ownership (spec §12.3): a peer may only acknowledge and delete messages addressed
   to its own verified DID, preventing one agent from deleting another's queued mail.
+
+### Fixed
+
+- **Pending-message batch isolation.** A single malformed entry in a relay-supplied
+  `pending_messages` batch no longer aborts the drain; the failure is surfaced
+  through the error handler and the remaining queued messages are still delivered.
 
 ## [1.0.0-alpha.1] - 2026-02-01
 
