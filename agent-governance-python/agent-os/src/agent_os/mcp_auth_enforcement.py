@@ -43,6 +43,9 @@ logger = logging.getLogger(__name__)
 # Supported auth methods (aligns with 2026 MCP roadmap)
 VALID_AUTH_METHODS = {"oauth2", "mtls", "api_key", "bearer", "none"}
 
+# Only these URL schemes represent an actual TLS-secured transport.
+TLS_SCHEMES = frozenset({"https", "wss"})
+
 
 @dataclass
 class McpServerEntry:
@@ -112,13 +115,42 @@ class McpAuthPolicy:
         """Remove a server from the allowlist."""
         return self._servers.pop(name, None) is not None
 
+    @staticmethod
+    def _tls_violation(url: str) -> str | None:
+        """Return why *url* is not TLS-secured, or ``None`` if it is.
+
+        Scheme-based rather than prefix-based: ``ftp://``, ``ws://`` and a URL
+        with no scheme at all are all non-TLS, and only ``https``/``wss`` are
+        actual TLS transports.
+
+        A non-empty URL with **no scheme** is a violation rather than a pass. It
+        is the shape a bare host or a glob pattern takes (``mcp.internal``,
+        ``*.internal/finance``), and there is no way to tell from it whether the
+        connection will be encrypted -- so a TLS requirement cannot be
+        considered satisfied. Callers decide whether to invoke this at all for
+        an empty URL.
+        """
+        try:
+            scheme = urlparse(url).scheme.lower()
+        except (ValueError, AttributeError):
+            scheme = ""
+        if scheme in TLS_SCHEMES:
+            return None
+        if not scheme:
+            return f"URL {url!r} has no scheme, so TLS cannot be verified"
+        allowlist = ", ".join(sorted(TLS_SCHEMES))
+        return f"URL scheme {scheme!r} is not in the TLS allowlist ({allowlist})"
+
     def check(self, server_name: str, auth_method: str, url: str = "") -> AuthCheckResult:
         """Check if an auth method is allowed for the given MCP server.
 
         Args:
             server_name: Name of the MCP server.
             auth_method: Authentication method being used.
-            url: Server URL (for logging/audit).
+            url: Server URL for the connection being checked. When omitted, the
+                URL registered on the matching :class:`McpServerEntry` is used
+                instead, so a server configured with a plaintext URL is blocked
+                whether or not the caller repeats that URL here.
 
         Returns:
             AuthCheckResult indicating whether the connection is allowed.
@@ -152,20 +184,28 @@ class McpAuthPolicy:
                 # all bypassed the require_tls gate because none of
                 # them start with "http://" — only `https://` and
                 # `wss://` represent actual TLS-secured transports.
-                if entry.require_tls and url:
-                    try:
-                        scheme = urlparse(url).scheme.lower()
-                    except (ValueError, AttributeError):
-                        scheme = ""
-                    if scheme not in {"https", "wss"}:
+                #
+                # The URL to check falls back to the one registered on the
+                # entry. `url` defaults to "" and the gate used to be skipped
+                # entirely when it was falsy, so a server configured with a
+                # plaintext URL and require_tls=True was allowed by any caller
+                # that did not repeat the URL -- including every caller on the
+                # from_yaml path, where the URL lives in config and the call
+                # site has no reason to pass it again.
+                #
+                # When neither the caller nor the entry supplies a URL there is
+                # nothing to evaluate, and the gate stays skipped as before.
+                # Denying that case would be a separate policy decision about
+                # every server registered without a URL, not this fix.
+                effective_url = url or entry.url
+                if entry.require_tls and effective_url:
+                    violation = self._tls_violation(effective_url)
+                    if violation is not None:
                         return AuthCheckResult(
                             allowed=False,
                             server_name=server_name,
                             auth_method=auth_method,
-                            reason=(
-                                f"Server '{server_name}' requires TLS but URL scheme "
-                                f"{scheme!r} is not in the TLS allowlist (https, wss)"
-                            ),
+                            reason=f"Server '{server_name}' requires TLS but {violation}",
                         )
                 return AuthCheckResult(
                     allowed=True,

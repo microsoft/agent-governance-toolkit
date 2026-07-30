@@ -107,6 +107,88 @@ class TestMcpAuthPolicy:
         assert len(result.reason) > 0
 
 
+class TestTlsGateUsesTheConfiguredUrl:
+    """``require_tls`` must hold for the URL the server is registered with.
+
+    The gate only ran when the *caller* passed a ``url``, which defaults to
+    ``""``. So a server configured with a plaintext URL and ``require_tls=True``
+    was allowed by any caller that did not repeat that URL -- including every
+    caller on the ``from_yaml`` path, where the URL lives in config and the call
+    site has no reason to pass it again.
+    """
+
+    @staticmethod
+    def _policy(url: str, **kwargs: object) -> McpAuthPolicy:
+        return McpAuthPolicy(
+            servers=[
+                McpServerEntry(name="finance", url=url, allowed_auth_methods=["mtls"], **kwargs),
+            ]
+        )
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://mcp.internal/finance",
+            "ws://mcp.internal/finance",
+            "ftp://mcp.internal/finance",
+            "gopher://mcp.internal",
+            # No scheme: the shape a bare host or a glob pattern takes. Nothing
+            # here says the transport is encrypted, so TLS is not satisfied.
+            "mcp.internal/finance",
+            "*.internal/finance",
+        ],
+    )
+    def test_plaintext_configured_url_is_denied_without_a_caller_url(self, url: str) -> None:
+        result = self._policy(url).check("finance", auth_method="mtls")
+        assert result.allowed is False
+        assert "requires TLS" in result.reason
+
+    @pytest.mark.parametrize("url", ["https://mcp.internal/finance", "wss://mcp.internal/ws"])
+    def test_tls_configured_url_is_allowed(self, url: str) -> None:
+        assert self._policy(url).check("finance", auth_method="mtls").allowed is True
+
+    def test_scheme_case_is_ignored(self) -> None:
+        assert self._policy("HTTPS://MCP.INTERNAL").check("finance", auth_method="mtls").allowed
+
+    def test_caller_url_still_wins_over_the_configured_one(self) -> None:
+        # The caller knows the URL actually being dialed; a plaintext dial
+        # against an https-registered server must still be blocked.
+        policy = self._policy("https://mcp.internal/finance")
+        assert policy.check("finance", auth_method="mtls").allowed is True
+        assert (
+            policy.check("finance", auth_method="mtls", url="http://mcp.internal/finance").allowed
+            is False
+        )
+
+    def test_no_url_anywhere_leaves_the_gate_skipped(self) -> None:
+        # Unchanged behaviour: with no URL from either source there is nothing
+        # to evaluate. Denying this would be a separate policy decision about
+        # every server registered without a URL.
+        assert self._policy("").check("finance", auth_method="mtls").allowed is True
+
+    def test_require_tls_false_allows_plaintext(self) -> None:
+        policy = self._policy("http://mcp.internal/finance", require_tls=False)
+        assert policy.check("finance", auth_method="mtls").allowed is True
+
+    def test_auth_method_denial_is_not_masked_by_the_tls_gate(self) -> None:
+        # A method outside the allowlist must still be reported as such, not as
+        # a TLS problem — the allowlist check comes first.
+        result = self._policy("http://mcp.internal/finance").check("finance", auth_method="oauth2")
+        assert result.allowed is False
+        assert "not allowed for server" in result.reason
+
+    def test_yaml_configured_plaintext_server_is_denied(self) -> None:
+        policy = McpAuthPolicy.from_yaml("""
+mcp_auth_policy:
+  servers:
+    - name: finance-tools
+      url: http://mcp.internal/finance
+      allowed_auth_methods: [mtls]
+      require_tls: true
+""")
+        assert policy.check("finance-tools", auth_method="mtls").allowed is False
+
+
 class TestFromYaml:
     def test_parse_yaml(self):
         policy = McpAuthPolicy.from_yaml("""
