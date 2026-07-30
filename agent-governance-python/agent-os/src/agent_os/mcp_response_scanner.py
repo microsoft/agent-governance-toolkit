@@ -221,9 +221,14 @@ class MCPResponseScanner:
                 # Still producing new tags at the pass limit. The output cannot be
                 # called sanitized, and the caller must not be handed content whose
                 # threats were reported as "stripped" while they are still present.
+                # The count logged is the number of passes actually run, which is
+                # one more than the tolerated depth. Logging the depth would send
+                # whoever reads this line looking for an 8th pass that ran 9
+                # times.
                 logger.error(
-                    "MCP response sanitization did not converge in %s passes for tool %s "
-                    "— failing closed",
+                    "MCP response sanitization did not converge in %s passes "
+                    "(nesting depth over %s) for tool %s — failing closed",
+                    _MAX_TAG_STRIP_PASSES + 1,
                     _MAX_TAG_STRIP_PASSES,
                     tool_name,
                 )

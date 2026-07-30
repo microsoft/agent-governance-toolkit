@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 
 import pytest
@@ -170,6 +171,28 @@ def test_sanitize_response_fails_closed_when_stripping_does_not_converge():
     assert "did not converge" in removed[0].description
     # The raw content must not be echoed back in the finding.
     assert "PAYLOAD" not in removed[0].description
+
+
+def test_non_convergence_log_reports_the_passes_it_actually_ran(caplog):
+    """The logged pass count is the loop's iteration count, not the depth.
+
+    The loop runs ``_MAX_TAG_STRIP_PASSES + 1`` times, because convergence is
+    only observable on a pass that changes nothing. Logging the tolerated depth
+    instead sends whoever reads the line during an incident looking for an
+    8th pass that in fact ran 9 times -- and the two numbers mean different
+    things, so the message states both.
+    """
+    scanner = MCPResponseScanner()
+    depth = _MAX_TAG_STRIP_PASSES + 1
+    payload = "<" * depth + "important>" * depth + "PAYLOAD"
+
+    with caplog.at_level(logging.ERROR, logger="agent_os.mcp_response_scanner"):
+        scanner.sanitize_response(payload, "tool")
+
+    message = caplog.records[-1].getMessage()
+    assert f"in {_MAX_TAG_STRIP_PASSES + 1} passes" in message
+    assert f"depth over {_MAX_TAG_STRIP_PASSES}" in message
+    assert "PAYLOAD" not in message
 
 
 def test_sanitize_response_accepts_content_at_exactly_the_pass_limit():

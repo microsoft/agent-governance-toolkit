@@ -375,7 +375,11 @@ class MCPGateway:
                 # category. A re-scan that could not run is not a re-scan that
                 # passed, so without it a crashing verifier reads as "nothing
                 # residual" and the unverified content is handed to the model.
-                residual_tag = any(
+                #
+                # Only run it when the cheaper checks passed: the verdict is
+                # already "blocked" otherwise, and a full re-scan of a large
+                # response is not free.
+                residual_tag = not (sanitize_failed or residual_credential) and any(
                     threat.category in ("instruction_injection", "error")
                     for threat in self._response_scanner.scan_response(
                         sanitized, tool_name
