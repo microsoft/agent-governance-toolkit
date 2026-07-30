@@ -7,6 +7,12 @@ cases, same benign-safety cases, same invariants — so cross-SDK parity is
 checkable test-by-test.
 """
 
+# Base64 fixtures whose exact spelling is the test. ``QUJDREVGR0hJSktMTU5P``
+# is the length-and-padding-valid string ``_decode_attemptable`` must accept and
+# ``QUJDRA==`` the one it must reject. Declared here because ``cspell:ignore``
+# applies from its own line onward.
+# cspell:ignore QUJDREVGR QUJDRA
+
 from __future__ import annotations
 
 import base64

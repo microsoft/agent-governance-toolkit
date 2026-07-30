@@ -475,6 +475,7 @@ healthz
 helpdesk
 hexdigest
 hexdigit
+hexs
 hitl
 hkdf
 htek
