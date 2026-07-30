@@ -78,10 +78,11 @@ DID_POP_REPLAY_WINDOW = timedelta(minutes=5)
 # This deliberately is NOT 1000 (Normal Closure). 1000 is indistinguishable
 # from the peer calling disconnect() on itself, so a displaced agent could not
 # tell "I closed this" from "someone else took over my mailbox" — an
-# unattributable, silent eviction. A distinct code in the private-use 4xxx
-# range lets the client report the takeover to its host. Clients must not
-# auto-reconnect on this code (see MeshClient.onclose): reconnecting would
-# displace the socket that just replaced them and start an eviction ping-pong.
+# unattributable, silent eviction. A distinct code in the private-use
+# 4000-4999 range lets the client report the takeover to its host. Clients
+# must not auto-reconnect on this code (see MeshClient.onclose): reconnecting
+# would displace the socket that just replaced them and start an eviction
+# ping-pong.
 WS_CLOSE_SESSION_REPLACED = 4006
 
 
