@@ -369,8 +369,14 @@ class MCPGateway:
                 # a residual imperative ("ignore all previous instructions") is
                 # prose it never claimed to strip, and blocking on it would turn
                 # SANITIZE into BLOCK for ordinary text.
+                #
+                # "error" is checked alongside it because scan_response swallows
+                # its own exceptions and reports the failure as a threat of that
+                # category. A re-scan that could not run is not a re-scan that
+                # passed, so without it a crashing verifier reads as "nothing
+                # residual" and the unverified content is handed to the model.
                 residual_tag = any(
-                    threat.category == "instruction_injection"
+                    threat.category in ("instruction_injection", "error")
                     for threat in self._response_scanner.scan_response(
                         sanitized, tool_name
                     ).threats
