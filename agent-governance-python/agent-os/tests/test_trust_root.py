@@ -109,3 +109,22 @@ def test_negative_level_is_reported_even_without_a_level_0(level: int) -> None:
     hierarchy = SupervisorHierarchy(trust_root=_root())
     hierarchy.register_supervisor('only', level=level, is_agent=True)
     assert any('negative level' in v for v in hierarchy.validate_hierarchy())
+
+@pytest.mark.parametrize('level', [0.0, 1.0, 2.5])
+def test_float_level_never_reached_a_working_hierarchy(level: float) -> None:
+    """Rejecting a float level takes nothing away that used to work.
+
+    ``validate_supervisor`` accepted a float before this change, so on its own
+    the stricter check looks like a regression -- notably ``0.0`` with
+    ``is_agent=False``, which a YAML or JSON round-trip can produce for a
+    legitimate root. But nothing downstream could consume it: the gap scan in
+    ``validate_hierarchy`` computes ``range(1, max_level + 1)``, and a float
+    ``max_level`` raises. A config that got a float past ``validate_supervisor``
+    crashed at the next step rather than being governed, so the fix converts an
+    unhandled ``TypeError`` into a ``False`` -- it does not narrow the set of
+    hierarchies that ever validated.
+    """
+    hierarchy = SupervisorHierarchy(trust_root=_root())
+    hierarchy.register_supervisor('root', level=level, is_agent=False)
+    with pytest.raises(TypeError, match='float'):
+        hierarchy.validate_hierarchy()
