@@ -28,9 +28,6 @@ class _RecordingControl:
     def __init__(self) -> None:
         self.calls: list[tuple[object, dict, object]] = []
 
-    def __init_result__(self):  # pragma: no cover - documentation helper
-        raise NotImplementedError
-
     async def evaluate_intervention_point(self, intervention_point, snapshot, mode):
         self.calls.append((intervention_point, dict(snapshot), mode))
         return InterventionPointResult(verdict=Verdict(decision=Decision.ALLOW))
