@@ -1,3 +1,9 @@
+---
+title: What Actually Makes the Agent Governance Toolkit Stand Apart
+last_reviewed: 2026-07-30
+owner: adwaitm1301
+---
+
 # What Actually Makes the Agent Governance Toolkit Stand Apart
 
 ## A Deep Dive Into the One Thing That Actually Matters
