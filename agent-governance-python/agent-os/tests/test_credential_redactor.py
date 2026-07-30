@@ -5,8 +5,9 @@
 # Fixture credentials, not repo vocabulary. ``AKIAIOSFODNN`` opens AWS's own
 # documentation example key ID, ``TOOSHORT`` is the below-the-length-floor token
 # that must stay unredacted, and ``Rpbjpvc`` is a camel-case fragment cspell
-# extracts from the base64 Basic-auth fixture. Declared here because
-# ``cspell:ignore`` applies from its own line onward.
+# extracts from the base64 Basic-auth fixture. Declared at the top by
+# convention, not by necessity: ``cspell:ignore`` scopes to the whole document,
+# so it covers a word that appears above it too.
 # cspell:ignore AKIAIOSFODNN TOOSHORT Rpbjpvc
 
 from __future__ import annotations
