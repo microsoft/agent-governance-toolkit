@@ -1431,7 +1431,7 @@ def _inspect_streamable_http_server(
         # Peer rejected stateless discovery on this Streamable HTTP
         # endpoint; fall through to legacy ``initialize`` on the same URL.
         pass
-    except (urllib.error.URLError, ValueError, json.JSONDecodeError):
+    except (urllib.error.URLError, ValueError, json.JSONDecodeError, TimeoutError, RuntimeError):
         pass  # transport/parse failure: fall through to legacy.
 
     if stateless_discover and "error" not in stateless_discover:
