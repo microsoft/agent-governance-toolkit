@@ -133,6 +133,7 @@ defi
 deidentified
 delenv
 deletecollection
+dels
 demux
 deprioritized
 Deque
@@ -334,6 +335,7 @@ nother
 notrequirements
 npmjs
 numpy
+numstat
 octo
 omitempty
 oncall
