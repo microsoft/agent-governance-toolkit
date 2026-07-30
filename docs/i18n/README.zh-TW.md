@@ -73,7 +73,6 @@ pip install agentmesh-lightning        # 強化學習訓練治理
 - **[Go 模組](../../agent-governance-golang/README.md)** — 提供策略、信任、稽核與身份功能的 Go 模組
 - **[教學](../../docs/tutorials/)** — 涵蓋策略、身份、整合、合規、SRE 與沙箱的逐步指南
 - **[Azure 部署](../../docs/deployment/README.md)** — 支援 AKS、Azure AI Foundry、Container Apps、OpenClaw Sidecar
-- **[NVIDIA OpenShell 整合](../../docs/integrations/openshell.md)** — 將沙箱隔離與治理智能相結合
 - **[OWASP 合規](../../docs/compliance/owasp-agentic-top10-architecture.md)** — 完整覆蓋 ASI-01 至 ASI-10 的對應
 - **[威脅模型](../../docs/security/threat-model.md)** — 包含信任邊界、攻擊面與 STRIDE 分析
 - **[架構](../../docs/ARCHITECTURE.md)** — 系統設計、安全模型與信任評分

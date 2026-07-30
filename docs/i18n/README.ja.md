@@ -91,7 +91,6 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 - **[Go モジュール](../../agent-governance-golang/README.md)** — ポリシー、トラスト、監査、ID 機能を備えた Go モジュール
 - **[チュートリアル](../../docs/tutorials/)** — ポリシー、ID、統合、コンプライアンス、SRE、サンドボックスのステップバイステップガイド
 - **[Azure デプロイ](../../docs/deployment/README.md)** — AKS、Azure AI Foundry、Container Apps、OpenClaw サイドカー
-- **[NVIDIA OpenShell 統合](../../docs/integrations/openshell.md)** — サンドボックス分離とガバナンスインテリジェンスの統合
 - **[OWASP コンプライアンス](../../docs/compliance/owasp-agentic-top10-architecture.md)** — ASI-01 から ASI-10 の完全マッピング
 - **[脅威モデル](../../docs/security/threat-model.md)** — 信頼境界、攻撃面、STRIDE 分析
 - **[アーキテクチャ](../../docs/ARCHITECTURE.md)** — システム設計、セキュリティモデル、トラストスコアリング

@@ -9,6 +9,7 @@ check lets the run continue with content the policy expected to be rewritten.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -80,16 +81,17 @@ class TestRequireAllowed:
 
 
 class TestGuardrailBody:
-    """The input guardrail must hand evaluate_input a supported type."""
+    """The input guardrail must hand HostSession.input a JSON-serializable body."""
 
-    def test_a_list_of_input_items_becomes_a_dict(self) -> None:
-        """evaluate_input declares body: str | dict, so a list cannot pass through."""
+    def test_a_list_of_input_items_stays_json_serializable(self) -> None:
+        """HostSession.input takes a JsonValue, so a list passes through, but every
+        non-dict item must be stringified or the native SDK cannot serialize it."""
         from openai_agents_trust import guardrails
 
         captured: dict[str, Any] = {}
 
         class _Session:
-            def evaluate_input(self, *, body: Any) -> Any:
+            def input(self, body: Any) -> Any:
                 captured["body"] = body
                 return _evaluation("allow")
 
@@ -101,10 +103,15 @@ class TestGuardrailBody:
 
         guard = guardrails.governance_input_guardrail(_Config())
         agent = type("A", (), {"name": "a"})()
-        guard.guardrail_function(None, agent, [{"role": "user", "content": "hi"}, "plain"])
+        guard.guardrail_function(
+            None, agent, [{"role": "user", "content": "hi"}, object()]
+        )
 
-        assert isinstance(captured["body"], (str, dict))
-        assert captured["body"] == {"items": [{"role": "user", "content": "hi"}, "plain"]}
+        body = captured["body"]
+        assert isinstance(body, list)
+        assert body[0] == {"role": "user", "content": "hi"}
+        assert isinstance(body[1], str), "non-dict items must be stringified"
+        json.dumps(body)
 
 
 class TestGuardrailTripsOnTransform:
