@@ -172,7 +172,35 @@ def test_sanitize_response_fails_closed_when_stripping_does_not_converge():
     assert "PAYLOAD" not in removed[0].description
 
 
+def test_sanitize_response_accepts_content_at_exactly_the_pass_limit():
+    """A payload of exactly the tolerated depth is cleaned, not refused.
+
+    Convergence is only observable on a pass that changes nothing, so depth n
+    needs n stripping passes plus one confirming pass. A loop that iterates
+    exactly ``_MAX_TAG_STRIP_PASSES`` times strips the last tag on its final
+    pass and then exits before seeing that the result was clean, so it rejects a
+    payload it had in fact fully sanitized -- and the constant's name would
+    overstate the real limit by one.
+    """
+    scanner = MCPResponseScanner()
+    depth = _MAX_TAG_STRIP_PASSES
+    payload = "<" * depth + "important>" * depth + "PAYLOAD"
+
+    sanitized, removed = scanner.sanitize_response(payload, "tool")
+
+    assert [threat.category for threat in removed] == [
+        "instruction_injection"
+    ] * depth
+    assert sanitized == "PAYLOAD"
+    assert scanner.scan_response(sanitized, "tool").is_safe is True
+
+
 def test_sanitize_response_bounds_adversarial_nesting_cost():
+    # A wall-clock assertion, so the threshold is set for what it has to
+    # distinguish rather than for tightness: the unbounded fixed-point loop this
+    # replaced took ~15s on this input, and the bounded version measures ~28ms
+    # (~35x headroom). 1.0s separates "bounded" from "quadratic"
+    # without failing on a loaded CI runner.
     depth = 20_000
     payload = "<" * depth + "important>" * depth + "PAYLOAD"
     scanner = MCPResponseScanner()

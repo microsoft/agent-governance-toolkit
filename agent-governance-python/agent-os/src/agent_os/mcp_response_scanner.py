@@ -46,6 +46,14 @@ _URL_PATTERN = re.compile(r"https?://[^\s<>'\"]+", re.IGNORECASE)
 # 15 seconds for a 220 KB response. Content a host would legitimately sanitize
 # converges in one or two passes; anything still changing after this many is
 # constructed, so the method fails closed on it rather than grinding.
+#
+# This is the depth tolerated, not the iteration count. Convergence is only
+# observable on a pass that changes nothing, so a payload of depth n needs n
+# stripping passes plus one confirming pass; the loop below ranges over
+# ``_MAX_TAG_STRIP_PASSES + 1`` for that reason. Iterating exactly this many
+# times instead would reject a depth-8 payload -- the final pass strips the last
+# tag but the loop ends before it can see the result was clean -- making the
+# real limit 7 and the name off by one.
 _MAX_TAG_STRIP_PASSES = 8
 _EXFILTRATION_URL_PATTERN = re.compile(
     r"(?i)(?:\b(?:api[_-]?key|token|secret|payload|data|dump|upload|exfil|webhook)\b|webhook\.site|requestbin|pastebin|ngrok|transfer\.sh)"
@@ -191,8 +199,11 @@ class MCPResponseScanner:
             removed: list[MCPResponseThreat] = []
             # Strip to a fixed point: one pass is not enough, because removing a
             # tag splices its neighbors into a new one (see
-            # _MAX_TAG_STRIP_PASSES).
-            for _ in range(_MAX_TAG_STRIP_PASSES):
+            # _MAX_TAG_STRIP_PASSES). The ``+ 1`` is the pass that observes
+            # convergence: clearing depth n takes n passes, and one more to see
+            # that nothing changed. Without it a payload of exactly the tolerated
+            # depth would be rejected even though it was fully cleaned.
+            for _ in range(_MAX_TAG_STRIP_PASSES + 1):
                 before_pass = sanitized
                 for pattern in _INSTRUCTION_TAG_PATTERNS:
                     for match in pattern.finditer(sanitized):
