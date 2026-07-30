@@ -172,6 +172,54 @@ engine.LoadCedar(
         """);
 ```
 
+### Accumulated Context Governance
+
+`AgentGovernance.Context` carries immutable, versioned governance state across tool calls and delegation boundaries. Labels and restrictions only grow, sensitivity is the maximum classification seen so far, declared aggregation rules run in order, and an unknown label combination escalates once it reaches the configured threshold.
+
+```csharp
+using AgentGovernance.Context;
+
+var rules = new AggregationRuleSet(
+[
+    new AggregationRule(
+        "pii_financial_restricted",
+        ["pii", "financial"],
+        DataClassification.Restricted,
+        ["no_external_export"])
+]);
+
+var before = new ContextEnvelope(
+    "env-42",
+    "workflow-7",
+    labels: ["pii"],
+    aggregateSensitivity: DataClassification.Internal,
+    createdAt: new DateTimeOffset(2026, 7, 27, 5, 0, 0, TimeSpan.Zero));
+
+var after = ContextGovernance.Accumulate(
+    before,
+    resultLabels: ["financial"],
+    resultSensitivity: DataClassification.Confidential,
+    rules,
+    categoryThreshold: 3);
+
+var decision = ContextGovernance.DecideNext(
+    after,
+    action: "export",
+    rules,
+    categoryThreshold: 3);
+
+var decisionOutcome = decision.Outcome;
+var aggregation = rules.Evaluate(after, categoryThreshold: 3);
+var auditEvent = ContextEvent.Create(
+    ContextEventTypes.AggregationElevated,
+    "did:mesh:analyst-001",
+    before,
+    after,
+    aggregation.RulesApplied);
+```
+
+In this example, accumulation raises the envelope to `Restricted`, adds `no_external_export`, and increments the version twice. The export decision is `Constrain`; a caller without an obligation channel should fail closed and deny the action. Unknown combinations produce `Escalate` and should enter the existing stop-and-review flow. Envelope and audit timestamps are never read from the wall clock by this API.
+
 ### Rate Limiting
 
 Sliding window rate limiter integrated into the policy engine:

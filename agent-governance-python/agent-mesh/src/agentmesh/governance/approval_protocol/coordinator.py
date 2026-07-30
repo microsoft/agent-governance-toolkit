@@ -247,12 +247,16 @@ class ApprovalCoordinator:
                 self._resolve(request, Outcome.DENY, entry.entry_digest)
                 return
 
-        # Allow is terminal only once every required stage has an allow.
         allowed_stages = {
             e.stage_index for e in entries if e.decision == EntryDecision.ALLOW
         }
         required = {s.stage_index for s in chain.stages if s.required}
-        if required.issubset(allowed_stages):
+        # A chain without required stages is misconfigured and must fail closed.
+        if not required:
+            final_digest = entries[-1].entry_digest if entries else None
+            self._resolve(request, Outcome.DENY, final_digest)
+        # Otherwise, allow is terminal only once every required stage has an allow.
+        elif required.issubset(allowed_stages):
             final_digest = entries[-1].entry_digest if entries else None
             self._resolve(request, Outcome.ALLOW, final_digest)
 
