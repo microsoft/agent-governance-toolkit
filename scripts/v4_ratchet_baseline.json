@@ -1,444 +1,101 @@
 {
-  "grand_total": 1415,
+  "grand_total": 4,
   "package_totals": {
-    "CHANGELOG.md": 2,
-    "agent-governance-golang/examples": 1,
-    "agent-governance-python/agent-os": 243,
-    "agent-governance-python/agentmesh-integrations/adk-agentmesh": 5,
-    "agent-governance-python/agentmesh-integrations/cedarling-agentmesh": 1,
-    "agent-governance-python/agentmesh-integrations/copilot-governance": 1,
-    "agent-governance-python/agentmesh-integrations/haystack-agentmesh": 6,
-    "agent-governance-python/agentmesh-integrations/langflow-agentmesh": 59,
-    "agent-governance-python/agentmesh-integrations/langgraph-trust": 26,
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh": 6,
-    "agent-governance-python/agentmesh-integrations/openai-agents-trust": 32,
-    "agent-governance-python/agentmesh-integrations/pydantic-ai-governance": 99,
-    "agent-governance-python/agt-policies": 28,
-    "agent-governance-rust/agentmesh": 27,
-    "docs/ERROR_HANDLING.md": 3,
-    "docs/FAQ.md": 3,
-    "docs/LIMITATIONS.md": 1,
-    "docs/adr": 14,
-    "docs/compliance": 29,
-    "docs/deployment": 7,
-    "docs/i18n": 27,
-    "docs/integrations": 14,
-    "docs/modern-agent-architecture-overview.md": 9,
-    "docs/operations": 1,
-    "docs/packages": 1,
-    "docs/proposals": 40,
-    "docs/quickstart.md": 6,
-    "docs/releases": 1,
-    "docs/security": 24,
-    "docs/specs": 75,
-    "docs/tutorials": 295,
-    "docs/workshop": 8,
-    "examples/adk-governed": 1,
-    "examples/aegis-governance-profile": 4,
-    "examples/atr-community-rules": 29,
-    "examples/atr-import": 8,
-    "examples/cedarling-governed": 4,
-    "examples/crewai-governed": 18,
-    "examples/deerflow-governed": 3,
-    "examples/demos": 60,
-    "examples/maf-integration": 45,
-    "examples/openai-agents-governed": 29,
-    "examples/policies": 28,
-    "examples/policy-templates": 6,
-    "examples/quickstart": 22,
-    "examples/smolagents-governed": 16,
-    "examples/spendguard-composite": 9,
-    "policy-engine": 14,
-    "scripts/check_v4_ratchet.py": 25
+    "agent-governance-python/agent-mesh": 4
   },
   "files": {
-    "CHANGELOG.md": {
-      "PolicyDocument": 2
+    "agent-governance-python/agent-mesh/tests/engine_api/conftest.py": {
+      "v4_rule_document_shape": 1
     },
-    "agent-governance-golang/examples/policy-yaml/policy.yaml": {
-      "v4_policy_document_file": 1
+    "agent-governance-python/agent-mesh/tests/engine_api/test_policy_registry.py": {
+      "v4_rule_document_shape": 1
     },
-    "agent-governance-python/agent-os/benchmarks/bench_adapters.py": {
-      "GovernancePolicy": 4,
-      "PatternType": 7
-    },
-    "agent-governance-python/agent-os/benchmarks/bench_policy.py": {
-      "PolicyAction": 4,
-      "PolicyDocument": 4,
-      "PolicyEvaluator": 4
-    },
-    "agent-governance-python/agent-os/docs/api-reference.md": {
-      "GovernancePolicy": 8,
-      "PatternType": 4
-    },
-    "agent-governance-python/agent-os/docs/comparison-guide.md": {
-      "GovernancePolicy": 4
-    },
-    "agent-governance-python/agent-os/docs/integrations.md": {
-      "GovernancePolicy": 17
-    },
-    "agent-governance-python/agent-os/docs/owasp-agentic-top10-mapping.md": {
-      "GovernancePolicy": 20,
-      "PatternType": 3,
-      "PolicyInterceptor": 7
-    },
-    "agent-governance-python/agent-os/docs/use-cases.md": {
-      "GovernancePolicy": 13,
-      "PatternType": 18,
-      "PolicyInterceptor": 3
-    },
-    "agent-governance-python/agent-os/examples/aml-fraud-detection/README.md": {
-      "GovernancePolicy": 3,
-      "PolicyInterceptor": 2
-    },
-    "agent-governance-python/agent-os/examples/aml-fraud-detection/demo.py": {
-      "ExecutionContext": 4,
+    "agent-governance-python/agent-mesh/tests/engine_api/test_routes_policy_ops.py": {
+      "import:agent_os.policies.evaluator": 1,
+      "v4_rule_document_shape": 1
+    }
+  },
+  "allowed_migration_files": {
+    "BREAKING_CHANGES.md": {
+      "AdapterRuntimeBridge": 2,
+      "CedarBackend": 2,
       "GovernancePolicy": 6,
-      "PatternType": 7,
-      "PolicyInterceptor": 3
-    },
-    "agent-governance-python/agent-os/examples/finance-soc2/README.md": {
-      "GovernancePolicy": 5,
-      "PatternType": 3
-    },
-    "agent-governance-python/agent-os/examples/finance-soc2/main.py": {
-      "ExecutionContext": 3,
-      "GovernancePolicy": 4,
-      "PatternType": 3,
-      "PolicyInterceptor": 1
-    },
-    "agent-governance-python/agent-os/examples/financial-sox/README.md": {
-      "GovernancePolicy": 4,
-      "PatternType": 2,
-      "PolicyInterceptor": 1
-    },
-    "agent-governance-python/agent-os/examples/financial-sox/demo.py": {
-      "ExecutionContext": 2,
-      "GovernancePolicy": 2,
-      "PatternType": 3,
-      "PolicyInterceptor": 3
-    },
-    "agent-governance-python/agent-os/examples/integrations/governance_quickstart.py": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agent-os/examples/integrations/policy_violations_demo.py": {
-      "GovernancePolicy": 3
-    },
-    "agent-governance-python/agent-os/examples/integrations/signal_handling_demo.py": {
-      "GovernancePolicy": 3
-    },
-    "agent-governance-python/agent-os/examples/multi-agent-support/README.md": {
-      "GovernancePolicy": 1,
       "PatternType": 1,
-      "PolicyInterceptor": 1
-    },
-    "agent-governance-python/agent-os/examples/multi-agent-support/demo.py": {
-      "ExecutionContext": 2,
-      "GovernancePolicy": 2,
-      "PatternType": 3,
-      "PolicyInterceptor": 5
-    },
-    "agent-governance-python/agent-os/examples/policies/default.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "agent-governance-python/agent-os/examples/policies/development.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "agent-governance-python/agent-os/examples/policies/strict.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "agent-governance-python/agent-os/examples/shared-policies/no-pii.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "agent-governance-python/agent-os/examples/shared-policies/rate-limited-tools.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "agent-governance-python/agent-os/examples/shared-policies/trust-handoff.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "agent-governance-python/agent-os/examples/trading-governance/README.md": {
-      "GovernancePolicy": 1,
-      "PolicyInterceptor": 1
-    },
-    "agent-governance-python/agent-os/examples/trading-governance/demo.py": {
-      "ExecutionContext": 2,
-      "GovernancePolicy": 5,
-      "PatternType": 1,
-      "PolicyInterceptor": 6
-    },
-    "agent-governance-python/agent-os/templates/policies/README.md": {
-      "GovernancePolicy": 1
-    },
-    "agent-governance-python/agent-os/templates/policies/loader.py": {
-      "GovernancePolicy": 3,
-      "PatternType": 3
-    },
-    "agent-governance-python/agent-os/tutorials/hipaa-compliant-agent/README.md": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agent-os/tutorials/hipaa-compliant-agent/demo.py": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agent-os/tutorials/langchain-5-minute-governance/README.md": {
-      "GovernancePolicy": 3
-    },
-    "agent-governance-python/agent-os/tutorials/langchain-5-minute-governance/demo.py": {
-      "GovernancePolicy": 3
-    },
-    "agent-governance-python/agentmesh-integrations/adk-agentmesh/README.md": {
-      "governance.yaml": 5
-    },
-    "agent-governance-python/agentmesh-integrations/cedarling-agentmesh/README.md": {
-      "PolicyEvaluator": 1
-    },
-    "agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts": {
-      "GovernancePolicy": 1
-    },
-    "agent-governance-python/agentmesh-integrations/haystack-agentmesh/README.md": {
-      "GovernancePolicy": 6
-    },
-    "agent-governance-python/agentmesh-integrations/langflow-agentmesh/src/langflow_agentmesh/governance_component.py": {
-      "GovernancePolicy": 3,
-      "PatternType": 3,
-      "PolicyCheckResult": 1
-    },
-    "agent-governance-python/agentmesh-integrations/langflow-agentmesh/src/langflow_agentmesh/policy.py": {
-      "GovernancePolicy": 4,
-      "PatternType": 7,
-      "PolicyCheckResult": 15
-    },
-    "agent-governance-python/agentmesh-integrations/langflow-agentmesh/tests/test_langflow_components.py": {
-      "GovernancePolicy": 17,
-      "PatternType": 8,
-      "PolicyCheckResult": 1
-    },
-    "agent-governance-python/agentmesh-integrations/langgraph-trust/README.md": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agentmesh-integrations/langgraph-trust/langgraph_trust/policy.py": {
-      "GovernancePolicy": 3
-    },
-    "agent-governance-python/agentmesh-integrations/langgraph-trust/tests/test_policy.py": {
-      "GovernancePolicy": 21
-    },
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh/src/governance.ts": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh/src/governed-tool.ts": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh/src/index.ts": {
-      "GovernancePolicy": 1
-    },
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh/src/types.ts": {
-      "GovernancePolicy": 1
-    },
-    "agent-governance-python/agentmesh-integrations/openai-agents-trust/README.md": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agentmesh-integrations/openai-agents-trust/src/openai_agents_trust/guardrails.py": {
-      "GovernancePolicy": 3
-    },
-    "agent-governance-python/agentmesh-integrations/openai-agents-trust/src/openai_agents_trust/hooks.py": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agentmesh-integrations/openai-agents-trust/src/openai_agents_trust/policy.py": {
-      "GovernancePolicy": 1
-    },
-    "agent-governance-python/agentmesh-integrations/openai-agents-trust/tests/test_core.py": {
-      "GovernancePolicy": 8
-    },
-    "agent-governance-python/agentmesh-integrations/openai-agents-trust/tests/test_integration.py": {
-      "GovernancePolicy": 16
-    },
-    "agent-governance-python/agentmesh-integrations/pydantic-ai-governance/README.md": {
-      "GovernancePolicy": 4,
-      "PatternType": 3
-    },
-    "agent-governance-python/agentmesh-integrations/pydantic-ai-governance/src/pydantic_ai_governance/decorator.py": {
-      "GovernancePolicy": 3,
-      "PolicyCheckResult": 7
-    },
-    "agent-governance-python/agentmesh-integrations/pydantic-ai-governance/src/pydantic_ai_governance/policy.py": {
-      "GovernancePolicy": 6,
-      "PatternType": 7,
-      "PolicyCheckResult": 10
-    },
-    "agent-governance-python/agentmesh-integrations/pydantic-ai-governance/src/pydantic_ai_governance/toolset.py": {
-      "GovernancePolicy": 2,
-      "PolicyCheckResult": 7
-    },
-    "agent-governance-python/agentmesh-integrations/pydantic-ai-governance/tests/test_governance.py": {
-      "GovernancePolicy": 34,
-      "PatternType": 15,
-      "PolicyCheckResult": 1
-    },
-    "agent-governance-python/agt-policies/src/agt/__init__.py": {
-      "import:agt.manifest_resolution": 1
-    },
-    "agent-governance-python/agt-policies/src/agt/_harness/opa_runner.py": {
-      "import:agt.manifest_resolution": 1
-    },
-    "agent-governance-python/agt-policies/src/agt/manifest_resolution/__init__.py": {
-      "discover_policies": 2,
-      "import:agt.manifest_resolution": 5
-    },
-    "agent-governance-python/agt-policies/src/agt/manifest_resolution/build.py": {
-      "discover_policies": 2,
-      "import:agt.manifest_resolution": 4
-    },
-    "agent-governance-python/agt-policies/src/agt/manifest_resolution/discover.py": {
+      "PolicyAction": 2,
+      "PolicyCheckResult": 1,
+      "PolicyDocument": 2,
+      "PolicyInterceptor": 2,
+      "PolicyTemplates": 2,
+      "ViolationCategory": 2,
+      "aca_config_from_policy": 2,
+      "agent_os.compat": 4,
+      "agt.manifest_resolution": 1,
+      "compose_policies": 2,
       "discover_policies": 1,
-      "import:agt.manifest_resolution": 1
+      "docker_config_from_policy": 2,
+      "get_runtime_bridge": 2,
+      "governance_to_acs_manifest": 2,
+      "governance_to_document": 2,
+      "hyperlight_config_from_policy": 2,
+      "mxc_config_from_policy": 2,
+      "nono_config_from_policy": 2,
+      "override_policy": 2,
+      "policy_to_mxc_json": 2,
+      "policy_yaml_to_mxc_json": 2,
+      "policy_yaml_to_nono_config": 2,
+      "v4_policy_model_shape": 2
     },
-    "agent-governance-python/agt-policies/src/agt/manifest_resolution/merge.py": {
-      "import:agt.manifest_resolution": 1
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/AGT-RESOLUTION-1.0.md": {
+      "AGT-RESOLUTION": 1,
+      "PolicyDocument": 1,
+      "agent_os.policies.discovery": 1,
+      "agt.legacy": 3,
+      "agt_legacy": 3,
+      "discover_policies": 1,
+      "governance.yaml": 2
     },
-    "agent-governance-python/agt-policies/tests/scenarios/test_pii_redaction_transform_scenarios.py": {
-      "import:agt.manifest_resolution": 1
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/__init__.py": {
+      "discover_policies": 2
     },
-    "agent-governance-python/agt-policies/tests/test_manifest_resolution.py": {
-      "discover_policies": 7,
-      "import:agt.manifest_resolution": 2
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/build.py": {
+      "discover_policies": 2
     },
-    "agent-governance-rust/agentmesh/src/integration_support.rs": {
-      "GovernancePolicy": 17,
-      "PatternType": 8
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/discover.py": {
+      "discover_policies": 1
     },
-    "agent-governance-rust/agentmesh/src/lib.rs": {
-      "GovernancePolicy": 1,
-      "PatternType": 1
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/merge.py": {
+      "v4_rule_document_shape": 1
     },
-    "docs/ERROR_HANDLING.md": {
-      "PolicyDocument": 3
-    },
-    "docs/FAQ.md": {
-      "GovernancePolicy": 3
-    },
-    "docs/LIMITATIONS.md": {
-      "PolicyEvaluator": 1
-    },
-    "docs/adr/0011-additive-policy-check-contract.md": {
-      "PolicyCheckResult": 4,
-      "ViolationCategory": 5,
-      "from_check_result": 2
-    },
-    "docs/adr/0014-parent-deny-rules-immutable-in-merge.md": {
-      "governance.yaml": 1
-    },
-    "docs/adr/0032-agt-emits-trace-v01-trust-records.md": {
-      "PolicyInterceptor": 2
-    },
-    "docs/compliance/atf-conformance-assessment.md": {
-      "GovernancePolicy": 1
-    },
-    "docs/compliance/eu-ai-act-checklist.md": {
-      "PolicyDocument": 2
-    },
-    "docs/compliance/owasp-llm-top10-mapping.md": {
-      "GovernancePolicy": 11,
-      "PolicyInterceptor": 5
-    },
-    "docs/compliance/soc2-mapping.md": {
+    "agent-governance-python/agt-policies/src/agt/cli/migrate.py": {
+      "CedarBackend": 2,
       "GovernancePolicy": 5,
-      "PolicyAction": 1,
-      "PolicyDocument": 2,
-      "PolicyInterceptor": 2
+      "PatternType": 1,
+      "PolicyAction": 2,
+      "PolicyInterceptor": 2,
+      "v4_rule_document_shape": 1
     },
-    "docs/deployment/azure-foundry-agent-service.md": {
-      "GovernancePolicy": 6
+    "agent-governance-python/agt-policies/tests/test_migrate.py": {
+      "CedarBackend": 4,
+      "GovernancePolicy": 16,
+      "PatternType": 3,
+      "PolicyAction": 5,
+      "PolicyInterceptor": 3,
+      "v4_rule_document_shape": 1
     },
-    "docs/deployment/openclaw-sidecar.md": {
-      "PolicyDocument": 1
-    },
-    "docs/i18n/README.ja.md": {
-      "PolicyEvaluator": 2
-    },
-    "docs/i18n/README.zh-CN.md": {
-      "PolicyEvaluator": 2
-    },
-    "docs/i18n/README.zh-TW.md": {
-      "PolicyEvaluator": 2
-    },
-    "docs/i18n/quickstart.ko.md": {
-      "PolicyAction": 4,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 3
-    },
-    "docs/i18n/quickstart.zh-CN.md": {
-      "PolicyAction": 3,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "docs/i18n/quickstart.zh-TW.md": {
-      "PolicyAction": 3,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "docs/integrations/mcp-trust-guide.md": {
-      "GovernancePolicy": 6,
-      "PatternType": 4
-    },
-    "docs/integrations/spendguard-integration.md": {
-      "PolicyAction": 1,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "docs/modern-agent-architecture-overview.md": {
-      "PolicyAction": 4,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 3
-    },
-    "docs/operations/advisory-to-blocking-graduation.md": {
-      "governance.yaml": 1
-    },
-    "docs/packages/agent-mesh.md": {
-      "GovernancePolicy": 1
-    },
-    "docs/proposals/AUTOGEN-INTEGRATION-PROPOSAL.md": {
-      "GovernancePolicy": 5
-    },
-    "docs/proposals/AZURE-SANDBOX-ISOLATION-DESIGN.md": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "docs/proposals/CREWAI-INTEGRATION-PROPOSAL.md": {
-      "GovernancePolicy": 4
-    },
-    "docs/proposals/DOCKER-SANDBOX-ISOLATION-DESIGN.md": {
-      "PolicyDocument": 19
-    },
-    "docs/proposals/GOOGLE-ADK-PROPOSAL.md": {
-      "GovernancePolicy": 2
-    },
-    "docs/proposals/HAYSTACK-INTEGRATION-PROPOSAL.md": {
-      "GovernancePolicy": 2
-    },
-    "docs/proposals/MXC-SANDBOX-PROVIDER.md": {
-      "PolicyDocument": 3
-    },
-    "docs/proposals/NONO-SANDBOX-PROVIDER.md": {
-      "PolicyDocument": 1
-    },
-    "docs/proposals/RAG-GOVERNANCE-PROPOSAL.md": {
-      "PolicyEvaluator": 1
-    },
-    "docs/quickstart.md": {
-      "PolicyAction": 3,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "docs/releases/RELEASE_NOTES_v3.6.0.md": {
-      "PolicyAction": 1
+    "agent-governance-python/agt-policies/tests/test_migrate_resolution.py": {
+      "discover_policies": 7,
+      "v4_rule_document_shape": 1
     },
     "docs/security/audits/2026-04-29-additive-policy-check-contract.md": {
       "PolicyCheckResult": 4,
       "PolicyInterceptor": 1,
       "ViolationCategory": 3,
+      "agent_os.policies.decision": 2,
       "from_check_result": 2
     },
     "docs/security/audits/2026-05-14-sandbox-policy-extension-fields.md": {
-      "PolicyDocument": 3
+      "PolicyDocument": 3,
+      "aca_config_from_policy": 2
     },
     "docs/security/audits/2026-06-09-policy-regression-testing-schema.md": {
       "PolicyDocument": 3
@@ -449,527 +106,29 @@
       "governance.yaml": 3
     },
     "docs/security/audits/2026-06-11-sandbox-mounts-policy-field.md": {
-      "PolicyDocument": 2
-    },
-    "docs/security/context-accumulation-governance.md": {
-      "PolicyAction": 1
-    },
-    "docs/specs/AGENT-OS-POLICY-ENGINE-1.0.md": {
-      "CedarBackend": 1,
-      "GovernancePolicy": 10,
-      "PatternType": 2,
-      "PolicyAction": 3,
-      "PolicyDocument": 18,
-      "PolicyInterceptor": 2,
-      "governance.yaml": 3
-    },
-    "docs/specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md": {
-      "CedarBackend": 2,
-      "GovernancePolicy": 19,
-      "PatternType": 5,
-      "PolicyCheckResult": 3,
-      "PolicyInterceptor": 4,
-      "from_cedar": 3
-    },
-    "docs/tutorials/01-policy-engine.md": {
-      "GovernancePolicy": 19,
-      "PatternType": 14,
-      "PolicyAction": 3,
       "PolicyDocument": 2,
-      "PolicyEvaluator": 2
-    },
-    "docs/tutorials/03-framework-integrations.md": {
-      "GovernancePolicy": 27,
-      "PolicyInterceptor": 4
-    },
-    "docs/tutorials/04-audit-and-compliance.md": {
-      "GovernancePolicy": 2,
-      "PolicyInterceptor": 2
-    },
-    "docs/tutorials/06-execution-sandboxing.md": {
-      "GovernancePolicy": 1
-    },
-    "docs/tutorials/07-mcp-security-gateway.md": {
-      "GovernancePolicy": 19
-    },
-    "docs/tutorials/08-opa-rego-cedar-policies.md": {
-      "CedarBackend": 28,
-      "GovernancePolicy": 2,
-      "PolicyEvaluator": 7
-    },
-    "docs/tutorials/09-prompt-injection-detection.md": {
-      "GovernancePolicy": 2,
-      "PolicyEvaluator": 1,
-      "PolicyInterceptor": 2
-    },
-    "docs/tutorials/18-compliance-verification.md": {
-      "GovernancePolicy": 2,
-      "PolicyInterceptor": 3
+      "mxc_config_from_policy": 1
     },
     "docs/tutorials/19-dotnet-sdk.md": {
       "PolicyAction": 6
     },
-    "docs/tutorials/20-typescript-sdk.md": {
-      "PolicyAction": 1
-    },
-    "docs/tutorials/21-rust-sdk.md": {
-      "GovernancePolicy": 3,
-      "governance.yaml": 2
-    },
-    "docs/tutorials/22-go-sdk.md": {
-      "governance.yaml": 2
-    },
-    "docs/tutorials/24-cost-and-token-budgets.md": {
-      "GovernancePolicy": 4
-    },
-    "docs/tutorials/28-build-custom-integration.md": {
-      "GovernancePolicy": 9,
-      "PolicyInterceptor": 7
-    },
-    "docs/tutorials/31-entra-agent-id-bridge.md": {
-      "governance.yaml": 1
-    },
-    "docs/tutorials/52-chaos-testing-agents.md": {
-      "PolicyDocument": 9,
-      "PolicyEvaluator": 4
-    },
-    "docs/tutorials/policy-as-code/01-your-first-policy.md": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "docs/tutorials/policy-as-code/02-capability-scoping.md": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "docs/tutorials/policy-as-code/04-conditional-policies.md": {
-      "PolicyDocument": 5,
-      "PolicyEvaluator": 2
-    },
-    "docs/tutorials/policy-as-code/05-approval-workflows.md": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "docs/tutorials/policy-as-code/06-policy-testing.md": {
-      "PolicyDocument": 15,
-      "PolicyEvaluator": 2
-    },
-    "docs/tutorials/policy-as-code/07-policy-versioning.md": {
-      "GovernancePolicy": 1,
-      "PolicyDocument": 6,
-      "PolicyEvaluator": 1,
-      "governance_to_document": 1
-    },
-    "docs/tutorials/policy-as-code/examples/01_first_policy.py": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 2
-    },
-    "docs/tutorials/policy-as-code/examples/01_first_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/02_admin_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/02_capability_scoping.py": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 3
-    },
-    "docs/tutorials/policy-as-code/examples/02_reader_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/03_rate_limit_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/03_rate_limiting.py": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 2
-    },
-    "docs/tutorials/policy-as-code/examples/04_conditional_policies.py": {
-      "PolicyDocument": 4,
-      "PolicyEvaluator": 4
-    },
-    "docs/tutorials/policy-as-code/examples/04_env_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/04_global_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/04_support_team_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/05_approval_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/05_approval_workflows.py": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 2
-    },
-    "docs/tutorials/policy-as-code/examples/06_policy_testing.py": {
-      "PolicyDocument": 6,
-      "PolicyEvaluator": 5
-    },
-    "docs/tutorials/policy-as-code/examples/06_test_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/07_policy_v1.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/07_policy_v2.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "docs/tutorials/policy-as-code/examples/07_policy_versioning.py": {
-      "PolicyDocument": 3,
-      "PolicyEvaluator": 3
-    },
-    "docs/tutorials/progressive-governance.md": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 3
-    },
-    "docs/tutorials/retrofit-governance.md": {
-      "GovernancePolicy": 4,
-      "PolicyEvaluator": 1
-    },
-    "docs/workshop/lab-guide.md": {
-      "PolicyEvaluator": 2
-    },
-    "docs/workshop/labs/lab1_first_policy.py": {
-      "PolicyEvaluator": 2
-    },
-    "docs/workshop/labs/lab3_full_governance_stack.py": {
-      "PolicyEvaluator": 2
-    },
-    "docs/workshop/prerequisites.md": {
-      "PolicyEvaluator": 2
-    },
-    "examples/adk-governed/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/aegis-governance-profile/README.md": {
-      "CedarBackend": 3,
-      "PolicyAction": 1
-    },
-    "examples/atr-community-rules/README.md": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 1
-    },
-    "examples/atr-community-rules/atr_community_policy_full.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/atr-community-rules/atr_security_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/atr-community-rules/test_atr_policy.py": {
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 22
-    },
-    "examples/atr-import/README.md": {
-      "PolicyDocument": 4
-    },
-    "examples/atr-import/test_import_atr.py": {
-      "PolicyDocument": 4
-    },
-    "examples/cedarling-governed/multi_issuer_example.py": {
-      "PolicyEvaluator": 2
-    },
-    "examples/cedarling-governed/unsigned_example.py": {
-      "PolicyEvaluator": 2
-    },
-    "examples/crewai-governed/README.md": {
-      "GovernancePolicy": 7,
-      "PolicyEvaluator": 1
-    },
-    "examples/crewai-governed/crewai_governance_demo.py": {
-      "PolicyEvaluator": 6
-    },
-    "examples/crewai-governed/getting_started.py": {
-      "PolicyEvaluator": 2
-    },
-    "examples/crewai-governed/policies/content_creation_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/crewai-governed/policies/quality_gate_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/deerflow-governed/policies/deerflow-policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/deerflow-governed/provider/deerflow_agt_guardrail.py": {
-      "PolicyEvaluator": 2
-    },
-    "examples/demos/README.md": {
-      "GovernancePolicy": 3
-    },
-    "examples/demos/governed-agent-in-10-min/demo.py": {
-      "PolicyAction": 8,
-      "PolicyDocument": 4,
-      "PolicyEvaluator": 4
-    },
-    "examples/demos/governed-agent-in-10-min/policies/contoso-bank.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/demos/maf-integration/01_contoso_bank.py": {
-      "PolicyAction": 5,
-      "PolicyDocument": 2
-    },
-    "examples/demos/maf-integration/02_helpdesk_it.py": {
-      "PolicyAction": 4,
-      "PolicyDocument": 2
-    },
-    "examples/demos/maf-integration/03_contoso_support.py": {
-      "PolicyAction": 6,
-      "PolicyDocument": 2
-    },
-    "examples/demos/maf-integration/README.md": {
-      "GovernancePolicy": 3,
-      "PolicyDocument": 1
-    },
-    "examples/demos/maf_governance_demo.py": {
-      "PolicyDocument": 1,
-      "PolicyEvaluator": 4
-    },
-    "examples/demos/openclaw-governed/policies/openclaw-safety.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/demos/policies/research_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/demos/presentation/scripts/demo5_framework.py": {
-      "PolicyAction": 4,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 2
-    },
-    "examples/maf-integration/01-loan-processing/dotnet/README.md": {
-      "governance.yaml": 2
-    },
-    "examples/maf-integration/01-loan-processing/python/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/maf-integration/01-loan-processing/python/main.py": {
-      "PolicyEvaluator": 3
-    },
-    "examples/maf-integration/01-loan-processing/python/policies/loan_governance.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/maf-integration/02-customer-service/dotnet/README.md": {
-      "governance.yaml": 2
-    },
-    "examples/maf-integration/02-customer-service/dotnet/sample_output.md": {
-      "governance.yaml": 6
-    },
-    "examples/maf-integration/02-customer-service/python/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/maf-integration/02-customer-service/python/main.py": {
-      "PolicyEvaluator": 3
-    },
-    "examples/maf-integration/02-customer-service/python/policies/support_governance.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/maf-integration/02-customer-service/python/sample_output.md": {
-      "governance.yaml": 6
-    },
-    "examples/maf-integration/03-healthcare/dotnet/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/maf-integration/03-healthcare/python/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/maf-integration/03-healthcare/python/main.py": {
-      "PolicyEvaluator": 3
-    },
-    "examples/maf-integration/03-healthcare/python/policies/healthcare_governance.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/maf-integration/04-it-helpdesk/dotnet/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/maf-integration/04-it-helpdesk/python/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/maf-integration/04-it-helpdesk/python/main.py": {
-      "PolicyEvaluator": 3
-    },
-    "examples/maf-integration/04-it-helpdesk/python/policies/helpdesk_governance.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/maf-integration/05-devops-deploy/dotnet/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/maf-integration/05-devops-deploy/python/README.md": {
-      "governance.yaml": 1
-    },
-    "examples/maf-integration/05-devops-deploy/python/main.py": {
-      "PolicyEvaluator": 3
-    },
-    "examples/maf-integration/05-devops-deploy/python/policies/devops_governance.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/maf-integration/README.md": {
-      "GovernancePolicy": 1
-    },
-    "examples/openai-agents-governed/README.md": {
-      "GovernancePolicy": 10,
-      "PolicyEvaluator": 1
-    },
-    "examples/openai-agents-governed/getting_started.py": {
-      "GovernancePolicy": 3,
-      "PolicyEvaluator": 2
-    },
-    "examples/openai-agents-governed/openai_agents_governance_demo.py": {
+    "docs/v4-removal.md": {
+      "AdapterRuntimeBridge": 2,
+      "CedarBackend": 1,
       "GovernancePolicy": 5,
-      "PolicyEvaluator": 6
-    },
-    "examples/openai-agents-governed/policies/agent_governance_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/openai-agents-governed/policies/quality_gate_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/README.md": {
-      "PolicyDocument": 4
-    },
-    "examples/policies/african-regulatory/agent-human-approval.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/agent-model-routing.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/agent-pii-leakage.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/agent-prompt-injection.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/agent-tool-permissions.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/bvn-nin-protection.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/cbn-transaction-limits.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/ndpa-data-residency.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/nfiu-aml-str.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/popia-south-africa.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/african-regulatory/pos-geofencing.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/india-regulatory/aadhaar-pii-protection.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/india-regulatory/certin-2022-directions.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/india-regulatory/dpdp-data-protection.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/india-regulatory/rbi-data-localization.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/india-regulatory/sebi-governance.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/production/README.md": {
-      "PolicyDocument": 3
-    },
-    "examples/policies/production/enterprise.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/production/financial.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/production/healthcare.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/production/minimal.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policies/production/strict.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policy-templates/conflict-resolution.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policy-templates/edu-k12.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policy-templates/financial-services.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policy-templates/general-saas.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policy-templates/healthcare.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/policy-templates/wire-protocol-rules.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/quickstart/aca_research_agent.py": {
-      "PolicyDocument": 3
-    },
-    "examples/quickstart/aca_sandbox_test.py": {
-      "PolicyDocument": 3
-    },
-    "examples/quickstart/autogen_governed.py": {
-      "GovernancePolicy": 2
-    },
-    "examples/quickstart/crewai_governed.py": {
-      "GovernancePolicy": 2
-    },
-    "examples/quickstart/langchain_governed.py": {
-      "GovernancePolicy": 2
-    },
-    "examples/quickstart/nono_sandbox_test.py": {
-      "PolicyDocument": 2
-    },
-    "examples/quickstart/openai_agents_governed.py": {
-      "GovernancePolicy": 2
-    },
-    "examples/quickstart/policies/aca_research_agent.yaml": {
+      "PatternType": 4,
+      "PolicyAction": 1,
+      "PolicyCheckResult": 1,
       "PolicyDocument": 2,
-      "v4_policy_document_file": 1
-    },
-    "examples/quickstart/policies/nono_research_agent.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/quickstart/retrofit_governed.py": {
-      "GovernancePolicy": 2
-    },
-    "examples/smolagents-governed/README.md": {
-      "GovernancePolicy": 8,
-      "PolicyEvaluator": 1
-    },
-    "examples/smolagents-governed/getting_started.py": {
-      "PolicyEvaluator": 2
-    },
-    "examples/smolagents-governed/policies/model_safety_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/smolagents-governed/policies/research_governance_policy.yaml": {
-      "v4_policy_document_file": 1
-    },
-    "examples/smolagents-governed/smolagents_governance_demo.py": {
-      "PolicyEvaluator": 3
-    },
-    "examples/spendguard-composite/spendguard_composite_demo.py": {
-      "PolicyAction": 3,
-      "PolicyDocument": 2,
-      "PolicyEvaluator": 4
-    },
-    "policy-engine/spec/agt/AGT-RESOLUTION-1.0.md": {
-      "AGT-RESOLUTION": 1,
-      "PolicyDocument": 1,
-      "agt.legacy": 3,
-      "agt_legacy": 3,
-      "discover_policies": 1,
-      "governance.yaml": 5
+      "PolicyInterceptor": 1,
+      "ViolationCategory": 1,
+      "agt.manifest_resolution": 1,
+      "get_runtime_bridge": 1,
+      "governance.yaml": 4,
+      "governance_to_acs_manifest": 1,
+      "governance_to_document": 1,
+      "resolution_root": 1,
+      "to_v4_check_result": 1
     },
     "scripts/check_v4_ratchet.py": {
       "AdapterRuntimeBridge": 1,
@@ -978,72 +137,62 @@
       "PatternType": 2,
       "PolicyAction": 1,
       "PolicyCheckResult": 1,
-      "PolicyDocument": 2,
+      "PolicyDocument": 4,
       "PolicyInterceptor": 1,
+      "PolicyTemplates": 1,
       "ViolationCategory": 1,
+      "aca_config_from_policy": 1,
+      "compose_policies": 1,
       "discover_policies": 1,
+      "docker_config_from_policy": 1,
       "from_cedar": 1,
       "from_check_result": 1,
       "get_runtime_bridge": 1,
       "governance_to_acs_manifest": 1,
       "governance_to_document": 1,
+      "hyperlight_config_from_policy": 1,
+      "import:agent_os.compat": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1,
+      "import:agent_os.integrations.policy_compose": 1,
+      "import:agent_os.integrations.templates": 1,
+      "import:agent_os.policies.backends": 3,
       "import:agent_os.policies.bridge": 1,
+      "import:agent_os.policies.budget": 1,
+      "import:agent_os.policies.cli": 1,
+      "import:agent_os.policies.conflict_resolution": 1,
+      "import:agent_os.policies.decision": 1,
+      "import:agent_os.policies.discovery": 1,
+      "import:agent_os.policies.dynamic_conditions": 1,
+      "import:agent_os.policies.evaluator": 2,
+      "import:agent_os.policies.merge": 1,
+      "import:agent_os.policies.schema": 6,
+      "import:agent_os.policies.shared": 1,
       "import:agt.manifest_resolution": 1,
       "import:agt.policies.bridge": 1,
+      "mxc_config_from_policy": 1,
+      "nono_config_from_policy": 1,
+      "override_policy": 1,
+      "policy_to_mxc_json": 1,
+      "policy_yaml_to_mxc_json": 1,
+      "policy_yaml_to_nono_config": 1,
       "resolution_root": 1,
-      "to_v4_check_result": 1
-    }
-  },
-  "allowed_migration_files": {
-    "BREAKING_CHANGES.md": {
-      "PolicyAction": 1
-    },
-    "agent-governance-python/agt-policies/src/agt/cli/migrate.py": {
-      "CedarBackend": 1,
-      "GovernancePolicy": 2,
-      "PatternType": 1,
-      "PolicyInterceptor": 1,
-      "import:agt.manifest_resolution": 1
-    },
-    "agent-governance-python/agt-policies/tests/test_migrate.py": {
-      "CedarBackend": 1,
-      "GovernancePolicy": 1,
-      "PolicyAction": 1,
-      "import:agt.policies.bridge": 2
-    },
-    "agent-governance-python/agt-policies/tests/test_migration_boundary.py": {
-      "import:agt.manifest_resolution": 1
-    },
-    "docs/v4-removal.md": {
-      "AdapterRuntimeBridge": 1,
-      "CedarBackend": 1,
-      "GovernancePolicy": 4,
-      "PatternType": 4,
-      "PolicyAction": 1,
-      "PolicyCheckResult": 1,
-      "PolicyDocument": 2,
-      "PolicyInterceptor": 1,
-      "ViolationCategory": 1,
-      "get_runtime_bridge": 1,
-      "governance.yaml": 3,
-      "governance_to_acs_manifest": 1,
-      "governance_to_document": 1,
-      "resolution_root": 1,
-      "to_v4_check_result": 1
+      "to_v4_check_result": 1,
+      "v4_rule_document_shape": 1
     },
     "scripts/tests/test_check_v4_ratchet.py": {
-      "GovernancePolicy": 16,
-      "PatternType": 3,
+      "GovernancePolicy": 26,
+      "PatternType": 4,
       "PolicyCheckResult": 1,
-      "get_runtime_bridge": 1,
-      "governance_to_acs_manifest": 1,
-      "governance_to_document": 1,
-      "resolution_root": 2
+      "get_runtime_bridge": 2,
+      "governance_to_acs_manifest": 2,
+      "governance_to_document": 2,
+      "import:agent_os.policies.schema": 1,
+      "resolution_root": 4,
+      "v4_rule_document_shape": 1
     },
     "scripts/v4_ratchet_baseline.json": {
-      "GovernancePolicy": 95,
-      "PolicyDocument": 59,
+      "GovernancePolicy": 7,
+      "PolicyDocument": 9,
       "v4_policy_document_file": 1
     }
   },
