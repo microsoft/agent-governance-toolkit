@@ -25,6 +25,11 @@ from agt.cli._migrate_resolution import (
     resolve_manifest,
 )
 from agt.cli._migrate_resolution.merge import merge_top_level_section
+from agt.cli._migrate_resolution.build import (
+    _rego_field_accessor,
+    _rego_op_clause,
+    _render_rego,
+)
 
 
 # ── discover_policies ────────────────────────────────────────────────
@@ -1026,12 +1031,6 @@ def test_resolution_error_message_includes_reason_string() -> None:
 # _v != null guard on ne/not_in. Tests mirror the OPA 1.18.2 live
 # confirmation run on 2026-07-30.
 
-
-from agt.cli._migrate_resolution.build import (
-    _rego_field_accessor,
-    _rego_op_clause,
-    _render_rego,
-)
 
 
 # ── array-path accessor shape ────────────────────────────────────────
