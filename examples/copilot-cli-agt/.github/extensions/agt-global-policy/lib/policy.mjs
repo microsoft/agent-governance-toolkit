@@ -988,17 +988,29 @@ function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
 
 function getRmCommandDetails(commandText, toolName) {
   const tokens = tokenizeDeleteCommandParts(commandText);
-  const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|rmdir|ri|rd|del)$/i.test(normalizeCommandNameToken(token)),
-  );
+  const commandIndex = tokens.findIndex((token) => {
+    const commandName = normalizeCommandNameToken(token);
+    return (
+      /^(rm|remove-item|rmdir|ri|rd|del|erase)$/i.test(commandName) ||
+      /(?:^|[\\/])(rd|rmdir|del|erase)(?:\/[a-z]+)+$/i.test(
+        stripCommandToken(token).replace(/^[`({$]+/, ""),
+      )
+    );
+  });
   if (commandIndex === -1) {
     return undefined;
   }
 
-  const commandName = normalizeCommandNameToken(tokens[commandIndex]).toLowerCase();
+  const commandToken = stripCommandToken(tokens[commandIndex]).replace(/^[`({$]+/, "");
+  const attachedWindowsSwitches =
+    /(?:^|[\\/])(rd|rmdir|del|erase)((?:\/[a-z]+)+)$/i.exec(commandToken);
+  const commandName = (
+    attachedWindowsSwitches?.[1] ?? normalizeCommandNameToken(tokens[commandIndex])
+  ).toLowerCase();
   const parsesUnixShortOptions = commandName === "rm" && !isPowerShellTool(toolName);
-  let recursive = false;
-  let force = false;
+  const attachedSwitches = parseWindowsSlashFlags(attachedWindowsSwitches?.[2]);
+  let recursive = attachedSwitches?.recursive ?? false;
+  let force = attachedSwitches?.force ?? false;
   const candidateTargets = [];
   for (const token of tokens.slice(commandIndex + 1)) {
     const normalizedToken = stripCommandToken(token);
@@ -1020,9 +1032,10 @@ function getRmCommandDetails(commandText, toolName) {
       }
       continue;
     }
-    if (isWindowsSlashFlagCommand(commandName) && /^\/[a-z]+$/i.test(normalizedToken)) {
-      recursive ||= /s/i.test(normalizedToken);
-      force ||= /[fq]/i.test(normalizedToken);
+    const slashFlags = parseWindowsSlashFlags(normalizedToken);
+    if (isWindowsSlashFlagCommand(commandName) && slashFlags) {
+      recursive ||= slashFlags.recursive;
+      force ||= slashFlags.force;
       continue;
     }
 
@@ -1142,7 +1155,24 @@ function isWindowsSlashFlagCommand(commandName) {
   // such as `/usr` or `/sbin` is an ordinary absolute path, and reading it as a
   // switch marked plainly non-recursive deletes (`rm -i /sbin`) as recursive and
   // hard-denied them, contradicting the recursive-only deny semantics.
-  return commandName === "rd" || commandName === "rmdir" || commandName === "del";
+  return (
+    commandName === "rd" ||
+    commandName === "rmdir" ||
+    commandName === "del" ||
+    commandName === "erase"
+  );
+}
+
+function parseWindowsSlashFlags(token) {
+  const value = String(token ?? "");
+  if (!/^(?:\/[a-z]+)+$/i.test(value)) {
+    return undefined;
+  }
+  const flags = value.replaceAll("/", "");
+  return {
+    force: /[fq]/i.test(flags),
+    recursive: /s/i.test(flags),
+  };
 }
 
 function isUnixRmShortOptionCluster(flag) {
