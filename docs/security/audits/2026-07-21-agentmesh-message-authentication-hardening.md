@@ -120,7 +120,7 @@ the socket that just replaced it and the two would evict each other in a loop.
 
 This does not by itself prevent a takeover; it makes one observable. The
 underlying connect-frame proof-of-possession replay window is tracked separately
-(see *Known gaps*).
+(see *Known gaps*, [#3525](https://github.com/microsoft/agent-governance-toolkit/issues/3525)).
 
 ## Threat model impact
 
@@ -210,7 +210,7 @@ messages, and it displaces the victim's live socket.
 
 The fix is a challenge-response nonce, or signing `relay_url || nonce` rather
 than a bare timestamp. That changes the connect handshake on both sides and is
-tracked separately.
+tracked in [#3525](https://github.com/microsoft/agent-governance-toolkit/issues/3525).
 
 Mitigation in the meantime: the displacement is now observable
 (`WS_CLOSE_SESSION_REPLACED`, section 6), and the transport requires TLS in
@@ -226,4 +226,5 @@ exists is dropped regardless of who it is addressed to. An attacker who could
 Not currently exploitable: ids are generated with `crypto.randomUUID()`
 (`mesh-client.ts`), a 122-bit random key space, so they cannot be predicted or
 enumerated. A correct fix re-keys `_messages` by `(recipient_did, message_id)`,
-which also changes `acknowledge` and `fetch_pending`, and is tracked separately.
+which also changes `acknowledge` and `fetch_pending`, and is tracked in
+[#3526](https://github.com/microsoft/agent-governance-toolkit/issues/3526).
