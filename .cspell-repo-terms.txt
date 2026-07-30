@@ -962,3 +962,6 @@ zerofrom
 zerotrie
 zerovec
 zoneinfo
+
+# --- Canonical-encoding math terms ---
+injective

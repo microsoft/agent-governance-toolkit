@@ -274,7 +274,7 @@ class MCPMessageSigner:
 
     @staticmethod
     def _canonical_field(value: str | None) -> str:
-        """Return *value* framed so it cannot be confused with its neighbours.
+        """Return *value* framed so it cannot be confused with its neighbors.
 
         Each field is prefixed with its own length, so a separator appearing
         inside a field is just one of that field's characters and cannot be read
