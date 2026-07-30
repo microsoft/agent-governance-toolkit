@@ -129,7 +129,6 @@ nav:
     - VS Code Extension: packages/agent-os-vscode.md
   - Tutorials:
     - Overview: tutorials/index.md
-    - Policy Engine: tutorials/01-policy-engine.md
     - Trust & Identity: tutorials/02-trust-and-identity.md
     - Framework Integrations: tutorials/03-framework-integrations.md
     - Audit & Compliance: tutorials/04-audit-and-compliance.md
@@ -137,7 +136,6 @@ nav:
     - Execution Sandboxing: tutorials/06-execution-sandboxing.md
     - MCP Security Gateway: tutorials/07-mcp-security-gateway.md
     - Agent Control Specification: tutorials/55-agent-control-specification.md
-    - OPA / Rego / Cedar Policies: tutorials/08-opa-rego-cedar-policies.md
     - Prompt Injection Detection: tutorials/09-prompt-injection-detection.md
     - Plugin Marketplace: tutorials/10-plugin-marketplace.md
     - Saga Orchestration: tutorials/11-saga-orchestration.md
@@ -207,7 +205,6 @@ nav:
   - Studio:
     - Engine API Contract: studio/engine-api-contract.md
   - Specifications:
-    - "Agent OS Policy Engine": specs/AGENT-OS-POLICY-ENGINE-1.0.md
     - "AgentMesh Identity & Trust": specs/AGENTMESH-IDENTITY-TRUST-1.0.md
     - "Agent Hypervisor Execution Control": specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md
     - "AgentMesh Trust & Coordination": specs/AGENTMESH-TRUST-COORDINATION-1.0.md
@@ -215,7 +212,6 @@ nav:
     - "Agent SRE Governance": specs/AGENT-SRE-GOVERNANCE-1.0.md
     - "MCP Security Gateway": specs/MCP-SECURITY-GATEWAY-1.0.md
     - "Agent Lightning Fast-Path": specs/AGENT-LIGHTNING-FAST-PATH-1.0.md
-    - "Framework Adapter Contract": specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md
     - "Audit & Compliance": specs/AUDIT-COMPLIANCE-1.0.md
   - Architecture Decisions:
     - Overview: adr/index.md
@@ -229,10 +225,8 @@ nav:
     - "ADR-0008: Cross-Org Policy Federation": adr/0008-cross-org-policy-federation.md
     - "ADR-0009: RFC 9334 RATS Alignment": adr/0009-rfc-9334-rats-architecture-alignment.md
     - "ADR-0010: TEE Keystore SEV-SNP": adr/0010-tee-keystore-sevsnp-attestation.md
-    - "ADR-0011: Additive Policy Contract": adr/0011-additive-policy-check-contract.md
     - "ADR-0012: Cost Governance": adr/0012-cost-governance-observability-policies.md
     - "ADR-0013: Fail Closed on Errors": adr/0013-fail-closed-on-policy-evaluation-errors.md
-    - "ADR-0014: Parent Deny Immutable": adr/0014-parent-deny-rules-immutable-in-merge.md
     - "ADR-0015: Pluggable Policy Backends": adr/0015-pluggable-external-policy-backends.md
     - "ADR-0016: Trust Ceiling Propagation": adr/0016-trust-ceiling-propagation-for-delegation.md
     - "ADR-0017: Merkle Audit Chain": adr/0017-merkle-chain-for-audit-tamper-evidence.md

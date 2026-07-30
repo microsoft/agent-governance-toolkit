@@ -179,7 +179,7 @@ Hyperlight when tool gating is required.
 
 For each execution, the provider applies four layers in order:
 
-1. **Native ACS gate** — `AgtRuntime` can deny before any sandbox spawns.
+1. **Native ACS gate** — `AgentControl` can deny before any sandbox spawns.
 2. **Static code scan** — `enforce_no_subprocess_execution` rejects obvious
    process-spawning APIs.
 3. **MXC containment** — filesystem/network policy enforced by the OS backend.

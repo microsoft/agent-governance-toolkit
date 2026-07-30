@@ -3,7 +3,7 @@
 """Tests for PII/CRI detection and MCP response gateway integration."""
 from __future__ import annotations
 from agent_os.credential_redactor import CredentialRedactor
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 from agent_os.mcp_gateway import MCPGateway, MCPResponseDecision, ResponsePolicy
 from agent_os.mcp_protocols import InMemoryAuditSink
 from agent_os.mcp_response_scanner import MCPResponseScanner
@@ -12,8 +12,8 @@ _FAKE_GOOGLE_KEY = 'AIza' + 'SyD1234567890abcdefghijklmnopqrstuv'
 class _Runtime:
     manifest = None
 
-    def evaluate(self, intervention_point, snapshot):
-        return PolicyEvaluation(verdict='allow', intervention_point=intervention_point)
+    async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
+        return InterventionPointResult(verdict=Verdict(decision=Decision('allow')))
 
 def _make_gateway(response_policy: ResponsePolicy=ResponsePolicy.BLOCK, **kwargs) -> MCPGateway:
     return MCPGateway(_Runtime(), enable_builtin_sanitization=False, response_policy=response_policy)

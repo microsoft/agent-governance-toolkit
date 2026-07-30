@@ -22,7 +22,7 @@ Nanvix sessions reject unsupported tools and networking.
 
 ## Native governance
 
-An optional `AgtRuntime` is wrapped in `AdapterRuntimeSession`. Denials occur
+An optional `AgentControl` is wrapped in `HostSession`. Denials occur
 before guest execution. Runtime transforms and audit data remain native.
 
 ## Snapshots

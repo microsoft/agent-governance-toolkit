@@ -15,7 +15,7 @@ from typing import Any, Protocol
 
 
 class _PolicyEvaluationLike(Protocol):
-    """Structural contract used to avoid a hard agent-os → agt-policies import."""
+    """Structural contract for a runtime evaluation result."""
 
     message: str
     reason_code: str

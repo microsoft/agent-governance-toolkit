@@ -365,7 +365,7 @@ jobs:
         # The native ACS runtime evaluates policy via OPA; without it the
         # runtime fails closed (runtime_error:policy_invocation_failed) and
         # denies everything. Same pinned binary the policy-engine CI uses.
-        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies')
+        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox')
         run: |
           set -euo pipefail
           curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
@@ -377,12 +377,13 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/opa" version
       - name: Build native ACS SDK (ACS-backed Python policy runtime)
-        # agent-os and agt-policies route evaluations through the native
+        # agent-os, agt-policies, agent-compliance, agent-marketplace and
+        # agent-sandbox route evaluations through the native
         # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
         # it from the vendored policy-engine so native-runtime tests run.
         # The wheel is abi3-py311, so one build serves all agent-os matrix
         # Python versions (3.11-3.13). ubuntu-latest ships Rust + a C toolchain.
-        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies')
+        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox')
         run: |
           set -euo pipefail
           pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
@@ -709,6 +710,15 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.11"
+      - name: Build native ACS SDK
+        # agt-policies pulls `agent-control-specification` transitively, and the
+        # last published wheel predates ACS APIs this commit relies on (e.g.
+        # HostSession). Build the vendored SDK first so the resolver sees the
+        # requirement already satisfied by this commit's source.
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
       - name: Install ${{ matrix.package }}
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
@@ -1090,7 +1100,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.25"
       - name: Build

@@ -5,7 +5,7 @@
 Covers: baseline recording, drift scoring, threshold violation,
 DRIFT_DETECTED event emission, DriftResult, configurable thresholds.
 """
-from agt.policies import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 
 from agent_os.integrations.base import (
     BaseIntegration,
@@ -17,13 +17,10 @@ from agent_os.integrations.base import (
 class _Runtime:
     manifest = None
 
-    def evaluate(
-        self, intervention_point: str, snapshot: dict[str, object]
-    ) -> PolicyEvaluation:
-        return PolicyEvaluation(
-            verdict="allow",
-            intervention_point=intervention_point,
-        )
+    async def evaluate_intervention_point(
+        self, intervention_point, snapshot, mode=None
+    ):
+        return InterventionPointResult(verdict=Verdict(decision=Decision("allow")))
 
     def close(self) -> None:
         pass

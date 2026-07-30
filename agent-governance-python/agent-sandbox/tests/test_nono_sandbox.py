@@ -32,7 +32,7 @@ from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.nono_sandbox_provider import NonoConfig
 from agent_sandbox.nono_sandbox_provider import provider as provider_mod
 from agent_sandbox.sandbox_provider import ExecutionStatus, SandboxConfig, SessionStatus
-from agt.policies.result import PolicyEvaluation
+from agent_control_specification import Decision, InterventionPointResult, Verdict
 
 class _AccessMode:
     READ = 'READ'
@@ -464,12 +464,8 @@ class TestGuards:
         class _DenyRuntime:
             manifest = None
 
-            def evaluate(self, intervention_point, snapshot):
-                return PolicyEvaluation(
-                    verdict='deny',
-                    reason_code='sandbox_denied',
-                    message='nope',
-                )
+            async def evaluate_intervention_point(self, intervention_point, snapshot, mode=None):
+                return InterventionPointResult(verdict=Verdict(decision=Decision('deny'), reason='sandbox_denied', message='nope'))
 
             def close(self):
                 return None

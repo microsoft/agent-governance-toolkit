@@ -117,15 +117,15 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
   Destructive operations require human approval
 ```
 
-Or use the full `AgtRuntime` API for programmatic control:
+Or use the full `AgentControl` API for programmatic control:
 
 <details>
-<summary><b>AgtRuntime example</b></summary>
+<summary><b>AgentControl example</b></summary>
 
 ```python
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime.from_manifest("manifest.yaml")
+runtime = AgentControl.from_path(str("manifest.yaml"))
 result = runtime.evaluate(
     "input",
     {

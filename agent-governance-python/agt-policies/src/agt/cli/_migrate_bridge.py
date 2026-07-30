@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import yaml
+
 import json
 import re
 import shutil
@@ -11,8 +13,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-from agt.policies.manifest import AgtManifest
-from agt.policies._re2 import glob_to_re2, validate_re2
+from agent_control_specification import validate_manifest
+
+from ._migrate_re2 import glob_to_re2, validate_re2
 
 ACS_VERSION = "0.3.0-alpha-agt"
 _REASON_PATTERN = "blocked_pattern_input"
@@ -143,7 +146,10 @@ def build_migrated_manifest(
     if policy.require_human_approval:
         manifest["approval"] = {}
 
-    return AgtManifest.from_document(manifest).to_document()
+    # Validate against the runtime's own contract so the migrator cannot emit
+    # a manifest the engine would refuse to load.
+    validate_manifest(yaml.safe_dump(manifest, sort_keys=False))
+    return manifest
 
 
 def _find_stock_rego_root() -> Path:

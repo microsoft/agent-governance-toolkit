@@ -21,7 +21,7 @@ deployment boundary.
 
 AGT already has the raw data for most TRACE fields: the Merkle chain tip covers
 `tool_transcript.hash`, `SessionState` carries the monotonic `data_class`,
-`PolicyInterceptor` evaluates and records Cedar policy decisions. The gap is the
+`NativeAdapterRuntime` evaluates and records Cedar policy decisions. The gap is the
 TRACE envelope, the EdDSA signature over the payload, and a handful of fields
 (model, runtime, build provenance) that must be injected from configuration.
 
@@ -99,7 +99,7 @@ DID/SPIFFE URI.
 
 **What does not change:**
 
-`AuditEntry`, `MerkleAuditChain`, `PolicyInterceptor`, and `SessionState` are
+`AuditEntry`, `MerkleAuditChain`, `NativeAdapterRuntime`, and `SessionState` are
 unchanged. `TRACEAuditSink` is an adapter over the existing chain. No existing
 sink is affected. The HMAC-chained audit log continues to be written in parallel.
 
@@ -133,76 +133,5 @@ sink is affected. The HMAC-chained audit log continues to be written in parallel
   TRACE extends.
 - agentrust-io/trace-spec v0.2.0 -- the claim schema and conformance tests.
 - agentrust-trace v0.2.0 (PyPI) -- `TrustRecord`, `sign_record`, `load_signing_key`.
-  That is the version this ADR was accepted against, kept as the historical record.
-  Do not install it: the current pin is `>=0.5.1,<0.6.0`, and the 2026-07-28
-  amendment below explains what changed in between, including a breaking
-  canonicalization change.
 - agentrust-io/cmcp#124 -- Phase 2 TEE enforcement; the runtime that will
   supersede this record for TEE deployments.
-
-## Amendment 2026-07-28: the profile URI moves to TRACE v0.2
-
-**Resolved by:** agentrust-io/trace-spec#107.
-
-The Decision section above specifies `eat_profile` as the constant
-`"tag:agentrust.io,2026:trace-v0.1"`. That URI is no longer correct, and it was
-never valid.
-
-RFC 4151 permits a tag URI only where the minting authority controlled the named
-domain on the date in the URI. `agentrust.io` was never controlled by the TRACE
-project; it resolves to third-party parked addresses. The identifier therefore
-asserted authority over a name belonging to someone else, who could at any point
-publish a conflicting definition at it.
-
-TRACE v0.2 corrects it to `tag:agentrust-io.com,2026:trace-v0.2`. The *specification*
-change is that one identifier: no field was added, removed, or re-typed.
-
-The *library* jump is a larger cutover, and describing it as one constant undersells
-it. AGT moves from `agentrust-trace` 0.2.0 to 0.5.x, which crosses two releases with
-consequences of their own:
-
-- **0.3.0 changed canonicalization to RFC 8785 (JCS), and it is breaking.** The prior
-  `json.dumps` pre-image was non-conformant. Records AGT signs after this bump are
-  **not cross-verifiable with 0.2.0-era verifiers**, and vice versa, because the
-  signature covers a different byte sequence. Any consumer pinned to 0.2.0 must move
-  with us.
-- **0.3.0 also stopped self-verifying from the embedded `cnf.jwk` by default.**
-  `verify_record` now requires an explicit trusted key unless `allow_embedded_key=True`
-  is passed, and enforces `iat` freshness. Anything that verified AGT records by
-  trusting the key inside them needs updating.
-- 0.4.0 is additive only (the `azure-cvm-sev-snp` platform value and the optional
-  `delegation` block), so it imposes nothing.
-
-None of that is a reason not to move; the 0.2.0 canonicalization was simply wrong.
-It is a reason to say so here rather than let a downstream verifier discover it.
-
-The upstream cutover is deliberate rather than a transition window: a v0.2 verifier
-requires the new URI and rejects the old one, because a verifier accepting both
-would keep the invalid identifier live indefinitely. Records AGT has already
-emitted remain verifiable as v0.1 records, and do not become invalid retroactively.
-Two different packages carry the pre-cutover behaviour, and they are on different
-version lines, which is worth stating precisely: the **library** `agentrust-trace`
-0.4.x still accepts the v0.1 profile, and the **conformance suite**
-`agentrust-trace-tests` 0.3.x still requires it. Both stay published. Note the
-canonicalization caveat above, though: a record signed by AGT under 0.2.0 needs a
-0.2.0-era verifier, not merely a pre-cutover one.
-
-AGT's `agentrust-trace` dependency moves from `>=0.2.0,<0.3.0` to
-`>=0.5.1,<0.6.0`. The floor is 0.5.1 rather than 0.5.0 deliberately: 0.5.0 still
-required a non-empty `transparency`, so a resolve that landed on it would reject
-the `None` this amendment describes and reproduce the exact ValidationError the
-change exists to fix. A floor that admits a broken version is not a floor.
-
-That bump also changes one field. The Decision section says `transparency` is an
-empty string for Phase 1, because SCITT anchoring is out of scope there. It is now
-`None` instead. An empty string looks populated and resolves to nothing, which is a
-worse thing to put in a trust record than an absent field; `None` says plainly that
-this record is not anchored. Conformance requires `transparency` only at Level 2,
-where `TR-ANC` runs, so an unanchored Phase 1 record remains conformant at the level
-it claims. This needs `agentrust-trace` 0.5.1 or later, which stopped requiring a
-non-empty value at every level (agentrust-io/trace-spec#109). The References section above still cites v0.2.0 because that is
-what this ADR was accepted against; it is a historical record, not a statement of
-the current pin.
-
-The original Decision text is retained above per the ADR immutability convention.
-The file name still says `v01` for the same reason.

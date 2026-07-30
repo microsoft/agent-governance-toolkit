@@ -881,8 +881,8 @@ class TestCmdValidateExtended:
         result = cmd_validate(Args())
         assert result == 1
 
-    def test_validate_warns_without_intervention_points(self, tmp_path, capsys):
-        """A valid manifest without bindings reports a warning."""
+    def test_validate_rejects_a_manifest_without_intervention_points(self, tmp_path, capsys):
+        """The runtime requires a binding, so the CLI reports an error."""
         from agent_os.cli import cmd_validate
         f = tmp_path / "policy.yaml"
         f.write_text(
@@ -899,9 +899,9 @@ class TestCmdValidateExtended:
             strict = False
 
         result = cmd_validate(Args())
-        assert result == 0
+        assert result == 1
         output = capsys.readouterr().out
-        assert "no intervention points" in output.lower()
+        assert "intervention point" in output.lower()
 
 
 # ============================================================================

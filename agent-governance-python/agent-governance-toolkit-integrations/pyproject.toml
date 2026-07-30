@@ -60,9 +60,6 @@ dev = [
     "ruff>=0.4.0,<1.0",
 ]
 
-[project.scripts]
-openshell-agentmesh = "openshell_agentmesh.cli:main"
-
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
