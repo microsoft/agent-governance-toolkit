@@ -241,25 +241,55 @@ def _condition_unsatisfiable(condition: Any) -> bool:
     return parts is not None and parts[1] == "in" and condition.get("value") == []
 
 
-def _conditions_disjoint(left: Any, right: Any) -> bool:
-    if _condition_unsatisfiable(left) or _condition_unsatisfiable(right):
+def _conditions_disjoint(
+    left: Any, right: Any, *, ignore_left_unsatisfiable: bool = False
+) -> bool:
+    # ``ignore_left_unsatisfiable`` is set on the deny-immutability path so a
+    # (possibly false-positive) "left is unsatisfiable" classification can never
+    # declare a parent deny harmless and silently neutralise it — that would be
+    # a fail-open against the deny-immutability invariant (ADR-0014). The right
+    # (child) side's unsatisfiability is still safe to short-circuit on: an
+    # unsatisfiable child allow never fires, so it overrides nothing.
+    if not ignore_left_unsatisfiable and _condition_unsatisfiable(left):
+        return True
+    if _condition_unsatisfiable(right):
         return True
     if not isinstance(left, dict) or not isinstance(right, dict):
         return False
 
     left_or = _compound_items(left, "or")
     if left_or is not None:
-        return all(_conditions_disjoint(item, right) for item in left_or)
+        return all(
+            _conditions_disjoint(
+                item, right, ignore_left_unsatisfiable=ignore_left_unsatisfiable
+            )
+            for item in left_or
+        )
     right_or = _compound_items(right, "or")
     if right_or is not None:
-        return all(_conditions_disjoint(left, item) for item in right_or)
+        return all(
+            _conditions_disjoint(
+                left, item, ignore_left_unsatisfiable=ignore_left_unsatisfiable
+            )
+            for item in right_or
+        )
 
     left_and = _compound_items(left, "and")
     if left_and is not None:
-        return any(_conditions_disjoint(item, right) for item in left_and)
+        return any(
+            _conditions_disjoint(
+                item, right, ignore_left_unsatisfiable=ignore_left_unsatisfiable
+            )
+            for item in left_and
+        )
     right_and = _compound_items(right, "and")
     if right_and is not None:
-        return any(_conditions_disjoint(left, item) for item in right_and)
+        return any(
+            _conditions_disjoint(
+                left, item, ignore_left_unsatisfiable=ignore_left_unsatisfiable
+            )
+            for item in right_and
+        )
 
     if "not" in left or "not" in right:
         return False
@@ -270,7 +300,12 @@ def _conditions_disjoint(left: Any, right: Any) -> bool:
 def _conditions_overlap(parent_condition: Any, child_condition: Any) -> bool:
     if _condition_key(parent_condition) == _condition_key(child_condition):
         return True
-    return not _conditions_disjoint(parent_condition, child_condition)
+    # Deny-immutability check: bias toward "overlap" (i.e. protect the parent
+    # deny). Drop the protection only for disjointness provable WITHOUT assuming
+    # the parent (left) deny condition is unsatisfiable.
+    return not _conditions_disjoint(
+        parent_condition, child_condition, ignore_left_unsatisfiable=True
+    )
 
 
 def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -303,6 +338,16 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if not isinstance(rule, dict) or "name" not in rule:
                 raise ResolutionError.invalid_governance(
                     f"rule at level {level} is missing name"
+                )
+            # ``priority`` feeds ``sorted(key=...)`` below; an explicit
+            # ``priority: null`` (None) or a typo (``priority: high``) would
+            # raise a bare ``TypeError`` comparing against ints, escaping the
+            # ResolutionError contract. Validate it as numeric up front.
+            priority = rule.get("priority", 0)
+            if isinstance(priority, bool) or not isinstance(priority, (int, float)):
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule.get('name')!r} at level {level} has non-numeric "
+                    f"priority {priority!r}"
                 )
 
     if len(documents) == 1:
