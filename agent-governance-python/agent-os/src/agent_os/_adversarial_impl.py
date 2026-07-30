@@ -165,13 +165,13 @@ class AdversarialEvaluator:
 
         if AttackCategory.PROMPT_INJECTION in failed_categories:
             recommendations.append(
-                "Add blocked_patterns for common prompt-injection phrases "
-                "(e.g. 'ignore all previous instructions')."
+                "Bind prompt-injection policy to the native input and tool "
+                "intervention points."
             )
         if AttackCategory.TOOL_ABUSE in failed_categories:
             recommendations.append(
-                "Restrict allowed_tools to a minimal allowlist and block "
-                "dangerous tools like 'shell_exec'."
+                "Declare a minimal manifest tool catalog and deny dangerous "
+                "tools such as 'shell_exec'."
             )
         if AttackCategory.POLICY_OVERRIDE in failed_categories:
             recommendations.append(

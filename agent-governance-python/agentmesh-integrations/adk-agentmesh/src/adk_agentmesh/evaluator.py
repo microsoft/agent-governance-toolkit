@@ -56,7 +56,7 @@ class ADKPolicyEvaluator:
 
         from adk_agentmesh import ADKPolicyEvaluator
 
-        evaluator = ADKPolicyEvaluator.from_config("policies/adk-governance.yaml")
+        evaluator = ADKPolicyEvaluator.from_config("policies/adk-agt-manifest.yaml")
 
         # Wire into ADK agent
         agent = LlmAgent(

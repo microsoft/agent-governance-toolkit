@@ -64,6 +64,18 @@ Policy management is handled through first-class CLI commands rather than slash 
 - `agt-copilot policy apply --file <path>`
 - `agt-copilot policy apply --profile <strict|balanced|advisory>`
 
+## Repository-specific policy authoring
+
+Use the portable [AGT policy authoring skill](../skills/agt-policy-authoring/SKILL.md) to have an
+agent inspect a repository's actual tool use and risk boundaries, then produce a minimal policy
+source at `.agt/policy.json`. The skill begins with AGT's strict baseline, preserves the default
+protections, and requires `agt-copilot policy validate --file .agt/policy.json` before activation.
+
+The Copilot CLI runtime does not automatically load policies from a repository. After reviewing the
+generated policy, explicitly opt in by using `agt-copilot policy apply --file <path>` or by setting
+`AGT_COPILOT_POLICY_PATH` for the Copilot CLI session. This keeps a repository policy from
+silently changing a user's global governance configuration.
+
 ## Copilot CLI setup
 
 The package does not auto-edit Copilot CLI settings. Enable extensions in your Copilot config:

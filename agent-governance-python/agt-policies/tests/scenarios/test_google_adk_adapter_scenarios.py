@@ -2,18 +2,18 @@
 # Licensed under the MIT License.
 """Google ADK adapter end-to-end scenarios on the AGT 5.0 ACS runtime.
 
-These scenarios exercise the v4 :class:`GoogleADKKernel` callback
-surface routed through :class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+These scenarios exercise the native :class:`GoogleADKKernel` callback
+surface routed through :class:`agent_control_specification.AgentControl` via the
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH`` or on ``google-adk`` being
 installed (the kernel ships its own ``PolicyConfig`` shim).
 
 Each test covers one of the AGT verdicts that the adapter must
-translate back to its v4 callback surface:
+expose through its native callback surface:
 
 - ``allow`` -> ``before_tool_callback`` returns ``None``.
-- ``deny`` -> the callback returns a v4-shaped ``{"error": "..."}`` dict
+- ``deny`` -> the callback returns a sanitized ``{"error": "..."}`` dict
   carrying the AGT reason.
 - ``transform`` -> the callback mutates ``tool_context.tool_args``
   in-place (pre_tool_call) or rewrites the ``tool_result`` (output)
@@ -32,8 +32,11 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agt.policies import EvaluationResult, SnapshotBuilder  # noqa: E402,F401
-from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
+from agent_control_specification import InterventionPointResult, SnapshotBuilder  # noqa: E402,F401
+from agent_control_specification import (  # noqa: E402
+    AgentControl,
+    ApprovalResolution,
+)
 
 
 _MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
@@ -96,10 +99,10 @@ def _build_runtime(
     verdicts: list[dict[str, Any]],
     *,
     approval_resolver=None,
-) -> tuple[AgtRuntime, _ScriptedPolicy]:
+) -> tuple[AgentControl, _ScriptedPolicy]:
     policy = _ScriptedPolicy(verdicts)
-    runtime = AgtRuntime(
-        _write_manifest(tmp_path),
+    runtime = AgentControl.from_path(
+        str(_write_manifest(tmp_path)),
         policy_dispatcher=policy,
         approval_resolver=approval_resolver,
     )
@@ -126,10 +129,8 @@ class _FakeCallbackContext:
 def _kernel(runtime, *, approval_resolver=None):
     from agent_os.integrations.google_adk_adapter import GoogleADKKernel
 
-    return GoogleADKKernel(
-        _runtime=runtime,
-        approval_resolver=approval_resolver,
-    )
+    assert approval_resolver is None or runtime._approval_resolver is approval_resolver
+    return GoogleADKKernel(runtime=runtime)
 
 
 # ── verdict scenarios — pre_tool_call ────────────────────────────────
@@ -151,7 +152,7 @@ def test_before_tool_callback_allow_path(tmp_path: Path) -> None:
 
 
 def test_before_tool_callback_deny_path(tmp_path: Path) -> None:
-    """A ``deny`` verdict surfaces as a v4 ``{"error": ...}`` dict."""
+    """A ``deny`` verdict surfaces as a sanitized error dict."""
     runtime, _policy = _build_runtime(
         tmp_path,
         [
@@ -169,7 +170,7 @@ def test_before_tool_callback_deny_path(tmp_path: Path) -> None:
 
     assert result is not None
     assert "error" in result
-    assert "agt_pre_tool_call_deny" in result["error"]
+    assert result["error"] == "Request blocked by policy."
 
 
 def test_before_tool_callback_transform_rewrites_args(tmp_path: Path) -> None:
@@ -202,10 +203,10 @@ def test_before_tool_callback_escalate_with_resolver_passes(
     """An ``escalate`` verdict that the resolver approves passes."""
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: InterventionPointResult) -> ApprovalResolution:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
-        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
+        return ApprovalResolution.allow(result.enforced_identity)  # type: ignore[arg-type]
 
     runtime, _policy = _build_runtime(
         tmp_path,
@@ -219,6 +220,17 @@ def test_before_tool_callback_escalate_with_resolver_passes(
 
     assert captured["ip"] == "pre_tool_call"
     assert result is None
+    identity_events = [
+        event
+        for event in kernel.get_audit_log()
+        if event.event_type == "agt_pre_tool_call"
+    ]
+    assert len(identity_events) == 1
+    assert identity_events[0].details["input_identity"]
+    assert (
+        identity_events[0].details["enforced_identity"]
+        == captured["enforced_identity"]
+    )
 
 
 def test_before_tool_callback_escalate_with_no_resolver_denies(
@@ -266,7 +278,7 @@ def test_after_tool_callback_transform_rewrites_result(tmp_path: Path) -> None:
 
 
 def test_after_tool_callback_deny_path(tmp_path: Path) -> None:
-    """A ``deny`` verdict on the output returns a v4 error dict."""
+    """A ``deny`` verdict on the output returns a sanitized error dict."""
     runtime, _policy = _build_runtime(
         tmp_path,
         [{"decision": "deny", "reason": "output_blocked"}],
@@ -278,7 +290,7 @@ def test_after_tool_callback_deny_path(tmp_path: Path) -> None:
 
     assert isinstance(result, dict)
     assert "error" in result
-    assert "agt_output_deny" in result["error"]
+    assert result["error"] == "Request blocked by policy."
 
 
 def test_before_agent_callback_deny_blocks_agent(tmp_path: Path) -> None:
@@ -294,7 +306,7 @@ def test_before_agent_callback_deny_blocks_agent(tmp_path: Path) -> None:
 
     assert isinstance(result, dict)
     assert "error" in result
-    assert "agt_input_deny" in result["error"]
+    assert result["error"] == "Request blocked by policy."
 
 
 def test_after_agent_callback_transform_rewrites_content(tmp_path: Path) -> None:

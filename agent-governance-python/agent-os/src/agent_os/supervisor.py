@@ -1,23 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Supervisor Hierarchy — Enforces layered supervision with a deterministic trust root.
+"""Layered supervision with a deterministic trust root.
 
-Level 0 (root) MUST be a deterministic (non-LLM) trust root.
-Middle levels (1–N) may be agent-based supervisors.
-Escalation always terminates at the trust root.
-
-Example:
-    >>> from agent_os.trust_root import TrustRoot
-    >>> from agent_os.supervisor import SupervisorHierarchy
-    >>> from agent_os.integrations.base import GovernancePolicy
-    >>>
-    >>> root = TrustRoot(policies=[GovernancePolicy()])
-    >>> hierarchy = SupervisorHierarchy(trust_root=root)
-    >>> hierarchy.register_supervisor("trust-root", level=0, is_agent=False)
-    >>> hierarchy.register_supervisor("safety-agent", level=1, is_agent=True)
-    >>> hierarchy.validate_hierarchy()
-    []
+Level zero must be deterministic. Higher levels may use agent supervisors, and
+escalation always terminates at the trust root.
 """
 
 from __future__ import annotations

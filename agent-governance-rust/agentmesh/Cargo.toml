@@ -29,6 +29,7 @@ path = "src/bin/agt/main.rs"
 required-features = ["cli"]
 
 [dependencies]
+agent_control_specification.workspace = true
 agentmesh-mcp.workspace = true
 aes-gcm.workspace = true
 base64.workspace = true
