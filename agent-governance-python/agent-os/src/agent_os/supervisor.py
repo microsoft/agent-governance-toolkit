@@ -61,12 +61,34 @@ class SupervisorHierarchy:
         """Check hierarchy rules and return a list of violations (empty = valid).
 
         Rules:
+        - Every level MUST be a real integer.
         - No supervisor may sit above the root: levels MUST NOT be negative.
         - Level 0 MUST exist and MUST be deterministic (not an LLM agent).
         - Middle levels (1–N) may be agent-based.
         - Each level present must have at least one supervisor.
         """
         violations: list[str] = []
+
+        # Checked first, because every rule below compares or counts levels and
+        # a non-integer level slips past all of them. ``range(1, max_level + 1)``
+        # raises on a float, so a float that *is* the maximum crashed here — but
+        # under a higher integer level the gap scan never sees it, and the
+        # hierarchy was reported as valid: a supervisor at level 0.5 sits between
+        # the root and level 1, is governed by neither, and yields no violations.
+        # ``bool`` is a subclass of ``int`` and ``False == 0``, so it is excluded
+        # explicitly rather than read as the root level, matching
+        # ``TrustRoot.validate_supervisor``.
+        for s in self._supervisors:
+            if isinstance(s.level, bool) or not isinstance(s.level, int):
+                violations.append(
+                    f"Supervisor '{s.name}' has non-integer level {s.level!r}; "
+                    "levels must be integers"
+                )
+        if violations:
+            # Returning early keeps the rules below from comparing or ranging
+            # over a value they cannot handle, which would raise instead of
+            # reporting.
+            return violations
 
         # Checked before anything else: level 0 is the root, so a negative level
         # places a supervisor *above* the deterministic authority. The

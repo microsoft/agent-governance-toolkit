@@ -111,20 +111,72 @@ def test_negative_level_is_reported_even_without_a_level_0(level: int) -> None:
     assert any('negative level' in v for v in hierarchy.validate_hierarchy())
 
 @pytest.mark.parametrize('level', [0.0, 1.0, 2.5])
-def test_float_level_never_reached_a_working_hierarchy(level: float) -> None:
-    """Rejecting a float level takes nothing away that used to work.
+def test_a_float_level_is_reported_when_it_is_the_maximum(level: float) -> None:
+    """A lone float level used to raise ``TypeError`` out of the gap scan.
 
-    ``validate_supervisor`` accepted a float before this change, so on its own
-    the stricter check looks like a regression -- notably ``0.0`` with
-    ``is_agent=False``, which a YAML or JSON round-trip can produce for a
-    legitimate root. But nothing downstream could consume it: the gap scan in
-    ``validate_hierarchy`` computes ``range(1, max_level + 1)``, and a float
-    ``max_level`` raises. A config that got a float past ``validate_supervisor``
-    crashed at the next step rather than being governed, so the fix converts an
-    unhandled ``TypeError`` into a ``False`` -- it does not narrow the set of
-    hierarchies that ever validated.
+    ``validate_supervisor`` accepted a float, and ``range(1, max_level + 1)``
+    does not, so a config that got a float past the declaration check crashed at
+    the next step. It is now a violation, which is the same answer the rest of
+    this method gives for a level it will not govern.
     """
     hierarchy = SupervisorHierarchy(trust_root=_root())
     hierarchy.register_supervisor('root', level=level, is_agent=False)
-    with pytest.raises(TypeError, match='float'):
-        hierarchy.validate_hierarchy()
+    assert any('non-integer level' in v for v in hierarchy.validate_hierarchy())
+
+
+@pytest.mark.parametrize(
+    ('level', 'top'),
+    [(0.0, 1), (1.0, 2), (0.5, 1), (1.5, 2), (-1.0, 1)],
+)
+def test_a_float_level_under_an_integer_maximum_is_reported(
+    level: float, top: int
+) -> None:
+    """The case a float-is-always-fatal reading misses, and the reason for the check.
+
+    ``range(1, max_level + 1)`` only raises when the float *is* the maximum. Put
+    any higher integer level in the hierarchy and the gap scan never sees the
+    float, so none of the other rules apply to it either: ``level == 0`` is False
+    for ``0.0``'s neighbours, ``level < 0`` is False for ``0.5``, and the level is
+    absent from ``range``. Before the check these returned ``violations == []`` --
+    a supervisor at 0.5 sitting between the root and level 1, governed by
+    neither, reported as a valid hierarchy. ``-1.0`` is included because the
+    negative-level rule did fire for it, but on a value the hierarchy cannot
+    order; naming the type is the more accurate violation.
+    """
+    hierarchy = SupervisorHierarchy(trust_root=_root())
+    hierarchy.register_supervisor('root', level=0, is_agent=False)
+    hierarchy.register_supervisor('drifted', level=level, is_agent=True)
+    hierarchy.register_supervisor('top', level=top, is_agent=True)
+
+    violations = hierarchy.validate_hierarchy()
+
+    assert any('non-integer level' in v and 'drifted' in v for v in violations)
+
+
+def test_a_string_level_is_reported_instead_of_raising() -> None:
+    # '0' == 0 is False, so a string level skipped the determinism rule and then
+    # raised out of the `level < 0` comparison. Same class of gap as the float.
+    hierarchy = SupervisorHierarchy(trust_root=_root())
+    hierarchy.register_supervisor('root', level='0', is_agent=False)  # type: ignore[arg-type]
+    hierarchy.register_supervisor('top', level=1, is_agent=True)
+
+    assert any('non-integer level' in v for v in hierarchy.validate_hierarchy())
+
+
+def test_a_bool_level_is_reported_rather_than_read_as_a_level() -> None:
+    # bool subclasses int and False == 0, so `True` would otherwise be governed
+    # as level 1 and `False` as the deterministic root.
+    hierarchy = SupervisorHierarchy(trust_root=_root())
+    hierarchy.register_supervisor('root', level=False, is_agent=False)  # type: ignore[arg-type]
+
+    assert any('non-integer level' in v for v in hierarchy.validate_hierarchy())
+
+
+def test_an_all_integer_hierarchy_is_unaffected() -> None:
+    # The check must not add a violation to a hierarchy that already validated.
+    hierarchy = SupervisorHierarchy(trust_root=_root())
+    hierarchy.register_supervisor('root', level=0, is_agent=False)
+    hierarchy.register_supervisor('mid', level=1, is_agent=True)
+    hierarchy.register_supervisor('leaf', level=2, is_agent=True)
+
+    assert hierarchy.validate_hierarchy() == []
