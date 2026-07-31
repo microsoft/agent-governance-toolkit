@@ -203,12 +203,16 @@ audit contains msg if {
 }
 
 # NIMC Act 2026 — Mandatory NIN prerequisite: regulated services require verified NIN.
-# object.get(..., false) != true (matching pos-geofencing.rego's location_verified
-# check) treats missing, null, and false all as "not verified" — a bare
-# `not input.context.nin_verified` would miss an explicit nin_verified: null.
+# Defaulting through object.get twice — once for a missing `context` object,
+# once for a missing/null/false `nin_verified` within it — means an absent
+# context, an absent nin_verified, and an explicit nin_verified: null or false
+# are all treated identically as "not verified". A single
+# object.get(input.context, ...) is itself undefined when `context` is
+# missing entirely (probed: {"action":"open_account","params":{},"output":""}
+# with no context key silently failed to audit).
 audit contains msg if {
 	input.action in mandatory_nin_service_actions
-	object.get(input.context, "nin_verified", false) != true
+	object.get(object.get(input, "context", {}), "nin_verified", false) != true
 	msg := sprintf(
 		"NIMC Act 2026: Action '%v' is a mandatory-NIN service — bank accounts, SIM, passports, land transactions, pension, insurance, and consumer credit require context.nin_verified = true",
 		[input.action],

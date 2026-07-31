@@ -429,6 +429,18 @@ test_open_account_without_nin_verified_is_audited_nimc_2026 if {
 	contains(msg, "mandatory-NIN service")
 }
 
+# context key entirely absent (not just empty) must still audit — regression
+# test for the fail-open bug where a single object.get(input.context, ...) is
+# itself undefined when `context` is missing, so the rule silently never fired.
+test_open_account_with_no_context_key_is_audited_nimc_2026 if {
+	result := bvn_nin.audit with input as {
+		"action": "open_account",
+		"params": {},
+		"output": "",
+	}
+	_has_mandatory_nin_msg(result)
+}
+
 test_sim_registration_without_nin_verified_is_audited_nimc_2026 if {
 	result := bvn_nin.audit with input as {
 		"action": "sim_registration",
