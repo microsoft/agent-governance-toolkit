@@ -211,10 +211,6 @@ def _render_rego(
         "\ttexts := [s | walk(target, [_, s]); is_string(s)]",
         "}",
         "",
-        "is_post_action_point if {",
-        '\tinput.intervention_point in ["post_tool_call", "post_model_call", "output", "agent_shutdown"]',
-        "}",
-        "",
     ]
     branches: list[str] = []
     pattern_list = list(blocked_patterns)
@@ -240,20 +236,29 @@ def _render_rego(
             "\tv := patterns.deny_if_pattern(matched_texts[0], "
             f"[{rendered}], {json.dumps(_REASON_PATTERN)})"
         )
-    thresholds: dict[str, Any] = {}
     if max_tool_calls is not None:
-        thresholds["tool_call_count"] = max_tool_calls
-    if max_tokens is not None:
-        thresholds["token_count"] = max_tokens
-    if thresholds:
-        # Budgets gate an action before it runs. The runtime charges the attempt
-        # during pre_tool_call, so by post_tool_call the counter has already
-        # reached the limit and a >= check would deny the result of the last
-        # permitted call, after its side effects committed. Only evaluate
-        # budgets at the points that can still prevent the action.
+        # v4 checked the tool-call budget only when intercepting a tool call
+        # (PolicyInterceptor compared context.call_count at tool interception),
+        # so an exhausted budget must gate the next tool call and nothing
+        # else; letting it fire at input/pre_model_call/agent_startup would
+        # stop the agent from ever emitting its final model response. It also
+        # cannot fire at post_tool_call: the runtime charges the attempt
+        # during pre_tool_call, so a >= check there would deny the result of
+        # the last permitted call after its side effects committed.
         branches.append(
-            "not is_post_action_point\n"
-            f"\tv := budgets.deny_if_budget_exceeded({json.dumps(thresholds)})"
+            'input.intervention_point == "pre_tool_call"\n'
+            "\tv := budgets.deny_if_budget_exceeded("
+            f'{json.dumps({"tool_call_count": max_tool_calls})})'
+        )
+    if max_tokens is not None:
+        # The cumulative token budget gates new consumption, so evaluate it
+        # only where the agent is about to spend tokens (model and tool
+        # calls). Denying input or agent_startup on an exhausted budget would
+        # strand the session, and post-action points cannot un-run the spend.
+        branches.append(
+            'input.intervention_point in ["pre_model_call", "pre_tool_call"]\n'
+            "\tv := budgets.deny_if_budget_exceeded("
+            f'{json.dumps({"token_count": max_tokens})})'
         )
     if confidence_threshold is not None and confidence_threshold > 0:
         branches.append(
@@ -261,8 +266,13 @@ def _render_rego(
             f"{json.dumps(confidence_threshold)})"
         )
     if require_human_approval:
+        # v4 gated human approval on tool interception only (PolicyInterceptor
+        # checked require_human_approval when a tool was about to run), so the
+        # migrated escalation stays scoped to pre_tool_call. Escalating at
+        # every bound point would, absent an approver, deny all traffic.
         branches.append(
-            'v := approval.escalate_if_approver_required(["human"])'
+            'input.intervention_point == "pre_tool_call"\n'
+            '\tv := approval.escalate_if_approver_required(["human"])'
         )
     for index, branch in enumerate(branches):
         lines.append("verdict := v if {" if index == 0 else "else := v if {")

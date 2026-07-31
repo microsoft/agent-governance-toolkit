@@ -662,11 +662,92 @@ def test_budgets_do_not_fire_after_the_action_ran(tmp_path: Path) -> None:
         policy_id="p",
     )
     rego = (bundle / "p.rego").read_text(encoding="utf-8")
-    assert "not is_post_action_point" in rego
+    assert 'input.intervention_point == "pre_tool_call"' in rego
     assert (
-        'input.intervention_point in ["post_tool_call", "post_model_call", '
-        '"output", "agent_shutdown"]'
+        'input.intervention_point in ["pre_model_call", "pre_tool_call"]'
     ) in rego
+
+
+def _migrated_session(policy: Any, tmp_path: Path):
+    """Load a migrated policy into the real engine and open a host session."""
+    import shutil
+
+    import yaml as _yaml
+
+    if shutil.which("opa") is None and not os.environ.get("ACS_OPA_PATH"):
+        pytest.skip("OPA is required to evaluate a migrated policy")
+    from agent_control_specification import AgentControl, HostSession
+
+    from agt.cli._migrate_bridge import build_migrated_manifest
+
+    manifest = build_migrated_manifest(
+        policy, bundle_dir=tmp_path / "b", policy_id="p"
+    )
+    path = tmp_path / "manifest.yaml"
+    path.write_text(_yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+    return HostSession(
+        AgentControl.from_path(str(path)), agent_id="a", session_id="s"
+    )
+
+
+def test_approval_stays_scoped_to_tool_calls(tmp_path: Path) -> None:
+    """v4 gated require_human_approval on tool interception only.
+
+    Binding all eight intervention points must not widen the escalation:
+    firing it everywhere would, absent an approver, deny every input, model
+    call, and startup of a migrated agent.
+    """
+    from agt.cli._migrate_bridge import MigrationPolicyInput
+
+    session = _migrated_session(
+        MigrationPolicyInput(
+            name="p", require_human_approval=True, confidence_threshold=0.0
+        ),
+        tmp_path,
+    )
+    messages = {"model": "m", "messages": [{"role": "user", "content": "hi"}]}
+    for label, result in (
+        ("input", session.input("hello")),
+        ("pre_model_call", session.pre_model_call(messages)),
+        ("agent_startup", session.agent_startup({"id": "a"})),
+    ):
+        assert result.verdict.decision.value == "allow", label
+    verdict = session.pre_tool_call(tool_name="t", args={}).verdict
+    # The escalation fires only here; with no approver configured the
+    # session resolves it to a denial.
+    assert verdict.decision.value == "deny"
+    assert verdict.reason == "approval_denied"
+
+
+def test_tool_call_budget_gates_only_the_next_tool_call(tmp_path: Path) -> None:
+    """v4 compared context.call_count to max_tool_calls at tool interception.
+
+    An exhausted tool-call budget must deny the next tool call and nothing
+    else; denying pre_model_call or input as well would stop the agent from
+    ever emitting its final model response.
+    """
+    from agt.cli._migrate_bridge import MigrationPolicyInput
+
+    session = _migrated_session(
+        MigrationPolicyInput(
+            name="p",
+            max_tool_calls=1,
+            max_tokens=1_000_000,
+            confidence_threshold=0.0,
+        ),
+        tmp_path,
+    )
+    first = session.pre_tool_call(tool_name="t", args={}).verdict
+    assert first.decision.value == "allow"
+    session.builder.record_tool_call()
+    second = session.pre_tool_call(tool_name="t", args={}).verdict
+    assert second.decision.value == "deny"
+    assert second.reason == "budget_tool_calls_exceeded"
+    followup = session.pre_model_call(
+        {"model": "m", "messages": [{"role": "user", "content": "summarize"}]}
+    ).verdict
+    assert followup.decision.value == "allow"
+    assert session.input("next user turn").verdict.decision.value == "allow"
 
 
 def test_zero_width_patterns_still_deny(tmp_path: Path) -> None:
