@@ -150,8 +150,8 @@ async function install(codexHome) {
 /**
  * Remove the plugin and its marketplace registration. Policy and audit files
  * are preserved. Mirrors install's read-back gate: uninstall fails loudly
- * (non-zero exit) if Codex still lists the plugin afterwards, so a failed
- * removal is never reported as success.
+ * (non-zero exit) if Codex still reports the plugin as installed afterwards,
+ * so a failed removal is never reported as success.
  * @param {string} codexHome Target Codex home directory.
  * @returns {Promise<void>}
  */

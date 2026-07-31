@@ -15,9 +15,10 @@ import {
   loadPolicy,
 } from "../lib/policy.mjs";
 
-// loadPolicy checks <home>/agt/policy.json before the bundled default, so every
-// test pins policyPath inside its own temp root — otherwise a real policy on
-// the test machine leaks into these assertions and flips their outcomes.
+// loadPolicy prefers an explicit policyPath, then $AGT_CODEX_POLICY_PATH, then
+// ~/.codex/agt/policy.json, before the bundled default — so every test pins
+// policyPath inside its own temp root; otherwise a real policy (or an inherited
+// env override) on the test machine leaks into these assertions.
 const isolatedPolicy = (root) => join(root, "missing-user-policy.json");
 
 test("evaluatePromptSubmission blocks prompt injection and records audit", async () => {
@@ -192,10 +193,9 @@ test("bundled policy load failures block prompt submission in enforce mode", asy
   const state = await loadPolicy({
     auditPath,
     defaultPolicyPath: missingDefaultPolicy,
-    // Also isolate the user-policy lookup: loadPolicy checks
-    // <home>/agt/policy.json before the bundled default, so a real policy on
-    // the test machine would mask the bundled-failure path this test stages.
-    policyPath: join(root, "missing-user-policy.json"),
+    // Also isolate the user-policy lookup, which would otherwise mask the
+    // bundled-failure path this test stages.
+    policyPath: isolatedPolicy(root),
   });
 
   const result = await evaluatePromptSubmission(state, {

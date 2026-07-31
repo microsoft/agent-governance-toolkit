@@ -83,7 +83,7 @@ async function withFakeCodex(run) {
   }
 }
 
-test("uninstall fails loudly when codex still lists the plugin after remove", async () => {
+test("uninstall fails loudly when codex still lists the plugin as installed after remove", async () => {
   await withFakeCodex(async ({ shimDir, codexHome, marker }) => {
     const { code, stderr } = await runInstaller("uninstall", codexHome, shimDir, {
       FAKE_CODEX_LIST_LINE: INSTALLED_LINE,
