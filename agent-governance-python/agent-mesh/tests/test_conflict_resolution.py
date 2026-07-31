@@ -2,7 +2,16 @@
 # Licensed under the MIT License.
 """Tests for policy conflict resolution strategies."""
 
+# ``organisation`` is a deliberate misspelling of the ``organization`` scope --
+# the fixture for "a plausible typo the validator must reject", so its exact
+# spelling is the test. Declared per-file rather than in the shared dictionary,
+# which would let a real misspelling elsewhere pass unnoticed.
+# cspell:ignore organisation
+
+import logging
+
 import pytest
+from pydantic import ValidationError
 
 from agentmesh.governance.conflict_resolution import (
     CandidateDecision,
@@ -302,3 +311,129 @@ rules:
     def test_scope_defaults_to_global(self):
         policy = Policy(name="test")
         assert policy.scope == "global"
+
+
+class TestPolicyScopeValidation:
+    """A scope ``PolicyScope`` cannot parse must fail at load, not at evaluate.
+
+    ``PolicyEngine.evaluate`` maps ``Policy.scope`` onto ``PolicyScope`` and
+    falls back to ``GLOBAL``, the *least* specific rank. Under
+    ``most_specific_wins`` that turned a typo into a silent authorization
+    change: the mis-scoped policy sank below every correctly-scoped one, and
+    neither the decision nor its trace mentioned the scope at all.
+    """
+
+    @pytest.mark.parametrize("scope", [s.value for s in PolicyScope])
+    def test_every_enum_value_is_accepted(self, scope):
+        # Guards the guard: the accepted set is the enum, so adding a scope to
+        # PolicyScope cannot leave the validator rejecting it.
+        assert Policy(name="p", scope=scope).scope == scope
+
+    @pytest.mark.parametrize(
+        "scope",
+        [
+            "organisation",  # British spelling of a real scope
+            "Agent",  # right word, wrong case -- str Enum lookup is exact
+            "team",  # plausible but not a scope
+            "",  # empty
+        ],
+    )
+    def test_unparseable_scope_is_rejected_at_construction(self, scope):
+        with pytest.raises(ValidationError, match="Invalid policy scope"):
+            Policy(name="p", scope=scope)
+
+    def test_rejection_names_the_valid_scopes(self):
+        with pytest.raises(ValidationError) as exc_info:
+            Policy(name="p", scope="organisation")
+        message = str(exc_info.value)
+        for scope in PolicyScope:
+            assert scope.value in message
+
+    def test_yaml_load_rejects_an_unparseable_scope(self):
+        # Policies arrive as YAML in practice, so the load path is where a typo
+        # actually gets introduced.
+        yaml_content = """
+apiVersion: governance.toolkit/v1
+name: mis-scoped
+scope: organisation
+agents: ["*"]
+rules:
+  - name: r
+    condition: "action.type == 'export'"
+    action: deny
+"""
+        with pytest.raises(ValidationError, match="Invalid policy scope"):
+            PolicyEngine().load_yaml(yaml_content)
+
+    def test_a_typo_can_no_longer_flip_a_deny_into_an_allow(self):
+        """The regression, stated as the authorization outcome it changes."""
+        deny = {
+            "name": "block-export",
+            "condition": "action.type == 'export'",
+            "action": "deny",
+            "priority": 1,
+        }
+        allow = {
+            "name": "allow-all",
+            "condition": "action.type == 'export'",
+            "action": "allow",
+            "priority": 100,
+        }
+
+        def decide(agent_scope):
+            engine = PolicyEngine(conflict_strategy="most_specific_wins")
+            engine.load_policy(Policy(
+                name="agent-deny",
+                scope=agent_scope,
+                agents=["*"],
+                rules=[PolicyRule(**deny)],
+            ))
+            engine.load_policy(Policy(
+                name="global-allow",
+                scope="global",
+                agents=["*"],
+                rules=[PolicyRule(**allow)],
+            ))
+            return engine.evaluate("agent-1", {"action": {"type": "export"}})
+
+        # Spelled correctly, the agent-scoped deny wins over a global allow
+        # carrying 100x the priority -- that is what most_specific_wins means.
+        assert decide("agent").allowed is False
+
+        # Misspelled, it used to be demoted to global and lose to that allow.
+        # It cannot be built now, so the permissive decision is unreachable.
+        with pytest.raises(ValidationError):
+            decide("Agent")
+
+    def test_evaluate_still_tolerates_a_scope_mutated_after_construction(self, caplog):
+        """Validation is not re-run on assignment, so the fallback stays live.
+
+        It must degrade rather than raise -- but no longer silently: the
+        fallback now logs which policy and which scope it did not understand.
+        """
+        policy = Policy(
+            name="mutated",
+            scope="agent",
+            agents=["*"],
+            rules=[PolicyRule(
+                name="r",
+                condition="action.type == 'export'",
+                action="deny",
+            )],
+        )
+        policy.scope = "organisation"  # bypasses validation by design
+
+        engine = PolicyEngine(conflict_strategy="most_specific_wins")
+        engine.load_policy(policy)
+
+        with caplog.at_level(logging.WARNING, logger="agentmesh.governance.policy"):
+            result = engine.evaluate("agent-1", {"action": {"type": "export"}})
+
+        assert result.allowed is False
+        assert result.matched_rule == "r"
+        # The demotion is named, so an operator can find it in logs rather than
+        # by noticing a decision they did not expect.
+        assert any(
+            "unrecognized scope" in r.getMessage() and "mutated" in r.getMessage()
+            for r in caplog.records
+        )

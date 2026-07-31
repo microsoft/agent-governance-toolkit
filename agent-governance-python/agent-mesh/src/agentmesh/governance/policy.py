@@ -291,8 +291,33 @@ class Policy(BaseModel):
     # Scope for conflict resolution
     scope: str = Field(
         default="global",
-        description="Policy scope: global, tenant, or agent",
+        description="Policy scope: global, tenant, organization, or agent",
     )
+
+    @field_validator("scope")
+    @classmethod
+    def _validate_scope(cls, value: str) -> str:
+        """Reject a scope ``PolicyScope`` cannot parse, at construction.
+
+        ``PolicyEngine.evaluate`` maps this string onto ``PolicyScope`` and
+        falls back to ``GLOBAL`` when the mapping fails. ``GLOBAL`` is the
+        *least* specific rank, so under ``most_specific_wins`` a typo silently
+        demotes the policy below every other one -- an agent-scoped deny loses
+        to a global allow, and nothing in the decision or its trace says the
+        scope was not understood. Failing at load, like ``limit`` does, keeps
+        that from being a runtime authorization change.
+        """
+        # Imported here, as ``evaluate`` does, so the accepted set is the enum
+        # itself and cannot drift from what the resolver ranks.
+        from agentmesh.governance.conflict_resolution import PolicyScope
+
+        valid = {s.value for s in PolicyScope}
+        if value not in valid:
+            raise ValueError(
+                f"Invalid policy scope {value!r}. "
+                f"Must be one of: {', '.join(sorted(valid))}"
+            )
+        return value
 
     # Rules
     rules: list[PolicyRule] = Field(default_factory=list)
@@ -832,10 +857,20 @@ class PolicyEngine:
         if applicable:
             candidates: list[CandidateDecision] = []
             for policy in applicable:
-                # Map policy scope string to enum
+                # Map policy scope string to enum. ``Policy`` validates this at
+                # construction, so reaching the fallback means the field was
+                # mutated afterwards (validation is not re-run on assignment).
+                # GLOBAL is the least-specific rank, so log rather than demote
+                # a policy silently.
                 try:
                     scope = PolicyScope(policy.scope)
                 except ValueError:
+                    logger.warning(
+                        "Policy %r has unrecognized scope %r; treating it as "
+                        "'global', the least specific rank",
+                        policy.name,
+                        policy.scope,
+                    )
                     scope = PolicyScope.GLOBAL
 
                 for rule in policy.rules:
