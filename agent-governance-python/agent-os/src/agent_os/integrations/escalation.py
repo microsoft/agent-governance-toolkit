@@ -443,6 +443,7 @@ class EscalationHandler:
                 action=action,
                 reason=f"Auto-denied: escalation fatigue ({reason})",
                 context_snapshot=context_snapshot or {},
+                quorum=self.quorum,
                 decision=EscalationDecision.DENY,
                 resolved_at=datetime.now(timezone.utc),
                 resolved_by="system:fatigue_detector",
@@ -524,14 +525,13 @@ class EscalationHandler:
             decision = req.decision if req else EscalationDecision.PENDING
 
         quorum = req.quorum if req is not None else self.quorum
-        # Quorum evaluation (also catches the non-blocking backend case
-        # above, and re-derives the decision from votes either way so a
-        # raw req.decision set by a single approve()/deny() call never
-        # leaks through without being checked against quorum).
-        if quorum:
+        # Quorum evaluation for pending requests only.  approve()/deny()
+        # already finalize req.decision once quorum is met, so re-tallying
+        # here for non-pending requests would let late votes (appended
+        # after finalisation) change an already-settled outcome.
+        if quorum and req and req.decision == EscalationDecision.PENDING:
             decision = (
-                (_tally_quorum(req.votes, quorum) if req else None)
-                or EscalationDecision.PENDING
+                _tally_quorum(req.votes, quorum) or EscalationDecision.PENDING
             )
 
         if decision == EscalationDecision.PENDING:
@@ -549,7 +549,7 @@ class EscalationHandler:
                     f"timed out after {self.timeout_seconds:.0f}s"
                     if blocked_wait
                     else "has an unresolved decision on a non-blocking "
-                    f"backend (quorum unmet or no vote yet; "
+                    f"backend ({'quorum not met' if quorum else 'quorum not configured'}; "
                     f"timeout_seconds={self.timeout_seconds:.0f}s was not "
                     "actually waited)"
                 ),
