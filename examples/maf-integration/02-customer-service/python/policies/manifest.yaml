@@ -15,3 +15,7 @@ intervention_points:
     policy_target: $.input.body
     policy:
       id: support_safety
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: support_safety
