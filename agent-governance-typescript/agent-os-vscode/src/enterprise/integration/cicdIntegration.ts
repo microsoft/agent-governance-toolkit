@@ -53,10 +53,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.11'
           
@@ -69,7 +69,7 @@ jobs:
         continue-on-error: true
         
       - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
         with:
           sarif_file: results.sarif
           
