@@ -198,3 +198,53 @@ class TestMuteAgentRecursive:
     def test_scrub_text_standalone(self):
         agent = MuteAgent()
         assert "alice@test.com" not in agent.scrub_text("alice@test.com")
+
+    def test_dict_keys_scrubbed(self):
+        """Regression test for #3504: dict keys must be scrubbed, not just values."""
+        agent = MuteAgent()
+        result = FakeResult(data={"user@example.com": "contact info", "safe_key": "ok"})
+        redacted = agent.mute(result)
+        # The email key should be redacted
+        for key in redacted.data:
+            assert "user@example.com" not in key
+        # The safe value should be unchanged
+        assert redacted.data["safe_key"] == "ok"
+
+    def test_nested_dict_key_with_sensitive_data(self):
+        """Dict keys containing PII at any nesting depth must be scrubbed."""
+        agent = MuteAgent()
+        result = FakeResult(data={"outer": {"SSN: 123-45-6789": True}})
+        redacted = agent.mute(result)
+        inner = redacted.data["outer"]
+        for key in inner:
+            assert "123-45-6789" not in key
+
+    def test_set_data_scrubbed(self):
+        """Regression test for #3499: set elements must be scrubbed."""
+        agent = MuteAgent()
+        scrubbed = agent._scrub({"secret@corp.com", "clean"})
+        assert isinstance(scrubbed, set)
+        for item in scrubbed:
+            assert "secret@corp.com" not in item
+
+    def test_frozenset_data_scrubbed(self):
+        """Frozenset elements must be scrubbed and type preserved."""
+        agent = MuteAgent()
+        scrubbed = agent._scrub(frozenset({"api_key: sk_live_abc123def456ghi7"}))
+        assert isinstance(scrubbed, frozenset)
+        for item in scrubbed:
+            assert "sk_live_abc123def456ghi7" not in item
+
+    def test_tuple_subclass_fallback(self):
+        """Tuple subclasses that crash on instantiation fallback to plain tuple."""
+        class BadTuple(tuple):
+            def __new__(cls, a, b):
+                return super().__new__(cls, (a, b))
+
+        agent = MuteAgent()
+        # Should not crash; instead it should catch TypeError and return a base tuple
+        result = agent._scrub(BadTuple("alice@example.com", "safe"))
+        assert isinstance(result, tuple)
+        assert not isinstance(result, BadTuple)
+        assert "alice@example.com" not in result
+

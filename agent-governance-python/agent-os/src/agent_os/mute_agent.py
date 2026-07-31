@@ -188,19 +188,30 @@ class MuteAgent:
         if isinstance(value, str):
             return self._scrub_string(value)
         if isinstance(value, dict):
-            return {k: self._scrub(v) for k, v in value.items()}
+            # Note: Scrubbing keys may cause key collisions (e.g. multiple emails becoming "[REDACTED]"), which will result in silently dropped values.
+            return {self._scrub(k): self._scrub(v) for k, v in value.items()}
         if isinstance(value, (set, frozenset)):
             # Scrubbing can collapse distinct members onto the same placeholder;
             # a set naturally dedupes them, which is the desired outcome.
-            return type(value)(self._scrub(item) for item in value)
+            scrubbed_set = {self._scrub(item) for item in value}
+            try:
+                return type(value)(scrubbed_set)
+            except TypeError:
+                return set(scrubbed_set) if isinstance(value, set) else frozenset(scrubbed_set)
         if isinstance(value, (list, tuple)):
             scrubbed = [self._scrub(item) for item in value]
             # ``type(value)(iterable)`` is wrong for tuple subclasses with a
             # positional signature -- a named tuple raises TypeError, taking down
             # the whole result instead of redacting it. Rebuild those field-wise.
             if isinstance(value, tuple) and hasattr(value, "_fields"):
-                return type(value)(*scrubbed)
-            return type(value)(scrubbed)
+                try:
+                    return type(value)(*scrubbed)
+                except TypeError:
+                    pass
+            try:
+                return type(value)(scrubbed)
+            except TypeError:
+                return tuple(scrubbed) if isinstance(value, tuple) else list(scrubbed)
         return value
 
     def _scrub_string(self, text: str) -> str:
