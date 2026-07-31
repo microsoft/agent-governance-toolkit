@@ -172,7 +172,11 @@ class TestNestingOrderSymmetry(unittest.TestCase):
         the next pass will not even try is not a benefit -- it is the guard
         loosened for nothing.
         """
-        from agent_os.normalize import _decode_attemptable, _looks_encoded
+        from agent_os.normalize import (
+            _decode_attemptable,
+            _is_base64,
+            _looks_encoded,
+        )
 
         attemptable = "QUJDREVGR0hJSktMTU5P"  # 20 chars, base64, len % 4 == 0
         wrong_length = attemptable[:-1]  # 19 chars: same alphabet, no decoder
@@ -183,9 +187,18 @@ class TestNestingOrderSymmetry(unittest.TestCase):
         # where "looked like a payload" is the right question.
         self.assertTrue(_looks_encoded(wrong_length))
 
-        # Odd-length hex is the same mistake in the other alphabet.
-        self.assertTrue(_decode_attemptable("abcdef0123456789"))
-        self.assertFalse(_decode_attemptable("abcdef0123456789a"))
+        # Odd-length hex is the same mistake in the other alphabet. Digits only,
+        # so ``_is_base64``'s ``any(c.isalpha())`` fails and the base64 branch
+        # cannot return early -- these two reach the hex congruence, which is
+        # what they are here to pin.
+        self.assertFalse(_is_base64("1234567890123456"))
+        self.assertTrue(_decode_attemptable("1234567890123456"))
+        self.assertFalse(_decode_attemptable("123456789012345"))
+
+        # The ``0x`` prefix is stripped before the hex congruence is applied, so
+        # parity is judged on the digits rather than on the whole string.
+        self.assertTrue(_decode_attemptable("0x1234567890123456"))
+        self.assertFalse(_decode_attemptable("0x123456789012345"))
 
         # Whitespace and short runs are out for both, as prose must be.
         self.assertFalse(_decode_attemptable("hello world this is prose"))

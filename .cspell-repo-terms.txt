@@ -499,6 +499,7 @@ interp
 iproof
 ircuit
 isalnum
+isalpha
 isascii
 isatty
 isawaitable
