@@ -73,7 +73,7 @@ intervention_points:
     policy:
       id: email_policy
   post_tool_call:
-    policy_target: $.tool_result
+    policy_target: $.tool_result.value
     policy_target_kind: tool_result
     tool_name_from: $.tool_call.name
     policy:
