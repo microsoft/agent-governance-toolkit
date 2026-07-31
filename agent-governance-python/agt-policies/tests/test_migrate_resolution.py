@@ -867,7 +867,10 @@ def test_resolve_intervention_points_union_annotations(tmp_path: Path) -> None:
 
 def test_resolve_writes_default_bundle_outside_workspace(tmp_path: Path) -> None:
     root = tmp_path
-    _write(root / "governance.yaml", {"rules": []})
+    _write(
+        root / "governance.yaml",
+        {"rules": [], "intervention_points": _legacy_binding()},
+    )
     manifest = resolve_manifest(root, root)
     bundle_path = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
     # The default bundle location is a unique temp directory outside the
@@ -964,11 +967,30 @@ def test_resolve_renders_operator_vocabulary(
 def test_resolve_explicit_bundle_dir(tmp_path: Path) -> None:
     root = tmp_path / "ws"
     root.mkdir()
-    _write(root / "governance.yaml", {"rules": []})
+    _write(
+        root / "governance.yaml",
+        {"rules": [], "intervention_points": _legacy_binding()},
+    )
     out_dir = tmp_path / "build"
     manifest = resolve_manifest(root, root, bundle_dir=out_dir)
     bundle_path = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
     assert bundle_path == (out_dir / "policy").resolve()
+
+
+def test_resolve_refuses_a_chain_that_binds_no_intervention_points(
+    tmp_path: Path,
+) -> None:
+    """A manifest with no bound points is rejected by the engine on load.
+
+    Emitting one anyway reports a successful migration and leaves the user with
+    a project that cannot start, so the migrator has to refuse first.
+    """
+    root = tmp_path / "ws"
+    root.mkdir()
+    _write(root / "governance.yaml", {"rules": []})
+    with pytest.raises(ResolutionError) as excinfo:
+        resolve_manifest(root, root)
+    assert "no intervention points" in str(excinfo.value)
 
 
 # ── ResolutionError shape ────────────────────────────────────────────
