@@ -134,10 +134,10 @@ pub struct EnvelopeReference {
 /// Organization-authored rule over a combination of accumulated labels.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregationRule {
-    pub name: String,
-    pub all_labels: BTreeSet<String>,
-    pub sets_sensitivity: DataClassification,
-    pub adds_restrictions: BTreeSet<String>,
+    name: String,
+    all_labels: BTreeSet<String>,
+    sets_sensitivity: DataClassification,
+    adds_restrictions: BTreeSet<String>,
 }
 
 impl AggregationRule {
@@ -145,17 +145,25 @@ impl AggregationRule {
         name: impl Into<String>,
         all_labels: I,
         sets_sensitivity: DataClassification,
-    ) -> Self
+    ) -> Result<Self, String>
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        Self {
-            name: name.into(),
-            all_labels: all_labels.into_iter().map(Into::into).collect(),
+        let name = name.into();
+        let all_labels: BTreeSet<String> = all_labels.into_iter().map(Into::into).collect();
+        if all_labels.is_empty() {
+            return Err(format!(
+                "aggregation rule '{name}' must have a non-empty all_labels set"
+            ));
+        }
+
+        Ok(Self {
+            name,
+            all_labels,
             sets_sensitivity,
             adds_restrictions: BTreeSet::new(),
-        }
+        })
     }
 
     pub fn with_restrictions<I, S>(mut self, restrictions: I) -> Self
@@ -198,7 +206,9 @@ pub fn evaluate_aggregation(
     AggregationResult {
         aggregate_sensitivity,
         restrictions,
-        escalate: rules_applied.is_empty() && envelope.labels.len() >= category_threshold,
+        escalate: rules_applied.is_empty()
+            && !envelope.labels.is_empty()
+            && envelope.labels.len() >= category_threshold,
         rules_applied,
     }
 }
@@ -390,6 +400,7 @@ mod tests {
             ["pii", "financial"],
             DataClassification::Restricted,
         )
+        .expect("fixture rule has labels")
         .with_restrictions(["no_external_export"])
     }
 
@@ -460,6 +471,28 @@ mod tests {
             DataClassification::Internal,
         );
         assert!(evaluate_aggregation(&unknown, &rules, 3).escalate);
+    }
+
+    #[test]
+    fn empty_aggregation_rule_labels_are_rejected() {
+        let error = AggregationRule::new(
+            "empty_rule",
+            std::iter::empty::<&str>(),
+            DataClassification::TopSecret,
+        )
+        .expect_err("empty rules must not match every envelope");
+
+        assert_eq!(
+            error.to_string(),
+            "aggregation rule 'empty_rule' must have a non-empty all_labels set"
+        );
+    }
+
+    #[test]
+    fn empty_envelope_does_not_escalate_at_zero_threshold() {
+        let envelope = ContextEnvelope::new("env-1", "workflow-1");
+
+        assert!(!evaluate_aggregation(&envelope, &[], 0).escalate);
     }
 
     #[test]

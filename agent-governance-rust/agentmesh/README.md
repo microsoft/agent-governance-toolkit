@@ -400,6 +400,7 @@ let rules = [AggregationRule::new(
     ["pii", "financial"],
     DataClassification::Restricted,
 )
+.expect("aggregation rules require labels")
 .with_restrictions(["no_external_export"])];
 
 let envelope = ContextEnvelope::new("env-1", "workflow-1");
