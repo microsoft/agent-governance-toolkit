@@ -364,6 +364,19 @@ class ReferenceValues(BaseModel):
             raise ValueError("max_evidence_age_seconds must be positive")
         return value
 
+    @model_validator(mode="after")
+    def _validate_image_match_policy(self) -> ReferenceValues:
+        if (
+            self.image_match_policy is ImageMatchPolicy.SIGNING_IDENTITY
+            and not self.allowed_image_signers
+        ):
+            raise ValueError(
+                "allowed_image_signers must not be empty for SIGNING_IDENTITY policy"
+            )
+        if self.image_match_policy is ImageMatchPolicy.STABLE_CLAIMS:
+            raise ValueError("STABLE_CLAIMS image match policy is not supported")
+        return self
+
 
 def _length_prefixed_utf8(value: str, *, field_name: str) -> bytes:
     encoded = _utf8_required(value, field_name=field_name)

@@ -12,6 +12,7 @@ from agentmesh.identity.attestation import (
     AttestationEvidence,
     AttestationRequest,
     ConfidentialLevel,
+    ImageMatchPolicy,
     KeyOrigin,
     ReferenceValues,
     canonical_attestation_evidence_bytes,
@@ -196,6 +197,14 @@ class TestReferenceValues:
     def test_rejects_invalid_max_evidence_age(self) -> None:
         with pytest.raises(ValidationError, match="max_evidence_age_seconds"):
             ReferenceValues(max_evidence_age_seconds=0)
+
+    def test_rejects_signing_identity_without_allowed_signers(self) -> None:
+        with pytest.raises(ValidationError, match="allowed_image_signers"):
+            ReferenceValues(image_match_policy=ImageMatchPolicy.SIGNING_IDENTITY)
+
+    def test_rejects_unsupported_stable_claims_policy(self) -> None:
+        with pytest.raises(ValidationError, match="STABLE_CLAIMS"):
+            ReferenceValues(image_match_policy=ImageMatchPolicy.STABLE_CLAIMS)
 
     @pytest.mark.asyncio
     async def test_mock_verifier_does_not_copy_peer_supplied_key_origin(self) -> None:

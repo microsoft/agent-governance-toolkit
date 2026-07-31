@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
@@ -33,8 +34,14 @@ class AttestationVerifier(ABC):
         self,
         evidence: AttestationEvidence,
         reference_values: ReferenceValues,
+        *,
+        expected_report_data_hash: str | None = None,
     ) -> AttestationClaims:
-        """Validate evidence against reference values. Raise on failure."""
+        """Validate evidence against reference values. Raise on failure.
+
+        Concrete provider verifiers must prove that provider-authenticated
+        report data matches ``expected_report_data_hash`` when it is supplied.
+        """
 
 
 class MockAttestationVerifier(AttestationVerifier):
@@ -76,6 +83,8 @@ class MockAttestationVerifier(AttestationVerifier):
         self,
         evidence: AttestationEvidence,
         reference_values: ReferenceValues,
+        *,
+        expected_report_data_hash: str | None = None,
     ) -> AttestationClaims:
         """Validate synthetic evidence and return normalized attestation claims."""
         if self._latency_seconds:
@@ -85,6 +94,8 @@ class MockAttestationVerifier(AttestationVerifier):
         verified_at = datetime.now(UTC)
         max_age_seconds = min(reference_values.max_evidence_age_seconds, self._ttl_seconds)
         max_age = timedelta(seconds=max_age_seconds)
+        if evidence.timestamp > verified_at:
+            raise AttestationVerificationError("attestation evidence timestamp is in the future")
         if evidence.is_expired(verified_at):
             raise AttestationVerificationError("attestation evidence is expired")
         if verified_at - evidence.timestamp > max_age:
@@ -95,6 +106,13 @@ class MockAttestationVerifier(AttestationVerifier):
             raise AttestationVerificationError("attestation platform was not verified")
         if not self._report_data_match:
             raise AttestationVerificationError("attestation report data did not match")
+        if expected_report_data_hash is not None and not hmac.compare_digest(
+            evidence.report_data_hash,
+            expected_report_data_hash,
+        ):
+            raise AttestationVerificationError(
+                "attestation report data did not match the expected binding"
+            )
 
         runtime_measurements = {**evidence.runtime_measurements, **self._runtime_measurements}
         claims = dict(self._claims)
@@ -172,9 +190,6 @@ class MockAttestationVerifier(AttestationVerifier):
         reference_values: ReferenceValues,
         claims: Mapping[str, str],
     ) -> None:
-        if not reference_values.allowed_image_signers:
-            return
-
         signer = next((claims.get(name) for name in IMAGE_SIGNER_CLAIMS if claims.get(name)), None)
         if signer not in reference_values.allowed_image_signers:
             raise AttestationVerificationError(

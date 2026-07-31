@@ -14,13 +14,14 @@ import pytest
 from agentmesh.exceptions import HandshakeError
 from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
 from agentmesh.identity.attestation import (
+    AttestationClaims,
     AttestationEvidence,
     KeyOrigin,
     ReferenceValues,
     compute_binding_hash,
     compute_startup_binding,
 )
-from agentmesh.identity.attestation_verifier import MockAttestationVerifier
+from agentmesh.identity.attestation_verifier import AttestationVerifier, MockAttestationVerifier
 from agentmesh.identity.tee_keystore import LocalTEEKeyStore, MockSKRKeyStore, TEEKeyHandle
 from agentmesh.trust.handshake import HandshakeChallenge, HandshakeResponse, TrustHandshake
 
@@ -38,6 +39,26 @@ def _make_registry(*identities: AgentIdentity) -> IdentityRegistry:
     for identity in identities:
         registry.register(identity)
     return registry
+
+
+class _PermissiveAttestationVerifier(AttestationVerifier):
+    async def verify(
+        self,
+        evidence: AttestationEvidence,
+        reference_values: ReferenceValues,
+        *,
+        expected_report_data_hash: str | None = None,
+    ) -> AttestationClaims:
+        verified_at = datetime.now(UTC)
+        return AttestationClaims(
+            platform=evidence.platform,
+            key_origin=evidence.key_origin,
+            platform_verified=True,
+            report_data_match=True,
+            tcb_status="up_to_date",
+            verified_at=verified_at,
+            expires_at=verified_at + timedelta(minutes=5),
+        )
 
 
 def _make_evidence(
@@ -193,6 +214,25 @@ async def test_required_attestation_rejects_unexpected_provider_binding_hash() -
 
     assert verification["valid"] is False
     assert "startup binding mismatch" in verification["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_required_attestation_rejects_unexpected_report_data_hash() -> None:
+    agent_a, _agent_b, registry, challenge, response = await _signed_attestation_response(
+        evidence_overrides={"report_data_hash": "0" * 64},
+    )
+    verifier = TrustHandshake(
+        agent_did=str(agent_a.did),
+        identity=agent_a,
+        registry=registry,
+        attestation_verifier=MockAttestationVerifier(),
+        require_attestation=True,
+    )
+
+    verification = await verifier._verify_response(response, challenge, 0, None)
+
+    assert verification["valid"] is False
+    assert "report data" in verification["reason"].lower()
 
 
 @pytest.mark.asyncio
@@ -369,6 +409,25 @@ async def test_required_tee_bound_key_rejects_stripped_response_key_origin() -> 
 
 
 @pytest.mark.asyncio
+async def test_required_attestation_rejects_evidence_key_origin_mismatch() -> None:
+    agent_a, _agent_b, registry, challenge, response = await _signed_attestation_response(
+        evidence_key_origin=KeyOrigin.LOCAL,
+    )
+    verifier = TrustHandshake(
+        agent_did=str(agent_a.did),
+        identity=agent_a,
+        registry=registry,
+        attestation_verifier=MockAttestationVerifier(key_origin=KeyOrigin.SKR),
+        require_attestation=True,
+    )
+
+    verification = await verifier._verify_response(response, challenge, 0, None)
+
+    assert verification["valid"] is False
+    assert "key origin mismatch" in verification["reason"].lower()
+
+
+@pytest.mark.asyncio
 async def test_expired_attestation_evidence_is_rejected_by_handshake_layer() -> None:
     now = datetime.now(UTC)
     agent_a, _agent_b, registry, challenge, response = await _signed_attestation_response(
@@ -389,6 +448,29 @@ async def test_expired_attestation_evidence_is_rejected_by_handshake_layer() -> 
 
     assert verification["valid"] is False
     assert verification["reason"] == "Attestation evidence expired"
+
+
+@pytest.mark.asyncio
+async def test_future_attestation_evidence_is_rejected_by_handshake_layer() -> None:
+    timestamp = datetime.now(UTC) + timedelta(minutes=1)
+    agent_a, _agent_b, registry, challenge, response = await _signed_attestation_response(
+        evidence_overrides={
+            "timestamp": timestamp,
+            "expires_at": timestamp + timedelta(minutes=5),
+        }
+    )
+    verifier = TrustHandshake(
+        agent_did=str(agent_a.did),
+        identity=agent_a,
+        registry=registry,
+        attestation_verifier=_PermissiveAttestationVerifier(),
+        require_attestation=True,
+    )
+
+    verification = await verifier._verify_response(response, challenge, 0, None)
+
+    assert verification["valid"] is False
+    assert verification["reason"] == "Attestation evidence timestamp is in the future"
 
 
 @pytest.mark.asyncio
@@ -516,43 +598,67 @@ async def test_attestation_replay_reservation_rejects_concurrent_duplicate() -> 
 
 
 @pytest.mark.asyncio
-async def test_attestation_replay_memory_is_bounded() -> None:
+async def test_attestation_replay_cache_fails_closed_at_capacity() -> None:
     agent_a = _make_identity("verifier")
-    agent_b = _make_identity("responder")
-    registry = _make_registry(agent_a, agent_b)
-    store = MockSKRKeyStore()
-    handle = await store.acquire_key("responder-key")
-    evidence = _make_evidence(agent_did=str(agent_b.did), handle=handle)
-    responder = TrustHandshake(
-        agent_did=str(agent_b.did),
-        identity=agent_b,
-        registry=registry,
-        tee_key_store=store,
-        tee_key_id="responder-key",
-        attestation_evidence=evidence,
-    )
     verifier = TrustHandshake(
         agent_did=str(agent_a.did),
         identity=agent_a,
-        registry=registry,
-        attestation_verifier=MockAttestationVerifier(),
-        require_attestation=True,
+        registry=_make_registry(agent_a),
     )
-    verifier._max_used_attestation_challenges = 3
+    verifier._max_used_attestation_challenges = 1
+    now = datetime.now(UTC)
+    existing_key = ("did:mesh:existing", "challenge_existing", "nonce-existing")
+    new_key = ("did:mesh:new", "challenge_new", "nonce-new")
+    verifier._used_attestation_challenges[existing_key] = now + timedelta(seconds=30)
 
-    for _ in range(5):
-        challenge = HandshakeChallenge.generate()
-        response = await responder.respond(
-            challenge=challenge,
-            my_capabilities=agent_b.capabilities,
-            my_trust_score=500,
-            identity=agent_b,
-            verifier_did=str(agent_a.did),
-        )
-        verification = await verifier._verify_response(response, challenge, 0, None)
-        assert verification["valid"] is True
+    rejection = await verifier._reserve_attestation_challenge(
+        new_key,
+        now + timedelta(seconds=30),
+    )
 
-    assert len(verifier._used_attestation_challenges) <= 3
+    assert rejection == "Attestation replay cache capacity exceeded"
+    assert verifier._used_attestation_challenges == {
+        existing_key: now + timedelta(seconds=30),
+    }
+
+
+@pytest.mark.asyncio
+async def test_attestation_replay_cache_purges_expired_entries() -> None:
+    agent_a = _make_identity("verifier")
+    verifier = TrustHandshake(
+        agent_did=str(agent_a.did),
+        identity=agent_a,
+        registry=_make_registry(agent_a),
+    )
+    verifier._max_used_attestation_challenges = 1
+    now = datetime.now(UTC)
+    expired_key = ("did:mesh:expired", "challenge_expired", "nonce-expired")
+    new_key = ("did:mesh:new", "challenge_new", "nonce-new")
+    new_expiry = now + timedelta(seconds=30)
+    verifier._used_attestation_challenges[expired_key] = now - timedelta(seconds=1)
+
+    rejection = await verifier._reserve_attestation_challenge(new_key, new_expiry)
+
+    assert rejection is None
+    assert verifier._used_attestation_challenges == {new_key: new_expiry}
+
+
+@pytest.mark.asyncio
+async def test_attestation_replay_cache_rejects_expired_reservation() -> None:
+    agent_a = _make_identity("verifier")
+    verifier = TrustHandshake(
+        agent_did=str(agent_a.did),
+        identity=agent_a,
+        registry=_make_registry(agent_a),
+    )
+    now = datetime.now(UTC)
+    replay_key = ("did:mesh:peer", "challenge_expired", "nonce-expired")
+    expired_at = now - timedelta(seconds=1)
+    verifier._used_attestation_challenges[replay_key] = expired_at
+
+    rejection = await verifier._reserve_attestation_challenge(replay_key, expired_at)
+
+    assert rejection == "Attestation challenge expired"
 
 
 @pytest.mark.asyncio

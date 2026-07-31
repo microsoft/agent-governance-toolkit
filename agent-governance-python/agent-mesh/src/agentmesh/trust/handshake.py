@@ -40,6 +40,7 @@ from agentmesh.identity.attestation import (
     ReferenceValues,
     _length_prefixed_utf8,
     canonical_attestation_evidence_bytes,
+    compute_report_data_hash_hex,
     compute_startup_binding_hash,
     public_key_hash_hex,
 )
@@ -415,13 +416,19 @@ class TrustHandshake:
     async def _reserve_attestation_challenge(
         self,
         replay_key: tuple[str, str, str],
-    ) -> bool:
+        expires_at: datetime,
+    ) -> Optional[str]:
         async with self._attestation_replay_lock:
+            now = datetime.now(timezone.utc)
+            if expires_at <= now:
+                return "Attestation challenge expired"
+            self._purge_expired_attestation_challenges_locked(now)
             if replay_key in self._used_attestation_challenges:
-                return False
-            self._used_attestation_challenges[replay_key] = datetime.now(timezone.utc)
-            self._trim_used_attestation_challenges_locked()
-            return True
+                return "Attestation challenge replay detected"
+            if len(self._used_attestation_challenges) >= self._max_used_attestation_challenges:
+                return "Attestation replay cache capacity exceeded"
+            self._used_attestation_challenges[replay_key] = expires_at
+            return None
 
     async def _forget_attestation_challenge(
         self,
@@ -430,15 +437,14 @@ class TrustHandshake:
         async with self._attestation_replay_lock:
             self._used_attestation_challenges.pop(replay_key, None)
 
-    def _trim_used_attestation_challenges_locked(self) -> None:
-        # Bound the O(n) oldest-entry scan with _max_used_attestation_challenges.
-        # If that cap grows substantially, replace this dict with OrderedDict.
-        while len(self._used_attestation_challenges) > self._max_used_attestation_challenges:
-            oldest = min(
-                self._used_attestation_challenges,
-                key=self._used_attestation_challenges.__getitem__,
-            )
-            del self._used_attestation_challenges[oldest]
+    def _purge_expired_attestation_challenges_locked(self, now: datetime) -> None:
+        expired = [
+            replay_key
+            for replay_key, expires_at in self._used_attestation_challenges.items()
+            if expires_at <= now
+        ]
+        for replay_key in expired:
+            del self._used_attestation_challenges[replay_key]
 
     def clear_cache(self) -> None:
         """Clear all cached peer verification results.
@@ -852,7 +858,10 @@ class TrustHandshake:
             if require_attestation or require_tee_bound_key:
                 return "Attestation evidence required but missing"
             return None
-        if evidence.is_expired():
+        verification_time = datetime.now(timezone.utc)
+        if evidence.timestamp > verification_time:
+            return "Attestation evidence timestamp is in the future"
+        if evidence.is_expired(verification_time):
             return "Attestation evidence expired"
         if self.attestation_verifier is None:
             if require_attestation or require_tee_bound_key:
@@ -881,6 +890,12 @@ class TrustHandshake:
         except ValueError as exc:
             return f"Malformed attestation public key: {exc}"
         if evidence.challenge_id is not None or evidence.nonce is not None:
+            expected_report_data_hash = compute_report_data_hash_hex(
+                agent_did=response.agent_did,
+                challenge_id=challenge.challenge_id,
+                nonce=challenge.nonce,
+                public_key_hash=evidence.public_key_hash,
+            )
             if not evidence.matches_binding(
                 agent_did=response.agent_did,
                 challenge_id=challenge.challenge_id,
@@ -888,12 +903,15 @@ class TrustHandshake:
                 public_key_hash=evidence.public_key_hash,
             ):
                 return "Attestation evidence binding mismatch"
-        elif evidence.binding_hash is not None:
-            startup_binding_hash = compute_startup_binding_hash(
+        else:
+            expected_report_data_hash = compute_startup_binding_hash(
                 response.agent_did,
                 evidence.public_key_hash,
             )
-            if not hmac.compare_digest(evidence.binding_hash, startup_binding_hash):
+            if evidence.binding_hash is None or not hmac.compare_digest(
+                evidence.binding_hash,
+                expected_report_data_hash,
+            ):
                 return "Attestation startup binding mismatch"
 
         transcript = compute_layer2_signature_input(
@@ -912,18 +930,30 @@ class TrustHandshake:
             return f"Attestation signature verification failed: {exc}"
 
         replay_key = (response.agent_did, challenge.challenge_id, challenge.nonce)
-        if not await self._reserve_attestation_challenge(replay_key):
-            return "Attestation challenge replay detected"
+        challenge_expires_at = challenge.timestamp + timedelta(
+            seconds=challenge.expires_in_seconds
+        )
+        reservation_error = await self._reserve_attestation_challenge(
+            replay_key,
+            challenge_expires_at,
+        )
+        if reservation_error is not None:
+            return reservation_error
         try:
             claims = await self.attestation_verifier.verify(
                 evidence,
                 self.attestation_reference_values,
+                expected_report_data_hash=expected_report_data_hash,
             )
         except (AttestationError, KeyAcquisitionError) as exc:
             await self._forget_attestation_challenge(replay_key)
             return f"Attestation verification failed: {exc}"
 
-        if response.attestation_key_origin != claims.key_origin:
+        if not (
+            evidence.key_origin
+            == response.attestation_key_origin
+            == claims.key_origin
+        ):
             await self._forget_attestation_challenge(replay_key)
             return "Attestation key origin mismatch"
         if require_tee_bound_key and not claims.key_bound_to_tee:
