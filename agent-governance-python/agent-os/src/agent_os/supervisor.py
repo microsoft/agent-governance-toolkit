@@ -1,23 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Supervisor Hierarchy — Enforces layered supervision with a deterministic trust root.
+"""Layered supervision with a deterministic trust root.
 
-Level 0 (root) MUST be a deterministic (non-LLM) trust root.
-Middle levels (1–N) may be agent-based supervisors.
-Escalation always terminates at the trust root.
-
-Example:
-    >>> from agent_os.trust_root import TrustRoot
-    >>> from agent_os.supervisor import SupervisorHierarchy
-    >>> from agent_os.integrations.base import GovernancePolicy
-    >>>
-    >>> root = TrustRoot(policies=[GovernancePolicy()])
-    >>> hierarchy = SupervisorHierarchy(trust_root=root)
-    >>> hierarchy.register_supervisor("trust-root", level=0, is_agent=False)
-    >>> hierarchy.register_supervisor("safety-agent", level=1, is_agent=True)
-    >>> hierarchy.validate_hierarchy()
-    []
+Level zero must be deterministic. Higher levels may use agent supervisors, and
+escalation always terminates at the trust root.
 """
 
 from __future__ import annotations
@@ -75,11 +61,26 @@ class SupervisorHierarchy:
         """Check hierarchy rules and return a list of violations (empty = valid).
 
         Rules:
+        - No supervisor may sit above the root: levels MUST NOT be negative.
         - Level 0 MUST exist and MUST be deterministic (not an LLM agent).
         - Middle levels (1–N) may be agent-based.
         - Each level present must have at least one supervisor.
         """
         violations: list[str] = []
+
+        # Checked before anything else: level 0 is the root, so a negative level
+        # places a supervisor *above* the deterministic authority. The
+        # determinism rule below only inspects supervisors whose level is exactly
+        # 0, and the gap scan only walks ``range(1, max_level + 1)``, so a
+        # negative level was invisible to both — an agent registered at level -1
+        # produced no violations at all while ranking ahead of the trust root in
+        # ``get_authority_chain``.
+        for s in self._supervisors:
+            if s.level < 0:
+                violations.append(
+                    f"Supervisor '{s.name}' has negative level {s.level}; level 0 is the "
+                    "root and nothing may sit above it"
+                )
 
         level_0 = [s for s in self._supervisors if s.level == 0]
         if not level_0:

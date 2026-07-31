@@ -7,16 +7,16 @@ manifest is a strict superset of the ACS manifest defined in
 `policy-engine/spec/SPECIFICATION.md`, with two additional top-level
 sections owned by AGT.
 
-The AGT host first resolves the manifest chain (folder discovery + scope
-filter + merge) per `AGT-RESOLUTION-1.0.md`, then passes a single flat
-manifest to the engine with `extends: []`.
+The runtime consumes native ACS/AGT manifests directly. Composition uses the
+ACS `extends` contract. Legacy governance folder discovery is available only
+through the one-way migration command.
 
 ## 1. Layout
 
 ```yaml
 agent_control_specification_version: "0.3.0-alpha-agt"  # see §2
 metadata: {...}                                          # free-form
-extends: []                                              # AGT host pre-resolves; engine sees empty
+extends: []                                              # native ACS composition
 policies: {...}                                          # ACS-defined; supports rego, cedar, test, custom
 intervention_points: {...}                               # ACS-defined; 8 well-known keys
 tools: {...}                                             # ACS-defined; AGT may add content_hash field
@@ -46,7 +46,7 @@ limits:
   max_policy_input_bytes: 524288    # 512 KiB
   max_annotators_per_point: 16
   max_annotator_output_bytes: 65536
-  max_extends_depth: 8              # host-resolution layer enforces
+  max_extends_depth: 8
   max_intervention_points_per_run: 256
 ```
 
@@ -83,9 +83,9 @@ opaque annotator config.
 
 An AGT host conforms to this manifest profile when it:
 
-1. Resolves manifest chains per `AGT-RESOLUTION-1.0.md` before calling the
-   engine.
-2. Passes the engine a flat manifest with `extends: []`.
+1. Passes native ACS/AGT manifests to the engine without legacy folder
+   discovery.
+2. Uses ACS `extends` for composition.
 3. Sets `agent_control_specification_version` per §2.
 4. Supplies all ACS-required fields (`policies`, `intervention_points`).
 5. MAY include `approval` and `limits` sections.

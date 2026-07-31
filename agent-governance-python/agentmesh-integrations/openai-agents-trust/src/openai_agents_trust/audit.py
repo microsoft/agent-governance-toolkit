@@ -9,7 +9,7 @@ import json
 import time
 import threading
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -116,3 +116,23 @@ class AuditLog:
 
     def __len__(self) -> int:
         return len(self._entries)
+
+
+def audit_record(evaluation: Any) -> dict:
+    """The restricted audit payload for one ACS evaluation.
+
+    The result a session returns carries a verdict, not the ``audit_record``
+    accessor the removed wrapper provided, and this log hashes what it is
+    given, so the payload has to be plain JSON shapes. It lives beside the log
+    because both the guardrails and the lifecycle hooks write to it.
+    """
+    verdict = evaluation.verdict
+    return {
+        "schema": "agt.policy_evaluation.v1",
+        "verdict": verdict.decision.value,
+        "reason_code": verdict.reason or "",
+        "message": verdict.message or "",
+        "result_labels": list(verdict.result_labels or ()),
+        "input_identity": getattr(evaluation, "input_identity", None),
+        "enforced_identity": getattr(evaluation, "enforced_identity", None),
+    }

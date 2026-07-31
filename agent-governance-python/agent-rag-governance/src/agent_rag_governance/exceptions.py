@@ -17,7 +17,6 @@ class RAGGovernanceError(Exception):
 _REASON_PHRASES: dict[str, str] = {
     "denied": "explicitly denied",
     "not_allowed": "not in the allow list",
-    "cedar_denied": "denied by Cedar policy",
 }
 
 
@@ -27,9 +26,8 @@ class CollectionDeniedError(RAGGovernanceError):
     Attributes:
         collection: The collection name that was blocked.
         agent_id: The agent that attempted the retrieval.
-        reason: One of ``"denied"`` (explicit deny list), ``"not_allowed"``
-            (allow list is set and collection is absent), or
-            ``"cedar_denied"`` (rejected by the Cedar policy engine).
+        reason: Either ``"denied"`` for the explicit deny list or
+            ``"not_allowed"`` when an allow list excludes the collection.
     """
 
     def __init__(self, collection: str, agent_id: str, reason: str = "denied") -> None:
