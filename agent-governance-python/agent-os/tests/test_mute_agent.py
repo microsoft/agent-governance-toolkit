@@ -248,3 +248,26 @@ class TestMuteAgentRecursive:
         assert not isinstance(result, BadTuple)
         assert "alice@example.com" not in result
 
+    def test_set_subclass_fallback(self):
+        #Set subclasses that crash on instantiation fallback to plain set/frozenset.
+        class BadSet(set):
+            def __init__(self, items, extra_arg):
+                super().__init__(items)
+                
+        class BadFrozen(frozenset):
+            def __new__(cls, items, extra_arg):
+                return super().__new__(cls, items)
+
+        agent = MuteAgent()
+        
+        # Test set fallback
+        result = agent._scrub(BadSet({"alice@example.com", "safe"}, extra_arg="foo"))
+        assert isinstance(result, set)
+        assert not isinstance(result, BadSet)
+        assert "alice@example.com" not in result
+        
+        # Test frozenset fallback
+        result_frozen = agent._scrub(BadFrozen({"bob@example.com", "safe"}, extra_arg="bar"))
+        assert isinstance(result_frozen, frozenset)
+        assert not isinstance(result_frozen, BadFrozen)
+        assert "bob@example.com" not in result_frozen
