@@ -152,16 +152,19 @@ escalate contains msg if {
 # Defaulting through object.get twice — once for a missing `context` object,
 # once for a missing/empty `nin_purpose` within it — means an absent context,
 # an absent nin_purpose, and an explicit nin_purpose: "" are all treated
-# identically, so none of the three can bypass this gate.
+# identically. `in {"", null}` additionally catches an explicit
+# nin_purpose: null (object.get returns the stored null as-is, not the
+# default, so a plain == "" comparison would miss it), so none of the
+# four can bypass this gate.
 escalate contains msg if {
 	input.action in nin_verification_actions
-	object.get(object.get(input, "context", {}), "nin_purpose", "") == ""
+	object.get(object.get(input, "context", {}), "nin_purpose", "") in {"", null}
 	msg := "NIMC Act 2026: NIN lookup attempted without a declared purpose — purpose limitation requires stating the reason before each verification"
 }
 
 escalate contains msg if {
 	input.action in bvn_verification_actions
-	object.get(object.get(input, "context", {}), "nin_purpose", "") == ""
+	object.get(object.get(input, "context", {}), "nin_purpose", "") in {"", null}
 	msg := "NIMC Act 2026: BVN lookup attempted without a declared purpose — purpose limitation requires stating the reason before each verification"
 }
 
@@ -199,10 +202,13 @@ audit contains msg if {
 	msg := "BVN/NIN Audit: Identity-related action logged — NDPA s.30 and CBN BVN audit trail requirement"
 }
 
-# NIMC Act 2026 — Mandatory NIN prerequisite: regulated services require verified NIN
+# NIMC Act 2026 — Mandatory NIN prerequisite: regulated services require verified NIN.
+# object.get(..., false) != true (matching pos-geofencing.rego's location_verified
+# check) treats missing, null, and false all as "not verified" — a bare
+# `not input.context.nin_verified` would miss an explicit nin_verified: null.
 audit contains msg if {
 	input.action in mandatory_nin_service_actions
-	not input.context.nin_verified
+	object.get(input.context, "nin_verified", false) != true
 	msg := sprintf(
 		"NIMC Act 2026: Action '%v' is a mandatory-NIN service — bank accounts, SIM, passports, land transactions, pension, insurance, and consumer credit require context.nin_verified = true",
 		[input.action],

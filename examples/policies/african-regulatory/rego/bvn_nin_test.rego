@@ -322,6 +322,28 @@ test_bvn_lookup_with_empty_purpose_escalates_nimc_2026 if {
 	_has_nimc_purpose_msg(result)
 }
 
+# An explicit nin_purpose: null must be treated the same as missing/empty —
+# regression test for the `in {"", null}` bypass fix.
+test_nin_lookup_with_null_purpose_escalates_nimc_2026 if {
+	result := bvn_nin.escalate with input as {
+		"action": "nin_lookup",
+		"params": {},
+		"output": "",
+		"context": {"nin_purpose": null},
+	}
+	_has_nimc_purpose_msg(result)
+}
+
+test_bvn_lookup_with_null_purpose_escalates_nimc_2026 if {
+	result := bvn_nin.escalate with input as {
+		"action": "verify_bvn",
+		"params": {},
+		"output": "",
+		"context": {"nin_purpose": null},
+	}
+	_has_nimc_purpose_msg(result)
+}
+
 test_nin_lookup_with_no_context_key_escalates_nimc_2026 if {
 	result := bvn_nin.escalate with input as {
 		"action": "nin_lookup",
@@ -435,6 +457,28 @@ test_open_account_with_nin_verified_does_not_trigger_mandatory_nin_audit if {
 		"context": {"nin_verified": true},
 	}
 	not _has_mandatory_nin_msg(result)
+}
+
+# An explicit nin_verified: null must be treated the same as missing —
+# regression test for the object.get(..., false) != true bypass fix.
+test_open_account_with_null_nin_verified_is_audited_nimc_2026 if {
+	result := bvn_nin.audit with input as {
+		"action": "open_account",
+		"params": {},
+		"output": "",
+		"context": {"nin_verified": null},
+	}
+	_has_mandatory_nin_msg(result)
+}
+
+test_open_account_with_nin_verified_false_is_audited_nimc_2026 if {
+	result := bvn_nin.audit with input as {
+		"action": "open_account",
+		"params": {},
+		"output": "",
+		"context": {"nin_verified": false},
+	}
+	_has_mandatory_nin_msg(result)
 }
 
 _has_mandatory_nin_msg(msgs) if {
