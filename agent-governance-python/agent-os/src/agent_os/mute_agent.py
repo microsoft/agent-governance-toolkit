@@ -212,6 +212,7 @@ class MuteAgent:
                 return type(value)(scrubbed)
             except TypeError:
                 return tuple(scrubbed) if isinstance(value, tuple) else list(scrubbed)
+
         return value
 
     def _scrub_string(self, text: str) -> str:
