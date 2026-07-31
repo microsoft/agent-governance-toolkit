@@ -1079,6 +1079,9 @@ function collectDirectResourceCandidates({ toolArgs, toolName, cwd }) {
     }
 
     const lastKey = String(keyPath.at(-1) ?? "");
+    // URL detection is value-based on purpose: keys like `link` or `target`
+    // can hold URL values too, so gating on URL-ish key names would let them
+    // through (the direct-URL policy bypass fixed on main in #2541).
     if (looksLikeUrlValue(value)) {
       urls.push({
         normalizedUrl: normalizeUrlValue(value),
@@ -1150,10 +1153,6 @@ function looksLikePathField(key) {
   return /(path|file|filename|target|targets|destination|dest|output|cwd|workspace|root|dir|directory)/i.test(
     key,
   );
-}
-
-function looksLikeUrlField(key) {
-  return /(url|uri|href|endpoint)/i.test(key);
 }
 
 function looksLikeUrlValue(value) {

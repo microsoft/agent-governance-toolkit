@@ -74,11 +74,26 @@ function codex(args, codexHome) {
   }
 }
 
-/** True when `codex plugin list` reports our plugin as installed AND enabled. */
-function isPluginEnabled(codexHome) {
+/**
+ * Read back the plugin's state from `codex plugin list`. Install and uninstall
+ * both gate on this read-back rather than on subcommand exit codes, because
+ * `codex plugin add`/`remove` can fail (or no-op) while still exiting zero.
+ * The `^`-anchored multiline match keeps a similarly named plugin (e.g.
+ * `other-agt-governance@agt`) from satisfying the check, and `installed`
+ * requires the status column to start with `installed` because Codex also
+ * lists known-but-uninstalled marketplace plugins (`<selector>  not installed`).
+ * `row` is the plugin's own list line (null when absent) — `status` reports it
+ * verbatim; an unanchored substring search could hit the marketplace path
+ * header that `codex plugin list` prints above the table.
+ * @returns {{installed: boolean, enabled: boolean, row: string | null, listOutput: string}}
+ */
+function readPluginState(codexHome) {
   const list = codex(["plugin", "list"], codexHome);
+  const selector = PLUGIN_SELECTOR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return {
-    enabled: new RegExp(`${PLUGIN_NAME}@${MARKETPLACE_NAME}\\s+installed,\\s*enabled`).test(list.stdout),
+    installed: new RegExp(`^${selector}\\s+installed\\b`, "m").test(list.stdout),
+    enabled: new RegExp(`^${selector}\\s+installed,\\s*enabled\\b`, "m").test(list.stdout),
+    row: list.stdout.match(new RegExp(`^${selector}(?=\\s|$).*$`, "m"))?.[0].trim() ?? null,
     listOutput: list.stdout,
   };
 }
@@ -108,7 +123,7 @@ async function install(codexHome) {
   codex(["plugin", "marketplace", "add", PACKAGE_ROOT], codexHome);
   const add = codex(["plugin", "add", PLUGIN_SELECTOR], codexHome);
 
-  const { enabled, listOutput } = isPluginEnabled(codexHome);
+  const { enabled, listOutput } = readPluginState(codexHome);
   if (!enabled) {
     throw new Error(
       `plugin did not register as installed+enabled.\n` +
@@ -134,16 +149,32 @@ async function install(codexHome) {
 
 /**
  * Remove the plugin and its marketplace registration. Policy and audit files
- * are preserved.
+ * are preserved. Mirrors install's read-back gate: uninstall fails loudly
+ * (non-zero exit) if Codex still lists the plugin afterwards, so a failed
+ * removal is never reported as success.
  * @param {string} codexHome Target Codex home directory.
  * @returns {Promise<void>}
  */
 async function uninstall(codexHome) {
+  // Snapshot before removing so the success message can distinguish "removed
+  // it" from "was never installed" — the remove command's exit code cannot,
+  // because it also fails when the plugin is simply absent.
+  const before = readPluginState(codexHome);
   const removed = codex(["plugin", "remove", PLUGIN_SELECTOR], codexHome);
   codex(["plugin", "marketplace", "remove", MARKETPLACE_NAME], codexHome);
+
+  const after = readPluginState(codexHome);
+  if (after.installed) {
+    throw new Error(
+      `plugin still reports as installed after removal.\n` +
+        `\`codex plugin remove\` output:\n${removed.stderr || removed.stdout || "(none)"}\n` +
+        `\`codex plugin list\`:\n${after.listOutput || "(empty)"}`,
+    );
+  }
+
   process.stdout.write(
     [
-      removed.ok
+      before.installed
         ? `Removed AGT governance plugin (${PLUGIN_SELECTOR}) and its marketplace.`
         : `AGT plugin was not installed; removed any marketplace registration.`,
       `Policy and audit files under ${join(codexHome, "agt")} were kept; delete them manually if desired.`,
@@ -159,9 +190,7 @@ async function uninstall(codexHome) {
  * @returns {Promise<void>}
  */
 async function status(codexHome) {
-  const list = codex(["plugin", "list"], codexHome);
-  const line =
-    list.stdout.split("\n").find((l) => l.includes(PLUGIN_NAME))?.trim() ?? "not installed";
+  const line = readPluginState(codexHome).row ?? "not installed";
   const policyPath = join(codexHome, "agt", "policy.json");
   const auditPath = join(codexHome, "agt", "audit-log.json");
   const { getAuditStatus } = await import("../lib/audit.mjs");

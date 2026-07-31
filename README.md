@@ -261,6 +261,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
 | **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
+| **Codex CLI** | [`@microsoft/agent-governance-codex-cli`](agent-governance-codex-cli/) | `node agent-governance-codex-cli/bin/agt-codex.mjs install` |
 | **OpenCode** | [`@microsoft/agent-governance-opencode`](agent-governance-opencode/) | `npm install @microsoft/agent-governance-opencode` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
