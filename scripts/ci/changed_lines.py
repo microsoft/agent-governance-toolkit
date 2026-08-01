@@ -47,12 +47,20 @@ def run_git_diff(
     *,
     name_only: bool,
 ) -> str:
-    """Run git diff for the requested pathspecs and return stdout."""
+    """Run git diff for the requested pathspecs and return stdout.
+
+    ``--merge-base`` diffs the requested base against its merge-base with
+    HEAD, so only the branch's own changes are reported. Diffing against a
+    live base ref directly would include reversed base drift (lines that
+    main changed or removed after the branch was created), which made the
+    spell-check job flag words from main's history on unrelated PRs.
+    """
     command = [
         "git",
         "diff",
         "--no-ext-diff",
         "--diff-filter=ACMRT",
+        "--merge-base",
     ]
     if name_only:
         command.append("--name-only")
