@@ -1,6 +1,6 @@
 ---
 title: Agent Control Specification
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-31
 owner: docs-team
 ---
 
@@ -17,13 +17,17 @@ owner: docs-team
 
 ## What ACS is
 
-Agent Control Specification, or ACS, is a stateless, deterministic, fail-closed policy decision runtime for agent security. A host submits a complete snapshot plus a policy manifest at each intervention point, and ACS returns a normalized verdict that the host enforces.
+Agent Control Specification, or ACS, is AGT's stateless, deterministic,
+fail-closed policy decision runtime. At each intervention point, a host sends a
+policy manifest and complete snapshot to ACS. ACS returns a normalized verdict;
+the host enforces it.
 
-The core is pure Rust and exposes native binding surfaces for C-ABI, PyO3, napi, and P-Invoke. AGT includes SDKs for Python, Node.js, .NET, and Rust.
+The Rust core exposes bindings through C-ABI, PyO3, napi, and P-Invoke. AGT
+includes SDKs for Python, Node.js, .NET, and Rust.
 
 ## Intervention-point model
 
-ACS mediates the agent loop by evaluating policy at eight intervention points across this flow.
+ACS evaluates policy at eight points in the agent loop:
 
 ```text
 Input -> Model -> Tool Call -> Tool Result -> Output
@@ -40,7 +44,8 @@ Input -> Model -> Tool Call -> Tool Result -> Output
 | `output` | Before final output is returned or published. |
 | `agent_shutdown` | Before the agent session is closed. |
 
-Each call includes the full snapshot for that point, so hosts can run ACS without relying on retained runtime state.
+Each request includes the full snapshot for that point. ACS does not depend on
+retained runtime state.
 
 ## Core properties
 
@@ -71,7 +76,9 @@ Verdicts may include optional evidence fields that propagate into telemetry.
 | `test` | Provides fixed test-double behavior for runtime and conformance tests. |
 | `custom` | Calls a host dispatcher identified by adapter configuration. |
 
-The AGT variant replaces upstream effects with the `transform` verdict, adds optional `evidence` fields on verdicts and telemetry, and adds a top-level `approval` section for escalation backends.
+The AGT variant uses the `transform` verdict instead of upstream effects,
+attaches optional `evidence` fields to verdicts and telemetry, and adds a
+top-level `approval` section for escalation backends.
 
 ## Manifest shape
 
@@ -94,12 +101,16 @@ The Rust core emits structured telemetry through a `TelemetrySink`. Telemetry is
 
 ## Where it lives in AGT
 
-ACS is vendored into [`policy-engine/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine) as the AGT 5.0 policy layer and is now AGT-owned source. It is the decision-runtime core that backs policy evaluation. AGT hosts and adapters call it through `agt-policies`; the Agent OS compatibility bridge preserves existing integration behavior while routing new host code toward ACS.
+AGT owns the vendored ACS source under
+[`policy-engine/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine).
+`agt-policies` connects AGT hosts and adapters to that runtime. The Agent OS
+compatibility bridge preserves existing integration behavior while routing new
+host code toward ACS.
 
 ## How AGT Python hosts call ACS
 
-`agt-policies` is the canonical Python host package for ACS. It gives adapters
-and gateways the AGT-facing pieces that do not belong in the stateless engine:
+`agt-policies` is the canonical Python host package for ACS. It provides the
+host concerns that remain outside the stateless engine:
 
 - governance manifest discovery and resolution
 - complete intervention-point snapshots
@@ -111,8 +122,8 @@ and gateways the AGT-facing pieces that do not belong in the stateless engine:
 pip install agt-policies
 ```
 
-Use `agent-control-specification` directly only when you need the native ACS SDK
-without the AGT host conventions.
+Use `agent-control-specification` directly only for the native ACS SDK without
+AGT's host conventions.
 
 ## SDKs and specification
 
@@ -130,9 +141,9 @@ The Python SDK distribution is named `agent-control-specification` in `policy-en
 ## Trusted by partners
 
 !!! note "Historical name"
-    AgentShield in the Bigspin quotation was the former name used for ACS.
-    It is unrelated to the separate Microsoft Agent Shield integration exposed
-    through `agent_os.integrations.agentshield_adapter`.
+    The Bigspin quotation uses AgentShield, ACS's former name. This is separate
+    from the Microsoft Agent Shield integration exposed through
+    `agent_os.integrations.agentshield_adapter`.
 
 <!--
   Replace the placeholder logos, quotes, and attributions below with real,

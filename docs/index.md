@@ -1,6 +1,6 @@
 ---
 title: Agent Governance Toolkit
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-31
 owner: docs-team
 hide:
   - navigation
@@ -15,7 +15,7 @@ hide:
 
 # Ship autonomous agents with enforceable guardrails
 
-<p class="agt-hero-subtitle">ACS policy decisions, identity, isolation, and audit for agent actions.<br>Portable controls, enforced by your agent host.</p>
+<p class="agt-hero-subtitle">ACS provides portable policy controls that your host enforces.<br>Add identity, isolation, and audit around each agent action.</p>
 
 <div class="agt-hero-cta">
   <a class="agt-btn agt-btn-solid" href="quickstart/">Get started</a>
@@ -77,9 +77,9 @@ Your AI agents call tools, browse the web, query databases, and delegate to othe
 
 ## Start with governance in 2 lines
 
-Wrap any tool function with `govern()` for the fastest integration. This is the
-current AgentMesh convenience API for application teams. Platform hosts and new
-AGT 5 policy integrations should use the ACS path in the next section.
+Wrap a tool function with `govern()` for the shortest application integration.
+This is the current AgentMesh convenience API. New hosts, adapters, and platform
+policy integrations should use ACS.
 
 ```python
 from agentmesh.governance import govern
@@ -87,7 +87,10 @@ from agentmesh.governance import govern
 safe_tool = govern(my_tool, policy="policy.yaml")
 ```
 
-That's it. `safe_tool` evaluates your YAML policy on every call, logs the decision, and raises `GovernanceDenied` if the action is blocked. Works with LangChain, CrewAI, OpenAI Agents, AutoGen, Google ADK, and any other framework.
+On every call, `safe_tool` evaluates the YAML policy, logs the decision to an
+audit trail, and raises `GovernanceDenied` when the policy blocks the action.
+Because it wraps a callable, the same pattern works with tools from LangChain,
+CrewAI, OpenAI Agents, AutoGen, Google ADK, and any other framework.
 
 ```yaml
 # policy.yaml
@@ -122,9 +125,9 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
 ## ACS is the policy decision layer
 
 [Agent Control Specification](packages/agent-control-specification.md), or ACS,
-is the canonical AGT 5 runtime for policy decisions. The host intercepts an
-agent lifecycle event, builds a complete snapshot, asks ACS for a verdict, and
-enforces that verdict before allowing the side effect.
+is the canonical AGT 5 policy decision runtime. At each lifecycle event, the
+host sends ACS a complete snapshot, receives a verdict, and applies it at the
+corresponding intervention point.
 
 ```bash
 pip install agt-policies
@@ -150,9 +153,9 @@ if not result.allowed:
 ```
 
 ACS returns one of five normalized verdicts: `allow`, `warn`, `deny`,
-`escalate`, or `transform`. It does not execute the tool or retain hidden
-session state. That separation makes the same policy contract portable across
-framework adapters, gateways, and custom agent hosts.
+`escalate`, or `transform`. ACS neither executes the tool nor retains hidden
+session state, so framework adapters, gateways, and custom hosts can share the
+same portable policy contract.
 
 Run `examples/acs-email-tool` from a repository checkout, or follow the
 [step-by-step ACS tutorial](tutorials/55-agent-control-specification.md).
@@ -175,9 +178,9 @@ flowchart LR
     HV["Runtime isolation"] --> T
 ```
 
-ACS decides; the host enforces. Identity, audit, and runtime isolation provide
-the surrounding evidence and execution controls without changing the policy
-decision contract.
+ACS returns the decision; the host applies it. Identity and audit supply context
+and evidence, while runtime isolation controls execution. These layers do not
+change the ACS decision contract.
 
 </div>
 
@@ -189,7 +192,7 @@ decision contract.
 <a class="agt-card" data-pkg="acs" href="packages/agent-control-specification/">
 <img class="agt-card-icon" src="assets/icons/agent-os.svg" alt="">
 <span class="agt-card-body"><span class="agt-card-title">ACS policy decision layer</span>
-<span class="agt-card-desc">Intervention points, portable manifests, and fail-closed verdicts</span></span>
+<span class="agt-card-desc">Portable manifests, intervention points, and fail-closed verdicts</span></span>
 </a>
 <a class="agt-card" data-pkg="compliance" href="packages/#python-toolkit">
 <img class="agt-card-icon" src="assets/icons/agent-compliance.svg" alt="">
@@ -238,11 +241,11 @@ decision contract.
 
 ## Framework Integrations
 
-Application teams can wrap a callable with `govern()`. Hosts that need the
-canonical AGT 5 contract use `agt-policies` to build ACS snapshots and enforce
-verdicts at framework lifecycle hooks. Optional adapters cover LangChain,
-CrewAI, OpenAI Agents, LangGraph, LlamaIndex, Haystack, PydanticAI, and Google
-ADK. See the [package guide](packages/index.md#framework-integrations).
+Use `govern()` to wrap application callables. For framework lifecycle hooks,
+hosts use the canonical AGT 5 contract in `agt-policies` to build ACS snapshots
+and enforce verdicts. Optional adapters cover LangChain, CrewAI, OpenAI Agents,
+LangGraph, LlamaIndex, Haystack, PydanticAI, and Google ADK. See the
+[package guide](packages/index.md#framework-integrations).
 
 </div>
 
@@ -266,7 +269,8 @@ ADK. See the [package guide](packages/index.md#framework-integrations).
 
 ## Specifications and design contracts
 
-These documents define runtime and interoperability contracts. Each document carries its own status; inclusion here does not imply that every implementation is conformant.
+These documents define runtime and interoperability contracts. Each page states
+its status; listing it here does not imply that every implementation conforms.
 
 | Document | Scope |
 |---|---|

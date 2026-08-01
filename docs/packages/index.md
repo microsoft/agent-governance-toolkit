@@ -1,25 +1,26 @@
 ---
 title: Packages
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-31
 owner: docs-team
 ---
 
 # Packages
 
-AGT ships a small set of canonical package families. Start with the Python
-toolkit unless you need one specific runtime surface or another language SDK.
+AGT publishes a small set of canonical package families. Most Python users
+should start with the toolkit; choose a narrower package only for a specific
+runtime surface or language SDK.
 
 !!! important "Public Preview"
-    Package APIs may change before general availability. Prefer the canonical
-    names below for new projects; older component names remain compatibility
-    packages during migration.
+    Package APIs may change before general availability. Use the canonical names
+    below for new projects. Older component names remain as temporary
+    compatibility packages.
 
 ## Python toolkit
 
-The meta-package is the recommended starting point. The `[full]` extra installs
-the core runtime, framework integrations, CLI tools, and protocol surfaces used
-throughout the convenience-wrapper documentation. Add `agt-policies` when
-building on the canonical AGT 5 ACS host API.
+The meta-package is the recommended starting point. Its `[full]` extra installs
+the core runtime, framework integrations, CLI tools, and protocol packages used
+by the convenience-wrapper examples. Install `agt-policies` when building on
+the canonical AGT 5 ACS host API.
 
 ```bash
 pip install "agent-governance-toolkit[full]"
@@ -39,8 +40,8 @@ Source: `agent-governance-python/agent-compliance`
 ## Python core
 
 `agent-governance-toolkit-core` contains policy, trust, identity, audit, and
-runtime primitives. It is the current distribution behind the legacy
-`agent_os`, `agentmesh`, runtime, and hypervisor compatibility imports.
+runtime primitives. It provides the current implementation behind the legacy
+`agent_os`, `agentmesh`, runtime, and hypervisor imports.
 
 ```bash
 pip install agent-governance-toolkit-core
@@ -50,8 +51,8 @@ Source: `agent-governance-python/agent-governance-toolkit-core`
 
 ## Framework integrations
 
-`agent-governance-toolkit-integrations` packages optional adapters without
-forcing every framework dependency into the core installation.
+`agent-governance-toolkit-integrations` contains optional adapters, so the core
+package does not install every framework dependency.
 
 ```bash
 pip install "agent-governance-toolkit-integrations[langchain]"
@@ -87,16 +88,16 @@ Source: `agent-governance-python/agent-governance-toolkit-protocols`
 
 ## Agent Control Specification
 
-Agent Control Specification, or ACS, is the canonical stateless policy decision
-runtime. AGT hosts normally use `agt-policies`, which resolves manifests, builds
-snapshots, calls ACS, and maps verdicts into host-facing results.
+Agent Control Specification, or ACS, is AGT's canonical stateless policy
+decision runtime. AGT hosts normally use `agt-policies` to resolve manifests,
+build snapshots, call ACS, and map verdicts into host-facing results.
 
 ```bash
 pip install agt-policies
 ```
 
-Advanced hosts that need the native SDK directly can install
-`agent-control-specification`. See the
+Install `agent-control-specification` directly only when the host needs the
+native SDK without AGT's host conventions. See the
 [ACS package guide](agent-control-specification.md).
 
 ## Language SDKs
@@ -111,9 +112,9 @@ Advanced hosts that need the native SDK directly can install
 
 ## Other shipped surfaces
 
-Standalone Python packages, developer-tool integrations, ACS SDKs, and OCI
-images remain separate where consolidation would obscure their lifecycle or
-consumer. The authoritative identity and migration map is
+Some Python packages, developer tools, ACS SDKs, and OCI images remain separate
+where consolidation would obscure their lifecycle or intended consumer. The
+authoritative identity and migration map is
 [`../package-migration.md`](../package-migration.md).
 
 ## Status labels

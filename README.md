@@ -65,10 +65,10 @@ pip install agent-governance-toolkit[full]
 pip install agt-policies
 ```
 
-Use the `[full]` extra for the short application wrapper below. Use
-`agt-policies` for new hosts, adapters, gateways, and platform enforcement on
-ACS, the canonical AGT 5 policy decision layer. The current `govern()` wrapper
-does not call ACS, so the two paths remain explicit.
+The `[full]` extra supplies the application wrapper below. Use `agt-policies`
+for new hosts, adapters, gateways, and platform enforcement through ACS, the
+canonical AGT 5 policy decision layer. The current `govern()` wrapper does not
+call ACS.
 
 For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
 
@@ -85,7 +85,8 @@ from agentmesh.governance import govern
 safe_tool = govern(my_tool, policy="policy.yaml")   # every call checked, logged, enforced
 ```
 
-That's it. `safe_tool` evaluates your YAML policy on every call, logs the decision, and raises `GovernanceDenied` if the action is blocked.
+On every call, `safe_tool` evaluates the YAML policy, logs the decision to an
+audit trail, and raises `GovernanceDenied` when the policy blocks the action.
 
 ```yaml
 # policy.yaml
@@ -113,7 +114,7 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
   Destructive operations require human approval
 ```
 
-Use ACS when you need the portable intervention-point contract:
+Use ACS when the host needs the portable intervention-point contract:
 
 <details>
 <summary><b>ACS host example</b></summary>

@@ -1,15 +1,15 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 name: Docs Quality
 
-# Runs link validation and frontmatter checks on PRs that touch the
-# documentation site or its quality tooling.
+# Validates links and frontmatter when a PR changes the documentation site
+# or its quality tooling.
 #
 # Link checking is strict: any broken relative link, missing target, or
 # unresolved anchor fails the job. The baseline file is empty and reserved
-# only for an explicitly approved migration.
+# for approved migrations.
 #
-# Frontmatter checking is strict because the published docs corpus has
-# complete title, ownership, and review-date metadata.
+# Frontmatter checking is strict because the published corpus has complete
+# title, ownership, and review-date metadata.
 
 on:
   pull_request:

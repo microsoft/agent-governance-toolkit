@@ -56,8 +56,8 @@ PR that touches markdown. It enforces two checks:
 
 | Check | Script | Mode |
 |-------|--------|------|
-| Relative link validation | [scripts/docs/check_links.py](../scripts/docs/check_links.py) | **strict** — broken links fail CI |
-| Frontmatter validation | [scripts/docs/check_frontmatter.py](../scripts/docs/check_frontmatter.py) | **strict** — missing title, review date, or owner fails CI |
+| Relative link validation | [scripts/docs/check_links.py](../scripts/docs/check_links.py) | **strict**: broken links fail CI |
+| Frontmatter validation | [scripts/docs/check_frontmatter.py](../scripts/docs/check_frontmatter.py) | **strict**: missing title, review date, or owner fails CI |
 
 Run them locally before opening a PR:
 
@@ -88,7 +88,7 @@ owner: agt-maintainers      # team or maintainer handle
 ---
 ```
 
-`last_reviewed` is a freshness signal — bump it whenever you meaningfully revise
+`last_reviewed` is a freshness signal. Bump it whenever you meaningfully revise
 a page. The link checker resolves relative links, URL-encoded paths, and
 heading anchors (GitHub-style slug). Directory targets are accepted if the
 directory exists (matching GitHub's folder rendering); pass

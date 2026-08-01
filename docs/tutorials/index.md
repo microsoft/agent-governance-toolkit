@@ -1,21 +1,22 @@
 ---
 title: "Tutorials"
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-31
 owner: agt-maintainers
 ---
 
 # Tutorials
 
-Step-by-step guides organized by what you're trying to accomplish.
+Step-by-step guides grouped by task and role.
 
 !!! tip "Where to start?"
-    **New here?** Start with [2-Line Quickstart](36-govern-quickstart.md) to see AGT in action, then follow [Policy Engine Basics](01-policy-engine.md) for a full walkthrough.
+    **New to AGT?** Start with [2-Line Quickstart](36-govern-quickstart.md), then
+    follow [Policy Engine Basics](01-policy-engine.md).
 
 ---
 
 ## Learning Paths
 
-Pick a path based on your role. Each path is a curated sequence of tutorials, not a flat list.
+Choose the path that matches your role.
 
 ### :material-rocket-launch: **Path 1: First governed agent** (30 min)
 
@@ -31,10 +32,10 @@ For developers adding governance to their first agent.
 For platform engineers building adapters, gateways, or custom agent runtimes on
 the canonical AGT 5 decision contract.
 
-1. [Agent Control Specification](55-agent-control-specification.md) — manifests, snapshots, and host enforcement
-2. [OPA / Rego / Cedar](08-opa-rego-cedar-policies.md) — choose the policy backend
-3. [Approval Workflows](38-approval-workflows.md) — route `escalate` verdicts
-4. [OpenTelemetry Integration](40-otel-observability.md) — observe policy decisions
+1. [Agent Control Specification](55-agent-control-specification.md): manifests, snapshots, and host enforcement
+2. [OPA / Rego / Cedar](08-opa-rego-cedar-policies.md): choose the policy backend
+3. [Approval Workflows](38-approval-workflows.md): route `escalate` verdicts
+4. [OpenTelemetry Integration](40-otel-observability.md): observe policy decisions
 
 ### :material-shield-lock: **Path 3: Secure an agent fleet** (60 min)
 
@@ -76,7 +77,7 @@ For SRE teams operating agents at scale.
 
 ## Getting Started
 
-The essentials to get your first governed agent running in minutes.
+Use these guides to build your first governed agent.
 
 | Tutorial | What you'll accomplish |
 |----------|----------------------|
@@ -90,7 +91,7 @@ The essentials to get your first governed agent running in minutes.
 
 ## End-to-End Scenarios
 
-Complete workflows from a customer perspective: pick the scenario closest to your use case.
+Choose the end-to-end scenario closest to your use case.
 
 | Scenario | Description |
 |----------|-------------|
@@ -142,7 +143,7 @@ Writing, composing, and enforcing governance policies.
 
 ### Policy-as-Code Series
 
-A focused series on writing, testing, and versioning governance policies.
+This series covers writing, testing, and versioning governance policies.
 
 | # | Tutorial | What you'll learn |
 |---|----------|-------------------|

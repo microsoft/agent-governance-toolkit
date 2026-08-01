@@ -1,12 +1,12 @@
 # ACS email-tool enforcement
 
-This framework-neutral example shows the canonical AGT 5 policy path:
+This framework-neutral example uses the canonical AGT 5 policy path:
 
 ```text
 Host -> SnapshotBuilder -> AgtRuntime -> ACS verdict -> host enforcement
 ```
 
-The host evaluates `send_email` before execution. The custom policy produces
+The host evaluates `send_email` before execution. Its custom policy returns
 three ACS outcomes:
 
 | Input | Verdict | Host behavior |
@@ -15,8 +15,8 @@ three ACS outcomes:
 | Body containing `TRACK-*` | `transform` | Redact the token, then execute |
 | Recipient under `example.net` | `deny` | Do not execute |
 
-The policy is intentionally local and deterministic so the example needs no
-model, network call, secret, or OPA installation.
+The policy runs locally and deterministically. The example needs no model,
+network call, secret, or OPA installation.
 
 ## Files
 
@@ -40,7 +40,7 @@ pip install -e "./agent-governance-python/agt-policies[dev]"
 ```
 
 `agt-policies` is the AGT host package. It builds snapshots, calls the vendored
-ACS runtime, and maps the returned verdict into an `EvaluationResult`.
+ACS runtime, and maps each verdict to an `EvaluationResult`.
 
 ## Run
 
@@ -56,8 +56,8 @@ Expected output:
 [deny] decision=deny executed=False reason=external_recipient_blocked
 ```
 
-The host owns the side effect. ACS only returns the decision and transformed
-target, so the denied case never calls `send_email`.
+The host owns the side effect. ACS returns only the decision and transformed
+target, so a denied request never calls `send_email`.
 
 ## Test
 
@@ -65,7 +65,7 @@ target, so the denied case never calls `send_email`.
 pytest examples/acs-email-tool/test_email_tool.py
 ```
 
-The dispatcher tests run without the native SDK. The end-to-end test runs when
+The dispatcher tests do not need the native SDK. The end-to-end test runs when
 `agent-control-specification` and `agt-policies` are installed.
 
 ## Cleanup
@@ -74,4 +74,3 @@ The dispatcher tests run without the native SDK. The end-to-end test runs when
 deactivate
 rm -rf .venv
 ```
-

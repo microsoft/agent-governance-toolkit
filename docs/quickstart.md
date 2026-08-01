@@ -1,12 +1,12 @@
 ---
 title: Quick Start
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-31
 owner: docs-team
 ---
 
 # Quick Start
 
-Get from zero to governed AI agents in under 5 minutes.
+Govern an AI agent in under five minutes.
 
 !!! important "Public Preview"
     APIs may change before general availability. The canonical package names
@@ -18,11 +18,12 @@ Get from zero to governed AI agents in under 5 minutes.
 pip install agent-governance-toolkit[full]
 ```
 
-Use the `[full]` extra for the convenience wrapper and framework examples below.
-The base `agent-governance-toolkit` wheel installs the compliance CLI only.
+The `[full]` extra supplies the convenience wrapper and framework integrations
+used below. The base `agent-governance-toolkit` wheel installs the compliance
+CLI only.
 
-For the canonical AGT 5 policy host API, also install `agt-policies`. It brings
-in the Agent Control Specification Python SDK:
+For the canonical AGT 5 policy host API, also install `agt-policies`. It
+includes the Agent Control Specification Python SDK:
 
 ```bash
 pip install agt-policies
@@ -33,11 +34,11 @@ pip install agt-policies
 | Path | Use it when | Runtime |
 |---|---|---|
 | `agentmesh.governance.govern()` | You want the shortest working application integration | AgentMesh convenience policy engine |
-| `agt.policies.AgtRuntime` | You are building new host, adapter, gateway, or platform enforcement | ACS, the canonical AGT 5 decision layer |
+| `agt.policies.AgtRuntime` | You are building new host, adapter, gateway, or platform enforcement | ACS, the canonical AGT 5 policy decision layer |
 
-The two paths are intentionally named separately. The current `govern()` wrapper
-does not call ACS. Existing applications can keep using it, while new policy
-hosts should target the portable ACS snapshot and verdict contract.
+The APIs use different runtimes. The current `govern()` wrapper does not call
+ACS. Existing applications can keep the wrapper; new policy hosts should use ACS
+through its portable snapshot and verdict contract.
 
 !!! info "Other languages"
     **TypeScript:** `npm install @microsoft/agent-governance-sdk` ·
@@ -53,9 +54,8 @@ from agentmesh.governance import govern
 safe_tool = govern(my_tool, policy="policy.yaml")
 ```
 
-That's it. `safe_tool` evaluates your YAML policy on every call, logs the
-decision to an audit trail, and raises `GovernanceDenied` if the action is
-blocked.
+On each call, `safe_tool` evaluates the YAML policy, logs the decision to an
+audit trail, and raises `GovernanceDenied` when the policy blocks the action.
 
 ## Write a convenience-wrapper policy
 
@@ -115,8 +115,8 @@ GovernanceDenied: Action denied by policy rule 'block-dangerous-tools':
 
 ## Use ACS for new policy host code
 
-ACS is stateless. Your host builds a complete snapshot at an intervention point,
-receives a normalized verdict, and owns enforcement:
+ACS is stateless. At each intervention point, the host sends a complete
+snapshot, receives a normalized verdict, and applies it:
 
 ```python
 from agt.policies import SnapshotBuilder
@@ -137,26 +137,27 @@ if not result.allowed:
     raise PermissionError(result.reason)
 ```
 
-The manifest selects the policy and target for `pre_tool_call`. ACS can return
-`allow`, `warn`, `deny`, `escalate`, or `transform`; the host executes, blocks,
-routes approval, or applies the transformed target.
+The manifest binds a policy and target to `pre_tool_call`. ACS returns `allow`,
+`warn`, `deny`, `escalate`, or `transform`; the host executes, blocks, requests
+approval, or applies a transformed target.
 
 Run `examples/acs-email-tool` from a repository checkout, or follow the
 [ACS tutorial](tutorials/55-agent-control-specification.md).
 
 ## Use with your framework
 
-AGT works with any agent framework. The stable starting point is the `govern()`
-wrapper on tool functions:
+For framework tools, `govern()` remains the stable starting point and accepts
+any callable:
 
 ```python
 from agentmesh.governance import govern
 safe_tool = govern(my_langchain_tool.run, policy="policy.yaml")
 ```
 
-Install an optional adapter extra when you need framework-specific hooks.
-Canonical extras currently cover **LangChain**, **CrewAI**, **OpenAI Agents**,
-**LangGraph**, **LlamaIndex**, **Haystack**, **PydanticAI**, and **Google ADK**.
+AGT works with any agent framework through the callable wrapper. Install an
+adapter extra when you need framework-specific hooks. Canonical extras cover
+**LangChain**, **CrewAI**, **OpenAI Agents**, **LangGraph**, **LlamaIndex**,
+**Haystack**, **PydanticAI**, and **Google ADK**.
 
 ```bash
 pip install "agent-governance-toolkit[langchain]"
@@ -170,7 +171,7 @@ integration-package installs and the complete extra list.
 
 ## Verify OWASP coverage
 
-Check your deployment covers the OWASP Agentic Security Threats:
+Run the OWASP Agentic Security Threats compliance check:
 
 ```bash
 agt verify
