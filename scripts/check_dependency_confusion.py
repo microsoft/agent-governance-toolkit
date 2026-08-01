@@ -107,7 +107,7 @@ REGISTERED_PACKAGES = {
     "sql", "async", "nexus", "caas-core", "message-bus",
     "ai-agents", "amb", "eval_type_backport",
     # Integration packages / real PyPI packages used as deps
-    # Optional integration deps in agt-integrations/pyproject.toml (all real PyPI packages):
+    # Optional integration backend deps (all real PyPI packages):
     #   flowise (Flowise SDK), boto3 (AWS, for AVP), nostr-sdk (Nostr WoT), oso (Oso authz).
     "flowise", "boto3", "nostr-sdk", "oso",
     # fastembed: Qdrant's embedding library, optional dep for the default-off

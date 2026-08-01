@@ -75,7 +75,6 @@ STEP_COLORS = {
 EVENT_CATEGORIES = {
     "session": "#0074D9",
     "ring": "#FF851B",
-    "liability": "#FF4136",
     "saga": "#2ECC40",
     "vfs": "#B10DC9",
     "security": "#FFDC00",
@@ -106,10 +105,6 @@ SIMULATED_EVENT_TYPES = [
     "ring.elevated",
     "ring.demoted",
     "ring.breach_detected",
-    "liability.vouch_created",
-    "liability.vouch_released",
-    "liability.slash_executed",
-    "liability.fault_attributed",
     "saga.created",
     "saga.step_started",
     "saga.step_committed",
@@ -117,7 +112,6 @@ SIMULATED_EVENT_TYPES = [
     "saga.compensating",
     "saga.completed",
     "saga.escalated",
-    "saga.checkpoint_saved",
     "vfs.write",
     "vfs.delete",
     "vfs.snapshot",
@@ -276,70 +270,6 @@ def generate_sagas(sessions: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 @st.cache_data(ttl=300)
-def generate_vouches(agents_df: pd.DataFrame) -> pd.DataFrame:
-    rng = random.Random(_seed() + 4)
-    rows = []
-    grouped = agents_df.groupby("session_id")
-    for sid, group in grouped:
-        agents = group.to_dict("records")
-        for _ in range(min(len(agents), rng.randint(2, 5))):
-            voucher = rng.choice([a for a in agents if a["sigma_raw"] >= 0.5] or agents)
-            vouchee = rng.choice(
-                [a for a in agents if a["agent_did"] != voucher["agent_did"]] or agents
-            )
-            bond_pct = round(rng.uniform(0.10, 0.35), 2)
-            rows.append(
-                dict(
-                    vouch_id=f"v-{uuid.UUID(int=rng.getrandbits(128)).hex[:6]}",
-                    voucher_did=voucher["agent_did"],
-                    vouchee_did=vouchee["agent_did"],
-                    session_id=sid,
-                    bonded_sigma_pct=bond_pct,
-                    bonded_amount=round(voucher["sigma_raw"] * bond_pct, 3),
-                    created_at=datetime.now(UTC) - timedelta(minutes=rng.randint(5, 60)),
-                    is_active=rng.random() > 0.2,
-                )
-            )
-    return pd.DataFrame(rows)
-
-
-@st.cache_data(ttl=300)
-def generate_slashes(vouches_df: pd.DataFrame) -> pd.DataFrame:
-    rng = random.Random(_seed() + 5)
-    rows = []
-    if vouches_df.empty:
-        return pd.DataFrame(
-            columns=[
-                "slash_id",
-                "vouchee_did",
-                "sigma_before",
-                "sigma_after",
-                "reason",
-                "session_id",
-                "timestamp",
-                "cascade_depth",
-                "vouchers_clipped",
-            ]
-        )
-    for _, v in vouches_df.iterrows():
-        if rng.random() < 0.25:
-            rows.append(
-                dict(
-                    slash_id=f"sl-{uuid.UUID(int=rng.getrandbits(128)).hex[:6]}",
-                    vouchee_did=v["vouchee_did"],
-                    sigma_before=round(rng.uniform(0.3, 0.8), 3),
-                    sigma_after=0.0,
-                    reason=rng.choice(["behavioral_drift", "policy_violation", "timeout_exceeded"]),
-                    session_id=v["session_id"],
-                    timestamp=datetime.now(UTC) - timedelta(minutes=rng.randint(1, 30)),
-                    cascade_depth=rng.randint(0, 2),
-                    vouchers_clipped=rng.randint(1, 3),
-                )
-            )
-    return pd.DataFrame(rows)
-
-
-@st.cache_data(ttl=300)
 def generate_events(sessions: list[str], n: int = 200) -> pd.DataFrame:
     rng = random.Random(_seed() + 6)
     rows = []
@@ -427,8 +357,6 @@ sessions_df = sim_sessions
 agents_df = generate_agents(session_ids)
 transitions_df = generate_ring_transitions(agents_df)
 sagas_df, steps_df = generate_sagas(session_ids)
-vouches_df = generate_vouches(agents_df)
-slashes_df = generate_slashes(vouches_df)
 events_df = generate_events(session_ids)
 
 if selected_session != "All Sessions":
@@ -440,8 +368,6 @@ if selected_session != "All Sessions":
     )
     sagas_df = sagas_df[sagas_df["session_id"] == selected_session]
     steps_df = steps_df[steps_df["saga_id"].isin(sagas_df["saga_id"])]
-    vouches_df = vouches_df[vouches_df["session_id"] == selected_session]
-    slashes_df = slashes_df[slashes_df["session_id"] == selected_session]
     events_df = events_df[events_df["session_id"] == selected_session]
 
 # ---------------------------------------------------------------------------
@@ -453,17 +379,17 @@ m1.metric("Sessions", len(sessions_df))
 m2.metric("Agents", len(agents_df))
 m3.metric("Active Sagas", int((sagas_df["state"] == "RUNNING").sum()) if not sagas_df.empty else 0)
 m4.metric("Events", len(events_df))
-m5.metric("Sponsors", len(vouches_df))
+m5.metric("Ring Changes", len(transitions_df))
 
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_overview, tab_rings, tab_sagas, tab_liability, tab_events = st.tabs(
+tab_overview, tab_rings, tab_sagas, tab_audit, tab_events = st.tabs(
     [
         "📊 Session Overview",
         "🔒 Execution Rings",
         "⚙️ Saga Orchestration",
-        "💰 Liability & Trust",
+        "🧾 Audit & Verification",
         "📡 Event Stream",
     ]
 )
@@ -762,118 +688,13 @@ with tab_sagas:
         c2.metric("Success Rate", f"{completed / max(1, total_sagas) * 100:.0f}%")
         c3.metric("Failure Rate", f"{failed / max(1, total_sagas) * 100:.0f}%")
 
-# ===== TAB 4: Liability & Trust ==============================================
-with tab_liability:
-    st.subheader("Liability & Trust")
+# ===== TAB 4: Audit & Verification ==========================================
+with tab_audit:
+    st.subheader("Audit & Verification")
     c1, c2 = st.columns(2)
 
     with c1:
-        # Sponsor network graph
-        st.markdown("#### Sponsor Network")
-        if not vouches_df.empty:
-            G = nx.DiGraph()
-            for _, v in vouches_df.iterrows():
-                short_voucher = v["voucher_did"].split(":")[-1]
-                short_vouchee = v["vouchee_did"].split(":")[-1]
-                G.add_edge(short_voucher, short_vouchee, weight=v["bonded_amount"])
-
-            pos = nx.spring_layout(G, seed=42, k=2.0)
-
-            edge_x, edge_y = [], []
-            annotations = []
-            for u, v, data in G.edges(data=True):
-                x0, y0 = pos[u]
-                x1, y1 = pos[v]
-                edge_x.extend([x0, x1, None])
-                edge_y.extend([y0, y1, None])
-                mid_x, mid_y = (x0 + x1) / 2, (y0 + y1) / 2
-                annotations.append(
-                    dict(
-                        x=mid_x,
-                        y=mid_y,
-                        text=f"{data['weight']:.2f}σ",
-                        showarrow=False,
-                        font=dict(size=9, color="#FFDC00"),
-                    )
-                )
-
-            node_x = [pos[n][0] for n in G.nodes()]
-            node_y = [pos[n][1] for n in G.nodes()]
-            node_text = list(G.nodes())
-
-            fig = go.Figure()
-            fig.add_trace(
-                go.Scatter(
-                    x=edge_x,
-                    y=edge_y,
-                    mode="lines",
-                    line=dict(width=1.5, color="#555"),
-                    hoverinfo="none",
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=node_x,
-                    y=node_y,
-                    mode="markers+text",
-                    marker=dict(size=20, color="#0074D9", line=dict(width=2, color="#E0E0E0")),
-                    text=node_text,
-                    textposition="top center",
-                    textfont=dict(size=10, color="#E0E0E0"),
-                    hoverinfo="text",
-                )
-            )
-            fig.update_layout(
-                title="Sponsor Network (bond amounts)",
-                showlegend=False,
-                xaxis=dict(visible=False),
-                yaxis=dict(visible=False),
-                annotations=annotations,
-                **PLOTLY_LAYOUT,
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No sponsors recorded.")
-
-    with c2:
-        # Penalty cascade visualization
-        st.markdown("#### Penalty Cascades")
-        if not slashes_df.empty:
-            fig = go.Figure()
-            for _, sl in slashes_df.iterrows():
-                fig.add_trace(
-                    go.Scatter(
-                        x=[0, sl["cascade_depth"]],
-                        y=[sl["sigma_before"], sl["sigma_after"]],
-                        mode="lines+markers",
-                        name=sl["vouchee_did"].split(":")[-1],
-                        marker=dict(size=10),
-                        line=dict(width=2),
-                        hovertemplate=(
-                            f"Agent: {sl['vouchee_did']}<br>"
-                            f"Reason: {sl['reason']}<br>"
-                            f"σ: {sl['sigma_before']:.3f} → {sl['sigma_after']:.3f}<br>"
-                            f"Cascade depth: {sl['cascade_depth']}<br>"
-                            f"Sponsors clipped: {sl['vouchers_clipped']}<extra></extra>"
-                        ),
-                    )
-                )
-            fig.update_layout(
-                title="Penalty Impact (σ drop vs cascade depth)",
-                xaxis_title="Cascade Depth",
-                yaxis_title="σ Score",
-                **PLOTLY_LAYOUT,
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No penalty events recorded.")
-
-    st.markdown("---")
-    c3, c4 = st.columns(2)
-
-    with c3:
-        # Trust leaderboard
-        st.markdown("#### 🏆 Trust Score Leaderboard")
+        st.markdown("#### Trust Score Leaderboard")
         if not agents_df.empty:
             leaderboard = (
                 agents_df.groupby("agent_did")
@@ -885,9 +706,7 @@ with tab_liability:
                 .sort_values("eff_score", ascending=False)
                 .reset_index()
             )
-            leaderboard["rank"] = range(1, len(leaderboard) + 1)
             leaderboard["agent"] = leaderboard["agent_did"].str.split(":").str[-1]
-
             fig = go.Figure(
                 go.Bar(
                     x=leaderboard["eff_score"],
@@ -905,40 +724,46 @@ with tab_liability:
                 **PLOTLY_LAYOUT,
             )
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No agents in the selected session.")
 
-    with c4:
-        # Liability exposure heatmap
-        st.markdown("#### Liability Exposure Heatmap")
-        if not vouches_df.empty:
-            exposure = (
-                vouches_df.groupby(["voucher_did", "session_id"])["bonded_amount"]
-                .sum()
-                .reset_index()
-            )
-            exposure["sponsor"] = exposure["voucher_did"].str.split(":").str[-1]
-            exposure["session"] = exposure["session_id"].str[:12]
-            pivot = exposure.pivot_table(
-                index="sponsor", columns="session", values="bonded_amount", fill_value=0
-            )
-
+    with c2:
+        st.markdown("#### Audit and Verification Events")
+        signal_events = events_df[events_df["category"].isin(["audit", "verification", "security"])]
+        if not signal_events.empty:
+            counts = signal_events["event_type"].value_counts()
             fig = go.Figure(
-                go.Heatmap(
-                    z=pivot.values,
-                    x=pivot.columns.tolist(),
-                    y=pivot.index.tolist(),
-                    colorscale="YlOrRd",
-                    text=np.round(pivot.values, 3),
-                    texttemplate="%{text}",
-                    hovertemplate="Sponsor: %{y}<br>Session: %{x}<br>Bonded σ: %{z:.3f}<extra></extra>",
+                go.Bar(
+                    x=counts.index.tolist(),
+                    y=counts.values.tolist(),
+                    marker_color=[EVENT_CATEGORIES.get(x.split(".")[0], "#AAA") for x in counts.index],
+                    text=counts.values.tolist(),
+                    textposition="auto",
                 )
             )
-            fig.update_layout(
-                title="Total Bonded σ per Agent × Session",
-                **PLOTLY_LAYOUT,
-            )
+            fig.update_layout(title="Safety Signal Event Counts", **PLOTLY_LAYOUT)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No exposure data available.")
+            st.info("No audit, verification, or security events recorded.")
+
+    st.markdown("---")
+    c3, c4, c5 = st.columns(3)
+    c3.metric("Audits", int((events_df["category"] == "audit").sum()))
+    c4.metric("Verifications", int((events_df["category"] == "verification").sum()))
+    c5.metric("Security Events", int((events_df["category"] == "security").sum()))
+
+    st.markdown("#### Recent Safety Signals")
+    recent = events_df[events_df["category"].isin(["audit", "verification", "security"])].tail(25)
+    if not recent.empty:
+        display_recent = recent.copy()
+        display_recent["time"] = display_recent["timestamp"].dt.strftime("%H:%M:%S")
+        st.dataframe(
+            display_recent[["time", "event_type", "session_id", "agent_did", "causal_trace_id"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No safety signals match the current filters.")
 
 # ===== TAB 5: Event Stream ===================================================
 with tab_events:

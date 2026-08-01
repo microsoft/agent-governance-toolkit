@@ -14,7 +14,7 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from benchmark.red_team_dataset import (
+from benchmarks.red_team_dataset import (
     get_prompts_by_category,
     PromptCategory,
     get_dataset_stats

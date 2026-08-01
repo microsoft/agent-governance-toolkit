@@ -14,6 +14,16 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class NonceStoreCapacityError(RuntimeError):
+    """Raised when a nonce cannot be stored without evicting an in-window nonce.
+
+    Signals that the replay-protection store is saturated with nonces that are
+    still inside the replay window. Callers must treat this as a fail-closed
+    condition (reject the message) rather than evicting a live nonce, which
+    would re-open the replay window.
+    """
+
+
 class MCPSessionStore(Protocol):
     """Persistence contract for authenticated MCP sessions."""
 
@@ -34,7 +44,13 @@ class MCPNonceStore(Protocol):
         """Return ``True`` when *nonce* is still tracked."""
 
     def add(self, nonce: str, expires_at: datetime) -> None:
-        """Track *nonce* until *expires_at*."""
+        """Track *nonce* until *expires_at*.
+
+        Implementations must retain a nonce for at least its replay window and
+        must not evict an in-window nonce to make room. When the store is full
+        of in-window nonces they should raise ``NonceStoreCapacityError`` so the
+        caller fails closed.
+        """
 
     def cleanup(self) -> int:
         """Remove expired entries and return the number removed."""
@@ -81,7 +97,15 @@ class InMemorySessionStore:
 
 
 class InMemoryNonceStore:
-    """Thread-safe in-memory nonce storage with TTL cleanup and eviction."""
+    """Thread-safe in-memory nonce storage with TTL retention and fail-closed capacity.
+
+    Nonces are retained until their ``expires_at`` (the replay horizon). When the
+    store reaches ``max_entries`` it reclaims room by dropping only entries that
+    have already expired; it never evicts an in-window nonce, because doing so
+    would re-open the replay window. If the store is full of in-window nonces a
+    new insertion raises :class:`NonceStoreCapacityError` so the caller can fail
+    closed. Effective memory is bounded by ``max_entries``.
+    """
 
     def __init__(
         self,
@@ -101,7 +125,10 @@ class InMemoryNonceStore:
             expires_at = self._nonces.get(nonce)
             if expires_at is None:
                 return False
-            if expires_at <= self._clock():
+            # Expire strictly AFTER expires_at. The verifier accepts a message
+            # whose age == replay_window (inclusive), so the nonce must remain
+            # tracked at that exact boundary or a replay slips through.
+            if expires_at < self._clock():
                 self._nonces.pop(nonce, None)
                 return False
             self._nonces.move_to_end(nonce)
@@ -109,16 +136,27 @@ class InMemoryNonceStore:
 
     def add(self, nonce: str, expires_at: datetime) -> None:
         with self._lock:
+            if nonce not in self._nonces and len(self._nonces) >= self._max_entries:
+                # Expired-first eviction: reclaim room only from nonces whose
+                # replay window has strictly elapsed (matches has()/cleanup()).
+                now = self._clock()
+                for expired in [n for n, exp in self._nonces.items() if exp < now]:
+                    self._nonces.pop(expired, None)
+                # Fail closed: never evict an in-window nonce to make room.
+                if len(self._nonces) >= self._max_entries:
+                    raise NonceStoreCapacityError(
+                        f"nonce store at capacity ({self._max_entries}); refusing "
+                        "to evict an in-window nonce (increase max_entries or "
+                        "shorten the replay window)"
+                    )
             self._nonces[nonce] = expires_at
             self._nonces.move_to_end(nonce)
-            while len(self._nonces) > self._max_entries:
-                self._nonces.popitem(last=False)
 
     def cleanup(self) -> int:
         removed = 0
         now = self._clock()
         with self._lock:
-            expired = [nonce for nonce, expires_at in self._nonces.items() if expires_at <= now]
+            expired = [nonce for nonce, expires_at in self._nonces.items() if expires_at < now]
             for nonce in expired:
                 self._nonces.pop(nonce, None)
             removed = len(expired)

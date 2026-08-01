@@ -1,19 +1,20 @@
-# Tutorial 11 — Saga Orchestration
+# Tutorial 11 Saga Orchestration
 
-> **Package:** `agentmesh-runtime` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
+> **Package:** `agent-hypervisor` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
 
 ---
 
 ## What You'll Learn
 
 - Multi-step transactions with compensating actions
-- Saga DSL for declarative pipeline definitions
-- Fan-out for parallel step execution
-- Compensating actions and rollback strategies
+- Saga and step state machines with validated transitions
+- Timeout and retry handling for individual steps
+- Reverse-order compensation and rollback strategies
+- Integrating saga steps with execution rings
 
 ---
 
-**Multi-step agent transactions with compensating actions, parallel fan-out, and semantic checkpoints.**
+**Multi-step agent transactions with compensating actions and reverse-order rollback.**
 
 See also: [Execution Sandboxing (Tutorial 06)](./06-execution-sandboxing.md) | [Observability & Tracing (Tutorial 13)](./13-observability-and-tracing.md) | [Agent Runtime README](../../agent-governance-python/agent-runtime/README.md)
 
@@ -26,15 +27,11 @@ See also: [Execution Sandboxing (Tutorial 06)](./06-execution-sandboxing.md) | [
 3. [Quick Start: A 3-Step Saga with Compensation](#3-quick-start-a-3-step-saga-with-compensation)
 4. [SagaOrchestrator](#4-sagaorchestrator)
 5. [Saga & Step State Machines](#5-saga--step-state-machines)
-6. [SagaDSLParser — Declarative Saga Definitions](#6-sagadslparser--declarative-saga-definitions)
-7. [Schema Validation](#7-schema-validation)
-8. [Compensating Transactions](#8-compensating-transactions)
-9. [FanOutOrchestrator — Parallel Step Execution](#9-fanoutorchestrator--parallel-step-execution)
-10. [CheckpointManager — Save & Restore Saga State](#10-checkpointmanager--save--restore-saga-state)
-11. [Error Handling](#11-error-handling)
-12. [Integration with Execution Rings](#12-integration-with-execution-rings)
-13. [Real-World Example: Multi-Agent Data Pipeline](#13-real-world-example-multi-agent-data-pipeline)
-14. [Next Steps](#14-next-steps)
+6. [Compensating Transactions](#6-compensating-transactions)
+7. [Error Handling](#7-error-handling)
+8. [Integration with Execution Rings](#8-integration-with-execution-rings)
+9. [Real-World Example: Multi-Agent Data Pipeline](#9-real-world-example-multi-agent-data-pipeline)
+10. [Next Steps](#10-next-steps)
 
 ---
 
@@ -63,46 +60,34 @@ If Step 3 fails:
 | Component | Purpose |
 |-----------|---------|
 | `SagaOrchestrator` | Sequential step execution with retry and compensation |
-| `SagaDSLParser` | Declarative saga definitions from structured dictionaries |
-| `SagaSchemaValidator` | JSON schema validation for saga definitions |
-| `FanOutOrchestrator` | Parallel step execution with success policies |
-| `CheckpointManager` | Semantic checkpoints for replay and skip-ahead |
 
 ---
 
 ## 2. Installation
 
 ```bash
-pip install agentmesh-runtime
+pip install agent-governance-toolkit-core
 ```
 
 Import from either package:
 
 ```python
 # From runtime (convenience re-exports)
-from agent_runtime import (
-    SagaOrchestrator, SagaState, StepState,
-    FanOutOrchestrator, FanOutPolicy,
-    CheckpointManager, SagaDSLParser, SagaDefinition,
-)
+from agent_runtime import SagaOrchestrator, SagaState, StepState
 
 # Or directly from hypervisor
-from hypervisor.saga.orchestrator import SagaOrchestrator
-from hypervisor.saga.state_machine import Saga, SagaStep, SagaState, StepState
-from hypervisor.saga.dsl import SagaDSLParser, SagaDefinition
-from hypervisor.saga.fan_out import FanOutOrchestrator, FanOutPolicy, FanOutGroup
-from hypervisor.saga.checkpoint import CheckpointManager, SemanticCheckpoint
-from hypervisor.saga.schema import SagaSchemaValidator, SagaSchemaError
+from hypervisor.saga.orchestrator import SagaOrchestrator, SagaTimeoutError
+from hypervisor.saga.state_machine import Saga, SagaStep, SagaState, StepState, SagaStateError
 ```
 
-**Requirements:** Python ≥ 3.11, `agentmesh-runtime` v2.0.2+
+**Requirements:** Python 3.11+
 
 ---
 
 ## 3. Quick Start: A 3-Step Saga with Compensation
 
-A complete example — define a 3-step deployment saga, execute it, and
-handle failure with automatic compensation:
+A complete example that defines a 3-step deployment saga, executes it, and
+handles failure with automatic compensation:
 
 ```python
 import asyncio
@@ -116,7 +101,7 @@ async def main():
     # 1. Create a saga bound to a session
     saga = orchestrator.create_saga(session_id="session-deploy-42")
 
-    # 2. Add steps — each pairs a forward action with a compensation
+    # 2. Add steps, each pairing a forward action with a compensation
     step_pr = orchestrator.add_step(
         saga_id=saga.saga_id,
         action_id="data.create_pr",
@@ -193,7 +178,7 @@ asyncio.run(main())
 Saga state: SagaState.COMPLETED
 ```
 
-Compensation runs in **reverse order** — tests cancelled before PR closed.
+Compensation runs in **reverse order**, so tests are cancelled before the PR is closed.
 
 ---
 
@@ -221,9 +206,9 @@ class SagaOrchestrator:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `action_id` | — | Action type (dot-notation: `model.`, `data.`, `deploy.`, etc.) |
-| `agent_did` | — | Decentralized identifier of the executing agent |
-| `execute_api` | — | Forward execution endpoint |
+| `action_id` | required | Action type (dot-notation: `model.`, `data.`, `deploy.`, etc.) |
+| `agent_did` | required | Decentralized identifier of the executing agent |
+| `execute_api` | required | Forward execution endpoint |
 | `undo_api` | `None` | Compensation endpoint (if `None`, step can't be compensated) |
 | `timeout_seconds` | `300` | Max wall-clock time for execution |
 | `max_retries` | `0` | Number of retry attempts on failure |
@@ -315,7 +300,7 @@ The seven step states and their meanings:
 | `FAILED` | Step failed after exhausting retries |
 | `COMPENSATING` | Compensation is in progress for this step |
 | `COMPENSATED` | Compensation completed successfully |
-| `COMPENSATION_FAILED` | Compensation itself failed — requires escalation |
+| `COMPENSATION_FAILED` | Compensation itself failed, requires escalation |
 
 ### 5.2 Saga States
 
@@ -335,9 +320,9 @@ assert saga.completed_at is not None
 |-------|---------|----------------|
 | `RUNNING` | Steps are being executed | `COMPENSATING`, `COMPLETED`, `FAILED` |
 | `COMPENSATING` | Compensation is running in reverse | `COMPLETED`, `ESCALATED` |
-| `COMPLETED` | All steps committed or all compensations succeeded | — (terminal) |
-| `FAILED` | Execution failed (before compensation) | — (terminal) |
-| `ESCALATED` | Compensation itself failed; human intervention required | — (terminal) |
+| `COMPLETED` | All steps committed or all compensations succeeded | terminal |
+| `FAILED` | Execution failed (before compensation) | terminal |
+| `ESCALATED` | Compensation itself failed; human intervention required | terminal |
 
 ### 5.3 Serialization and Inspection
 
@@ -356,172 +341,13 @@ for step in saga.committed_steps_reversed:
 
 ---
 
-## 6. SagaDSLParser — Declarative Saga Definitions
-
-Instead of building sagas imperatively with `add_step()`, you can define them
-declaratively using a structured dictionary format. This is especially useful
-for saga definitions stored in configuration files or databases.
-
-### 6.1 Basic Usage
-
-```python
-from hypervisor.saga.dsl import SagaDSLParser, SagaDefinition
-
-parser = SagaDSLParser()
-
-definition = parser.parse({
-    "name": "deploy-model",
-    "session_id": "sess-deploy-42",
-    "steps": [
-        {
-            "id": "validate",
-            "action_id": "model.validate",
-            "agent": "did:mesh:validator",
-            "execute_api": "/api/validate",
-            "undo_api": "/api/rollback",
-        },
-        {
-            "id": "deploy",
-            "action_id": "deploy.push",
-            "agent": "did:mesh:deployer",
-            "execute_api": "/api/deploy",
-            "undo_api": "/api/deploy/rollback",
-            "timeout": 600,
-            "retries": 2,
-        },
-        {
-            "id": "notify",
-            "action_id": "notify.team",
-            "agent": "did:mesh:notifier",
-            "execute_api": "/api/notify",
-            # No undo_api — notifications can't be unsent
-        },
-    ],
-})
-
-print(definition.name)           # "deploy-model"
-print(definition.session_id)     # "sess-deploy-42"
-print(definition.saga_id)        # "saga:<auto-generated>"
-print(len(definition.steps))     # 3
-print(definition.step_ids)       # ["validate", "deploy", "notify"]
-```
-
-### 6.2 Definition Schema
-
-**Required top-level:** `name` (str), `session_id` (str), `steps` (non-empty list).
-**Optional top-level:** `saga_id` (str, auto-generated), `metadata` (dict).
-
-**Required per step:** `id` (str), `action_id` (str), `agent` (str).
-**Optional per step:** `execute_api` (str), `undo_api` (str|None), `timeout` (int, default 300), `retries` (int, default 0), `checkpoint_goal` (str|None).
-
-### 6.3 Converting to SagaSteps
-
-A `SagaDefinition` can be converted into `SagaStep` objects for use with `SagaOrchestrator`:
-
-```python
-saga_steps = parser.to_saga_steps(definition)
-for step in saga_steps:
-    print(f"{step.step_id}: {step.execute_api} (timeout={step.timeout_seconds}s)")
-```
-
-### 6.4 Validation
-
-`validate()` returns errors without raising — useful for pre-flight checks:
-
-```python
-errors = parser.validate({})
-# ["Missing 'name'", "Missing 'session_id'", "Missing 'steps'"]
-
-errors = parser.validate({
-    "name": "valid", "session_id": "s1",
-    "steps": [{"id": "s1", "action_id": "data.run", "agent": "did:mesh:a"}],
-})
-# []
-```
-
-`parse()` raises `SagaDSLError` for missing `name`, missing `session_id`,
-empty/missing `steps`, or duplicate step IDs.
-
----
-
-## 7. Schema Validation
-
-For production use, enable JSON schema validation to catch definition
-errors early — invalid timeouts, unknown action prefixes, circular
-dependencies, and more.
-
-### 7.1 SagaSchemaValidator
-
-```python
-from hypervisor.saga.schema import SagaSchemaValidator, SagaSchemaError
-
-validator = SagaSchemaValidator()
-
-# Returns a list of error strings (empty = valid)
-errors = validator.validate({
-    "name": "test-saga",
-    "session_id": "sess-1",
-    "steps": [
-        {
-            "id": "step-1",
-            "action_id": "model.validate",
-            "agent": "did:mesh:validator",
-            "execute_api": "/api/validate",
-            "undo_api": "/api/rollback",
-            "timeout": 300,
-            "retries": 0,
-        },
-    ],
-})
-assert errors == []
-```
-
-### 7.2 What Gets Validated
-
-| Rule | Example |
-|------|---------|
-| **Action ID prefixes** | Must start with `model.`, `data.`, `deploy.`, `validate.`, `notify.`, `infra.`, `security.`, `monitor.`, `config.`, or `test.` |
-| **Timeout range** | 1–86400 seconds |
-| **Retry range** | 0–10 |
-| **Compensation** | Steps without `undo_api` generate warnings |
-| **Dependencies** | Unknown refs and circular dependencies are caught |
-| **Duplicate IDs** | Duplicate step IDs are rejected |
-
-```python
-from hypervisor.saga.schema import VALID_ACTION_PREFIXES
-
-# All recognized action prefixes
-print(VALID_ACTION_PREFIXES)
-# ("model.", "data.", "deploy.", "validate.", "notify.",
-#  "infra.", "security.", "monitor.", "config.", "test.")
-```
-
-### 7.3 Strict Mode and Parser Integration
-
-```python
-# Fail-fast: throws SagaSchemaError with all errors
-try:
-    validator.validate_or_raise({})
-except SagaSchemaError as e:
-    print(e.errors)  # ["Missing 'name'", "Missing 'session_id'", ...]
-
-# Enable schema validation in the parser
-parser = SagaDSLParser(schema_validation=True)
-try:
-    parser.parse({"name": "", "session_id": "s", "steps": []})
-except SagaSchemaError:
-    print("Schema validation failed before parsing")
-```
-
----
-
-## 8. Compensating Transactions
+## 6. Compensating Transactions
 
 Compensation is the core safety mechanism. When a step fails, the
 orchestrator walks backward through committed steps, calling a compensator
 for each.
 
-### 8.1 Compensation Flow
+### 6.1 Compensation Flow
 
 ```python
 async def compensator(step: SagaStep) -> Any:
@@ -541,14 +367,14 @@ The flow:
 5. All compensations succeeded → saga `COMPLETED`. Any failed → saga `ESCALATED`.
 6. Returns list of steps whose compensation failed.
 
-### 8.2 Steps Without Compensation
+### 6.2 Steps Without Compensation
 
 Steps with `undo_api=None` cannot be compensated. Place irreversible actions
 (notifications, emails) as the **last** step so they're never compensated.
 
-### 8.3 Escalation
+### 6.3 Escalation
 
-When compensation itself fails, the saga enters `ESCALATED` — human
+When compensation itself fails, the saga enters `ESCALATED` and human
 intervention is required:
 
 ```python
@@ -563,195 +389,28 @@ assert failed[0].state == StepState.COMPENSATION_FAILED
 
 > **Important:** An `ESCALATED` saga means inconsistent state. Wire up
 > alerting for this scenario. See
-> [Tutorial 13 — Observability & Tracing](./13-observability-and-tracing.md)
+> [Tutorial 13 Observability & Tracing](./13-observability-and-tracing.md)
 > for OpenTelemetry integration.
 
 ---
 
-## 9. FanOutOrchestrator — Parallel Step Execution
+## 7. Error Handling
 
-Some saga steps are independent and can run in parallel — for example,
-deploying to multiple regions or validating data with multiple agents.
-
-### 9.1 Core Concepts
-
-The `FanOutOrchestrator` groups saga steps into **branches** within a
-**fan-out group** and executes them with a configurable success policy:
-
-```
-                    ┌────────────┐
-                    │  Fan-Out   │
-                    │   Group    │
-                    └──┬────┬──┬─┘
-                       │    │  │
-              ┌────────▼┐ ┌▼──┴────┐ ┌────────┐
-              │Branch 1 │ │Branch 2│ │Branch 3│
-              │(step s1)│ │(step s2)│ │(step s3)│
-              └─────────┘ └────────┘ └────────┘
-                    │         │          │
-                    ▼         ▼          ▼
-              Check policy: ALL_MUST_SUCCEED?
-```
-
-### 9.2 Fan-Out Policies
-
-```python
-from hypervisor.saga.fan_out import FanOutPolicy
-
-FanOutPolicy.ALL_MUST_SUCCEED       # Every branch must succeed
-FanOutPolicy.MAJORITY_MUST_SUCCEED  # > 50% of branches must succeed
-FanOutPolicy.ANY_MUST_SUCCEED       # At least one branch must succeed
-```
-
-### 9.3 Creating and Executing a Fan-Out Group
-
-```python
-from hypervisor.saga.fan_out import FanOutOrchestrator, FanOutPolicy
-from hypervisor.saga.state_machine import SagaStep
-
-fan_out = FanOutOrchestrator()
-
-# Create a group within a saga
-group = fan_out.create_group("saga:deploy-multi-region", FanOutPolicy.ALL_MUST_SUCCEED)
-
-# Add branches — each wraps a SagaStep
-steps = [
-    SagaStep(step_id="us-east", action_id="deploy.region",
-             agent_did="did:mesh:deployer", execute_api="/api/deploy/us-east"),
-    SagaStep(step_id="eu-west", action_id="deploy.region",
-             agent_did="did:mesh:deployer", execute_api="/api/deploy/eu-west"),
-]
-for step in steps:
-    fan_out.add_branch(group.group_id, step)
-
-# Define executors keyed by step_id
-async def deploy_us():
-    return {"region": "us-east-1", "status": "deployed"}
-
-async def deploy_eu():
-    return {"region": "eu-west-1", "status": "deployed"}
-
-result = await fan_out.execute(group.group_id, executors={
-    "us-east": deploy_us, "eu-west": deploy_eu,
-})
-
-print(result.resolved)           # True
-print(result.policy_satisfied)   # True — all succeeded
-print(result.success_count)      # 2
-print(result.compensation_needed)  # []
-```
-
-### 9.4 Handling Partial Failures
-
-When a branch fails, `compensation_needed` lists step IDs of branches that
-succeeded and now need rollback:
-
-```python
-async def deploy_fails():
-    raise RuntimeError("Region unavailable")
-
-result = await fan_out.execute(group.group_id, executors={
-    "us-east": deploy_us, "eu-west": deploy_fails,
-})
-print(result.policy_satisfied)     # False
-print(result.compensation_needed)  # ["us-east"]
-```
-
-### 9.5 Managing Groups
-
-```python
-active = fan_out.active_groups            # Unresolved groups
-group = fan_out.get_group("fanout:abc123") # Look up by ID
-
-# FanOutGroup properties
-group.success_count        # Branches that succeeded
-group.failure_count        # Branches that failed
-group.total_branches       # Total branches
-group.check_policy()       # Re-evaluate success policy
-```
-
----
-
-## 10. CheckpointManager — Save & Restore Saga State
-
-The `CheckpointManager` creates **semantic checkpoints** — snapshots that
-record "this goal was achieved," enabling smarter replay where completed
-steps can be skipped.
-
-### 10.1 Saving and Querying Checkpoints
-
-```python
-from hypervisor.saga.checkpoint import CheckpointManager, SemanticCheckpoint
-
-checkpoint_mgr = CheckpointManager()
-
-# Save a checkpoint after a step achieves its goal
-ckpt = checkpoint_mgr.save(
-    saga_id="saga:pipeline-7",
-    step_id="migrate-db",
-    goal_description="Database schema migrated to v5",
-    state_snapshot={"schema_version": 5, "tables_added": ["users_v2"]},
-)
-print(ckpt.checkpoint_id)  # "ckpt:<hash>"
-print(ckpt.is_valid)       # True
-
-# Check if a goal was achieved
-achieved = checkpoint_mgr.is_achieved("saga:pipeline-7",
-    "Database schema migrated to v5", "migrate-db")
-
-# Get all checkpoints for a saga
-for ckpt in checkpoint_mgr.get_saga_checkpoints("saga:pipeline-7"):
-    print(f"  {ckpt.step_id}: {ckpt.goal_description}")
-```
-
-### 10.2 Invalidation and Replay
-
-```python
-# Invalidate when underlying data changes
-checkpoint_mgr.invalidate("saga:pipeline-7", "migrate-db",
-                          reason="Schema manually altered")
-
-# Replay plan — returns only steps needing re-execution
-replay = checkpoint_mgr.get_replay_plan("saga:pipeline-7",
-    ["extract", "transform", "validate", "load"])
-```
-
-### 10.3 Goal Hashes
-
-```python
-h1 = SemanticCheckpoint.compute_goal_hash("Deploy to staging", "step-deploy")
-h2 = SemanticCheckpoint.compute_goal_hash("Deploy to staging", "step-deploy")
-assert h1 == h2  # Same goal + step → same hash
-```
-
-> **Note:** In the Public Preview, `is_achieved()` returns `False` by
-> default and `get_replay_plan()` returns all steps unchanged. Checkpoints
-> are stored but not used for skip-ahead logic. The Enterprise Edition
-> includes full semantic checkpoint evaluation.
-
----
-
-## 11. Error Handling
-
-### 11.1 Exception Types
+### 7.1 Exception Types
 
 The saga system defines several exception types:
 
 ```python
 from hypervisor.saga.state_machine import SagaStateError
 from hypervisor.saga.orchestrator import SagaTimeoutError
-from hypervisor.saga.dsl import SagaDSLError
-from hypervisor.saga.schema import SagaSchemaError
 ```
 
 | Exception | Raised when |
 |-----------|-------------|
 | `SagaStateError` | An invalid state transition is attempted |
 | `SagaTimeoutError` | A step exceeds its `timeout_seconds` |
-| `SagaDSLError` | A saga definition has structural problems (missing fields, duplicates) |
-| `SagaSchemaError` | Schema validation fails (invalid values, bad prefixes, circular deps) |
 
-### 11.2 Timeout Handling
+### 7.2 Timeout Handling
 
 Steps that exceed their `timeout_seconds` are failed automatically:
 
@@ -770,11 +429,11 @@ async def slow_executor():
 
 try:
     await orchestrator.execute_step(saga.saga_id, step.step_id, executor=slow_executor)
-except asyncio.TimeoutError:
+except SagaTimeoutError:
     print(f"Step state: {step.state}")  # StepState.FAILED
 ```
 
-### 11.3 Retry Semantics
+### 7.3 Retry Semantics
 
 Steps with `max_retries > 0` are retried automatically with a 1-second
 delay between attempts:
@@ -783,7 +442,7 @@ delay between attempts:
 attempt_count = 0
 
 async def flaky_executor():
-    nonlocal attempt_count
+    global attempt_count
     attempt_count += 1
     if attempt_count < 3:
         raise ConnectionError("Temporarily unavailable")
@@ -804,7 +463,7 @@ assert step.state == StepState.COMMITTED
 assert step.retry_count == 2
 ```
 
-### 11.4 Error Propagation Pattern
+### 7.4 Error Propagation Pattern
 
 ```python
 async def run_saga_safely(orchestrator, saga, steps_and_executors, compensator):
@@ -830,7 +489,7 @@ async def run_saga_safely(orchestrator, saga, steps_and_executors, compensator):
 
 ---
 
-## 12. Integration with Execution Rings
+## 8. Integration with Execution Rings
 
 Sagas work with the [Execution Ring Model](./06-execution-sandboxing.md)
 to enforce privilege boundaries on each step. An agent can only execute a
@@ -838,7 +497,8 @@ saga step if its effective score grants access to the ring required by that
 action.
 
 ```python
-from hypervisor import ExecutionRing
+from hypervisor import ExecutionRing, ReversibilityLevel
+from hypervisor.models import ActionDescriptor
 from hypervisor.rings.classifier import ActionClassifier
 from hypervisor.saga.orchestrator import SagaOrchestrator
 
@@ -854,8 +514,15 @@ step = orchestrator.add_step(
     undo_api="/api/deploy/rollback",
 )
 
-# Check ring requirements before execution
-classification = classifier.classify_action_id("deploy.production")
+# Classify the action, then compare its required ring to the agent ring
+action = ActionDescriptor(
+    action_id="deploy.production",
+    name="Deploy to production",
+    execute_api="/api/deploy/prod",
+    undo_api="/api/deploy/rollback",
+    reversibility=ReversibilityLevel.PARTIAL,
+)
+classification = classifier.classify(action)
 agent_ring = ExecutionRing.from_eff_score(eff_score=0.72)
 
 if classification.ring.value < agent_ring.value:
@@ -870,146 +537,118 @@ For steps needing temporary privilege escalation, combine sagas with
 
 ---
 
-## 13. Real-World Example: Multi-Agent Data Pipeline
+## 9. Real-World Example: Multi-Agent Data Pipeline
 
-Bringing together DSL, fan-out, checkpoints, and compensation:
+Bringing together ordered execution, timeouts, retries, and reverse-order
+compensation in a single pipeline:
 
 ```python
 import asyncio
 from hypervisor.saga.orchestrator import SagaOrchestrator
-from hypervisor.saga.dsl import SagaDSLParser
-from hypervisor.saga.fan_out import FanOutOrchestrator, FanOutPolicy
-from hypervisor.saga.checkpoint import CheckpointManager
+from hypervisor.saga.state_machine import SagaState
 
-# ── 1. Define pipeline declaratively ─────────────────────────────
-
-parser = SagaDSLParser(schema_validation=True)
-definition = parser.parse({
-    "name": "weekly-ml-pipeline",
-    "session_id": "pipeline-2025-w03",
-    "steps": [
-        {"id": "extract-sales", "action_id": "data.extract",
-         "agent": "did:mesh:extractor", "execute_api": "/api/extract/sales",
-         "undo_api": "/api/extract/cleanup", "timeout": 120, "retries": 2},
-        {"id": "extract-inventory", "action_id": "data.extract",
-         "agent": "did:mesh:extractor", "execute_api": "/api/extract/inventory",
-         "undo_api": "/api/extract/cleanup", "timeout": 120, "retries": 2},
-        {"id": "transform", "action_id": "data.transform",
-         "agent": "did:mesh:transformer", "execute_api": "/api/transform",
-         "undo_api": "/api/transform/rollback", "timeout": 600},
-        {"id": "validate", "action_id": "validate.quality",
-         "agent": "did:mesh:validator", "execute_api": "/api/validate",
-         "undo_api": "/api/validate/reset"},
-        {"id": "load", "action_id": "data.load",
-         "agent": "did:mesh:loader", "execute_api": "/api/load/warehouse",
-         "undo_api": "/api/load/rollback", "timeout": 900},
-        {"id": "notify", "action_id": "notify.team",
-         "agent": "did:mesh:notifier", "execute_api": "/api/notify/slack"},
-    ],
-})
-
-# ── 2. Create orchestrators and saga ─────────────────────────────
+# ── 1. Create the orchestrator and a saga for the pipeline ───────
 
 orchestrator = SagaOrchestrator()
-fan_out = FanOutOrchestrator()
-checkpoint_mgr = CheckpointManager()
-saga = orchestrator.create_saga(session_id=definition.session_id)
+saga = orchestrator.create_saga(session_id="pipeline-2025-w03")
 
-saga_steps = parser.to_saga_steps(definition)
-step_map = {}
-for dsl_step in saga_steps:
-    step = orchestrator.add_step(
-        saga_id=saga.saga_id, action_id=dsl_step.action_id,
-        agent_did=dsl_step.agent_did, execute_api=dsl_step.execute_api,
-        undo_api=dsl_step.undo_api, timeout_seconds=dsl_step.timeout_seconds,
-        max_retries=dsl_step.max_retries,
+# ── 2. Add the pipeline steps in execution order ─────────────────
+
+pipeline = [
+    # action_id, agent_did, execute_api, undo_api, timeout, retries
+    ("data.extract", "did:mesh:extractor", "/api/extract/sales",
+     "/api/extract/cleanup", 120, 2),
+    ("data.transform", "did:mesh:transformer", "/api/transform",
+     "/api/transform/rollback", 600, 0),
+    ("validate.quality", "did:mesh:validator", "/api/validate",
+     "/api/validate/reset", 300, 0),
+    ("data.load", "did:mesh:loader", "/api/load/warehouse",
+     "/api/load/rollback", 900, 0),
+    ("notify.team", "did:mesh:notifier", "/api/notify/slack",
+     None, 60, 0),
+]
+
+steps = [
+    orchestrator.add_step(
+        saga_id=saga.saga_id,
+        action_id=action_id,
+        agent_did=agent_did,
+        execute_api=execute_api,
+        undo_api=undo_api,
+        timeout_seconds=timeout,
+        max_retries=retries,
     )
-    step_map[dsl_step.step_id] = step
+    for action_id, agent_did, execute_api, undo_api, timeout, retries in pipeline
+]
 
-# ── 3. Execute: fan-out extraction, then sequential steps ────────
+# ── 3. Provide an async executor for each step ───────────────────
 
-async def run_pipeline():
-    # Parallel extraction via fan-out
-    group = fan_out.create_group(saga.saga_id, FanOutPolicy.ALL_MUST_SUCCEED)
-    for key in ["extract-sales", "extract-inventory"]:
-        fan_out.add_branch(group.group_id, step_map[key])
+async def extract():   return {"records": 23_720}
+async def transform(): return {"records": 23_720}
+async def validate():  return {"score": 0.97}
+async def load():      return {"rows_inserted": 23_720}
+async def notify():    return {"sent": True}
 
-    async def extract_sales():
-        return {"records": 15_420}
-    async def extract_inventory():
-        return {"records": 8_300}
+executors = [extract, transform, validate, load, notify]
 
-    result = await fan_out.execute(group.group_id, executors={
-        step_map["extract-sales"].step_id: extract_sales,
-        step_map["extract-inventory"].step_id: extract_inventory,
-    })
-    if not result.policy_satisfied:
-        await orchestrator.compensate(saga.saga_id, compensator)
-        return
-
-    checkpoint_mgr.save(saga.saga_id, "extract-phase",
-                        "All sources extracted", {"total": 23_720})
-
-    # Sequential: transform → validate → load → notify
-    async def transform(): return {"records": 23_720}
-    async def validate():  return {"score": 0.97}
-    async def load():      return {"rows_inserted": 23_720}
-    async def notify():    return {"sent": True}
-
-    for name, fn in [("transform", transform), ("validate", validate),
-                     ("load", load), ("notify", notify)]:
-        try:
-            r = await orchestrator.execute_step(
-                saga.saga_id, step_map[name].step_id, executor=fn)
-            print(f"  ✓ {name}: {r}")
-        except Exception as e:
-            print(f"  ✗ {name} failed: {e}")
-            await orchestrator.compensate(saga.saga_id, compensator)
-            return
-
-    print(f"\n✅ Pipeline complete — saga state: {saga.state}")
+# ── 4. Compensator called for each committed step on rollback ────
 
 async def compensator(step):
     print(f"  ↩ Compensating {step.action_id} via {step.undo_api}")
     return "compensated"
+
+# ── 5. Run the pipeline, compensating on the first failure ───────
+
+async def run_pipeline():
+    for step, executor in zip(steps, executors):
+        try:
+            result = await orchestrator.execute_step(
+                saga.saga_id, step.step_id, executor=executor,
+            )
+            print(f"  ✓ {step.action_id}: {result}")
+        except Exception as e:
+            print(f"  ✗ {step.action_id} failed: {e}")
+            failed = await orchestrator.compensate(saga.saga_id, compensator)
+            if saga.state == SagaState.ESCALATED:
+                raise RuntimeError(
+                    f"{len(failed)} compensation(s) failed; manual repair required"
+                )
+            return
+
+    print(f"Pipeline complete, saga state: {saga.state}")
 
 asyncio.run(run_pipeline())
 ```
 
 ---
 
-## 14. Next Steps
+## 10. Next Steps
 
 You now have a solid understanding of saga orchestration in the Agent
 Governance Toolkit. Here's where to go next:
 
 | Topic | Tutorial |
 |-------|----------|
-| Privilege rings and sandboxing | [Tutorial 06 — Execution Sandboxing](./06-execution-sandboxing.md) |
-| OpenTelemetry spans for saga events | [Tutorial 13 — Observability & Tracing](./13-observability-and-tracing.md) |
-| Rogue agent detection and circuit breakers | [Tutorial 05 — Agent Reliability](./05-agent-reliability.md) |
-| Trust scores and agent identity | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
-| Policy-based governance | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
+| Privilege rings and sandboxing | [Tutorial 06 Execution Sandboxing](./06-execution-sandboxing.md) |
+| OpenTelemetry spans for saga events | [Tutorial 13 Observability & Tracing](./13-observability-and-tracing.md) |
+| Rogue agent detection and circuit breakers | [Tutorial 05 Agent Reliability](./05-agent-reliability.md) |
+| Trust scores and agent identity | [Tutorial 02 Trust & Identity](./02-trust-and-identity.md) |
+| Policy-based governance | [Tutorial 01 Policy Engine](./01-policy-engine.md) |
 
 ### Key Takeaways
 
-1. **Every forward action needs a compensation** — design your APIs with
+1. **Every forward action needs a compensation.** Design your APIs with
    undo endpoints from the start.
-2. **Use the DSL for complex pipelines** — declarative definitions are
-   easier to review, version-control, and share.
-3. **Enable schema validation in production** — catch timeout, retry, and
-   dependency errors before execution.
-4. **Fan-out for independent steps** — parallel execution with policy-based
-   success criteria.
-5. **Checkpoints enable smart replay** — skip steps whose goals are already
-   achieved when restarting a saga.
-6. **Plan for ESCALATED state** — wire up alerting for sagas that can't
+2. **Steps and sagas follow validated state machines.** Invalid transitions
+   raise `SagaStateError`.
+3. **Use timeouts and retries per step.** `execute_step` enforces
+   `timeout_seconds` and retries up to `max_retries`.
+4. **Plan for ESCALATED state.** Wire up alerting for sagas that can't
    be compensated automatically.
 
 ---
 
 ## Next Steps
 
-- **Liability & Attribution:** [Tutorial 12 — Liability & Attribution](12-liability-and-attribution.md)
-- **Observability:** [Tutorial 13 — Observability & Distributed Tracing](13-observability-and-tracing.md)
-- **Execution Sandboxing:** [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md)
+- **Observability:** [Tutorial 13 Observability and Distributed Tracing](13-observability-and-tracing.md)
+- **Execution Sandboxing:** [Tutorial 06 Execution Sandboxing](06-execution-sandboxing.md)

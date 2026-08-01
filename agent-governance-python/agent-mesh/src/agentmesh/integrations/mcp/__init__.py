@@ -228,21 +228,22 @@ class TrustGatedMCPServer:
         client_capabilities: List[str],
         required: str,
     ) -> bool:
-        """Check if client has required capability (with wildcard support)."""
+        """Check if client has required capability.
+
+        Delegates to :func:`agentmesh.trust.capability.capability_scope_matches`
+        so MCP tool gating uses the same scope semantics as the core
+        capability matcher (exact, trailing-wildcard, colon-boundary, and
+        full-qualifier component matching), rather than a divergent
+        exact/wildcard-only check.
+        """
         if not required:
             return True
 
-        for cap in client_capabilities:
-            # Exact match
-            if cap == required:
-                return True
-            # Wildcard match (e.g., "use:*" matches "use:sql")
-            if cap.endswith(":*"):
-                prefix = cap[:-1]  # "use:"
-                if required.startswith(prefix):
-                    return True
+        from agentmesh.trust.capability import capability_scope_matches
 
-        return False
+        return any(
+            capability_scope_matches(cap, required) for cap in client_capabilities
+        )
 
     async def invoke_tool(
         self,

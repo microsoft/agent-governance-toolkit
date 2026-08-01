@@ -75,8 +75,12 @@ class TestKernelSpaceIntegration:
     
     @pytest.fixture
     def kernel_without_policy(self):
-        """Create a KernelSpace without policy engine (permissive mode)."""
-        return KernelSpace()
+        """Create a permissive KernelSpace with no policy engine.
+
+        Permissive mode is now an explicit opt-in; without it a kernel that has
+        no policy engine fails closed and denies syscalls.
+        """
+        return KernelSpace(permissive=True)
     
     @pytest.mark.asyncio
     async def test_policy_engine_wired_to_check_policy(self, kernel_with_policy):
@@ -270,7 +274,7 @@ class TestKernelSpaceIntegration:
     
     @pytest.mark.asyncio
     async def test_permissive_mode_without_policy_engine(self, kernel_without_policy):
-        """Verify kernel allows all actions when no policy engine is set."""
+        """Verify kernel allows all actions when explicitly opted into permissive mode."""
         ctx = kernel_without_policy.create_agent_context("permissive-agent")
         
         # Register a tool

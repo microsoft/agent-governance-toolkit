@@ -40,21 +40,6 @@ RATE_LIMIT_FALLBACK: tuple[float, float] = RATE_LIMIT_RING_2
 """Fallback rate limit when a ring is not found in the limits map."""
 
 # ---------------------------------------------------------------------------
-# Vouching / sponsorship thresholds
-# ---------------------------------------------------------------------------
-VOUCHING_SCORE_SCALE: float = 1000.0
-"""Maximum trust-score scale used by the vouching engine."""
-
-VOUCHING_MIN_VOUCHER_SCORE: float = 0.50
-"""Minimum score required to sponsor another agent."""
-
-VOUCHING_DEFAULT_BOND_PCT: float = 0.20
-"""Default percentage of sigma bonded when sponsoring."""
-
-VOUCHING_DEFAULT_MAX_EXPOSURE: float = 0.80
-"""Maximum exposure percentage for bonding."""
-
-# ---------------------------------------------------------------------------
 # Saga orchestrator defaults
 # ---------------------------------------------------------------------------
 SAGA_DEFAULT_MAX_RETRIES: int = 2

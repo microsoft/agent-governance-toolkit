@@ -767,13 +767,21 @@ Where:
 
 - `action` is the verb (e.g., `read`, `write`, `execute`, `admin`).
 - `resource` is the target resource (e.g., `data`, `reports`, `tools`).
-- `qualifier` is an optional sub-resource (e.g., `calculator`).
+- `qualifier` is an optional sub-resource. It captures the **entire**
+  remainder after `action:resource`, including any further
+  colon-separated segments, and is compared as a single opaque
+  exact-match token. For example `write:database:table_users:row_1`
+  parses to `qualifier = "table_users:row_1"`. Implementations MUST NOT
+  truncate the qualifier to a single segment; doing so collapses a leaf
+  grant onto its parent and siblings and is a privilege escalation.
 
 Examples:
 
 - `read:data` -- read access to data resources.
 - `write:reports` -- write access to reports.
 - `execute:tools:calculator` -- execute the calculator tool.
+- `write:database:table_users:row_1` -- write access to a single row;
+  `qualifier` is the full `table_users:row_1` path.
 - `admin:*` -- administrative wildcard.
 
 **[Pure Specification]**
@@ -786,7 +794,7 @@ Examples:
 | `capability` | string | Yes | -- | Capability string (e.g., `read:data`) |
 | `action` | string | Yes | -- | Action component parsed from capability |
 | `resource` | string | Yes | -- | Resource component parsed from capability |
-| `qualifier` | string or null | No | null | Optional qualifier component |
+| `qualifier` | string or null | No | null | Optional full sub-resource path (all segments after `action:resource`, joined by `:`), compared as one opaque token |
 | `granted_to` | string | Yes | -- | DID of the grantee agent |
 | `granted_by` | string | Yes | -- | DID of the grantor agent |
 | `resource_ids` | list[string] | No | [] | Specific resource IDs this grant applies to |
@@ -821,7 +829,11 @@ The `matches()` method MUST evaluate capability matching in order:
    matches. This prevents `read` from matching `readwrite:secret`.
 4. **Component matching fallback:** Parse both capability strings and
    compare action, resource, and qualifier independently. Wildcard
-   `*` in any component matches any value. A grant scoped to a
+   `*` in any component matches any value. The qualifier is the full
+   sub-resource path (§8.2) compared as one opaque token, so
+   `write:database:table_users:row_1` does not match
+   `write:database:table_users:row_2` (a sibling) nor
+   `write:database:table_users` (its parent). A grant scoped to a
    specific (non-`*`) qualifier MUST only match a request that names
    that exact qualifier; a request that omits the qualifier is broader
    than the grant and MUST NOT match it (otherwise a narrow grant such

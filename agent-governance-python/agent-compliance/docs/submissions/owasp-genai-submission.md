@@ -27,8 +27,8 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 ### ASI02 — Tool Misuse & Exploitation
 
 - **MCPSecurityScanner**: Rug pull detection via SHA-256 tool fingerprinting, cross-server impersonation detection (Levenshtein distance), schema abuse detection
-- **GovernancePolicy.allowed_tools**: Whitelist-based tool access control
-- **PolicyInterceptor**: Runtime interception of all tool calls with pre/post hooks
+- **AgentControl.allowed_tools**: Whitelist-based tool access control
+- **NativeAdapterRuntime**: Runtime interception of all tool calls with pre/post hooks
 - **ExecutionSandbox**: Resource-limited execution with AST-based static analysis
 
 ### ASI03 — Identity & Privilege Abuse
@@ -53,7 +53,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
   - Blocked builtins: exec, eval, compile, \_\_import\_\_
 - **SandboxConfig**: Configurable max_memory_mb, max_cpu_seconds, allowed_paths
 - **SemanticPolicyEngine**: CODE_EXECUTION intent detection with deny policies
-- **Content filtering**: blocked_patterns in GovernancePolicy
+- **Content filtering**: blocked_patterns in AgentControl
 
 ### ASI06 — Memory & Context Poisoning
 
@@ -95,7 +95,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **SLO engine**: Continuous compliance monitoring with error budget tracking
 - **OpenTelemetry export**: TraceExporter + MetricsExporter for full observability
 - **Agent Runtime RingEnforcer**: Trust-score-based demotion; automatic sandbox for untrusted agents
-- **QuarantineManager**: Agent isolation with forensic data preservation
+- **KillSwitch**: Agent termination with audit evidence and saga handoff support
 - **CostGuard**: Budget enforcement (throttle at 85%, kill at 95%)
 
 ## Architecture
@@ -123,7 +123,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **GitHub (Agent SRE)**: https://github.com/microsoft/agent-governance-toolkit
 - **GitHub (Agent Runtime)**: https://github.com/microsoft/agent-governance-toolkit
 - **Governance Docs**: https://github.com/microsoft/agent-governance-toolkit
-- **OWASP Mapping**: https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/owasp-agentic-top10-mapping.md
+- **OWASP Mapping**: https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/owasp-agentic-top10-mapping.md
 
 ## Maintainers
 

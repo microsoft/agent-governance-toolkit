@@ -42,9 +42,6 @@ from hypervisor.constants import (
     SAGA_DEFAULT_STEP_TIMEOUT_SECONDS,
     SESSION_DEFAULT_MIN_EFF_SCORE,
 )
-from hypervisor.liability.quarantine import (
-    QuarantineReason,
-)
 
 # ---------------------------------------------------------------------------
 # Imports under test
@@ -498,7 +495,6 @@ class TestSessionModel:
         assert config.max_duration_seconds == 3600
         assert config.min_eff_score == SESSION_DEFAULT_MIN_EFF_SCORE
         assert config.enable_audit is True
-        assert config.enable_blockchain_commitment is False
 
     def test_session_config_max_participants_validation(self):
         """S17.3 -- max_participants out of range MUST raise."""
@@ -663,24 +659,6 @@ class TestKillSwitch:
         # Second kill should find no callback
         result = ks.kill(agent_did="did:mesh:a", session_id="s1", reason=KillReason.MANUAL)
         assert not result.terminated
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Section 13: Quarantine
-# ═══════════════════════════════════════════════════════════════════════════
-
-
-class TestQuarantine:
-    """Spec S13 -- Quarantine."""
-
-    def test_quarantine_reasons_exist(self):
-        """S13.1 -- all quarantine reasons MUST exist."""
-        assert QuarantineReason.BEHAVIORAL_DRIFT
-        assert QuarantineReason.LIABILITY_VIOLATION
-        assert QuarantineReason.RING_BREACH
-        assert QuarantineReason.RATE_LIMIT_EXCEEDED
-        assert QuarantineReason.MANUAL
-        assert QuarantineReason.CASCADE_SLASH
 
 
 # ═══════════════════════════════════════════════════════════════════════════

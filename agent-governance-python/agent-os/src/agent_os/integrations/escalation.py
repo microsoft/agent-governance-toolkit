@@ -1,32 +1,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-Human-in-the-Loop Escalation for Governance Policies.
+Human-in-the-loop approval queue and handler primitives.
 
-Adds an ``ESCALATE`` decision tier between ALLOW and DENY. When a policy
-requires human approval, the agent is **suspended** and an approval request
-is routed to a configurable backend (in-memory queue, webhook, or custom
-handler).  A timeout with configurable default action ensures the system
-never blocks indefinitely.
-
-Usage:
-    from agent_os.integrations.escalation import (
-        EscalationHandler,
-        EscalationPolicy,
-        EscalationRequest,
-        EscalationDecision,
-        InMemoryApprovalQueue,
-    )
-
-    queue = InMemoryApprovalQueue()
-    handler = EscalationHandler(backend=queue, timeout_seconds=300)
-    policy = EscalationPolicy(integration, handler=handler)
-
-    result = policy.evaluate("tool_call", context, input_data)
-    if result.decision == EscalationDecision.PENDING:
-        # Agent is suspended — await human decision
-        queue.approve(result.request_id, approver="admin@corp.com")
-        final = policy.resolve(result.request_id)
+Native policy runtimes own escalation decisions and invoke their configured
+approval resolver. This module provides host-side approval backends, quorum
+handling, timeout behavior, and auditable request state.
 """
 
 from __future__ import annotations
@@ -40,7 +19,6 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
-from .base import BaseIntegration, ExecutionContext, GovernanceEventType
 
 logger = logging.getLogger(__name__)
 
@@ -458,139 +436,3 @@ class EscalationHandler:
                 decision.value,
             )
         return decision
-
-
-@dataclass
-class EscalationResult:
-    """Result of an escalation policy evaluation."""
-
-    action: str
-    decision: EscalationDecision
-    reason: Optional[str]
-    request: Optional[EscalationRequest] = None
-    policy_name: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class EscalationPolicy:
-    """Wraps a BaseIntegration with human-in-the-loop escalation.
-
-    When ``require_human_approval`` is True in the policy, instead of
-    immediately denying the action, this wrapper **suspends** execution
-    and routes an approval request to the configured handler.
-
-    This is the ``ESCALATE`` tier between ALLOW and DENY.
-
-    Args:
-        integration: The governance integration to wrap.
-        handler: The escalation handler managing approvals.
-        policy_name: Name for audit logging.
-    """
-
-    def __init__(
-        self,
-        integration: BaseIntegration,
-        handler: EscalationHandler | None = None,
-        *,
-        policy_name: str = "default",
-    ) -> None:
-        self._integration = integration
-        self._handler = handler or EscalationHandler()
-        self._policy_name = policy_name
-
-    @property
-    def handler(self) -> EscalationHandler:
-        return self._handler
-
-    def evaluate(
-        self,
-        action: str,
-        context: ExecutionContext,
-        input_data: Any = None,
-    ) -> EscalationResult:
-        """Evaluate a policy check with escalation support.
-
-        If the policy would deny due to ``require_human_approval``,
-        this creates an escalation request instead of blocking.
-
-        For all other deny reasons (blocked patterns, timeouts, etc.),
-        the action is denied immediately — escalation only applies
-        to the human-approval gate.
-
-        Returns:
-            An ``EscalationResult`` with the decision and optional
-            escalation request.
-        """
-        allowed, reason = self._integration.pre_execute(context, input_data)
-
-        if allowed:
-            return EscalationResult(
-                action=action,
-                decision=EscalationDecision.ALLOW,
-                reason=None,
-                policy_name=self._policy_name,
-            )
-
-        # Check if this denial was due to human approval requirement
-        if self._integration.policy.require_human_approval and reason and (
-            "human approval" in reason.lower()
-        ):
-            request = self._handler.escalate(
-                agent_id=context.agent_id,
-                action=action,
-                reason=reason,
-                context_snapshot={
-                    "session_id": context.session_id,
-                    "call_count": context.call_count,
-                    "total_tokens": context.total_tokens,
-                    "input_summary": str(input_data)[:500] if input_data else "",
-                },
-            )
-            self._integration.emit(
-                GovernanceEventType.POLICY_CHECK,
-                {
-                    "agent_id": context.agent_id,
-                    "action": action,
-                    "escalation_id": request.request_id,
-                    "phase": "escalated",
-                },
-            )
-            return EscalationResult(
-                action=action,
-                decision=EscalationDecision.PENDING,
-                reason=reason,
-                request=request,
-                policy_name=self._policy_name,
-            )
-
-        # Hard deny (not an escalation scenario)
-        return EscalationResult(
-            action=action,
-            decision=EscalationDecision.DENY,
-            reason=reason,
-            policy_name=self._policy_name,
-        )
-
-    def resolve(self, request_id: str) -> EscalationDecision:
-        """Wait for and return the human decision on an escalation.
-
-        Delegates to the handler's resolve method, which blocks or
-        polls depending on the backend.
-        """
-        return self._handler.resolve(request_id)
-
-    def evaluate_and_wait(
-        self,
-        action: str,
-        context: ExecutionContext,
-        input_data: Any = None,
-    ) -> EscalationResult:
-        """Evaluate and, if escalated, block until resolved.
-
-        Convenience method that combines ``evaluate()`` and ``resolve()``.
-        """
-        result = self.evaluate(action, context, input_data)
-        if result.decision == EscalationDecision.PENDING and result.request:
-            final = self.resolve(result.request.request_id)
-            result.decision = final
-        return result

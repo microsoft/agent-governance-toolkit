@@ -8,8 +8,8 @@ Demonstrates the full lifecycle of the Agent Hypervisor:
   1. Session creation with configurable governance
   2. Agent admission via trust scoring (eff_score -> ring assignment)
   3. Saga orchestration with reversibility tracking
-  4. Liability enforcement (sponsorship, bonding, penalty)
-  5. Audit trail with hash commitment
+  4. Audit trail with a hash-chained delta log
+  5. Optional integration adapters
 
 Run:
     cd modules/hypervisor
@@ -115,7 +115,7 @@ async def demo_session_lifecycle() -> None:
     )
     step("Delta captured: /workspace/report.md")
 
-    # Terminate and get hash commitment
+    # Terminate and get the audit hash root
     hash_chain_root = await hv.terminate_session(session.sso.session_id)
     step(f"Session terminated -- audit log root: {hash_chain_root[:16]}...")
 
@@ -185,57 +185,11 @@ async def demo_saga() -> None:
     print("    All-or-nothing semantics for multi-agent workflows")
 
 
-# ── Demo 3: Liability & Penalty ────────────────────────────────────
-
-
-async def demo_liability() -> None:
-    banner("Demo 3: Liability -- Sponsorship, Bonding, and Penalty")
-
-    hv = Hypervisor(max_exposure=10.0)
-
-    # Sponsor posts a bond for an agent
-    record = hv.vouching.vouch(
-        voucher_did="did:mesh:sponsor",
-        vouchee_did="did:mesh:new-agent",
-        session_id="session-001",
-        voucher_sigma=0.9,
-    )
-    step(
-        f"Bond posted: {record.voucher_did} -> {record.vouchee_did} ({record.bonded_amount:.2f} tokens)"
-    )
-
-    exposure = hv.vouching.get_total_exposure("did:mesh:sponsor", "session-001")
-    step(f"Sponsor exposure: {exposure:.2f}/10.0 max")
-
-    # Agent misbehaves -- penalize!
-    slash_result = hv.slashing.slash(
-        vouchee_did="did:mesh:new-agent",
-        session_id="session-001",
-        vouchee_sigma=0.30,
-        risk_weight=0.8,
-        reason="policy_violation",
-        agent_scores={"did:mesh:new-agent": 0.30},
-    )
-    fail(
-        f"Agent penalized! sigma: {slash_result.vouchee_sigma_before} -> {slash_result.vouchee_sigma_after}"
-    )
-    step(f"Penalty reason: {slash_result.reason}")
-    for clip in slash_result.voucher_clips:
-        warn(
-            f"Sponsor {clip.voucher_did.split(':')[-1]} clipped: sigma {clip.sigma_before} -> {clip.sigma_after}"
-        )
-
-    print(f"\n  {BOLD}Liability model:{RESET}")
-    print("    Sponsors sponsor for agents with token bonds")
-    print("    Misbehavior triggers proportional penalty")
-    print("    Maximum exposure limits protect sponsors")
-
-
-# ── Demo 4: Audit Trail ────────────────────────────────────────────
+# ── Demo 3: Audit Trail ────────────────────────────────────────────
 
 
 async def demo_audit() -> None:
-    banner("Demo 4: Audit Trail -- Hash-Committed Delta Chain")
+    banner("Demo 3: Audit Trail -- Hash-Chained Delta Log")
 
     hv = Hypervisor()
     config = SessionConfig(enable_audit=True)
@@ -271,25 +225,17 @@ async def demo_audit() -> None:
     audit_log = await hv.terminate_session(session.sso.session_id)
     step(f"audit log root: {audit_log}")
 
-    # Verify commitment
-    commitment = hv.commitment.get_commitment(session.sso.session_id)
-    if commitment:
-        step("Commitment stored for session")
-        step(f"  Participants: {len(commitment.participant_dids)}")
-        step(f"  Deltas: {commitment.delta_count}")
-        step(f"  Verified: {hv.commitment.verify(session.sso.session_id, audit_log)}")
-
     print(f"\n  {BOLD}Audit guarantees:{RESET}")
     print("    Every agent action is delta-captured")
-    print("    hash tree provides tamper-evident commitment")
-    print("    Commitments are immutable and verifiable")
+    print("    The delta hash chain provides a tamper-evident root")
+    print("    The returned root can be stored by the caller")
 
 
-# ── Demo 5: Integration Adapters ────────────────────────────────────
+# ── Demo 4: Integration Adapters ────────────────────────────────────
 
 
 async def demo_integrations() -> None:
-    banner("Demo 5: Integration Adapters -- Nexus + Verification + IATP")
+    banner("Demo 4: Integration Adapters -- Nexus + Verification + IATP")
 
     from hypervisor.integrations.iatp_adapter import IATPAdapter
     from hypervisor.integrations.nexus_adapter import NexusAdapter
@@ -317,11 +263,6 @@ async def demo_integrations() -> None:
             elif history and history.get("tasks_completed", 0) > 10:
                 return scores[650]()
             return scores[200]()
-
-        def slash_reputation(
-            self, agent_did, reason, severity, evidence_hash=None, trace_id=None, broadcast=True
-        ):
-            pass
 
         def record_task_outcome(self, agent_did, outcome):
             pass
@@ -396,7 +337,6 @@ async def main() -> None:
 
     await demo_session_lifecycle()
     await demo_saga()
-    await demo_liability()
     await demo_audit()
     await demo_integrations()
 
@@ -404,10 +344,9 @@ async def main() -> None:
     print("  The Agent Hypervisor provides:")
     print("    - Ring-based execution isolation (4 trust tiers)")
     print("    - Saga orchestration with automatic compensation")
-    print("    - Economic liability (sponsorship + penalty)")
-    print("    - hash-committed audit trails")
+    print("    - Hash-chained audit trails")
     print("    - Pluggable integrations (Nexus, Verification, IATP)")
-    print(f"\n  {BOLD}184 tests passing | 268us full pipeline | Zero dependencies{RESET}")
+    print(f"\n  {BOLD}644 tests passing | 268us full pipeline | Zero dependencies{RESET}")
     print("\n  Learn more: https://github.com/microsoft/agent-governance-toolkit")
     print()
 

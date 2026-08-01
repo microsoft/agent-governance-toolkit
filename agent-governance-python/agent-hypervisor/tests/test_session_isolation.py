@@ -2,7 +2,7 @@
 """Tests for VectorClock and SessionIsolationManager fixes."""
 
 from hypervisor.session.isolation import IsolationLevel, SessionIsolationManager
-from hypervisor.session.vector_clock import CausalViolationError, VectorClock, VectorClockManager
+from hypervisor.session.vector_clock import VectorClock
 
 
 class TestVectorClockHappensBefore:

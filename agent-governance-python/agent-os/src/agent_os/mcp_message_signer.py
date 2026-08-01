@@ -15,7 +15,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from agent_os.mcp_protocols import InMemoryNonceStore, MCPNonceStore
+from agent_os.mcp_protocols import (
+    InMemoryNonceStore,
+    MCPNonceStore,
+    NonceStoreCapacityError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +84,10 @@ class MCPMessageSigner:
             nonce_cache_cleanup_interval: Minimum interval between automatic
                 nonce cleanup passes.
             max_nonce_cache_size: Maximum number of nonces retained by the
-                default in-memory nonce store.
+                default in-memory nonce store. This is a hard bound: when the
+                store is full of nonces still inside the replay window, further
+                messages are rejected (fail-closed) rather than evicting a live
+                nonce. Size it above the peak in-window message volume.
             nonce_store: Optional nonce persistence backend. Defaults to the
                 in-memory LRU nonce store.
             nonce_generator: Optional nonce factory for deterministic testing
@@ -216,10 +223,19 @@ class MCPMessageSigner:
                 return MCPVerificationResult.failed("Invalid signature.")
 
             with self._lock:
-                self._nonce_store.add(
-                    envelope.nonce,
-                    envelope.timestamp + self.replay_window,
-                )
+                try:
+                    self._nonce_store.add(
+                        envelope.nonce,
+                        envelope.timestamp + self.replay_window,
+                    )
+                except NonceStoreCapacityError:
+                    logger.warning(
+                        "Nonce store saturated with in-window nonces; rejecting "
+                        "message to preserve replay protection (fail-closed)."
+                    )
+                    return MCPVerificationResult.failed(
+                        "Nonce store at capacity (fail-closed)."
+                    )
 
             return MCPVerificationResult.success(envelope.payload, envelope.sender_id)
         except Exception as exc:

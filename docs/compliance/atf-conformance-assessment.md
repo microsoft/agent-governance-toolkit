@@ -116,7 +116,6 @@ Actions are attributed to agent identities, but naming conventions vary across p
 |-----------|----------|
 | Audit attribution | `agent-governance-python/agent-mesh/audit/merkle_chain.py` — `agent_did` field |
 | Hypervisor tracking | `agent-governance-python/agent-hypervisor/audit/delta.py` — `agent_did` per entry |
-| Joint liability | `agent-governance-python/agent-hypervisor/liability/joint.py` — `AgentContribution` |
 
 **Gap:** Inconsistent field naming (`agent_id` vs `agent_did` vs `AgentId`) across packages. No shared `Attribution` model.
 
@@ -251,7 +250,7 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | Component | Location |
 |-----------|----------|
 | Cost guard | `agent-governance-python/agent-sre/slo/__init__.py` — cost-based SLIs |
-| Max tool calls | `agent-governance-python/agent-os/integrations/base.py` — `GovernancePolicy.max_tool_calls` |
+| Max tool calls | `agent-governance-python/agent-os/integrations/base.py` — `AgentControl.max_tool_calls` |
 | Budget enforcement | `agent-governance-python/agent-os/context_budget.py` — `ContextScheduler` |
 | Execution context limits | `agent-governance-python/agent-os/execution_context_policy.py` |
 
@@ -309,7 +308,7 @@ Degradation mechanisms exist but are not unified under a single autonomy control
 
 | Component | Location |
 |-----------|----------|
-| NoOp fallbacks | `agent-governance-python/agent-os/compat.py` — `NoOpPolicyEvaluator` |
+| NoOp sandbox provider | `agent-governance-python/agent-os/src/agent_os/sandbox_provider.py` — `NoOpSandboxProvider` |
 | Ring demotion | `agent-governance-python/agent-hypervisor/session/__init__.py` — `update_ring()` |
 | Trust-tier demotion | `agent-governance-python/agent-marketplace/trust_tiers.py` — `filter_capabilities()` |
 | Fleet degraded state | `agent-governance-python/agent-sre/fleet/__init__.py` — `AgentState.DEGRADED` |

@@ -258,13 +258,13 @@ fn fetch_remote_bundle(value: &JsonValue, limits: Limits) -> Result<RemoteBundle
 /// On non-Unix platforms `std::fs::create_dir` is used unchanged because
 /// Windows uses ACLs rather than POSIX permission bits.
 #[cfg(unix)]
-fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+pub(crate) fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
     use std::os::unix::fs::DirBuilderExt;
     std::fs::DirBuilder::new().mode(0o700).create(path)
 }
 
 #[cfg(not(unix))]
-fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+pub(crate) fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
     std::fs::create_dir(path)
 }
 

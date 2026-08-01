@@ -9,15 +9,26 @@ Python to publish multiple focused distributions instead of a single monolithic 
 
 ## Installing
 
-The recommended install for most users is the meta-package, which pulls in the core runtime and lets you add framework integrations as extras:
+The base meta-package installs the compliance CLI. Add an extra when you need
+the governance runtime, framework integrations, or the full Python stack:
 
 ```
+# Compliance CLI only
 pip install agent-governance-toolkit
+
+# Framework integrations
 pip install agent-governance-toolkit[langchain]
 pip install agent-governance-toolkit[crewai]
 pip install agent-governance-toolkit[openai-agents]
+
+# Full Python governance stack, including agentmesh and legacy agent_os compatibility
 pip install agent-governance-toolkit[full]
 ```
+
+`agent_os` is the legacy compatibility import from the old `agent-os-kernel`
+surface. It currently emits a `DeprecationWarning`; use
+`agent-governance-toolkit-core` (or the `[full]` extra) as the replacement
+distribution, and prefer `agt-policies`/ACS APIs for new policy-engine host code.
 
 If you only need a specific component, each package can also be installed on its own. See the package listing below for names.
 

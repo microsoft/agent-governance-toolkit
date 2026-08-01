@@ -70,15 +70,38 @@ class HealthReport:
 class HealthChecker:
     """Thread-safe health checker with pluggable component checks.
 
+    Fails closed: a checker with no registered checks aggregates to UNHEALTHY
+    (an empty report never claims HEALTHY), and the built-in audit-backend probe
+    reports DEGRADED when no backend is configured rather than a bare HEALTHY.
+
     Args:
         version: Application version string included in reports.
+        register_builtins: When True (default) the ``runtime`` and
+            ``audit_backend`` built-in checks are registered so a fresh checker
+            verifies real components instead of returning an empty HEALTHY report.
+        audit_backend: Optional audit backend probed by the built-in
+            ``audit_backend`` check. When ``None`` that check reports DEGRADED.
+        runtime: Optional native runtime probed by the built-in ``runtime``
+            check. When ``None`` that check reports DEGRADED.
     """
 
-    def __init__(self, version: str = "1.0.0") -> None:
+    def __init__(
+        self,
+        version: str = "1.0.0",
+        *,
+        register_builtins: bool = True,
+        audit_backend: object | None = None,
+        runtime: object | None = None,
+    ) -> None:
         self._checks: dict[str, Callable[[], ComponentHealth]] = {}
         self._start_time = datetime.now(timezone.utc)
         self._version = version
         self._lock = threading.Lock()
+        self._audit_backend = audit_backend
+        self._runtime = runtime
+        if register_builtins:
+            self.register_check("runtime", self._check_runtime)
+            self.register_check("audit_backend", self._check_audit_backend)
 
     # -- registration ------------------------------------------------------
 
@@ -136,35 +159,66 @@ class HealthChecker:
 
     # -- built-in checks ---------------------------------------------------
 
-    def _check_policy_engine(self) -> ComponentHealth:
-        """Built-in check that validates the policy engine can create a policy."""
-        from .base import GovernancePolicy
-
+    def _check_runtime(self) -> ComponentHealth:
+        """Built-in check that validates a native runtime is configured."""
         start = time.monotonic()
-        try:
-            GovernancePolicy(name="health-probe")
-            elapsed = (time.monotonic() - start) * 1000.0
+        runtime = self._runtime
+        elapsed = (time.monotonic() - start) * 1000.0
+        if runtime is None:
             return ComponentHealth(
-                name="policy_engine",
-                status=HealthStatus.HEALTHY,
-                message="policy engine operational",
+                name="runtime",
+                status=HealthStatus.DEGRADED,
+                message="no runtime configured",
                 latency_ms=elapsed,
             )
-        except Exception as exc:
-            elapsed = (time.monotonic() - start) * 1000.0
+        if not callable(getattr(runtime, "create_session", None)):
             return ComponentHealth(
-                name="policy_engine",
+                name="runtime",
                 status=HealthStatus.UNHEALTHY,
-                message=str(exc),
+                message="runtime missing create_session interface",
                 latency_ms=elapsed,
             )
+        return ComponentHealth(
+            name="runtime",
+            status=HealthStatus.HEALTHY,
+            message="runtime configured",
+            latency_ms=elapsed,
+        )
 
     def _check_audit_backend(self) -> ComponentHealth:
-        """Built-in check stub for the audit backend."""
+        """Built-in check for the configured audit backend.
+
+        Reports DEGRADED (not HEALTHY) when no audit backend is configured — a
+        governance probe must not claim the audit path is healthy when nothing
+        is wired up. When a backend is present, verifies it exposes the expected
+        write/flush (or emit) interface without mutating the audit log.
+        """
+        start = time.monotonic()
+        backend = self._audit_backend
+        if backend is None:
+            return ComponentHealth(
+                name="audit_backend",
+                status=HealthStatus.DEGRADED,
+                message="no audit backend configured",
+                latency_ms=(time.monotonic() - start) * 1000.0,
+            )
+        has_write_flush = callable(getattr(backend, "write", None)) and callable(
+            getattr(backend, "flush", None)
+        )
+        has_emit = callable(getattr(backend, "emit", None))
+        elapsed = (time.monotonic() - start) * 1000.0
+        if has_write_flush or has_emit:
+            return ComponentHealth(
+                name="audit_backend",
+                status=HealthStatus.HEALTHY,
+                message="audit backend configured (write/flush interface available)",
+                latency_ms=elapsed,
+            )
         return ComponentHealth(
             name="audit_backend",
-            status=HealthStatus.HEALTHY,
-            message="audit backend reachable",
+            status=HealthStatus.UNHEALTHY,
+            message="audit backend missing write/flush or emit interface",
+            latency_ms=elapsed,
         )
 
     # -- helpers -----------------------------------------------------------
@@ -188,7 +242,9 @@ class HealthChecker:
         components: dict[str, ComponentHealth],
     ) -> HealthStatus:
         if not components:
-            return HealthStatus.HEALTHY
+            # Fail closed: an empty report verifies nothing, so it must not
+            # claim HEALTHY (a probe wired to this would report a false-healthy).
+            return HealthStatus.UNHEALTHY
         statuses = {c.status for c in components.values()}
         if HealthStatus.UNHEALTHY in statuses:
             return HealthStatus.UNHEALTHY

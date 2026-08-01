@@ -21,7 +21,7 @@ from dataclasses import dataclass, asdict
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from benchmark.red_team_dataset import (
+from benchmarks.red_team_dataset import (
     get_all_prompts,
     get_prompts_by_category,
     get_dataset_stats,

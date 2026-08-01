@@ -124,7 +124,13 @@ class GovServer:
         self._version = version or __version__
         self._detector = PromptInjectionDetector(DetectionConfig(sensitivity="balanced"))
         self._metrics = GovernanceMetrics()
-        self._health_checker = HealthChecker(version=self._version)
+        # This server does not own an ACS runtime. Probe the governance path it
+        # does own: the injection detector audit trail exposed by the API.
+        self._health_checker = HealthChecker(
+            version=self._version,
+            register_builtins=False,
+        )
+        self._health_checker.register_check("audit_backend", self._check_audit_trail)
         self._execute_authenticator: MCPSessionAuthenticator | None = (
             execute_authenticator or _build_execute_authenticator_from_env()
         )
@@ -157,6 +163,39 @@ class GovServer:
     @property
     def health_checker(self) -> Any:
         return self._health_checker
+
+    def _check_audit_trail(self) -> Any:
+        """Health probe for the server's real audit path (the detector trail).
+
+        The server's audit facility is the injection detector's bounded audit
+        log (served by ``/api/v1/audit/injections``). This performs a
+        non-invasive read to confirm the trail is accessible — it does not write
+        a probe record, so it never pollutes audit data. Reports UNHEALTHY if the
+        detector or its audit trail cannot be reached.
+        """
+        import time
+
+        from agent_os.integrations.health import ComponentHealth, HealthStatus
+
+        start = time.monotonic()
+        try:
+            entries = self._detector.audit_log
+            count = len(entries)
+            elapsed = (time.monotonic() - start) * 1000.0
+            return ComponentHealth(
+                name="audit_backend",
+                status=HealthStatus.HEALTHY,
+                message=f"injection audit trail operational ({count} recent entries)",
+                latency_ms=elapsed,
+            )
+        except Exception as exc:
+            elapsed = (time.monotonic() - start) * 1000.0
+            return ComponentHealth(
+                name="audit_backend",
+                status=HealthStatus.UNHEALTHY,
+                message=f"audit trail unavailable: {exc}",
+                latency_ms=elapsed,
+            )
 
     @property
     def execute_authenticator(self) -> Any:

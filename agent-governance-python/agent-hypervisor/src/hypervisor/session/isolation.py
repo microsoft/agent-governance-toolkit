@@ -32,10 +32,6 @@ class IsolationLevel(str, Enum):
         return self == IsolationLevel.SERIALIZABLE
 
     @property
-    def requires_intent_locks(self) -> bool:
-        return self == IsolationLevel.SERIALIZABLE
-
-    @property
     def allows_concurrent_writes(self) -> bool:
         return self != IsolationLevel.SERIALIZABLE
 

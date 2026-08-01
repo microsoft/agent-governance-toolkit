@@ -6,7 +6,7 @@ Interactive Jupyter notebooks for exploring the **agent-hypervisor** runtime.
 
 | Notebook | Description |
 |----------|-------------|
-| [`hypervisor-exploration.ipynb`](hypervisor-exploration.ipynb) | End-to-end tour of execution rings, sagas, kill switch, rate limiting, audit trails, and joint liability |
+| [`hypervisor-exploration.ipynb`](hypervisor-exploration.ipynb) | End-to-end tour of execution rings, sagas, kill switch, rate limiting, audit trails, and visualization |
 
 ## Quick Start
 
@@ -25,8 +25,7 @@ jupyter notebook notebooks/
 4. **Kill Switch** — Terminate misbehaving agents and hand off in-flight work
 5. **Resource Limits** — Per-ring rate limiting demonstration
 6. **Audit Trail** — Hash-chained, tamper-evident delta log with chain verification
-7. **Joint Liability** — Vouching bonds and slashing cascades
-8. **Visualization** — Plotly charts showing ring distribution, trust mapping, and audit timeline
+7. **Visualization** — Plotly charts showing ring distribution, trust mapping, and audit timeline
 
 ## Requirements
 

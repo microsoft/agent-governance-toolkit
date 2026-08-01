@@ -200,12 +200,23 @@ class GovernanceLayer:
                     })
                     max_severity = max(max_severity, rule.severity)
             except Exception as e:
-                # Log but don't fail on validator errors
+                # Fail closed: a validator that raises must NOT be treated as
+                # compliant. Record the audit event AND a violation so the gate
+                # reports aligned=False.
                 self._log_audit_event({
                     "event": "validator_error",
                     "rule_id": rule_id,
                     "error": str(e)
                 })
+                violations.append({
+                    "rule_id": rule_id,
+                    "principle": rule.principle.value,
+                    "description": rule.description,
+                    "severity": rule.severity,
+                    "type": "validator_error",
+                    "error": str(e)
+                })
+                max_severity = max(max_severity, rule.severity)
         
         return {
             "aligned": len(violations) == 0,
@@ -350,9 +361,15 @@ class GovernanceLayer:
         limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """Get governance audit log"""
-        if limit:
-            return self._audit_log[-limit:]
-        return self._audit_log.copy()
+        if limit is None:
+            return self._audit_log.copy()
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        if limit == 0:
+            # Explicit: 0 means zero entries. Note self._audit_log[-0:] would
+            # return the ENTIRE log (since -0 == 0), so guard it directly.
+            return []
+        return self._audit_log[-limit:]
     
     def _log_audit_event(self, event: Dict[str, Any]):
         """Internal audit logging"""

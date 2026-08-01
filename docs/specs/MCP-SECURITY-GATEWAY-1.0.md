@@ -640,8 +640,13 @@ checks in order:
 4. **Signature verification:** Recompute the HMAC-SHA256 signature
    and compare against the envelope signature using constant-time
    comparison. If mismatch, return `failed("invalid signature")`.
-5. **Success:** Store the nonce in the cache and return
-   `success(payload, sender_id)`.
+5. **Store and success:** Store the nonce in the cache and return
+   `success(payload, sender_id)`. If the nonce cannot be stored
+   without evicting an in-window nonce (see §7.9), the store fails
+   closed and verification MUST return
+   `failed("Nonce store at capacity (fail-closed).")` rather than
+   accept a message whose nonce cannot be retained for the full
+   replay window.
 
 **[Pure Specification]**
 
@@ -661,12 +666,24 @@ checks in order:
    `nonce_cache_cleanup_interval`.
 2. Nonces older than the `replay_window` MUST be evicted during
    cleanup.
-3. If the cache exceeds `max_nonce_cache_size`, implementations
-   SHOULD trigger an immediate cleanup cycle.
+3. If the cache exceeds `max_nonce_cache_size`, implementations MUST
+   reclaim capacity by removing already-expired nonces only. An
+   implementation MUST NOT evict a nonce that is still inside its
+   `replay_window` to make room, because doing so re-opens the replay
+   window for the evicted message. When the cache is full of in-window
+   nonces, the implementation MUST fail closed: reject the incoming
+   message (see §7.7 step 5) rather than accept a nonce it cannot
+   retain. Operators size `max_nonce_cache_size` above the peak
+   in-window message volume, or shorten `replay_window`, to avoid
+   saturation.
 4. A `cleanup_nonce_cache()` method MUST be available for manual
    cache maintenance and MUST return the number of evicted entries.
 5. A `cached_nonce_count` property MUST return the current cache
    size.
+6. A nonce is considered in-window while `now <= expires_at`
+   (retention is inclusive of the exact expiry instant, matching the
+   inclusive replay-window check in §7.7 step 2); it is eligible for
+   eviction only once `now > expires_at`.
 
 **[Pure Specification]**
 

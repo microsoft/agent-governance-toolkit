@@ -8,7 +8,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from agent_os.credential_redactor import CredentialRedactor
+from agent_os.credential_redactor import CredentialMatch, CredentialRedactor
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +118,11 @@ class MCPResponseScanner:
                     description="Imperative instruction detected in tool response.",
                 )
             )
-            threats.extend(self._scan_credential_leaks(response_content))
-            threats.extend(self._scan_pii_leaks(response_content))
+            credential_matches = self._deduplicate_credential_matches(
+                CredentialRedactor.find_matches(response_content)
+            )
+            threats.extend(self._credential_threats(credential_matches, action="detected"))
+            threats.extend(self._scan_pii_leaks(response_content, credential_matches))
             threats.extend(self._scan_exfiltration_urls(response_content))
 
             if not threats:
@@ -143,25 +146,37 @@ class MCPResponseScanner:
         response_content: str | None,
         tool_name: str = "unknown",
     ) -> tuple[str, list[MCPResponseThreat]]:
-        """Strip instruction tags from tool output and report stripped threats.
+        """Strip instruction tags and redact credentials from tool output.
+
+        This makes the returned content safe from prompt-injection tags and
+        credential leakage in one pass, so a host does not have to stitch the
+        scanner and :class:`CredentialRedactor` together by hand.
+
+        Note: this removes instruction tags and *credentials* only. It does
+        **not** remove PII (email, phone, SSN, credit card, IP); those are
+        reported by :meth:`scan_response` and must be handled by policy. Do not
+        treat sanitized output as PII-safe.
 
         Args:
             response_content: Raw tool output to sanitize.
             tool_name: Human-readable tool name for reporting.
 
         Returns:
-            A tuple of ``(sanitized_content, stripped_threats)``. On failure the
-            method returns an empty string and a fail-closed error finding.
+            A tuple of ``(sanitized_content, removed_threats)`` where
+            ``removed_threats`` lists the instruction tags stripped and the
+            credential types redacted (by type name, never the raw secret). On
+            failure the method returns an empty string and a fail-closed error
+            finding.
         """
         try:
             if not response_content:
                 return "", []
 
             sanitized = response_content
-            stripped: list[MCPResponseThreat] = []
+            removed: list[MCPResponseThreat] = []
             for pattern in _INSTRUCTION_TAG_PATTERNS:
                 for match in pattern.finditer(sanitized):
-                    stripped.append(
+                    removed.append(
                         MCPResponseThreat(
                             category="instruction_injection",
                             description="Instruction tag stripped from tool response.",
@@ -170,7 +185,16 @@ class MCPResponseScanner:
                     )
                 sanitized = pattern.sub("", sanitized)
 
-            return sanitized, stripped
+            credential_matches = self._deduplicate_credential_matches(
+                CredentialRedactor.find_matches(sanitized)
+            )
+            if credential_matches:
+                sanitized = CredentialRedactor.redact(sanitized)
+                removed.extend(
+                    self._credential_threats(credential_matches, action="redacted")
+                )
+
+            return sanitized, removed
         except Exception:
             logger.error("MCP response sanitization failed closed", exc_info=True)
             return "", [
@@ -203,23 +227,75 @@ class MCPResponseScanner:
         return threats
 
     @staticmethod
-    def _scan_credential_leaks(content: str) -> list[MCPResponseThreat]:
-        threats: list[MCPResponseThreat] = []
-        for credential_match in CredentialRedactor.find_matches(content):
-            threats.append(
-                MCPResponseThreat(
-                    category="credential_leak",
-                    description=f"{credential_match.name} detected in tool response.",
-                    matched_pattern=credential_match.name,
-                    details={"credential_type": credential_match.name},
-                )
+    def _deduplicate_credential_matches(
+        matches: list[CredentialMatch],
+    ) -> list[CredentialMatch]:
+        """Drop credential matches whose span is strictly inside a larger match.
+
+        A single secret can match both a specific and a generic pattern (for
+        example ``api_key=AIza...`` matches "Google API key" and "Generic API
+        secret"). Keeping only the widest span per region avoids emitting
+        duplicate ``credential_leak`` findings for one secret. Matches with equal
+        spans or unknown offsets are all retained.
+        """
+        kept: list[CredentialMatch] = []
+        for index, match in enumerate(matches):
+            if match.start < 0:
+                kept.append(match)
+                continue
+            match_size = match.end - match.start
+            contained = any(
+                other_index != index
+                and other.start >= 0
+                and other.start <= match.start
+                and match.end <= other.end
+                and (other.end - other.start) > match_size
+                for other_index, other in enumerate(matches)
             )
-        return threats
+            if not contained:
+                kept.append(match)
+        return kept
 
     @staticmethod
-    def _scan_pii_leaks(content: str) -> list[MCPResponseThreat]:
+    def _credential_threats(
+        matches: list[CredentialMatch], *, action: str
+    ) -> list[MCPResponseThreat]:
+        """Build credential threats from matches, exposing only the type name.
+
+        ``action`` is "detected" (scan) or "redacted" (sanitize). The raw
+        matched secret value is never placed in the threat.
+        """
+        return [
+            MCPResponseThreat(
+                category="credential_leak",
+                description=f"{match.name} {action} in tool response.",
+                matched_pattern=match.name,
+                details={"credential_type": match.name},
+            )
+            for match in matches
+        ]
+
+    @staticmethod
+    def _scan_pii_leaks(
+        content: str,
+        credential_matches: list[CredentialMatch] | None = None,
+    ) -> list[MCPResponseThreat]:
+        credential_spans = [
+            (match.start, match.end)
+            for match in (credential_matches or [])
+            if match.start >= 0
+        ]
         threats: list[MCPResponseThreat] = []
         for pii_match in CredentialRedactor.find_pii_matches(content):
+            # Suppress PII that falls entirely inside a credential match: digit
+            # runs in tokens such as Google "AIza..." keys otherwise register as
+            # a false "US phone number" and would wrongly hard-block a secret
+            # that is actually redactable.
+            if pii_match.start >= 0 and any(
+                start <= pii_match.start and pii_match.end <= end
+                for start, end in credential_spans
+            ):
+                continue
             threats.append(
                 MCPResponseThreat(
                     category="pii_leak",

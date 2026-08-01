@@ -25,20 +25,10 @@ __version__ = "5.0.0"
 from hypervisor import constants  # noqa: F401,E402
 
 # Audit
-from hypervisor.audit.commitment import CommitmentEngine  # noqa: E402
 from hypervisor.audit.delta import DeltaEngine  # noqa: E402
-from hypervisor.audit.gc import EphemeralGC  # noqa: E402
 
 # Top-level orchestrator
 from hypervisor.core import Hypervisor  # noqa: E402
-
-# Liability
-from hypervisor.liability import LiabilityMatrix  # noqa: E402
-from hypervisor.liability.attribution import AttributionResult, CausalAttributor  # noqa: E402
-from hypervisor.liability.ledger import LedgerEntryType, LiabilityLedger  # noqa: E402
-from hypervisor.liability.quarantine import QuarantineManager, QuarantineReason  # noqa: E402
-from hypervisor.liability.slashing import SlashingEngine  # noqa: E402
-from hypervisor.liability.vouching import VouchingEngine, VouchRecord  # noqa: E402
 
 # Core models
 from hypervisor.models import (  # noqa: E402
@@ -71,9 +61,6 @@ from hypervisor.rings.elevation import (  # noqa: E402
 from hypervisor.rings.enforcer import RingEnforcer  # noqa: E402
 
 # Saga
-from hypervisor.saga.checkpoint import CheckpointManager, SemanticCheckpoint  # noqa: E402
-from hypervisor.saga.dsl import SagaDefinition, SagaDSLParser  # noqa: E402
-from hypervisor.saga.fan_out import FanOutOrchestrator, FanOutPolicy  # noqa: E402
 from hypervisor.saga.orchestrator import SagaOrchestrator, SagaTimeoutError  # noqa: E402
 from hypervisor.saga.state_machine import SagaState, StepState  # noqa: E402
 
@@ -83,18 +70,11 @@ from hypervisor.security.rate_limiter import AgentRateLimiter, RateLimitExceeded
 
 # Session management
 from hypervisor.session import SharedSessionObject  # noqa: E402
-from hypervisor.session.intent_locks import (  # noqa: E402
-    DeadlockError,
-    IntentLockManager,
-    LockContentionError,
-    LockIntent,
-)
 from hypervisor.session.isolation import IsolationLevel  # noqa: E402
 from hypervisor.session.sso import SessionVFS, VFSEdit, VFSPermissionError  # noqa: E402
 from hypervisor.session.vector_clock import (  # noqa: E402
     CausalViolationError,
     VectorClock,
-    VectorClockManager,
 )
 
 # Verification
@@ -117,24 +97,8 @@ __all__ = [
     "VFSEdit",
     "VFSPermissionError",
     "VectorClock",
-    "VectorClockManager",
     "CausalViolationError",
-    "IntentLockManager",
-    "LockIntent",
-    "LockContentionError",
-    "DeadlockError",
     "IsolationLevel",
-    # Liability
-    "VouchRecord",
-    "VouchingEngine",
-    "SlashingEngine",
-    "LiabilityMatrix",
-    "CausalAttributor",
-    "AttributionResult",
-    "QuarantineManager",
-    "QuarantineReason",
-    "LiabilityLedger",
-    "LedgerEntryType",
     # Rings
     "RingEnforcer",
     "ActionClassifier",
@@ -150,16 +114,8 @@ __all__ = [
     "SagaTimeoutError",
     "SagaState",
     "StepState",
-    "FanOutOrchestrator",
-    "FanOutPolicy",
-    "CheckpointManager",
-    "SemanticCheckpoint",
-    "SagaDSLParser",
-    "SagaDefinition",
     # Audit
     "DeltaEngine",
-    "CommitmentEngine",
-    "EphemeralGC",
     # Verification
     "TransactionHistoryVerifier",
     # Observability

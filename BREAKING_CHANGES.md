@@ -5,6 +5,435 @@ entries appear first.
 
 ---
 
+## `HostSession.post_tool_call` and `pre_model_call` emit the adapter snapshot shape
+
+**Date:** TBD
+
+**Affected**
+
+- manifests binding `post_tool_call` to `$.tool_result`
+- manifests binding `pre_model_call` to `$.request`
+- anything constructing `HostSession` directly rather than going through an
+  `agent_os.integrations` adapter
+
+**What changed**
+
+`HostSession` sent the tool result as a bare value and nested the model request
+under `request`, while the `agent_os.integrations` adapters send `tool_result`
+as `{"value": ..., "error": ..., "duration_ms": ...}` and spread the model
+request over `model`, `messages` and `tools`. Because those two seams
+disagreed, no manifest could bind a policy target that resolved for both:
+whichever seam the policy author did not target failed closed with a
+missing-path error.
+
+`HostSession` now emits the adapter shape at both points, which is also the
+shape AGT-SNAPSHOT-1.0 §2.6 specifies.
+
+This aligns `HostSession` with `agent_os.integrations` only. Other SDK entry
+points, including `AgentControl.run_tool` and the LiteLLM adapter, still send
+the older flat `tool_result` and are not covered by this change.
+
+**How to update**
+
+Repoint the affected policy targets:
+
+| Before | After |
+|--------|-------|
+| `$.tool_result` | `$.tool_result.value` |
+| `$.request` | `$.messages` (or `$.model`, `$.tools`) |
+
+A manifest left on `$.tool_result` still loads and still returns a verdict. It
+matches against an object rather than the result value, so a rule written for a
+string stops denying. Repoint it before upgrading.
+
+---
+
+## `agt.policies` is removed; hosts call the ACS runtime directly
+
+**Date:** TBD
+
+**Affected**
+
+- anything importing `agt.policies`
+- hosts relying on the wrapper's approval-timeout default
+- audit records keyed on the `policy:` reason-code prefix
+
+**What changed**
+
+`agt.policies` wrapped the ACS runtime to re-expose it under AGT names. The
+wrapper is deleted and every module now calls
+`agent_control_specification` directly. The `agt` package keeps only the CLI,
+including the v4 migration tool.
+
+The following public symbols are removed:
+
+- runtime and manifest: `AgtRuntime`, `AgtManifest`, `AdapterRuntimeSession`,
+  `AdapterManifestContract`, `ManifestCompatibilityError`, `ManifestProvenance`
+- results: `PolicyEvaluation`, `ApprovalDecision`, `PolicyAuditRecord`,
+  `TransformResult`, `EvidenceResult`
+- snapshot builders: `SnapshotBuilder`, `agent_startup_snapshot`,
+  `agent_shutdown_snapshot`, `input_snapshot`, `output_snapshot`,
+  `pre_model_call_snapshot`, `post_model_call_snapshot`,
+  `pre_tool_call_snapshot`, `post_tool_call_snapshot`
+
+**Replacements**
+
+| Removed | Use instead |
+|---------|-------------|
+| `AgtRuntime(path)` | `AgentControl.from_path(str(path))` |
+| `AdapterRuntimeSession` | `HostSession` |
+| `AgtManifest` | `parse_manifest` / `validate_manifest` |
+| `PolicyEvaluation` | `InterventionPointResult` and `Verdict` |
+| `ApprovalDecision` | `ApprovalResolution` |
+| `*_snapshot()` helpers | `SnapshotBuilder` from `agent_control_specification` |
+| `evaluation.is_allowed()` | `result.verdict.decision.permits` |
+
+**Three deliberate behaviour changes**
+
+1. Reason codes lose the `policy:` prefix. A Pydantic validator on the wrapper
+   added it; the engine never emitted it. Anything matching on `policy:` needs
+   updating.
+2. `agt validate` now applies the runtime's own contract, so a manifest with no
+   intervention points is an error rather than a warning.
+3. The approval timeout moved onto the session. `HostSession` defaults to 300
+   seconds and denies on expiry; pass `approval_timeout_seconds` to change it.
+   The manifest's `approval.timeout_seconds` does not drive this. The core
+   treats that section as opaque host configuration and `AgentControl` does not
+   surface it, so a host that declares it in the manifest must pass the same
+   value to the session until the SDK exposes an accessor.
+
+---
+
+## acs-generator is now a CLI-only package
+
+**Date:** TBD (next `acs-generator` release)
+
+**Affected:**
+
+- `acs-generator` top-level Python imports such as `GenerationEngine`,
+  `GenerationError`, `FakeLanguageModel`, `LanguageModel`, and
+  `OpenAICompatibleLanguageModel`
+
+**What changed:**
+
+`acs-generator` `0.4.0b0` no longer re-exports implementation classes from its
+package initializer. The package remains the `acs` and `acs-generate` command
+line artifact generator. Reusable artifact validation moved to
+`agent_control_specification.validation`.
+
+**Why:**
+
+The generator is an authoring CLI, not the owner of reusable runtime-facing
+APIs. Keeping validation in the Python SDK gives API consumers one supported
+surface and prevents the generator package from becoming a second SDK.
+
+**How to migrate:**
+
+- Replace `from acs_generator import validate_acs_artifacts` with
+  `from agent_control_specification.validation import validate_acs_artifacts`.
+- Invoke generation through `acs` or `acs-generate`. Code that imported
+  generator implementation classes must move to the CLI or maintain its own
+  integration with the internal modules.
+## The rest of the Python policy surface follows the rule model out
+
+**Date:** TBD
+
+**Affected**
+
+- `agt-policies` (`agt.manifest_resolution`, `agt._harness.opa_runner`)
+- `agent-os` (`agent_os.policies` evaluators, decisions, and conflict types)
+- `agentmesh-integrations`
+- The unreleased `cedarling-agentmesh` backend and its package extra
+
+**What changed**
+
+The entry titled "Python runtime policy APIs drop the pre-ACS rule model"
+records the rule model itself, the conversion helpers, and the sandbox
+policy-to-config helpers. What goes here is everything that depended on them
+and could only leave once they had.
+
+Manifest resolution is gone as a module. It walked a folder tree, merged the
+documents it found, and filtered them by scope, all of which described a
+layout the ACS manifest does not have. `resolve_manifest`, `discover_policies`,
+`merge_documents`, `filter_by_scope`, `ResolutionError`, and `ResolutionReason`
+go with it, along with the `agt._harness.opa_runner` module. Point `AgentControl`
+at a manifest instead.
+
+`agent_os.policies` loses the evaluators and backends that read the rule model
+(`PolicyEvaluator`, `ExternalPolicyBackend`, `ConcurrencyStats`), the decision
+and conflict types they produced (`PolicyDecision`, `CandidateDecision`,
+`PolicyCheckResult`, `PolicyConflictResolver`, `ConflictResolutionStrategy`,
+`ResolutionResult`), and the remaining rule types (`PolicyRule`, `PolicyScope`,
+`Condition`). Names that survive elsewhere are unrelated: `agent_os.base_agent`
+keeps its own `PolicyDecision` enum, `agent_os` re-exports a `PolicyRule` from
+`agent_control_plane`, and `agentmesh.governance` keeps a separate trust-policy
+system that was never part of the v4 language.
+
+Framework integrations lose their local policy surfaces: `GovernancePolicy`,
+`GovernancePolicyChecker`, `GovernanceComponent`, `GovernanceSkill`,
+`GovernanceToolset`, `PolicyGuardrailConfig`, `PatternType`,
+`ShellPolicyViolation`, `load_policy_yaml`, `governed_shell`,
+`policy_input_guardrail`, and `content_output_guardrail`. Each took a local
+policy object; each now takes an `AgentControl`.
+
+The `cedarling-agentmesh` backend and `CedarlingBackend` are removed with the
+consolidated package extra that pulled them in. The backend implemented the
+deleted backend contract and was never released.
+
+**Migration**
+
+Build the manifest with `agt migrate`, construct `AgentControl` from it, and
+pass that wherever a policy object used to go. Read `evaluation_result` and
+the ACS audit record in place of the compatibility exception fields.
+
+---
+
+## Rust and Mastra framework policy surfaces now use ACS manifests
+
+**Date:** TBD
+
+**Affected:**
+
+- Rust `agentmesh::FrameworkGovernanceAdapter`
+- `@microsoft/agentmesh-mastra`
+
+**What changed:**
+
+The Rust framework adapter no longer accepts its local policy struct and
+pattern enum. It accepts native `AgentControl` or `Manifest` input. The Mastra
+wrapper no longer exports a local policy middleware. It requires a Node ACS
+`AgentControl` and delegates tool execution to `runTool`.
+
+**Migration:**
+
+Move tool catalogs, bindings, budgets, content policies, and approval rules
+into an ACS manifest. Rust callers construct `AgentControl::from_manifest` or
+`FrameworkGovernanceAdapter::from_path`. Mastra callers pass
+`AgentControl.fromPath(...)` as the `control` option to `createGovernedTool`.
+
+---
+
+## Python runtime policy APIs drop the pre-ACS rule model
+
+**Date:** TBD
+
+**Affected**
+
+- `agent-os` (`agent_os.policies`, `agent_os.integrations`, `agent_os.compat`, `agent_os.providers`)
+- `agt-sandbox` (`agent_sandbox`)
+- `agt-policies` (`agt.policies`, `agt._harness`)
+- `agent-marketplace` (`agent_marketplace.hooks`)
+
+**What changed**
+
+The Python runtime no longer carries its own rule model, its own evaluators and
+external backends, or the bridge that translated between that model and ACS.
+The ACS runtime evaluates policy, so the parallel model and every helper that
+converted between the two are gone rather than deprecated. Framework
+adapters take an `AgentControl`. Sandbox providers take `runtime=` alongside an
+explicit `SandboxConfig` instead of deriving one from a policy document.
+
+These 75 public names are removed. The list is computed from the export diff
+against the merge base, not assembled by hand.
+
+`agent_os.policies` (39):
+`AsyncPolicyEvaluator`, `BackendDecision`, `BudgetPolicy`, `CedarBackend`,
+`DynamicBudgetTracker`, `DynamicCondition`, `DynamicConditionEvaluator`,
+`DynamicConditionType`, `OPABackend`, `PolicyAction`, `PolicyCondition`,
+`PolicyDefaults`, `PolicyDocument`, `PolicyOperator`, `SandboxMounts`,
+`SharedPolicyDecision`, `SharedPolicyEvaluator`, `SharedPolicyRule`,
+`SharedPolicySchema`, `ViolationCategory`, `deny_blocked_pattern_input`,
+`deny_blocked_pattern_memory`, `deny_blocked_pattern_output`,
+`deny_blocked_pattern_tool`, `deny_blocked_tool`, `deny_confidence_threshold`,
+`deny_drift`, `deny_human_approval`, `deny_max_tool_calls`,
+`deny_not_allowed_tool`, `deny_policy_error`, `deny_timeout`,
+`document_to_governance`, `get_effective_defaults`, `governance_to_document`,
+`merge_policies`, `policy_document_to_shared`, `shared_to_policy_document`,
+`to_policy_action`
+
+`agent_os.integrations` (20):
+`ADKPolicyConfig`, `AdapterRegistry`, `AdapterRuntimeBridge`,
+`AsyncGovernedWrapper`, `BridgeResult`, `DetectionEnforcementAction`,
+`DetectionModuleConfig`, `EscalationResult`, `GovernancePolicyMiddleware`,
+`HumanApprovalRequired`, `MAFGovernancePolicyMiddleware`, `PolicyConfig`,
+`PolicyHierarchy`, `PolicyInterceptor`, `PolicyTemplates`, `TransformOutcome`,
+`compose_policies`, `get_runtime_bridge`, `override_policy`, `register_adapter`
+
+`agent_sandbox` (8): `aca_config_from_policy`, `docker_config_from_policy`,
+`hyperlight_config_from_policy`, `mxc_config_from_policy`,
+`nono_config_from_policy`, `policy_to_mxc_json`, `policy_yaml_to_mxc_json`,
+`policy_yaml_to_nono_config`
+
+Elsewhere (8): `NoOpGovernanceMiddleware`, `NoOpPolicyEvaluator`,
+`get_evaluator` (`agent_os.compat`); `get_policy_engine`
+(`agent_os.providers`); `governance_to_acs_manifest` (`agt.policies`);
+`evaluate_policy_cli` (`agent_marketplace.hooks`); `EvaluationResult`; and the
+`agt._harness.opa_runner` module.
+
+**A manifest must bind every intervention point the adapter evaluates**
+
+The bridge rewrote an unconfigured intervention point to an allow, so a
+manifest could bind nothing and every path still ran. The ACS runtime denies
+it instead, with reason `runtime_error:intervention_point_unknown`, and the
+adapters pass that denial through.
+
+This bites on a minimal manifest. An adapter evaluates a fixed set of points:
+`input` on every call, `pre_tool_call` on every tool call, `output` after
+every response. A manifest binding only `input` therefore denies the tool and
+output paths, which reads as the adapter being broken.
+
+Bind each point the adapter uses. The Rust guidance in
+`agent-governance-rust/agentmesh/MIGRATION_V5.md` says the same thing and
+shows the shape.
+
+Do not read the reason as "no policy here, carry on". A `post_*` block still
+stops the result propagating even though the guarded action already ran, so
+permitting an unconfigured `output` or `post_tool_call` forwards model
+responses and tool results no policy was consulted about.
+
+**A tool-call budget now counts one call differently**
+
+The bridge reported the tool-call count *including* the call under evaluation,
+so `max_tool_calls: 3` denied the third call and allowed two. The ACS runtime
+reports calls already completed, so `max_tool_calls: 3` now allows three. The
+bridge carried this as a compatibility override and recorded it as temporary.
+A deployed policy therefore permits one more tool call than it used to. Lower
+the limit by one to keep the behaviour you have.
+
+**Migration**
+
+Run `agt migrate` on a supported literal policy, then build an `AgentControl`
+from the manifest it writes. Sandbox resources, mounts, network settings, and
+tool exposure move into `SandboxConfig`. Read `evaluation_result` and the ACS audit
+record where you used to read the compatibility exception fields.
+
+---
+
+## MuteAgentValidator now runs capability validators consistently and honors strict_mode
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-governance-python` (`agent_control_plane.mute_agent`):
+  `MuteAgentValidator.validate_request`, `MuteAgentValidator.validate_action`,
+  `MuteAgentConfig.strict_mode`
+
+**What changed:**
+
+Three input-handling defects that silently weakened validation are fixed. Each
+changes the outcome for inputs that previously slipped through:
+
+1. **Dict-shaped requests are now validated.** `validate_request` previously ran
+   a capability's parameter validator only when the request was an
+   `ExecutionRequest` object (it gated on `hasattr(request, "action_type")`). A
+   dict request carries `action_type` as a key, so validators were skipped and a
+   dict request with dangerous parameters was approved. Requests are now
+   normalized to a shape-independent view and validated the same way whether they
+   are objects or dicts. A dict request that fails a validator is now rejected.
+2. **`validate_action` now runs validators.** The lightweight
+   `validate_action(action_type, parameters)` path previously ignored
+   `parameters` and returned success on an action-type match alone. It now runs
+   the matching capabilities' validators against `parameters` and can reject.
+3. **`strict_mode` is now honored.** `MuteAgentConfig.strict_mode` was never
+   read; out-of-capability actions were always rejected. `strict_mode=False` now
+   allows well-formed out-of-capability actions (as documented), while
+   `strict_mode=True` (the default) continues to reject them. Malformed or
+   unrecognized `action_type` is rejected in both modes.
+
+**Why:**
+
+Validation strength must not depend on the in-memory shape of the request, a
+config flag that was silently ignored, or which entry point a caller used. All
+three were fail-open gaps in a validator whose job is to reject.
+
+**How to migrate:**
+
+- If you send dict requests or use `validate_action` and relied on validators
+  being skipped, ensure your requests satisfy the capability validators.
+- If you set `strict_mode=False` assuming it was inert, note it now relaxes
+  out-of-capability actions; set `strict_mode=True` (the default) to keep strict
+  enforcement.
+
+---
+
+## GovernanceLayer.check_alignment fails closed; get_audit_log(0) returns zero entries
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-governance-python` (`agent_control_plane.governance_layer`):
+  `GovernanceLayer.check_alignment`, `GovernanceLayer.get_audit_log`
+
+**What changed:**
+
+1. **A raising alignment validator is no longer treated as compliant.**
+   `check_alignment` previously logged an audit event when a rule's validator
+   raised but did not record a violation, so a validator that threw was silently
+   reported as `aligned=True` with no violations. It now records a
+   `validator_error` violation and returns `aligned=False`.
+2. **`get_audit_log(0)` now returns an empty list.** A `limit` of `0` was falsy
+   and returned the entire log (`self._audit_log[-0:]` is the whole list). It now
+   returns `[]`. `get_audit_log(None)` still returns the full log; a negative
+   limit now raises `ValueError`.
+
+**Why:**
+
+An alignment gate that reports a throwing validator as compliant is fail-open,
+and a limit of `0` returning everything is a silent wrong result for any caller
+that computes a limit which can legitimately be `0`.
+
+**How to migrate:**
+
+- If you relied on `check_alignment` returning `aligned=True` when a validator
+  raised, fix the validator; a raise is now a violation.
+- If you called `get_audit_log(0)` expecting the full log, pass `None` (or no
+  argument) instead.
+
+---
+
+## KernelSpace fails closed when no policy engine is configured
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-governance-python` (`agent_control_plane.kernel_space`,
+  Layer 3 control plane): `KernelSpace`, `create_kernel`
+
+**What changed:**
+
+A `KernelSpace` constructed without a policy engine previously allowed every
+syscall (fail-open), including `SYS_EXEC` tool execution. It now fails closed:
+
+1. **External syscalls are denied by default.** With no `policy_engine`,
+   syscalls that reach outside the agent's own sandbox (`SYS_EXEC`, IPC,
+   signal delivery, agent spawn) are denied. The denial is returned as a clean
+   `SyscallResult(success=False)`; it does not raise a kernel panic and is not
+   counted as a policy violation.
+2. **Self-scoped syscalls stay allowed.** `SYS_EXIT` and the agent's own VFS
+   operations (`SYS_READ`, `SYS_WRITE`, `SYS_OPEN`, `SYS_CLOSE`, `SYS_STAT`)
+   remain allowed so an agent can still use its own memory and exit cleanly.
+3. **New `permissive` parameter.** `KernelSpace(..., permissive=True)` and
+   `create_kernel(..., permissive=True)` restore the previous allow-all
+   behavior as an explicit, auditable opt-in.
+
+**Why:**
+
+For a governance kernel, a missing policy engine allowing arbitrary tool
+execution is a fail-open trust-boundary hole. The safe default for a missing
+governance dependency is to refuse externally-visible actions.
+
+**How to migrate:**
+
+If you construct `KernelSpace()` or `create_kernel()` without a policy engine
+and rely on tool execution or other external syscalls, either wire a policy
+engine or pass `permissive=True` to keep the previous behavior. Agents that
+only read and write their own VFS and exit need no change.
+
+---
+
 ## Policy engines: default-deny and consistent warn/log semantics
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
@@ -22,9 +451,8 @@ policy input. This release standardizes all three on fail-closed semantics:
 
 1. **Default action is now deny.** When `defaults.action` is omitted, or when
    no policies are loaded at all, the decision is now `deny` in every SDK.
-   - Python: `PolicyDefaults.action` now defaults to `PolicyAction.DENY`, and
-     the evaluator returns `deny` when no policies are loaded (previously both
-     were `allow`, fail-open).
+   - Python native ACS evaluation fails closed when no valid binding can
+     produce a decision.
    - .NET: the zero-policy path now returns `PolicyDecision.DenyDefault`
      (previously `AllowDefault`).
    - TypeScript already defaulted to `deny`; no change.
@@ -55,15 +483,56 @@ a default action.
 
 ---
 
-## Composite actions: `toolkit-version` is now **required**
+## `agent-hypervisor` removes joint-liability, blockchain-commitment, and advanced-saga symbols
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-hypervisor` (`hypervisor`)
+- `agentmesh-runtime` (`agent_runtime`, which re-exported these symbols)
+
+**What changed:**
+
+The following public symbols are removed from `hypervisor` and from the
+`agent_runtime` re-exports. Each backed a documented no-op stub (the ledger
+always admitted, slashing and quarantine recorded events but enforced nothing,
+the commitment engine stored in memory with no anchoring, and the saga DSL,
+fan-out, and checkpoint modules had no runtime), so the removal is behavior
+preserving:
+
+- Joint liability: `VouchingEngine`, `VouchRecord`, `SlashingEngine`,
+  `LiabilityLedger`, `LedgerEntryType`, `LiabilityMatrix`, `QuarantineManager`,
+  `QuarantineReason`, `CausalAttributor`, `AttributionResult`
+- Session intent locks: `IntentLockManager`, `LockIntent`,
+  `LockContentionError`, `DeadlockError`
+- Advanced saga: `FanOutOrchestrator`, `FanOutPolicy`, `SagaDSLParser`,
+  `SagaDefinition`, `CheckpointManager`, `SemanticCheckpoint`
+- Audit and clock internals: `CommitmentEngine`, `EphemeralGC`,
+  `VectorClockManager`
+
+**Why:**
+
+These surfaces were Public Preview stubs that advertised capabilities the
+runtime never applied, so keeping them exported implied enforcement that did
+not exist. Public Preview status permits removal without a deprecation cycle.
+
+**How to migrate:**
+
+Remove imports of these symbols. The supported runtime surface is unchanged:
+execution rings, session isolation, the hash-chained delta audit trail,
+`SagaOrchestrator` (ordered steps, retries, timeout handling, and reverse-order
+compensation), the kill switch, rate limiting, and observability.
+
+---
+
+## Composite action: `toolkit-version` is now **required**
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
 
 **Affected:**
 
 - `microsoft/agent-governance-toolkit/action`
-- `microsoft/agent-governance-toolkit/action/security-scan`
-- `microsoft/agent-governance-toolkit/action/governance-attestation`
 
 **What changed:**
 

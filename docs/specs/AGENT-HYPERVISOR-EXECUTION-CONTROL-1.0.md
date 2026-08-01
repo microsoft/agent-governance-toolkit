@@ -6,8 +6,8 @@
 >
 > This specification defines the execution control model for the Agent
 > Hypervisor, including execution rings, privilege elevation, resource
-> constraints, rate limiting, session isolation, kill switch, audit
-> integrity, and quarantine. All SDK implementations MUST conform to
+> constraints, rate limiting, session isolation, kill switch, and audit
+> integrity. All SDK implementations MUST conform to
 > this specification.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
@@ -494,7 +494,6 @@ A SessionConfig MUST contain:
 | `max_duration_seconds` | int | 3600 | [1, 604800] (7 days) |
 | `min_eff_score` | float | 0.60 | [0.0, 1.0] |
 | `enable_audit` | bool | true | |
-| `enable_blockchain_commitment` | bool | false | |
 
 ### 10.3 Session Participant
 
@@ -643,6 +642,10 @@ substitute MUST be unregistered from the kill switch.
 ---
 
 ## 13. Quarantine
+
+> **Not implemented in this release.** Agent quarantine was a Public Preview stub and has
+> been removed from the implementation. This section is retained for historical spec
+> reference and does not describe shipped behavior.
 
 ### 13.1 Quarantine Reasons
 
@@ -856,7 +859,6 @@ Implementations SHOULD support pluggable providers for:
 | Provider | Fallback |
 | --- | --- |
 | `ring_engine` | `RingEnforcer` |
-| `liability` | `LiabilityMatrix` |
 | `saga_engine` | `SagaOrchestrator` |
 | `breach_detector` | `RingBreachDetector` |
 | `session_manager` | (implementation-specific) |

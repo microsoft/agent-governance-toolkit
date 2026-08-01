@@ -31,7 +31,7 @@ This is a governance control, so the relevant risk is whether the control can fa
 
 ### New attack surface and mitigations
 
-1. **Constrain fails open on a path that cannot carry obligations.** The declarative `PolicyAction` enum has no obligation channel, so a `constrain` outcome could degrade to allow.
+1. **Constrain fails open on a path that cannot carry obligations.** The declarative `PolicyEvaluation` enum has no obligation channel, so a `constrain` outcome could degrade to allow.
 
    **Mitigation:** `to_policy_action` maps `constrain` to `DENY` when there is no obligation channel, and the empty `ObligationSet` case is guarded so that a vacuous `all_satisfied` cannot grant allow. Fail-closed by construction.
 

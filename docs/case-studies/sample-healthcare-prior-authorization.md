@@ -260,7 +260,7 @@ CHP's sandboxing violation pipeline is designed around one constraint: **a breac
 
 - **`RingBreachDetector`**: fires on ring boundary violations — WARNING (1-ring gap, e.g., clinical-documentation-agent attempting a Ring 1 write), HIGH (2-ring gap), CRITICAL (3-ring gap, e.g., Ring 2 agent attempting Ring 0 emergency override). CRITICAL breaches page the on-call clinical informatics engineer within 30 seconds via Azure Monitor alert.
 - **`KillSwitch`** automatic triggers: `RING_BREACH` (severity HIGH or CRITICAL), `RATE_LIMIT` (after three consecutive violations within 60 seconds), `BEHAVIORAL_DRIFT` (agent approving treatments with active contraindications flagged by Micromedex). **Exception**: kill switch execution is deferred by up to 90 seconds if the breaching agent holds an active PROVISIONAL EMERGENCY AUTHORIZATION — the emergency authorization is completed and handed off first, then the agent is terminated and the incident escalated to clinical informatics.
-- **`QuarantineManager`**: used for WARNING-severity breaches (e.g., Ring 2 agent reading a record type outside its normal scope). Agent is isolated; the authorization case it was processing is handed to a human reviewer; in-flight saga state is preserved for forensic review. Quarantine is the preferred response for clinical-documentation-agent anomalies because termination mid-workflow would leave an authorization in an incomplete state with no saga compensation possible against Epic EHR.
+- **`KillSwitch`**: used for severe breaches, such as a Ring 2 agent reading a record type outside its normal scope. The authorization case it was processing is handed to a human reviewer and in-flight saga work is preserved for review or compensation.
 - **`AgentRateLimiter`**: a sudden spike in PHI read calls from clinical-documentation-agent (e.g., >500 Epic API calls in 60 seconds vs. normal 80–120) triggers a `RATE_LIMIT` kill reason. This pattern matches the Week 6 psychiatric records incident — bulk PHI access outside authorization scope.
 
 #### Side-Channel Attack Mitigations
@@ -426,7 +426,7 @@ Detection mechanisms:
 
 Immediate mitigation steps (target: <5 minutes from detection to containment):
 1. Revoke the key in Azure Key Vault — propagates to all agents holding a cached public key copy within <2 seconds via Key Vault event subscription
-2. Quarantine the affected agent via `QuarantineManager` — halts all signing operations; in-flight clinical authorization sagas are preserved for human review, not abandoned, to protect patient care continuity
+2. Terminate the affected agent via `KillSwitch` — halts signing operations; in-flight clinical authorization sagas are handed to human review, not abandoned, to protect patient care continuity
 3. Issue a DID deactivation event in AgentMesh — all peer agents reject delegations from the deactivated DID on next IATP handshake (within one heartbeat cycle, ~5 seconds); clinical requests routed to human escalation queue automatically
 4. Provision a new Ed25519 keypair in Key Vault HSM, generate a new DID, and re-register the agent in AgentMesh under the incident change control process (dual approval required per CHP's HIPAA security incident procedure §164.308(a)(6))
 

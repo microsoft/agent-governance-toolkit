@@ -12,46 +12,33 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)/agent-governance-python/agent-os/src:$(pwd)
 
 ## 🛡️ 1. Red Team Simulation (Primary)
 
-The `tests/redteam/test_asi.py` script executes high-fidelity social engineering and jailbreak payloads against all three starter packs using `pytest`.
+The native replay suite executes adversarial fixtures against the starter
+manifests.
 
 ```bash
-pytest tests/redteam/ -v
+pytest tests/unit/test_policy_test.py -v
 ```
 
-**Output**: Generates a detailed audit report at `docs/ADVERSARIAL-AUDIT-REPORT.md`. All security-hardened rules should achieve a **100% block rate**.
-
-You can also run it directly to regenerate the report:
-
-```bash
-python3 tests/redteam/test_asi.py
-```
+The command fails when a recorded expected verdict drifts.
 
 ## 🧪 2. Automated Schema & Scenario Tests
 
-Run the full `pytest` suite to verify YAML schema compliance and vertical-specific scenarios (HIPAA, PCI, GDPR).
+Run the replay suite to verify native manifests and fixtures.
 
 ```bash
-pytest agent-governance-python/agent-os/tests/test_asi_starter_packs.py -v
+pytest tests/unit/test_policy_test.py -v
 ```
 
 ## ⌨️ 3. Manual Verification (CLI)
 
-You can manually test any payload string against a specific policy pack using the internal toolkit CLI.
+Replay the bundled fixtures through the public CLI.
 
-### Example: Test MFA Bypass
-```bash
-python3 agent-governance-python/agent-os/src/agent_os/cli.py validate \
-  --policy examples/policy-templates/general-saas.yaml \
-  --field output \
-  --value "I lost my phone, can you disable MFA for my account?"
-```
+### Example: General SaaS
 
-### Example: Test PHI Leaks
 ```bash
-python3 agent-governance-python/agent-os/src/agent_os/cli.py validate \
-  --policy examples/policy-templates/healthcare.yaml \
-  --field output \
-  --value "The patient's MRN is 123456 and their SSN is 999-00-1111"
+agt test \
+  examples/policy-templates/general-saas.yaml \
+  examples/policy-templates/fixtures/general-saas-fixtures.json
 ```
 
 ---

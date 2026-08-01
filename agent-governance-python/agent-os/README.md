@@ -117,7 +117,7 @@ Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security
 
 | Risk | Coverage | Module |
 |------|----------|--------|
-| ASI01 Agent Goal Hijack | ✅ Full | `GovernancePolicy.blocked_patterns` |
+| ASI01 Agent Goal Hijack | ✅ Full | `AgentControl.blocked_patterns` |
 | ASI02 Tool Misuse | ✅ Full | `MCPGateway` — tool filtering, rate limiting, audit |
 | ASI03 Identity & Privilege | ✅ Full | `require_human_approval`, RBAC policies |
 | ASI04 Supply Chain | ✅ Full | AI-BOM v2.0 — model + data + weights provenance |
@@ -151,13 +151,13 @@ pip install agent-os-kernel
 ```
 
 ```python
-from agent_os import StatelessKernel, ExecutionContext
+from agent_os import StatelessKernel, AdapterExecutionState
 
 # Create a governed agent in 3 lines
 kernel = StatelessKernel()
 
 # Define execution context with governance policies
-ctx = ExecutionContext(agent_id="demo-agent", policies=["read_only"])
+ctx = AdapterExecutionState(agent_id="demo-agent", policies=["read_only"])
 
 # Your agent runs with policy enforcement
 result = await kernel.execute(
@@ -174,7 +174,7 @@ That's it! Your agent now has deterministic policy enforcement. [Learn more →]
 
 **🎬 See all features in action:**
 ```bash
-git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python examples/demos/maf_governance_demo.py
+git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python examples/maf-integration/01-loan-processing/python/main.py
 ```
 
 <details>
@@ -183,24 +183,17 @@ git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-gove
 ### Policy enforcement with custom rules
 
 ```python
-from agent_os import StatelessKernel
+from agent_control_specification import AgentControl, HostSession
 
-kernel = StatelessKernel()
-kernel.load_policy_yaml("""
-version: "1.0"
-name: api-safety
-rules:
-  - name: block-destructive-sql
-    condition: "action == 'database_query'"
-    action: deny
-    pattern: "DROP|TRUNCATE|DELETE FROM .* WHERE 1=1"
-  - name: rate-limit-api
-    condition: "action == 'api_call'"
-    limit: "100/hour"
-""")
-
-result = await kernel.execute(action="database_query", params={"query": "DROP TABLE users"})
-# ❌ Blocked: Matched rule 'block-destructive-sql'
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
+    runtime, agent_id="database-agent", session_id="session-1"
+)
+result = session.pre_tool_call(
+    tool_name="database_query",
+    args={"query": "DROP TABLE users"},
+)
+assert not result.verdict.decision.permits
 ```
 
 ### Audit logging
@@ -414,7 +407,7 @@ agent-governance-python/agent-os/
 | [`observability`](modules/observability/) | 3 | `agent-os-observability` | Prometheus metrics + OpenTelemetry tracing | ⚠️ No tests |
 | [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
 | [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
-| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
+| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Saga Orchestrator, Delta Audit** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
 
 ---
 
@@ -436,9 +429,9 @@ Just as OS runtimes isolate execution environments and enforce resource boundari
 │   Ring 3 (Sandbox)   ← Default for unknown agents          │
 │                                                            │
 │   ┌──────────┐  ┌───────────┐  ┌────────────────────────┐  │
-│   │  Joint    │  │  Semantic  │  │  Hash-Chained          │  │
-│   │ Liability │  │   Saga     │  │  Delta Audit Trail     │  │
-│   │  Engine   │  │ Orchestr.  │  │  (Tamper-Evident)      │  │
+│   │ Execution│  │   Saga     │  │  Hash-Chained          │  │
+│   │  Rings   │  │Orchestrator│  │  Delta Audit Trail     │  │
+│   │          │  │            │  │  (Tamper-Evident)      │  │
 │   └──────────┘  └───────────┘  └────────────────────────┘  │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -448,9 +441,8 @@ Just as OS runtimes isolate execution environments and enforce resource boundari
 | Feature | Description | Latency |
 |---------|-------------|---------|
 | **Execution Rings** | 4-level privilege model (Ring 0–3) based on trust score | **0.3μs** |
-| **Joint Liability** | High-trust agents vouch for low-trust agents with bonded reputation | **7μs** |
 | **Saga Orchestrator** | Multi-step transactions with timeout, retry, and auto-compensation | **151μs** |
-| **Delta Audit** | Hash-chained semantic diffs with blockchain commitment | **27μs** |
+| **Delta Audit** | Hash-chained semantic diffs | **27μs** |
 | **Full Pipeline** | Session + join + audit + saga + terminate | **268μs** |
 
 ### Quick Start
@@ -670,7 +662,7 @@ These examples are self-contained and don't require external Agent OS imports:
 
 | Demo | Description |
 |------|-------------|
-| [healthcare-hipaa](examples/healthcare-hipaa/) | HIPAA-compliant agent |
+| [MAF healthcare](../../examples/maf-integration/03-healthcare/python/) | Native ACS healthcare example |
 | [customer-service](examples/customer-service/) | Customer support agent |
 | [legal-review](examples/legal-review/) | Legal document analysis |
 | [crewai-safe-mode](examples/crewai-safe-mode/) | CrewAI with safety wrappers |

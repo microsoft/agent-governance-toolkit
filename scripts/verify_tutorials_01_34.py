@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Verify tutorials 01-34 code examples."""
 import sys, os
 PASS = FAIL = 0
@@ -178,8 +179,8 @@ def t11():
     from agent_os import supervisor
 check("T11 supervisor import", t11)
 
-# === T12: Liability & Attribution ===
-print("\n=== T12: Liability ===")
+# === T12: Removed tutorial slot ===
+print("\n=== T12: Removed tutorial slot ===")
 
 def t12():
     from agentmesh.governance import AuditLog, AuditEntry

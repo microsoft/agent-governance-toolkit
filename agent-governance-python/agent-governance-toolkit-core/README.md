@@ -11,7 +11,7 @@ install:
 | `agent-os-kernel` | Kernel architecture, Nexus Trust Exchange, CMVK, IATP, AMB, ATR, control plane, observability |
 | `agentmesh-primitives` | Shared primitive data models (failure types, severity levels, base structures) |
 | `agentmesh-runtime` | Execution supervisor with privilege rings, saga orchestration, audit trails |
-| `agent-hypervisor` | Runtime supervisor for shared sessions, execution rings, joint liability, hash-chained audit |
+| `agent-hypervisor` | Runtime supervisor for shared sessions, execution rings, saga compensation, hash-chained audit |
 | `agentmesh-platform` | Identity, trust, reward, governance for cloud-native agent ecosystems |
 
 ## Install

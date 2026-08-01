@@ -181,6 +181,7 @@ from agent_os.mcp_protocols import (
     MCPNonceStore,
     MCPRateLimitStore,
     MCPSessionStore,
+    NonceStoreCapacityError,
 )
 from agent_os.mcp_response_scanner import (
     MCPResponseScanner,
@@ -297,9 +298,12 @@ from agent_os.event_sink import (
     GovernanceEvent,
     GovernanceEventKind,
     GovernanceEventProcessor,
+    GovernanceEventSigner,
     GovernanceEventSink,
     GovernanceEventSinkBase,
+    OTLPGovernanceSink,
     SinkExportResult,
+    StdoutGovernanceSink,
 )
 
 # ============================================================================
@@ -414,6 +418,7 @@ __all__ = [
     "MCPAuditSink",
     "InMemorySessionStore",
     "InMemoryNonceStore",
+    "NonceStoreCapacityError",
     "InMemoryRateLimitStore",
     "InMemoryAuditSink",
     "MCPResponseScanner",
@@ -459,6 +464,9 @@ __all__ = [
     "GovernanceEventSink",
     "GovernanceEventSinkBase",
     "GovernanceEventProcessor",
+    "GovernanceEventSigner",
+    "StdoutGovernanceSink",
+    "OTLPGovernanceSink",
     "SinkExportResult",
     "AuditBackendSinkAdapter",
 ]

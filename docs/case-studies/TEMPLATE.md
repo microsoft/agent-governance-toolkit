@@ -184,7 +184,7 @@ Agent Runtime's `SessionVFS` provides per-agent isolated filesystem views within
 Document the automated detection-to-response pipeline for sandboxing violations:
 - **`RingBreachDetector`**: fires alerts when an agent attempts actions above its ring level — WARNING for a 1-ring gap, HIGH for a 2-ring gap, CRITICAL for a 3-ring gap (e.g., Ring 3 agent attempting a Ring 0 action)
 - **`KillSwitch`**: immediately terminates the violating agent and triggers saga compensation for all in-flight work; document which kill reasons are wired to automatic triggers (`RING_BREACH`, `RATE_LIMIT`, `BEHAVIORAL_DRIFT`) vs. require human confirmation (`MANUAL`)
-- **`QuarantineManager`**: isolates a suspect agent without termination so in-flight saga state is preserved for forensic investigation
+- **`KillSwitch`**: terminates a suspect agent and hands off or compensates in-flight saga work
 - **`AgentRateLimiter`**: enforces per-ring call quotas; exceeding the limit triggers a `RATE_LIMIT` kill reason rather than silently dropping requests
 
 #### Side-Channel Attack Mitigations
@@ -333,7 +333,7 @@ Detection mechanisms:
 
 Immediate mitigation steps (target: <5 minutes from detection to containment):
 1. Revoke the key in the vault system — revocation must propagate to all agents holding a cached copy of the public key
-2. Quarantine the affected agent via `QuarantineManager` — halts all signing operations without destroying in-flight saga state
+2. Terminate the affected agent via `KillSwitch` — halts signing operations and hands off or compensates in-flight saga work
 3. Issue a DID deactivation event — downstream agents must re-verify on next connection and reject the deactivated DID
 4. Rotate to a new Ed25519 keypair, generate a new DID, and re-register the agent in AgentMesh
 

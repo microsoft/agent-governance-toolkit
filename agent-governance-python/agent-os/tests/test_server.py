@@ -61,6 +61,17 @@ class TestHealthEndpoints:
         body = resp.json()
         assert body["status"] in ("healthy", "degraded", "unhealthy")
 
+    def test_health_is_healthy_with_wired_audit_probe(self, client):
+        # The audit_backend check is overridden to probe the detector's real
+        # audit trail, so a fresh server reports HEALTHY (not a permanently
+        # DEGRADED / never-checked probe).
+        resp = client.get("/health")
+        body = resp.json()
+        assert body["status"] == "healthy"
+        audit = body["components"]["audit_backend"]
+        assert audit["status"] == "healthy"
+        assert "audit trail operational" in audit["message"]
+
     def test_health_has_timestamp(self, client):
         resp = client.get("/health")
         body = resp.json()

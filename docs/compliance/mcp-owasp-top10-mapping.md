@@ -289,8 +289,8 @@ result = proxy.route(target="mcp://random-server.external", tool_call={...})
 
 **Mitigation:** The **MCP Response Scanner** inspects all tool outputs for sensitive data before they enter agent context. **CredentialRedactor** strips credentials, and VFS policies enforce per-agent context boundaries.
 
-- **MCP Response Scanner** — fail-closed inspection of tool outputs; blocks responses containing credentials, PII, or injection payloads
-- **CredentialRedactor** — strips API keys, tokens, PEM blocks, and connection strings from all MCP responses
+- **MCP Response Scanner** — fail-closed inspection of tool outputs; blocks responses containing PII or injection payloads and redacts credential values under the sanitize policy
+- **CredentialRedactor** — strips API keys, tokens, PEM blocks, connection strings, AWS secret keys, Azure SAS tokens, and Slack/Google/Stripe tokens from all MCP responses
 - **VFS Context Isolation** — per-agent memory boundaries prevent cross-agent context leakage
 - **Scoped Sessions** — `MCPSessionAuthenticator` binds context to specific agent sessions with TTL expiry
 - **PII Detection** — identifies and redacts sensitive personal data in tool responses

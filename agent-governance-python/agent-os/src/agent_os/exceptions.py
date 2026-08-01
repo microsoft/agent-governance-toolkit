@@ -10,11 +10,24 @@ for structured error handling and logging.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
-if TYPE_CHECKING:
-    from agent_os.policies.decision import PolicyCheckResult
+
+class _PolicyEvaluationLike(Protocol):
+    """Structural contract for a runtime evaluation result."""
+
+    message: str
+    reason_code: str
+
+    def is_allowed(self) -> bool:
+        """Return whether the evaluation permits the host to continue."""
+
+    def audit_record(self) -> dict[str, Any]:
+        """Return the restricted structured audit payload."""
+
+    def public_error_message(self) -> str:
+        """Return the sanitized message safe to expose to callers."""
 
 
 class AgentOSError(Exception):
@@ -24,7 +37,7 @@ class AgentOSError(Exception):
         super().__init__(message)
         self.error_code = error_code or "AGENT_OS_ERROR"
         self.details = details or {}
-        self.timestamp = datetime.now(timezone.utc).isoformat()
+        self.timestamp = datetime.now(UTC).isoformat()
 
     def to_dict(self):
         return {
@@ -49,24 +62,22 @@ class PolicyViolationError(PolicyError):
 
     def __init__(self, message, error_code=None, details=None):
         super().__init__(message, error_code or "POLICY_VIOLATION", details)
-        self.check_result = None
+        self.evaluation_result = None
 
     @classmethod
-    def from_check_result(cls, result: PolicyCheckResult) -> PolicyViolationError:
-        """Create a policy violation error from a structured check result."""
-
-        details = {
-            "category": result.category.value if result.category else None,
-            "matched_rule": result.matched_rule,
-            "detail": result.detail,
-            "scope": result.scope,
-            "operation": result.operation,
-            "tool_name": result.tool_name,
-            **result.audit_entry,
-        }
-        e = cls(result.public_message, "POLICY_VIOLATION", details)
-        e.check_result = result
-        return e
+    def from_evaluation_result(
+        cls, result: _PolicyEvaluationLike
+    ) -> PolicyViolationError:
+        """Create a policy violation error from a native evaluation."""
+        if result.is_allowed():
+            raise ValueError(
+                "a permitting policy evaluation cannot create PolicyViolationError"
+            )
+        details = result.audit_record()
+        message = result.public_error_message()
+        error = cls(message, "POLICY_VIOLATION", details)
+        error.evaluation_result = result
+        return error
 
 
 class PolicyDeniedError(PolicyError):

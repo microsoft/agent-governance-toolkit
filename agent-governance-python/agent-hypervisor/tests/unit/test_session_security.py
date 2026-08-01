@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for version counters, resource locks, isolation levels, rate limiter, and kill switch."""
+"""Tests for version counters, isolation levels, rate limiter, and kill switch."""
 
 import pytest
 
@@ -15,14 +15,9 @@ from hypervisor.security.rate_limiter import (
     RateLimitExceeded,
     TokenBucket,
 )
-from hypervisor.session.intent_locks import (
-    IntentLockManager,
-    LockIntent,
-)
 from hypervisor.session.isolation import IsolationLevel
 from hypervisor.session.vector_clock import (
     VectorClock,
-    VectorClockManager,
 )
 
 # ── Version Counter Tests ──────────────────────────────────────────
@@ -68,109 +63,6 @@ class TestVectorClock:
         assert vc.get("a1") == 1  # original unchanged
 
 
-class TestVectorClockManager:
-    @pytest.mark.skip("Feature not available in Public Preview")
-    def test_read_updates_agent_clock(self):
-        pass
-
-    def test_write_advances_path_clock(self):
-        mgr = VectorClockManager()
-        mgr.write("/data/file1", "a1")
-        path_clock = mgr.get_path_clock("/data/file1")
-        assert path_clock.get("a1") == 1
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    def test_causal_violation_detected(self):
-        pass
-
-    def test_read_then_write_no_violation(self):
-        mgr = VectorClockManager()
-        mgr.write("/data/file1", "a1")
-        mgr.read("/data/file1", "a2")  # a2 catches up
-        mgr.write("/data/file1", "a2", strict=True)  # OK: a2 has seen latest
-
-    def test_non_strict_allows_concurrent(self):
-        mgr = VectorClockManager()
-        mgr.write("/data/file1", "a1", strict=False)
-        mgr.write("/data/file1", "a2", strict=False)
-        assert mgr.tracked_paths == 1
-
-    def test_conflict_count(self):
-        mgr = VectorClockManager()
-        assert mgr.conflict_count == 0
-
-
-# ── Resource Lock Tests ───────────────────────────────────────────
-
-
-class TestIntentLocks:
-    def test_acquire_read_locks(self):
-        mgr = IntentLockManager()
-        l1 = mgr.acquire("a1", "s1", "/data/file", LockIntent.READ)
-        l2 = mgr.acquire("a2", "s1", "/data/file", LockIntent.READ)
-        assert l1.is_active
-        assert l2.is_active
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    def test_write_conflicts_with_read(self):
-        pass
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    def test_write_conflicts_with_write(self):
-        pass
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    def test_exclusive_conflicts_with_read(self):
-        pass
-
-    def test_same_agent_no_conflict(self):
-        mgr = IntentLockManager()
-        mgr.acquire("a1", "s1", "/data/file", LockIntent.WRITE)
-        # Same agent, different lock type — allowed
-        mgr.acquire("a1", "s1", "/data/file", LockIntent.READ)
-
-    def test_release_lock(self):
-        mgr = IntentLockManager()
-        lock = mgr.acquire("a1", "s1", "/data/file", LockIntent.WRITE)
-        mgr.release(lock.lock_id)
-        # Now another agent can acquire
-        mgr.acquire("a2", "s1", "/data/file", LockIntent.WRITE)
-
-    def test_release_agent_locks(self):
-        mgr = IntentLockManager()
-        mgr.acquire("a1", "s1", "/file1", LockIntent.WRITE)
-        mgr.acquire("a1", "s1", "/file2", LockIntent.EXCLUSIVE)
-        count = mgr.release_agent_locks("a1", "s1")
-        assert count == 2
-        assert mgr.active_lock_count == 0
-
-    def test_release_session_locks(self):
-        mgr = IntentLockManager()
-        mgr.acquire("a1", "s1", "/file1", LockIntent.READ)
-        mgr.acquire("a2", "s1", "/file2", LockIntent.WRITE)
-        count = mgr.release_session_locks("s1")
-        assert count == 2
-
-    def test_contention_points(self):
-        mgr = IntentLockManager()
-        mgr.acquire("a1", "s1", "/shared", LockIntent.READ)
-        mgr.acquire("a2", "s1", "/shared", LockIntent.READ)
-        points = mgr.contention_points
-        # Public Preview: no contention detection
-        assert points == []
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    def test_deadlock_detection(self):
-        pass
-
-    def test_get_agent_locks(self):
-        mgr = IntentLockManager()
-        mgr.acquire("a1", "s1", "/f1", LockIntent.READ)
-        mgr.acquire("a1", "s1", "/f2", LockIntent.WRITE)
-        locks = mgr.get_agent_locks("a1", "s1")
-        assert len(locks) == 2
-
-
 # ── Isolation Level Tests ──────────────────────────────────────
 
 
@@ -178,21 +70,18 @@ class TestIsolationLevels:
     def test_snapshot_properties(self):
         level = IsolationLevel.SNAPSHOT
         assert not level.requires_vector_clocks
-        assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
         assert level.coordination_cost == "low"
 
     def test_read_committed_properties(self):
         level = IsolationLevel.READ_COMMITTED
         assert not level.requires_vector_clocks
-        assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
         assert level.coordination_cost == "medium"
 
     def test_serializable_properties(self):
         level = IsolationLevel.SERIALIZABLE
         assert level.requires_vector_clocks
-        assert level.requires_intent_locks
         assert not level.allows_concurrent_writes
         assert level.coordination_cost == "high"
 

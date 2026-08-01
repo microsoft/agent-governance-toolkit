@@ -25,7 +25,7 @@ The specification spans five AGT components:
 
 - **Agent OS** -- Core audit logging, governance event processing, and OpenTelemetry integration
 - **Agent Mesh** -- Merkle-chained audit log, compliance engine, decision BOM reconstruction, and audit collector REST API
-- **Agent Hypervisor** -- Event bus, semantic delta engine, and commitment engine
+- **Agent Hypervisor** -- Event bus and semantic delta engine
 - **Agent SRE** -- SRE-specific observability events and OTel conventions
 - **Agent Lightning** -- Flight recorder emission and RL environment violation tracking
 
@@ -128,7 +128,7 @@ The AGT Audit and Compliance system MUST provide:
 |                  |     |                  |     |                     |
 | - AuditEntry     |     | - MerkleChain    |     | - EventBus          |
 | - AuditBackend   |     | - Compliance     |     | - DeltaEngine       |
-| - EventSink SPI  |     | - DecisionBOM    |     | - CommitmentEngine  |
+| - EventSink SPI  |     | - DecisionBOM    |     |                     |
 | - EventProcessor |     | - AuditCollector |     |                     |
 | - OTel Backend   |     |                  |     |                     |
 +--------+---------+     +--------+---------+     +---------+-----------+
@@ -1132,6 +1132,10 @@ The delta hash MUST be computed as:
 
 ## 14. Commitment Engine
 
+> **Not implemented in this release.** The Commitment Engine was a Public Preview stub and
+> has been removed from the implementation. This section is retained for historical spec
+> reference and does not describe shipped behavior.
+
 ### 14.1 Purpose [Pure Specification]
 
 The Commitment Engine produces summary records that anchor a session's delta chain,
@@ -1923,7 +1927,6 @@ An implementation at Level 3 MUST satisfy Level 2 AND:
 - Implement the Compliance Framework Engine (Section 10).
 - Implement the Decision BOM reconstruction (Section 11).
 - Implement the Semantic Delta Engine (Section 13).
-- Implement the Commitment Engine (Section 14).
 - Provide the Audit Collector REST API (Section 15).
 - Support all four compliance frameworks (Section 10.1).
 

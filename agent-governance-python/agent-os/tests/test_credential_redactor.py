@@ -15,6 +15,11 @@ def _fake_github_token(prefix: str) -> str:
     return f"{prefix}_FAKEFORTESTING000000000000000000"
 
 
+# Fake Google API key built by concatenation so the contiguous literal never
+# appears in source (avoids secret-scanner false positives on a test value).
+_FAKE_GOOGLE_KEY = "AIza" + "SyD1234567890abcdefghijklmnopqrstuv"
+
+
 def _fake_pem_block(label: str) -> str:
     return (
         f"-----BEGIN {label}-----\n"
@@ -180,3 +185,174 @@ def test_private_key_pattern_handles_adversarial_input_quickly():
 
     assert redacted == text
     assert elapsed < 1.0
+
+
+# AWS's own documentation example secret — deterministic and clearly fake.
+_FAKE_AWS_SECRET = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+# Realistic-length clearly-fake Azure SAS signature. Real Azure sig values are
+# base64(HMAC-SHA256) = 44 chars (longer URL-encoded); the detector requires
+# this realistic floor so short incidental "sig=" params are not flagged.
+_FAKE_SAS_SIG = "abcDEF0123ghiJKL4567mnoPQR89stuVWX%2Fyz01%3D2345"
+
+
+@pytest.mark.parametrize(
+    ("input_text", "expected_type"),
+    [
+        (f"aws_secret_access_key = {_FAKE_AWS_SECRET}", "AWS secret access key"),
+        (f"aws-secret-access-key: {_FAKE_AWS_SECRET}", "AWS secret access key"),
+        (f'"AWS Secret Access Key":"{_FAKE_AWS_SECRET}"', "AWS secret access key"),
+        (
+            "https://a.blob.core.windows.net/c/b?sv=2021-08-06&ss=b&srt=o"
+            f"&sp=rwd&se=2025-01-01T00:00:00Z&sig={_FAKE_SAS_SIG}",
+            "Azure SAS token",
+        ),
+        (
+            # SAS query parameters are not ordered; sig may appear before sv.
+            f"https://a.blob.core.windows.net/c/b?sig={_FAKE_SAS_SIG}"
+            "&sv=2021-08-06&sp=r",
+            "Azure SAS token",
+        ),
+        ("xoxb-FAKE-not-a-real-slack-token-00", "Slack token"),
+        ("xapp-FAKE-not-a-real-slack-token-00", "Slack token"),
+        (_FAKE_GOOGLE_KEY, "Google API key"),
+        ("stripe=sk_live_FakeTestKey0000", "Stripe secret key"),
+        ("rk_test_FakeTestKey0000", "Stripe secret key"),
+    ],
+)
+def test_detects_and_redacts_newly_covered_secret_classes(input_text: str, expected_type: str):
+    redacted = CredentialRedactor.redact(input_text)
+    detected = CredentialRedactor.detect_credential_types(input_text)
+
+    assert REDACTED_PLACEHOLDER in redacted
+    assert expected_type in detected
+    assert CredentialRedactor.contains_credentials(input_text) is True
+
+
+def test_aws_secret_value_is_fully_removed():
+    text = f"aws_secret_access_key = {_FAKE_AWS_SECRET}"
+
+    assert _FAKE_AWS_SECRET not in CredentialRedactor.redact(text)
+
+
+def test_azure_sas_signature_is_removed():
+    url = (
+        "https://a.blob.core.windows.net/c/b?sv=2021-08-06&ss=b&srt=o"
+        f"&sp=rwd&se=2025-01-01T00:00:00Z&sig={_FAKE_SAS_SIG}"
+    )
+
+    redacted = CredentialRedactor.redact(url)
+
+    assert "sig=" not in redacted
+    assert _FAKE_SAS_SIG not in redacted
+    # The non-secret base path survives.
+    assert redacted.startswith("https://a.blob.core.windows.net/c/b?")
+
+
+def test_azure_sas_detected_regardless_of_parameter_order():
+    # SAS query parameters are order-independent; a token with sig before sv
+    # must still be detected and redacted (regression: an sv-anchored pattern
+    # missed this and the signature leaked).
+    url = (
+        f"https://a.blob.core.windows.net/c/b?sig={_FAKE_SAS_SIG}"
+        "&sv=2021-08-06&sp=r"
+    )
+
+    assert CredentialRedactor.contains_credentials(url) is True
+    assert _FAKE_SAS_SIG not in CredentialRedactor.redact(url)
+
+
+def test_azure_sas_pattern_has_no_quadratic_backtracking():
+    # Repeated non-matching markers must not trigger super-linear scanning
+    # (regression: a lazy cross-parameter gap scanned to end from each marker).
+    text = "&".join(["sv=2021-08-06"] * 5000)
+
+    start = time.perf_counter()
+    CredentialRedactor.redact(text)
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 1.0
+
+
+def test_slack_token_fully_redacted_when_followed_by_word_char():
+    # Regression: the "-" in the token class let a trailing word boundary
+    # backtrack and redact only a prefix, leaking the final secret segment.
+    secret_tail = "abcdefghijklmnopqrstuvwx"
+    text = f"slack=xoxb-111111111111-222222222222-{secret_tail}_rotated"
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert secret_tail not in redacted
+
+
+def test_bare_sig_query_param_without_sas_context_is_not_flagged():
+    # A short "sig=" that is not an Azure SAS token must not false-positive.
+    text = "https://example.com/callback?sig=abcdefghijklmnopqrstuvwxyz123456"
+
+    assert CredentialRedactor.contains_credentials(text) is False
+    assert CredentialRedactor.redact(text) == text
+
+
+def test_detection_and_redaction_agree_on_adjacent_anchored_secrets():
+    # Regression: sequential subn on a mutating string let the greedy OpenAI
+    # pattern consume the "aws_secret_access_key" anchor of a following pattern,
+    # so redaction removed less than detection reported and the secret survived.
+    secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    text = "sk-abcDEF012345678901234567890-aws_secret_access_key=" + secret
+
+    detected = CredentialRedactor.detect_credential_types(text)
+    redacted = CredentialRedactor.redact(text)
+
+    assert "AWS secret access key" in detected
+    assert secret not in redacted
+    assert CredentialRedactor.contains_credentials(redacted) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "session_sk-abcdefghijklmnopqrstuvwx0123",
+        "prefix_ghp_FAKEFORTESTING000000000000000000",
+        "x_xoxb-FAKE-not-a-real-slack-token",
+        "svc_" + _FAKE_GOOGLE_KEY,
+        "env_sk_live_FakeTestKey0000",
+        "db_password=Hunter2xyz",
+    ],
+)
+def test_detects_secret_glued_to_preceding_word_character(text: str):
+    # Regression: a leading \b treats "_" as a word character, so a secret glued
+    # directly after "_" was missed. The (?<![A-Za-z0-9]) anchor detects it.
+    assert CredentialRedactor.contains_credentials(text) is True
+    assert REDACTED_PLACEHOLDER in CredentialRedactor.redact(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "basketball-court-schedule-1234567",
+        "the disk-usage-report is ready",
+        "a risky-business-plan draft",
+        "the tokenizer=fast setting is nice",
+    ],
+)
+def test_loosened_anchor_does_not_match_inside_words(text: str):
+    # The (?<![A-Za-z0-9]) anchor still refuses to match a secret prefix that is
+    # embedded in an alphanumeric word (e.g. the "sk-" inside "disk-").
+    assert CredentialRedactor.contains_credentials(text) is False
+    assert CredentialRedactor.redact(text) == text
+
+
+def test_scan_and_redact_reports_types_without_raw_secret():
+    secret = "xoxb-FAKE-not-a-real-slack-token-00"
+    redacted, types = CredentialRedactor.scan_and_redact(f"token {secret}")
+
+    assert REDACTED_PLACEHOLDER in redacted
+    assert secret not in redacted
+    assert types == ["Slack token"]
+    # The returned metadata must never carry the raw secret value.
+    assert all(secret not in name for name in types)
+
+
+def test_scan_and_redact_empty_input():
+    assert CredentialRedactor.scan_and_redact(None) == ("", [])
+    assert CredentialRedactor.scan_and_redact("") == ("", [])

@@ -217,7 +217,7 @@ def cmd_benchmark_run(args):
         print(json.dumps({"status": "running", "benchmark": "safety"}, indent=2))
     else:
         print("Running safety benchmark...")
-        print("This would execute benchmark/red_team_dataset.py")
+        print("This would execute benchmarks/red_team_dataset.py")
         print("(Implementation in progress)")
 
 

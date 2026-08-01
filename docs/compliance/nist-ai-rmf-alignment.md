@@ -109,9 +109,9 @@ validation, versioning, conflict resolution, and multiple backend support.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Core policy evaluator | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` | `PolicyEvaluator` |
-| Async policy evaluator | `agent-governance-python/agent-os/src/agent_os/policies/async_evaluator.py` | `AsyncPolicyEvaluator` |
-| Shared/cross-project policies | `agent-governance-python/agent-os/src/agent_os/policies/shared.py` | `SharedPolicyEvaluator` |
+| Core policy runtime | `policy-engine/sdk/python/agent_control_specification/_client.py` | `AgentControl` |
+| Adapter session runtime | `policy-engine/sdk/python/agent_control_specification/_host.py` | `HostSession` |
+| Manifest composition | `policy-engine/sdk/python/agent_control_specification/validation.py` | ACS manifest |
 | AgentMesh policy engine | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy.py:317` | `PolicyEngine` |
 | AgentMesh policy evaluator | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy_evaluator.py:33` | `PolicyEvaluator` |
 | .NET policy engine | `agent-governance-dotnet/src/AgentGovernance/Policy/PolicyEngine.cs:16` | `PolicyEngine` |
@@ -121,8 +121,8 @@ validation, versioning, conflict resolution, and multiple backend support.
 | Semantic policy engine | `agent-governance-python/agent-os/src/agent_os/semantic_policy.py:248` | `SemanticPolicyEngine` |
 | IATP policy engine | `agent-governance-python/agent-os/modules/iatp/iatp/policy_engine.py:78` | `IATPPolicyEngine` |
 | Control-plane policy engine | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/policy_engine.py:178` | `PolicyEngine` |
-| Conflict resolution | `agent-governance-python/agent-os/src/agent_os/policies/conflict_resolution.py` | `ResolutionResult` |
-| Policy schema (JSON) | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json` | JSON Schema |
+| Native composition | `policy-engine/sdk/python/agent_control_specification/validation.py` | ACS `extends` |
+| Policy schema (JSON) | `policy-engine/spec/schema/manifest.schema.json` | ACS manifest schema |
 | OPA integration | `agent-governance-python/agent-mesh/src/agentmesh/governance/opa.py` | OPA/Rego backend |
 | Cedar integration | `agent-governance-python/agent-mesh/src/agentmesh/governance/cedar.py` | Cedar backend |
 | Policy templates | `agent-governance-python/agent-os/templates/policies/*.yaml` | GDPR, production, enterprise, data-protection, content-safety |
@@ -142,8 +142,7 @@ and conflict detection provide lifecycle management. Three enforcement modes
 
 **Coverage: ✅ FULLY ADDRESSED**
 
-AGT provides cryptographic audit trails, Merkle hash chains, Shapley-value fault
-attribution, and joint liability tracking.
+AGT provides cryptographic audit trails, Merkle hash chains, DID-based attribution, and runtime verification signals.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
@@ -152,10 +151,6 @@ attribution, and joint liability tracking.
 | Flight recorder (IATP) | `agent-governance-python/agent-os/modules/iatp/iatp/telemetry/__init__.py:21` | `FlightRecorder` |
 | Flight recorder (Lightning) | `agent-governance-python/agent-lightning/src/agent_lightning_gov/emitter.py:56` | `FlightRecorderEmitter` |
 | Hypervisor audit | `agent-governance-python/agent-hypervisor/audit/delta.py` | `DeltaEngine` |
-| Shapley attribution | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/attribution.py` | Shapley-value fault attribution |
-| Joint liability | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/__init__.py` | Joint liability module |
-| Liability ledger | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/ledger.py` | Liability tracking |
-| Quarantine system | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/quarantine.py` | Agent quarantine |
 | RBAC | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py` | 4 roles: READER, WRITER, ADMIN, AUDITOR |
 | DID-based attribution | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py` | `agent_did` field per entry |
 
@@ -286,7 +281,7 @@ to the eighth framework.
 | Execution context | `agent-governance-python/agent-os/src/agent_os/execution_context_policy.py:62` | `ContextualPolicyEngine` |
 | Stateless kernel context | `agent-governance-python/agent-os/src/agent_os/stateless.py` | `ExecutionContext` |
 | Governance tiers | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring 0–3 privilege separation |
-| Policy modes | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:34-41` | `strict`, `permissive`, `audit` |
+| Enforcement modes | `policy-engine/sdk/python/agent_control_specification/_client.py` | ACS enforcement mode |
 | Context budget | `agent-governance-python/agent-os/src/agent_os/context_budget.py` | `ContextScheduler` |
 
 **How AGT addresses this subcategory:** `ContextualPolicyEngine` binds policy
@@ -385,10 +380,10 @@ lacks ML-based bias detection or fairness evaluation.
 |-----------|------|--------------------|
 | GDPR policy template | `agent-governance-python/agent-os/templates/policies/gdpr.yaml` | 10+ PII pattern categories, right to erasure, data minimization |
 | Data protection template | `agent-governance-python/agent-os/templates/policies/data-protection.yaml` | Data protection rules |
-| PII detection policy | `agent-governance-python/agent-os/examples/shared-policies/no-pii.yaml` | Shareable PII blocking policy |
+| PII detection policy | `examples/policies/production/healthcare.yaml` | Native ACS healthcare profile |
 | Memory guard PII redaction | `agent-governance-python/agent-os/src/agent_os/memory_guard.py` | PII redaction in context |
 | Content governance | `agent-governance-python/agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
-| HIPAA example | `agent-governance-python/agent-os/tutorials/hipaa-compliant-agent/demo.py` | Healthcare compliance demo |
+| HIPAA example | `examples/maf-integration/03-healthcare/python/main.py` | Native ACS healthcare demo |
 | Healthcare HIPAA example | `agent-governance-python/agent-mesh/examples/03-healthcare-hipaa/main.py` | PHI protection demo |
 
 **How AGT addresses this subcategory:** GDPR policy templates provide declarative
@@ -445,8 +440,8 @@ platforms.
 |-----------|------|--------------------|
 | Content quality evaluator | `agent-governance-python/agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
 | Plugin quality assessor | `agent-governance-python/agent-marketplace/src/agent_marketplace/quality_assessment.py:120` | `QualityAssessor` |
-| Red team dataset | `agent-governance-python/agent-os/modules/control-plane/benchmark/red_team_dataset.py` | Red-team benchmark data |
-| Policy benchmark suite | `agent-governance-python/agent-os/benchmarks/bench_policy.py` | 30-scenario OWASP benchmark |
+| Red team dataset | `agent-governance-python/agent-os/modules/control-plane/benchmarks/red_team_dataset.py` | Red-team benchmark data |
+| Policy replay suite | `tests/unit/test_policy_test.py` | Native manifest regression fixtures |
 | CMVK verification | `agent-governance-python/agent-os/modules/cmvk/src/cmvk/constitutional.py` | Cross-Model Verification Kernel |
 
 **How AGT addresses this subcategory:** Content quality evaluation and plugin
@@ -559,7 +554,7 @@ operations upon failure.
 | Ring demotion | `agent-governance-python/agent-hypervisor/session/__init__.py` | `update_ring()` |
 | Trust-tier filtering | `agent-governance-python/agent-marketplace/src/agent_marketplace/trust_tiers.py` | `filter_capabilities()` |
 | Progressive delivery | `agent-governance-python/agent-sre/src/agent_sre/delivery/` | Canary deploys, GitOps |
-| NoOp fallbacks | `agent-governance-python/agent-os/src/agent_os/compat.py:37` | `NoOpPolicyEvaluator` |
+| Fail-closed runtime | `policy-engine/sdk/python/agent_control_specification/_client.py` | Runtime error verdicts |
 | RL training governance | `agent-governance-python/agent-lightning/` | Policy rewards for RL training |
 
 **How AGT addresses this subcategory:** Trust-based capability delegation

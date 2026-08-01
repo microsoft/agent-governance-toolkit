@@ -3,7 +3,7 @@
 """
 Hypervisor — Top-level orchestrator for multi-agent Shared Sessions.
 
-Composes all submodules (Session, Liability, Rings, Reversibility,
+Composes all submodules (Session, Rings, Reversibility,
 Saga, Audit, Verification) into a unified governance runtime.
 
 Optionally integrates with external trust scoring and behavioral
@@ -15,11 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from hypervisor.audit.commitment import CommitmentEngine
 from hypervisor.audit.delta import DeltaEngine
-from hypervisor.audit.gc import EphemeralGC, RetentionPolicy
-from hypervisor.liability.slashing import SlashingEngine
-from hypervisor.liability.vouching import VouchingEngine
 from hypervisor.models import (
     ActionDescriptor,
     ConsistencyMode,
@@ -71,23 +67,16 @@ class Hypervisor:
 
     def __init__(
         self,
-        retention_policy: RetentionPolicy | None = None,
-        max_exposure: float | None = None,
         nexus: Any | None = None,
         policy_check: Any | None = None,
         iatp: Any | None = None,
     ) -> None:
         # Shared engines
-        self.vouching = VouchingEngine(max_exposure=max_exposure)
-        self.slashing = SlashingEngine(self.vouching)
         self.ring_enforcer = RingEnforcer()
         self.classifier = ActionClassifier()
         self.verifier = TransactionHistoryVerifier()
-        self.commitment = CommitmentEngine()
-        self.gc = EphemeralGC(retention_policy)
 
-        # Aliases expected by API layer
-        self.commitment_engine = self.commitment
+        # Alias expected by API layer
         self.history_verifier = self.verifier
 
         # Integration adapters (optional)
@@ -201,7 +190,7 @@ class Hypervisor:
 
     async def terminate_session(self, session_id: str) -> str | None:
         """
-        Terminate a session and commit audit trail.
+        Terminate a session and finalize the audit hash chain.
 
         Returns:
             audit log root summary hash, or None if audit disabled
@@ -215,28 +204,13 @@ class Hypervisor:
         return hash_chain_root
 
     def _commit_audit(self, session_id: str, managed: ManagedSession) -> str | None:
-        """Commit audit trail and return hash chain root (None if audit disabled)."""
+        """Compute and return the audit hash chain root (None if audit disabled)."""
         if not managed.sso.config.enable_audit:
             return None
-        hash_chain_root = managed.delta_engine.compute_hash_chain_root()
-        if hash_chain_root:
-            self.commitment.commit(
-                session_id=session_id,
-                hash_chain_root=hash_chain_root,
-                participant_dids=[p.agent_did for p in managed.sso.participants],
-                delta_count=managed.delta_engine.turn_count,
-            )
-        return hash_chain_root
+        return managed.delta_engine.compute_hash_chain_root()
 
     def _cleanup_session(self, session_id: str, managed: ManagedSession) -> None:
-        """Release bonds, purge VFS data, and archive session."""
-        self.vouching.release_session_bonds(session_id)
-        self.gc.collect(
-            session_id=session_id,
-            vfs=managed.sso.vfs if hasattr(managed.sso, "vfs") else None,
-            delta_engine=managed.delta_engine,
-            delta_count=managed.delta_engine.turn_count,
-        )
+        """Archive the session and drop it from the active index."""
         managed.sso.archive()
         # Remove from active index after archiving
         self._active_ids.discard(session_id)
@@ -255,8 +229,8 @@ class Hypervisor:
         """
         Verify agent behavior via Verification adapter.
 
-        If drift exceeds threshold, automatically slashes the agent and
-        reports to Nexus (if adapter is available).
+        If drift exceeds the threshold, reports the drift to Nexus
+        (if an adapter is available).
 
         Returns:
             DriftCheckResult if Verification adapter is configured, else None.
@@ -273,19 +247,12 @@ class Hypervisor:
         )
 
         if result.should_slash:
+            # Validate the session and agent before reporting drift externally,
+            # matching the pre-existing guard: an unknown session or a
+            # non-participant agent is an error, not a silent external report.
             managed = self._get_session(session_id)
-            participant = managed.sso.get_participant(agent_did)
-            # Build scores dict only for the slash path (avoid on healthy agents)
-            agent_scores = {p.agent_did: p.eff_score for p in managed.sso.participants}
-            self.slashing.slash(
-                vouchee_did=agent_did,
-                session_id=session_id,
-                vouchee_sigma=participant.eff_score,
-                risk_weight=0.95,
-                reason=f"Verification drift: {result.drift_score:.3f} ({result.severity.value})",
-                agent_scores=agent_scores,
-            )
-            # Propagate to Nexus
+            managed.sso.get_participant(agent_did)
+            # Propagate the drift signal to Nexus (external trust backend).
             if self.nexus:
                 severity = "critical" if result.drift_score >= 0.75 else "high"
                 self.nexus.report_slash(
@@ -293,7 +260,7 @@ class Hypervisor:
                     reason=f"Behavioral drift: {result.drift_score:.3f}",
                     severity=severity,
                 )
-            logger.warning("Agent %s penalized: drift=%.3f", agent_did, result.drift_score)
+            logger.warning("Agent %s flagged for drift=%.3f", agent_did, result.drift_score)
 
         return result
 

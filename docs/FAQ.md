@@ -132,9 +132,9 @@ In practice:
 | OpenAI Agents SDK | Middleware | `OpenAIAgentsKernel` | Async hooks on tool calls. Published on PyPI (`agentmesh-openai-agents-trust`). |
 | Google ADK | Adapter | `GoogleADKKernel` | Plugin-style integration via ADK's extension system. |
 | LlamaIndex | Middleware | `LlamaIndexAdapter` | `TrustedAgentWorker` + `TrustGatedQueryEngine` merged upstream. |
-| Haystack | Pipeline | `HaystackAdapter` | `GovernancePolicyChecker` + `TrustGate` pipeline components. |
+| Haystack | Pipeline | `TrustedPipeline` | `TrustGateComponent` + `TrustAgentComponent` in `agentmesh.integrations.haystack`. |
 | Dify | Plugin | `DifyPlugin` | Install from Dify Marketplace. Zero-code governance. |
-| Azure AI Foundry | Deployment Guide | MAF Middleware | `GovernancePolicyMW`, `CapabilityGuardMW`, `AuditTrailMW`, `RogueDetectionMW`. |
+| Azure AI Foundry | Deployment Guide | MAF Middleware | `RuntimeGovernanceMiddleware`, `CapabilityGuardMiddleware`, `AuditTrailMiddleware`, `RogueDetectionMiddleware`. |
 
 ### Which Should You Choose?
 
@@ -276,26 +276,27 @@ token = managed.get_token(scope="https://graph.microsoft.com/.default")
 
 ## 6. If I update a policy at runtime, do I need to restart the agent?
 
-**Short answer:** No. Policies can be reloaded at runtime without restarting the agent.
+**Short answer:** No, but the in-process runtime does not watch the filesystem.
+Rebuild the control, or use a backend that reloads on its own.
 
 ### In-Process Reload (Explicit)
 
+An `AgentControl` reads its manifest once, at construction. To pick up an edit,
+build a new one and swap it in:
+
 ```python
-from agent_os.policies import AsyncPolicyEvaluator
+from agent_control_specification import AgentControl
 
-evaluator = AsyncPolicyEvaluator(policy_dir="./policies")
+control = AgentControl.from_path("policies/agt-manifest.yaml")
 
-# Later, when policies have been updated on disk:
-await evaluator.reload_policies(directory="./policies")
-# All subsequent evaluations use the new policies — no restart needed
+# Later, after the manifest changed on disk:
+control = AgentControl.from_path("policies/agt-manifest.yaml")
+# Sessions created from the new control use the new manifest.
 ```
 
-The reload operation:
-1. Acquires a write lock (blocking concurrent reads momentarily)
-2. Clears the existing policy cache
-3. Loads all policy files from the directory
-4. Releases the lock
-5. All subsequent evaluations use the new policies
+Construction validates the manifest, so a bad edit raises here rather than
+silently leaving the old policy in force. Hold the swap behind whatever
+synchronisation your host already uses for shared state.
 
 ### OPA Remote Server (Hot Reload)
 
@@ -319,7 +320,7 @@ In sidecar deployments, the governance sidecar can be updated independently of t
 
 | Scenario | Approach |
 |----------|---------|
-| Development/testing | Call `reload_policies()` explicitly after editing policy files |
+| Development/testing | Rebuild the `AgentControl` after editing the manifest |
 | Production (single agent) | Use OPA Remote Server for automatic hot-reload |
 | Production (fleet) | Use Foundry Control Plane to distribute policy updates → sidecar picks up changes via ConfigMap |
 
@@ -493,7 +494,7 @@ Key controls:
 | **Session Isolation** | Multi-agent sessions with VFS namespacing and DID-bound identity. |
 | **Saga Orchestration** | Multi-step transactions with automatic compensation (rollback). |
 | **Kill Switch** | Immediate or graceful termination of runaway agents with audit trail. |
-| **Joint Liability** | Attribution tracking across multi-agent collaborations. Bonded reputation with collateral slashing. |
+| **Saga Compensation** | Multi-step workflow rollback with hash-chained audit evidence. |
 | **Rate Limiting** | Per-agent rate limits to prevent resource exhaustion. |
 | **Hash-Chained Audit Trail** | Tamper-evident, append-only execution logs. |
 | **Temporary Ring Elevation (Sudo)** | Agents can request temporary privilege escalation with a TTL that auto-expires. |
@@ -520,7 +521,7 @@ It works with Azure AI Foundry, AWS Bedrock, Google ADK, LangChain, CrewAI, Auto
 
 AGT follows an **adapter pattern**: core governance packages are vendor-neutral (pydantic + cryptography only), while framework-specific integrations are published as separate packages. This means:
 
-- **Foundry agents** get native middleware integration (`GovernancePolicyMW`, `CapabilityGuardMW`, `AuditTrailMW`) — governance is invisible and automatic.
+- **Foundry agents** get native middleware integration (`RuntimeGovernanceMiddleware`, `CapabilityGuardMiddleware`, `AuditTrailMiddleware`) — governance is invisible and automatic.
 - **Non-Foundry agents** (LangChain, CrewAI, OpenClaw, etc.) use adapters or the sidecar HTTP API — 2–3 lines of code.
 - The **governance capabilities are identical** regardless of framework — policy enforcement, identity verification, audit logging, trust scoring.
 
@@ -684,7 +685,7 @@ See [Tutorial 40 — OTel Observability](tutorials/40-otel-observability.md) for
 | Agent OS | `agent-os-kernel` | Stateless policy engine — YAML, OPA/Rego, Cedar policies |
 | AgentMesh | `agentmesh-platform` | Trust, identity, governance — DID, Ed25519, trust scoring, protocol bridges |
 | Agent Runtime | `agentmesh-runtime` | Execution rings, saga orchestration, kill switch (re-exports from agent-hypervisor) |
-| Agent Hypervisor | `agent-hypervisor` | Canonical runtime — session isolation, privilege rings, joint liability |
+| Agent Hypervisor | `agent-hypervisor` | Canonical runtime — session isolation, privilege rings, saga compensation |
 | Agent SRE | `agent-sre` | SLOs, error budgets, circuit breakers, chaos engineering, replay debugging |
 | Agent Marketplace | `agentmesh-marketplace` | Plugin lifecycle — Ed25519 signing, trust-tiered capability gating |
 | Agent Lightning | `agentmesh-lightning` | RL training governance — policy-enforced runners, reward shaping |

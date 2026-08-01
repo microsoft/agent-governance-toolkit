@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **Agent OS security & integrity hardening** ([#3247](https://github.com/microsoft/agent-governance-toolkit/pull/3247)) — five governance gaps closed so `agent_os` fails closed when gating and recording untrusted activity:
+  - `MCPMessageSigner` / `InMemoryNonceStore` no longer evict in-window nonces by count. The nonce store keeps every nonce for its full replay window and, when saturated with live nonces, raises `NonceStoreCapacityError` so verification fails closed instead of re-opening the replay window. (New public export: `NonceStoreCapacityError`.)
+  - `MemoryGuard.validate_write` now detects markup-wrapped tool poisoning — hidden-instruction tags paired with destructive shell commands (`rm -rf`, fork bombs, `dd if=`, …), pipe-to-shell exfiltration, or a covert standing instruction (concealment such as "do not mention"/"silently", or an always-on directive such as "when asked …"/"always respond …") — via a new `AlertType.TOOL_POISONING`. Bare tool tags and plain `curl` mentions stay allowed to avoid false positives on benign runbooks.
+  - `HealthChecker` fails closed: a checker with no components now aggregates to `UNHEALTHY`, and the built-in `policy_engine`/`audit_backend` checks auto-register. The governance server (`GovServer`) binds the `audit_backend` health check to its real audit path (the injection detector's audit trail served at `/api/v1/audit/injections`), so `/health` reflects actual audit health instead of a permanently degraded stub.
+  - `GovernanceEventProcessor` gained reconciling accounting: `submitted_count`, `delivered_count`, and `failed_count` (alongside `dropped_count`) so `submitted == delivered + failed + dropped`. Events sent to a failing or circuit-broken sink are counted, never silently lost; intentional sink `DROPPED` results are bucketed as dropped, not failed.
+  - Governance audit events are exportable as signed CloudEvents 1.0 via `GovernanceEvent.to_cloudevent()` and a new HMAC `GovernanceEventSigner` (the signature covers the algorithm attribute). New `StdoutGovernanceSink` and `OTLPGovernanceSink` deliver signed CloudEvents; the OTLP sink reports `DROPPED` (not delivered) when OpenTelemetry is absent. (New public exports: `GovernanceEventSigner`, `StdoutGovernanceSink`, `OTLPGovernanceSink`.)
 - **Broadened SSN PII regex across integration adapters** ([#2635](https://github.com/microsoft/agent-governance-toolkit/issues/2635), [#2636](https://github.com/microsoft/agent-governance-toolkit/pull/2636)) — the dashed-only `\b\d{3}-\d{2}-\d{4}\b` regex used by the LangChain, AutoGen, CrewAI, and Bedrock adapters to detect SSNs in memory writes and outbound messages was trivially bypassed by space-, dot-, or no-separator variants such as `123 45 6789`, `123.45.6789`, and `123456789`. The pattern is now `\b\d{3}[\s.-]?\d{2}[\s.-]?\d{4}\b`, matching the YAML policy pack fix from [#2594](https://github.com/microsoft/agent-governance-toolkit/pull/2594) / [#2469](https://github.com/microsoft/agent-governance-toolkit/issues/2469).
 - `POST /api/v1/execute` now fails closed by default and no longer trusts
   caller-asserted `agent_id` values before policy, audit, and rate-limit
@@ -47,16 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider fails closed (action denied). Without an `approval_provider`,
   behavior is unchanged from earlier in this release: actions remain
   denied with the same error message.
-- `agent_os.policies.backends.OPABackend` now strict-bool validates OPA
-  responses in both remote and CLI modes. A positive authorization
-  decision requires the JSON literal `true`; any other shape (missing
-  `result` field, non-object body, truthy strings like `"denied"`,
-  integers, non-empty dicts/lists, malformed JSON, HTTP errors,
-  subprocess non-zero exits, timeouts) fails closed with an explicit
-  error code (`malformed_response`, `missing_result`, `missing_expressions`).
-  Previously the code defaulted missing fields to `False` then cast
-  through `bool(value)`, which would silently authorize any truthy
-  non-bool value returned by a misconfigured or compromised OPA server.
 - `iatp.main` and `iatp.sidecar` `POST /proxy` `X-User-Override` header
   is now **double-gated**. The legacy behavior accepted any truthy
   value of the caller-supplied header as a bypass of policy and
@@ -93,15 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subclasses overriding it must accept `**kwargs` or update their signature.
 
 ### Added
-- **`BackendDecision` assurance fields**: optional `proof_artefact: str | None`
-  (content-address of an underlying proof, e.g. `sha256:…`) and
-  `verification_pointers: dict[str, str]` (named URLs for offline re-verification)
-  on `agent_os.policies.backends.BackendDecision`. High-assurance external
-  backends (SMT-verified gates, mechanised-proof PDPs, TEE-attested PDPs) can
-  populate them; `PolicyEvaluator._evaluate_flat` propagates non-empty values
-  into `PolicyDecision.audit_entry`. Fully additive — existing `OPABackend` and
-  `CedarBackend` are unaffected and audit consumers see no new keys until a
-  backend supplies them.
 - `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
   credentials. These tokens remain valid for the life of the process unless
   revoked explicitly.

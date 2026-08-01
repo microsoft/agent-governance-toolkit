@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 PROVIDER_GROUPS = {
     "ring_engine": "hypervisor.providers.ring_engine",
-    "liability": "hypervisor.providers.liability",
     "saga_engine": "hypervisor.providers.saga_engine",
     "breach_detector": "hypervisor.providers.breach_detector",
     "session_manager": "hypervisor.providers.session_manager",
@@ -62,25 +61,6 @@ def get_ring_engine(**kwargs: Any):
     from hypervisor.rings.enforcer import RingEnforcer
 
     return RingEnforcer(**kwargs)
-
-
-def get_liability_engine(**kwargs: Any):
-    """Get the best available liability engine.
-
-    Advanced: Shapley-value fault attribution with vouch cascades.
-    Community: ``LiabilityMatrix`` from ``hypervisor.liability``.
-    """
-    provider = _discover_provider(PROVIDER_GROUPS["liability"])
-    if provider is not None:
-        return provider(**kwargs)
-
-    # Community fallback. The previous import targeted
-    # ``hypervisor.liability.engine.LiabilityEngine`` which does not
-    # exist in this tree; ``LiabilityMatrix`` is the real public-
-    # edition entry point.
-    from hypervisor.liability import LiabilityMatrix
-
-    return LiabilityMatrix(**kwargs)
 
 
 def get_saga_engine(**kwargs: Any):

@@ -256,7 +256,7 @@ class PluginTrustStore:
         if not self._store_path.exists():
             return {"scores": {}, "events": {}}
         try:
-            with open(self._store_path) as f:
+            with open(self._store_path, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError as exc:
             # A corrupt trust store is a security-relevant signal — silently
@@ -280,7 +280,7 @@ class PluginTrustStore:
         # mid-write leaves the *.tmp file behind but the canonical store
         # remains the last fully-written copy.
         tmp_path = self._store_path.with_name(self._store_path.name + ".tmp")
-        with open(tmp_path, "w") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(self._data, f, indent=2)
             f.flush()
             try:

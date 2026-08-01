@@ -12,17 +12,6 @@
       "ops_per_sec": 3750319
     },
     {
-      "name": "vouching_sigma_eff",
-      "iterations": 10000,
-      "mean_us": 1448.91,
-      "median_us": 666.2,
-      "p95_us": 3968.9,
-      "p99_us": 5195.1,
-      "min_us": 16.4,
-      "max_us": 18213.2,
-      "ops_per_sec": 690
-    },
-    {
       "name": "delta_capture",
       "iterations": 50000,
       "mean_us": 37.43,
