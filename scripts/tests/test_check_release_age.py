@@ -309,7 +309,7 @@ def test_main_too_young_exact_pinned_crate_fails():
     """End-to-end: a fresh ``=``-pinned crate must fail the age check."""
     toml_map = {
         ("origin/main", "Cargo.toml"): {"dependencies": {}},
-        ("HEAD", "Cargo.toml"): {"dependencies": {"newcrate": "=1.2.3"}},
+        ("HEAD", "Cargo.toml"): {"dependencies": {"new-crate": "=1.2.3"}},
     }
     fresh = datetime.now(timezone.utc) - timedelta(days=2)
     with _mock_changed(["Cargo.toml"]), \
@@ -317,7 +317,7 @@ def test_main_too_young_exact_pinned_crate_fails():
          patch.object(cra, "fetch_release_time", return_value=fresh) as fetch:
         rc = cra.main_with_args(["--base", "origin/main", "--min-age-days", "7"])
     assert rc == 1
-    fetch.assert_called_once_with("cargo", "newcrate", "1.2.3")
+    fetch.assert_called_once_with("cargo", "new-crate", "1.2.3")
 
 
 def test_collect_candidates_pyproject_pep621():
