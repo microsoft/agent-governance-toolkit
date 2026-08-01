@@ -1,192 +1,22 @@
-# agt-policies — African Regulatory Pack
-# POPIA — Protection of Personal Information Act (South Africa)
-#
-# Regulatory references:
-#   Protection of Personal Information Act 4 of 2013 (POPIA)
-#   Information Regulator (South Africa) — enforcement authority
-#   POPIA Commencement: 1 July 2021 (grace period ended 30 June 2022)
-#
-# ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
-# It covers key POPIA obligations relevant to AI agent governance.
-# It is NOT a complete POPIA compliance programme. Organisations must
-# perform their own assessments with qualified Information Officers.
-#
-# Key POPIA sections enforced:
-#   s.11   — Conditions for lawful processing (8 conditions)
-#   s.26   — Prohibition on processing special personal information
-#   s.72   — Transborder information flows
-#   s.19   — Security safeguards
-#   s.22   — Notification of security compromises
-#
-# South African identifiers governed:
-#   SA ID Number: 13-digit number (YYMMDD + gender + citizenship + checksum)
-#   Passport number: alphanumeric
-#   Tax reference number: 10 digits
-
-version: "1.0"
-name: popia-south-africa
-description: >
-  POPIA compliance governance policy for AI agents processing South African
-  personal information. Enforces cross-border transfer restrictions, special
-  personal information controls, SA ID number masking, and lawful processing
-  conditions. Designed for South African fintech, insurtech, and enterprise
-  AI deployments. Extends the African governance coverage alongside NDPA 2023.
-
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
 metadata:
-  source_regulation: "Protection of Personal Information Act 4 of 2013 (POPIA)"
-  jurisdiction: "ZA"
-  enforcing_authority: "Information Regulator of South Africa"
-
-rules:
-
-  # =========================================================================
-  # POPIA s.72 — Transborder Information Flows
-  # Personal information may only be transferred outside South Africa where:
-  # (a) the recipient is subject to a law that upholds substantially similar
-  #     principles to POPIA, or (b) the data subject consents, or (c) the
-  #     transfer is necessary for the performance of a contract.
-  # =========================================================================
-
-  - name: popia-crossborder-transfer-block
-    condition:
-      field: action
-      operator: matches
-      value: "^(send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote)$"
-    action: block
-    priority: 95
-    message: "POPIA s.72: Cross-border personal information transfer requires approval — destination jurisdiction must offer substantially similar POPIA protections"
-
-  - name: popia-crossborder-output-pattern
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?|upload(ing)?).{0,60}(outside\\s+south\\s+africa|cross.?border|international\\s+transfer|offshore|foreign\\s+server)"
-    action: block
-    priority: 95
-    message: "POPIA s.72: Cross-border data transfer detected — requires Information Officer approval and destination adequacy assessment"
-
-  # =========================================================================
-  # POPIA s.26 — Special Personal Information (Prohibition)
-  # POPIA prohibits processing of: (a) religious/philosophical beliefs,
-  # (b) race/ethnic origin, (c) trade union membership, (d) political
-  # persuasion, (e) health/sex life, (f) biometric information,
-  # (g) criminal behaviour, (h) children's personal information.
-  # =========================================================================
-
-  - name: popia-special-health-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|mental\\s+health|disability|chronic\\s+illness|prescription|clinical)"
-    action: block
-    priority: 95
-    message: "POPIA s.26(1)(e): Health/medical data detected — special personal information requires explicit lawful basis under POPIA s.27"
-
-  - name: popia-special-biometric-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(fingerprint|facial\\s+recognition|retina|iris\\s+scan|voice\\s+print|biometric\\s+(template|hash|data|record))"
-    action: deny
-    priority: 100
-    message: "POPIA s.26(1)(f): Biometric information must not be processed or transmitted by AI agents without documented POPIA s.27 exception"
-
-  - name: popia-special-race-ethnicity-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(race|ethnic\\s+origin|racial\\s+(group|classification)|coloured|population\\s+group)"
-    action: block
-    priority: 90
-    message: "POPIA s.26(1)(b): Race/ethnic origin data detected — special personal information, requires lawful basis and heightened controls"
-
-  - name: popia-special-criminal-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(criminal\\s+(record|history|conviction|background)|prior\\s+(offence|offense|conviction)|police\\s+clearance)"
-    action: block
-    priority: 90
-    message: "POPIA s.26(1)(g): Criminal history data detected — special personal information requiring explicit lawful processing basis"
-
-  - name: popia-children-data-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(minor|child\\s+(data|record|profile|account)|under\\s+(18|sixteen|fourteen)|children'?s\\s+(data|information|personal\\s+info))"
-    action: deny
-    priority: 100
-    message: "POPIA s.26(1)(h): Children's personal information must not be processed by AI agents — requires separate consent framework"
-
-  # =========================================================================
-  # SA ID Number — Masking and Exposure Prevention
-  # SA ID Number format: YYMMDDGSSSCAZ (13 digits)
-  # This is a sensitive personal identifier — must not appear in agent output.
-  # =========================================================================
-
-  - name: popia-sa-id-number-block
-    condition:
-      field: output
-      operator: matches
-      value: "\\b[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])[0-9]{7}\\b"
-    action: deny
-    priority: 100
-    message: "POPIA s.19: SA ID Number detected in agent output — blocked to prevent exposure of sensitive personal identifier"
-
-  - name: popia-sa-id-contextual-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(id\\s+number|identity\\s+number|sa\\s+id|south\\s+african\\s+id)[\\s:=]+[0-9]{13}"
-    action: deny
-    priority: 100
-    message: "POPIA s.19: SA ID Number value in agent response — blocked"
-
-  # =========================================================================
-  # POPIA s.11 — Conditions for Lawful Processing
-  # Processing is only lawful if at least one of 8 conditions is met.
-  # Agents must not autonomously invoke a new purpose without consent.
-  # =========================================================================
-
-  - name: popia-purpose-limitation-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(process(ing)?.{0,40}(beyond|outside|new\\s+purpose|repurpose|use\\s+for\\s+something\\s+else)|(data|information).{0,30}(without\\s+(consent|permission|authorisation)))"
-    action: deny
-    priority: 95
-    message: "POPIA s.11: Purpose limitation violated — agent cannot process personal information for a purpose beyond the original consent"
-
-  # =========================================================================
-  # POPIA s.22 — Notification of Security Compromises
-  # Agents must not suppress or delay breach notifications.
-  # The Information Regulator and affected data subjects must be notified.
-  # =========================================================================
-
-  - name: popia-breach-suppression-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident|leak)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+report)"
-    action: deny
-    priority: 100
-    message: "POPIA s.22: Agent cannot suppress or delay breach notification — Information Regulator must be notified without unreasonable delay"
-
-  # =========================================================================
-  # Audit — All Personal Information Processing
-  # POPIA requires RESPONSIBLE PARTYs to maintain records of processing activities.
-  # =========================================================================
-
-  - name: popia-pi-access-audit
-    condition:
-      field: action
-      operator: matches
-      value: "^(read_customer|get_profile|lookup_account|fetch_record|query_personal|access_data).*"
-    action: audit
-    priority: 75
-    message: "POPIA s.11/s.17: Personal information access logged — RESPONSIBLE PARTY accountability record for Information Regulator"
-
-defaults:
-  action: audit
-  max_tokens: 8000
-  max_tool_calls: 25
+  name: popia-south-africa
+  version: "1.0"
+extends: []
+policies:
+  popia_south_africa:
+    type: rego
+    bundle: rego
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: popia_south_africa
+      query: data.agt_policies_africa.popia.acs_input_result
+  output:
+    policy_target: $.output.content
+    policy:
+      id: popia_south_africa
+      query: data.agt_policies_africa.popia.acs_output_result

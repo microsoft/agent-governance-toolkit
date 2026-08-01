@@ -1,123 +1,76 @@
 # agt-policies (5.0.0a1)
 
-Agent Control Specification, or ACS, is the AGT policy engine. It is a
-stateless, deterministic, fail-closed policy decision runtime for agent
-security. A host acts as the policy enforcement point, calls ACS at
-defined intervention points with a complete snapshot, receives a
-normalized verdict, and enforces that verdict before the agent action
-proceeds.
+This package ships `agt migrate`, the one-way tool that converts an AGT v4
+project into an Agent Control Specification (ACS) manifest. It no longer
+evaluates policy. Policy evaluation lives in `agent_control_specification`,
+which hosts and adapters call directly.
 
-ACS gives AGT one portable contract for policy decisions across the
-agent lifecycle. Instead of scattering governance through prompts,
-framework callbacks, and application-specific checks, hosts submit the
-same manifest and snapshot shape at each point in the loop.
+The v4 policy language exists here and nowhere else in the repository. That is
+the point of the package: a v4 project has somewhere to go, and the runtime
+never has to understand two languages at once.
 
-```text
-Input -> Model -> Tool Call -> Tool Result -> Output
+## Migrating a v4 project
+
+```bash
+pip install agt-policies
+
+# Dry run by default: lists every legacy artifact without touching the project.
+agt migrate v4-to-v5 .
+
+# Apply it.
+agt migrate v4-to-v5 . --write
 ```
 
-ACS covers the full agent loop: input, model calls, tool calls, tool
-results, output, startup, and shutdown. A manifest declares which
-policy runs at each intervention point, what part of the snapshot is
-the policy target, which tool metadata is projected, and which
-annotators contribute additional context.
+The tool walks the project root, resolves the folder hierarchy that the v4
+runtime used to resolve at evaluation time, and writes a flat ACS manifest plus
+generated Rego bundles. Each `governance.yaml` it consumes is moved aside to
+`.governance.yaml.v4-backup` rather than deleted. Resolution happens once, here,
+instead of on every evaluation; the algorithm is specified in
+`src/agt/cli/_migrate_resolution/AGT-RESOLUTION-1.0.md`.
 
-`agt-policies` is the Python package that exposes ACS to AGT hosts and
-adapters. Use it when host code needs to:
+`--write-report MIGRATION.md` records what changed.
 
-- discover, scope, merge, and materialize AGT governance manifests
-- build complete AGT snapshots for ACS intervention points
-- call the ACS Python SDK through `AgtRuntime`
-- enforce `allow`, `warn`, `deny`, `escalate`, and `transform` verdicts
-- preserve v4 Agent OS adapter behavior while routing through ACS
+Migration refuses rather than guesses. Dynamic expressions, host-only settings,
+invalid patterns, unsupported fields, and an existing output file all stop the
+run with an error naming the construct.
 
-The native runtime evaluates; this package prepares the AGT host
-context and turns the returned decision into the Python objects that
-AGT adapters enforce.
+## After migrating
 
-## How ACS and `agt-policies` fit together
+The generated manifest is what the runtime evaluates. Load it through the ACS
+SDK:
 
-| Layer | Responsibility |
-| --- | --- |
-| AGT host | Intercepts the agent loop, owns side effects, and enforces the verdict. |
-| `agt-policies` | Python-facing ACS package for AGT hosts. Resolves manifests, builds snapshots, calls the runtime, and returns `EvaluationResult`. |
-| ACS runtime | Evaluates the manifest and snapshot as a stateless policy decision runtime. |
+```python
+from agent_control_specification import AgentControl, HostSession
 
-## What is here
+control = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(control, agent_id="mail-agent", session_id="run-1")
 
-- `agt.manifest_resolution` — folder discovery + scope filtering +
-  rule merge layer that runs in the host before the engine sees a
-  manifest. Implements `spec/agt/AGT-RESOLUTION-1.0.md`.
-  (`discover`, `scope`, `merge`, `build`.)
-- `agt.policies.snapshot` — snapshot builder per
-  `spec/agt/AGT-SNAPSHOT-1.0.md`.
-- `agt.policies.bridge` — renders a v4 `GovernancePolicy` into an ACS
-  manifest + OPA rego module.
-- `agt.policies.result` — `EvaluationResult` (replaces v4
-  `PolicyCheckResult`).
-- `agt.policies.runtime` — Python wrapper over the ACS Python SDK that
-  loads a resolved manifest, runs intervention points, applies the
-  transform verdict, enforces approval, and emits AGT telemetry events.
+result = session.input("summarise the last thread")
+if not result.verdict.decision.permits:
+    raise RuntimeError(result.verdict.reason)
+```
 
-## Runtime flow
+`HostSession` owns one session's snapshots and budget counters over a stateless
+runtime, and exposes one method per intervention point. Verdicts are `allow`,
+`warn`, `deny`, `escalate`, and `transform`, and `decision.permits` is true for
+the three that let the action proceed.
 
-1. The host identifies the intervention point, such as `input` or
-   `pre_tool_call`.
-2. `SnapshotBuilder` creates the complete AGT snapshot for that call,
-   including the agent/session envelope and current budget counters.
-3. `AgtRuntime` resolves the manifest when needed, sanitizes AGT-only
-   fields for the native engine, and calls the ACS Python SDK.
-4. The returned ACS verdict is mapped to `EvaluationResult`, including
-   `verdict`, `reason`, optional `transform`, optional `evidence`, and
-   the `input_identity` / `enforced_identity` audit fields.
-5. The host enforces the result. `allow`, `warn`, and `transform`
-   proceed; `deny` blocks; `escalate` routes through the configured
-   approval resolver or fails closed.
-
-## Compatibility bridge
-
-Existing Agent OS adapters still accept the v4 `GovernancePolicy`
-dataclass. `agt.policies.bridge` renders that policy into an ACS
-manifest plus a generated Rego bundle. The bridge preserves v4
-semantics where they differ from the native ACS defaults, including an
-empty `allowed_tools` list meaning no allowlist and `max_tool_calls=0`
-meaning deny every tool call.
-
-The generated compatibility policy is identified as `agt_legacy_rules`
-inside the resolved ACS manifest. If merged governance rules are
-present but no intervention point binds to `agt_legacy_rules`,
-resolution fails closed rather than producing rules that never run.
+Framework adapters do not need this package. `agent_os.integrations` builds its
+own snapshots and calls ACS directly.
 
 ## Security invariants
 
-The host layer is fail-closed by design. Notably: governance files
-that resolve outside the workspace root are rejected; directory-style
-scopes (`dir/`) cover their subtree; a parent `deny` cannot be
-neutralised by a child `allow` whose condition overlaps it; malformed
-budget counters and approval-resolver timeouts deny rather than
-silently allow.
-
-Resolved Rego bundles are materialized outside the governed workspace
-for runtime use and cleaned up when the runtime closes. This prevents a
-workspace-writable policy bundle from being overwritten between
-resolution and evaluation.
+- The migration output is validated with `validate_manifest` before an atomic
+  write, so an invalid manifest is never left on disk.
+- Regex and glob patterns are validated against OPA's Go RE2 engine, which is
+  what evaluates them at runtime, so a pattern that migrates is one the runtime
+  can actually run.
+- The resolution algorithm is confined to the migration path. No runtime module
+  imports it.
 
 ## Install (development)
 
-```sh
-cd agent-governance-python/agt-policies
-pip install -e ".[dev]"
-pytest
+```bash
+pip install -e "agent-governance-python/agt-policies[dev]"
+pytest agent-governance-python/agt-policies/tests
 ```
-
-Tests that exercise `agt.policies.runtime` require the native ACS Python
-SDK from `policy-engine/sdk/python`. In a repository checkout, build it
-first:
-
-```sh
-cd ../../policy-engine
-pip install ./sdk/python
-```
-
-OPA-backed Rego evaluations also require `opa` on `PATH` or
-`ACS_OPA_PATH` pointing at an OPA executable.

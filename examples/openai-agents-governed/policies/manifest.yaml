@@ -1,0 +1,29 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: openai-agents-example
+  version: "1.0"
+extends: []
+policies:
+  prompt_safety:
+    type: rego
+    bundle: .
+    query: data.agt.examples.openai_agents.result
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: prompt_safety
+  output:
+    policy_target: $.response.content
+    policy:
+      id: prompt_safety
+  post_tool_call:
+    policy_target: $.tool_result.value
+    policy:
+      id: prompt_safety
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: prompt_safety

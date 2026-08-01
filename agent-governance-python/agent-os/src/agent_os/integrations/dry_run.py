@@ -1,18 +1,13 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Dry-run policy wrapper for governance policies.
-
-Wraps any GovernancePolicy and runs enforcement in "dry run" mode,
-recording what WOULD have happened without actually blocking execution.
-"""
+"""Dry-run wrapper that records native integration decisions without blocking."""
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from .base import BaseIntegration, ExecutionContext
+from .base import BaseIntegration, AdapterExecutionState
 
 
 class DryRunDecision(Enum):
@@ -78,7 +73,7 @@ class DryRunPolicy:
         self._policy_name = policy_name
         self.collector = collector or DryRunCollector()
 
-    def evaluate(self, action: str, context: ExecutionContext, input_data: Any = None) -> DryRunResult:
+    def evaluate(self, action: str, context: AdapterExecutionState, input_data: Any = None) -> DryRunResult:
         """
         Evaluate a policy check in dry-run mode.
 

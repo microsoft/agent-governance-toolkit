@@ -40,17 +40,20 @@ def policy_file(tmp_path: Path) -> Path:
     p.write_text(
         textwrap.dedent(
             """\
-            name: test-policy
-            version: "1.0"
-            description: A test policy
-            rules:
-              - name: block-delete
-                condition:
-                  field: tool_name
-                  operator: in
-                  value: ["delete_file"]
-                action: deny
-                priority: 100
+            agent_control_specification_version: 0.3.1-beta
+            metadata:
+              name: test-policy
+              version: "1.0"
+            extends: []
+            policies:
+              test:
+                type: custom
+                adapter: test
+            intervention_points:
+              input:
+                policy_target: $.input.body
+                policy:
+                  id: test
             """
         ),
         encoding="utf-8",
@@ -64,16 +67,19 @@ def bad_policy_file(tmp_path: Path) -> Path:
     p.write_text(
         textwrap.dedent(
             """\
-            name: bad-policy
-            version: "1.0"
-            rules:
-              - name: rule-with-deprecated-field
-                condition:
-                  field: tool_name
-                  op: eq
-                  value: "delete_file"
-                type: deny
-                priority: 100
+            agent_control_specification_version: 0.3.1-beta
+            metadata:
+              name: bad-policy
+              version: "1.0"
+            extends: []
+            policies:
+              test:
+                type: custom
+            intervention_points:
+              input:
+                policy_target: $.input.body
+                policy:
+                  id: missing
             """
         ),
         encoding="utf-8",
@@ -815,4 +821,3 @@ class TestPerformance:
 
         assert result.exit_code == 0
         assert elapsed < 5.0
-        
