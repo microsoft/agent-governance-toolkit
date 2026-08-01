@@ -163,6 +163,7 @@ Ravande
 Redocly
 Rego
 Rekor
+Repoint
 Rootfs
 RustCrypto
 RustSec
@@ -758,6 +759,7 @@ refetches
 regen
 reimplementation
 relativedelta
+relpath
 removeprefix
 removesuffix
 replayable

@@ -54,7 +54,7 @@
     "@typescript-eslint/parser": "8.62.0",
     "eslint": "10.7.0",
     "jest": "30.4.2",
-    "ts-jest": "29.4.11",
+    "ts-jest": "29.4.12",
     "ts-node": "10.9.2",
     "typescript": "6.0.3"
   },
