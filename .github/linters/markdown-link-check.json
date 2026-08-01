@@ -52,7 +52,7 @@
     { "pattern": "genai\\.owasp\\.org" },
     { "pattern": "learn\\.microsoft\\.com" },
     { "pattern": "microsoft\\.com/en-us/security/blog" },
-    { "pattern": "dcbadge\\.limes\\.pink/api/server/TxMRqY3pFr" },
+    { "pattern": "dcbadge\\.limes\\.pink" },
     { "pattern": "agent-governance-python/agent-lightning/pull" },
     { "pattern": "azure-container-apps/blob" },
     { "pattern": "^(?!https?://|mailto:|#)" }

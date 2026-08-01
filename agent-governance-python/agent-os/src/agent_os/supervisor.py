@@ -61,11 +61,26 @@ class SupervisorHierarchy:
         """Check hierarchy rules and return a list of violations (empty = valid).
 
         Rules:
+        - No supervisor may sit above the root: levels MUST NOT be negative.
         - Level 0 MUST exist and MUST be deterministic (not an LLM agent).
         - Middle levels (1–N) may be agent-based.
         - Each level present must have at least one supervisor.
         """
         violations: list[str] = []
+
+        # Checked before anything else: level 0 is the root, so a negative level
+        # places a supervisor *above* the deterministic authority. The
+        # determinism rule below only inspects supervisors whose level is exactly
+        # 0, and the gap scan only walks ``range(1, max_level + 1)``, so a
+        # negative level was invisible to both — an agent registered at level -1
+        # produced no violations at all while ranking ahead of the trust root in
+        # ``get_authority_chain``.
+        for s in self._supervisors:
+            if s.level < 0:
+                violations.append(
+                    f"Supervisor '{s.name}' has negative level {s.level}; level 0 is the "
+                    "root and nothing may sit above it"
+                )
 
         level_0 = [s for s in self._supervisors if s.level == 0]
         if not level_0:

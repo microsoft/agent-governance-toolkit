@@ -37,6 +37,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Build native ACS SDK
+        # agent-compliance's manifest linter calls the native
+        # `agent_control_specification` Rust SDK (pyo3/maturin); build it from
+        # the vendored policy-engine so parse/validate are available.
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
+
       - name: Install native manifest linter
         run: |
           pip install --no-cache-dir -e agent-governance-python/agent-compliance
@@ -94,6 +103,13 @@ jobs:
         if: needs.changes.outputs.policies == 'true'
         with:
           python-version: "3.11"
+
+      - name: Build native ACS SDK (test job)
+        if: needs.changes.outputs.policies == 'true'
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
 
       - name: Install native manifest test dependencies
         if: needs.changes.outputs.policies == 'true'

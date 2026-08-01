@@ -5,6 +5,47 @@ All notable changes to AgentMesh will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **AgentMesh transport message authentication.** `MeshClient` no longer lets a
+  sender-supplied `plaintext` wire flag select the legacy no-crypto receive path;
+  whether an inbound message is treated as plaintext is decided solely by the
+  receiver's own `plaintextPeers` configuration. Once a peer has been end-to-end
+  verified it can never be handled as plaintext again — the check latches on the
+  E2E-verified set rather than on a live session, so tearing the session down
+  (ratchet desync or an unauthenticated `knock_reject`) cannot re-open the
+  plaintext path. An encrypted frame that is missing its ratchet header is now
+  dropped before the pre-KNOCK buffer instead of being buffered until TTL
+  eviction.
+- **Relay sender-identity binding.** The relay binds the frame `from` field to the
+  connection's cryptographically verified DID identity for message and knock
+  frames (including `knock_accept` / `knock_reject`, and on the offline store
+  path), so a connected peer can no longer emit frames under another agent's DID.
+- **Relay acknowledgement ownership.** `InboxStore.acknowledge` enforces recipient
+  ownership (spec §12.3): a peer may only acknowledge and delete messages addressed
+  to its own verified DID, preventing one agent from deleting another's queued mail.
+
+### Fixed
+
+- **Pending-message batch isolation.** A single malformed entry in a relay-supplied
+  `pending_messages` batch no longer aborts the drain; the failure is surfaced
+  through the error handler and the remaining queued messages are still delivered.
+
+### Changed
+
+- **Displaced connections now close with a distinct WebSocket code.** When a second
+  connection authenticates for a DID, the relay closes the displaced socket with
+  `4006` (`WS_CLOSE_SESSION_REPLACED`) instead of `1000`. `1000` was reported by
+  `MeshClient` as a client-initiated close, making an involuntary takeover
+  indistinguishable from the agent calling `disconnect()` on itself — so a
+  displaced agent could neither detect nor report it. The new code is reported as
+  a server close and raised through `onError`, while still suppressing
+  auto-reconnect so the displaced and replacing sockets do not evict each other in
+  a loop. Hosts that previously matched on close code `1000` to detect replacement
+  should match `WS_CLOSE_SESSION_REPLACED` (exported from `mesh-client`) instead.
+
 ## [1.0.0-alpha.1] - 2026-02-01
 
 ### Added

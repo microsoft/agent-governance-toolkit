@@ -1,0 +1,21 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: helpdesk-governance
+  version: "1.0"
+extends: []
+policies:
+  helpdesk_safety:
+    type: rego
+    bundle: .
+    query: data.agt.examples.maf.helpdesk.result
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: helpdesk_safety
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: helpdesk_safety

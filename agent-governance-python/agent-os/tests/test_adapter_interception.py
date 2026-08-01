@@ -22,8 +22,12 @@ from _framework_stubs import install as _install_framework_stubs
 
 _install_framework_stubs()
 
-from agt.policies import PolicyEvaluation  # noqa: E402
-from agt.policies.result import TransformResult  # noqa: E402
+from agent_control_specification import (  # noqa: E402
+    Decision,
+    InterventionPointResult,
+    Transform,
+    Verdict,
+)
 
 from agent_os.integrations.anthropic_adapter import AnthropicKernel  # noqa: E402
 from agent_os.integrations.autogen_adapter import (  # noqa: E402
@@ -46,27 +50,29 @@ from agent_os.integrations.semantic_kernel_adapter import (  # noqa: E402
 class _StubRuntime:
     manifest = None
 
-    def __init__(self, result: PolicyEvaluation) -> None:
+    def __init__(self, result: InterventionPointResult) -> None:
         self._result = result
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    def evaluate(
-        self, intervention_point: str, snapshot: dict[str, Any]
-    ) -> PolicyEvaluation:
+    async def evaluate_intervention_point(
+        self, intervention_point: Any, snapshot: dict[str, Any], mode: Any = None
+    ) -> InterventionPointResult:
         name = getattr(intervention_point, "value", str(intervention_point))
         self.calls.append((name, snapshot))
-        return self._result.model_copy(update={"intervention_point": name})
+        return self._result
 
     def close(self) -> None:  # pragma: no cover - adapters may not close
         pass
 
 
-def _allow() -> PolicyEvaluation:
-    return PolicyEvaluation(verdict="allow")
+def _allow() -> InterventionPointResult:
+    return InterventionPointResult(verdict=Verdict(decision=Decision.ALLOW))
 
 
-def _deny() -> PolicyEvaluation:
-    return PolicyEvaluation(verdict="deny", reason_code="blocked", message="detail")
+def _deny() -> InterventionPointResult:
+    return InterventionPointResult(
+        verdict=Verdict(decision=Decision.DENY, reason="blocked", message="detail")
+    )
 
 
 def _named(name: str = "agent-1") -> MagicMock:
@@ -147,7 +153,7 @@ def test_governed_proxy_delegates_unknown_attributes(
 
 @pytest.fixture()
 def autogen_handler() -> Any:
-    def _build(result: PolicyEvaluation) -> tuple[Any, _StubRuntime]:
+    def _build(result: InterventionPointResult) -> tuple[Any, _StubRuntime]:
         runtime = _StubRuntime(result)
         kernel = AutoGenKernel(runtime=runtime)
         return GovernanceInterventionHandler(kernel, name="test"), runtime
@@ -199,10 +205,12 @@ async def test_autogen_on_send_applies_transform_to_content(
 ) -> None:
     """A transform verdict rewrites the message before it is forwarded."""
     handler, _ = autogen_handler(
-        PolicyEvaluation(
-            verdict="transform",
-            reason_code="redact",
-            transform=TransformResult(path="input.body", value="[redacted]"),
+        InterventionPointResult(
+            verdict=Verdict(
+                decision=Decision.TRANSFORM,
+                reason="redact",
+                transform=Transform(path="input.body", value="[redacted]"),
+            )
         )
     )
     message = MagicMock()
@@ -292,24 +300,25 @@ _SECRET = "SECRET-TOKEN-XYZ-99"
 class _PerPointRuntime(_StubRuntime):
     """A stub runtime that answers per intervention point, allowing elsewhere."""
 
-    def __init__(self, overrides: dict[str, PolicyEvaluation]) -> None:
+    def __init__(self, overrides: dict[str, InterventionPointResult]) -> None:
         super().__init__(_allow())
         self._overrides = overrides
 
-    def evaluate(
-        self, intervention_point: str, snapshot: dict[str, Any]
-    ) -> PolicyEvaluation:
+    async def evaluate_intervention_point(
+        self, intervention_point: Any, snapshot: dict[str, Any], mode: Any = None
+    ) -> InterventionPointResult:
         name = getattr(intervention_point, "value", str(intervention_point))
         self.calls.append((name, snapshot))
-        result = self._overrides.get(name, self._result)
-        return result.model_copy(update={"intervention_point": name})
+        return self._overrides.get(name, self._result)
 
 
-def _output_transform() -> PolicyEvaluation:
-    return PolicyEvaluation(
-        verdict="transform",
-        reason_code="redact",
-        transform=TransformResult(path="output.content", value="[redacted]"),
+def _output_transform() -> InterventionPointResult:
+    return InterventionPointResult(
+        verdict=Verdict(
+            decision=Decision.TRANSFORM,
+            reason="redact",
+            transform=Transform(path="output.content", value="[redacted]"),
+        )
     )
 
 

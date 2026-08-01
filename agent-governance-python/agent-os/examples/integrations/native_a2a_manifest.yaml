@@ -1,0 +1,15 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: native-a2a-example
+policies:
+  request_policy:
+    type: custom
+    adapter: native_a2a_example
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy_target_kind: a2a_request
+    policy:
+      id: request_policy

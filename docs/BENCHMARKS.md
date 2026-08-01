@@ -25,7 +25,7 @@
 
 ## 1. Policy Evaluation
 
-Measures `AgtRuntime.evaluate()` — the core enforcement path every agent action passes through.
+Measures `AgentControl.evaluate()` — the core enforcement path every agent action passes through.
 
 | Benchmark | ops/sec | p50 (ms) | p95 (ms) | p99 (ms) |
 |---|---:|---:|---:|---:|
@@ -81,7 +81,7 @@ Measures the governance check overhead per framework adapter — the cost added 
 
 | Adapter | ops/sec | p50 (ms) | p95 (ms) | p99 (ms) |
 |---|---:|---:|---:|---:|
-| AgtRuntime init (startup) | 134,923 | 0.007 | 0.008 | 0.019 |
+| AgentControl init (startup) | 134,923 | 0.007 | 0.008 | 0.019 |
 | Tool allowed check | 3,745,036 | 0.000 | 0.000 | 0.000 |
 | Pattern match (per call) | 135,717 | 0.007 | 0.008 | 0.022 |
 | **OpenAI** adapter | 166,363 | 0.005 | 0.007 | 0.017 |
@@ -116,7 +116,7 @@ Source: [`agent-governance-python/agent-sre/benchmarks/`](agent-governance-pytho
 
 ## 6. Memory Footprint
 
-Measured with `tracemalloc` — AgtRuntime with 100 rules, 1,000 evaluations:
+Measured with `tracemalloc` — AgentControl with 100 rules, 1,000 evaluations:
 
 | Metric | Value |
 |---|---|
