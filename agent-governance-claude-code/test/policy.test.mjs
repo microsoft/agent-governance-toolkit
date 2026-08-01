@@ -134,6 +134,8 @@ test("evaluatePreToolUse denies recursive force deletes", async () => {
     "ri -Recurse:$true important-data",
     "Remove-Item -Recurse:$unresolved important-data",
     "rm -rfx important-data",
+    "\"rm\" -rf important-data",
+    "'rm' -rf important-data",
     "`rm -rf /`",
     "{rm -rf /;}",
   ]) {
@@ -186,6 +188,7 @@ test("evaluatePreToolUse does not deny safe cleanup or non-recursive force delet
     "rm -f /srv",
     "rm /sys",
     "rm -i /sbin",
+    "rmdir /srv/emptydir",
     "rmdir -p a/b/c",
   ]) {
     const result = await evaluatePreToolUse(state, {

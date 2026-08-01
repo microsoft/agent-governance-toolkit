@@ -69,6 +69,11 @@ agt-antigravity policy show
 
 Custom policies should stay fail-closed, keep `toolPolicies.defaultEffect` at `review`, and retain AGT baseline protections for prompt defense, secret-path reads, and metadata endpoints. In Antigravity CLI enforce mode, AGT treats `review` as `deny` because Antigravity hooks cannot pause for manual approval.
 
+The recursive-delete matcher covers common literal command forms. It does not expand shell
+variables, decode obfuscated command names, or parse command strings passed to nested interpreters
+such as `bash -c` or `cmd /c`. Unclassified forms follow the policy's normal `review` path, which
+Antigravity maps to `deny` in enforce mode.
+
 ## Example usage
 
 After restarting Antigravity CLI, a typical verification flow looks like:

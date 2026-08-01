@@ -134,6 +134,10 @@ overridden via `AGT_OPENCODE_AUDIT_PATH`.
   `review`, this plugin marks the args with `__agt_review_reason` and lets
   OpenCode's normal permission flow run. Operators who want hard-deny behaviour
   on review should set `toolPolicies.defaultEffect: "deny"` in their policy.
+- The recursive-delete matcher covers common literal command forms. It does not
+  expand shell variables, decode obfuscated command names, or parse command
+  strings passed to nested interpreters such as `bash -c` or `cmd /c`.
+  Unclassified forms follow the policy's normal `review` path.
 - Output redaction is conservative: only well-known credential patterns are
   redacted. The audit entry records that a redaction occurred but never the
   redacted value.

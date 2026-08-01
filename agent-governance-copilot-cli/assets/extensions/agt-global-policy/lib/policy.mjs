@@ -995,7 +995,7 @@ function getRmCommandDetails(commandText, toolName) {
     const commandName = normalizeCommandNameToken(token);
     return (
       /^(rm|remove-item|rmdir|ri|rd|del|erase)$/i.test(commandName) ||
-      /(?:^|[\\/])(rd|rmdir|del|erase)(?:\/[a-z]+)+$/i.test(
+      /(?:^|[\\/])(rd|rmdir|del|erase)(?:\/[a-z])+$/i.test(
         stripCommandToken(token).replace(/^[`({$]+/, ""),
       )
     );
@@ -1006,7 +1006,7 @@ function getRmCommandDetails(commandText, toolName) {
 
   const commandToken = stripCommandToken(tokens[commandIndex]).replace(/^[`({$]+/, "");
   const attachedWindowsSwitches =
-    /(?:^|[\\/])(rd|rmdir|del|erase)((?:\/[a-z]+)+)$/i.exec(commandToken);
+    /(?:^|[\\/])(rd|rmdir|del|erase)((?:\/[a-z])+)$/i.exec(commandToken);
   const commandName = (
     attachedWindowsSwitches?.[1] ?? normalizeCommandNameToken(tokens[commandIndex])
   ).toLowerCase();
@@ -1168,7 +1168,10 @@ function isWindowsSlashFlagCommand(commandName) {
 
 function parseWindowsSlashFlags(token) {
   const value = String(token ?? "");
-  if (!/^(?:\/[a-z]+)+$/i.test(value)) {
+  // cmd.exe switches are slash-prefixed letters. Requiring one letter per
+  // segment keeps POSIX paths such as `/srv/emptydir` from looking like `/s`
+  // followed by more switches.
+  if (!/^(?:\/[a-z])+$/i.test(value)) {
     return undefined;
   }
   const flags = value.replaceAll("/", "");

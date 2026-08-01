@@ -30,7 +30,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "(^|[\\s;&|(){`/\\\\])(?:rm|remove-item|rmdir|ri|rd|del|erase)\\b",
+          "source": "(^|[\\s;&|(){`\"'/\\\\])(?:rm|remove-item|rmdir|ri|rd|del|erase)\\b",
           "flags": "i"
         }
       ]
@@ -110,7 +110,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "(^|[\\s;&|(){`/\\\\])(?:rm|remove-item|rmdir|ri|rd|del|erase)\\b",
+          "source": "(^|[\\s;&|(){`\"'/\\\\])(?:rm|remove-item|rmdir|ri|rd|del|erase)\\b",
           "flags": "i"
         }
       ]

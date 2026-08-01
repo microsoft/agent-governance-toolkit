@@ -337,5 +337,9 @@ Copilot CLI environment before using them broadly.
 ## Notes
 
 - The extension runtime resolves `@github/copilot-sdk` from Copilot CLI itself.
+- The recursive-delete matcher covers common literal command forms. It does not expand shell
+  variables, decode obfuscated command names, or parse command strings passed to nested
+  interpreters such as `bash -c` or `cmd /c`. Unclassified forms follow the policy's normal
+  `review` path.
 - This example intentionally stays in `examples/` because it demonstrates an integration pattern rather than a stabilized public package.
 - The installer vendors the AGT TypeScript SDK so the extension continues to work after being copied outside the repo.
