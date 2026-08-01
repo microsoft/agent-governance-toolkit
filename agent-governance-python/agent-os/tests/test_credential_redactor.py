@@ -356,3 +356,44 @@ def test_scan_and_redact_reports_types_without_raw_secret():
 def test_scan_and_redact_empty_input():
     assert CredentialRedactor.scan_and_redact(None) == ("", [])
     assert CredentialRedactor.scan_and_redact("") == ("", [])
+
+
+@pytest.mark.parametrize(
+    "ssn",
+    [
+        "123-45-6789",   # dash
+        "123 45 6789",   # space
+        "123.45.6789",   # dot
+    ],
+)
+def test_ssn_detected_across_separators(ssn: str):
+    """The dash-only pattern missed the space and dot forms used elsewhere in the
+    codebase. Regression for issue #3239."""
+    matches = CredentialRedactor.find_pii_matches(f"employee ssn {ssn} on file")
+    assert any(m.name == "US SSN" and m.matched_text == ssn for m in matches)
+
+
+def test_ssn_glued_to_a_word_character_is_detected():
+    """A word boundary treats ``_`` as a word character, so an SSN glued to one
+    escaped detection. The lookaround anchor catches it."""
+    matches = CredentialRedactor.find_pii_matches("employee_123-45-6789")
+    assert any(m.name == "US SSN" for m in matches)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tracking: 123456789",       # bare nine digits, not an SSN
+        "order_123456789",           # nine-digit id glued to an underscore
+        "ZIP 12345-6789",            # ZIP+4
+        "ABA 021000021",             # routing number
+        "order 1234567890 shipped",  # ten digits
+        "build 12-34-5678 tagged",   # wrong digit grouping
+    ],
+)
+def test_ssn_pattern_rejects_bare_nine_digit_forms(text: str):
+    """pii_leak is a hard-block category in the MCP gateway, so a bare nine-digit
+    match would deny ordinary traffic. A separator is required here."""
+    assert not any(
+        m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text)
+    )

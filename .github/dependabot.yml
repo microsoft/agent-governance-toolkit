@@ -177,3 +177,12 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
+    groups:
+      # codeql-action's init, autobuild and analyze steps must run the same
+      # version: init writes a config stamped with its version and analyze
+      # refuses to load a config from a different one ("Loaded a configuration
+      # file for version X, but running version Y"). Bumping them in separate
+      # PRs leaves every one of them red, so they are grouped into a single PR.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
