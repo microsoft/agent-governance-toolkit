@@ -159,8 +159,17 @@ class CredentialRedactor:
     PII_PATTERNS: tuple[CredentialPattern, ...] = (
         CredentialPattern(
             name="Email address",
+            # RFC 5321 limits the local part to 64 octets. The character class
+            # below is ASCII-only, so the same limit also bounds regex work at
+            # every candidate start. Without it, separator-dense input that
+            # contains no ``@`` makes the greedy local part scan the remaining
+            # string from each word boundary, producing quadratic behavior.
+            # Keep the word boundary fail-closed: punctuation such as ``-`` or
+            # ``.`` must not let untrusted output hide a readable email suffix.
+            # An uninterrupted local part over the RFC limit is intentionally
+            # out of scope; a separator-delimited suffix may still be reported.
             pattern=re.compile(
-                r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
+                r"\b[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
             ),
         ),
         CredentialPattern(

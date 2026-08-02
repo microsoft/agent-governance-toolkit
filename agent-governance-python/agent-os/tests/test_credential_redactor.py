@@ -397,3 +397,69 @@ def test_ssn_pattern_rejects_bare_nine_digit_forms(text: str):
     assert not any(
         m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text)
     )
+
+
+def test_email_local_part_respects_rfc_5321_length_limit():
+    valid_email = f"{'a' * 64}@example.com"
+    overlong_email = f"{'a' * 65}@example.com"
+
+    valid_matches = CredentialRedactor.find_pii_matches(valid_email)
+    overlong_matches = CredentialRedactor.find_pii_matches(overlong_email)
+
+    assert any(
+        match.name == "Email address" and match.matched_text == valid_email
+        for match in valid_matches
+    )
+    assert not any(match.name == "Email address" for match in overlong_matches)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_email"),
+    [
+        ("Contact john.doe@corp.com", "john.doe@corp.com"),
+        ("Contact -john.doe@corp.com", "john.doe@corp.com"),
+        ("Contact +tag@example.com", "tag@example.com"),
+        ("Contact .john.doe@corp.com", "john.doe@corp.com"),
+        ("Contact %john.doe@corp.com", "john.doe@corp.com"),
+        ("Contact:-jane.roe@contoso.com", "jane.roe@contoso.com"),
+    ],
+)
+def test_email_detection_remains_fail_closed_next_to_punctuation(
+    text: str, expected_email: str
+):
+    matches = CredentialRedactor.find_pii_matches(text)
+
+    assert any(
+        match.name == "Email address" and match.matched_text == expected_email
+        for match in matches
+    )
+
+
+def test_email_detection_prefers_bounded_suffix_match_to_punctuation_bypass():
+    bounded_suffix = f"{'a' * 64}@example.com"
+    invalid_overlong_email = f"x.{bounded_suffix}"
+
+    matches = CredentialRedactor.find_pii_matches(invalid_overlong_email)
+
+    assert any(
+        match.name == "Email address" and match.matched_text == bounded_suffix
+        for match in matches
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "1.1.1." * 8_000,
+        "123-45-" * 8_000,
+        "a." * 24_000,
+    ],
+    ids=["ipv4-shaped", "ssn-shaped", "email-dots"],
+)
+def test_pii_scan_handles_separator_dense_input_quickly(text: str):
+    start = time.perf_counter()
+    matches = CredentialRedactor.find_pii_matches(text)
+    elapsed = time.perf_counter() - start
+
+    assert not any(match.name == "Email address" for match in matches)
+    assert elapsed < 1.0
