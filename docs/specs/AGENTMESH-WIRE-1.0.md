@@ -8,15 +8,16 @@
 > messaging in the Agent Governance Toolkit. All SDK implementations (Python,
 > TypeScript, Rust, .NET, Go) MUST conform to this specification.
 
-> [!IMPORTANT]
-> **Independent Design Statement.** This specification is an independent,
-> clean-room design built entirely from published, freely-licensed standards
-> (see [Section 3](#3-standards-foundation) and [Appendix A](#appendix-a--intellectual-property-and-prior-art)).
-> No proprietary protocols, third-party source code, or patented algorithms
-> were used. Every cryptographic operation references an IETF RFC or a
-> CC0-licensed specification. Implementers should follow this spec and the
-> referenced standards only — do not reference, copy, or derive from any
-> third-party implementation.
+!!! important
+
+    **Independent Design Statement.** This specification is an independent,
+    clean-room design built entirely from published, freely-licensed standards
+    (see [Section 3](#3-standards-foundation) and [Appendix A](#appendix-a--intellectual-property-and-prior-art)).
+    No proprietary protocols, third-party source code, or patented algorithms
+    were used. Every cryptographic operation references an IETF RFC or a
+    CC0-licensed specification. Implementers should follow this spec and the
+    referenced standards only — do not reference, copy, or derive from any
+    third-party implementation.
 
 ---
 

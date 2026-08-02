@@ -12,8 +12,9 @@
 [![Benchmarks](https://img.shields.io/badge/benchmarks-available-blue)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-hypervisor/benchmarks)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
-> [!IMPORTANT]
-> `agent-hypervisor` is deprecated as a standalone PyPI package. For new work, install `agent-governance-toolkit-core` or the full toolkit. The source in this directory remains tested and documents the runtime features that are implemented here.
+!!! important
+
+    `agent-hypervisor` is deprecated as a standalone PyPI package. For new work, install `agent-governance-toolkit-core` or the full toolkit. The source in this directory remains tested and documents the runtime features that are implemented here.
 
 [Quick start](#quick-start) | [Why a hypervisor](#why-agent-hypervisor) | [Configuration](#configuration) | [Architecture](#architecture) | [Key features](#key-features) | [REST API](#rest-api) | [Ecosystem](#ecosystem)
 

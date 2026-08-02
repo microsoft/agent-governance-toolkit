@@ -31,8 +31,9 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/compliance/owasp-agentic-top10-architecture.md)
 
-> [!IMPORTANT]
-> **공개 프리뷰(Public Preview)** — 프로덕션 품질의 Microsoft 서명 릴리즈입니다. GA 이전에 주요 변경이 발생할 수 있습니다.
+!!! important
+
+    **공개 프리뷰(Public Preview)** — 프로덕션 품질의 Microsoft 서명 릴리즈입니다. GA 이전에 주요 변경이 발생할 수 있습니다.
 
 자율형 AI 에이전트를 위한 정책 적용, 신원증명, 샌드박싱, SRE. `pip install` 하나로 어떤 프레임워크에서도 사용 가능합니다.
 

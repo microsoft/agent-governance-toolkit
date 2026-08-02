@@ -18,21 +18,22 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
 
-> [!IMPORTANT]
-> **パブリックプレビュー** — このリポジトリから公開されるすべてのパッケージは
-> **Microsoft 署名済みのパブリックプレビューリリース**です。プロダクション品質ですが、
-> GA（一般提供）前に破壊的変更が行われる可能性があります。フィードバックは
-> [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) からお寄せください。
->
-> **このツールキットとは：** ランタイムガバナンスインフラストラクチャ — エージェントフレームワークと
-> エージェントが実行するアクションの間に位置する、決定論的ポリシー適用、ゼロトラストID、
-> 実行サンドボックス、および信頼性エンジニアリング。
->
-> **このツールキットではないもの：** モデルの安全性やプロンプトガードレールのツールではありません。
-> LLM の入出力フィルタリングやコンテンツモデレーションは行いません。アプリケーション層で
-> *エージェントのアクション*（ツール呼び出し、リソースアクセス、エージェント間通信）を
-> ガバナンスします。モデルレベルの安全性については、
-> [Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/) をご参照ください。
+!!! important
+
+    **パブリックプレビュー** — このリポジトリから公開されるすべてのパッケージは
+    **Microsoft 署名済みのパブリックプレビューリリース**です。プロダクション品質ですが、
+    GA（一般提供）前に破壊的変更が行われる可能性があります。フィードバックは
+    [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) からお寄せください。
+
+    **このツールキットとは：** ランタイムガバナンスインフラストラクチャ — エージェントフレームワークと
+    エージェントが実行するアクションの間に位置する、決定論的ポリシー適用、ゼロトラストID、
+    実行サンドボックス、および信頼性エンジニアリング。
+
+    **このツールキットではないもの：** モデルの安全性やプロンプトガードレールのツールではありません。
+    LLM の入出力フィルタリングやコンテンツモデレーションは行いません。アプリケーション層で
+    *エージェントのアクション*（ツール呼び出し、リソースアクセス、エージェント間通信）を
+    ガバナンスします。モデルレベルの安全性については、
+    [Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/) をご参照ください。
 
 AI エージェントのためのランタイムガバナンス — **OWASP Agentic リスク全10項目**を **13,000 以上のテスト**でカバーする唯一のツールキット。エージェントが*何を言うか*ではなく、*何をするか*をガバナンス — 決定論的ポリシー適用、ゼロトラストID、実行サンドボックス、SRE — **Python · TypeScript · .NET · Rust · Go**
 

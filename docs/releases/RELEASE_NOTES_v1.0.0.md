@@ -1,9 +1,10 @@
 # Agent Governance Toolkit v1.0.0
 
-> [!IMPORTANT]
-> **Community Preview Release** — This release is for testing and evaluation purposes only.
-> Packages published to PyPI are **not** official Microsoft-signed releases.
-> Official Microsoft-signed packages via ESRP Release will be available in a future release.
+!!! important
+
+    **Community Preview Release** — This release is for testing and evaluation purposes only.
+    Packages published to PyPI are **not** official Microsoft-signed releases.
+    Official Microsoft-signed packages via ESRP Release will be available in a future release.
 
 **The missing security layer for AI agents.** Runtime policy enforcement, identity mesh, execution sandboxing, and reliability engineering — in one toolkit.
 
