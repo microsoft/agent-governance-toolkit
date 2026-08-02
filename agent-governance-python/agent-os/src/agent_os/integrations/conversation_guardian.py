@@ -98,6 +98,11 @@ _HOMOGLYPH_MAP: dict[str, str] = {
 #
 # The result of this function is only ever matched against, never shown to a
 # user or stored, so stripping is always preferable to preserving.
+#
+# Deleting them is not sufficient on its own, though: deletion closes the gap
+# between two adjacent keywords and destroys the ``\b`` the patterns need, so
+# ``normalize_variants`` also produces a space-substituted variant and the
+# detectors match against both. See its docstring.
 _INVISIBLE_RANGES: tuple[tuple[int, int], ...] = (
     (0x00AD, 0x00AD),  # soft hyphen
     (0x034F, 0x034F),  # combining grapheme joiner
@@ -133,21 +138,16 @@ _INVISIBLE_CHARS = re.compile(
 )
 
 
-def normalize_text(text: str) -> str:
-    """Normalize text to defeat common evasion techniques.
+def _normalize(text: str, invisible_becomes: str) -> str:
+    """Normalize *text*, replacing invisible characters with *invisible_becomes*.
 
-    Handles: unicode homoglyphs, leetspeak, invisible characters (every
-    range in ``_INVISIBLE_RANGES``, not only the zero-width ones),
-    excessive whitespace, combining diacritics, fullwidth characters.
-
-    The return value is intended for matching only. It is lossy by design --
-    invisible characters are dropped rather than preserved -- so it must not be
-    stored or displayed in place of the original text.
+    Every step other than that replacement is shared by both variants; see
+    ``normalize_variants`` for why there are two.
     """
-    # Strip invisible characters (see _INVISIBLE_RANGES). This has to run before
-    # the compatibility decomposition below, which does not remove them, and one
-    # of them mid-word is enough to defeat every word-anchored pattern here.
-    text = _INVISIBLE_CHARS.sub("", text)
+    # Handle invisible characters (see _INVISIBLE_RANGES) before the
+    # compatibility decomposition below, which does not remove them, and one of
+    # them mid-word is enough to defeat every word-anchored pattern here.
+    text = _INVISIBLE_CHARS.sub(invisible_becomes, text)
 
     # NFKD decomposition (handles fullwidth, compatibility chars)
     text = unicodedata.normalize("NFKD", text)
@@ -165,6 +165,50 @@ def normalize_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
 
     return text
+
+
+def normalize_text(text: str) -> str:
+    """Normalize text to defeat common evasion techniques.
+
+    Handles: unicode homoglyphs, leetspeak, invisible characters (every
+    range in ``_INVISIBLE_RANGES``, not only the zero-width ones),
+    excessive whitespace, combining diacritics, fullwidth characters.
+
+    The return value is intended for matching only. It is lossy by design --
+    invisible characters are dropped rather than preserved -- so it must not be
+    stored or displayed in place of the original text.
+
+    Deletion alone cannot resist both placements of an invisible character, so
+    the detectors do not use this function on its own; they match against every
+    variant from ``normalize_variants``, of which this is the first.
+    """
+    return _normalize(text, "")
+
+
+def normalize_variants(text: str) -> tuple[str, ...]:
+    """Return the normalized forms a pattern must be matched against.
+
+    Deleting an invisible character and replacing it with a space each defeat
+    one placement and create the other:
+
+    - *inside* a keyword, deletion restores the word (``priv​ilege`` ->
+      ``privilege``) while a space breaks it in two;
+    - *between* two keywords, deletion glues them and destroys the ``\\b`` the
+      patterns are anchored on (``privileges​impersonate`` ->
+      ``privilegesimpersonate``, so ``\\bimpersonat\\w*`` no longer matches),
+      while a space separates them.
+
+    Neither is the safe default, so both are produced and a pattern matching
+    any variant counts. That is fail-closed in the direction this module needs:
+    an evasion attempt is scored, and the cost is that a keyword an author
+    genuinely split with an invisible character is scored too.
+
+    The raw text is not included -- callers match it separately, since a
+    pattern may legitimately depend on characters normalization removes.
+    """
+    deleted = _normalize(text, "")
+    spaced = _normalize(text, " ")
+    return (deleted,) if spaced == deleted else (deleted, spaced)
 
 
 # ── Enums ────────────────────────────────────────────────────────────
@@ -401,18 +445,19 @@ class EscalationClassifier:
     def score_message(self, text: str) -> tuple[float, list[str]]:
         """Score a single message for escalation patterns.
 
-        Matches against both original and normalized text to catch
-        evasion while preserving regular detection.
+        Matches against the original text and every variant from
+        ``normalize_variants`` to catch evasion while preserving regular
+        detection.
 
         Returns:
             Tuple of (score in [0, 1], list of matched pattern descriptions).
         """
-        normalized = normalize_text(text)
+        candidates = (text, *normalize_variants(text))
         total = 0.0
         matched: list[str] = []
         for weight, patterns in _ESCALATION_PATTERNS:
             for pattern in patterns:
-                if pattern.search(text) or pattern.search(normalized):
+                if any(pattern.search(candidate) for candidate in candidates):
                     total += weight
                     matched.append(pattern.pattern)
         return min(total, 1.0), matched
@@ -539,18 +584,19 @@ class OffensiveIntentDetector:
     def score_message(self, text: str) -> tuple[float, list[str]]:
         """Score a message for offensive intent patterns.
 
-        Matches against both original and normalized text to catch
-        evasion while preserving regular detection.
+        Matches against the original text and every variant from
+        ``normalize_variants`` to catch evasion while preserving regular
+        detection.
 
         Returns:
             Tuple of (score in [0, 1], list of matched pattern descriptions).
         """
-        normalized = normalize_text(text)
+        candidates = (text, *normalize_variants(text))
         total = 0.0
         matched: list[str] = []
         for weight, patterns in _OFFENSIVE_PATTERNS:
             for pattern in patterns:
-                if pattern.search(text) or pattern.search(normalized):
+                if any(pattern.search(candidate) for candidate in candidates):
                     total += weight
                     matched.append(pattern.pattern)
         return min(total, 1.0), matched
@@ -1014,4 +1060,5 @@ __all__ = [
     "TranscriptEntry",
     "load_conversation_guardian_config",
     "normalize_text",
+    "normalize_variants",
 ]

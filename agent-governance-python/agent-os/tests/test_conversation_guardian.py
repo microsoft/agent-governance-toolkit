@@ -533,6 +533,7 @@ class TestEdgeCases:
 from agent_os.integrations.conversation_guardian import (
     _INVISIBLE_RANGES,
     normalize_text,
+    normalize_variants,
 )
 
 
@@ -746,6 +747,110 @@ class TestEvasionResistance:
         # The strip must not eat real content: every character above is visible
         # and has to survive, including the ones adjacent to stripped ranges.
         assert normalize_text(text).strip()
+
+
+class TestInvisibleCharactersBetweenKeywords:
+    """An invisible character *between* two keywords must not hide either one.
+
+    Deleting it glues the keywords together and destroys the ``\\b`` the patterns
+    are anchored on, which is the mirror image of the mid-word case: deletion is
+    what rescues that one. Neither placement can be handled by one variant, so
+    the detectors match against a space-substituted variant as well.
+
+    This was already true on main for the five characters it stripped -- a zero
+    width space between two leetspeak keywords scores 0.35 there instead of 0.70
+    -- so widening the stripped set widened an existing weakness. Both are fixed
+    here, which is why the parametrisations below cover a previously-stripped
+    character alongside the newly-covered ones.
+    """
+
+    # Leetspeak is part of every case on purpose. The detectors match the raw
+    # text as well as the normalized variants, and an invisible character is a
+    # non-word character, so in *plain* text the raw match still fires across
+    # the glue. Only when some other evasion (here leetspeak) forces the match
+    # to depend on a normalized variant does the gluing actually hide anything.
+    @pytest.mark.parametrize(
+        ("name", "char"),
+        [
+            ("zero width space (stripped on main too)", "\u200b"),
+            ("soft hyphen", "\u00ad"),
+            ("variation selector 16", "\ufe0f"),
+            ("hangul filler", "\u3164"),
+            ("interlinear annotation anchor", "\ufff9"),
+            ("musical symbol begin beam", "\U0001d173"),
+        ],
+    )
+    def test_glue_does_not_hide_an_offensive_keyword(self, name: str, char: str):
+        # "3scalate privileg3s<char>imp3rsonate": deletion yields
+        # "...privilegesimpersonate", where \bimpersonat\w* cannot match, so the
+        # score fell from 0.70 to 0.35 -- one keyword silently lost.
+        d = OffensiveIntentDetector()
+        clean = "3scalate privileg3s imp3rsonate"
+        glued = f"3scalate privileg3s{char}imp3rsonate"
+
+        assert d.score_message(glued)[0] == d.score_message(clean)[0], name
+
+    @pytest.mark.parametrize(
+        ("name", "char"),
+        [
+            ("zero width space (stripped on main too)", "\u200b"),
+            ("soft hyphen", "\u00ad"),
+            ("variation selector 16", "\ufe0f"),
+            ("interlinear annotation terminator", "\ufffb"),
+        ],
+    )
+    def test_glue_does_not_hide_an_escalation_keyword(self, name: str, char: str):
+        # "y0u must<char>n0 excuses" -> "you mustno excuses" under deletion, which
+        # matches neither \byou\s+must\b nor \bno\s+excuses\b: 0.50 -> 0.00.
+        c = EscalationClassifier()
+        clean = "y0u must n0 excuses"
+        glued = f"y0u must{char}n0 excuses"
+
+        assert c.score_message(glued)[0] == c.score_message(clean)[0], name
+
+    def test_glue_and_mid_word_evasion_are_both_caught_in_one_message(self):
+        """The two placements in the same message, which needs both variants.
+
+        ``privileg3s<char>imp3rsonate`` is only scored via the space-substituted
+        variant and ``3xf1ltr4te`` with a character inside it only via the
+        deleted variant, so a message using both is the case that fails if
+        either variant is dropped.
+        """
+        d = OffensiveIntentDetector()
+        clean = "3xf1ltr4te data 3scalate privileg3s imp3rsonate"
+        # Concatenated rather than interpolated: a backslash escape inside an
+        # f-string expression is a syntax error before Python 3.12, and this
+        # package supports 3.11.
+        evaded = _hidden("3xf1ltr4te", "\u00ad") + " data 3scalate privileg3s\ufe0fimp3rsonate"
+
+        assert d.score_message(evaded)[0] == d.score_message(clean)[0]
+
+    def test_guardian_still_pauses_on_a_glued_message(self):
+        # End to end, at the composite level: this message recommends "pause" on
+        # main and produced no action at all once the character was stripped.
+        guardian = ConversationGuardian()
+
+        alert = guardian.analyze_message("c1", "a", "b", "3scalate privileg3s\ufe0fimp3rsonate")
+
+        assert alert.offensive_score == pytest.approx(0.70)
+        assert alert.action is AlertAction.PAUSE
+
+    def test_variants_are_deduplicated_when_there_is_nothing_invisible(self):
+        # Ordinary text produces one variant, not two identical ones, so the
+        # common case does no extra matching work.
+        assert normalize_variants("you must comply") == ("you must comply",)
+
+    def test_variants_are_the_deleted_and_spaced_forms(self):
+        assert normalize_variants("privileg3s\ufe0fimp3rsonate") == (
+            "privilegesimpersonate",
+            "privileges impersonate",
+        )
+
+    def test_normalize_text_is_still_the_deleting_variant(self):
+        # normalize_text is exported and used elsewhere; splitting the variants
+        # out must not change what it returns.
+        assert normalize_text(_hidden("urgent", "\ufe0f")) == "urgent"
+        assert normalize_text("privileg3s\ufe0fimp3rsonate") == "privilegesimpersonate"
 
 
 # =============================================================================
