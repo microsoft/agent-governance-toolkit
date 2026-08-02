@@ -178,12 +178,9 @@ class McpAuthPolicy:
         entry = self._servers.get(server_name)
         if entry:
             if auth_method in entry.allowed_auth_methods:
-                # TLS check: parse the URL's scheme rather than testing
-                # for the literal "http://" prefix. Previously, a URL
-                # using `ftp://`, `ws://`, `gopher://`, or no scheme at
-                # all bypassed the require_tls gate because none of
-                # them start with "http://" — only `https://` and
-                # `wss://` represent actual TLS-secured transports.
+                # TLS check: the scheme is parsed and matched against the
+                # allowlist below, so only `https://` and `wss://` count as
+                # TLS-secured transports.
                 #
                 # The URL to check falls back to the one registered on the
                 # entry. `url` defaults to "" and the gate used to be skipped
