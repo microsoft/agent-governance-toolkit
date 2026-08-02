@@ -109,6 +109,67 @@ def test_session_sends_the_tool_call_and_the_current_counters() -> None:
     assert snapshot["envelope"]["budgets"]["tool_call_count"] == 3
 
 
+def test_session_matches_the_adapter_envelopes() -> None:
+    """One manifest has to bind paths that work through either seam.
+
+    The framework adapters send ``tool_result`` as a mapping and spread the
+    model request over top-level keys. If HostSession nested those differently,
+    a policy target that resolved for one caller would fail closed with a
+    missing-path error for the other.
+    """
+    control = _RecordingControl()
+    session = HostSession(control, agent_id="bot")
+
+    session.post_tool_call(tool_name="t", args={}, result="ok")
+    session.pre_model_call({"messages": [{"role": "user"}], "model": {"name": "m"}})
+
+    _point, post_tool_snapshot, _mode = control.calls[0]
+    assert post_tool_snapshot["tool_result"]["value"] == "ok"
+
+    _point, pre_model_snapshot, _mode = control.calls[1]
+    assert pre_model_snapshot["messages"] == [{"role": "user"}]
+    assert pre_model_snapshot["model"] == {"name": "m"}
+    assert "request" not in pre_model_snapshot
+
+
+def test_a_hook_body_cannot_replace_the_envelope() -> None:
+    """The envelope is host-asserted; policies trust it for identity and budgets.
+
+    If a body key could overwrite it, any caller passing an ``envelope`` field
+    would forge its own identity and reset the counters behind max_tool_calls
+    and max_tokens.
+    """
+    control = _RecordingControl()
+    session = HostSession(control, agent_id="bot", session_id="sess")
+    session.builder.record_tool_call(7)
+
+    session.evaluate("input", envelope={"budgets": {"tool_call_count": 0}})
+    session.pre_model_call(
+        {"messages": [], "envelope": {"agent": {"id": "ATTACKER"}}}
+    )
+
+    for _point, snapshot, _mode in control.calls:
+        assert snapshot["envelope"]["agent"]["id"] == "bot"
+        assert snapshot["envelope"]["budgets"]["tool_call_count"] == 7
+
+
+def test_pre_model_call_accepts_any_json_body() -> None:
+    """The signature advertises JsonValue, so no body may raise."""
+    control = _RecordingControl()
+    session = HostSession(control, agent_id="bot")
+
+    for body in (
+        {"intervention_point": "input", "messages": []},
+        {"self": 1, "messages": []},
+        {1: "x"},
+        "a bare string",
+        [{"role": "user"}],
+    ):
+        session.pre_model_call(body)
+
+    assert len(control.calls) == 5
+
+
 def test_session_covers_every_intervention_point() -> None:
     control = _RecordingControl()
     session = HostSession(control, agent_id="bot")

@@ -211,8 +211,11 @@ class SnapshotBuilder:
         self, intervention_point: str, **body: JsonValue
     ) -> dict[str, Any]:
         """Return a full snapshot: the envelope plus whatever the hook carries."""
-        snapshot: dict[str, Any] = {"envelope": self.envelope(intervention_point)}
-        snapshot.update(body)
+        snapshot: dict[str, Any] = dict(body)
+        # The envelope carries host-asserted identity, session and budget
+        # counters that policies trust. Write it last so no hook body can
+        # replace it and forge an identity or reset a budget.
+        snapshot["envelope"] = self.envelope(intervention_point)
         return snapshot
 
 def _with_decision(
@@ -325,7 +328,33 @@ class HostSession:
         return self.evaluate(InterventionPoint.INPUT, input={"body": body})
 
     def pre_model_call(self, request: JsonValue) -> InterventionPointResult:
-        return self.evaluate(InterventionPoint.PRE_MODEL_CALL, request=request)
+        # Emit the same top-level keys the framework adapters send (``model``,
+        # ``messages``, ``tools``) so one manifest binds paths that resolve
+        # through either seam. Read them out by name rather than spreading the
+        # caller's mapping, which would raise TypeError for a body carrying a
+        # key named after one of this method's parameters.
+        #
+        # Anything outside that set is folded into ``messages`` rather than
+        # dropped. The signature accepts any JSON, and provider request shapes
+        # differ (Anthropic puts instructions in ``system``, Gemini in
+        # ``contents``, Bedrock in ``inputText``); discarding them would hand
+        # the policy an empty request and allow prompt text nobody inspected.
+        canonical = ("model", "messages", "tools", "request_id")
+        body: dict[str, JsonValue] = {"model": {}, "messages": [], "tools": []}
+        if isinstance(request, dict):
+            for key in canonical:
+                if key in request:
+                    body[key] = request[key]
+            extras = {k: v for k, v in request.items() if k not in canonical}
+            if extras:
+                carried = body["messages"]
+                body["messages"] = [
+                    *(carried if isinstance(carried, list) else [carried]),
+                    extras,
+                ]
+        else:
+            body["messages"] = request
+        return self.evaluate(InterventionPoint.PRE_MODEL_CALL, **body)
 
     def post_model_call(self, response: JsonValue) -> InterventionPointResult:
         return self.evaluate(InterventionPoint.POST_MODEL_CALL, response=response)
@@ -353,7 +382,9 @@ class HostSession:
         return self.evaluate(
             InterventionPoint.POST_TOOL_CALL,
             tool_call={"name": tool_name, "args": args, "id": call_id or "call-1"},
-            tool_result=result,
+            # Same envelope the adapters emit, so ``$.tool_result.value`` resolves
+            # whichever seam the host went through.
+            tool_result={"value": result, "error": None, "duration_ms": None},
         )
 
     def output(self, content: JsonValue) -> InterventionPointResult:

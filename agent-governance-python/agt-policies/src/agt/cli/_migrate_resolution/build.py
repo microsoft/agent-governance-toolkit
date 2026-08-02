@@ -106,14 +106,28 @@ def resolve_manifest(
 
     merged_rules = merge_documents(docs_only)
 
-    bundle_path = bundle_dir or Path(tempfile.mkdtemp(prefix="agt_resolved_bundle_"))
-    rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
-
+    # Validate before materializing anything. Both guards below reject the
+    # chain, and creating the bundle first would leave an orphaned temp
+    # directory behind on every rejected migration.
     intervention_points = _collect_intervention_points(docs_only)
     if merged_rules and not _binds_legacy_rules(intervention_points):
         raise ResolutionError.invalid_governance(
             "governance rules must bind policy id 'agt_legacy_rules' at one or more intervention points"
         )
+    # The engine rejects a manifest with no intervention points
+    # ("at least one intervention point config is required"), so refuse here
+    # rather than reporting a successful migration and writing a manifest that
+    # cannot be loaded. A chain that binds nothing also governs nothing.
+    if not intervention_points:
+        raise ResolutionError.invalid_governance(
+            "no intervention points were declared across the governance chain; "
+            "add an 'intervention_points' block binding policy id "
+            "'agt_legacy_rules' to at least one point (for example 'input') "
+            "before migrating"
+        )
+
+    bundle_path = bundle_dir or Path(tempfile.mkdtemp(prefix="agt_resolved_bundle_"))
+    rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
 
     manifest: dict[str, Any] = {
         "agent_control_specification_version": ACS_VERSION,
