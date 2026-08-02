@@ -143,6 +143,24 @@ class TestTlsGateUsesTheConfiguredUrl:
         assert not result.allowed
         assert "requires TLS" in result.reason
 
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://user:s3cret@mcp.internal/finance",
+            "http://mcp.internal/finance?access_token=s3cret",
+            # No scheme, so the whole string would have been echoed verbatim.
+            "mcp.internal/finance?access_token=s3cret",
+        ],
+    )
+    def test_denial_reason_does_not_echo_the_url(self, url: str) -> None:
+        # `reason` is promoted to audit attributes (otel_audit_backend maps it
+        # to agt.audit.reason), and a server URL can carry a token in its
+        # userinfo or query string. The scheme alone explains the decision.
+        result = self._policy(url).check("finance", auth_method="mtls")
+        assert not result.allowed
+        assert "s3cret" not in result.reason
+        assert url not in result.reason
+
     @pytest.mark.parametrize("url", ["https://mcp.internal/finance", "wss://mcp.internal/ws"])
     def test_tls_configured_url_is_allowed(self, url: str) -> None:
         assert self._policy(url).check("finance", auth_method="mtls").allowed

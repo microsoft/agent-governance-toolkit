@@ -129,6 +129,12 @@ class McpAuthPolicy:
         connection will be encrypted -- so a TLS requirement cannot be
         considered satisfied. Callers decide whether to invoke this at all for
         an empty URL.
+
+        The returned string never embeds the URL itself. It reaches
+        ``AuthCheckResult.reason``, which audit backends promote to attributes
+        (``otel_audit_backend`` maps it to ``agt.audit.reason``), and a server
+        URL can carry a token in its userinfo or query string. The scheme is
+        the only part needed to explain the decision, and it is not secret.
         """
         try:
             scheme = urlparse(url).scheme.lower()
@@ -136,9 +142,9 @@ class McpAuthPolicy:
             scheme = ""
         if scheme in TLS_SCHEMES:
             return None
-        if not scheme:
-            return f"URL {url!r} has no scheme, so TLS cannot be verified"
         allowlist = ", ".join(sorted(TLS_SCHEMES))
+        if not scheme:
+            return f"the URL has no scheme, so TLS cannot be verified (need {allowlist})"
         return f"URL scheme {scheme!r} is not in the TLS allowlist ({allowlist})"
 
     def check(self, server_name: str, auth_method: str, url: str = "") -> AuthCheckResult:
