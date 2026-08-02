@@ -27,91 +27,65 @@ _SECRET_GROUP = "secret"
 
 # Characters that terminate an unquoted value, as a character-class body.
 #
-# A JSON or YAML value ends at a structural character. A connection-string value
-# is delimited only by ``;``, so a comma or a brace inside one is an ordinary
-# password character and must not end the match.
-_JSON_VALUE_END = r"\s,;}\]"
-_CONNECTION_VALUE_END = r"\s;"
+# Only whitespace and ``;`` end a value, which is what ``main`` used and what the
+# syntaxes actually guarantee. A comma or a closing brace is *not* here: an
+# earlier revision of this patch added ``,}]``, and that lost whole values
+# instead of trailing characters -- ``token=ab,cdefghijkl`` and ``Password=abc}``
+# passed through, both redacted on ``main`` -- because a value *containing* one
+# of those characters ended early and fell under the length floor. Where they are
+# structural they are excluded from the last character of the value instead; see
+# ``_STRUCTURAL``.
+_VALUE_END = r"\s;"
+
+# Structural characters a bare value may contain but must not *end* on, as a
+# character-class body.
+#
+# An unquoted value in a JSON or YAML flow mapping runs up to the delimiter that
+# closes it (``{"password": hunter2}``), and redacting that delimiter along with
+# the value turns a redaction into a parse failure. Excluding it from the value's
+# last character rather than from the class throughout is what keeps a value that
+# *contains* one intact: the regex backtracks to end one character earlier, so
+# only the delimiter is given up, never the value.
+#
+# A quote is here for the same reason: it closes the value rather than belonging
+# to it, and a redaction that eats the closing quote of a JSON string is exactly
+# the parse failure ``_SECRET_GROUP`` exists to avoid. Without it, a value under
+# the length floor reached the floor by *borrowing* its own quotes on
+# backtracking, so ``{"api_key": "abc"}`` matched as the six-character
+# ``"abc"}``. Both ends need it: a quote is excluded from the first character of
+# a bare value too, so the group cannot grow leftwards into one either.
+#
+# For a keyword that also appears in a connection string this is a *preference*
+# rather than a rule -- see ``allow_structural_end``. There, ``;`` is the only
+# separator, so a brace is an ordinary password character and ``Password=abc}``
+# is a four-character password, not a three-character one inside a brace. Which
+# syntaxes a keyword is written in is a property of the pattern, fixed by its
+# author -- unlike the value-shape exemptions this patch used to have, which
+# whoever wrote the value could choose.
+_STRUCTURAL = r",}\]\"'"
 
 
-def _not_a_literal(value_end: str, *, numeric: bool) -> str:
-    """Build the guard that keeps a literal from being read as a secret.
+def _separator(*, colon_floor: int | None = None) -> str:
+    """Build the ``:``/``=`` separator.
 
-    ``"secret"`` and ``"token"`` name plenty of non-secret fields, so a keyword
-    pattern would otherwise match benign settings like ``{"secret": false}`` --
-    a common visibility flag -- and the value class would then consume the
-    following comma.
+    Neither spelling exempts anything by the *shape* of its value. An earlier
+    revision of this patch exempted the literals ``true``/``false``/``null`` and
+    bare numbers, and values that were wholly an interpolation reference
+    (``${VAR}``, ``{{var}}``, ``%VAR%``), to keep benign config out of the
+    output. Review showed why an egress redactor cannot afford either: the
+    exemption is chosen by whoever writes the value, so a tool on the far side
+    of the MCP boundary walks a secret past the gate by wrapping it
+    (``password=${DB_PASS:-S3cr3tHunter22}``, ``api_key=%Actual_Secret_123%``)
+    or by shaping it (``token: 738291046512``). The failure direction here has
+    to be over-redaction, so both guards are gone: a ``${VAR}`` reference in
+    tool output is redacted, which costs a reader some context and leaks
+    nothing.
 
-    Args:
-        value_end: Character-class body for the delimiters that end a value.
-            This must be the same set the value class stops at: the guard only
-            rejects a literal that is the *whole* value, and it can only tell
-            where the value ends by the same rule the value itself uses. When
-            the two drifted apart, a value ending at a delimiter the guard did
-            not know about was matched while the same value at end-of-string was
-            not (``Password=12345678;`` redacted, ``Password=12345678`` leaked).
-        numeric: Whether a bare number counts as a literal. True for the
-            identifier-ish keywords (``token``, ``secret``, ``api_key``), whose
-            value is as likely to be an ID, a count or an expiry as a secret.
-            False for ``password`` and the key-material keywords, where a
-            digit-only value is a digit-only secret.
-
-    Returns:
-        A negative-lookahead pattern string, to be placed after the separator.
+    The length floors, not a value-shape guard, are what keep ordinary settings
+    out: ``false``, ``true``, ``null`` and ``none`` are all shorter than the
+    6-character floor on the generic keywords, so ``{"secret": false}`` does not
+    match for want of length.
     """
-    literals = r"true|false|null|none"
-    if numeric:
-        literals += r"|[+-]?[\d.]+"
-    return rf"(?!(?:{literals})\s*(?:[{value_end}]|$))"
-
-
-def _not_an_interpolation_reference(value_end: str) -> str:
-    """Build the guard that exempts a value that is *wholly* an unexpanded reference.
-
-    ``"api_key": "${MCP_API_KEY}"`` is the config that reads a credential at
-    startup: it names one without containing one. Redacting it destroys the
-    reference and reports a leak that did not happen, which costs someone a
-    rotation.
-
-    Args:
-        value_end: Character-class body for the delimiters that end a value --
-            the same set the value class stops at, for the same reason
-            :func:`_not_a_literal` needs it. The guard exempts a reference only
-            when it is the *whole* value, and it can only tell where the value
-            ends by the rule the value itself uses. Hard-coding the JSON
-            delimiters here made ``Password=${DB_PASS},suffix`` read as wholly
-            a reference and skipped it, because in a connection string the
-            comma is an ordinary password character and the value runs on.
-
-    Returns:
-        A negative-lookahead pattern string, to be placed after the separator.
-    """
-    reference = r"\$\{[^{}]*\}|\{\{[^{}]*\}\}|%[A-Za-z_][A-Za-z0-9_]*%"
-    return rf"(?![\"']?(?:{reference})[\"']?(?:[{value_end}]|$))"
-
-
-def _separator(
-    value_end: str, *, numeric_is_literal: bool, colon_floor: int | None = None
-) -> str:
-    """Build the ``:``/``=`` separator, applying the numeric guard to ``:`` only.
-
-    A bare number is a *typed* number only where the syntax has a number type.
-    ``{"token": 12345678}`` and ``token: 3600`` are JSON and YAML integers, and
-    reading either as a credential is a false positive. ``token=12345678`` is
-    not: in an environment variable, a connection string or a query string
-    every value is a string, so a digit run there is a digit-only secret.
-
-    Guarding both separators alike is what made the same secret redact in one
-    spelling and leak in another -- ``token="12345678"`` redacted while
-    ``token=12345678`` did not -- which contradicts the invariant
-    ``test_one_secret_is_found_in_every_spelling`` asserts. Quoting already
-    settles the JSON case: a quoted digit run is a string by construction and
-    reaches the quoted branches, which this guard never sees.
-    """
-    # ``true``/``false``/``null`` are not credentials under either separator,
-    # so that half of the guard applies to both. Only the numeric half is
-    # specific to the syntaxes that have a number type.
-    word_guard = _not_a_literal(value_end, numeric=False)
     # A floor that applies to the ``:`` spelling only. ``password`` needs a low
     # floor for ``Password=1234``, but ``:`` is also how Python annotates a
     # parameter, so the same floor let source text match: in
@@ -119,21 +93,9 @@ def _separator(
     # characters and the line tail was redacted. A connection string is written
     # with ``=``, so raising the floor for ``:`` costs no real spelling.
     colon_floor_guard = (
-        "" if colon_floor is None else rf"(?=[\"']?[^{value_end}]{{{colon_floor},}})"
+        "" if colon_floor is None else rf"(?=[\"']?[^{_VALUE_END}]{{{colon_floor},}})"
     )
-    colon = rf":\s*{colon_floor_guard}"
-    # An interpolation reference is not a secret under either separator: an
-    # env-file line is written ``API_KEY=${MY_KEY}`` as often as a YAML one is
-    # written ``api_key: ${MY_KEY}``. Like the literal guard, it has to end the
-    # value by the caller's rule, not by the JSON one.
-    reference_guard = _not_an_interpolation_reference(value_end)
-    colon_guard = word_guard if not numeric_is_literal else _not_a_literal(
-        value_end, numeric=True
-    )
-    return (
-        rf"(?:{colon}{reference_guard}{colon_guard}"
-        rf"|=\s*{reference_guard}{word_guard})"
-    )
+    return rf"(?::\s*{colon_floor_guard}|=\s*)"
 
 
 def _keyword_value(
@@ -141,9 +103,8 @@ def _keyword_value(
     floor: int,
     value_class: str | None = None,
     *,
-    value_end: str = _JSON_VALUE_END,
-    numeric_is_literal: bool = True,
     colon_floor: int | None = None,
+    allow_structural_end: bool = False,
 ) -> str:
     """Build a ``keyword <sep> value`` pattern whose value is a capture group.
 
@@ -155,55 +116,70 @@ def _keyword_value(
             one group is enough. When omitted the value is matched in three
             alternatives instead, so a *quoted* secret may contain the
             delimiters an unquoted one has to stop at: a quoted value runs to
-            its own closing quote, while a bare one stops at ``value_end``.
-        value_end: Character-class body for the delimiters an unquoted value
-            stops at. Also drives the literal guard, so the two cannot drift.
-        numeric_is_literal: Passed to :func:`_not_a_literal`.
+            its own closing quote, while a bare one stops at ``_VALUE_END``.
         colon_floor: Optional larger floor for the ``:`` spelling only, for a
             keyword whose ``=`` form needs a floor too low to distinguish a
             short secret from source text. See :func:`_separator`.
+        allow_structural_end: Whether a bare value may end on ``,}]`` when that
+            is the only way it can match at all. False keeps the delimiter out of
+            the redacted span unconditionally. True adds a lower-preference
+            fallback for a keyword that also appears in a syntax where those
+            characters are ordinary value characters -- ``password`` is written
+            both as a JSON field and in a connection string, so ``hunter2}`` has
+            to give the brace back in ``{"password": hunter2}`` and keep it in
+            ``Password=abc}``. See ``_STRUCTURAL``.
 
     Returns:
         A pattern string with the secret captured in a ``secret*`` group.
     """
     # An optional quote before the separator: in ``"api_key": "..."`` the
     # closing quote of the *key* falls between the keyword and the separator.
-    sep = _separator(
-        value_end, numeric_is_literal=numeric_is_literal, colon_floor=colon_floor
-    )
+    sep = _separator(colon_floor=colon_floor)
     head = rf"(?i)(?<![A-Za-z0-9]){keywords}[\"']?\s*{sep}"
     if value_class is not None:
         return rf"{head}[\"']?(?P<{_SECRET_GROUP}_bare>{value_class}{{{floor},}})"
-    # The unquoted branch excludes a quote only as its *first* character, which
-    # is what actually distinguishes it from the quoted branches. Excluding
-    # quotes throughout meant an apostrophe inside a connection-string password
-    # ended the value: ``Password=abcd'efgh`` leaked the ``'efgh`` tail, and
-    # ``Password=ab'cdefgh`` fell below the length floor and leaked entirely.
-    #
-    # ``(?<![,}\]])`` keeps the match from *ending* on a structural character
-    # while still allowing one inside the value. Where ``value_end`` already
-    # excludes them it is a no-op; where it does not (a connection string, whose
-    # only field separator is ``;``), it stops an unquoted value in a YAML flow
-    # mapping from consuming the delimiter that closes it and turning a redaction
-    # into a parse failure. A password whose last character really is ``,`` loses
-    # that one character from the redaction, which is not a meaningful leak.
     # The quoted classes exclude a newline as well as their own delimiter. A
     # JSON or YAML string cannot contain a raw newline, so a quote that is not
     # closed on its own line is an unterminated quote rather than the start of a
     # very long value. Without ``\n`` a stray opening quote consumed the
     # following lines and redacted them as one secret.
     #
-    # The bare branch's leading quote is *optional*, not excluded. Excluding it
-    # meant an unterminated quote matched nothing at all and the secret leaked
-    # in full (``api_key="SECRET`` with no closing quote), where the earlier
-    # ``[\"']?`` handled it. The quoted branches are tried first, so a properly
-    # terminated value still matches them and keeps its quotes outside the
-    # redacted span; the bare branch only takes over when they fail.
+    # The bare branch keeps its optional leading quote *outside* the capture
+    # group. Dropping it altogether meant an unterminated quote matched nothing
+    # at all and the secret leaked in full (``api_key="SECRET`` with no closing
+    # quote). The quoted branches are tried first, so a properly terminated value
+    # still matches them; the bare branch only takes over when they fail.
+    #
+    # Structural characters are excluded from the group's first and last
+    # character but not from the middle, which is what distinguishes a delimiter
+    # from a value character at the same offset. Excluding them throughout meant
+    # an apostrophe inside a connection-string password ended the value
+    # (``Password=abcd'efgh`` leaked the ``'efgh`` tail) or dropped it under the
+    # floor entirely (``Password=ab'cdefgh``). Not excluding them at the ends
+    # meant the group reached the floor by *borrowing* the delimiters around it:
+    # ``{"api_key": "abc"}``, three characters long and untouched here before,
+    # matched as the six-character ``"abc"}`` and took the closing brace with it.
+    #
+    # Written as first + middle + last rather than as a lookaround, because a
+    # lookaround that rejects the alternative cannot *shorten* a match -- the
+    # value ended early, fell under the floor, and leaked in full. Spelled this
+    # way the engine backtracks into the middle run and gives the delimiter back
+    # one character at a time, so a value that merely *contains* one keeps it.
+    bare = rf"[^{_VALUE_END}]"
+    edge = rf"[^{_VALUE_END}{_STRUCTURAL}]"
+    bare_value = rf"{edge}{bare}{{{floor - 2},}}{edge}"
+    if allow_structural_end:
+        # Second, and only reachable when the first cannot match anywhere in the
+        # value: a connection-string password really may end on a brace, since
+        # ``;`` is that syntax's only delimiter. Ordered after the first, so where
+        # both could apply -- ``{"password": hunter2}`` -- the brace is still
+        # given back.
+        bare_value = rf"(?:{bare_value}|{edge}{bare}{{{floor - 1},}})"
     return (
         rf"{head}"
         rf"(?:\"(?P<{_SECRET_GROUP}_dq>[^\"\n]{{{floor},}})\""
         rf"|'(?P<{_SECRET_GROUP}_sq>[^'\n]{{{floor},}})'"
-        rf"|[\"']?(?P<{_SECRET_GROUP}_bare>[^{value_end}]{{{floor},}})(?<![,}}\]]))"
+        rf"|[\"']?(?P<{_SECRET_GROUP}_bare>{bare_value}))"
     )
 
 
@@ -216,6 +192,13 @@ def _secret_span(match: re.Match[str]) -> tuple[int, int]:
 
     Falls back to the whole match, which is correct for the prefix-anchored
     patterns (``ghp_...``, ``AKIA...``) where the match *is* the secret.
+
+    The group is exactly the span to redact, with no adjustment here: the
+    delimiters a bare value must not end on are excluded by the pattern itself
+    (see ``_STRUCTURAL``), and quotes are outside the group. Both have to hold in
+    the pattern rather than be fixed up afterwards, because the length floor
+    counts what the group captured -- a span this function shortened would be one
+    the floor never applied to.
     """
     groups = match.re.groupindex
     for name in _SECRET_GROUPS:
@@ -333,14 +316,12 @@ class CredentialRedactor:
                 _keyword_value(
                     r"(?:password|passphrase|pwd|accountkey|sharedaccesssignature)",
                     4,
-                    # A connection string separates fields with ``;`` only, and a
-                    # password is free to contain a comma, a brace or a quote.
-                    value_end=_CONNECTION_VALUE_END,
-                    # "password = 12345678" is a bad password, not a non-secret.
-                    numeric_is_literal=False,
                     # ``:`` is also Python's annotation separator, and floor 4
                     # matched ``password: str):`` in a function signature.
                     colon_floor=8,
+                    # These keywords are written in connection strings too, where
+                    # ``}`` and ``,`` are ordinary password characters.
+                    allow_structural_end=True,
                 )
             ),
         ),

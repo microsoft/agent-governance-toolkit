@@ -510,31 +510,24 @@ def test_detects_azure_account_key_in_the_json_spelling():
         "topsecret=abcdefghijkl",
         # A separator with nothing after it.
         '{"password":}',
-        # "secret" and "token" name plenty of non-secret fields. A literal or a
-        # bare number is not a credential, and matching one also swallowed the
-        # following comma.
+        # "secret" and "token" name plenty of non-secret fields, and the length
+        # floors are what keep the ordinary ones out -- not a guard on the shape
+        # of the value, which whoever writes the value could satisfy on purpose.
+        # ``false``, ``true``, ``null`` and ``none`` are all under the 6-character
+        # generic floor. A *number* is not exempt: see
+        # ``test_a_value_is_not_exempted_by_its_shape``.
         '{"secret": false}',
         '{"secret": false, "keep": 1}',
         '{"token": true}',
         '{"secret": null}',
-        '{"token": 12345678}',
         '{"expires_token": -1}',
         "token: null",
-        "password = false",
         # ``:`` is also Python's annotation separator. The connection-string
         # floor of 4 exists for ``Password=1234``, but with ``:`` it let a
         # function signature match and redacted the tail of the line.
         "def authenticate_user(username: str, password: str):",
         "def f(self, token: str) -> None:",
         "    api_key: str",
-        # A value that is wholly an unexpanded reference names a credential
-        # without containing one. Redacting it destroys the reference and
-        # reports a leak that did not happen.
-        '"API_KEY": "${MCP_API_KEY}"',
-        'api_key: "{{ vault_key }}"',
-        "api_key=${MY_KEY}",
-        "password=%DB_PASS%",
-        '{"token": "${GITHUB_TOKEN}", "keep": 1}',
     ],
 )
 def test_keyword_patterns_still_avoid_false_positives(text: str):
@@ -545,22 +538,58 @@ def test_keyword_patterns_still_avoid_false_positives(text: str):
 @pytest.mark.parametrize(
     "text",
     [
-        # Only a value that is *wholly* a reference is exempt. A secret is not
-        # laundered by wrapping part of it to look like one.
+        # An unexpanded reference names a credential rather than containing one,
+        # so exempting it reads as harmless. It is not, on this path: the value
+        # arrives from the far side of the MCP boundary, so a tool that wants a
+        # secret past the gate only has to wrap it in the exempt shape. Every one
+        # of these carries a real secret in a shape an earlier revision of this
+        # patch treated as a reference and skipped entirely.
+        "password=${DB_PASS:-" + _FAKE_SECRET_VALUE + "}",
+        "api_key=%" + _FAKE_SECRET_VALUE + "%",
+        'api_key: "{{ ' + _FAKE_SECRET_VALUE + ' }}"',
+        # Shaping the value works the same way: a bare number was exempt as a
+        # non-credential, and a numeric password or account id is a credential.
+        "token: 738291046512",
+        "password=1234567890123456",
+    ],
+)
+def test_a_value_is_not_exempted_by_its_shape(text: str):
+    redacted = CredentialRedactor.redact(text)
+
+    assert redacted != text
+    assert _FAKE_SECRET_VALUE not in redacted
+    assert CredentialRedactor.contains_credentials(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The cost of dropping that exemption, stated rather than hidden: a
+        # reference with no secret in it is redacted too. Over-redaction is the
+        # direction this module has to fail in -- a reader loses the variable
+        # name, and nothing leaks.
+        '"API_KEY": "${MCP_API_KEY}"',
+        "api_key=${MY_KEY}",
+        "password=%DB_PASS%",
+        "Password=${DB_PASS};Server=db",
+    ],
+)
+def test_an_unexpanded_reference_is_redacted_too(text: str):
+    assert CredentialRedactor.redact(text) != text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
         'api_key: "${MCP_API_KEY}' + _FAKE_SECRET_VALUE + '"',
         'api_key: "prefix${X}' + _FAKE_SECRET_VALUE + '"',
         'api_key: "{not-a-reference-' + _FAKE_SECRET_VALUE + '"',
-        # The reference guard has to end the value by the *caller's* rule. A
-        # connection-string value is delimited by ``;`` only, so a comma or a
-        # brace after the reference is part of the value and the whole thing is
-        # not a reference. Hard-coding the JSON delimiters in the guard let
-        # these read as wholly a reference and skipped them entirely.
         "Password=${DB_PASS},suffix",
         "Password=${DB_PASS}}real",
         "password: ${DB_PASS},tail",
     ],
 )
-def test_a_reference_prefix_does_not_exempt_a_real_secret(text: str):
+def test_a_reference_prefix_does_not_hide_a_real_secret(text: str):
     redacted = CredentialRedactor.redact(text)
 
     assert _FAKE_SECRET_VALUE not in redacted
@@ -568,17 +597,35 @@ def test_a_reference_prefix_does_not_exempt_a_real_secret(text: str):
 
 
 @pytest.mark.parametrize(
-    "text",
+    ("text", "expected"),
     [
-        # Wholly a reference under the connection-string rule too: the value
-        # ends at ``;`` or at end-of-string, not at a comma.
-        "Password=${DB_PASS}",
-        "Password=${DB_PASS};Server=db",
-        "password: ${DB_PASS}",
+        # A bare value in a JSON or YAML flow mapping runs up to the delimiter
+        # that closes it, and taking the delimiter into the redaction turns a
+        # redaction into a parse failure. The value is what gets redacted; the
+        # delimiter stays.
+        ('{"password": hunter2xyz}', '{"password": ' + REDACTED_PLACEHOLDER + "}"),
+        (
+            '{"password": hunter2xyz, "keep": 1}',
+            '{"password": ' + REDACTED_PLACEHOLDER + ', "keep": 1}',
+        ),
+        ("[api_key=abcdefghijkl]", f"[api_key={REDACTED_PLACEHOLDER}]"),
+        # A value that *contains* one of those characters keeps all of it. This
+        # is why the delimiter is excluded from the value's last character only:
+        # excluding it from the value class throughout made the value end early,
+        # fall under the length floor, and leak in full -- both of these are
+        # redacted on ``main`` and passed through on an earlier revision here.
+        ("token=ab,cdefghijkl", f"token={REDACTED_PLACEHOLDER}"),
+        ('{"token": "ab,cdefghijkl"}', '{"token": "' + REDACTED_PLACEHOLDER + '"}'),
+        # A connection string separates fields with ``;`` only, so here the brace
+        # is an ordinary password character and the password is four long. The
+        # same keyword has to give the brace back in the JSON spelling above, so
+        # ending on a delimiter is a fallback, not an alternative of equal rank.
+        ("Password=abc}", f"Password={REDACTED_PLACEHOLDER}"),
+        ("Password=ab,c;Server=db", f"Password={REDACTED_PLACEHOLDER};Server=db"),
     ],
 )
-def test_a_connection_string_reference_is_still_exempt(text: str):
-    assert CredentialRedactor.redact(text) == text
+def test_a_structural_delimiter_is_not_redacted_with_the_value(text: str, expected: str):
+    assert CredentialRedactor.redact(text) == expected
 
 
 # ── redaction replaces the value, not the key ─────────────────
