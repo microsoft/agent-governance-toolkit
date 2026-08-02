@@ -50,7 +50,7 @@ npm install @microsoft/agent-governance-sdk
 dotnet add package Microsoft.AgentGovernance
 ```
 
-<details>
+<details markdown>
 <summary>安裝單獨的 Python 套件</summary>
 
 ```bash

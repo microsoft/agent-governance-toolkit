@@ -1,4 +1,4 @@
-<div align="center">
+<div align="center" markdown>
 
 # Agent OS — Public Preview
 
@@ -72,7 +72,7 @@
 | **OpenAI Agents SDK** | — | 📦 Published on PyPI | [agentmesh-openai-agents-trust](https://pypi.org/project/agentmesh-openai-agents-trust/) |
 | **OpenClaw** | — | 📦 Published on ClawHub | [agentmesh-governance](https://clawhub.ai/microsoft/agentmesh-governance) |
 
-<details>
+<details markdown>
 <summary><b>📋 Proposals under review at 10+ frameworks (click to expand)</b></summary>
 
 | Framework | Stars | Proposal |
@@ -177,7 +177,7 @@ That's it! Your agent now has deterministic policy enforcement. [Learn more →]
 git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python examples/maf-integration/01-loan-processing/python/main.py
 ```
 
-<details>
+<details markdown>
 <summary><b>📋 More examples (click to expand)</b></summary>
 
 ### Policy enforcement with custom rules
@@ -1150,7 +1150,7 @@ MIT — See [LICENSE](LICENSE)
 
 ---
 
-<div align="center">
+<div align="center" markdown>
 
 **Exploring kernel concepts for AI agent safety.**
 

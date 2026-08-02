@@ -1,4 +1,4 @@
-<div align="center">
+<div align="center" markdown>
 
 # 🛡️ OWASP MCP Top 10 — Compliance Mapping
 
@@ -397,7 +397,7 @@ Three MCP risks have partial coverage today with planned enhancements targeting 
 
 ---
 
-<div align="center">
+<div align="center" markdown>
 
 *Last updated: April 2026 · OWASP MCP Top 10 v0.1 (Phase 3 Beta)*
 

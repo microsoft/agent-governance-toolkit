@@ -1,4 +1,4 @@
-<div align="center">
+<div align="center" markdown>
 
 # Agent Governance
 
@@ -137,14 +137,14 @@ pip install agent-governance-toolkit[sre]
 
 ### Star the ecosystem
 
-<p align="center">
+<div align="center" markdown>
 
 [![Agent OS Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20OS&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![AgentMesh Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=AgentMesh&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![Agent Runtime Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20Runtime&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![Agent SRE Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20SRE&style=social)](https://github.com/microsoft/agent-governance-toolkit)
 
-</p>
+</div>
 
 ---
 
@@ -265,7 +265,7 @@ MIT — see [LICENSE](../../LICENSE) for details.
 
 ---
 
-<div align="center">
+<div align="center" markdown>
 
 **[github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)** · **[Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)** · **[GitHub](https://github.com/microsoft/agent-governance-toolkit)**
 

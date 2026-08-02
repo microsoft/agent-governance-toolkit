@@ -1,4 +1,4 @@
-<div align="center">
+<div align="center" markdown>
 
 # NSA MCP Security Considerations — Compliance Mapping
 

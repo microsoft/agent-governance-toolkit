@@ -67,7 +67,7 @@ cargo add agentmesh
 cargo add agentmesh-mcp
 ```
 
-<details>
+<details markdown>
 <summary>個別の Python パッケージをインストール</summary>
 
 ```bash

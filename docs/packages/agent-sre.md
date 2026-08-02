@@ -1,4 +1,4 @@
-<div align="center">
+<div align="center" markdown>
 
 # Agent SRE
 
@@ -654,7 +654,7 @@ MIT — See [LICENSE](LICENSE) for details.
 
 ---
 
-<div align="center">
+<div align="center" markdown>
 
 **Observability tells you what happened. Agent SRE tells you if it was within budget.**
 
