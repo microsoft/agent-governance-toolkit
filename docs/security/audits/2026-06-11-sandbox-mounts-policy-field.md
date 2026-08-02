@@ -6,7 +6,7 @@ PR: [microsoft/agent-governance-toolkit#2951](https://github.com/microsoft/agent
 
 This PR adds a **`sandbox_mounts` extension field** to the canonical
 `PolicyDocument` schema in
-[`agent-governance-python/agent-os/src/agent_os/policies/schema.py`](../../../agent-governance-python/agent-os/src/agent_os/policies/schema.py)
+`agent-governance-python/agent-os/src/agent_os/policies/schema.py`
 so the new MXC (`MxcSandboxProvider`) backend — and the existing Docker,
 Hyperlight, and ACA providers — can read filesystem mount configuration
 from a single canonical policy document instead of from out-of-band

@@ -22,29 +22,49 @@ from agent_compliance.policy_test import (
 
 
 def _write_policy(tmp_path: Path, *, default_action: str = "deny") -> Path:
-    """Write a minimal policy YAML and return its path."""
+    """Write a minimal native ACS manifest and Rego bundle."""
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    bundle = bundle_dir / "policy.rego"
+    bundle.write_text(
+        textwrap.dedent(
+            f"""\
+            package test.policy
+
+            import rego.v1
+
+            action := object.get(input.policy_target.value, "action", "")
+
+            result := {{"decision": "allow", "reason": "allow-reads"}} if action == "read"
+            result := {{"decision": "deny", "reason": "deny-writes", "message": "Writes are blocked"}} if action == "write"
+            result := {{"decision": "warn", "reason": "audit-list"}} if action == "list"
+            result := {{"decision": "{default_action}", "reason": "default-{default_action}"}} if not action in {{"read", "write", "list"}}
+            """
+        ),
+        encoding="utf-8",
+    )
     policy = tmp_path / "policy.yaml"
     policy.write_text(
-        textwrap.dedent(f"""\
-        version: "1.0"
-        name: test-policy
-        rules:
-          - name: allow-reads
-            condition: {{field: action, operator: eq, value: read}}
-            action: allow
-            priority: 90
-          - name: deny-writes
-            condition: {{field: action, operator: eq, value: write}}
-            action: deny
-            priority: 80
-            message: "Writes are blocked"
-          - name: audit-list
-            condition: {{field: action, operator: eq, value: list}}
-            action: audit
-            priority: 70
-        defaults:
-          action: {default_action}
-        """)
+        textwrap.dedent(
+            """\
+            agent_control_specification_version: 0.3.1-beta
+            metadata:
+              name: test-policy
+              version: "1.0"
+            extends: []
+            policies:
+              test_policy:
+                type: rego
+                bundle: bundle
+                query: data.test.policy.result
+            intervention_points:
+              input:
+                policy_target: $.input.body
+                policy:
+                  id: test_policy
+            """
+        ),
+        encoding="utf-8",
     )
     return policy
 
@@ -150,24 +170,6 @@ class TestReplay:
         assert mismatch.expected_verdict == "allow"
         assert mismatch.actual_verdict == "deny"
 
-    def test_rule_mismatch(self, tmp_path: Path) -> None:
-        policy = _write_policy(tmp_path)
-        fixtures = _write_fixtures_json(
-            tmp_path,
-            [
-                {
-                    "id": "wrong-rule",
-                    "input": {"action": "read"},
-                    "expected_verdict": "allow",
-                    "expected_rule": "nonexistent-rule",
-                },
-            ],
-        )
-        report = replay(policy, fixtures)
-        assert not report.ok
-        assert report.mismatches[0].expected_rule == "nonexistent-rule"
-        assert report.mismatches[0].actual_rule == "allow-reads"
-
     def test_expected_allowed_boolean(self, tmp_path: Path) -> None:
         policy = _write_policy(tmp_path)
         fixtures = _write_fixtures_json(
@@ -185,7 +187,7 @@ class TestReplay:
         policy = _write_policy(tmp_path)
         fixtures = _write_fixtures_json(
             tmp_path,
-            [{"id": "audit-ok", "input": {"action": "list"}, "expected_verdict": "audit"}],
+            [{"id": "audit-ok", "input": {"action": "list"}, "expected_verdict": "warn"}],
         )
         report = replay(policy, fixtures)
         assert report.ok
@@ -207,8 +209,8 @@ class TestReplay:
             tmp_path,
             [{"id": "read-ok", "input": {"action": "read"}, "expected_verdict": "allow"}],
         )
-        report = replay(policy_dir, fixtures)
-        assert report.ok
+        with pytest.raises(FileNotFoundError, match="Manifest path"):
+            replay(policy_dir, fixtures)
 
     def test_fixture_dir(self, tmp_path: Path) -> None:
         policy = _write_policy(tmp_path)
@@ -220,11 +222,94 @@ class TestReplay:
         report = replay(policy, fixture_dir)
         assert report.ok
 
+    def test_missing_expectation_raises(self, tmp_path: Path) -> None:
+        policy = _write_policy(tmp_path)
+        fixtures = _write_fixtures_json(
+            tmp_path,
+            [{"id": "missing-expectation", "input": {"action": "read"}}],
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="fixture 'missing-expectation'.*must define expected_verdict",
+        ):
+            replay(policy, fixtures)
+
+    @pytest.mark.parametrize(
+        "expectation",
+        [
+            {"expected_verdict": None},
+            {"expected_action": None},
+            {"expected_allowed": None},
+            {"expected_verdict": ""},
+            {"expected_action": ""},
+        ],
+    )
+    def test_null_expectation_raises(
+        self, tmp_path: Path, expectation: dict[str, object]
+    ) -> None:
+        policy = _write_policy(tmp_path)
+        fixtures = _write_fixtures_json(
+            tmp_path,
+            [{"id": "null-expectation", "input": {"action": "read"}, **expectation}],
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="fixture 'null-expectation'.*must define expected_verdict",
+        ):
+            replay(policy, fixtures)
+
+    def test_empty_fixture_file_raises(self, tmp_path: Path) -> None:
+        policy = _write_policy(tmp_path)
+        fixtures = tmp_path / "fixtures.json"
+        fixtures.write_text("[]")
+
+        with pytest.raises(ValueError, match="No fixtures found"):
+            replay(policy, fixtures)
+
+    def test_malformed_fixture_in_mixed_suite_raises(self, tmp_path: Path) -> None:
+        policy = _write_policy(tmp_path)
+        fixtures = _write_fixtures_json(
+            tmp_path,
+            [
+                {
+                    "id": "valid",
+                    "input": {"action": "read"},
+                    "expected_verdict": "allow",
+                },
+                {"id": "malformed", "input": {"action": "write"}},
+            ],
+        )
+
+        with pytest.raises(ValueError, match="fixture 'malformed'"):
+            replay(policy, fixtures)
+
+    @pytest.mark.parametrize("invalid_fixture", ["not-an-object", 42, None])
+    def test_non_object_fixture_raises(
+        self, tmp_path: Path, invalid_fixture: object
+    ) -> None:
+        policy = _write_policy(tmp_path)
+        fixtures = tmp_path / "fixtures.json"
+        fixtures.write_text(json.dumps([invalid_fixture]))
+
+        with pytest.raises(
+            ValueError,
+            match=r"fixture entry .* must be an object",
+        ):
+            replay(policy, fixtures)
+
 
 # ── Report ─────────────────────────────────────────────────────────────
 
 
 class TestReplayReport:
+    def test_empty_report_is_not_successful(self) -> None:
+        report = ReplayReport()
+
+        assert report.total == 0
+        assert report.ok is False
+
     def test_to_dict(self) -> None:
         report = ReplayReport(
             results=[
@@ -254,14 +339,10 @@ class TestReplayReport:
             passed=False,
             expected_verdict="allow",
             actual_verdict="deny",
-            expected_rule="my-rule",
-            actual_rule="other-rule",
         )
         summary = result.mismatch_summary()
         assert "allow" in summary
         assert "deny" in summary
-        assert "my-rule" in summary
-        assert "other-rule" in summary
 
 
 # ── Example fixture files ─────────────────────────────────────────────────

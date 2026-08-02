@@ -16,37 +16,6 @@ pip install "haystack-agentmesh[haystack]"
 
 ## Components
 
-### GovernancePolicyChecker
-
-Enforces governance policies loaded from YAML files. Checks tool allowlists/blocklists, content patterns, token limits, and rate limits.
-
-```python
-from haystack_agentmesh import GovernancePolicyChecker
-
-checker = GovernancePolicyChecker(policy_path="policy.yaml")
-result = checker.run(action="search", params={"query": "hello"}, agent_id="agent-1")
-# {"decision": "allow", "reason": "All policy checks passed", "passed": True}
-```
-
-**Policy YAML example:**
-
-```yaml
-allowed_tools:
-  - search
-  - summarize
-blocked_tools:
-  - delete_all
-blocked_patterns:
-  - pattern: "DROP TABLE"
-    type: substring
-  - pattern: "rm\\s+-rf"
-    type: regex
-max_tokens: 4096
-rate_limit:
-  max_calls: 10
-  window_seconds: 60
-```
-
 ### TrustGate
 
 Trust scoring with time-based decay and routing decisions.
@@ -82,11 +51,10 @@ logger.export_jsonl("audit.jsonl")  # Export for analysis
 
 ```python
 from haystack import Pipeline
-from haystack_agentmesh import GovernancePolicyChecker, TrustGate, AuditLogger
+from haystack_agentmesh import TrustGate, AuditLogger
 
 pipe = Pipeline()
 pipe.add_component("trust_gate", TrustGate())
-pipe.add_component("policy_checker", GovernancePolicyChecker(policy_path="policy.yaml"))
 pipe.add_component("audit", AuditLogger())
 ```
 
@@ -94,7 +62,6 @@ pipe.add_component("audit", AuditLogger())
 
 | Component | Inputs | Outputs |
 |-----------|--------|---------|
-| `GovernancePolicyChecker` | `action: str`, `params: dict`, `agent_id: Optional[str]` | `decision: str`, `reason: str`, `passed: bool` |
 | `TrustGate` | `agent_id: str`, `min_score: Optional[float]` | `trusted: bool`, `score: float`, `action: str` |
 | `AuditLogger` | `action: str`, `agent_id: str`, `decision: str`, `metadata: Optional[dict]` | `entry_id: str`, `chain_hash: str` |
 

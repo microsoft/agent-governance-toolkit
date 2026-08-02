@@ -153,4 +153,119 @@ describe("MeshClient malformed frame handling", () => {
       process.off("unhandledRejection", listener);
     }
   });
+
+  // handlePendingMessages drains a relay-supplied batch. A single poisoned
+  // entry must not abort the drain and silently discard the rest of the
+  // mailbox — otherwise one malformed queued message (or a malicious relay
+  // deliberately placing one first) suppresses every message behind it.
+  test("one malformed pending message does not discard the rest of the batch", async () => {
+    const peer = "did:agentmesh:peer-a";
+    const client = makeClient({ plaintextPeers: [peer] });
+    const received: unknown[] = [];
+    const errors: Array<{ kind: string; detail: string }> = [];
+    client.onMessage((from, payload) => received.push({ from, payload }));
+    client.onError((kind, _from, detail) => errors.push({ kind, detail }));
+
+    await client.connect();
+
+    const msg = (id: string, ciphertext: string) => ({
+      v: 1,
+      type: "message",
+      from: peer,
+      to: "did:agentmesh:test-agent",
+      id,
+      ts: new Date().toISOString(),
+      ciphertext,
+      plaintext: true,
+    });
+
+    lastMockWs!.simulateFrame({
+      v: 1,
+      type: "pending_messages",
+      messages: [
+        // Poisoned first entry: atob() throws inside handleMessage.
+        msg("pending-bad", "***not-base64***"),
+        msg("pending-good-1", btoa(JSON.stringify({ text: "one" }))),
+        msg("pending-good-2", btoa(JSON.stringify({ text: "two" }))),
+      ],
+    });
+
+    await new Promise((r) => setTimeout(r, 80));
+
+    // Both well-formed messages behind the poisoned one are still delivered.
+    expect(received).toEqual([
+      { from: peer, payload: { text: "one" } },
+      { from: peer, payload: { text: "two" } },
+    ]);
+    // And the failure is surfaced rather than swallowed silently.
+    expect(errors.some((e) => e.kind === "frame" && /pending message dropped/.test(e.detail))).toBe(
+      true,
+    );
+  });
+
+  // Regression guard for the isolation above: the per-message catch block must
+  // itself be total. `messages` is relay-supplied JSON, so an entry can be
+  // `null`. handleMessage() dereferences `frame.from` and throws on it, and if
+  // the catch block then also dereferences `msg.from` it throws a second time —
+  // from inside the catch, where nothing can catch it. That escapes the loop and
+  // discards every message behind the null entry, which is precisely the
+  // failure mode the try/catch exists to prevent. A hostile relay could use a
+  // single leading `null` to silently suppress a victim's entire mailbox.
+  test("a null pending entry does not abort the drain or suppress messages behind it", async () => {
+    const peer = "did:agentmesh:peer-a";
+    const client = makeClient({ plaintextPeers: [peer] });
+    const received: unknown[] = [];
+    const errors: Array<{ kind: string; detail: string }> = [];
+    client.onMessage((from, payload) => received.push({ from, payload }));
+    client.onError((kind, _from, detail) => errors.push({ kind, detail }));
+
+    await client.connect();
+
+    const msg = (id: string, ciphertext: string) => ({
+      v: 1,
+      type: "message",
+      from: peer,
+      to: "did:agentmesh:test-agent",
+      id,
+      ts: new Date().toISOString(),
+      ciphertext,
+      plaintext: true,
+    });
+
+    const unhandled: unknown[] = [];
+    const listener = (err: unknown) => unhandled.push(err);
+    process.on("unhandledRejection", listener);
+
+    try {
+      lastMockWs!.simulateFrame({
+        v: 1,
+        type: "pending_messages",
+        messages: [
+          // Non-object entries a relay can legally emit in JSON. `null` is the
+          // dangerous one: property access on it throws.
+          null,
+          "not-an-object",
+          42,
+          msg("pending-good-1", btoa(JSON.stringify({ text: "one" }))),
+          msg("pending-good-2", btoa(JSON.stringify({ text: "two" }))),
+        ],
+      });
+
+      await new Promise((r) => setTimeout(r, 80));
+
+      // The well-formed messages behind the null entry are still delivered.
+      expect(received).toEqual([
+        { from: peer, payload: { text: "one" } },
+        { from: peer, payload: { text: "two" } },
+      ]);
+      // The dropped entries are reported, not silently skipped.
+      expect(
+        errors.filter((e) => e.kind === "frame" && /pending message dropped/.test(e.detail)).length,
+      ).toBe(3);
+      // And nothing escaped as an unhandled rejection.
+      expect(unhandled).toHaveLength(0);
+    } finally {
+      process.off("unhandledRejection", listener);
+    }
+  });
 });

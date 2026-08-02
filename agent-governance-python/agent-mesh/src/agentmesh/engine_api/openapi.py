@@ -5,7 +5,7 @@ OpenAPI integration for Engine API capability metadata.
 
 This module provides two functions:
 
-* :func:`inject_capability_extension` walks a FastAPI app's routes, reads the
+* :func:`inject_capability_extension` walks a FastAPI app's effective route contexts, reads the
   :class:`~agentmesh.engine_api.capabilities.CapabilityFlags` attached by the
   :func:`~agentmesh.engine_api.capabilities.capability_flags` decorator, and
   writes them into the generated OpenAPI document as the ``x-capability-flags``
@@ -64,7 +64,7 @@ def inject_capability_extension(app: Any) -> None:
         ValueError: when the schema is generated and an operation present in the
             OpenAPI document has no attached capability flags.
     """
-    from fastapi.routing import APIRoute
+    from fastapi.routing import APIRoute, iter_route_contexts
 
     original_openapi = app.openapi
 
@@ -72,27 +72,30 @@ def inject_capability_extension(app: Any) -> None:
         schema = original_openapi()
         paths: dict[str, Any] = schema.get("paths", {})
 
-        for route in app.routes:
-            if not isinstance(route, APIRoute):
+        for route_context in iter_route_contexts(app.routes):
+            if not isinstance(route_context.original_route, APIRoute):
                 continue
-            if not route.include_in_schema:
+            if not route_context.include_in_schema:
                 continue
 
-            path_item = paths.get(route.path)
+            route_path = route_context.path_format or route_context.path
+            path_item = paths.get(route_path)
             if path_item is None:
                 continue
 
-            flags: CapabilityFlags | None = getattr(route.endpoint, CAPABILITY_FLAGS_ATTR, None)
+            endpoint = route_context.endpoint
+            flags: CapabilityFlags | None = getattr(endpoint, CAPABILITY_FLAGS_ATTR, None)
 
-            for method in route.methods:
+            for method in route_context.methods or ():
                 operation = path_item.get(method.lower())
                 if operation is None:
                     continue
                 if flags is None:
+                    endpoint_name = getattr(endpoint, "__name__", repr(endpoint))
                     raise ValueError(
                         "missing capability flags for operation "
-                        f"{method.upper()} {route.path!r} (endpoint "
-                        f"{route.endpoint.__name__!r}). Decorate the endpoint "
+                        f"{method.upper()} {route_path!r} (endpoint "
+                        f"{endpoint_name!r}). Decorate the endpoint "
                         "with @capability_flags(...) before calling "
                         "inject_capability_extension()."
                     )
