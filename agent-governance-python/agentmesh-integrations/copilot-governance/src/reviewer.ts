@@ -48,7 +48,7 @@ const RULES: Rule[] = [
     owaspRisks: ["ASI02", "ASI01"],
     detect(source) {
       const hasGovernance =
-        /governanceMiddleware|governance_middleware|GovernancePolicy|apply_governance/i.test(source);
+        /AgentControl|AgtRuntime|createGovernedTool|evaluateInterventionPoint|runTool/i.test(source);
       if (hasGovernance) return null;
       // Only flag if there are tool definitions — not every file needs governance
       const hasTools =
@@ -57,15 +57,13 @@ const RULES: Rule[] = [
       if (!hasTools) return null;
       return {
         description:
-          "This file defines or executes agent tools but does not apply governance middleware. " +
-          "Without policy enforcement, tools can be invoked without rate-limiting, " +
-          "content filtering, or allow/deny-list checks.",
+          "This file defines or executes agent tools but does not apply ACS mediation. " +
+          "Without policy enforcement, tools can bypass manifest budgets, content " +
+          "filters, and tool-catalog checks.",
         suggestion:
-          "Wrap your tool with `governanceMiddleware` (TS) or `apply_governance` (Python):\n\n" +
-          "```ts\nimport { createGovernedTool } from '@agentmesh/mastra';\n" +
-          "const safe = createGovernedTool(myTool, {\n" +
-          "  governance: { rateLimitPerMinute: 60, blockedPatterns: ['(?i)ignore previous'] },\n" +
-          "});\n```",
+          "Load an ACS manifest and wrap the tool:\n\n" +
+          "```ts\nconst control = AgentControl.fromPath('./manifest.yaml');\n" +
+          "const safe = createGovernedTool(myTool, { control });\n```",
       };
     },
   },
@@ -81,7 +79,7 @@ const RULES: Rule[] = [
       const hasDirectExecute = /\.execute\s*\(/.test(source);
       if (!hasDirectExecute) return null;
       const hasGovernanceCheck =
-        /\.check\s*\(|governanceMiddleware|createGovernedTool|governance_check|policy\.check/i.test(
+        /runTool|evaluateInterventionPoint|createGovernedTool|AgtRuntime/i.test(
           source
         );
       if (hasGovernanceCheck) return null;
@@ -90,8 +88,8 @@ const RULES: Rule[] = [
           "Tool `.execute()` is called directly without a preceding governance policy check. " +
           "This bypasses content filtering, rate limiting, and tool allow-list enforcement.",
         suggestion:
-          "Use `createGovernedTool` to wrap the tool, or call `gov.check()` before executing:\n\n" +
-          "```ts\nconst result = await gov.check(input, toolId, agentId);\nif (!result.allowed) throw new Error(result.reason);\n```",
+          "Use `createGovernedTool` or `AgentControl.runTool` so ACS enforces " +
+          "pre-tool and post-tool intervention points.",
       };
     },
   },
@@ -133,7 +131,7 @@ const RULES: Rule[] = [
     owaspRisks: ["ASI03"],
     detect(source) {
       const hasPii =
-        /piiFields|pii_fields|redact_pii|REDACTED|pii_redact/i.test(source);
+        /annotators|redact_pii|REDACTED|pii_redact|pii_scan/i.test(source);
       if (hasPii) return null;
       // Only flag if agent handles user input
       const handlesInput =
@@ -145,8 +143,7 @@ const RULES: Rule[] = [
           "Sensitive fields (SSN, email, credit-card numbers) may be logged or " +
           "forwarded to downstream services in plaintext.",
         suggestion:
-          "Configure `piiFields` in your governance policy:\n\n" +
-          "```ts\ngovernanceMiddleware({\n  piiFields: ['ssn', 'email', 'credit_card', 'password'],\n});\n```",
+          "Bind a PII annotator or redaction policy in the ACS manifest.",
       };
     },
   },
@@ -190,24 +187,19 @@ const RULES: Rule[] = [
     owaspRisks: ["ASI01", "ASI02"],
     detect(source) {
       const hasAllowlist =
-        /allowedTools|allowed_tools|blockedTools|blocked_tools|tool_allowlist|tool_denylist/i.test(
+        /tools\s*:|tool_allowlist|tool_denylist|clearance/i.test(
           source
         );
       if (hasAllowlist) return null;
       const hasGovernance =
-        /governanceMiddleware|createGovernedTool|governance_middleware/i.test(source);
+        /AgentControl|createGovernedTool|evaluateInterventionPoint|runTool/i.test(source);
       if (!hasGovernance) return null; // already caught by rule 1
       return {
         description:
-          "Governance middleware is present but no tool allow-list or deny-list is defined. " +
-          "Without explicit tool constraints, any tool ID is accepted, which enables " +
-          "excessive-agency attacks if the LLM generates an unexpected tool name.",
+          "ACS mediation is present but no manifest tool catalog is visible. " +
+          "Unexpected tool names may fail late or bypass host intent.",
         suggestion:
-          "Define an explicit tool allow-list:\n\n" +
-          "```ts\ngovernanceMiddleware({\n" +
-          "  allowedTools: ['web-search', 'read-file'],  // only these\n" +
-          "  blockedTools: ['shell-exec', 'file-delete'], // never these\n" +
-          "});\n```",
+          "Declare every permitted tool in the ACS manifest `tools` catalog.",
       };
     },
   },
@@ -220,25 +212,18 @@ const RULES: Rule[] = [
     owaspRisks: ["ASI01"],
     detect(source) {
       const hasPatterns =
-        /blockedPatterns|blocked_patterns|prompt.?injection|content.?filter/i.test(source);
+        /annotators|prompt.?injection|content.?filter|type:\s*rego/i.test(source);
       if (hasPatterns) return null;
       const hasGovernance =
-        /governanceMiddleware|createGovernedTool|governance_middleware/i.test(source);
+        /AgentControl|createGovernedTool|evaluateInterventionPoint|runTool/i.test(source);
       if (!hasGovernance) return null;
       return {
         description:
-          "Governance middleware is present but `blockedPatterns` is not set. " +
-          "Without content filtering, prompt-injection strings such as " +
-          '"ignore previous instructions" can reach the agent.',
+          "ACS mediation is present but no annotator or policy content filter is visible. " +
+          "Prompt-injection input may reach the agent unchecked.",
         suggestion:
-          "Add prompt-injection guards to your policy:\n\n" +
-          "```ts\ngovernanceMiddleware({\n" +
-          "  blockedPatterns: [\n" +
-          "    'ignore (all )?previous instructions',  // i flag applied automatically\n" +
-          "    'system prompt',\n" +
-          "    'act as (if you are|a)',\n" +
-          "  ],\n" +
-          "});\n```",
+          "Bind a classifier/endpoint annotator or Rego policy to input and " +
+          "tool-call intervention points.",
       };
     },
   },

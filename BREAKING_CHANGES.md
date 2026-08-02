@@ -5,6 +5,105 @@ entries appear first.
 
 ---
 
+## `HostSession.post_tool_call` and `pre_model_call` emit the adapter snapshot shape
+
+**Date:** TBD
+
+**Affected**
+
+- manifests binding `post_tool_call` to `$.tool_result`
+- manifests binding `pre_model_call` to `$.request`
+- anything constructing `HostSession` directly rather than going through an
+  `agent_os.integrations` adapter
+
+**What changed**
+
+`HostSession` sent the tool result as a bare value and nested the model request
+under `request`, while the `agent_os.integrations` adapters send `tool_result`
+as `{"value": ..., "error": ..., "duration_ms": ...}` and spread the model
+request over `model`, `messages` and `tools`. Because those two seams
+disagreed, no manifest could bind a policy target that resolved for both:
+whichever seam the policy author did not target failed closed with a
+missing-path error.
+
+`HostSession` now emits the adapter shape at both points, which is also the
+shape AGT-SNAPSHOT-1.0 §2.6 specifies.
+
+This aligns `HostSession` with `agent_os.integrations` only. Other SDK entry
+points, including `AgentControl.run_tool` and the LiteLLM adapter, still send
+the older flat `tool_result` and are not covered by this change.
+
+**How to update**
+
+Repoint the affected policy targets:
+
+| Before | After |
+|--------|-------|
+| `$.tool_result` | `$.tool_result.value` |
+| `$.request` | `$.messages` (or `$.model`, `$.tools`) |
+
+A manifest left on `$.tool_result` still loads and still returns a verdict. It
+matches against an object rather than the result value, so a rule written for a
+string stops denying. Repoint it before upgrading.
+
+---
+
+## `agt.policies` is removed; hosts call the ACS runtime directly
+
+**Date:** TBD
+
+**Affected**
+
+- anything importing `agt.policies`
+- hosts relying on the wrapper's approval-timeout default
+- audit records keyed on the `policy:` reason-code prefix
+
+**What changed**
+
+`agt.policies` wrapped the ACS runtime to re-expose it under AGT names. The
+wrapper is deleted and every module now calls
+`agent_control_specification` directly. The `agt` package keeps only the CLI,
+including the v4 migration tool.
+
+The following public symbols are removed:
+
+- runtime and manifest: `AgtRuntime`, `AgtManifest`, `AdapterRuntimeSession`,
+  `AdapterManifestContract`, `ManifestCompatibilityError`, `ManifestProvenance`
+- results: `PolicyEvaluation`, `ApprovalDecision`, `PolicyAuditRecord`,
+  `TransformResult`, `EvidenceResult`
+- snapshot builders: `SnapshotBuilder`, `agent_startup_snapshot`,
+  `agent_shutdown_snapshot`, `input_snapshot`, `output_snapshot`,
+  `pre_model_call_snapshot`, `post_model_call_snapshot`,
+  `pre_tool_call_snapshot`, `post_tool_call_snapshot`
+
+**Replacements**
+
+| Removed | Use instead |
+|---------|-------------|
+| `AgtRuntime(path)` | `AgentControl.from_path(str(path))` |
+| `AdapterRuntimeSession` | `HostSession` |
+| `AgtManifest` | `parse_manifest` / `validate_manifest` |
+| `PolicyEvaluation` | `InterventionPointResult` and `Verdict` |
+| `ApprovalDecision` | `ApprovalResolution` |
+| `*_snapshot()` helpers | `SnapshotBuilder` from `agent_control_specification` |
+| `evaluation.is_allowed()` | `result.verdict.decision.permits` |
+
+**Three deliberate behaviour changes**
+
+1. Reason codes lose the `policy:` prefix. A Pydantic validator on the wrapper
+   added it; the engine never emitted it. Anything matching on `policy:` needs
+   updating.
+2. `agt validate` now applies the runtime's own contract, so a manifest with no
+   intervention points is an error rather than a warning.
+3. The approval timeout moved onto the session. `HostSession` defaults to 300
+   seconds and denies on expiry; pass `approval_timeout_seconds` to change it.
+   The manifest's `approval.timeout_seconds` does not drive this. The core
+   treats that section as opaque host configuration and `AgentControl` does not
+   surface it, so a host that declares it in the manifest must pass the same
+   value to the session until the SDK exposes an accessor.
+
+---
+
 ## acs-generator is now a CLI-only package
 
 **Date:** TBD (next `acs-generator` release)
@@ -35,6 +134,178 @@ surface and prevents the generator package from becoming a second SDK.
 - Invoke generation through `acs` or `acs-generate`. Code that imported
   generator implementation classes must move to the CLI or maintain its own
   integration with the internal modules.
+## The rest of the Python policy surface follows the rule model out
+
+**Date:** TBD
+
+**Affected**
+
+- `agt-policies` (`agt.manifest_resolution`, `agt._harness.opa_runner`)
+- `agent-os` (`agent_os.policies` evaluators, decisions, and conflict types)
+- `agentmesh-integrations`
+- The unreleased `cedarling-agentmesh` backend and its package extra
+
+**What changed**
+
+The entry titled "Python runtime policy APIs drop the pre-ACS rule model"
+records the rule model itself, the conversion helpers, and the sandbox
+policy-to-config helpers. What goes here is everything that depended on them
+and could only leave once they had.
+
+Manifest resolution is gone as a module. It walked a folder tree, merged the
+documents it found, and filtered them by scope, all of which described a
+layout the ACS manifest does not have. `resolve_manifest`, `discover_policies`,
+`merge_documents`, `filter_by_scope`, `ResolutionError`, and `ResolutionReason`
+go with it, along with the `agt._harness.opa_runner` module. Point `AgentControl`
+at a manifest instead.
+
+`agent_os.policies` loses the evaluators and backends that read the rule model
+(`PolicyEvaluator`, `ExternalPolicyBackend`, `ConcurrencyStats`), the decision
+and conflict types they produced (`PolicyDecision`, `CandidateDecision`,
+`PolicyCheckResult`, `PolicyConflictResolver`, `ConflictResolutionStrategy`,
+`ResolutionResult`), and the remaining rule types (`PolicyRule`, `PolicyScope`,
+`Condition`). Names that survive elsewhere are unrelated: `agent_os.base_agent`
+keeps its own `PolicyDecision` enum, `agent_os` re-exports a `PolicyRule` from
+`agent_control_plane`, and `agentmesh.governance` keeps a separate trust-policy
+system that was never part of the v4 language.
+
+Framework integrations lose their local policy surfaces: `GovernancePolicy`,
+`GovernancePolicyChecker`, `GovernanceComponent`, `GovernanceSkill`,
+`GovernanceToolset`, `PolicyGuardrailConfig`, `PatternType`,
+`ShellPolicyViolation`, `load_policy_yaml`, `governed_shell`,
+`policy_input_guardrail`, and `content_output_guardrail`. Each took a local
+policy object; each now takes an `AgentControl`.
+
+The `cedarling-agentmesh` backend and `CedarlingBackend` are removed with the
+consolidated package extra that pulled them in. The backend implemented the
+deleted backend contract and was never released.
+
+**Migration**
+
+Build the manifest with `agt migrate`, construct `AgentControl` from it, and
+pass that wherever a policy object used to go. Read `evaluation_result` and
+the ACS audit record in place of the compatibility exception fields.
+
+---
+
+## Rust and Mastra framework policy surfaces now use ACS manifests
+
+**Date:** TBD
+
+**Affected:**
+
+- Rust `agentmesh::FrameworkGovernanceAdapter`
+- `@microsoft/agentmesh-mastra`
+
+**What changed:**
+
+The Rust framework adapter no longer accepts its local policy struct and
+pattern enum. It accepts native `AgentControl` or `Manifest` input. The Mastra
+wrapper no longer exports a local policy middleware. It requires a Node ACS
+`AgentControl` and delegates tool execution to `runTool`.
+
+**Migration:**
+
+Move tool catalogs, bindings, budgets, content policies, and approval rules
+into an ACS manifest. Rust callers construct `AgentControl::from_manifest` or
+`FrameworkGovernanceAdapter::from_path`. Mastra callers pass
+`AgentControl.fromPath(...)` as the `control` option to `createGovernedTool`.
+
+---
+
+## Python runtime policy APIs drop the pre-ACS rule model
+
+**Date:** TBD
+
+**Affected**
+
+- `agent-os` (`agent_os.policies`, `agent_os.integrations`, `agent_os.compat`, `agent_os.providers`)
+- `agt-sandbox` (`agent_sandbox`)
+- `agt-policies` (`agt.policies`, `agt._harness`)
+- `agent-marketplace` (`agent_marketplace.hooks`)
+
+**What changed**
+
+The Python runtime no longer carries its own rule model, its own evaluators and
+external backends, or the bridge that translated between that model and ACS.
+The ACS runtime evaluates policy, so the parallel model and every helper that
+converted between the two are gone rather than deprecated. Framework
+adapters take an `AgentControl`. Sandbox providers take `runtime=` alongside an
+explicit `SandboxConfig` instead of deriving one from a policy document.
+
+These 75 public names are removed. The list is computed from the export diff
+against the merge base, not assembled by hand.
+
+`agent_os.policies` (39):
+`AsyncPolicyEvaluator`, `BackendDecision`, `BudgetPolicy`, `CedarBackend`,
+`DynamicBudgetTracker`, `DynamicCondition`, `DynamicConditionEvaluator`,
+`DynamicConditionType`, `OPABackend`, `PolicyAction`, `PolicyCondition`,
+`PolicyDefaults`, `PolicyDocument`, `PolicyOperator`, `SandboxMounts`,
+`SharedPolicyDecision`, `SharedPolicyEvaluator`, `SharedPolicyRule`,
+`SharedPolicySchema`, `ViolationCategory`, `deny_blocked_pattern_input`,
+`deny_blocked_pattern_memory`, `deny_blocked_pattern_output`,
+`deny_blocked_pattern_tool`, `deny_blocked_tool`, `deny_confidence_threshold`,
+`deny_drift`, `deny_human_approval`, `deny_max_tool_calls`,
+`deny_not_allowed_tool`, `deny_policy_error`, `deny_timeout`,
+`document_to_governance`, `get_effective_defaults`, `governance_to_document`,
+`merge_policies`, `policy_document_to_shared`, `shared_to_policy_document`,
+`to_policy_action`
+
+`agent_os.integrations` (20):
+`ADKPolicyConfig`, `AdapterRegistry`, `AdapterRuntimeBridge`,
+`AsyncGovernedWrapper`, `BridgeResult`, `DetectionEnforcementAction`,
+`DetectionModuleConfig`, `EscalationResult`, `GovernancePolicyMiddleware`,
+`HumanApprovalRequired`, `MAFGovernancePolicyMiddleware`, `PolicyConfig`,
+`PolicyHierarchy`, `PolicyInterceptor`, `PolicyTemplates`, `TransformOutcome`,
+`compose_policies`, `get_runtime_bridge`, `override_policy`, `register_adapter`
+
+`agent_sandbox` (8): `aca_config_from_policy`, `docker_config_from_policy`,
+`hyperlight_config_from_policy`, `mxc_config_from_policy`,
+`nono_config_from_policy`, `policy_to_mxc_json`, `policy_yaml_to_mxc_json`,
+`policy_yaml_to_nono_config`
+
+Elsewhere (8): `NoOpGovernanceMiddleware`, `NoOpPolicyEvaluator`,
+`get_evaluator` (`agent_os.compat`); `get_policy_engine`
+(`agent_os.providers`); `governance_to_acs_manifest` (`agt.policies`);
+`evaluate_policy_cli` (`agent_marketplace.hooks`); `EvaluationResult`; and the
+`agt._harness.opa_runner` module.
+
+**A manifest must bind every intervention point the adapter evaluates**
+
+The bridge rewrote an unconfigured intervention point to an allow, so a
+manifest could bind nothing and every path still ran. The ACS runtime denies
+it instead, with reason `runtime_error:intervention_point_unknown`, and the
+adapters pass that denial through.
+
+This bites on a minimal manifest. An adapter evaluates a fixed set of points:
+`input` on every call, `pre_tool_call` on every tool call, `output` after
+every response. A manifest binding only `input` therefore denies the tool and
+output paths, which reads as the adapter being broken.
+
+Bind each point the adapter uses. The Rust guidance in
+`agent-governance-rust/agentmesh/MIGRATION_V5.md` says the same thing and
+shows the shape.
+
+Do not read the reason as "no policy here, carry on". A `post_*` block still
+stops the result propagating even though the guarded action already ran, so
+permitting an unconfigured `output` or `post_tool_call` forwards model
+responses and tool results no policy was consulted about.
+
+**A tool-call budget now counts one call differently**
+
+The bridge reported the tool-call count *including* the call under evaluation,
+so `max_tool_calls: 3` denied the third call and allowed two. The ACS runtime
+reports calls already completed, so `max_tool_calls: 3` now allows three. The
+bridge carried this as a compatibility override and recorded it as temporary.
+A deployed policy therefore permits one more tool call than it used to. Lower
+the limit by one to keep the behaviour you have.
+
+**Migration**
+
+Run `agt migrate` on a supported literal policy, then build an `AgentControl`
+from the manifest it writes. Sandbox resources, mounts, network settings, and
+tool exposure move into `SandboxConfig`. Read `evaluation_result` and the ACS audit
+record where you used to read the compatibility exception fields.
 
 ---
 
@@ -180,9 +451,8 @@ policy input. This release standardizes all three on fail-closed semantics:
 
 1. **Default action is now deny.** When `defaults.action` is omitted, or when
    no policies are loaded at all, the decision is now `deny` in every SDK.
-   - Python: `PolicyDefaults.action` now defaults to `PolicyAction.DENY`, and
-     the evaluator returns `deny` when no policies are loaded (previously both
-     were `allow`, fail-open).
+   - Python native ACS evaluation fails closed when no valid binding can
+     produce a decision.
    - .NET: the zero-policy path now returns `PolicyDecision.DenyDefault`
      (previously `AllowDefault`).
    - TypeScript already defaulted to `deny`; no change.

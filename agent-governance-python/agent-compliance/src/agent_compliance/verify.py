@@ -59,8 +59,8 @@ def _validate_module_name(mod_name: str) -> None:
 OWASP_ASI_CONTROLS = {
     "ASI-01": {
         "name": "Prompt Injection",
-        "module": "agent_os.integrations.base",
-        "check": "PolicyInterceptor",
+        "module": "agent_os.prompt_injection",
+        "check": "PromptInjectionDetector",
     },
     "ASI-02": {
         "name": "Insecure Tool Use",
@@ -69,8 +69,8 @@ OWASP_ASI_CONTROLS = {
     },
     "ASI-03": {
         "name": "Excessive Agency",
-        "module": "agent_os.integrations.base",
-        "check": "GovernancePolicy",
+        "module": "agent_os.integrations._native_adapter_runtime",
+        "check": "NativeAdapterRuntime",
     },
     "ASI-04": {
         "name": "Unauthorized Escalation",

@@ -99,18 +99,11 @@ The verification flow for an auditor is:
    `enforced_identity` (what the host actually executed).
 4. If the proof verifies, the decision is reproducible.
 
-## 5. Backwards-compat note
+## 5. Migration boundary
 
-This is the v5 equivalent of the v4 `BackendDecision.proof_artefact` and
-`BackendDecision.verification_pointers` fields shipped in
-`agent_os.policies.backends` (changelog entry under "Added"). The semantics
-are unchanged; the carrier moves from a backend-decision wrapper to the
-verdict and telemetry directly.
-
-The v4-to-v5 migration tool MUST translate:
-
-- Any `BackendDecision` with non-empty `proof_artefact` or
-  `verification_pointers` → ACS verdict with the same data under `evidence`.
+Legacy evidence carriers are interpreted only by the one-way AGT migration
+command. Runtime implementations consume the ACS verdict and telemetry fields
+defined in this specification directly.
 
 ## 6. Reference dispatchers
 

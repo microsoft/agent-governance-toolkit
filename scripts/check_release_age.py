@@ -162,6 +162,16 @@ def _resolve_cargo_deps(tree: dict | None) -> dict[str, str]:
                     ver = raw.strip()
             if not ver:
                 continue
+            # Cargo's explicit exact-pin operator: ``=1.2.3`` (optionally
+            # ``= 1.2.3``). Strip a single leading ``=`` so exact pins are
+            # resolved and age-checked like bare pins; without this the
+            # version fails SAFE_VERSION_RE below and the dep is silently
+            # skipped. A double ``==`` is not valid Cargo syntax and still
+            # fails the safe-version check after one strip.
+            if ver.startswith("="):
+                ver = ver[1:].strip()
+            if not ver:
+                continue
             # Cargo allows ^1.0 as the implicit form; only treat as exact-pin
             # when it strictly looks like a pin (no ^ ~ >= <= * inside).
             if any(c in ver for c in ("^", "~", ">", "<", "*", " ", ",")):

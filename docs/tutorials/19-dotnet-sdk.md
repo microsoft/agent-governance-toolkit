@@ -225,6 +225,13 @@ evaluation is side-effect free.
 
 ### Policy YAML syntax
 
+!!! note "This page documents the .NET engine's own policy format"
+
+    The Python, Rust, and TypeScript runtimes evaluate ACS v5 manifests. The
+    .NET `PolicyEngine` still uses the `governance.toolkit/v1` document shown
+    below, and this page will change when that engine migrates. Do not use
+    this shape with the other runtimes.
+
 ```yaml
 apiVersion: governance.toolkit/v1
 name: production-security
@@ -1224,7 +1231,7 @@ tutorials for deeper conceptual coverage:
 
 | .NET Feature | Python Tutorial | Notes |
 |-------------|-----------------|-------|
-| `PolicyEngine` | [Tutorial 01 — Policy Engine](01-policy-engine.md) | Same YAML syntax, same condition operators |
+| `PolicyEngine` | Tutorial 01 — Policy Engine | Same YAML syntax, same condition operators |
 | `AgentIdentity` / `FileTrustStore` | [Tutorial 02 — Trust & Identity](02-trust-and-identity.md) | DID format and trust decay are identical |
 | `GovernanceMiddleware` | [Tutorial 03 — Framework Integrations](03-framework-integrations.md) | MAF adapter pattern |
 | `AuditEmitter` / `GovernanceEvent` | [Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md) | Same event types and structure |

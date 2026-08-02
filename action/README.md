@@ -39,13 +39,16 @@ Add governance as a required CI check with minimal configuration.
 
 ### Policy evaluation
 
+The action installs the pinned OPA runtime used by native Rego policies.
+
 ```yaml
 - name: Evaluate Policy
   uses: microsoft/agent-governance-toolkit/action@v2
   with:
     command: policy-evaluate
-    policy-path: policies/
-    context-json: '{"tool_name": "web_search", "agent_id": "agent-1"}'
+    policy-path: policies/manifest.yaml
+    intervention-point: input
+    context-json: '{"input": {"body": "Summarize the report"}}'
 ```
 
 ### Full suite (all checks)
@@ -56,7 +59,7 @@ Add governance as a required CI check with minimal configuration.
   with:
     command: all
     manifest-path: plugins/my-plugin/plugin.json
-    policy-path: policies/
+    policy-path: policies/manifest.yaml
 ```
 
 ### Plugin marketplace PR workflow
@@ -92,9 +95,10 @@ jobs:
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `command` | Verification to run: `governance-verify`, `marketplace-verify`, `policy-evaluate`, `all` | No | `governance-verify` |
-| `policy-path` | Path to YAML policy file(s) | No | |
+| `policy-path` | Path to a native ACS manifest | No | |
 | `manifest-path` | Path to plugin manifest | No | |
-| `context-json` | JSON evaluation context for `policy-evaluate` | No | |
+| `intervention-point` | ACS intervention point for `policy-evaluate` | No | `pre_tool_call` |
+| `context-json` | JSON snapshot for `policy-evaluate` | No | |
 | `output-format` | Output format: `text`, `json`, `badge` | No | `text` |
 | `fail-on-warning` | Fail on warnings (not just errors) | No | `false` |
 | `python-version` | Python version to use | No | `3.12` |

@@ -2,10 +2,8 @@
 # Licensed under the MIT License.
 """Tests for human-readable phrasing of CollectionDeniedError messages.
 
-The ``reason`` attribute remains a machine-readable code (``"denied"`` /
-``"not_allowed"`` / ``"cedar_denied"``) so callers and audit entries can
-still pattern-match on it. The exception *message* uses a human phrase
-that reads naturally when interpolated by logs or surfaced to users.
+The ``reason`` attribute remains a machine-readable code so callers and audit
+entries can pattern-match on it. The exception message uses a human phrase.
 """
 
 from __future__ import annotations
@@ -32,15 +30,6 @@ def test_not_allowed_reason_renders_allow_list_phrase() -> None:
     assert (
         str(exc)
         == "Collection 'internal_wiki' is not in the allow list for agent 'agent-1'"
-    )
-
-
-def test_cedar_denied_reason_renders_cedar_phrase() -> None:
-    exc = CollectionDeniedError("financials", "agent-1", reason="cedar_denied")
-    assert exc.reason == "cedar_denied"
-    assert (
-        str(exc)
-        == "Collection 'financials' is denied by Cedar policy for agent 'agent-1'"
     )
 
 

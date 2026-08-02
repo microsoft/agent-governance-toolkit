@@ -8,7 +8,12 @@
  * with a cryptographic link to the previous entry.
  */
 
-import type { AuditConfig, AuditEntry, GovernanceResult, TrustVerification } from "./types";
+import type {
+  AuditConfig,
+  AuditEntry,
+  PolicyDecisionAudit,
+  TrustVerification,
+} from "./types";
 
 const GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -71,7 +76,7 @@ export function auditMiddleware(config: AuditConfig = {}) {
     input?: unknown;
     output?: unknown;
     duration_ms?: number;
-    governance?: GovernanceResult;
+    policy?: PolicyDecisionAudit;
     trust?: TrustVerification;
   }): Promise<AuditEntry> {
     const id = `audit-${++entryCounter}-${Date.now()}`;
@@ -91,7 +96,7 @@ export function auditMiddleware(config: AuditConfig = {}) {
       input: config.captureData ? params.input : undefined,
       output: config.captureData ? params.output : undefined,
       duration_ms: params.duration_ms,
-      governance: params.governance,
+      policy: params.policy,
       trust: params.trust,
       hash,
       previousHash: prev,
@@ -127,7 +132,7 @@ export function auditMiddleware(config: AuditConfig = {}) {
       input?: unknown;
       output?: unknown;
       duration_ms?: number;
-      governance?: GovernanceResult;
+      policy?: PolicyDecisionAudit;
       trust?: TrustVerification;
     }): Promise<AuditEntry> {
       // Chain this append onto the previous one. We swallow prior rejections

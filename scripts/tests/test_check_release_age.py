@@ -112,6 +112,33 @@ def test_cargo_skips_range_specifiers():
     assert cra._resolve_cargo_deps(tree) == {}
 
 
+def test_cargo_resolves_exact_pin_operator():
+    """Regression: ``=``-pinned deps must be checked, not silently skipped.
+
+    ``agent-control-spec = "=0.4.0-alpha.1"`` previously fell through:
+    the leading ``=`` failed SAFE_VERSION_RE and the dep dropped out of
+    the candidate set without any finding.
+    """
+    tree = {
+        "dependencies": {
+            "agent-control-spec": "=0.4.0-alpha.1",
+            "spaced": "= 1.2.3",
+            "tabled": {"version": "=1.40.0", "features": ["full"]},
+        },
+    }
+    assert cra._resolve_cargo_deps(tree) == {
+        "agent-control-spec": "0.4.0-alpha.1",
+        "spaced": "1.2.3",
+        "tabled": "1.40.0",
+    }
+
+
+def test_cargo_skips_invalid_equals_forms():
+    """``==`` is not Cargo syntax and a bare ``=`` has no version."""
+    tree = {"dependencies": {"dbl": "==1.2.3", "bare": "="}}
+    assert cra._resolve_cargo_deps(tree) == {}
+
+
 def test_cargo_includes_dev_and_build_deps():
     tree = {
         "dev-dependencies": {"pretty_assertions": "1.4.0"},
@@ -264,6 +291,33 @@ def test_collect_candidates_cargo_dotted_table():
          _mock_loaders({}, toml_map)[0], _mock_loaders({}, toml_map)[1], _mock_loaders({}, toml_map)[2]:
         out = cra.collect_candidates("origin/main")
     assert out == [("cargo", "tokio", "1.40.0", "Cargo.toml")]
+
+
+def test_collect_candidates_cargo_exact_pin_operator():
+    """``=``-pinned Cargo deps become candidates (regression coverage)."""
+    toml_map = {
+        ("origin/main", "Cargo.toml"): {"dependencies": {}},
+        ("HEAD", "Cargo.toml"): {"dependencies": {"agent-control-spec": "=0.4.0-alpha.1"}},
+    }
+    with _mock_changed(["Cargo.toml"]), \
+         _mock_loaders({}, toml_map)[0], _mock_loaders({}, toml_map)[1], _mock_loaders({}, toml_map)[2]:
+        out = cra.collect_candidates("origin/main")
+    assert out == [("cargo", "agent-control-spec", "0.4.0-alpha.1", "Cargo.toml")]
+
+
+def test_main_too_young_exact_pinned_crate_fails():
+    """End-to-end: a fresh ``=``-pinned crate must fail the age check."""
+    toml_map = {
+        ("origin/main", "Cargo.toml"): {"dependencies": {}},
+        ("HEAD", "Cargo.toml"): {"dependencies": {"new-crate": "=1.2.3"}},
+    }
+    fresh = datetime.now(timezone.utc) - timedelta(days=2)
+    with _mock_changed(["Cargo.toml"]), \
+         _mock_loaders({}, toml_map)[0], _mock_loaders({}, toml_map)[1], _mock_loaders({}, toml_map)[2], \
+         patch.object(cra, "fetch_release_time", return_value=fresh) as fetch:
+        rc = cra.main_with_args(["--base", "origin/main", "--min-age-days", "7"])
+    assert rc == 1
+    fetch.assert_called_once_with("cargo", "new-crate", "1.2.3")
 
 
 def test_collect_candidates_pyproject_pep621():
