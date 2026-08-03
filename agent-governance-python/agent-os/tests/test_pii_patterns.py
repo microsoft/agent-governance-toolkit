@@ -58,11 +58,13 @@ def test_shared_ssn_regex_rejects_obvious_non_ssn(non_match: str) -> None:
     assert ssn.search(non_match) is None, f'shared SSN regex {ssn.pattern!r} unexpectedly matched {non_match!r}'
 
 @pytest.mark.parametrize('text', _SSN_FALSE_POSITIVES)
-def test_shared_ssn_regex_rejects_bare_nine_digit_forms(text: str) -> None:
+def test_shared_ssn_regex_rejects_common_false_positives(text: str) -> None:
     """These patterns gate blocking paths, so a separator is required (#3532).
 
     Without it, a bare nine-digit run hard-denies ordinary content carrying a
-    tracking number, routing number, or ZIP+4.
+    tracking number or routing number. The remaining cases (ZIP+4, ten-digit
+    runs, an eight-digit build tag) guard the digit grouping itself, which the
+    separator requirement must not loosen.
     """
     ssn = _ssn_pattern()
     assert ssn.search(text) is None, f'shared SSN regex {ssn.pattern!r} would hard-block {text!r}'
