@@ -352,6 +352,8 @@ console.log(result.trustScore);
 
 ---
 
+<a id="full-example-manager-researcher-reader"></a>
+
 ## Full Example: Manager → Researcher → Reader
 
 ```typescript

@@ -1,6 +1,6 @@
 ---
 title: "Securing OpenClaw with the Agent Governance Toolkit"
-last_reviewed: 2026-06-10
+last_reviewed: 2026-07-15
 owner: agt-maintainers
 ---
 
@@ -16,7 +16,7 @@ Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a si
 
 > **Container images** are not yet published to a public registry. Build from source and push to your own registry (see [Build the Sidecar Image](#1-build-the-governance-sidecar-image)).
 
-> **See also:** [Deployment Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) | [AKS Deployment](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/deployment/azure.md) | [OpenShell Integration](../integrations/openshell.md)
+> **See also:** [Deployment Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) | [AKS Deployment](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/deployment/azure.md)
 
 ---
 
@@ -415,7 +415,7 @@ For Kubernetes monitoring, use the health/ready endpoints as probes (already con
 Features we're actively working on:
 
 - [ ] **Transparent tool-call proxy** — Intercept agent → tool calls without agent modification
-- [ ] **YAML policy loading from mounted volume** — Load `PolicyDocument` files from `/policies`
+- [ ] **Manifest loading from mounted volume** — Load ACS manifests from `/policies`
 - [ ] **Prometheus `/metrics` endpoint** — Standard Prometheus format alongside the JSON API
 - [ ] **Published container images** — Pre-built images on a public registry (currently build-from-source)
 - [ ] **Helm chart sidecar injection** — First-class sidecar support in the AgentMesh Helm chart

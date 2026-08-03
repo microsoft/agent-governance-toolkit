@@ -1,12 +1,12 @@
 ---
 title: "Agent Governance Toolkit へようこそ！"
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-15
 owner: agt-maintainers
 ---
 
-> この文書は [README.md](../index.md) の日本語訳です。最新の情報は英語版をご確認ください。
+> この文書は [README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md) の日本語訳です。最新の情報は英語版をご確認ください。
 
-🌍 [English](../index.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md)
+🌍 [English](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md)
 
 ![Agent Governance Toolkit](../assets/readme-banner.svg)
 
@@ -97,7 +97,6 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 - **[Go モジュール](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-golang/README.md)** — ポリシー、トラスト、監査、ID 機能を備えた Go モジュール
 - **[チュートリアル](../tutorials/index.md)** — ポリシー、ID、統合、コンプライアンス、SRE、サンドボックスのステップバイステップガイド
 - **[Azure デプロイ](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md)** — AKS、Azure AI Foundry、Container Apps、OpenClaw サイドカー
-- **[NVIDIA OpenShell 統合](../integrations/openshell.md)** — サンドボックス分離とガバナンスインテリジェンスの統合
 - **[OWASP コンプライアンス](../compliance/owasp-agentic-top10-architecture.md)** — ASI-01 から ASI-10 の完全マッピング
 - **[脅威モデル](../security/threat-model.md)** — 信頼境界、攻撃面、STRIDE 分析
 - **[アーキテクチャ](../ARCHITECTURE.md)** — システム設計、セキュリティモデル、トラストスコアリング
@@ -218,16 +217,16 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 ```bash
 # フルガバナンスデモ（ポリシー適用、監査、トラスト、コスト、信頼性）
-python examples/demos/maf_governance_demo.py
+python examples/maf-integration/01-loan-processing/python/main.py
 
 # 敵対的攻撃シナリオを含めて実行
-python examples/demos/maf_governance_demo.py --include-attacks
+python examples/maf-integration/01-loan-processing/python/main.py --include-attacks
 ```
 
 ## その他のサンプルと例
 
 - **[フレームワーククイックスタート](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/quickstart)** — LangChain、CrewAI、AutoGen、OpenAI Agents、Google ADK 向けの単一ファイルガバナンス付きエージェント
-- **[チュートリアル 1: Policy Engine](../tutorials/01-policy-engine.md)** — ガバナンスポリシーの定義と適用
+- **チュートリアル 1: Policy Engine** — ガバナンスポリシーの定義と適用
 - **[チュートリアル 2: Trust & Identity](../tutorials/02-trust-and-identity.md)** — ゼロトラストエージェント資格情報
 - **[チュートリアル 3: Framework Integrations](../tutorials/03-framework-integrations.md)** — 任意のフレームワークにガバナンスを追加
 - **[チュートリアル 4: Audit & Compliance](../tutorials/04-audit-and-compliance.md)** — OWASP コンプライアンスとアテステーション
@@ -241,33 +240,23 @@ python examples/demos/maf_governance_demo.py --include-attacks
 ### OPA/Rego (Agent OS)
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agent_control_specification import AgentControl, HostSession
 
-evaluator = PolicyEvaluator()
-evaluator.load_rego(rego_content="""
-package agentos
-default allow = false
-allow { input.tool_name == "web_search" }
-allow { input.role == "admin" }
-""")
-
-decision = evaluator.evaluate({"tool_name": "web_search", "role": "analyst"})
-# decision.allowed == True
+runtime = AgentControl.from_path("policies/rego-manifest.yaml")
+session = HostSession(
+    runtime, agent_id="agent-1", session_id="session-1"
+)
+decision = session.pre_tool_call(
+    tool_name="web_search", args={"query": "status"}
+)
 ```
 
 ### Cedar (Agent OS)
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agent_control_specification import AgentControl
 
-evaluator = PolicyEvaluator()
-evaluator.load_cedar(policy_content="""
-permit(principal, action == Action::"ReadData", resource);
-forbid(principal, action == Action::"DeleteFile", resource);
-""")
-
-decision = evaluator.evaluate({"tool_name": "read_data", "agent_id": "agent-1"})
-# decision.allowed == True
+runtime = AgentControl.from_path("policies/cedar-manifest.yaml")
 ```
 
 ### AgentMesh OPA/Cedar

@@ -28,7 +28,7 @@ crate-type = ["lib", "cdylib"]
 #   translator, and the always-compiled `CedarTestDispatcher` stay available
 #   under no-default-features per AGT D3.
 default = ["opa", "cedar"]
-opa = []
+opa = ["dep:jsonschema"]
 cedar = ["dep:cedar-policy"]
 # Bundled reference dispatchers used to provide zero-config defaults through
 # the FFI builder. OFF by default. Manifest HTTPS extends support is part of
@@ -51,6 +51,7 @@ base64 = "0.22"
 url = "2"
 ureq = { version = "2", features = ["json"] }
 cedar-policy = { version = "4", optional = true }
+jsonschema = { version = "0.17", default-features = false, optional = true }
 
 [dev-dependencies]
 jsonschema = { version = "0.17", default-features = false }

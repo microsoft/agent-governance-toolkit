@@ -3,7 +3,7 @@
 This framework-neutral example uses the canonical AGT 5 policy path:
 
 ```text
-Host -> SnapshotBuilder -> AgtRuntime -> ACS verdict -> host enforcement
+Host -> HostSession -> AgentControl -> ACS verdict -> host enforcement
 ```
 
 The host evaluates `send_email` before execution. Its custom policy returns
@@ -36,11 +36,12 @@ From the repository root:
 python -m venv .venv
 . .venv/bin/activate
 pip install ./policy-engine/sdk/python
-pip install -e "./agent-governance-python/agt-policies[dev]"
+pip install pytest
 ```
 
-`agt-policies` is the AGT host package. It builds snapshots, calls the vendored
-ACS runtime, and maps each verdict to an `EvaluationResult`.
+The Python SDK provides `AgentControl`, `HostSession`, and `SnapshotBuilder`.
+The host session builds snapshots and returns the native ACS
+`InterventionPointResult`.
 
 ## Run
 
@@ -66,7 +67,7 @@ pytest examples/acs-email-tool/test_email_tool.py
 ```
 
 The dispatcher tests do not need the native SDK. The end-to-end test runs when
-`agent-control-specification` and `agt-policies` are installed.
+`agent-control-specification` is installed.
 
 ## Cleanup
 

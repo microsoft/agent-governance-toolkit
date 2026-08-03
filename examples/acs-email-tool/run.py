@@ -7,8 +7,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from agt.policies import EvaluationResult, SnapshotBuilder
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import (
+    AgentControl,
+    Decision,
+    HostSession,
+    InterventionPointResult,
+)
 
 from email_policy import EmailPolicy
 
@@ -21,43 +25,43 @@ def send_email(args: dict[str, str]) -> dict[str, Any]:
 
 
 def enforce_email(
-    runtime: AgtRuntime,
-    session: SnapshotBuilder,
+    session: HostSession,
     args: dict[str, str],
     *,
     call_id: str,
-) -> tuple[EvaluationResult, dict[str, Any] | None]:
+) -> tuple[InterventionPointResult, dict[str, Any] | None]:
     """Evaluate, enforce, and conditionally execute one email tool call."""
-    snapshot = session.pre_tool_call(
+    decision = session.pre_tool_call(
         tool_name="send_email",
         args=args,
         call_id=call_id,
     )
-    decision = runtime.evaluate_intervention_point("pre_tool_call", snapshot)
 
-    if not decision.allowed:
+    if not decision.verdict.decision.permits:
         return decision, None
 
     enforced_args: dict[str, str] = args
-    if decision.verdict == "transform":
-        if decision.transform is None:
-            raise RuntimeError("ACS returned transform without transform data")
-        applied_value = decision.transform.get("applied_value")
+    if decision.verdict.decision is Decision.TRANSFORM:
+        applied_value = decision.transformed_policy_target
         if not isinstance(applied_value, dict):
             raise RuntimeError("ACS transform did not produce an argument object")
         enforced_args = applied_value
 
     output = send_email(enforced_args)
-    session.record_tool_call()
+    session.builder.record_tool_call()
     return decision, output
 
 
 def main() -> None:
-    runtime = AgtRuntime(
-        ROOT / "manifest.yaml",
+    control = AgentControl.from_path(
+        str(ROOT / "manifest.yaml"),
         policy_dispatcher=EmailPolicy(),
     )
-    session = SnapshotBuilder(agent_id="email-agent", session_id="demo-session")
+    session = HostSession(
+        control,
+        agent_id="email-agent",
+        session_id="demo-session",
+    )
 
     cases = [
         (
@@ -77,26 +81,23 @@ def main() -> None:
         ),
     ]
 
-    try:
-        for index, (label, args) in enumerate(cases, start=1):
-            decision, output = enforce_email(
-                runtime,
-                session,
-                args,
-                call_id=f"email-{index}",
+    for index, (label, args) in enumerate(cases, start=1):
+        decision, output = enforce_email(
+            session,
+            args,
+            call_id=f"email-{index}",
+        )
+        verdict = decision.verdict
+        if output is None:
+            print(
+                f"[{label}] decision={verdict.decision.value} "
+                f"executed=False reason={verdict.reason}"
             )
-            if output is None:
-                print(
-                    f"[{label}] decision={decision.verdict} "
-                    f"executed=False reason={decision.reason}"
-                )
-            else:
-                print(
-                    f"[{label}] decision={decision.verdict} "
-                    f"sent={output['sent']} body={output['body']}"
-                )
-    finally:
-        runtime.close()
+        else:
+            print(
+                f"[{label}] decision={verdict.decision.value} "
+                f"sent={output['sent']} body={output['body']}"
+            )
 
 
 if __name__ == "__main__":

@@ -130,26 +130,22 @@ host sends ACS a complete snapshot, receives a verdict, and applies it at the
 corresponding intervention point.
 
 ```bash
-pip install agt-policies
+pip install agent-control-specification
 ```
 
 ```python
-from agt.policies import SnapshotBuilder
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl, HostSession
 
-runtime = AgtRuntime("manifest.yaml")
-snapshot = SnapshotBuilder(agent_id="researcher", session_id="session-1")
+control = AgentControl.from_path("manifest.yaml")
+session = HostSession(control, agent_id="researcher", session_id="session-1")
 
-result = runtime.evaluate_intervention_point(
-    "pre_tool_call",
-    snapshot.pre_tool_call(
-        tool_name="send_email",
-        args={"to": "partner@example.net", "body": "Status update"},
-    ),
+result = session.pre_tool_call(
+    tool_name="send_email",
+    args={"to": "partner@example.net", "body": "Status update"},
 )
 
-if not result.allowed:
-    raise PermissionError(result.reason)
+if not result.verdict.decision.permits:
+    raise PermissionError(result.verdict.reason)
 ```
 
 ACS returns one of five normalized verdicts: `allow`, `warn`, `deny`,
@@ -228,7 +224,7 @@ change the ACS decision contract.
 
 | SDK | Install |
 |-----|---------|
-| [ACS host for Python](packages/agent-control-specification.md#how-agt-python-hosts-call-acs) | `pip install agt-policies` |
+| [ACS host for Python](packages/agent-control-specification.md#how-python-hosts-call-acs) | `pip install agent-control-specification` |
 | [Python](packages/index.md) | `pip install agent-governance-toolkit[full]` |
 | [TypeScript](tutorials/20-typescript-sdk.md) | `npm install @microsoft/agent-governance-sdk` |
 | [.NET](packages/dotnet-sdk.md) | `dotnet add package Microsoft.AgentGovernance` |
@@ -242,9 +238,9 @@ change the ACS decision contract.
 ## Framework Integrations
 
 Use `govern()` to wrap application callables. For framework lifecycle hooks,
-hosts use the canonical AGT 5 contract in `agt-policies` to build ACS snapshots
-and enforce verdicts. Optional adapters cover LangChain, CrewAI, OpenAI Agents,
-LangGraph, LlamaIndex, Haystack, PydanticAI, and Google ADK. See the
+hosts use the native ACS Python SDK to build snapshots and enforce verdicts.
+Optional adapters cover LangChain, CrewAI, OpenAI Agents, LangGraph,
+LlamaIndex, Haystack, PydanticAI, and Google ADK. See the
 [package guide](packages/index.md#framework-integrations).
 
 </div>
@@ -285,7 +281,6 @@ its status; listing it here does not imply that every implementation conforms.
 | [Agent Lightning Fast-Path](specs/AGENT-LIGHTNING-FAST-PATH-1.0.md) | Governed reinforcement learning workflows |
 | [Framework Adapter Contract](specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md) | Common adapter lifecycle and failure semantics |
 | [Audit and Compliance](specs/AUDIT-COMPLIANCE-1.0.md) | Audit events, integrity, evidence, and export |
-| [Dynamic Policy Conditions](specs/DYNAMIC-POLICY-CONDITIONS-1.0.md) | Draft time-window and budget conditions |
 
 [Architecture Decision Records](./adr/index.md) document the reasoning behind key design choices.
 

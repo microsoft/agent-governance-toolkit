@@ -275,7 +275,7 @@ allow/deny lists:
 ```python
 from agent_os.integrations.maf_adapter import (
     CapabilityGuardMiddleware,
-    GovernancePolicyMiddleware,
+    RuntimeGovernanceMiddleware,
     create_governance_middleware,
 )
 

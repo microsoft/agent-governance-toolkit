@@ -85,6 +85,8 @@ Agent SRE directly addresses **[OWASP Agentic Security Initiative](../compliance
 
 ---
 
+<a id="architecture-diagram"></a>
+
 ## 🏗️ Architecture Diagram
 
 ```mermaid
@@ -135,6 +137,8 @@ flowchart LR
 ```
 
 ---
+
+<a id="quick-start-in-30-seconds"></a>
 
 ## ⚡ Quick Start in 30 Seconds
 

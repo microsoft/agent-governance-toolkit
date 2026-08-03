@@ -1,0 +1,28 @@
+# Allow non-diagnostic visit-note updates for clinic intake agents.
+# Native Agent Control Specification manifest: the pre_tool_call intervention
+# point binds a host-owned custom policy that allows the visit-note update.
+# This is the contract a customer would ship; no legacy policy language.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: healthcare-visit-note-guard
+policies:
+  tool_guard:
+    type: custom
+    adapter: e2e_rule
+    config:
+      rule:
+        tool: update_visit_notes
+        decision: allow
+        reason: healthcare.allow-visit-note-update
+        message: Non-diagnostic visit note update allowed
+intervention_points:
+  pre_tool_call:
+    policy_target_kind: tool_args
+    policy_target: "$.tool_call.args"
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: tool_guard
+tools:
+  update_visit_notes:
+    type: Tool
+    id: update_visit_notes

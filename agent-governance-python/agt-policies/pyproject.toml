@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "agt-policies"
 version = "5.0.0"
-description = "AGT 5.0 policy layer over the AGT-vendored ACS engine"
+description = "Public Preview: one-way tool that migrates an AGT v4 project to an ACS manifest"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
@@ -22,7 +22,6 @@ classifiers = [
 ]
 dependencies = [
     "agent-control-specification>=0.3.1b0,<0.4.0",
-    "pydantic>=2.5.0,<3.0",
     "pyyaml>=6.0,<7.0",
 ]
 

@@ -60,40 +60,37 @@ def test_policy_denies_case_insensitive_external_domain() -> None:
 
 def test_native_runtime_applies_transform_and_deny() -> None:
     pytest.importorskip("agent_control_specification")
-    pytest.importorskip("agt.policies")
 
-    from agt.policies import SnapshotBuilder
-    from agt.policies.runtime import AgtRuntime
+    from agent_control_specification import AgentControl, HostSession
 
     from run import enforce_email
 
-    runtime = AgtRuntime(
-        ROOT / "manifest.yaml",
+    control = AgentControl.from_path(
+        str(ROOT / "manifest.yaml"),
         policy_dispatcher=EmailPolicy(),
     )
-    session = SnapshotBuilder(agent_id="test-agent", session_id="test-session")
+    session = HostSession(
+        control,
+        agent_id="test-agent",
+        session_id="test-session",
+    )
 
-    try:
-        transformed, output = enforce_email(
-            runtime,
-            session,
-            {
-                "to": "customer@example.com",
-                "body": "Tracking token: TRACK-123",
-            },
-            call_id="transform-1",
-        )
-        assert transformed.verdict == "transform"
-        assert output is not None
-        assert output["body"] == "Tracking token: [REDACTED]"
+    transformed, output = enforce_email(
+        session,
+        {
+            "to": "customer@example.com",
+            "body": "Tracking token: TRACK-123",
+        },
+        call_id="transform-1",
+    )
+    assert transformed.verdict.decision.value == "transform"
+    assert output is not None
+    assert output["body"] == "Tracking token: [REDACTED]"
 
-        denied, output = enforce_email(
-            runtime,
-            session,
-            {"to": "partner@example.net", "body": "Status update"},
-            call_id="deny-1",
-        )
-        assert denied.verdict == "deny"
-        assert output is None
-    finally:
-        runtime.close()
+    denied, output = enforce_email(
+        session,
+        {"to": "partner@example.net", "body": "Status update"},
+        call_id="deny-1",
+    )
+    assert denied.verdict.decision.value == "deny"
+    assert output is None

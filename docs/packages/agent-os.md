@@ -1,6 +1,6 @@
 ---
 title: "Agent OS — Public Preview"
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-15
 owner: agt-maintainers
 ---
 
@@ -11,7 +11,7 @@ owner: agt-maintainers
 **A kernel architecture for governing autonomous AI agents**
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
@@ -23,7 +23,7 @@ owner: agt-maintainers
 
 > 📦 **Install the full stack:** `pip install agent-governance-toolkit[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-example) • [Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs) • [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode) • [Examples](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
+[Quick Start](#quick-example) • [Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs) • [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode) • [Examples](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
 
 <br/>
 
@@ -94,7 +94,6 @@ owner: agt-maintainers
 | OpenAI Agents SDK | — | [openai/openai-agents-python#2515](https://github.com/openai/openai-agents-python/issues/2515) |
 | A2A Protocol | 21K ⭐ | [a2aproject/A2A#1501](https://github.com/a2aproject/A2A/issues/1501) |
 | Oracle Agent Spec | — | [oracle/agent-spec#105](https://github.com/oracle/agent-spec/issues/105) |
-| AI Card Spec | — | [agent-card/ai-card#16](https://github.com/Agent-Card/ai-card/issues/16) |
 
 </details>
 
@@ -123,7 +122,7 @@ Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security
 
 | Risk | Coverage | Module |
 |------|----------|--------|
-| ASI01 Agent Goal Hijack | ✅ Full | `GovernancePolicy.blocked_patterns` |
+| ASI01 Agent Goal Hijack | ✅ Full | `AgentControl.blocked_patterns` |
 | ASI02 Tool Misuse | ✅ Full | `MCPGateway` — tool filtering, rate limiting, audit |
 | ASI03 Identity & Privilege | ✅ Full | `require_human_approval`, RBAC policies |
 | ASI04 Supply Chain | ✅ Full | AI-BOM v2.0 — model + data + weights provenance |
@@ -157,13 +156,13 @@ pip install agent-os-kernel
 ```
 
 ```python
-from agent_os import StatelessKernel, ExecutionContext
+from agent_os import StatelessKernel, AdapterExecutionState
 
 # Create a governed agent in 3 lines
 kernel = StatelessKernel()
 
 # Define execution context with governance policies
-ctx = ExecutionContext(agent_id="demo-agent", policies=["read_only"])
+ctx = AdapterExecutionState(agent_id="demo-agent", policies=["read_only"])
 
 # Your agent runs with policy enforcement
 result = await kernel.execute(
@@ -180,7 +179,7 @@ That's it! Your agent now has deterministic policy enforcement. [Learn more →]
 
 **🎬 See all features in action:**
 ```bash
-git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python examples/demos/maf_governance_demo.py
+git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python examples/maf-integration/01-loan-processing/python/main.py
 ```
 
 <details>
@@ -189,24 +188,17 @@ git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-gove
 ### Policy enforcement with custom rules
 
 ```python
-from agent_os import StatelessKernel
+from agent_control_specification import AgentControl, HostSession
 
-kernel = StatelessKernel()
-kernel.load_policy_yaml("""
-version: "1.0"
-name: api-safety
-rules:
-  - name: block-destructive-sql
-    condition: "action == 'database_query'"
-    action: deny
-    pattern: "DROP|TRUNCATE|DELETE FROM .* WHERE 1=1"
-  - name: rate-limit-api
-    condition: "action == 'api_call'"
-    limit: "100/hour"
-""")
-
-result = await kernel.execute(action="database_query", params={"query": "DROP TABLE users"})
-# ❌ Blocked: Matched rule 'block-destructive-sql'
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
+    runtime, agent_id="database-agent", session_id="session-1"
+)
+result = session.pre_tool_call(
+    tool_name="database_query",
+    args={"query": "DROP TABLE users"},
+)
+assert not result.verdict.decision.permits
 ```
 
 ### Audit logging
@@ -243,7 +235,7 @@ async def chat(message: str, conversation_id: str = "default") -> str:
 # Outputs are checked against content policies; violations trigger SIGSTOP
 ```
 
-See [examples/](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples) for 20+ runnable demos including SQL agents, GitHub reviewers, and compliance bots.
+See the [Agent OS examples](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples) for 20+ runnable demos including SQL agents, GitHub reviewers, and compliance bots.
 </details>
 
 ---
@@ -667,7 +659,7 @@ The `examples/` directory contains demos at various levels:
 |------|-------------|---------|
 | [demo-app](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/demo-app) | Uses the stateless API (most reliable) | `cd examples/demo-app && python demo.py` |
 | [hello-world](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/hello-world) | Minimal example | `cd examples/hello-world && python agent.py` |
-| [quickstart](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/quickstart) | Quick intro | `cd examples/quickstart && python my_first_agent.py` |
+| [quickstart](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/quickstart) | Quick intro | `cd examples/quickstart && python my_first_agent.py` |
 
 ### Domain Examples (Self-Contained)
 
@@ -675,7 +667,7 @@ These examples are self-contained and don't require external Agent OS imports:
 
 | Demo | Description |
 |------|-------------|
-| [healthcare-hipaa](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/healthcare-hipaa) | HIPAA-compliant agent |
+| [MAF healthcare](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/maf-integration/03-healthcare/python) | Native ACS healthcare example |
 | [customer-service](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/customer-service) | Customer support agent |
 | [legal-review](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/legal-review) | Legal document analysis |
 | [crewai-safe-mode](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples/crewai-safe-mode) | CrewAI with safety wrappers |
@@ -930,10 +922,10 @@ See [MCP server documentation](https://github.com/microsoft/agent-governance-too
 | [Citadel Foundry Governance](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/notebooks/05_citadel_foundry_governance.ipynb) | Apply governance in an Azure Foundry flow | 20 min |
 
 ### Reference
-- [Quickstart Guide](../quickstart.md) — 60 seconds to first agent
+- [Quickstart Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/quickstart.md) — 60 seconds to first agent
 - [Framework Integrations](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/integrations.md) — LangChain, OpenAI, etc.
 - [Kernel Internals](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/kernel-internals.md) — How the kernel works
-- [Architecture Overview](../quickstart.md) — Getting started
+- [Architecture Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/quickstart.md) — Getting started
 - [Kernel Internals](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/kernel-internals.md) — How the kernel works
 
 ---
@@ -1156,7 +1148,7 @@ pytest
 
 ## License
 
-MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
+MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/LICENSE)
 
 ---
 
@@ -1164,6 +1156,6 @@ MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob
 
 **Exploring kernel concepts for AI agent safety.**
 
-[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](../index.md)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/docs)
 
 </div>

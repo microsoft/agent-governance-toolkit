@@ -1,10 +1,10 @@
 ---
 title: "Agent Governance Toolkit"
-last_reviewed: 2026-06-22
+last_reviewed: 2026-07-15
 owner: agt-maintainers
 ---
 
-🌍 [English](../index.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [한국어](./README.ko.md)
+🌍 [English](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [한국어](./README.ko.md)
 
 ![Agent Governance Toolkit](../assets/readme-banner.svg)
 
@@ -28,7 +28,7 @@ owner: agt-maintainers
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Discord](https://dcbadge.limes.pink/api/server/7aVPCcVh?style=flat)](https://discord.gg/7aVPCcVh)
+[![Discord](https://dcbadge.limes.pink/api/server/TxMRqY3pFr?style=flat)](https://discord.gg/TxMRqY3pFr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
@@ -59,6 +59,8 @@ owner: agt-maintainers
 AGT는 프롬프트 내부에서 이 싸움을 이기려 하지 않습니다. 모든 도구 호출, 메시지 전송, 위임 작업은 모델의 의도가 실행되기 전에 결정론적 애플리케이션 코드에서 **가로채어집니다**. AGT 커널이 거부한 동작은 "가능성이 낮은" 것이 아닙니다. **구조적으로 불가능합니다**. 이것이 에이전트에게 올바르게 행동하도록 요청하는 것과 잘못된 행동 자체를 불가능하게 만드는 것의 차이입니다.
 
 ---
+
+<a id="빠른-시작"></a>
 
 ## 빠른 시작
 
@@ -111,33 +113,21 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
   파괴적인 작업은 사람의 승인이 필요합니다
 ```
 
-또는 프로그래밍 방식 제어를 위해 전체 `PolicyEvaluator` API를 사용하세요:
+또는 프로그래밍 방식 제어를 위해 전체 `AgentControl` API를 사용하세요:
 
 <details>
-<summary><b>PolicyEvaluator 예제</b></summary>
+<summary><b>AgentControl 예제</b></summary>
 
 ```python
-from agent_os.policies import (
-    PolicyEvaluator, PolicyDocument, PolicyRule,
-    PolicyCondition, PolicyAction, PolicyOperator, PolicyDefaults
+from agent_control_specification import AgentControl, HostSession
+
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
+    runtime, agent_id="agent-1", session_id="session-1"
 )
-
-evaluator = PolicyEvaluator(policies=[PolicyDocument(
-    name="my-policy", version="1.0",
-    defaults=PolicyDefaults(action=PolicyAction.ALLOW),
-    rules=[PolicyRule(
-        name="block-dangerous-tools",
-        condition=PolicyCondition(
-            field="tool_name",
-            operator=PolicyOperator.IN,
-            value=["execute_code", "delete_file"]
-        ),
-        action=PolicyAction.DENY, priority=100,
-    )],
-)])
-
-result = evaluator.evaluate({"tool_name": "web_search"})    # 허용됩니다
-result = evaluator.evaluate({"tool_name": "delete_file"})   # 차단됩니다
+result = session.pre_tool_call(
+    tool_name="delete_file", args={"path": "report.txt"}
+)
 ```
 
 </details>
@@ -332,10 +322,11 @@ v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습�
 | [smolagents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/smolagents-governed) | HuggingFace smolagents | 경량 에이전트 거버넌스 |
 | [maf-integration](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/maf-integration) | MAF | Microsoft Agent Framework 연동 |
 | [mcp-trust-verified-server](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/mcp-trust-verified-server) | MCP | 신뢰 검증된 MCP 서버 구현 |
-| [cedarling-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/cedarling-governed) | Cedar/Cedarling | Janssen Cedarling 정책 엔진 연동 |
 | [governance-dashboard](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/demos/governance-dashboard) | Streamlit | 실시간 에이전트 현황 대시보드 |
 
 ---
+
+<a id="명세-specifications"></a>
 
 ## 명세 (Specifications)
 
@@ -343,14 +334,14 @@ v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습�
 
 | 명세 | 범위 | 테스트 수 |
 |---|---|---|
-| [Agent OS Policy Engine](../specs/AGENT-OS-POLICY-ENGINE-1.0.md) | 정책 평가, 규칙 병합, fail-closed 시맨틱 | 68 |
+| Agent OS Policy Engine | 정책 평가, 규칙 병합, fail-closed 시맨틱 | 68 |
 | [AgentMesh Identity and Trust](../specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | 자격증명, 신뢰 점수화, 위임 체인 | 135 |
 | [Agent Hypervisor Execution Control](../specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | 권한 격리 링, 사가 오케스트레이션, 킬 스위치 | 80 |
 | [AgentMesh Trust and Coordination](../specs/AGENTMESH-TRUST-COORDINATION-1.0.md) | 피어 신뢰 협상, 메시 전체 정책 | 62 |
 | [Agent SRE Governance](../specs/AGENT-SRE-GOVERNANCE-1.0.md) | SLO, 에러 버짓, 카오스, 서킷 브레이커 | 111 |
 | [MCP Security Gateway](../specs/MCP-SECURITY-GATEWAY-1.0.md) | 도구 오염, 드리프트 탐지, 숨겨진 지시문 | 127 |
 | [Agent Lightning Fast-Path](../specs/AGENT-LIGHTNING-FAST-PATH-1.0.md) | 강화학습 훈련 거버넌스, 위반 패널티 | 100 |
-| [Framework Adapter Contract](../specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md) | 10개 어댑터 연동, 인터셉터 체인 | 152 |
+| Framework Adapter Contract | 10개 어댑터 연동, 인터셉터 체인 | 152 |
 | [Audit and Compliance](../specs/AUDIT-COMPLIANCE-1.0.md) | Merkle 감사, 컴플라이언스 매핑, Decision BOM | 157 |
 | [AgentMesh Wire Protocol](../specs/AGENTMESH-WIRE-1.0.md) | 메시지 형식, 라우팅, 직렬화 | -- |
 
@@ -403,7 +394,7 @@ AGT는 OS 커널 레벨이 아닌 애플리케이션 미들웨어 레이어에�
 
 ## 기여하기 (Contributing)
 
-[기여 가이드](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) · [커뮤니티](../COMMUNITY.md) · [Discord](https://discord.gg/7aVPCcVh) · [보안 정책](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) · [변경 이력](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md)
+[기여 가이드](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) · [커뮤니티](../COMMUNITY.md) · [Discord](https://discord.gg/TxMRqY3pFr) · [보안 정책](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) · [변경 이력](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md)
 
 **AGT를 사용 중이신가요?** [ADOPTERS.md](../ADOPTERS.md)에 귀하의 조직을 추가해 주세요.
 

@@ -58,6 +58,8 @@ The Agent Governance Toolkit ships three bridge components:
 
 ---
 
+<a id="2-quick-start-mcp-proxy-with-trust-gating"></a>
+
 ## 2. Quick Start — MCP Proxy with Trust Gating
 
 Wrap any MCP server with governance in five lines:
@@ -318,6 +320,8 @@ print(result.allowed, result.reason)  # False, "Content matches blocked pattern.
 
 ---
 
+<a id="5-iatp-inter-agent-trust-protocol"></a>
+
 ## 5. IATP — Inter-Agent Trust Protocol
 
 IATP is the toolkit's native trust protocol providing cryptographic
@@ -574,6 +578,8 @@ if a2a_gate.evaluate(task).allowed:
 ```
 
 ---
+
+<a id="9-cli-agentmesh-proxy"></a>
 
 ## 9. CLI — `agentmesh proxy`
 

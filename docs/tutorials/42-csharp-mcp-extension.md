@@ -52,6 +52,8 @@ The extension package targets `net8.0` and integrates with `IMcpServerBuilder`.
 
 ---
 
+<a id="step-1-create-a-policy-file"></a>
+
 ## Step 1 - Create a policy file
 
 Create `policies/mcp.yaml`:
@@ -72,6 +74,8 @@ This is the minimum useful policy: deny everything by default, then explicitly a
 you want exposed.
 
 ---
+
+<a id="step-2-register-the-governed-server"></a>
 
 ## Step 2 - Register the governed server
 
@@ -98,6 +102,8 @@ If you are using `Host.CreateApplicationBuilder(args)`, register the same way th
 `builder.Services`.
 
 ---
+
+<a id="step-3-register-tools"></a>
 
 ## Step 3 - Register tools
 
@@ -163,6 +169,8 @@ internal sealed class EchoTool : McpServerTool
 
 ---
 
+<a id="step-4-understand-runtime-behavior"></a>
+
 ## Step 4 - Understand runtime behavior
 
 After building the service provider, governance changes the MCP server in four ways:
@@ -194,6 +202,8 @@ Console.WriteLine(tool.GetType().Name);
 If a call is denied by policy, the tool implementation is never executed.
 
 ---
+
+<a id="step-5-tune-the-options"></a>
 
 ## Step 5 - Tune the options
 
@@ -241,6 +251,8 @@ That definition is scanned during option materialization, and with `FailOnUnsafe
 an `InvalidOperationException` is thrown instead of exposing the tool.
 
 ---
+
+<a id="step-6-use-authenticated-agent-ids"></a>
 
 ## Step 6 - Use authenticated agent IDs
 

@@ -761,6 +761,8 @@ so a single Prometheus instance can scrape both and correlate in Grafana.
 
 ---
 
+<a id="10-prometheus-grafana-dashboard"></a>
+
 ## 10. Prometheus & Grafana Dashboard
 
 ### Prometheus scrape configuration

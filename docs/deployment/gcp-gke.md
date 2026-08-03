@@ -1,6 +1,6 @@
 ---
 title: "Deploying AGT on Google Cloud GKE"
-last_reviewed: 2026-04-11
+last_reviewed: 2026-07-15
 owner: agt-maintainers
 ---
 
@@ -95,8 +95,8 @@ kubectl rollout status deployment/agt-governance
 
 ## Using with Google ADK Agents
 
-AGT includes a native Google ADK adapter. Wrap your ADK agent's tool calls
-with `PolicyEvaluator.evaluate()` — see
+AGT includes a native Google ADK adapter. Construct it with `AgentControl` and
+mediate tool calls through the adapter. See
 [examples/quickstart/google_adk_governed.py](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/quickstart/google_adk_governed.py).
 
 ## See Also

@@ -22,7 +22,7 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Discord](https://dcbadge.limes.pink/api/server/7aVPCcVh?style=flat)](https://discord.gg/7aVPCcVh)
+[![Discord](https://dcbadge.limes.pink/api/server/TxMRqY3pFr?style=flat)](https://discord.gg/TxMRqY3pFr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
@@ -61,14 +61,19 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 **Prerequisites:** Python 3.11+
 
 ```bash
-pip install agent-governance-toolkit[full]
-pip install agt-policies
+pip install "agent-governance-toolkit[full]"
 ```
 
-The `[full]` extra supplies the application wrapper below. Use `agt-policies`
-for new hosts, adapters, gateways, and platform enforcement through ACS, the
-canonical AGT 5 policy decision layer. The current `govern()` wrapper does not
-call ACS.
+Use the `[full]` extra for the quick-start imports below. The base
+`agent-governance-toolkit` wheel installs the compliance CLI only; the governance
+modules live in the consolidated core distribution. The `agentmesh` quick-start
+import remains the current wrapper API. Importing `agent_os` emits a
+`DeprecationWarning` because the old `agent-os-kernel` distribution is deprecated.
+Use `agent-governance-toolkit-core` (or the `[full]` extra that includes it) as
+the replacement distribution. Policy-engine host code uses the ACS SDK;
+`agt-policies` provides the one-way v4-to-v5 migration command. The pre-ACS
+`agent_os.policies` rule model is gone, and `BREAKING_CHANGES.md` lists its
+replacements.
 
 For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
 
@@ -114,28 +119,24 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
   Destructive operations require human approval
 ```
 
-Use ACS when the host needs the portable intervention-point contract:
+Or use the full `AgentControl` API for programmatic control:
 
 <details>
-<summary><b>ACS host example</b></summary>
+<summary><b>AgentControl example</b></summary>
 
 ```python
-from agt.policies import SnapshotBuilder
-from agt.policies.runtime import AgtRuntime
+from agent_control_specification import AgentControl
 
-runtime = AgtRuntime("manifest.yaml")
-session = SnapshotBuilder(agent_id="researcher", session_id="session-1")
-
-result = runtime.evaluate_intervention_point(
-    "pre_tool_call",
-    session.pre_tool_call(
-        tool_name="send_email",
-        args={"to": "partner@example.net", "body": "Status update"},
-    ),
+runtime = AgentControl.from_path(str("manifest.yaml"))
+result = runtime.evaluate(
+    "input",
+    {
+        "envelope": {"agent_id": "example-agent"},
+        "input": {"body": {"action": "web_search", "params": {}}},
+    },
 )
-
-if not result.allowed:
-    raise PermissionError(result.reason)
+print(result.verdict)
+runtime.close()
 ```
 
 [Run the complete ACS email-tool example](examples/acs-email-tool).
@@ -260,7 +261,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 | Language | Package | Command |
 |----------|---------|---------|
-| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
+| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install "agent-governance-toolkit[full]"` |
 | **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
 | **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
@@ -335,7 +336,6 @@ Full list: [Framework Integrations](agent-governance-python/agentmesh-integratio
 | [smolagents-governed](examples/smolagents-governed) | HuggingFace smolagents | Lightweight agent governance |
 | [maf-integration](examples/maf-integration) | MAF | Microsoft Agent Framework integration |
 | [mcp-trust-verified-server](examples/mcp-trust-verified-server) | MCP | Trust-verified MCP server implementation |
-| [cedarling-governed](examples/cedarling-governed) | Cedar/Cedarling | Janssen Cedarling policy engine integration |
 | [governance-dashboard](examples/demos/governance-dashboard) | Streamlit | Real-time fleet visibility dashboard |
 
 ---
@@ -346,7 +346,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 
 | Specification | Scope | Tests |
 |---|---|---|
-| [Agent OS Policy Engine](docs/specs/AGENT-OS-POLICY-ENGINE-1.0.md) | Policy evaluation, rule merging, fail-closed semantics | 68 |
+| [Agent OS Policy Engine](docs/specs/AGENT-OS-POLICY-ENGINE-1.0.md) | Native runtime integration and fail-closed semantics | -- |
 | [Agent Control Specification](policy-engine/spec/SPECIFICATION.md) | Stateless intervention-point policy runtime, verdicts, transform, fail-closed | -- |
 | [AgentMesh Identity and Trust](docs/specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | Credentials, trust scoring, delegation chains | 135 |
 | [Agent Hypervisor Execution Control](docs/specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | Privilege rings, saga orchestration, kill switch | 80 |
@@ -354,7 +354,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 | [Agent SRE Governance](docs/specs/AGENT-SRE-GOVERNANCE-1.0.md) | SLOs, error budgets, chaos, circuit breakers | 111 |
 | [MCP Security Gateway](docs/specs/MCP-SECURITY-GATEWAY-1.0.md) | Tool poisoning, drift detection, hidden instructions | 127 |
 | [Agent Lightning Fast-Path](docs/specs/AGENT-LIGHTNING-FAST-PATH-1.0.md) | RL training governance, violation penalties | 100 |
-| [Framework Adapter Contract](docs/specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md) | 10 adapter integrations, interceptor chain | 152 |
+| [Framework Adapter Contract](docs/specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md) | Native framework mediation contract | -- |
 | [Audit and Compliance](docs/specs/AUDIT-COMPLIANCE-1.0.md) | Merkle audit, compliance mapping, Decision BOM | 157 |
 | [AgentMesh Wire Protocol](docs/specs/AGENTMESH-WIRE-1.0.md) | Message format, routing, serialization | -- |
 
@@ -409,7 +409,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 
 ## Contributing
 
-[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/7aVPCcVh) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/TxMRqY3pFr) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 **Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md).
 

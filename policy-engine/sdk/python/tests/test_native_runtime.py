@@ -4,7 +4,15 @@ import asyncio
 import unittest
 from pathlib import Path
 
-from agent_control_specification import AgentControl, Decision, InterventionPoint, PerfTelemetry
+from agent_control_specification import (
+    AgentControl,
+    Decision,
+    InterventionPoint,
+    PerfTelemetry,
+    parse_manifest,
+    validate_manifest,
+    validate_manifest_overlay,
+)
 
 try:
     from agent_control_specification import _native  # noqa: F401
@@ -67,6 +75,41 @@ class MockPolicy:
 
 @unittest.skipUnless(_NATIVE_AVAILABLE, "agent_control_specification._native extension is not built")
 class NativeRuntimeTests(unittest.TestCase):
+    def test_parse_manifest_uses_native_yaml_semantics(self):
+        parsed = parse_manifest(
+            """agent_control_specification_version: 0.3.1-beta
+metadata:
+  on: 0b1010
+  date: 2026-07-16
+"""
+        )
+
+        self.assertEqual(parsed["metadata"]["on"], 10)
+        self.assertEqual(parsed["metadata"]["date"], "2026-07-16")
+
+    def test_validate_manifest_rejects_duplicate_keys(self):
+        with self.assertRaisesRegex(RuntimeError, "duplicate manifest mapping key"):
+            validate_manifest(
+                """agent_control_specification_version: 0.3.0-alpha
+agent_control_specification_version: 0.3.1-beta
+"""
+            )
+
+    def test_validate_manifest_overlay_checks_version_without_requiring_points(self):
+        validate_manifest_overlay(
+            """agent_control_specification_version: 0.3.1-beta
+extends:
+  - base.yaml
+"""
+        )
+        with self.assertRaisesRegex(RuntimeError, "unsupported agent_control_specification_version"):
+            validate_manifest_overlay(
+                """agent_control_specification_version: banana
+extends:
+  - base.yaml
+"""
+            )
+
     def test_basic_host_scenario_through_native_runtime(self):
         async def run():
             control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), MockPolicy())

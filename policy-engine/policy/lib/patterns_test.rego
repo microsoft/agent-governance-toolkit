@@ -60,3 +60,29 @@ test_non_string_input_does_not_match if {
 	not patterns.matches_any(123, patterns.pii_patterns)
 	not patterns.first_match({"x": 1}, patterns.pii_patterns)
 }
+
+# A zero-length leftmost match must still produce a verdict. matches_any and
+# first_match have to agree: a caller that gates on the former and reads a
+# verdict from the latter would otherwise fall through to allow.
+test_zero_length_leftmost_match_still_denies if {
+	patterns.matches_any("card 4111", ["[0-9]*"])
+	verdict := patterns.deny_if_pattern("card 4111", ["[0-9]*"], "r")
+	verdict.decision == "deny"
+}
+
+test_empty_text_with_zero_width_pattern_denies if {
+	patterns.matches_any("", ["x*"])
+	patterns.deny_if_pattern("", ["x*"], "r").decision == "deny"
+}
+
+test_match_start_of_empty_match_is_zero if {
+	patterns.first_match("card 4111", ["[0-9]*"]).span_start == 0
+}
+
+# A zero-width match reports offset 0 because OPA gives no position for it.
+# Pinned so the placeholder is a recorded property rather than an accident.
+test_zero_width_match_reports_placeholder_offset if {
+	hit := patterns.first_match("ab 12", ["(?m)$"])
+	hit.match == ""
+	hit.span_start == 0
+}

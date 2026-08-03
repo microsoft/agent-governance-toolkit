@@ -8,10 +8,10 @@
 
 | Scenario | Layer | What Happens |
 |----------|-------|--------------|
-| **1. Policy Enforcement** | `GovernancePolicyMiddleware` | YAML policy allows a search prompt but blocks `**/internal/**` — **before the LLM is called** |
+| **1. Policy Enforcement** | `RuntimeGovernanceMiddleware` | YAML policy allows a search prompt but blocks `**/internal/**` — **before the LLM is called** |
 | **2. Capability Sandboxing** | `CapabilityGuardMiddleware` | LLM requests tool calls; governance allows `run_code` but denies `write_file` |
 | **3. Rogue Detection** | `RogueDetectionMiddleware` | Behavioral anomaly engine detects a 50-call burst and auto-quarantines |
-| **4. Content Filtering** | `GovernancePolicyMiddleware` | Multiple prompts evaluated — dangerous ones blocked, safe ones forwarded |
+| **4. Content Filtering** | `RuntimeGovernanceMiddleware` | Multiple prompts evaluated — dangerous ones blocked, safe ones forwarded |
 | **Audit Trail** | `AuditLog` + Merkle chain | Every decision is cryptographically chained and verifiable |
 
 ## Architecture
@@ -20,7 +20,7 @@
 +-------------------------------------------------------+
 |  Agent (with real OpenAI / Azure OpenAI backend)      |
 |  +--------------------------------------------------+ |
-|  |  GovernancePolicyMiddleware (YAML policy eval)    | <-- Blocks before LLM
+|  |  RuntimeGovernanceMiddleware (YAML policy eval)    | <-- Blocks before LLM
 |  |  CapabilityGuardMiddleware  (tool allow/deny)     | <-- Intercepts tools
 |  |  RogueDetectionMiddleware   (anomaly scoring)     | <-- Behavioral SRE
 |  +--------------------------------------------------+ |
@@ -36,37 +36,38 @@
 ## Prerequisites
 
 ```bash
-pip install agent-os-kernel agentmesh-platform agent-sre openai
+pip install -e "agent-governance-python/agt-policies"
+pip install -e "agent-governance-python/agent-os"
+```
 
-# Set your API key (pick one)
-export OPENAI_API_KEY="sk-..."
-# or for Azure OpenAI:
-export AZURE_OPENAI_API_KEY="..."
-export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
+### No API key: run against a open-source model
+
+The demo also runs against a local, OpenAI-compatible server such as
+[Ollama](https://ollama.com) — no paid keys or secrets required. The OpenAI
+client picks up `OPENAI_BASE_URL` automatically, so pointing it at Ollama is
+just two environment variables. This is the mode used by CI, which exercises the
+governance stack against **Meta Llama 3.1**:
+
+```bash
+ollama serve &
+ollama pull llama3.1
+export OPENAI_BASE_URL="http://127.0.0.1:11434/v1"
+export OPENAI_API_KEY="ollama"   # placeholder; Ollama ignores it
+python examples/maf-integration/01-loan-processing/python/main.py --model llama3.1
 ```
 
 ## Running
 
 ```bash
-cd agent-governance-toolkit
-
-# Default (gpt-4o-mini, ~$0.01 per run)
-python demo/maf_governance_demo.py
-
-# Use a specific model
-python demo/maf_governance_demo.py --model gpt-4o
-
-# Show raw LLM responses
-python demo/maf_governance_demo.py --verbose
+python examples/maf-integration/01-loan-processing/python/main.py
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `demo/maf_governance_demo.py` | Main demo script (real LLM calls) |
-| `demo/policies/research_policy.yaml` | Declarative governance policy |
-| `demo/governance-dashboard/` | **Real-time Streamlit dashboard** — fleet overview, shadow agents, lifecycle, policy feed, trust heatmap |
+| `examples/maf-integration/` | Native ACS MAF scenarios |
+| `examples/demos/governance-dashboard/` | Real-time Streamlit dashboard |
 | `agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py` | Governance middleware |
 | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
 | `agent-governance-python/agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |

@@ -17,7 +17,7 @@ to agent actions. It exercises the real implementations from all three packages:
 
 | Package | Component tested |
 |---------|-----------------|
-| `agent-os` | `PolicyEvaluator` — declarative YAML/JSON rule engine |
+| `agt-policies` | `AgentControl` — native ACS runtime |
 | `agent-mesh` | `TrustPolicyEvaluator` — trust-score-based policy DSL |
 | `agent-mesh` | `AuditLog` / `MerkleAuditChain` — append-only Merkle audit |
 | `agent-mesh` | `CredentialManager` — ephemeral credential issuance & validation |
@@ -163,7 +163,7 @@ governed-action overhead to ~0.02 ms (p50).
 ## Reproducing
 
 ```bash
-py -3.12 agent-governance-python/benchmarks/governance_overhead.py
+py -3.12 tests/ci/test_native_policy_packaging.py
 ```
 
 Raw results are saved to `agent-governance-python/benchmarks/results/governance_overhead.json`.

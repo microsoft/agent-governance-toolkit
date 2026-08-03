@@ -789,8 +789,27 @@ class TestCLIAuditExtended:
 # ============================================================================
 
 
+def _native_manifest(name: str = "test-policy") -> str:
+    return (
+        "agent_control_specification_version: 0.3.1-beta\n"
+        "metadata:\n"
+        f"  name: {name}\n"
+        '  version: "1.0"\n'
+        "extends: []\n"
+        "policies:\n"
+        "  test:\n"
+        "    type: custom\n"
+        "    adapter: test\n"
+        "intervention_points:\n"
+        "  input:\n"
+        "    policy_target: $.input.body\n"
+        "    policy:\n"
+        "      id: test\n"
+    )
+
+
 class TestCLIValidateExtended:
-    """Extended tests for agentos validate command (#158)."""
+    """Extended tests for native ACS manifest validation."""
 
     def test_validate_valid_policy(self):
         """Test validate with a valid policy YAML."""
@@ -798,9 +817,7 @@ class TestCLIValidateExtended:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             policy_file = Path(tmpdir) / "policy.yaml"
-            policy_file.write_text(
-                "version: '1.0'\nname: test-policy\nrules:\n  - type: allow\n"
-            )
+            policy_file.write_text(_native_manifest(), encoding="utf-8")
 
             class Args:
                 files = [str(policy_file)]
@@ -815,7 +832,10 @@ class TestCLIValidateExtended:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             policy_file = Path(tmpdir) / "bad.yaml"
-            policy_file.write_text("version: '1.0'\nname: [unterminated\n")
+            policy_file.write_text(
+                "agent_control_specification_version: [unterminated\n",
+                encoding="utf-8",
+            )
 
             class Args:
                 files = [str(policy_file)]
@@ -825,12 +845,12 @@ class TestCLIValidateExtended:
             assert result == 1
 
     def test_validate_missing_required_fields(self):
-        """Test validate catches missing required fields (version, name)."""
+        """Test validate catches missing native manifest fields."""
         from agent_os.cli import cmd_validate
 
         with tempfile.TemporaryDirectory() as tmpdir:
             policy_file = Path(tmpdir) / "incomplete.yaml"
-            policy_file.write_text("description: no version or name\n")
+            policy_file.write_text("metadata: {}\n", encoding="utf-8")
 
             class Args:
                 files = [str(policy_file)]
@@ -839,13 +859,16 @@ class TestCLIValidateExtended:
             result = cmd_validate(Args())
             assert result == 1
 
-    def test_validate_missing_name_field(self, capsys):
-        """Test validate reports helpful error for missing 'name' field."""
+    def test_validate_rejects_unknown_top_level_field(self, capsys):
+        """Test validate reports native schema errors."""
         from agent_os.cli import cmd_validate
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            policy_file = Path(tmpdir) / "noname.yaml"
-            policy_file.write_text("version: '1.0'\nrules:\n  - type: allow\n")
+            policy_file = Path(tmpdir) / "extra.yaml"
+            policy_file.write_text(
+                _native_manifest() + "unexpected: true\n",
+                encoding="utf-8",
+            )
 
             class Args:
                 files = [str(policy_file)]
@@ -854,7 +877,7 @@ class TestCLIValidateExtended:
             result = cmd_validate(Args())
             assert result == 1
             output = capsys.readouterr().out
-            assert "name" in output.lower()
+            assert "unexpected" in output.lower()
 
     def test_validate_empty_file(self):
         """Test validate catches empty YAML files."""
@@ -862,7 +885,7 @@ class TestCLIValidateExtended:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             policy_file = Path(tmpdir) / "empty.yaml"
-            policy_file.write_text("")
+            policy_file.write_text("", encoding="utf-8")
 
             class Args:
                 files = [str(policy_file)]
@@ -883,14 +906,31 @@ class TestCLIValidateExtended:
             result = cmd_validate(Args())
             assert result == 1
 
-    def test_validate_rules_not_a_list(self):
-        """Test validate catches 'rules' field that is not a list."""
+    def test_policy_validate_alias_uses_native_validator(self):
+        """The nested policy command validates the same ACS manifest."""
+        from agent_os.cli import cmd_policy
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            policy_file = Path(tmpdir) / "manifest.yaml"
+            policy_file.write_text(_native_manifest(), encoding="utf-8")
+
+            class Args:
+                policy_command = "validate"
+                path = str(policy_file)
+                strict = False
+                json = False
+
+            assert cmd_policy(Args()) == 0
+
+    def test_validate_rejects_non_native_document(self):
+        """Test validate rejects a document without the ACS contract."""
         from agent_os.cli import cmd_validate
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            policy_file = Path(tmpdir) / "badrules.yaml"
+            policy_file = Path(tmpdir) / "invalid.yaml"
             policy_file.write_text(
-                "version: '1.0'\nname: bad\nrules: not-a-list\n"
+                "metadata: []\n",
+                encoding="utf-8",
             )
 
             class Args:

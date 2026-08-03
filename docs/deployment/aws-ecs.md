@@ -1,6 +1,6 @@
 ---
 title: "Deploying AGT on AWS ECS/Fargate"
-last_reviewed: 2026-04-11
+last_reviewed: 2026-07-15
 owner: agt-maintainers
 ---
 
@@ -83,8 +83,8 @@ aws ecs create-service \
 
 ## Using with AWS Bedrock Agents
 
-AGT works with any agent framework. For Bedrock agents, wrap the agent's
-tool calls with `PolicyEvaluator.evaluate()` — see
+AGT works with any agent framework. For Bedrock agents, construct
+`BedrockKernel` with `AgentControl`. See
 [examples/quickstart/govern_in_60_seconds.py](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/quickstart/govern_in_60_seconds.py).
 
 ## See Also

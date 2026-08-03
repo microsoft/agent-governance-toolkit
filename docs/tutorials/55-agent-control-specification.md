@@ -16,10 +16,9 @@ verdict.
 
 !!! tip "Prefer a runnable repository example?"
     Start with `examples/acs-email-tool` in a repository checkout. It
-    demonstrates the canonical AGT host path through `agt-policies`,
-    `SnapshotBuilder`, and `AgtRuntime` without OPA. This tutorial uses the
-    lower-level ACS SDK and a Rego policy to expose the native manifest and
-    policy-input contract.
+    demonstrates the canonical Python host path through `AgentControl`,
+    `HostSession`, and `SnapshotBuilder` without OPA. This tutorial adds a Rego
+    policy to expose the native manifest and policy-input contract.
 
 You will create:
 
@@ -52,15 +51,8 @@ python -m pip install ./sdk/python
 ```
 
 The `agent-control-specification` distribution builds the native Rust core with
-maturin when installed from source.
-
-For an AGT host or adapter, install `agt-policies` after the native SDK and use
-its `AgtRuntime` wrapper:
-
-```bash
-cd ..
-python -m pip install -e agent-governance-python/agt-policies
-```
+maturin when installed from source. It includes `AgentControl`, `HostSession`,
+and `SnapshotBuilder` for Python hosts.
 
 OPA-backed Rego examples require the `opa` CLI on `PATH`.
 
@@ -92,7 +84,7 @@ intervention_points:
     policy:
       id: email_policy
   post_tool_call:
-    policy_target: $.tool_result
+    policy_target: $.tool_result.value
     policy_target_kind: tool_result
     tool_name_from: $.tool_call.name
     policy:

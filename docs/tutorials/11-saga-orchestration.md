@@ -260,6 +260,8 @@ if saga:
 
 ---
 
+<a id="5-saga-step-state-machines"></a>
+
 ## 5. Saga & Step State Machines
 
 Both sagas and steps follow strict state machines with validated transitions.

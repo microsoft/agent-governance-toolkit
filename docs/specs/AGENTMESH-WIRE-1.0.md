@@ -913,6 +913,8 @@ Canonical JSON serialization of each frame type will be provided at
 
 ---
 
+<a id="appendix-a-intellectual-property-and-prior-art"></a>
+
 ## Appendix A — Intellectual Property and Prior Art
 
 ### A.1 Clean-Room Design Statement
@@ -981,6 +983,8 @@ To maintain clean-room integrity:
 
 ---
 
+<a id="appendix-b-recommended-cryptographic-libraries"></a>
+
 ## Appendix B — Recommended Cryptographic Libraries
 
 Implementations MUST use audited, well-known cryptographic libraries.
@@ -1023,6 +1027,8 @@ Custom crypto implementations are prohibited.
 | X25519, Ed25519, HKDF, ChaCha20-Poly1305 | [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | BSD-3-Clause | Go standard extended library |
 
 ---
+
+<a id="appendix-c-tutorial-and-demo-roadmap"></a>
 
 ## Appendix C — Tutorial and Demo Roadmap
 

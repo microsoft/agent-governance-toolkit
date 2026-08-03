@@ -77,7 +77,7 @@ owner: agt-maintainers
 | **Microsoft Agent-Lightning** | 15K ⭐ | ✅ Merged | Governance kernel for RL training safety |
 | **LangGraph** | 24K ⭐ | 📦 PyPI | Trust-scored state transitions |
 | **OpenAI Agents SDK** | — | 📦 PyPI | Tool-level governance guardrails |
-| **Haystack** | 22K ⭐ | 🔄 In Review | GovernancePolicyChecker + TrustGate components |
+| **Haystack** | 22K ⭐ | 🔄 In Review | `TrustGate` + `AuditLogger` components |
 
 > **AgentMesh is "SSL for AI Agents"** — the trust and identity layer that makes multi-agent systems enterprise-ready. Every agent gets a cryptographic identity. Every interaction is verified. Every action is audited.
 
@@ -309,6 +309,8 @@ git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-mesh
 pip install -e .
 ```
+
+<a id="examples-integrations"></a>
 
 ## Examples & Integrations
 

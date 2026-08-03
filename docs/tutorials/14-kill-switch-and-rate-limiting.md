@@ -115,6 +115,8 @@ history. The rest of this tutorial covers every component in detail.
 
 ---
 
+<a id="3-killswitch-immediate-termination"></a>
+
 ## 3. KillSwitch — Immediate Termination
 
 **Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py`
@@ -273,6 +275,8 @@ The `KillResult` dataclass is returned from every `kill()` call:
 | `details` | `str` | Free-text details about the kill |
 
 ---
+
+<a id="4-agentratelimiter-per-ring-token-buckets"></a>
 
 ## 4. AgentRateLimiter — Per-Ring Token Buckets
 
@@ -452,6 +456,8 @@ assert bucket.consume(1.0) is False
 ```
 
 ---
+
+<a id="5-ratelimiter-agent-mesh-http-service-limits"></a>
 
 ## 5. RateLimiter (Agent Mesh) — HTTP Service Limits
 
@@ -652,6 +658,8 @@ where multiple HTTP handler threads may be checking limits concurrently.
 
 ---
 
+<a id="6-ratelimitmiddleware-http-edge-enforcement"></a>
+
 ## 6. RateLimitMiddleware — HTTP Edge Enforcement
 
 **Source:** `agent-governance-python/agent-mesh/src/agentmesh/services/rate_limit_middleware.py`
@@ -771,6 +779,8 @@ assert response.status_code == 200
 | `X-Backpressure` | Response | `"true"` when nearing capacity |
 
 ---
+
+<a id="7-ringelevationmanager-temporary-privilege-escalation"></a>
 
 ## 7. RingElevationManager — Temporary Privilege Escalation
 
@@ -937,6 +947,8 @@ print(RingElevationManager.DEFAULT_TTL)          # 300 seconds
 ```
 
 ---
+
+<a id="8-ringbreachdetector-anomaly-detection"></a>
 
 ## 8. RingBreachDetector — Anomaly Detection
 
@@ -1199,6 +1211,8 @@ for _ in range(200):
 ```
 
 ---
+
+<a id="9-combining-controls-defense-in-depth"></a>
 
 ## 9. Combining Controls — Defense in Depth
 

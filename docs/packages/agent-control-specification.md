@@ -103,34 +103,34 @@ The Rust core emits structured telemetry through a `TelemetrySink`. Telemetry is
 
 AGT owns the vendored ACS source under
 [`policy-engine/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine).
-`agt-policies` connects AGT hosts and adapters to that runtime. The Agent OS
-compatibility bridge preserves existing integration behavior while routing new
-host code toward ACS.
+The language SDKs connect hosts and adapters to that runtime. Agent OS adapters
+preserve framework integration behavior while routing policy decisions through
+ACS.
 
-## How AGT Python hosts call ACS
+## How Python hosts call ACS
 
-`agt-policies` is the canonical Python host package for ACS. It provides the
-host concerns that remain outside the stateless engine:
+`agent-control-specification` is the canonical Python SDK for ACS. It provides
+the host concerns that remain outside the stateless engine:
 
-- governance manifest discovery and resolution
-- complete intervention-point snapshots
-- the synchronous `AgtRuntime` host wrapper
-- result mapping for `allow`, `warn`, `deny`, `escalate`, and `transform`
-- compatibility bridging for existing Agent OS integrations
+- manifest loading through `AgentControl`
+- complete intervention-point snapshots through `SnapshotBuilder`
+- synchronous host callbacks through `HostSession`
+- native `InterventionPointResult` values for `allow`, `warn`, `deny`,
+  `escalate`, and `transform`
 
 ```bash
-pip install agt-policies
+pip install agent-control-specification
 ```
 
-Use `agent-control-specification` directly only for the native ACS SDK without
-AGT's host conventions.
+`agt-policies` is a separate migration package. It converts AGT v4 projects to
+ACS manifests with `agt migrate v4-to-v5`.
 
 ## SDKs and specification
 
 | Surface | Path |
 | --- | --- |
-| AGT Python host | [`agent-governance-python/agt-policies/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agt-policies) |
 | Python SDK | [`policy-engine/sdk/python/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/python) |
+| v4 migration tool | [`agent-governance-python/agt-policies/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agt-policies) |
 | Node.js SDK | [`policy-engine/sdk/node/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/node) |
 | .NET SDK | [`policy-engine/sdk/dotnet/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/dotnet) |
 | Rust SDK | [`policy-engine/sdk/rust/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/rust) |

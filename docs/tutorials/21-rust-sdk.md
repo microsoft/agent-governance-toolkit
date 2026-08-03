@@ -44,7 +44,7 @@ smaller standalone dependency.
 
 - **Rust 1.75+** with Cargo
 - Familiarity with `cargo` and `Cargo.toml`
-- Recommended: read [Tutorial 01 — Policy Engine](01-policy-engine.md) for
+- Recommended: read Tutorial 01 — Policy Engine for
   governance concepts
 
 ---
@@ -163,7 +163,7 @@ the core client:
 ```rust
 use agentmesh::{
     ComplianceEngine, ComplianceFramework, ExecutionRequest, ExecutionResponse,
-    FrameworkGovernanceAdapter, FrameworkKind, GovernanceHook, GovernancePolicy,
+    FrameworkGovernanceAdapter, FrameworkKind, GovernanceHook, AgentControl,
     KillSwitchRegistry, KillSwitchReason, KillSwitchScope, PromptDefenseEvaluator,
     RewardEngine, TrustHandshake,
 };
@@ -191,9 +191,9 @@ let kill_switches = KillSwitchRegistry::new();
 let handshake = TrustHandshake::new("did:mesh:controller", None, None);
 let adapter = FrameworkGovernanceAdapter::for_tower(
     ReadOnlyHook,
-    GovernancePolicy {
+    AgentControl {
         allowed_tools: vec!["read_file".into()],
-        ..GovernancePolicy::default()
+        ..AgentControl::default()
     },
 );
 
@@ -293,7 +293,7 @@ assert_eq!(decision, PolicyDecision::Allow);
 ### §3.3 Four Decision Types
 
 ```yaml
-# policies/governance.yaml
+# policies/agt-manifest.yaml
 version: "1.0"
 agent: multi-decision-demo
 policies:
@@ -323,7 +323,7 @@ policies:
 
 ```rust
 let engine = PolicyEngine::new();
-engine.load_from_file("policies/governance.yaml")?;
+engine.load_from_file("policies/agt-manifest.yaml")?;
 
 // Capability — allowed
 assert_eq!(engine.evaluate("data.read", None), PolicyDecision::Allow);
@@ -791,7 +791,7 @@ Chain valid: true
 
 | Rust Crate Feature | Python Equivalent | Tutorial |
 |------------------|-------------------|----------|
-| `PolicyEngine` | `agent_os.policy` | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
+| `PolicyEngine` | `agent_os.policy` | Tutorial 01 — Policy Engine |
 | `TrustManager` | `agent_os.trust` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
 | `AuditLogger` | `agent_os.audit` | [Tutorial 04 — Audit & Compliance](./04-audit-and-compliance.md) |
 | `AgentIdentity` | `agent_os.identity` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
