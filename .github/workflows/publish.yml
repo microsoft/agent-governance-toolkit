@@ -209,6 +209,8 @@ jobs:
             echo "::error::expected one ACS wheel, found ${#wheels[@]}"
             exit 1
           fi
+          # EXPECTED_WHEEL is a deliberate glob (e.g. *macosx_10_12_x86_64.whl).
+          # shellcheck disable=SC2254
           case "$(basename "${wheels[0]}")" in
             $EXPECTED_WHEEL) ;;
             *) echo "::error::unexpected ACS wheel tag: $(basename "${wheels[0]}")"; exit 1 ;;
@@ -309,9 +311,9 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Verify complete ACS Python distribution
-        run: >-
-          python scripts/ci/verify_acs_python_dist.py dist
-          --pyproject policy-engine/sdk/python/pyproject.toml
+        run: |
+          python scripts/ci/verify_acs_python_dist.py dist \
+            --pyproject policy-engine/sdk/python/pyproject.toml
       - name: Sign release artifacts with sigstore
         uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
         with:

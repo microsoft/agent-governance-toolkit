@@ -97,7 +97,10 @@
     "headerless",
     "desync",
     "starlette",
-    "realpeerrealpeerrealpeerreal"
+    "realpeerrealpeerrealpeerreal",
+    "pwsh",
+    "notlike",
+    "sdists"
   ],
   "ignorePaths": [
     "**/node_modules/**",

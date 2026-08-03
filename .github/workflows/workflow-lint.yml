@@ -34,8 +34,10 @@ jobs:
           actionlint -color \
             -ignore 'unknown permission scope "models"' \
             -ignore 'undefined variable "pattern"' \
+            -ignore 'label "macos-15-intel" is unknown' \
             -ignore 'SC2016' \
             -ignore 'SC2001' \
+            -ignore 'SC2129' \
             -ignore 'SC2193'
 
   shellcheck:
