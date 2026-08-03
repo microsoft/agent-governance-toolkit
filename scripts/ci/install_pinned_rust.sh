@@ -27,6 +27,11 @@ case "$(uname -s):$(uname -m)" in
     RUSTUP_FILE="rustup-init"
     RUSTUP_SHA256="f547d77c32d50d82b8228899b936bf2b3c72ce0a70fb3b364e7fba8891eba781"
     ;;
+  Darwin:arm64)
+    RUSTUP_TARGET="aarch64-apple-darwin"
+    RUSTUP_FILE="rustup-init"
+    RUSTUP_SHA256="760b18611021deee1a859c345d17200e0087d47f68dfe58278c57abe3a0d3dd0"
+    ;;
   MINGW*:x86_64 | MSYS*:x86_64 | CYGWIN*:x86_64)
     RUSTUP_TARGET="x86_64-pc-windows-msvc"
     RUSTUP_FILE="rustup-init.exe"
