@@ -361,6 +361,13 @@ jobs:
           # declare every agt-policies transitive dependency itself.
           pip install --no-cache-dir "pydantic>=2.5.0,<3.0" "pyyaml>=6.0,<7.0"
           pip install --no-cache-dir --no-deps -e agent-governance-python/agt-policies
+          # agent-mesh's dev extra pins agent_hypervisor>=5.0.0 (its ring tests
+          # exercise the hypervisor). PyPI tops out at the pre-consolidation
+          # 3.7.0 wheel, which ships real code that would collide with the
+          # `hypervisor` top-level package force-included by -core. Satisfy the
+          # pin from the local dep-only stub so pip never falls back to PyPI;
+          # the actual source is imported via the editable -core install above.
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-hypervisor
       - name: Install OPA (ACS-backed Python policy runtime)
         # The native ACS runtime evaluates policy via OPA; without it the
         # runtime fails closed (runtime_error:policy_invocation_failed) and
@@ -512,6 +519,77 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
         run: ls -la dist/*.whl
+
+  # ── Install coherence — built wheels must form one coherent module set ─
+  # Guards the order/version-dependent "Frankenstein install": builds the
+  # consolidation wheels for all three umbrella sets (-core, -cli, -protocols)
+  # plus their deprecation stubs, asserts no two of them own the same top-level
+  # import path (a stub re-shipping source would fail here), then imports the
+  # modules from clean venvs — each umbrella alone, and every wheel installed
+  # together, which is the exact combination that previously collided.
+  install-coherence:
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install build tools
+        run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-build.txt
+      - name: Build consolidation wheels
+        run: |
+          set -euo pipefail
+          rm -rf dist-coherence && mkdir -p dist-coherence
+          # The umbrellas own the source; the sibling stubs are dep-only. Build
+          # them all with --wheel because the umbrellas force-include sibling
+          # source, which only resolves when building directly from the source
+          # tree. -core's set is the five renamed stubs; -cli's set adds
+          # agent-sre; -protocols' set adds agent-mcp-governance.
+          for pkg in \
+            agent-governance-toolkit-core \
+            agent-hypervisor agent-mesh agent-os agent-runtime agent-primitives \
+            agent-governance-toolkit-cli agent-sre \
+            agent-governance-toolkit-protocols agent-mcp-governance; do
+            python -m build --wheel "agent-governance-python/$pkg" -o dist-coherence
+          done
+          ls -la dist-coherence
+      - name: Assert one owner per top-level module (no collisions)
+        run: python scripts/ci/check_wheel_coherence.py dist-coherence
+      - name: Clean-venv import — meta package alone
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv-core
+          /tmp/venv-core/bin/pip install --no-cache-dir \
+            dist-coherence/agent_governance_toolkit_core-*.whl
+          /tmp/venv-core/bin/python -W ignore \
+            -c "import hypervisor, agentmesh, agent_os, agent_runtime, agent_primitives; print('meta import OK')"
+      - name: Clean-venv import — cli umbrella alone
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv-cli
+          # --find-links resolves the -core dependency to the locally built wheel.
+          /tmp/venv-cli/bin/pip install --no-cache-dir --find-links dist-coherence \
+            dist-coherence/agent_governance_toolkit_cli-*.whl
+          /tmp/venv-cli/bin/python -W ignore \
+            -c "import agent_sre, agent_sandbox, mcp_trust_server; print('cli import OK')"
+      - name: Clean-venv import — protocols umbrella alone
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv-protocols
+          # --find-links resolves the -core dependency to the locally built wheel.
+          /tmp/venv-protocols/bin/pip install --no-cache-dir --find-links dist-coherence \
+            dist-coherence/agent_governance_toolkit_protocols-*.whl
+          /tmp/venv-protocols/bin/python -W ignore \
+            -c "import agent_mcp_governance, a2a_agentmesh, mcp_receipt_governed, mcp_trust_proxy; print('protocols import OK')"
+      - name: Clean-venv import — all umbrellas + all deprecation stubs (previously collided)
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv-all
+          /tmp/venv-all/bin/pip install --no-cache-dir --find-links dist-coherence dist-coherence/*.whl
+          /tmp/venv-all/bin/python -W ignore \
+            -c "import hypervisor, agentmesh, agent_os, agent_runtime, agent_primitives, agent_sre, agent_sandbox, mcp_trust_server, agent_mcp_governance, a2a_agentmesh, mcp_receipt_governed, mcp_trust_proxy; print('combined import OK')"
 
   # ── Python dependency safety (only when Python files change) ──────────
   security:

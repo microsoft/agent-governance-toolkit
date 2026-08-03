@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=83.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent_sre"
@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-cli>=4.1.0,<6.0"]
+dependencies = ["agent-governance-toolkit-cli>=5.0.0,<6.0"]
 
 # The published wheel is a dep-only deprecation stub (see [project] above), but
 # the agent_sre source tree under src/ (and tests/) is still exercised in CI via
@@ -49,8 +49,20 @@ dev = [
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 "Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/agent_sre"]
+# Dep-only deprecation stub: the published wheel ships NO source, it only
+# redirects to agent-governance-toolkit-cli (see [project].dependencies). The
+# `agent_sre` top-level package is owned solely by -cli, which force-includes
+# ../agent-sre/src/agent_sre. Shipping it here too would put the same top-level
+# import path in two distributions and cause an order/version-dependent
+# "Frankenstein" install. Hatchling's bypass-selection cannot express this
+# here: its default heuristic runs first and would re-ship src/agent_sre
+# because the distribution name matches the tree. An explicit setuptools
+# `packages = []` (the agentmesh-primitives stub pattern) builds a wheel with
+# no package of its own. The src/ tree stays in-repo for CI (which imports it
+# via the editable -cli install) and as the source of truth force-included by
+# -cli.
+[tool.setuptools]
+packages = []
 
 # ============================================================================
 # Ruff - Fast Python Linter & Formatter
