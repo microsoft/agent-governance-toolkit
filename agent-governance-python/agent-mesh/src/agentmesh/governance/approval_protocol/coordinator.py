@@ -93,11 +93,37 @@ class ApprovalStage:
 
 @dataclass(frozen=True)
 class ApprovalChain:
-    """A versioned, immutable approval-chain configuration."""
+    """A versioned, immutable approval-chain configuration.
+
+    ``stage_index`` is the identity of a stage, not merely its position:
+    :meth:`stage` resolves an index to the first matching stage, while
+    :meth:`ApprovalCoordinator._maybe_resolve` collapses the chain to the *set*
+    of required indexes. A duplicated index therefore satisfies two stages with
+    one approval, and lets an identity permitted only on a loose duplicate
+    satisfy a strict one. Both are rejected at construction so a misconfigured
+    chain can never open a request (fail-closed).
+
+    Parity note: the Go port applies the same duplicate/negative rejection in
+    ``ApprovalCoordinator.validateConfig``
+    (``agent-governance-golang/packages/agentmesh/approval_coordinator.go``).
+    """
 
     chain_id: str
     version: str
     stages: tuple[ApprovalStage, ...]
+
+    def __post_init__(self) -> None:
+        seen: set[int] = set()
+        for stage in self.stages:
+            if stage.stage_index < 0:
+                raise ApprovalProtocolError(
+                    f"invalid_approval_chain: stage index {stage.stage_index} must not be negative"
+                )
+            if stage.stage_index in seen:
+                raise ApprovalProtocolError(
+                    f"invalid_approval_chain: stage index {stage.stage_index} is duplicated"
+                )
+            seen.add(stage.stage_index)
 
     def stage(self, stage_index: int) -> Optional[ApprovalStage]:
         for stage in self.stages:
