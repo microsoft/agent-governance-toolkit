@@ -179,10 +179,12 @@ parameters:
   - name: rustPackages
     type: object
     displayName: 'Rust crates to publish'
+    # Only crates with no unpublished workspace dependency are eagerly packaged
+    # and published here. Dependent crates (agentmesh -> agentmesh-mcp,
+    # agent-control-specification -> agent-control-specification-core) cannot be
+    # packaged until their dependency exists in the crates.io index, so they are
+    # packaged and released in dedicated steps in the Publish_Rust stage.
     default:
-      - name: agentmesh
-        path: agent-governance-rust
-        crate: agentmesh
       - name: agentmesh-mcp
         path: agent-governance-rust
         crate: agentmesh-mcp
@@ -1000,6 +1002,7 @@ stages:
               displayName: 'Run all tests'
 
             - script: |
+                set -euo pipefail
                 mkdir -p $(Pipeline.Workspace)/rust-packages-${{ pkg.name }}
                 echo "=== Packaging ${{ pkg.crate }} ==="
                 cargo package -p "${{ pkg.crate }}" --allow-dirty
@@ -1056,10 +1059,12 @@ stages:
                 mainpublisher: 'ESRPRELPACMAN'
                 domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
-          # agent_control_specification depends on agent_control_specification_core.
-          # Cargo refuses to package it until the core crate version exists in
-          # the crates.io index, so the SDK crate is packaged and released only
-          # after the core ESRP release completes.
+          # Some crates depend on other workspace crates released earlier in
+          # this same run (agentmesh -> agentmesh-mcp, and
+          # agent-control-specification -> agent-control-specification-core).
+          # Cargo refuses to package a crate until its dependency version exists
+          # in the crates.io index, so each dependent crate is packaged and
+          # released only after its dependency's ESRP release completes above.
           - checkout: self
 
           - script: |
@@ -1082,7 +1087,44 @@ stages:
               echo "##vso[task.prependpath]$HOME/.cargo/bin"
               "$HOME/.cargo/bin/rustc" --version
               "$HOME/.cargo/bin/cargo" --version
-            displayName: 'Install Rust ${{ parameters.rustVersion }} for ACS SDK package'
+            displayName: 'Install Rust ${{ parameters.rustVersion }} for late crate packaging'
+
+          - script: |
+              set -euo pipefail
+              mkdir -p "$(Pipeline.Workspace)/rust-publish/agentmesh"
+              for ATTEMPT in 1 2 3 4 5; do
+                if cargo package -p agentmesh --allow-dirty; then
+                  break
+                fi
+                if [ "$ATTEMPT" = "5" ]; then
+                  exit 1
+                fi
+                echo "agentmesh-mcp is not visible in the crates.io index yet; retrying..."
+                sleep 30
+              done
+              cp target/package/agentmesh-*.crate "$(Pipeline.Workspace)/rust-publish/agentmesh/"
+              find "$(Pipeline.Workspace)/rust-publish/agentmesh" -name "*.crate" -type f -print
+            workingDirectory: 'agent-governance-rust'
+            displayName: 'Package agentmesh crate'
+
+          - task: EsrpRelease@11
+            displayName: 'ESRP Publish agentmesh to crates.io'
+            inputs:
+              connectedservicename: 'AGT-ESRP-Signing'
+              usemanagedidentity: true
+              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
+              clientid: '$(ESRP_CLIENT_ID)'
+              intent: 'PackageDistribution'
+              contenttype: 'Rust'
+              contentsource: 'Folder'
+              folderlocation: '$(Pipeline.Workspace)/rust-publish/agentmesh'
+              waitforreleasecompletion: true
+              owners: '$(ESRP_OWNERS)'
+              approvers: '$(ESRP_APPROVERS)'
+              serviceendpointurl: 'https://api.esrp.microsoft.com'
+              mainpublisher: 'ESRPRELPACMAN'
+              domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
           - script: |
               mkdir -p "$(Pipeline.Workspace)/rust-publish/agent-control-specification"
