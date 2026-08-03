@@ -181,9 +181,10 @@ parameters:
     displayName: 'Rust crates to publish'
     # Only crates with no unpublished workspace dependency are packaged and
     # published here. A crate that depends on another crate from this run
-    # (agentmesh -> agentmesh-mcp, agent-control-specification ->
-    # agent-control-specification-core) is packaged and released later, in a
-    # dedicated step in the Publish_Rust stage.
+    # (agent-control-specification -> agent-control-specification-core;
+    # agentmesh -> BOTH agentmesh-mcp and agent-control-specification) is
+    # packaged and released later, in dependency order, in dedicated steps in
+    # the Publish_Rust stage.
     default:
       - name: agentmesh-mcp
         path: agent-governance-rust
@@ -1036,8 +1037,20 @@ stages:
 
           - ${{ each pkg in parameters.rustPackages }}:
             - script: |
+                set -euo pipefail
                 echo "=== ${{ pkg.name }} crate package ==="
-                find "$(Pipeline.Workspace)/rust-publish/${{ pkg.name }}" -name "*.crate" -type f -print
+                CRATE_DIR="$(Pipeline.Workspace)/rust-publish/${{ pkg.name }}"
+                CRATES=$(find "$CRATE_DIR" -name "*.crate" -type f)
+                if [ -z "$CRATES" ]; then
+                  echo "##[error]No .crate file found in $CRATE_DIR; refusing to release an empty payload."
+                  exit 1
+                fi
+                echo "$CRATES"
+                EMPTY=$(find "$CRATE_DIR" -name "*.crate" -type f -empty)
+                if [ -n "$EMPTY" ]; then
+                  echo "##[error]Zero-byte .crate file(s) in $CRATE_DIR: $EMPTY"
+                  exit 1
+                fi
               displayName: 'List ${{ pkg.name }} crate package'
 
             - task: EsrpRelease@11
@@ -1059,11 +1072,15 @@ stages:
                 mainpublisher: 'ESRPRELPACMAN'
                 domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
-          # A crate that depends on another crate released earlier in this run
-          # (agentmesh -> agentmesh-mcp, agent-control-specification ->
-          # agent-control-specification-core) cannot be packaged until its
-          # dependency reaches the crates.io index, so this stage packages and
-          # releases each one after its dependency's ESRP release completes above.
+          # A crate that depends on another crate released in this run cannot
+          # be packaged until every dependency reaches the crates.io index.
+          # agent-control-specification depends on
+          # agent-control-specification-core (released above); agentmesh
+          # depends on BOTH agentmesh-mcp (released above) and
+          # agent-control-specification, so agentmesh must be packaged and
+          # released last. Overall order: agentmesh-mcp,
+          # agent-control-specification-core, agent-control-specification,
+          # agentmesh.
           - checkout: self
 
           - script: |
@@ -1090,42 +1107,6 @@ stages:
 
           - script: |
               set -euo pipefail
-              mkdir -p "$(Pipeline.Workspace)/rust-publish/agentmesh"
-              for ATTEMPT in 1 2 3 4 5; do
-                if cargo package -p agentmesh --allow-dirty; then
-                  break
-                fi
-                if [ "$ATTEMPT" = "5" ]; then
-                  exit 1
-                fi
-                echo "agentmesh-mcp is not visible in the crates.io index yet; retrying..."
-                sleep 30
-              done
-              cp target/package/agentmesh-*.crate "$(Pipeline.Workspace)/rust-publish/agentmesh/"
-              find "$(Pipeline.Workspace)/rust-publish/agentmesh" -name "*.crate" -type f -print
-            workingDirectory: 'agent-governance-rust'
-            displayName: 'Package agentmesh crate'
-
-          - task: EsrpRelease@11
-            displayName: 'ESRP Publish agentmesh to crates.io'
-            inputs:
-              connectedservicename: 'AGT-ESRP-Signing'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-              clientid: '$(ESRP_CLIENT_ID)'
-              intent: 'PackageDistribution'
-              contenttype: 'Rust'
-              contentsource: 'Folder'
-              folderlocation: '$(Pipeline.Workspace)/rust-publish/agentmesh'
-              waitforreleasecompletion: true
-              owners: '$(ESRP_OWNERS)'
-              approvers: '$(ESRP_APPROVERS)'
-              serviceendpointurl: 'https://api.esrp.microsoft.com'
-              mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(MICROSOFT_TENANT_ID)'
-
-          - script: |
               mkdir -p "$(Pipeline.Workspace)/rust-publish/agent-control-specification"
               for ATTEMPT in 1 2 3 4 5; do
                 if cargo package -p agent_control_specification --allow-dirty; then
@@ -1134,11 +1115,16 @@ stages:
                 if [ "$ATTEMPT" = "5" ]; then
                   exit 1
                 fi
-                echo "agent_control_specification_core is not visible in the crates.io index yet; retrying..."
+                echo "cargo package agent_control_specification failed (its dependencies may not be resolvable from crates.io yet); retrying..."
                 sleep 30
               done
               cp target/package/agent_control_specification-*.crate "$(Pipeline.Workspace)/rust-publish/agent-control-specification/"
               find "$(Pipeline.Workspace)/rust-publish/agent-control-specification" -name "*.crate" -type f -print
+              EMPTY=$(find "$(Pipeline.Workspace)/rust-publish/agent-control-specification" -name "*.crate" -type f -empty)
+              if [ -n "$EMPTY" ]; then
+                echo "##[error]Zero-byte .crate file(s): $EMPTY"
+                exit 1
+              fi
             workingDirectory: 'policy-engine'
             displayName: 'Package agent-control-specification crate'
 
@@ -1154,6 +1140,48 @@ stages:
               contenttype: 'Rust'
               contentsource: 'Folder'
               folderlocation: '$(Pipeline.Workspace)/rust-publish/agent-control-specification'
+              waitforreleasecompletion: true
+              owners: '$(ESRP_OWNERS)'
+              approvers: '$(ESRP_APPROVERS)'
+              serviceendpointurl: 'https://api.esrp.microsoft.com'
+              mainpublisher: 'ESRPRELPACMAN'
+              domaintenantid: '$(MICROSOFT_TENANT_ID)'
+
+          - script: |
+              set -euo pipefail
+              mkdir -p "$(Pipeline.Workspace)/rust-publish/agentmesh"
+              for ATTEMPT in 1 2 3 4 5; do
+                if cargo package -p agentmesh --allow-dirty; then
+                  break
+                fi
+                if [ "$ATTEMPT" = "5" ]; then
+                  exit 1
+                fi
+                echo "cargo package agentmesh failed (its dependencies may not be resolvable from crates.io yet); retrying..."
+                sleep 30
+              done
+              cp target/package/agentmesh-*.crate "$(Pipeline.Workspace)/rust-publish/agentmesh/"
+              find "$(Pipeline.Workspace)/rust-publish/agentmesh" -name "*.crate" -type f -print
+              EMPTY=$(find "$(Pipeline.Workspace)/rust-publish/agentmesh" -name "*.crate" -type f -empty)
+              if [ -n "$EMPTY" ]; then
+                echo "##[error]Zero-byte .crate file(s): $EMPTY"
+                exit 1
+              fi
+            workingDirectory: 'agent-governance-rust'
+            displayName: 'Package agentmesh crate'
+
+          - task: EsrpRelease@11
+            displayName: 'ESRP Publish agentmesh to crates.io'
+            inputs:
+              connectedservicename: 'AGT-ESRP-Signing'
+              usemanagedidentity: true
+              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
+              clientid: '$(ESRP_CLIENT_ID)'
+              intent: 'PackageDistribution'
+              contenttype: 'Rust'
+              contentsource: 'Folder'
+              folderlocation: '$(Pipeline.Workspace)/rust-publish/agentmesh'
               waitforreleasecompletion: true
               owners: '$(ESRP_OWNERS)'
               approvers: '$(ESRP_APPROVERS)'
