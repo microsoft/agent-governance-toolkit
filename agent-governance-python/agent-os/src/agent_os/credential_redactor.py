@@ -111,8 +111,10 @@ class CredentialRedactor:
             # line often has the newlines stripped altogether. The body class
             # already admits the backslash and ``n`` of an escape sequence, so the
             # line break is an alternative here rather than a required prefix,
-            # which covers all three shapes. Still linear: each iteration consumes
-            # exactly one character and the ``-----END`` literal bounds the match.
+            # which covers all three shapes. Still linear: every branch of the
+            # alternation consumes at least one character (none of them can match
+            # empty) and there is no nested quantifier, so the body cannot be
+            # re-partitioned on backtracking.
             #
             # The body is greedy rather than lazy. A lazy body stops at the *first*
             # ``-----END`` label, so a decoy one planted mid-body truncates the match
