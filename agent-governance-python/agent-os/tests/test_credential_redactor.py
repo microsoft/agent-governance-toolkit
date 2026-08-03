@@ -454,20 +454,26 @@ def test_still_requires_matching_begin_and_end_labels(separator: str):
     assert CredentialRedactor.contains_credentials(text) is False
 
 
+@pytest.mark.parametrize("opener", _ALL_SEPARATORS)
 @pytest.mark.parametrize(
     "prefix",
     ["junk", "junk\n", "junk\\n", "junk "],
     ids=["glued", "newline", "escaped", "space"],
 )
-def test_redacts_through_a_decoy_end_label(prefix: str):
+def test_redacts_through_a_decoy_end_label(prefix: str, opener: str):
     """A decoy ``-----END`` planted mid-body must not truncate the redaction.
 
     A lazy body stops at the first END label it sees, so an attacker who controls any
     part of the text can plant one and push the real key body outside the match, where
     it survives redaction. Matching to the last label instead can only over-redact.
+
+    ``opener`` varies the separator after ``BEGIN`` as well, because requiring a line
+    or escape boundary before ``-----END`` is the tempting fix here and it fails on
+    exactly the openers that are not a real newline: the decoy stops matching at all,
+    so nothing is redacted and the whole block leaks.
     """
     text = (
-        f"-----BEGIN PRIVATE KEY-----\n{prefix}-----END PRIVATE KEY-----"
+        f"-----BEGIN PRIVATE KEY-----{opener}{prefix}-----END PRIVATE KEY-----"
         f"{_FAKE_PEM_BODY}-----END PRIVATE KEY-----"
     )
 
