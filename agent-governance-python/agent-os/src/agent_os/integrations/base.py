@@ -19,7 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 PII_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\b\d{3}[\s.-]?\d{2}[\s.-]?\d{4}\b"),
+    # US SSN. A separator is REQUIRED: these patterns drive blocking paths
+    # (autogen_adapter DropMessage, PolicyViolationError on state updates,
+    # bedrock_adapter), so an optional separator matched any bare nine-digit
+    # run and hard-denied ordinary traffic carrying a tracking number, ABA
+    # routing number, or ZIP+4. Ported from the gateway-side fix in #3531
+    # (agent_os/credential_redactor.py, "US SSN"), which closed the same
+    # gateway-DoS on the MCP path; issue #3532 tracks this adapter-side copy.
+    # Lookarounds rather than ``\b`` so an SSN glued to ``_``
+    # (``employee_123-45-6789``) is still detected.
+    # policy-engine/policy/lib/patterns.rego keeps the looser form on purpose:
+    # that path is detection-only reporting, not a hard block.
+    re.compile(r"(?<![A-Za-z0-9])\d{3}[\s.-]\d{2}[\s.-]\d{4}(?![A-Za-z0-9])"),
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
     re.compile(r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\b"),
     re.compile(

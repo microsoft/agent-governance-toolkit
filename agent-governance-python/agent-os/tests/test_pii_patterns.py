@@ -1,28 +1,38 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Regression tests for the shared ``PII_PATTERNS`` constant (issue #2635).
+"""Regression tests for the shared ``PII_PATTERNS`` constant (issues #2635, #3532).
 
 The dashed-only SSN regex (``\\b\\d{3}-\\d{2}-\\d{4}\\b``) that used to be
 duplicated across each framework adapter was trivially bypassed by SSNs
-formatted with spaces, dots, or no separator at all.  This module guards
-two invariants going forward:
+formatted with spaces or dots (#2635).  Widening it also made the separator
+optional, so it matched any bare nine-digit run.  That is safe for a
+detection-only path but not here: these patterns drive blocking call sites
+(``autogen_adapter`` ``DropMessage``, ``PolicyViolationError`` on state
+updates, ``bedrock_adapter``), where a tracking number, ABA routing number,
+or ZIP+4 in ordinary content became a hard deny (#3532).
+
+#3531 resolved the same tension on the MCP gateway copy of this pattern by
+requiring a separator while keeping the space and dot forms.  This module
+holds the adapter-side copy to that same contract:
 
 1. The shared SSN regex in :mod:`agent_os.integrations.base` matches every
-   common separator variant (dash, space, dot, none).
-2. Adapters that retain local PII scanning share the same regex objects.
+   *separated* variant (dash, space, dot), including one glued to ``_``.
+2. It does not match bare nine-digit runs, which are not SSNs.
+3. Adapters that retain local PII scanning share the same regex objects.
 
 For the two adapters whose PII enforcement path can be exercised without
 optional third-party SDKs, we also drive a live boundary test through the
-real call site to verify the broadened SSN regex actually blocks every
-variant end-to-end.
+real call site to verify the regex behaves the same end-to-end.
 """
 from __future__ import annotations
 import pytest
 from agent_os.integrations import base as _base
 from agent_os.integrations import autogen_adapter, bedrock_adapter
 from agent_os.integrations.base import PII_PATTERNS
-_SSN_VARIANTS = ('123-45-6789', '123 45 6789', '123.45.6789', '123456789')
+_SSN_VARIANTS = ('123-45-6789', '123 45 6789', '123.45.6789')
 _SSN_NON_MATCHES = ('', 'no digits in dashed positions', '12-345-6789', '1234-56-7890', 'no digits at all')
+# Nine-digit content that a blocking path must let through (#3532).
+_SSN_FALSE_POSITIVES = ('Tracking: 123456789', 'order_123456789', 'ZIP 12345-6789', 'ABA 021000021', 'order 1234567890 shipped', 'build 12-34-5678 tagged')
 
 def _ssn_pattern():
     """Return the SSN regex from the shared ``PII_PATTERNS`` tuple."""
@@ -43,9 +53,26 @@ def test_shared_ssn_regex_matches_variant_in_sentence(variant: str) -> None:
 
 @pytest.mark.parametrize('non_match', _SSN_NON_MATCHES)
 def test_shared_ssn_regex_rejects_obvious_non_ssn(non_match: str) -> None:
-    """Sanity check that the broadened regex still rejects clear non-SSNs."""
+    """Sanity check that the regex still rejects clear non-SSNs."""
     ssn = _ssn_pattern()
     assert ssn.search(non_match) is None, f'shared SSN regex {ssn.pattern!r} unexpectedly matched {non_match!r}'
+
+@pytest.mark.parametrize('text', _SSN_FALSE_POSITIVES)
+def test_shared_ssn_regex_rejects_bare_nine_digit_forms(text: str) -> None:
+    """These patterns gate blocking paths, so a separator is required (#3532).
+
+    Without it, a bare nine-digit run hard-denies ordinary content carrying a
+    tracking number, routing number, or ZIP+4.
+    """
+    ssn = _ssn_pattern()
+    assert ssn.search(text) is None, f'shared SSN regex {ssn.pattern!r} would hard-block {text!r}'
+
+def test_shared_ssn_regex_detects_ssn_glued_to_underscore() -> None:
+    """``\\b`` treats ``_`` as a word character, so a glued SSN escaped detection.
+
+    The lookaround anchors ported from #3531 catch it.
+    """
+    assert _ssn_pattern().search('employee_123-45-6789') is not None
 
 def test_shared_pii_patterns_is_immutable_tuple() -> None:
     """The shared constant is a tuple so adapters cannot mutate it in place."""
