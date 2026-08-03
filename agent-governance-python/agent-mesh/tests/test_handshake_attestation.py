@@ -257,6 +257,64 @@ async def test_optional_attestation_allows_missing_evidence() -> None:
 
 
 @pytest.mark.asyncio
+async def test_optional_attestation_accepts_valid_complete_bundle() -> None:
+    agent_a, _agent_b, registry, challenge, response = await _signed_attestation_response()
+    verifier = TrustHandshake(
+        agent_did=str(agent_a.did),
+        identity=agent_a,
+        registry=registry,
+        attestation_verifier=MockAttestationVerifier(),
+    )
+
+    verification = await verifier._verify_response(response, challenge, 0, None)
+
+    assert verification["valid"] is True
+    assert verification["attestation_claims"] is not None
+
+
+@pytest.mark.asyncio
+async def test_optional_attestation_rejects_evidence_without_verifier() -> None:
+    agent_a, _agent_b, registry, challenge, response = await _signed_attestation_response()
+    verifier = TrustHandshake(
+        agent_did=str(agent_a.did),
+        identity=agent_a,
+        registry=registry,
+    )
+
+    verification = await verifier._verify_response(response, challenge, 0, None)
+
+    assert verification["valid"] is False
+    assert verification["reason"] == "Attestation verifier required but not configured"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("missing_field", "expected_reason"),
+    [
+        ("attestation_signature", "Attestation signature required but missing"),
+        ("attestation_public_key", "Attestation public key required but missing"),
+    ],
+)
+async def test_optional_attestation_rejects_incomplete_bundle(
+    missing_field: str,
+    expected_reason: str,
+) -> None:
+    agent_a, _agent_b, registry, challenge, response = await _signed_attestation_response()
+    setattr(response, missing_field, None)
+    verifier = TrustHandshake(
+        agent_did=str(agent_a.did),
+        identity=agent_a,
+        registry=registry,
+        attestation_verifier=MockAttestationVerifier(),
+    )
+
+    verification = await verifier._verify_response(response, challenge, 0, None)
+
+    assert verification["valid"] is False
+    assert verification["reason"] == expected_reason
+
+
+@pytest.mark.asyncio
 async def test_required_attestation_rejects_missing_evidence() -> None:
     agent_a = _make_identity("verifier")
     agent_b = _make_identity("responder")
@@ -361,7 +419,7 @@ async def test_attestation_signature_tampering_is_rejected() -> None:
     verification = await verifier._verify_response(response, challenge, 0, None)
 
     assert verification["valid"] is False
-    assert "signature verification failed" in verification["reason"].lower()
+    assert verification["reason"] == "Attestation signature verification failed"
 
 
 @pytest.mark.asyncio

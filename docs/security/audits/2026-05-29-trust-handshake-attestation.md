@@ -1,3 +1,9 @@
+---
+title: Trust Handshake Attestation Security Audit
+last_reviewed: 2026-07-31
+owner: agt-maintainers
+---
+
 # Security Audit: Trust Handshake Attestation
 
 **Date:** 2026-05-29
@@ -9,8 +15,9 @@
 Added a provider-neutral ADR 0010 attestation request/binding shape and optional
 attestation fields to the trust handshake response and result models. When configured,
 the verifier validates cached startup attestation evidence and a fresh Ed25519 signature
-over the Layer 2 challenge transcript. Legacy handshakes remain unchanged when attestation
-is not configured or required.
+over the Layer 2 challenge transcript. Legacy handshakes remain unchanged when no attestation
+evidence is supplied and attestation is not required. Once a peer supplies evidence, the complete
+attestation bundle must verify even in optional mode.
 
 ## Threat model impact
 
@@ -69,12 +76,15 @@ is not configured or required.
 - Registry-authoritative trust score and capabilities are still used instead of self-reported
   response values.
 - Missing attestation does not affect legacy handshakes unless explicitly required.
+- Presented evidence cannot downgrade to an unattested handshake when its verifier, signature,
+  or public key is missing.
 
 ## Mitigations
 
 | Risk | Mitigation | Verified by |
 |------|------------|-------------|
 | Missing evidence accepted in required mode | Required mode fails closed | `test_required_attestation_rejects_missing_evidence` |
+| Incomplete evidence accepted in optional mode | Presented evidence always requires a verifier, signature, and public key | `test_optional_attestation_rejects_evidence_without_verifier`, `test_optional_attestation_rejects_incomplete_bundle` |
 | Local key accepted as TEE-bound | Key-origin check rejects local claims | `test_required_tee_bound_key_rejects_local_origin` |
 | Provider-specific binding required | Collector accepts opaque binding bytes | `test_mock_attestation_collector_accepts_opaque_provider_bindings` |
 | Provider evidence not bound to the expected agent key | Verifier receives and validates the expected provider-neutral report-data hash | `test_required_attestation_rejects_unexpected_report_data_hash` |
@@ -88,7 +98,8 @@ is not configured or required.
 
 ## Test coverage
 
-- Optional mode preserves legacy behavior when no evidence is supplied.
+- Optional mode preserves legacy behavior when no evidence is supplied, but fully validates any
+  evidence that is supplied.
 - Provider-neutral startup bindings and legacy full ADR bindings are passed to the verifier for
   validation against provider-authenticated report data.
 - Mock collectors accept opaque Azure/Nitro/TDX/GCP-style binding bytes.

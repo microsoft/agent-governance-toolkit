@@ -355,27 +355,23 @@ class TrustHandshake:
                 require_attestation=require_attestation,
                 require_tee_bound_key=require_tee_bound_key,
             )
-            lookup_keys: list[Any] = [cache_key]
-            if not require_attestation and not require_tee_bound_key:
-                lookup_keys.append(peer_did)
-            for lookup_key in lookup_keys:
-                if lookup_key not in self._verified_peers:
-                    continue
-                result, timestamp = self._verified_peers[lookup_key]
-                if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
-                    if result.attestation_claims and result.attestation_claims.is_expired():
-                        del self._verified_peers[lookup_key]
-                        return None
-                    if require_attestation and not result.attestation_verified:
-                        del self._verified_peers[lookup_key]
-                        return None
-                    if require_tee_bound_key and not (
-                        result.key_origin and result.key_origin.is_tee_bound
-                    ):
-                        del self._verified_peers[lookup_key]
-                        return None
-                    return result
-                del self._verified_peers[lookup_key]
+            if cache_key not in self._verified_peers:
+                return None
+            result, timestamp = self._verified_peers[cache_key]
+            if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
+                if result.attestation_claims and result.attestation_claims.is_expired():
+                    del self._verified_peers[cache_key]
+                    return None
+                if require_attestation and not result.attestation_verified:
+                    del self._verified_peers[cache_key]
+                    return None
+                if require_tee_bound_key and not (
+                    result.key_origin and result.key_origin.is_tee_bound
+                ):
+                    del self._verified_peers[cache_key]
+                    return None
+                return result
+            del self._verified_peers[cache_key]
         return None
 
     async def _cache_result(
@@ -864,17 +860,11 @@ class TrustHandshake:
         if evidence.is_expired(verification_time):
             return "Attestation evidence expired"
         if self.attestation_verifier is None:
-            if require_attestation or require_tee_bound_key:
-                return "Attestation verifier required but not configured"
-            return None
+            return "Attestation verifier required but not configured"
         if not response.attestation_signature:
-            if require_attestation or require_tee_bound_key:
-                return "Attestation signature required but missing"
-            return None
+            return "Attestation signature required but missing"
         if not response.attestation_public_key:
-            if require_attestation or require_tee_bound_key:
-                return "Attestation public key required but missing"
-            return None
+            return "Attestation public key required but missing"
         if response.attestation_key_origin is None:
             return "Attestation key origin required but missing"
 
@@ -926,7 +916,9 @@ class TrustHandshake:
         try:
             signature = base64.b64decode(response.attestation_signature)
             Ed25519PublicKey.from_public_bytes(public_key_bytes).verify(signature, transcript)
-        except (InvalidSignature, ValueError, TypeError) as exc:
+        except InvalidSignature:
+            return "Attestation signature verification failed"
+        except (ValueError, TypeError) as exc:
             return f"Attestation signature verification failed: {exc}"
 
         replay_key = (response.agent_did, challenge.challenge_id, challenge.nonce)
