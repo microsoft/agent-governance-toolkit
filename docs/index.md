@@ -1,6 +1,6 @@
 ---
 title: Agent Governance Toolkit
-last_reviewed: 2026-07-31
+last_reviewed: 2026-08-03
 owner: docs-team
 hide:
   - navigation
@@ -49,7 +49,7 @@ pip install agent-governance-toolkit[full]
 </div>
 
 <div class="agt-capabilities">
-  <div class="agt-capability"><span class="agt-capability-name">ACS Policy</span><span class="agt-capability-detail">Stateless, fail-closed decisions</span></div>
+  <div class="agt-capability"><span class="agt-capability-name">Policy</span><span class="agt-capability-detail">Stateless, fail-closed decisions</span></div>
   <div class="agt-capability"><span class="agt-capability-name">Trust</span><span class="agt-capability-detail">DID, SPIFFE, mTLS</span></div>
   <div class="agt-capability"><span class="agt-capability-name">Runtime</span><span class="agt-capability-detail">Isolation and kill switches</span></div>
   <div class="agt-capability"><span class="agt-capability-name">Evidence</span><span class="agt-capability-detail">Tamper-evident audit</span></div>

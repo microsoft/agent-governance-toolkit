@@ -912,6 +912,18 @@ label.md-nav__link > .md-nav__icon::after {
   padding-bottom: 3rem;      /* breathing room before the footer */
 }
 
+/* The landing page uses the full page grid for its hero. Its prose sections
+   retain the standard reading measure below the hero. */
+.md-content__inner:has(> .agt-hero) {
+  max-width: none;
+}
+
+.md-content__inner:has(> .agt-hero) > .agt-section {
+  max-width: 56rem;
+  margin-right: auto;
+  margin-left: auto;
+}
+
 /* Material renders a zero-height ::before that normally adds the bottom
    margin; collapse it so our explicit padding-bottom controls the spacing. */
 .md-content__inner::before {
@@ -1469,7 +1481,7 @@ label.md-nav__link > .md-nav__icon::after {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  margin: -1.2rem -1.2rem 2.5rem;
+  margin: -1.2rem -1.25rem 2.5rem;
   padding: 5rem 2rem 4rem;
   border-radius: 0;
   text-align: center;

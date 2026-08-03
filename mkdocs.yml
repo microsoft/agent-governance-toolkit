@@ -26,6 +26,8 @@ not_in_nav: |
   proposals/azure-aca-sandbox.md
   proposals/folder-level-governance.md
   proposals/verifiable-compliance-receipts.md
+  package-consolidation/**
+  package-migration.md
   security/audits/20*.md
 copyright: Made responsibly with 💜 by Microsoft
 
@@ -142,11 +144,6 @@ nav:
       - Slides: workshop/slides.md
   - Packages:
     - Package guide: packages/index.md
-    - Package migration map: package-migration.md
-    - Package consolidation:
-      - Migration guide: package-consolidation/MIGRATION.md
-      - Consolidation audit: package-consolidation/AUDIT.md
-      - Consolidation proposal: package-consolidation/PROPOSAL.md
     - Agent Control Specification: packages/agent-control-specification.md
     - Standalone packages:
       - Agent Marketplace: packages/agent-marketplace.md

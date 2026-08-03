@@ -1,6 +1,6 @@
 ---
 title: Packages
-last_reviewed: 2026-07-31
+last_reviewed: 2026-08-03
 owner: docs-team
 ---
 
@@ -110,9 +110,7 @@ the [ACS package guide](agent-control-specification.md).
 ## Other shipped surfaces
 
 Some Python packages, developer tools, ACS SDKs, and OCI images remain separate
-where consolidation would obscure their lifecycle or intended consumer. The
-authoritative identity and migration map is
-[`../package-migration.md`](../package-migration.md).
+where consolidation would obscure their lifecycle or intended consumer.
 
 ## Status labels
 
@@ -133,6 +131,3 @@ Legacy distributions such as `agent-os-kernel`, `agentmesh-platform`,
 `agentmesh-runtime`, `agent-sre`, and `agent-hypervisor` are not recommended for
 new projects. Their compatibility pages remain available because existing
 imports and installations still need migration guidance.
-
-Use [`../package-migration.md`](../package-migration.md) before changing package
-names, install snippets, release workflow matrices, or registry metadata.
