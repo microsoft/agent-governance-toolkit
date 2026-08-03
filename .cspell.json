@@ -100,7 +100,8 @@
     "realpeerrealpeerrealpeerreal",
     "pwsh",
     "notlike",
-    "sdists"
+    "sdists",
+    "shellcheck"
   ],
   "ignorePaths": [
     "**/node_modules/**",
