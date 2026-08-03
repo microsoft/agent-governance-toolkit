@@ -179,11 +179,11 @@ parameters:
   - name: rustPackages
     type: object
     displayName: 'Rust crates to publish'
-    # Only crates with no unpublished workspace dependency are eagerly packaged
-    # and published here. Dependent crates (agentmesh -> agentmesh-mcp,
-    # agent-control-specification -> agent-control-specification-core) cannot be
-    # packaged until their dependency exists in the crates.io index, so they are
-    # packaged and released in dedicated steps in the Publish_Rust stage.
+    # Only crates with no unpublished workspace dependency are packaged and
+    # published here. A crate that depends on another crate from this run
+    # (agentmesh -> agentmesh-mcp, agent-control-specification ->
+    # agent-control-specification-core) is packaged and released later, in a
+    # dedicated step in the Publish_Rust stage.
     default:
       - name: agentmesh-mcp
         path: agent-governance-rust
@@ -1059,12 +1059,11 @@ stages:
                 mainpublisher: 'ESRPRELPACMAN'
                 domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
-          # Some crates depend on other workspace crates released earlier in
-          # this same run (agentmesh -> agentmesh-mcp, and
-          # agent-control-specification -> agent-control-specification-core).
-          # Cargo refuses to package a crate until its dependency version exists
-          # in the crates.io index, so each dependent crate is packaged and
-          # released only after its dependency's ESRP release completes above.
+          # A crate that depends on another crate released earlier in this run
+          # (agentmesh -> agentmesh-mcp, agent-control-specification ->
+          # agent-control-specification-core) cannot be packaged until its
+          # dependency reaches the crates.io index, so this stage packages and
+          # releases each one after its dependency's ESRP release completes above.
           - checkout: self
 
           - script: |
