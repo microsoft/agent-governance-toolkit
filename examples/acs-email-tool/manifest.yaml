@@ -17,4 +17,3 @@ intervention_points:
 tools:
   send_email:
     clearance: internal
-
