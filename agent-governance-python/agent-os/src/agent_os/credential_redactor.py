@@ -162,14 +162,15 @@ class CredentialRedactor:
             # RFC 5321 limits the local part to 64 octets. The character class
             # below is ASCII-only, so the same limit also bounds regex work at
             # every candidate start. Without it, separator-dense input that
-            # contains no ``@`` makes the greedy local part scan the remaining
-            # string from each word boundary, producing quadratic behavior.
-            # Keep the word boundary fail-closed: punctuation such as ``-`` or
-            # ``.`` must not let untrusted output hide a readable email suffix.
-            # An uninterrupted local part over the RFC limit is intentionally
-            # out of scope; a separator-delimited suffix may still be reported.
+            # contains no ``@`` makes the greedy local part scan overlapping
+            # suffixes from many candidate starts, producing quadratic behavior.
+            # Deliberately omit a leading word boundary. This is a fail-closed
+            # egress detector, not an RFC validator: if untrusted output pads a
+            # readable address with an uninterrupted word-character prefix, the
+            # engine must be able to report a bounded suffix instead of missing
+            # the address entirely.
             pattern=re.compile(
-                r"\b[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
+                r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
             ),
         ),
         CredentialPattern(

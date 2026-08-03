@@ -399,20 +399,6 @@ def test_ssn_pattern_rejects_bare_nine_digit_forms(text: str):
     )
 
 
-def test_email_local_part_respects_rfc_5321_length_limit():
-    valid_email = f"{'a' * 64}@example.com"
-    overlong_email = f"{'a' * 65}@example.com"
-
-    valid_matches = CredentialRedactor.find_pii_matches(valid_email)
-    overlong_matches = CredentialRedactor.find_pii_matches(overlong_email)
-
-    assert any(
-        match.name == "Email address" and match.matched_text == valid_email
-        for match in valid_matches
-    )
-    assert not any(match.name == "Email address" for match in overlong_matches)
-
-
 @pytest.mark.parametrize(
     ("text", "expected_email"),
     [
@@ -430,7 +416,21 @@ def test_email_detection_remains_fail_closed_next_to_punctuation(
     matches = CredentialRedactor.find_pii_matches(text)
 
     assert any(
-        match.name == "Email address" and match.matched_text == expected_email
+        match.name == "Email address" and expected_email in match.matched_text
+        for match in matches
+    )
+
+
+def test_email_detection_remains_fail_closed_with_uninterrupted_prefix():
+    readable_email = "john@corp.com"
+    attacker_controlled_text = f"{'Z' * 61}{readable_email}"
+
+    assert CredentialRedactor.contains_pii(attacker_controlled_text)
+
+    matches = CredentialRedactor.find_pii_matches(attacker_controlled_text)
+
+    assert any(
+        match.name == "Email address" and readable_email in match.matched_text
         for match in matches
     )
 
