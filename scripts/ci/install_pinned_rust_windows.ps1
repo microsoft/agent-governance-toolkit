@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet("x86_64-pc-windows-msvc")]

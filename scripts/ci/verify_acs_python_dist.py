@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Verify the complete ACS Python release artifact set."""
 
 from __future__ import annotations

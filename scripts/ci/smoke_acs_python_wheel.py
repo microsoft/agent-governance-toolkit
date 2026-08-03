@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Install one ACS wheel in isolation and exercise its native extension."""
 
 from __future__ import annotations
