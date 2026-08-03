@@ -1473,7 +1473,7 @@ label.md-nav__link > .md-nav__icon::after {
    ==========================================================================
    Clean Primer canvas with a tiled SVG dot pattern (inspired by
    magicui.design DotPattern). The dot grid sits behind the content and is
-   masked with a radial gradient so it fades softly to the edges. Text and
+   faded vertically so the decoration remains visible across the width. Text and
    buttons use default Primer color tokens — no inverted dark surface.
    ========================================================================== */
 
@@ -1489,7 +1489,7 @@ label.md-nav__link > .md-nav__icon::after {
   background:
     radial-gradient(circle at 18% 12%, rgba(91, 210, 190, 0.10), transparent 32%),
     radial-gradient(circle at 82% 8%, rgba(198, 97, 247, 0.10), transparent 30%),
-    #ffffff;
+    linear-gradient(180deg, #f6f8fa 0%, #ffffff 100%);
 }
 
 [data-md-color-scheme="slate"] .agt-hero {
@@ -1497,13 +1497,13 @@ label.md-nav__link > .md-nav__icon::after {
   background:
     radial-gradient(circle at 18% 12%, rgba(91, 210, 190, 0.12), transparent 34%),
     radial-gradient(circle at 82% 8%, rgba(198, 97, 247, 0.16), transparent 32%),
-    #0d1117;
+    linear-gradient(180deg, #151b23 0%, #0d1117 100%);
 }
 
 /* Dot pattern
    ----------------------------------------------------------------------
    Drawn as an inline SVG <pattern> via background-image. The gradient
-   mask fades dots toward the edges (Primer canvas-subtle feel). */
+   mask fades dots toward the bottom while keeping the full width visible. */
 .agt-hero::before {
   content: "";
   position: absolute;
@@ -1513,8 +1513,8 @@ label.md-nav__link > .md-nav__icon::after {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><circle cx='1' cy='1' r='1' fill='%23afb8c1' opacity='0.55'/></svg>");
   background-size: 20px 20px;
   background-position: 0 0;
-  -webkit-mask-image: radial-gradient(ellipse 65% 60% at 50% 45%, #000 35%, transparent 80%);
-          mask-image: radial-gradient(ellipse 65% 60% at 50% 45%, #000 35%, transparent 80%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 68%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 68%, transparent 100%);
 }
 
 [data-md-color-scheme="slate"] .agt-hero::before {
