@@ -34,7 +34,7 @@ classifiers = [
 
 # No mandatory framework deps: each adapter is an optional extra.
 dependencies = [
-    "agent-governance-toolkit-core>=4.1.0,<6.0",
+    "agent-governance-toolkit-core>=5.0.0,<6.0",
 ]
 
 [project.optional-dependencies]
