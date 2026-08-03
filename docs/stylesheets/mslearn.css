@@ -547,6 +547,12 @@ body,
   margin-top: 1.25rem;
 }
 
+/* Full-bleed landing-page elements may extend to viewport units without
+   creating a horizontal scrollbar. */
+.md-main:has(.agt-hero) {
+  overflow-x: clip;
+}
+
 /* Left & right rails: subtle background + rounded scroll container, no harsh border */
 .md-sidebar {
   padding-top: 1.25rem;
@@ -910,18 +916,6 @@ label.md-nav__link > .md-nav__icon::after {
   line-height: 1.7;
   padding-top: 0.5rem;
   padding-bottom: 3rem;      /* breathing room before the footer */
-}
-
-/* The landing page uses the full page grid for its hero. Its prose sections
-   retain the standard reading measure below the hero. */
-.md-content__inner:has(> .agt-hero) {
-  max-width: none;
-}
-
-.md-content__inner:has(> .agt-hero) > .agt-section {
-  max-width: 56rem;
-  margin-right: auto;
-  margin-left: auto;
 }
 
 /* Material renders a zero-height ::before that normally adds the bottom
@@ -1481,7 +1475,8 @@ label.md-nav__link > .md-nav__icon::after {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  margin: -1.2rem -1.25rem 2.5rem;
+  width: 100vw;
+  margin: -1.2rem calc(50% - 50vw) 2.5rem;
   padding: 5rem 2rem 4rem;
   border-radius: 0;
   text-align: center;
