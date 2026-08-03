@@ -113,10 +113,16 @@ class CredentialRedactor:
             # line break is an alternative here rather than a required prefix,
             # which covers all three shapes. Still linear: each iteration consumes
             # exactly one character and the ``-----END`` literal bounds the match.
+            #
+            # The body is greedy rather than lazy. A lazy body stops at the *first*
+            # ``-----END`` label, so a decoy one planted mid-body truncates the match
+            # and leaves the real key body outside it, unredacted. Running to the last
+            # label instead means extra text can only ever be over-redacted, never
+            # under-redacted - the safe direction for a redactor.
             name="PEM private key",
             pattern=re.compile(
                 r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
-                r"(?:[!-~ \t]|\r?\n)*?"
+                r"(?:[!-~ \t]|\r?\n)*"
                 r"-----END (?P=label)-----"
             ),
         ),

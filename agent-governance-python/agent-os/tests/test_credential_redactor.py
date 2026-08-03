@@ -454,6 +454,30 @@ def test_still_requires_matching_begin_and_end_labels(separator: str):
     assert CredentialRedactor.contains_credentials(text) is False
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    ["junk", "junk\n", "junk\\n", "junk "],
+    ids=["glued", "newline", "escaped", "space"],
+)
+def test_redacts_through_a_decoy_end_label(prefix: str):
+    """A decoy ``-----END`` planted mid-body must not truncate the redaction.
+
+    A lazy body stops at the first END label it sees, so an attacker who controls any
+    part of the text can plant one and push the real key body outside the match, where
+    it survives redaction. Matching to the last label instead can only over-redact.
+    """
+    text = (
+        f"-----BEGIN PRIVATE KEY-----\n{prefix}-----END PRIVATE KEY-----"
+        f"{_FAKE_PEM_BODY}-----END PRIVATE KEY-----"
+    )
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_PEM_BODY not in redacted, "the real key body survived the decoy END label"
+    assert REDACTED_PLACEHOLDER in redacted
+    assert CredentialRedactor.contains_credentials(text)
+
+
 def test_escaped_private_key_pattern_handles_adversarial_input_quickly():
     """The widened body must stay linear on an unterminated escaped key."""
     text = "-----BEGIN RSA PRIVATE KEY-----" + ("A\\n" * 50_000)

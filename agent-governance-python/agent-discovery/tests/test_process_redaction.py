@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from agent_discovery.scanners.process import _redact_secrets
 
 
@@ -74,3 +76,27 @@ def test_does_not_redact_public_key_without_newlines():
     public_key = f"-----BEGIN PUBLIC KEY-----{_FAKE_KEY_BODY}-----END PUBLIC KEY-----"
 
     assert _redact_secrets(public_key) == public_key
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    ["junk", "junk\n", "junk\\n", "junk "],
+    ids=["glued", "newline", "escaped", "space"],
+)
+def test_redacts_through_a_decoy_end_label(prefix: str):
+    """A decoy ``-----END`` in argv must not truncate the redaction.
+
+    Process command lines are attacker-influenced text: a lazy body stops at the
+    first END label, so a planted one pushes the real key body outside the match
+    and it lands in the discovery inventory. Matching to the last label instead
+    can only ever over-redact.
+    """
+    text = (
+        f"agent --key '-----BEGIN PRIVATE KEY-----{prefix}-----END PRIVATE KEY-----"
+        f"{_FAKE_KEY_BODY}-----END PRIVATE KEY-----'"
+    )
+
+    redacted = _redact_secrets(text)
+
+    assert _FAKE_KEY_BODY not in redacted, "the real key body survived the decoy END label"
+    assert "[REDACTED]" in redacted
