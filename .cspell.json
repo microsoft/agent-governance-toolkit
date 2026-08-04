@@ -120,7 +120,11 @@
     "chacha20",
     "getrandom",
     "spki",
-    "zerocopy"
+    "zerocopy",
+    "rngs",
+    "keygen",
+    "csprng",
+    "CSPRNG"
   ],
   "ignorePaths": [
     "**/node_modules/**",
