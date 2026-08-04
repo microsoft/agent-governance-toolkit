@@ -196,7 +196,7 @@ jobs:
           fi
 
       - name: Sign release artifacts with sigstore
-        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
+        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
         with:
           inputs: ${{ matrix.path }}/dist/*
           release-signing-artifacts: false
