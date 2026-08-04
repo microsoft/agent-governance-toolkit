@@ -350,6 +350,7 @@ conv
 coro
 covermode
 coverprofile
+cpython
 crds
 cref
 crossborder
@@ -386,6 +387,7 @@ devdeps
 dids
 digestmod
 displaydoc
+dists
 dkwargs
 dnssec
 doesnotexist
@@ -694,6 +696,7 @@ pipefail
 pipx
 pkgjson
 pkgs
+platlib
 plotly
 pluggable
 pmcrepo
@@ -717,6 +720,7 @@ promptinjectiondetector
 proofblob
 psmodules
 psour
+purelib
 pyatr
 pycache
 pyclass
@@ -935,6 +939,7 @@ utcfromtimestamp
 utcnow
 uvicorn
 venv
+venvs
 vitest
 vnet
 waitforreleasecompletion
