@@ -72,7 +72,9 @@ Custom policies should stay fail-closed, keep `toolPolicies.defaultEffect` at `r
 The recursive-delete matcher covers common literal command forms. It does not expand shell
 variables, decode obfuscated command names, or parse command strings passed to nested interpreters
 such as `bash -c` or `cmd /c`. Unclassified forms follow the policy's normal `review` path, which
-Antigravity maps to `deny` in enforce mode.
+Antigravity maps to `deny` in enforce mode. `git rm --cached -r <path>` is a known false positive:
+it only updates the index, but the matcher still classifies it as a recursive delete, so it is
+denied for any target outside the safe-cleanup list.
 
 ## Example usage
 

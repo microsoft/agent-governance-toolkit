@@ -143,6 +143,9 @@ The packaged default policy is a developer-protection baseline that:
 The recursive-delete matcher covers common literal command forms. It does not expand shell
 variables, decode obfuscated command names, or parse command strings passed to nested interpreters
 such as `bash -c` or `cmd /c`. Unclassified forms follow the policy's normal `review` path.
+`git rm --cached -r <path>` is a known false positive: it only updates the index, but the
+matcher still classifies it as a recursive delete, so it is denied for any target outside the
+safe-cleanup list.
 
 For this PR, the package keeps that strict baseline as the shipped default. Example profile
 starting points for `strict`, `balanced`, and `advisory` live under:
