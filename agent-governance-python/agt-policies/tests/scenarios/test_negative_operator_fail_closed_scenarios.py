@@ -3,9 +3,9 @@
 """OPA-backed scenarios: negative operators in deny rules must fail closed.
 
 Regression for #3297 re-introduced by the v4-removal migration (#3451).
-Both root causes — chained object.get producing undefined on a missing
+Both root causes (chained object.get producing undefined on a missing
 intermediate segment, and the unconditional _v != null guard on ne/not_in
-deny rules — were confirmed on OPA 1.18.2 (2026-07-30). These tests
+deny rules) were confirmed on OPA 1.18.2 (2026-07-30). These tests
 exercise the full compiled Rego so that no render-level fix can mask a
 runtime regression.
 """
@@ -192,7 +192,7 @@ class TestAllowPolarityGuardRetained:
             {"tool_name": "transfer", "region": None},
         )
         assert verdict == "deny", (
-            "allow ne fired on null field and preempted the deny — null guard missing"
+            "allow ne fired on null field and preempted the deny; null guard missing"
         )
 
     def test_allow_ne_absent_field_does_not_fire(self, tmp_path: Path) -> None:
@@ -202,7 +202,7 @@ class TestAllowPolarityGuardRetained:
             {"tool_name": "transfer"},
         )
         assert verdict == "deny", (
-            "allow ne fired on absent field and preempted the deny — null guard missing"
+            "allow ne fired on absent field and preempted the deny; null guard missing"
         )
 
     def test_allow_ne_fires_on_non_matching_present_field(self, tmp_path: Path) -> None:
@@ -220,7 +220,7 @@ class TestAllowPolarityGuardRetained:
             {"tool_name": "transfer", "region": None},
         )
         assert verdict == "deny", (
-            "allow not_in fired on null field and preempted the deny — null guard missing"
+            "allow not_in fired on null field and preempted the deny; null guard missing"
         )
 
     def test_allow_not_in_absent_field_does_not_fire(self, tmp_path: Path) -> None:
@@ -230,7 +230,7 @@ class TestAllowPolarityGuardRetained:
             {"tool_name": "transfer"},
         )
         assert verdict == "deny", (
-            "allow not_in fired on absent field and preempted the deny — null guard missing"
+            "allow not_in fired on absent field and preempted the deny; null guard missing"
         )
 
     def test_allow_not_in_fires_on_non_restricted_region(self, tmp_path: Path) -> None:
