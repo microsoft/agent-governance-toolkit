@@ -313,7 +313,7 @@ def _rego_field_accessor(field: str) -> str | None:
 
     Returns:
         Rego source using OPA's array-path ``object.get`` so that a
-        missing segment at *any* depth — leaf or intermediate — resolves
+        missing segment at *any* depth (leaf or intermediate) resolves
         to the ``null`` sentinel rather than ``undefined``. This is
         critical for fail-closed semantics: an undefined binding makes a
         ``_match_i`` rule silently not fire, falling through to

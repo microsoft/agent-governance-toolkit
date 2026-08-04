@@ -509,7 +509,7 @@ def test_merge_deny_and_eqnull_ne_sibling_eqnull_first_drops_child_allow() -> No
     ``_condition_unsatisfiable`` compares the two ``and`` siblings as a peer
     pair, not a deny/allow overlap. With this sibling order the pre-fix code
     applied allow (guarded) semantics to the deny ``ne`` and wrongly declared
-    the deny condition unsatisfiable, so the overlapping child allow survived —
+    the deny condition unsatisfiable, so the overlapping child allow survived,
     a fail-open. Polarity is now taken from the rule (deny), not the position.
     """
     parent = {
@@ -549,7 +549,7 @@ def test_merge_deny_and_eqnull_ne_sibling_eqnull_first_drops_child_allow() -> No
 def test_merge_deny_and_ne_eqnull_sibling_order_independent() -> None:
     """Same deny as above with the siblings reversed: result must be identical.
 
-    Locks in order-independence — the pre-fix code happened to be correct for
+    Locks in order-independence; the pre-fix code happened to be correct for
     this ordering only, which is why the bug was latent.
     """
     parent = {
