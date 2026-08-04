@@ -81,6 +81,33 @@ class TestMerkleRootReproducible:
             chain._rebuild_tree()
             assert chain.get_root_hash() == incremental, f"n={n}: rebuild disagrees with incremental"
 
+    def test_incremental_root_matches_independent_recompute_large(self):
+        # Larger, non-power-of-two sizes across further capacity doublings
+        # (100 crosses the 64->128 doubling, 1000 crosses 512->1024). Built
+        # once per size and compared against the independent recompute.
+        for n in (100, 1000):
+            chain = MerkleAuditChain()
+            for i in range(n):
+                chain.add_entry(_entry(i))
+            incremental = chain.get_root_hash()
+            independent = _textbook_merkle_root([e.entry_hash for e in chain._entries])
+            assert incremental == independent, (
+                f"n={n}: incremental root {incremental} != independent recompute {independent}"
+            )
+
+    def test_root_is_deterministic_for_identical_entries(self):
+        # Two chains fed byte-identical entries must record the same root, and
+        # rebuilding either from scratch must not change it.
+        base = [_entry(i) for i in range(9)]
+        first = MerkleAuditChain()
+        second = MerkleAuditChain()
+        for entry in base:
+            first.add_entry(copy.deepcopy(entry))
+            second.add_entry(copy.deepcopy(entry))
+        assert first.get_root_hash() == second.get_root_hash()
+        second._rebuild_tree()
+        assert first.get_root_hash() == second.get_root_hash()
+
     def test_empty_chain_root_is_none(self):
         chain = MerkleAuditChain()
         assert chain.get_root_hash() is None
