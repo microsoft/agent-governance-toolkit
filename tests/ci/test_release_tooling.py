@@ -193,6 +193,8 @@ def test_acs_python_release_builds_complete_platform_matrix() -> None:
     assert "contents: read" in acs_publish
     assert "attestations: write" not in acs_publish
     assert "skip-existing: true" not in acs_publish
+    # Least-privilege: no publish job should request write access to repo contents.
+    assert "contents: write" not in text
 
 
 def test_release_manifest_generator_covers_artifact_families(tmp_path: Path) -> None:
@@ -314,6 +316,7 @@ def test_pinned_rust_installer_covers_release_hosts() -> None:
     assert 'RUST_TOOLCHAIN="1.89.0"' in text
     assert "6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d" in text
     assert "f547d77c32d50d82b8228899b936bf2b3c72ce0a70fb3b364e7fba8891eba781" in text
+    assert "760b18611021deee1a859c345d17200e0087d47f68dfe58278c57abe3a0d3dd0" in text
     assert "193d6c727e18734edbf7303180657e96e9d5a08432002b4e6c5bbe77c60cb3e8" in text
     assert "--retry 5 --retry-all-errors --retry-delay 5" in text
     assert 'if [[ "$ACTUAL_SHA256" != "$RUSTUP_SHA256" ]]' in text

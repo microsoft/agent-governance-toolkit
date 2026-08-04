@@ -343,7 +343,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      contents: write
+      contents: read
       id-token: write
       attestations: write
     strategy:
