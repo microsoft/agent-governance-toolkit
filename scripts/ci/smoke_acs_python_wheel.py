@@ -21,7 +21,7 @@ def _exercise_installed_package(install_dir: Path) -> Path:
     if not resolved_install_dir.is_dir():
         raise ValueError(f"install path is not a directory: {resolved_install_dir}")
     # Import through the real machinery so a wheel with a broken package layout
-    # (missing __init__.py or an unimportable submodule) fails here instead of passing.
+    # (missing __init__.py or a submodule that cannot be imported) fails here instead of passing.
     sys.path.insert(0, str(resolved_install_dir))
     importlib.import_module("agent_control_specification")
     native = importlib.import_module("agent_control_specification._native")
