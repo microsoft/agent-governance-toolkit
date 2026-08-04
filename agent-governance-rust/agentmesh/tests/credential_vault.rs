@@ -324,6 +324,17 @@ fn rotation_does_not_require_prompt_changes() {
 }
 
 #[test]
+fn generate_key_distinct_per_call() {
+    // Vault keys come from OS entropy; two generations must differ and not be
+    // all zero.
+    let k1 = CredentialVault::generate_key();
+    let k2 = CredentialVault::generate_key();
+    assert_ne!(k1, k2);
+    assert_ne!(k1, [0u8; 32]);
+    assert_ne!(k2, [0u8; 32]);
+}
+
+#[test]
 fn encrypted_persistence_round_trip() {
     let key = CredentialVault::generate_key();
     let dir = tempfile::tempdir().unwrap();

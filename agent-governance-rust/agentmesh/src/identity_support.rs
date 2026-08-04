@@ -7,6 +7,8 @@ use crate::identity::{AgentIdentity, IdentityError, PublicIdentity, MAX_DELEGATI
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use ed25519_dalek::SigningKey;
+use rand::rand_core::UnwrapErr;
+use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -169,7 +171,8 @@ impl Credential {
         // effectively never" — semantically the same as what the caller
         // appears to have asked for — without invoking arithmetic UB.
         let expires_at_secs = issued_at_secs.saturating_add(ttl_seconds.max(1));
-        let signing_key = SigningKey::generate(&mut rand::rng());
+        // OS entropy per the ed25519-dalek 3 documented pattern for key generation.
+        let signing_key = SigningKey::generate(&mut UnwrapErr(SysRng));
         let token = URL_SAFE_NO_PAD.encode(signing_key.to_bytes());
         Self {
             credential_id: format!("cred_{:016x}", rand::random::<u64>()),
@@ -1051,7 +1054,7 @@ impl KeyRotationManager {
                 previous_public_key: identity.public_key.to_bytes().to_vec(),
                 rotated_at_secs: unix_secs_now(),
             });
-        let signing_key = SigningKey::generate(&mut rand::rng());
+        let signing_key = SigningKey::generate(&mut UnwrapErr(SysRng));
         let public_key = signing_key.verifying_key();
         AgentIdentity {
             did: identity.did.clone(),
