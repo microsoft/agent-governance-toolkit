@@ -101,7 +101,8 @@
     "pwsh",
     "notlike",
     "sdists",
-    "shellcheck"
+    "shellcheck",
+    "eqnull"
   ],
   "ignorePaths": [
     "**/node_modules/**",
