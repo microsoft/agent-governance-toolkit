@@ -205,6 +205,11 @@ test("evaluateOpenCodeTool denies credential reads regardless of the reader bina
     "sudo cp .env /tmp/exfil", // wrapper does not make a real .env a safe source
     "sudo cat .env",
     "sudo cp -t /exfil .env",
+    // A single `|` or `&` chains a second command, so the template-copy
+    // exemption must not clear the read that follows it.
+    "cp .env.example x | cat .env",
+    "cp .env.example x & cat .env",
+    "cat .env.example | cat .env",
   ];
   for (const command of denied) {
     const result = await evaluateOpenCodeTool(state, {
@@ -227,6 +232,15 @@ test("evaluateOpenCodeTool denies credential reads regardless of the reader bina
     "env VAR=1 cp .env.example .env",
     "nohup cp .env.example .env",
     "/usr/bin/sudo cp .env.example .env",
+    // A `|` or `&` inside a quoted argument is argument data, not a chain: a
+    // grep alternation, a path, or a URL query string must stay readable.
+    'grep -E "API_KEY|DATABASE_URL" .env.example',
+    "rg 'TOKEN|SECRET' .env.sample",
+    'head -1 "my repo & tools/.env.example"',
+    // A pipeline whose every stage only touches the template is still a
+    // template read.
+    "cat .env.example | head -20",
+    "cat .env.example | grep -v '^#'",
   ]) {
     const result = await evaluateOpenCodeTool(state, {
       tool: "bash",

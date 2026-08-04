@@ -918,21 +918,53 @@ function isSafeCleanupCommand(commandText) {
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
-  if (containsCommandControlOperator(commandText)) {
-    return false;
+  // Every command in a chain is inspected, so a template copy cannot clear a real
+  // secret read that follows it (`cp .env.example x | cat .env`). Splitting is
+  // quote-aware, so a `|` or `&` inside an argument stays argument data: a grep
+  // alternation, a path, or a URL query string is not a second command.
+  const sensitiveTokens = [];
+  for (const segment of splitCommandSegments(commandText)) {
+    const tokens = tokenizeCommand(segment).map(stripCommandToken).filter(Boolean);
+    // For copy/move commands the final path argument is a write destination, not a
+    // read, so scaffolding a real .env from a template (`cp .env.example .env`) must
+    // not be classified as reading the sensitive destination.
+    const readTokens = dropCopyDestinationToken(tokens);
+    sensitiveTokens.push(...readTokens.filter((token) => token.includes(".env")));
   }
-
-  const tokens = tokenizeCommand(commandText).map(stripCommandToken).filter(Boolean);
-  // For copy/move commands the final path argument is a write destination, not a
-  // read, so scaffolding a real .env from a template (`cp .env.example .env`) must
-  // not be classified as reading the sensitive destination.
-  const readTokens = dropCopyDestinationToken(tokens);
-  const sensitiveTokens = readTokens.filter((token) => token.includes(".env"));
 
   return (
     sensitiveTokens.length > 0 &&
     sensitiveTokens.every((token) => SAFE_ENV_TEMPLATE_NAME.test(getLastPathSegment(token)))
   );
+}
+
+function splitCommandSegments(commandText) {
+  // Quoted spans are copied verbatim so an operator inside a literal argument
+  // does not split the command.
+  const text = String(commandText);
+  const segments = [];
+  let current = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"' || character === "'") {
+      const closingIndex = text.indexOf(character, index + 1);
+      const end = closingIndex === -1 ? text.length : closingIndex;
+      current += text.slice(index, end + 1);
+      index = end;
+      continue;
+    }
+    if (/[&|;\r\n]/.test(character)) {
+      segments.push(current);
+      current = "";
+      while (index + 1 < text.length && /[&|;\r\n]/.test(text[index + 1])) {
+        index += 1;
+      }
+      continue;
+    }
+    current += character;
+  }
+  segments.push(current);
+  return segments.map((segment) => segment.trim()).filter(Boolean);
 }
 
 // Wrapper commands that take another command as their argument. `cp` behind one
