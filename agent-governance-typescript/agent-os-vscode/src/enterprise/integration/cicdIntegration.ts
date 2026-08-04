@@ -50,7 +50,10 @@ jobs:
   security-check:
     runs-on: ubuntu-latest
     name: Agent OS Policy Validation
-    
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
