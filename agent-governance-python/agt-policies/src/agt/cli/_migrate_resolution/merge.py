@@ -252,7 +252,7 @@ def _scalar_conditions_disjoint(
 
 def _condition_unsatisfiable(condition: Any, *, is_deny: bool = False) -> bool:
     # is_deny carries the polarity of the rule this condition belongs to so that
-    # ne/not_in siblings are analysed with the same null semantics the compiled
+    # ne/not_in siblings are analyzed with the same null semantics the compiled
     # rule uses. Sibling pairs are peers of one rule, not a deny/allow overlap,
     # so both sides share is_deny.
     if not isinstance(condition, dict):
