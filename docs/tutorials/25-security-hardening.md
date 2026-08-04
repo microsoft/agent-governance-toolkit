@@ -233,6 +233,7 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
     strategy:
       matrix:
@@ -354,6 +355,7 @@ jobs:
   scorecard:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
       id-token: write
     steps:
