@@ -23,6 +23,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use hmac::{Hmac, Mac};
+use rand::rand_core::UnwrapErr;
+use rand::rngs::SysRng;
 use rand::Rng;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -276,11 +278,11 @@ impl CredentialVault {
         Ok(vault)
     }
 
-    /// Generate a fresh AES-256-GCM key (32 random bytes).
+    /// Generate a fresh AES-256-GCM key (32 random bytes) from OS entropy.
     #[must_use]
     pub fn generate_key() -> [u8; KEY_LENGTH] {
         let mut k = [0u8; KEY_LENGTH];
-        rand::rng().fill_bytes(&mut k);
+        UnwrapErr(SysRng).fill_bytes(&mut k);
         k
     }
 
