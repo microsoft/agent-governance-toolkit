@@ -104,6 +104,11 @@ Audit entries are written to:
 
 Override with `AGT_CLAUDE_AUDIT_PATH`.
 
+The audit log retains the newest 10,000 entries. Before the first rollover it
+uses the legacy JSON array format. After rollover, it stores the retained
+entries with a `seamHash` object so the shortened hash chain remains
+verifiable. Logs truncated by older versions are recovered on the next read.
+
 ## Validation
 
 ```powershell
