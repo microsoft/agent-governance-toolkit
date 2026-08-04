@@ -180,3 +180,22 @@ def test_an_all_integer_hierarchy_is_unaffected() -> None:
     hierarchy.register_supervisor('leaf', level=2, is_agent=True)
 
     assert hierarchy.validate_hierarchy() == []
+
+
+@pytest.mark.parametrize('level', ['0', '1', 0.0, 1.5, [0], True, False])
+def test_the_two_layers_agree_about_a_non_integer_level(level: object) -> None:
+    """Neither layer may accept a level the other one rejects.
+
+    ``validate_supervisor`` is the declaration check and ``validate_hierarchy``
+    the whole-hierarchy check, and ``register_supervisor`` sits between them
+    without calling the first. A level rejected by one and governed by the other
+    is the gap both checks exist to close, so it is asserted directly on the same
+    parametrize list rather than left implicit in two separate tests.
+    """
+    assert _root().validate_supervisor({'name': 'sup', 'level': level, 'is_agent': True}) is False
+
+    hierarchy = SupervisorHierarchy(trust_root=_root())
+    hierarchy.register_supervisor('sup', level=level, is_agent=True)  # type: ignore[arg-type]
+    hierarchy.register_supervisor('top', level=9, is_agent=True)
+
+    assert any('non-integer level' in v and 'sup' in v for v in hierarchy.validate_hierarchy())
