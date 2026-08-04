@@ -140,10 +140,13 @@ jobs:
           SELECTED_COUNT=$(echo "$SELECTED" | jq 'length')
           GENERIC_COUNT=$(echo "$GENERIC" | jq 'length')
           ACS_COUNT=$(echo "$SELECTED" | jq '[.[] | select(.name == "agent-control-specification")] | length')
+          any=$([ "$SELECTED_COUNT" -gt 0 ] && echo true || echo false)
+          build_any=$([ "$GENERIC_COUNT" -gt 0 ] && echo true || echo false)
+          acs=$([ "$ACS_COUNT" -eq 1 ] && echo true || echo false)
           echo "matrix={\"include\":$GENERIC}" >> "$GITHUB_OUTPUT"
-          echo "any=$([ "$SELECTED_COUNT" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "build_any=$([ "$GENERIC_COUNT" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "acs=$([ "$ACS_COUNT" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "any=$any" >> "$GITHUB_OUTPUT"
+          echo "build_any=$build_any" >> "$GITHUB_OUTPUT"
+          echo "acs=$acs" >> "$GITHUB_OUTPUT"
 
   acs-python-wheels:
     needs: resolve-python-matrix
