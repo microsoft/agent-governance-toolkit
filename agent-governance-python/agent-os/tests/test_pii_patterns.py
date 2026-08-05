@@ -20,9 +20,10 @@ holds the adapter-side copy to that same contract:
 2. It does not match bare nine-digit runs, which are not SSNs.
 3. Adapters that retain local PII scanning share the same regex objects.
 
-For the two adapters whose PII enforcement path can be exercised without
-optional third-party SDKs, we also drive a live boundary test through the
-real call site to verify the regex behaves the same end-to-end.
+Bedrock's PII path can be exercised without optional third-party SDKs, so it
+also gets a live boundary test through ``bedrock_adapter._scan_pii`` to
+verify the regex behaves the same end-to-end.  The autogen adapter is only
+checked for sharing the same regex objects, not driven at its call site.
 """
 from __future__ import annotations
 import pytest
