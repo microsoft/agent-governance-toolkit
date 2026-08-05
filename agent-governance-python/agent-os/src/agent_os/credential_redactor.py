@@ -104,28 +104,14 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])Bearer\s+[A-Za-z0-9._\-+/=]{16,}\b"),
         ),
         CredentialPattern(
-            # A private key only has real newlines while it sits in a file. By the
-            # time it reaches this scanner it is usually text that has been through
-            # an encoding: a JSON tool response or a GCP service-account blob
-            # carries the key as ``\n`` escape sequences, and an env var or .env
-            # line often has the newlines stripped altogether. The body class
-            # already admits the backslash and ``n`` of an escape sequence, so the
-            # line break is an alternative here rather than a required prefix,
-            # which covers all three shapes. Still linear: every branch of the
-            # alternation consumes at least one character (none of them can match
-            # empty) and there is no nested quantifier, so the body cannot be
-            # re-partitioned on backtracking.
-            #
-            # The body is greedy rather than lazy. A lazy body stops at the *first*
-            # ``-----END`` label, so a decoy one planted mid-body truncates the match
-            # and leaves the real key body outside it, unredacted. Running to the last
-            # label instead means extra text can only ever be over-redacted, never
-            # under-redacted - the safe direction for a redactor.
+            # A key may contain real or escaped newlines after transport. Match a
+            # lazy body so adjacent keys remain separate, but only accept an END
+            # marker at a real or escaped line boundary.
             name="PEM private key",
             pattern=re.compile(
                 r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
-                r"(?:[!-~ \t]|\r?\n)*"
-                r"-----END (?P=label)-----"
+                r"(?:[!-~ \t]|\r?\n)*?"
+                r"(?:^|\r?\n|\\n)-----END (?P=label)-----"
             ),
         ),
         CredentialPattern(

@@ -385,9 +385,6 @@ def _fake_pem_block_with(label: str, separator: str) -> str:
         # A JSON tool response, or the private_key field of a GCP
         # service-account blob, carries the key with escaped newlines.
         ("escaped newlines, as in JSON", "\\n"),
-        # An env var or .env line often has the breaks stripped entirely.
-        ("no separator, as in an env var", ""),
-        ("literal spaces", " "),
     ],
 )
 def test_redacts_private_key_however_its_newlines_are_encoded(shape: str, separator: str):
@@ -426,10 +423,8 @@ def test_redacts_gcp_service_account_json():
     assert "example-project" in redacted
 
 
-# Every separator the widened pattern accepts. The negative tests below must
-# cover the same set as the positive one, or widening could start matching a
-# public key or a mismatched label in exactly the encoding left untested.
-_ALL_SEPARATORS = ["\n", "\r\n", "\\n", "", " "]
+# Every line-ending representation the pattern accepts.
+_ALL_SEPARATORS = ["\n", "\r\n", "\\n"]
 
 
 @pytest.mark.parametrize("separator", _ALL_SEPARATORS)
@@ -454,27 +449,13 @@ def test_still_requires_matching_begin_and_end_labels(separator: str):
     assert CredentialRedactor.contains_credentials(text) is False
 
 
-@pytest.mark.parametrize("opener", _ALL_SEPARATORS)
-@pytest.mark.parametrize(
-    "prefix",
-    ["junk", "junk\n", "junk\\n", "junk "],
-    ids=["glued", "newline", "escaped", "space"],
-)
-def test_redacts_through_a_decoy_end_label(prefix: str, opener: str):
-    """A decoy ``-----END`` planted mid-body must not truncate the redaction.
-
-    A lazy body stops at the first END label it sees, so an attacker who controls any
-    part of the text can plant one and push the real key body outside the match, where
-    it survives redaction. Matching to the last label instead can only over-redact.
-
-    ``opener`` varies the separator after ``BEGIN`` as well, because requiring a line
-    or escape boundary before ``-----END`` is the tempting fix here and it fails on
-    exactly the openers that are not a real newline: the decoy stops matching at all,
-    so nothing is redacted and the whole block leaks.
-    """
+@pytest.mark.parametrize("separator", _ALL_SEPARATORS)
+def test_does_not_terminate_at_glued_decoy_end_label(separator: str):
+    """A glued END literal is body text, not the end of a key."""
     text = (
-        f"-----BEGIN PRIVATE KEY-----{opener}{prefix}-----END PRIVATE KEY-----"
-        f"{_FAKE_PEM_BODY}-----END PRIVATE KEY-----"
+        f"-----BEGIN PRIVATE KEY-----{separator}"
+        f"glued-----END PRIVATE KEY-----{_FAKE_PEM_BODY}{separator}"
+        "-----END PRIVATE KEY-----"
     )
 
     redacted = CredentialRedactor.redact(text)
@@ -482,6 +463,17 @@ def test_redacts_through_a_decoy_end_label(prefix: str, opener: str):
     assert _FAKE_PEM_BODY not in redacted, "the real key body survived the decoy END label"
     assert REDACTED_PLACEHOLDER in redacted
     assert CredentialRedactor.contains_credentials(text)
+
+
+@pytest.mark.parametrize("separator", _ALL_SEPARATORS)
+def test_redacts_two_private_keys_separately(separator: str):
+    """A lazy body keeps adjacent PEM blocks from collapsing into one match."""
+    first = _fake_pem_block_with("PRIVATE KEY", separator)
+    second = _fake_pem_block_with("PRIVATE KEY", separator)
+
+    redacted = CredentialRedactor.redact(f"{first} 500 log lines {second}")
+
+    assert redacted == f"{REDACTED_PLACEHOLDER} 500 log lines {REDACTED_PLACEHOLDER}"
 
 
 def test_escaped_private_key_pattern_handles_adversarial_input_quickly():

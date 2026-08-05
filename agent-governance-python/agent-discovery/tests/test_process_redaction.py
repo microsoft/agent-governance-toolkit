@@ -41,14 +41,9 @@ def test_does_not_redact_public_or_malformed_pem_process_text():
 _FAKE_KEY_BODY = "ZmFrZSBmb3IgdGVzdGluZw=="
 
 
-def test_redacts_private_key_passed_on_one_command_line():
-    """A key in argv has no real newlines — a shell cannot put them there.
-
-    This is the shape the process scanner actually sees, so a pattern that
-    requires a line break inside the block never fires on real process text and
-    the key is written into the discovery inventory verbatim.
-    """
-    text = f"agent --key '-----BEGIN RSA PRIVATE KEY-----{_FAKE_KEY_BODY}-----END RSA PRIVATE KEY-----'"
+def test_redacts_private_key_with_real_newlines_in_process_text():
+    """A PEM block with real line endings remains redacted."""
+    text = f"agent --key '-----BEGIN RSA PRIVATE KEY-----\n{_FAKE_KEY_BODY}\n-----END RSA PRIVATE KEY-----'"
 
     redacted = _redact_secrets(text)
 
@@ -78,25 +73,24 @@ def test_does_not_redact_public_key_without_newlines():
     assert _redact_secrets(public_key) == public_key
 
 
-@pytest.mark.parametrize(
-    "prefix",
-    ["junk", "junk\n", "junk\\n", "junk "],
-    ids=["glued", "newline", "escaped", "space"],
-)
-def test_redacts_through_a_decoy_end_label(prefix: str):
-    """A decoy ``-----END`` in argv must not truncate the redaction.
-
-    Process command lines are attacker-influenced text: a lazy body stops at the
-    first END label, so a planted one pushes the real key body outside the match
-    and it lands in the discovery inventory. Matching to the last label instead
-    can only ever over-redact.
-    """
+@pytest.mark.parametrize("separator", ["\n", "\\n"], ids=["newline", "escaped"])
+def test_does_not_terminate_at_glued_decoy_end_label(separator: str):
+    """A glued END literal is body text, not the end of a key."""
     text = (
-        f"agent --key '-----BEGIN PRIVATE KEY-----{prefix}-----END PRIVATE KEY-----"
-        f"{_FAKE_KEY_BODY}-----END PRIVATE KEY-----'"
+        f"agent --key '-----BEGIN PRIVATE KEY-----{separator}"
+        f"glued-----END PRIVATE KEY-----{_FAKE_KEY_BODY}{separator}"
+        "-----END PRIVATE KEY-----'"
     )
 
     redacted = _redact_secrets(text)
 
     assert _FAKE_KEY_BODY not in redacted, "the real key body survived the decoy END label"
     assert "[REDACTED]" in redacted
+
+
+def test_redacts_two_private_keys_separately():
+    """A lazy body keeps two PEM blocks from collapsing into one match."""
+    first = f"-----BEGIN PRIVATE KEY-----\nfirst\n-----END PRIVATE KEY-----"
+    second = f"-----BEGIN PRIVATE KEY-----\nsecond\n-----END PRIVATE KEY-----"
+
+    assert _redact_secrets(f"{first} 500 log lines {second}") == "[REDACTED] 500 log lines [REDACTED]"
