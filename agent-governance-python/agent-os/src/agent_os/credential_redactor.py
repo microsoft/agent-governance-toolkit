@@ -104,14 +104,18 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])Bearer\s+[A-Za-z0-9._\-+/=]{16,}\b"),
         ),
         CredentialPattern(
-            # A key may contain real or escaped newlines after transport. Match a
-            # lazy body so adjacent keys remain separate, but only accept an END
-            # marker at a real or escaped line boundary.
+            # Greedy to the last matching END so a planted decoy mid-body cannot
+            # truncate redaction (under-redaction is the unsafe direction). The
+            # body refuses to cross another BEGIN, so two keys with log noise
+            # between them stay separate matches instead of collapsing into one
+            # span. Real/escaped/stripped/space separators are all accepted
+            # because the body class admits them without requiring a boundary
+            # before END.
             name="PEM private key",
             pattern=re.compile(
                 r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
-                r"(?:[!-~ \t]|\r?\n)*?"
-                r"(?:^|\r?\n|\\n)-----END (?P=label)-----"
+                r"(?:(?!-----BEGIN)(?:[!-~ \t]|\r?\n))*"
+                r"-----END (?P=label)-----"
             ),
         ),
         CredentialPattern(

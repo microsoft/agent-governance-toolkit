@@ -106,12 +106,12 @@ SECRET_PATTERNS = [
     re.compile(r"(xox[abprs]-[a-zA-Z0-9\-]+)"),
     re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
     re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b"),
-    # A command line can contain real or escaped line breaks. The END marker must
-    # begin a real or escaped line, so an embedded literal cannot end the match.
+    # Greedy to the last END, but stop before another BEGIN so adjacent keys
+    # stay separate. Accepts real, escaped, stripped, and space-separated forms.
     re.compile(
         r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
-        r"(?:[!-~ \t]|\r?\n)*?"
-        r"(?:^|\r?\n|\\n)-----END (?P=label)-----"
+        r"(?:(?!-----BEGIN)(?:[!-~ \t]|\r?\n))*"
+        r"-----END (?P=label)-----"
     ),
     re.compile(r"(eyJ[a-zA-Z0-9\-_]+\.eyJ[a-zA-Z0-9\-_]+)"),  # JWT
 ]

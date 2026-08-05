@@ -66,6 +66,20 @@ def test_redacts_private_key_with_escaped_newlines_in_process_text():
     assert "[REDACTED]" in redacted
 
 
+def test_redacts_private_key_with_stripped_newlines_in_process_text():
+    """Env-var / argv shape: newlines removed entirely between markers."""
+    text = (
+        "agent --key '-----BEGIN OPENSSH PRIVATE KEY-----"
+        f"{_FAKE_KEY_BODY}"
+        "-----END OPENSSH PRIVATE KEY-----'"
+    )
+
+    redacted = _redact_secrets(text)
+
+    assert _FAKE_KEY_BODY not in redacted
+    assert "[REDACTED]" in redacted
+
+
 def test_does_not_redact_public_key_without_newlines():
     """Widening the separator must not start matching public keys."""
     public_key = f"-----BEGIN PUBLIC KEY-----{_FAKE_KEY_BODY}-----END PUBLIC KEY-----"
@@ -73,7 +87,11 @@ def test_does_not_redact_public_key_without_newlines():
     assert _redact_secrets(public_key) == public_key
 
 
-@pytest.mark.parametrize("separator", ["\n", "\\n"], ids=["newline", "escaped"])
+@pytest.mark.parametrize(
+    "separator",
+    ["\n", "\r\n", "\\n", "", " "],
+    ids=["newline", "crlf", "escaped", "stripped", "space"],
+)
 def test_does_not_terminate_at_glued_decoy_end_label(separator: str):
     """A glued END literal is body text, not the end of a key."""
     text = (
@@ -88,9 +106,25 @@ def test_does_not_terminate_at_glued_decoy_end_label(separator: str):
     assert "[REDACTED]" in redacted
 
 
-def test_redacts_two_private_keys_separately():
-    """A lazy body keeps two PEM blocks from collapsing into one match."""
-    first = f"-----BEGIN PRIVATE KEY-----\nfirst\n-----END PRIVATE KEY-----"
-    second = f"-----BEGIN PRIVATE KEY-----\nsecond\n-----END PRIVATE KEY-----"
+@pytest.mark.parametrize(
+    "separator",
+    ["\n", "\\n", ""],
+    ids=["newline", "escaped", "stripped"],
+)
+def test_redacts_two_private_keys_separately(separator: str):
+    """Adjacent PEM blocks stay separate; log noise between them survives."""
+    first = (
+        f"-----BEGIN PRIVATE KEY-----{separator}"
+        f"first{separator}"
+        f"-----END PRIVATE KEY-----"
+    )
+    second = (
+        f"-----BEGIN PRIVATE KEY-----{separator}"
+        f"second{separator}"
+        f"-----END PRIVATE KEY-----"
+    )
 
-    assert _redact_secrets(f"{first} 500 log lines {second}") == "[REDACTED] 500 log lines [REDACTED]"
+    assert (
+        _redact_secrets(f"{first} 500 log lines {second}")
+        == "[REDACTED] 500 log lines [REDACTED]"
+    )
