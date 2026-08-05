@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit v3.1.1"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit v3.1.1
 
 !!! important
@@ -30,7 +36,7 @@ ciphertext = channel.send(b"governed action request")
 - **61 tests** across 4 new modules
 - **Zero new dependencies** — built on existing PyNaCl + cryptography
 
-See [Tutorial 32 — E2E Encrypted Messaging](docs/tutorials/32-e2e-encrypted-messaging.md).
+See [Tutorial 32 — E2E Encrypted Messaging](../tutorials/32-e2e-encrypted-messaging.md).
 
 ### GitHub Pages Documentation Site
 

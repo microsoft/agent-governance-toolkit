@@ -1,3 +1,9 @@
+---
+title: "Record Retention Policy for AI Governance Artifacts"
+last_reviewed: 2026-04-25
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Record Retention Policy for AI Governance Artifacts

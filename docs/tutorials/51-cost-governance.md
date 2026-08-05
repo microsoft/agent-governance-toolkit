@@ -1,3 +1,9 @@
+---
+title: "Tutorial 51: Cost Governance and Budget Enforcement"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 # Tutorial 51: Cost Governance and Budget Enforcement
 
 > **Package:** `agent-sre` · **Time:** 15 minutes · **Level:** Intermediate

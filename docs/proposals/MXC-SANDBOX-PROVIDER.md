@@ -34,5 +34,5 @@ the full lifecycle when multiple calls must share output files.
 
 ## Related implementation
 
-- [`MxcSandboxProvider`](../../agent-governance-python/agent-sandbox/src/agent_sandbox/mxc_sandbox_provider/provider.py)
-- [MXC quickstart](../../agent-governance-python/agent-sandbox/tutorials/mxc-quickstart/README.md)
+- [`MxcSandboxProvider`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/src/agent_sandbox/mxc_sandbox_provider/provider.py)
+- [MXC quickstart](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/tutorials/mxc-quickstart/README.md)
