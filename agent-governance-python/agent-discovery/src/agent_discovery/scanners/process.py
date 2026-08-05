@@ -106,11 +106,11 @@ SECRET_PATTERNS = [
     re.compile(r"(xox[abprs]-[a-zA-Z0-9\-]+)"),
     re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
     re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b"),
-    # Greedy to the last END, but stop before another BEGIN so adjacent keys
-    # stay separate. Accepts real, escaped, stripped, and space-separated forms.
+    # Prefer stopping before the next BEGIN for clean adjacent keys; fall back
+    # to a greedy body so a planted BEGIN cannot bypass redaction.
     re.compile(
         r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
-        r"(?:(?!-----BEGIN)(?:[!-~ \t]|\r?\n))*"
+        r"(?:(?:(?!-----BEGIN)(?:[!-~ \t]|\r?\n))*|(?:[!-~ \t]|\r?\n)*)"
         r"-----END (?P=label)-----"
     ),
     re.compile(r"(eyJ[a-zA-Z0-9\-_]+\.eyJ[a-zA-Z0-9\-_]+)"),  # JWT

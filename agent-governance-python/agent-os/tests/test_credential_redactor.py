@@ -490,6 +490,39 @@ def test_redacts_two_private_keys_separately(separator: str):
 
     assert redacted == f"{REDACTED_PLACEHOLDER} 500 log lines {REDACTED_PLACEHOLDER}"
 
+
+@pytest.mark.parametrize("opener", _ALL_SEPARATORS)
+@pytest.mark.parametrize(
+    "decoy",
+    [
+        "-----BEGIN PRIVATE KEY-----",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "-----BEGIN CERTIFICATE-----",
+        "-----BEGIN-----",
+    ],
+    ids=["same-label", "other-privkey-label", "certificate", "bare-begin"],
+)
+def test_redacts_through_a_decoy_begin_marker(decoy: str, opener: str):
+    """A planted ``-----BEGIN`` mid-body must not bypass redaction or detection.
+
+    The bounded body alone would stop at the decoy and leave the real key
+    unmatched. The greedy fallback has to take over so the whole span —
+    including any body fragment after the plant — is redacted, and
+    ``contains_credentials`` still fires.
+    """
+    text = (
+        f"-----BEGIN PRIVATE KEY-----{opener}"
+        f"{decoy}{_FAKE_PEM_BODY}"
+        f"-----END PRIVATE KEY-----"
+    )
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_PEM_BODY not in redacted, "a body fragment survived the decoy BEGIN"
+    assert REDACTED_PLACEHOLDER in redacted
+    assert CredentialRedactor.contains_credentials(text)
+
+
 def test_escaped_private_key_pattern_handles_adversarial_input_quickly():
     """The widened body must stay linear on an unterminated escaped key."""
     text = "-----BEGIN RSA PRIVATE KEY-----" + ("A\\n" * 50_000)

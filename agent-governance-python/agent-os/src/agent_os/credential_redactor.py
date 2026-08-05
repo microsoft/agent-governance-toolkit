@@ -104,17 +104,15 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])Bearer\s+[A-Za-z0-9._\-+/=]{16,}\b"),
         ),
         CredentialPattern(
-            # Greedy to the last matching END so a planted decoy mid-body cannot
-            # truncate redaction (under-redaction is the unsafe direction). The
-            # body refuses to cross another BEGIN, so two keys with log noise
-            # between them stay separate matches instead of collapsing into one
-            # span. Real/escaped/stripped/space separators are all accepted
-            # because the body class admits them without requiring a boundary
-            # before END.
+            # Prefer a body that stops before the next BEGIN so adjacent clean
+            # keys stay separate matches. Fall back to a fully greedy body so a
+            # planted mid-body BEGIN cannot bypass redaction or detection — that
+            # path can only over-redact. Real/escaped/stripped/space separators
+            # are accepted without requiring a boundary before END.
             name="PEM private key",
             pattern=re.compile(
                 r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
-                r"(?:(?!-----BEGIN)(?:[!-~ \t]|\r?\n))*"
+                r"(?:(?:(?!-----BEGIN)(?:[!-~ \t]|\r?\n))*|(?:[!-~ \t]|\r?\n)*)"
                 r"-----END (?P=label)-----"
             ),
         ),

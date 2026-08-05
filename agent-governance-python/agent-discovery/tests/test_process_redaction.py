@@ -107,6 +107,30 @@ def test_does_not_terminate_at_glued_decoy_end_label(separator: str):
 
 
 @pytest.mark.parametrize(
+    "decoy",
+    [
+        "-----BEGIN PRIVATE KEY-----",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "-----BEGIN CERTIFICATE-----",
+        "-----BEGIN-----",
+    ],
+    ids=["same-label", "other-privkey-label", "certificate", "bare-begin"],
+)
+def test_does_not_bypass_on_decoy_begin_marker(decoy: str):
+    """A planted BEGIN mid-body must not leave the real key body in the clear."""
+    text = (
+        f"agent --key '-----BEGIN PRIVATE KEY-----\n"
+        f"{decoy}{_FAKE_KEY_BODY}\n"
+        "-----END PRIVATE KEY-----'"
+    )
+
+    redacted = _redact_secrets(text)
+
+    assert _FAKE_KEY_BODY not in redacted
+    assert "[REDACTED]" in redacted
+
+
+@pytest.mark.parametrize(
     "separator",
     ["\n", "\\n", ""],
     ids=["newline", "escaped", "stripped"],
