@@ -261,6 +261,40 @@ class TestPolicyServer:
         data = resp.json()
         assert data["status"] == "reloaded"
 
+    def test_reload_rejects_directory_with_invalid_policy_scope(self, tmp_path, monkeypatch):
+        """A bad policy must prevent a partial, permissive policy set loading."""
+        from agentmesh.governance.policy import PolicyEngine
+        from agentmesh.server import policy_server
+
+        (tmp_path / "global-allow.yaml").write_text("""
+name: global-allow
+scope: global
+agents: ["*"]
+rules:
+  - name: allow-export
+    condition: "action.type == 'export'"
+    action: allow
+""")
+        (tmp_path / "mis-scoped-deny.yaml").write_text("""
+name: mis-scoped-deny
+scope: organisation
+agents: ["*"]
+rules:
+  - name: deny-export
+    condition: "action.type == 'export'"
+    action: deny
+""")
+        monkeypatch.setattr(policy_server, "POLICY_DIR", str(tmp_path))
+
+        try:
+            with pytest.raises(RuntimeError, match="mis-scoped-deny.yaml"):
+                policy_server._load_policies()
+        finally:
+            policy_server._engine = PolicyEngine()
+            policy_server._trust_policies = []
+            policy_server._trust_evaluator = None
+            policy_server._loaded_count = 0
+
     def test_trust_evaluate_no_policies(self):
         resp = self.client.post("/api/v1/policy/trust/evaluate", json={
             "context": {"action": "test"},

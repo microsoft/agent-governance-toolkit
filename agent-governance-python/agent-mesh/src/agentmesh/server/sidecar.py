@@ -196,14 +196,16 @@ def _load_policies() -> None:
             count += 1
             logger.info("Loaded policy: %s", f.name)
         except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
+            logger.error("Failed to load policy file: %s", f)
+            raise RuntimeError(f"Failed to load policy file: {f}") from exc
 
     for f in sorted(policy_path.glob("*.json")):
         try:
             _engine.load_json(f.read_text())
             count += 1
         except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
+            logger.error("Failed to load policy file: %s", f)
+            raise RuntimeError(f"Failed to load policy file: {f}") from exc
 
     _loaded_count = count
     logger.info("Loaded %d policies from %s", count, _policy_dir)

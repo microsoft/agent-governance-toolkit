@@ -57,20 +57,22 @@ def _load_policies() -> None:
             _engine.load_yaml(f.read_text())
             governance_count += 1
             logger.info("Loaded governance policy: %s", f.name)
-        except Exception:
+        except Exception as governance_error:
             try:
-                tp = TrustPolicy.from_yaml(f.read_text())
+                tp = TrustPolicy.from_yaml(f)
                 _trust_policies.append(tp)
                 logger.info("Loaded trust policy: %s", f.name)
-            except Exception as exc:
-                logger.warning("Skipped %s: %s", f.name, exc)
+            except Exception:
+                logger.error("Failed to load policy file: %s", f)
+                raise RuntimeError(f"Failed to load policy file: {f}") from governance_error
 
     for f in sorted(policy_path.glob("*.json")):
         try:
             _engine.load_json(f.read_text())
             governance_count += 1
         except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
+            logger.error("Failed to load policy file: %s", f)
+            raise RuntimeError(f"Failed to load policy file: {f}") from exc
 
     if _trust_policies:
         _trust_evaluator = PolicyEvaluator(_trust_policies)
