@@ -536,3 +536,24 @@ def test_main_deadline_unscanned_becomes_finding():
          patch.object(common.Deadline, "expired", return_value=True):
         rc = cra.main_with_args(["--max-deps", "0", "--total-deadline-sec", "60"])
     assert rc == 1
+
+
+def test_fetch_release_time_npm_packument_fallback_uses_large_cap(monkeypatch):
+    """Packuments for long-lived npm packages exceed the 5 MB default cap;
+    the fall-back fetch must pass the packument-sized bound (a 10 MB+
+    packument previously returned None and hard-failed the check)."""
+    calls = []
+
+    def fake_fetch_json(url, *, max_bytes=cra.common.MAX_RESPONSE_BYTES):
+        calls.append((url, max_bytes))
+        if url.endswith("/9.9.9"):
+            return {}  # per-version doc without a time field
+        return {"time": {"9.9.9": "2026-07-20T17:39:25.625Z"}}
+
+    monkeypatch.setattr(cra.common, "fetch_json", fake_fetch_json)
+    out = cra.fetch_release_time("npm", "big-packument-pkg", "9.9.9")
+    assert out is not None and out.year == 2026
+    packument_calls = [c for c in calls if not c[0].endswith("/9.9.9")]
+    assert packument_calls, "packument fall-back was not exercised"
+    assert packument_calls[0][1] == cra.NPM_PACKUMENT_MAX_BYTES
+    assert cra.NPM_PACKUMENT_MAX_BYTES > cra.common.MAX_RESPONSE_BYTES

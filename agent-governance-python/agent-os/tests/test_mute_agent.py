@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, NamedTuple, Optional
 
 import pytest
 
@@ -135,6 +135,50 @@ class TestMuteAgentRecursive:
         redacted = agent.mute(result)
         assert "111-22-3333" not in str(redacted.data)
         assert "ok" in redacted.data
+
+    @pytest.mark.parametrize("container", [set, frozenset])
+    def test_set_data_is_scrubbed(self, container):
+        # Regression: sets were not walked at all, so a secret inside one passed
+        # through the gate untouched. `data` is typed `Any`; an action returning
+        # a set of unique values (recipients, host names) is ordinary.
+        agent = MuteAgent()
+        result = FakeResult(data=container({"SSN: 111-22-3333", "ok"}))
+
+        redacted = agent.mute(result)
+
+        assert "111-22-3333" not in str(redacted.data)
+        assert isinstance(redacted.data, container)
+        assert "ok" in redacted.data
+
+    def test_named_tuple_data_is_scrubbed_not_crashed(self):
+        # Regression: `type(value)(scrubbed)` passes one iterable positionally,
+        # so a named tuple raised TypeError. That took down the entire result
+        # instead of redacting it -- and any caller catching the error broadly
+        # would fall back to the original, un-redacted value.
+        class Record(NamedTuple):
+            email: str
+            note: str
+
+        agent = MuteAgent()
+        result = FakeResult(data=Record("user@example.com", "keep me"))
+
+        redacted = agent.mute(result)
+
+        assert "user@example.com" not in str(redacted.data)
+        assert isinstance(redacted.data, Record)
+        assert redacted.data.note == "keep me"
+
+    def test_secret_nested_inside_skipped_containers(self):
+        # The two container gaps compose: a set inside a named tuple in a list.
+        class Record(NamedTuple):
+            hosts: set
+
+        agent = MuteAgent()
+        result = FakeResult(data=[Record({"admin@corp.com"})])
+
+        redacted = agent.mute(result)
+
+        assert "admin@corp.com" not in str(redacted.data)
 
     def test_metadata_scrubbed(self):
         agent = MuteAgent()
