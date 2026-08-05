@@ -28,5 +28,5 @@ static-scan denials occur before `sandboxed_exec`.
 
 ## Related implementation
 
-- [`NonoSandboxProvider`](../../agent-governance-python/agent-sandbox/src/agent_sandbox/nono_sandbox_provider/provider.py)
-- [Agent Sandbox README](../../agent-governance-python/agent-sandbox/README.md)
+- [`NonoSandboxProvider`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/src/agent_sandbox/nono_sandbox_provider/provider.py)
+- [Agent Sandbox README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/README.md)

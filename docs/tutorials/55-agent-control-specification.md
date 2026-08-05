@@ -1,6 +1,6 @@
 ---
 title: Agent Control Specification Tutorial
-last_reviewed: 2026-06-02
+last_reviewed: 2026-07-31
 owner: docs-team
 ---
 
@@ -10,7 +10,15 @@ owner: docs-team
 
 ## What you will build
 
-This tutorial builds a small ACS policy enforcement point around an email tool. The host submits a complete snapshot to ACS before and after the tool call. ACS returns a verdict, and the host enforces it.
+Build an ACS policy enforcement point for an email tool. The host sends ACS a
+complete snapshot before and after the tool call, then enforces the returned
+verdict.
+
+!!! tip "Prefer a runnable repository example?"
+    Start with `examples/acs-email-tool` in a repository checkout. It
+    demonstrates the canonical Python host path through `AgentControl`,
+    `HostSession`, and `SnapshotBuilder` without OPA. This tutorial adds a Rego
+    policy to expose the native manifest and policy-input contract.
 
 You will create:
 
@@ -24,13 +32,14 @@ You will create:
 
 ## How ACS fits in AGT
 
-ACS is the policy decision runtime. Your application or adapter is the policy enforcement point.
+ACS makes the policy decision. Your application or adapter enforces it.
 
 ```text
 Host adapter -> snapshot -> ACS runtime -> verdict -> host enforcement
 ```
 
-ACS is stateless. The host supplies all context for every evaluation, including the intervention point, tool call, tool result, and any ambient labels or metadata.
+Each evaluation includes its full context: the intervention point, tool call,
+tool result, labels, and metadata. ACS retains no session state between calls.
 
 ## Step 1: Install the Python SDK from the repo
 
@@ -41,7 +50,9 @@ cd policy-engine
 python -m pip install ./sdk/python
 ```
 
-The SDK distribution is named `agent-control-specification`. It builds the native Rust core with maturin when installed from source.
+The `agent-control-specification` distribution builds the native Rust core with
+maturin when installed from source. It includes `AgentControl`, `HostSession`,
+and `SnapshotBuilder` for Python hosts.
 
 OPA-backed Rego examples require the `opa` CLI on `PATH`.
 
@@ -189,7 +200,8 @@ async def main():
 asyncio.run(main())
 ```
 
-The host calls `run_tool()`. ACS evaluates `pre_tool_call`, the host runs the tool only if the verdict permits it, and ACS then evaluates `post_tool_call`.
+`run_tool()` evaluates `pre_tool_call` before execution and `post_tool_call`
+after the tool returns.
 
 ## Step 6: Run it
 
@@ -205,11 +217,13 @@ Expected output:
 external_recipient_blocked
 ```
 
-The second call proves the `transform` verdict changed the policy target before tool execution. The third call proves a `deny` verdict blocked the tool.
+The second call applies the `transform` verdict before execution. The third
+blocks the tool after a `deny` verdict.
 
 ## Step 7: Inspect the policy input shape
 
-ACS policies evaluate a canonical policy input. For the `pre_tool_call` point in this tutorial, the Rego policy sees fields like:
+ACS policies evaluate a canonical policy input. For `pre_tool_call`, the Rego
+policy receives fields like:
 
 ```json
 {
@@ -230,7 +244,9 @@ ACS policies evaluate a canonical policy input. For the `pre_tool_call` point in
 }
 ```
 
-The exact input can include additional snapshot, annotation, and manifest-derived fields. The policy should read the canonical fields it needs and avoid depending on host-local state.
+The input may include more snapshot, annotation, and manifest-derived fields.
+Read only the canonical fields the policy needs; do not depend on host-local
+state.
 
 ## Step 8: Try a fail-closed case
 
@@ -242,10 +258,13 @@ tool_name_from: $.tool_call.missing_name
 
 Run the host again. ACS fails closed with a runtime error verdict instead of allowing the call.
 
-This is the core ACS safety model: malformed manifests, missing paths, policy dispatcher failures, and invalid transform targets produce `deny` verdicts with reserved runtime-error reasons.
+Malformed manifests, missing paths, policy dispatcher failures, and invalid
+transform targets produce `deny` verdicts with reserved runtime-error reasons.
 
 ## Next steps
 
+- Run the framework-neutral AGT host example at `examples/acs-email-tool`.
+- Inspect the [ACS plus ATR annotator example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/acs-atr-annotator).
 - Read the [Agent Control Specification package page](../packages/agent-control-specification.md).
 - Compare Rego and Cedar in [OPA / Rego / Cedar Policies](08-opa-rego-cedar-policies.md).
 - Add human review with [Approval Workflows](38-approval-workflows.md).

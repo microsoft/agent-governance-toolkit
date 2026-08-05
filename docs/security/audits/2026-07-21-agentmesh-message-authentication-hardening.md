@@ -1,3 +1,9 @@
+---
+title: "2026-07-21 — AgentMesh message authentication and plaintext-downgrade hardening"
+last_reviewed: 2026-07-30
+owner: agt-maintainers
+---
+
 # 2026-07-21 — AgentMesh message authentication and plaintext-downgrade hardening
 
 PR: [microsoft/agent-governance-toolkit#3411](https://github.com/microsoft/agent-governance-toolkit/pull/3411)

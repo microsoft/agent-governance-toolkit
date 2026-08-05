@@ -1,3 +1,9 @@
+---
+title: "2026-07-02 - Capability sub-resource path preservation (4+ segment escalation)"
+last_reviewed: 2026-07-09
+owner: agt-maintainers
+---
+
 # 2026-07-02 - Capability sub-resource path preservation (4+ segment escalation)
 
 PR: microsoft/agent-governance-toolkit#3246

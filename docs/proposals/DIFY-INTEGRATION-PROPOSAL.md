@@ -1,17 +1,27 @@
+---
+title: "Dify — AgentMesh Trust Layer Plugin"
+last_reviewed: 2026-07-16
+owner: agt-maintainers
+---
+
 # Dify — AgentMesh Trust Layer Plugin
 
-**Submission:** [langgenius/dify-plugins#2060](https://github.com/langgenius/dify-plugins/pull/2060)
-**Status:** ✅ Shipped — Plugin merged (PR #2060), live on Dify Marketplace
-**Type:** Plugin submission (Dify Marketplace)
-**Date Submitted:** March 2, 2026
+**Submission:** [langgenius/dify#32079](https://github.com/langgenius/dify/pull/32079)
+**Status:** Closed without merge. No public follow-up plugin submission was found.
+**Type:** Historical integration proposal
+**Date Submitted:** February 6, 2026
 
 ---
 
 ## Summary
 
-AgentMesh Trust Layer plugin for Dify that provides cryptographic identity and trust verification for agent workflows. Submitted via the Dify plugin marketplace pipeline per @crazywoola's guidance (redirected from [langgenius/dify#32079](https://github.com/langgenius/dify/pull/32079)).
+The proposal added an AgentMesh trust extension to Dify for cryptographic
+identity and trust verification. A Dify maintainer closed the pull request and
+redirected the author to the separate plugin repository. The author stated that
+a plugin submission would follow, but no public submission or marketplace
+listing was found.
 
-## 4 Tools Provided
+## 4 Tools Proposed
 
 | Tool | Description |
 |------|-------------|
@@ -28,7 +38,7 @@ In multi-agent workflows, agents need to verify "who" they're communicating with
 - **Capability-based access control** per workflow step
 - **Full audit logging** of trust decisions
 
-## Privacy & Data
+## Proposed Privacy & Data
 
 - No personal user data collected
 - Operates entirely locally within the Dify environment
@@ -40,4 +50,4 @@ In multi-agent workflows, agents need to verify "who" they're communicating with
 
 - [Dify Plugins](https://github.com/langgenius/dify-plugins)
 - [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit)
-- [Plugin Source](https://github.com/microsoft/agent-governance-toolkit/tree/master/integrations/dify-plugin)
+- [Closed Dify Core Proposal](https://github.com/langgenius/dify/pull/32079)

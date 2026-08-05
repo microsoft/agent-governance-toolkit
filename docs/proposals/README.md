@@ -1,3 +1,9 @@
+---
+title: "External Proposals & Submissions Index"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # External Proposals & Submissions Index
 
 Master index of all external proposals, PRs, and issues submitted by the Agent Governance Toolkit project.

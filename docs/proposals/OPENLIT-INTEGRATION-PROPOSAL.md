@@ -1,3 +1,9 @@
+---
+title: "OpenLit — Agent SRE OTel Instrumentation"
+last_reviewed: 2026-03-23
+owner: agt-maintainers
+---
+
 # OpenLit — Agent SRE OTel Instrumentation
 
 **Issue:** [openlit/openlit#1003](https://github.com/openlit/openlit/issues/1003)
