@@ -341,8 +341,10 @@ class MerkleAuditChain:
             # constant E(level), then add a new root level.
             for level_idx in range(len(self._tree)):
                 self._tree[level_idx].extend(
-                    [MerkleNode(hash=self._empty_subtree_hash(level_idx))
-                     for _ in range(len(self._tree[level_idx]))]
+                    [
+                        MerkleNode(hash=self._empty_subtree_hash(level_idx))
+                        for _ in range(len(self._tree[level_idx]))
+                    ]
                 )
             # Add new root level. The old root's sibling is an all-zero subtree
             # at the old top level; the new level's spare slot is one higher.
