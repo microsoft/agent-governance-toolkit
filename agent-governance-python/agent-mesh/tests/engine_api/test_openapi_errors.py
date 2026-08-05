@@ -141,3 +141,34 @@ class TestEngineApiOpenApiErrors:
         capability_first = _build_wrapped_app(error_wrapper_first=False).openapi()
 
         assert error_first == capability_first
+
+    def test_reinstalling_error_wrapper_is_idempotent(self):
+        app = FastAPI()
+
+        @app.get("/validated", operation_id="validated")
+        @capability_flags(
+            runtime_mutating=False, user_intent_required=False, read_only_surface=True
+        )
+        async def validated(value: int = Query(...)):
+            return {"value": value}
+
+        inject_error_responses(app)
+        inject_capability_extension(app)
+        first_openapi = app.openapi
+
+        inject_error_responses(app)
+
+        assert app.openapi is first_openapi
+        operation = app.openapi()["paths"]["/validated"]["get"]
+        schema = app.openapi()
+        assert schema["components"]["schemas"]["ErrorEnvelope"]["properties"].keys() >= {
+            "status",
+            "code",
+            "message",
+            "details",
+        }
+        assert operation["responses"]["4XX"] == {"$ref": _ERROR_RESPONSE_REF}
+        assert operation["responses"]["5XX"] == {"$ref": _ERROR_RESPONSE_REF}
+        assert operation["responses"]["422"]["content"]["application/json"]["schema"] == {
+            "$ref": _ERROR_ENVELOPE_REF
+        }

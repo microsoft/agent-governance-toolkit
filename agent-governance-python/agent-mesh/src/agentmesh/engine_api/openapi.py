@@ -58,6 +58,9 @@ _ERROR_RESPONSE_REF = "#/components/responses/ErrorResponse"
 #: The component reference used by validation responses and ErrorResponse.
 _ERROR_ENVELOPE_REF = "#/components/schemas/ErrorEnvelope"
 
+#: Marker attached to the error wrapper and wrappers composed around it.
+_ERROR_RESPONSES_WRAPPER_ATTR = "__agentmesh_error_responses_wrapper__"
+
 
 def _error_response_ref() -> dict[str, str]:
     """Return a fresh reference to the reusable standard error response."""
@@ -134,6 +137,9 @@ def inject_error_responses(app: Any) -> None:
     Args:
         app: A ``fastapi.FastAPI`` instance with its routes already registered.
     """
+    if getattr(app.openapi, _ERROR_RESPONSES_WRAPPER_ATTR, False):
+        return
+
     original_openapi = app.openapi
 
     def openapi_with_error_responses() -> dict[str, Any]:
@@ -142,6 +148,7 @@ def inject_error_responses(app: Any) -> None:
         app.openapi_schema = schema
         return schema
 
+    setattr(openapi_with_error_responses, _ERROR_RESPONSES_WRAPPER_ATTR, True)
     app.openapi = openapi_with_error_responses
 
 
@@ -201,6 +208,8 @@ def inject_capability_extension(app: Any) -> None:
         app.openapi_schema = schema
         return schema
 
+    if getattr(original_openapi, _ERROR_RESPONSES_WRAPPER_ATTR, False):
+        setattr(openapi_with_capabilities, _ERROR_RESPONSES_WRAPPER_ATTR, True)
     app.openapi = openapi_with_capabilities
 
 
