@@ -19,7 +19,7 @@ import time
 from fastapi import FastAPI
 
 from agentmesh.engine_api.errors import register_error_handlers
-from agentmesh.engine_api.openapi import inject_capability_extension
+from agentmesh.engine_api.openapi import inject_capability_extension, inject_error_responses
 from agentmesh.engine_api.policy_registry import PolicyRegistry
 from agentmesh.engine_api.routes import (
     agents,
@@ -85,7 +85,7 @@ def create_app(policy_dir: str | None = None, enable_policy_save: bool | None = 
         hook is applied last, so accessing ``app.openapi()`` raises ``ValueError`` if any
         in-schema operation is missing capability flags.
     """
-    resolved_dir = policy_dir or os.getenv(POLICY_DIR_ENV, DEFAULT_POLICY_DIR)
+    resolved_dir = policy_dir or os.getenv(POLICY_DIR_ENV) or DEFAULT_POLICY_DIR
     if enable_policy_save is None:
         save_enabled = _env_truthy(POLICY_SAVE_ENV)
     else:
@@ -105,6 +105,10 @@ def create_app(policy_dir: str | None = None, enable_policy_save: bool | None = 
 
     for module in _ROUTE_MODULES:
         app.include_router(module.router)
+
+    # Install the error wrapper first so the capability wrapper composes with it instead of
+    # replacing it. Both wrappers call the previously installed app.openapi function.
+    inject_error_responses(app)
 
     # Must run after every router is registered: it validates that every in-schema
     # operation carries capability flags and injects the x-capability-flags extension.
