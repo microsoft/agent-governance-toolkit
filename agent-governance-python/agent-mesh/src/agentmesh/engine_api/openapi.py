@@ -176,8 +176,6 @@ def inject_capability_extension(app: Any) -> None:
                 continue
 
             route_path = route_context.path_format or route_context.path
-            if route_path is None:
-                continue
             path_item = paths.get(route_path)
             if path_item is None:
                 continue

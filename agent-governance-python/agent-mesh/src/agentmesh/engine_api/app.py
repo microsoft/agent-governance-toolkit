@@ -85,7 +85,7 @@ def create_app(policy_dir: str | None = None, enable_policy_save: bool | None = 
         hook is applied last, so accessing ``app.openapi()`` raises ``ValueError`` if any
         in-schema operation is missing capability flags.
     """
-    resolved_dir = policy_dir or os.getenv(POLICY_DIR_ENV) or DEFAULT_POLICY_DIR
+    resolved_dir = policy_dir or os.getenv(POLICY_DIR_ENV, DEFAULT_POLICY_DIR)
     if enable_policy_save is None:
         save_enabled = _env_truthy(POLICY_SAVE_ENV)
     else:
