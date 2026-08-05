@@ -1,3 +1,9 @@
+---
+title: "2026-04-29 — Additive Policy-Check Contract"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 # 2026-04-29 — Additive Policy-Check Contract
 
 PR: [microsoft/agent-governance-toolkit#1594](https://github.com/microsoft/agent-governance-toolkit/pull/1594)

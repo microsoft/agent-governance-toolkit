@@ -1,3 +1,9 @@
+---
+title: "ADR-0023: Append-Only Delta Engine for Hypervisor Audit"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR-0023: Append-Only Delta Engine for Hypervisor Audit
 
 ## Status

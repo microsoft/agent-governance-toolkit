@@ -9,7 +9,7 @@ Policy enforcement, trust verification, and audit trails for
 
 ## What It Does
 
-`adk-agentmesh` implements the `PolicyEvaluator` protocol
+`adk-agentmesh` implements the `AgentControl` protocol
 ([google/adk-python#4897](https://github.com/google/adk-python/issues/4897))
 backed by the Agent Governance Toolkit's deterministic policy engine.
 
@@ -28,7 +28,7 @@ pip install adk-agentmesh
 
 ### 1. Define a governance policy
 
-Create a YAML policy file (see [`examples/policies/adk-governance.yaml`](../../../examples/policies/adk-governance.yaml)):
+Create a YAML policy file (see [`examples/policies/adk-agt-manifest.yaml`](../../../examples/policies/adk-agt-manifest.yaml)):
 
 ```yaml
 adk_governance:
@@ -47,7 +47,7 @@ adk_governance:
 from adk_agentmesh import ADKPolicyEvaluator, GovernanceCallbacks
 
 # Load policy
-evaluator = ADKPolicyEvaluator.from_config("policies/adk-governance.yaml")
+evaluator = ADKPolicyEvaluator.from_config("policies/adk-agt-manifest.yaml")
 callbacks = GovernanceCallbacks(evaluator)
 
 # Attach to ADK agent
@@ -148,13 +148,13 @@ handler.handle(event)
 ## Sample Policy
 
 See the full sample policy at
-[`examples/policies/adk-governance.yaml`](../../../examples/policies/adk-governance.yaml).
+[`examples/policies/adk-agt-manifest.yaml`](../../../examples/policies/adk-agt-manifest.yaml).
 
 ## Links
 
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - [Google ADK](https://github.com/google/adk-python)
-- [PolicyEvaluator proposal (google/adk-python#4897)](https://github.com/google/adk-python/issues/4897)
+- [AgentControl proposal (google/adk-python#4897)](https://github.com/google/adk-python/issues/4897)
 
 ## License
 

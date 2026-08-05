@@ -1,3 +1,9 @@
+---
+title: "ADR 0012: Cost Governance via Observability Policies in Agent SRE"
+last_reviewed: 2026-05-06
+owner: agt-maintainers
+---
+
 # ADR 0012: Cost Governance via Observability Policies in Agent SRE
 
 - Status: accepted

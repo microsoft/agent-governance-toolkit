@@ -1,3 +1,9 @@
+---
+title: "🚀 10分钟快速入门指南"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # 🚀 10分钟快速入门指南
 
 从零开始，在10分钟内构建受治理的AI智能体。
@@ -83,43 +89,21 @@ agent-governance verify --badge
 创建一个名为 `governed_agent.py` 的文件：
 
 ```python
-from agent_os.policies import PolicyEvaluator, PolicyDecision
-from agent_os.policies.schema import (
-    PolicyDocument, PolicyRule, PolicyCondition,
-    PolicyAction, PolicyOperator, PolicyDefaults,
+from agent_control_specification import AgentControl, HostSession
+
+runtime = AgentControl.from_path("policies/manifest.yaml")
+session = HostSession(
+    runtime,
+    agent_id="quickstart-agent",
+    session_id="quickstart-session",
 )
 
-# 内联定义治理规则（或从 YAML 加载 — 见下文）
-policy = PolicyDocument(
-    name="agent-safety",
-    version="1.0",
-    description="示例安全策略",
-    defaults=PolicyDefaults(action=PolicyAction.ALLOW),
-    rules=[
-        PolicyRule(
-            name="block-dangerous-tools",
-            condition=PolicyCondition(
-                field="tool_name",
-                operator=PolicyOperator.IN,
-                value=["execute_code", "delete_file", "shell_exec"],
-            ),
-            action=PolicyAction.DENY,
-            message="工具被策略阻止",
-            priority=100,
-        ),
-    ],
+result = session.pre_tool_call(
+    tool_name="delete_file",
+    args={"path": "/etc/passwd"},
 )
-
-evaluator = PolicyEvaluator(policies=[policy])
-
-# 允许
-result = evaluator.evaluate({"tool_name": "web_search", "input_text": "latest AI news"})
-print(f"操作允许: {result.allowed}")   # True
-
-# 阻止 — 确定性
-result = evaluator.evaluate({"tool_name": "delete_file", "input_text": "/etc/passwd"})
-print(f"操作允许: {result.allowed}")   # False
-print(f"原因: {result.reason}")       # "工具被策略阻止"
+print(result.verdict)
+print(result.reason_code)
 ```
 
 运行：
@@ -155,11 +139,11 @@ agent-governance verify --badge
 
 | 内容 | 位置 |
 |------|------|
-| 完整 API 参考（Python） | [agent-governance-python/agent-os/README.md](../../agent-governance-python/agent-os/README.md) |
-| TypeScript 包文档 | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
-| .NET 包文档 | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
-| OWASP 覆盖图 | [../../docs/compliance/owasp-agentic-top10-architecture.md](../../docs/compliance/owasp-agentic-top10-architecture.md) |
-| 贡献指南 | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
+| 完整 API 参考（Python） | [agent-governance-python/agent-os/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/README.md) |
+| TypeScript 包文档 | [agent-governance-typescript/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-typescript/README.md) |
+| .NET 包文档 | [agent-governance-dotnet/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/README.md) |
+| OWASP 覆盖图 | [../../docs/compliance/owasp-agentic-top10-architecture.md](../compliance/owasp-agentic-top10-architecture.md) |
+| 贡献指南 | [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) |
 
 ---
 

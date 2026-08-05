@@ -1,3 +1,9 @@
+---
+title: "Migration Plan: Package Consolidation"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 # Migration Plan: Package Consolidation
 
 Tracks issue [#2482](https://github.com/microsoft/agent-governance-toolkit/issues/2482)
@@ -66,7 +72,7 @@ The table below lists every package being consolidated and its replacement.
 | `langflow-agentmesh` | `agent-governance-toolkit-integrations[langflow]` | yes |
 | `adk-agentmesh` | `agent-governance-toolkit-integrations[adk]` | yes |
 | `avp-agentmesh` | `agent-governance-toolkit-integrations[avp]` | yes |
-| `cedarling-agentmesh` | `agent-governance-toolkit-integrations[cedarling]` | yes |
+| `cedarling-agentmesh` | Removed. Use native ACS Cedar policy configuration or a custom policy dispatcher. | no |
 | `nostr-wot-agentmesh` | `agent-governance-toolkit-integrations[nostr-wot]` | yes |
 | `structural-authz-agentmesh` | `agent-governance-toolkit-integrations[structural-authz]` | yes |
 | `openshell-agentmesh` | `agent-governance-toolkit-integrations[openshell]` | yes |

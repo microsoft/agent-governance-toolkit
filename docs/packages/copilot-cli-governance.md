@@ -1,7 +1,13 @@
+---
+title: "@microsoft/agent-governance-copilot-cli — Copilot CLI governance package"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 # @microsoft/agent-governance-copilot-cli — Copilot CLI governance package
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-copilot-cli)](https://www.npmjs.com/package/@microsoft/agent-governance-copilot-cli)
 
 `@microsoft/agent-governance-copilot-cli` is the production install surface for AGT-backed
@@ -64,6 +70,18 @@ Policy management is handled through first-class CLI commands rather than slash 
 - `agt-copilot policy apply --file <path>`
 - `agt-copilot policy apply --profile <strict|balanced|advisory>`
 
+## Repository-specific policy authoring
+
+Use the portable [AGT policy authoring skill](../skills/agt-policy-authoring/SKILL.md) to have an
+agent inspect a repository's actual tool use and risk boundaries, then produce a minimal policy
+source at `.agt/policy.json`. The skill begins with AGT's strict baseline, preserves the default
+protections, and requires `agt-copilot policy validate --file .agt/policy.json` before activation.
+
+The Copilot CLI runtime does not automatically load policies from a repository. After reviewing the
+generated policy, explicitly opt in by using `agt-copilot policy apply --file <path>` or by setting
+`AGT_COPILOT_POLICY_PATH` for the Copilot CLI session. This keeps a repository policy from
+silently changing a user's global governance configuration.
+
 ## Copilot CLI setup
 
 The package does not auto-edit Copilot CLI settings. Enable extensions in your Copilot config:
@@ -108,7 +126,7 @@ If a custom policy becomes invalid, remove `~/.copilot/agt/policy.json` or point
 For the scenario-driven tutorial, sample prompts, and expected outcomes, see:
 
 - [Tutorial 46 — Copilot CLI governance installer](../tutorials/46-copilot-cli-governance.md)
-- [`examples/copilot-cli-agt`](../../examples/copilot-cli-agt/README.md)
+- [`examples/copilot-cli-agt`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/copilot-cli-agt/README.md)
 
 ## Release model
 

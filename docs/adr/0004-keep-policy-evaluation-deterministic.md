@@ -1,3 +1,9 @@
+---
+title: "ADR 0004: Keep policy evaluation deterministic and out of LLM control loops"
+last_reviewed: 2026-03-26
+owner: agt-maintainers
+---
+
 # ADR 0004: Keep policy evaluation deterministic and out of LLM control loops
 
 - Status: accepted

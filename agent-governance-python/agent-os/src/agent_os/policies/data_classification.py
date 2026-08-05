@@ -156,8 +156,7 @@ class DataAccessEvaluator:
                     )
 
         if (
-            policy.required_geography
-            and data_label.geography
+            policy.required_geography is not None
             and data_label.geography != policy.required_geography
         ):
             return DataAccessDecision(
