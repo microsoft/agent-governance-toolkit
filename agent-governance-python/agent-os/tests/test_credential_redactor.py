@@ -449,6 +449,50 @@ def test_trailing_anchor_does_not_widen_the_match(text: str):
     assert CredentialRedactor.redact(text) == text
 
 
+# The patterns that end on the mirror assertion, per the class comment. The rest
+# either keep a trailing \b or have no trailing assertion, which is safe because
+# their value class already includes "_" and so absorbs the annotation.
+_MIRROR_ASSERTION_PATTERNS = frozenset(
+    {"AWS access key", "GitHub token", "Google API key", "Stripe secret key"}
+)
+
+
+def test_only_underscore_excluding_patterns_use_the_mirror_assertion():
+    """Pin the class comment's claim about which trailing edge each pattern uses.
+
+    The comment above PATTERNS explains the mirror assertion in terms of value
+    classes that exclude `_`. Stating it as a blanket property of every pattern
+    would be wrong -- most keep a trailing `\\b` -- so the split is asserted here
+    rather than only described in prose.
+    """
+    mirror = {
+        p.name for p in CredentialRedactor.PATTERNS if p.pattern.pattern.endswith("(?![A-Za-z0-9])")
+    }
+    assert mirror == _MIRROR_ASSERTION_PATTERNS
+
+    # No trailing negative lookahead may exclude "_": excluding a character the
+    # value class also excludes is what left the annotated key unredacted.
+    for pattern in CredentialRedactor.PATTERNS:
+        assert not pattern.pattern.pattern.endswith("(?![A-Za-z0-9_])"), pattern.name
+
+
+@pytest.mark.parametrize(
+    ("text", "secret"),
+    [
+        # Value classes that include "_" consume the annotation themselves, so a
+        # trailing \b lands after the suffix and the secret is still redacted.
+        ("sk-ABCDEFGHIJKLMNOPQRSTUV_old", "sk-ABCDEFGHIJKLMNOPQRSTUV"),
+        ("Bearer ABCDEFGHIJKLMNOPQRST_old", "ABCDEFGHIJKLMNOPQRST"),
+        ("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGH_old", "eyJhbGciOiJIUzI1NiJ9"),
+    ],
+)
+def test_patterns_keeping_a_trailing_boundary_still_redact_an_annotated_key(text: str, secret: str):
+    # The counterpart to the mirror-assertion cases: these needed no change, and
+    # the class comment says so. Verified rather than assumed.
+    assert CredentialRedactor.contains_credentials(text) is True
+    assert secret not in CredentialRedactor.redact(text)
+
+
 def test_scan_and_redact_reports_types_without_raw_secret():
     secret = "xoxb-FAKE-not-a-real-slack-token-00"
     redacted, types = CredentialRedactor.scan_and_redact(f"token {secret}")
