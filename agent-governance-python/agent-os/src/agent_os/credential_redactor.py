@@ -48,23 +48,8 @@ class CredentialRedactor:
     placeholder.
     """
 
-    # Python's stdlib ``re`` does not support per-pattern timeouts. These
-    # patterns are kept simple and anchored to avoid pathological backtracking.
-    #
-    # Prefix-anchored patterns use a ``(?<![A-Za-z0-9])`` lookbehind rather than
-    # ``\b`` so a secret glued directly to a preceding word character (for
-    # example ``session_sk-...``) is still detected. ``\b`` treats ``_`` as a
-    # word character, so ``_sk-`` has no boundary and the secret would be missed;
-    # ``(?<![A-Za-z0-9])`` treats ``_`` (and ``-``, ``/``, ``.``, whitespace) as a
-    # valid left edge while still not matching inside an alphanumeric word.
-    #
-    # The trailing edge uses the mirror assertion ``(?![A-Za-z0-9])`` for the same
-    # reason. A closing ``\b`` after a value class that excludes ``_`` is not just
-    # inconsistent with the left edge — for a fixed-length or ``_``-excluding value
-    # it makes the whole pattern fail on ``<secret>_suffix``, because there is no
-    # shorter match the engine can back off to that ends on a word boundary. A
-    # complete, valid key annotated in place (``AKIA..._old``, ``sk_live_..._rotated``)
-    # was therefore not redacted at all.
+    # Use explicit ASCII alphanumeric guards where a token's value class is not
+    # compatible with ``\b``.
     PATTERNS: tuple[CredentialPattern, ...] = (
         CredentialPattern(
             name="OpenAI API key",

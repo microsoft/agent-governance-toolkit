@@ -161,7 +161,8 @@ def test_redacts_supported_github_token_prefixes(token: str):
 @pytest.mark.parametrize(
     "prefix", ["ghp", "ghs", "gho", "ghu", "ghr"],
 )
-def test_redacts_classic_github_token_with_trailing_underscore(prefix: str):
+@pytest.mark.parametrize("suffix", ["_", "_old"])
+def test_redacts_classic_github_token_with_trailing_underscore(prefix: str, suffix: str):
     """A trailing "_" ends a classic token; it does not disqualify it.
 
     A row asserting the opposite used to live in the false-positive table
@@ -172,8 +173,8 @@ def test_redacts_classic_github_token_with_trailing_underscore(prefix: str):
     """
     token = _fake_github_token(prefix)
 
-    assert CredentialRedactor.redact(f"{token}_") == f"{REDACTED_PLACEHOLDER}_"
-    assert "GitHub token" in CredentialRedactor.detect_credential_types(f"{token}_")
+    assert CredentialRedactor.redact(f"{token}{suffix}") == f"{REDACTED_PLACEHOLDER}{suffix}"
+    assert "GitHub token" in CredentialRedactor.detect_credential_types(f"{token}{suffix}")
 
 
 @pytest.mark.parametrize(
