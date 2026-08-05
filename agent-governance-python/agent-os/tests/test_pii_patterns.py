@@ -5,11 +5,11 @@
 The dashed-only SSN regex (``\\b\\d{3}-\\d{2}-\\d{4}\\b``) that used to be
 duplicated across each framework adapter was trivially bypassed by SSNs
 formatted with spaces or dots (#2635).  Widening it also made the separator
-optional, so it matched any bare nine-digit run.  That is safe for a
-detection-only path but not here: these patterns drive blocking call sites
-(``autogen_adapter`` ``DropMessage``, ``PolicyViolationError`` on state
-updates, ``bedrock_adapter``), where a tracking number, ABA routing number,
-or ZIP+4 in ordinary content became a hard deny (#3532).
+optional, so it matched any bare nine-digit run.  These patterns drive
+blocking call sites (``autogen_adapter`` ``DropMessage``,
+``PolicyViolationError`` on state updates, ``bedrock_adapter``), so a
+tracking number, ABA routing number, or ZIP+4 in ordinary content became a
+hard deny (#3532).
 
 #3531 resolved the same tension on the MCP gateway copy of this pattern by
 requiring a separator while keeping the space and dot forms.  This module
