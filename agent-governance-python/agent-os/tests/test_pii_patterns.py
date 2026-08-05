@@ -31,7 +31,8 @@ from agent_os.integrations import autogen_adapter, bedrock_adapter
 from agent_os.integrations.base import PII_PATTERNS
 _SSN_VARIANTS = ('123-45-6789', '123 45 6789', '123.45.6789')
 _SSN_NON_MATCHES = ('', 'no digits in dashed positions', '12-345-6789', '1234-56-7890', 'no digits at all')
-# Nine-digit content that a blocking path must let through (#3532).
+# Content a blocking path must let through (#3532): bare nine-digit runs, plus
+# neighbouring digit groupings that must not start matching either.
 _SSN_FALSE_POSITIVES = ('Tracking: 123456789', 'order_123456789', 'ZIP 12345-6789', 'ABA 021000021', 'order 1234567890 shipped', 'build 12-34-5678 tagged')
 
 def _ssn_pattern():

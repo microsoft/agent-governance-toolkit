@@ -30,10 +30,11 @@ PII_PATTERNS: tuple[re.Pattern[str], ...] = (
     # (``employee_123-45-6789``) is still detected.
     # NOT yet in step with the two Rego copies, which still carry the loose
     # form: policy-engine/policy/lib/patterns.rego and agt-policies
-    # .../cli/_stock_rego/patterns.rego. Both declare that they track this
-    # constant, and the first is reachable as a hard block through
+    # .../cli/_stock_rego/patterns.rego. The first declares that it tracks
+    # this constant and is reachable as a hard block through
     # patterns.deny_if_pattern (agt_default.rego), so the same over-block
-    # survives on the OPA path. They cannot take this pattern verbatim: RE2
+    # survives on the OPA path; the wheel-shipped copy carries the pattern
+    # with no such note. They cannot take this pattern verbatim: RE2
     # has no lookarounds, so an equivalent has to anchor with
     # ``(^|[^A-Za-z0-9])`` / ``([^A-Za-z0-9]|$)``, which consumes a character
     # and shifts the span offset that deny_if_pattern reports.
