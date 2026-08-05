@@ -438,7 +438,7 @@ def test_still_ignores_non_private_pem_in_every_encoding(separator: str):
     text = _fake_pem_block_with("PUBLIC KEY", separator)
 
     assert CredentialRedactor.redact(text) == text
-    assert CredentialRedactor.contains_credentials(text) is False
+    assert not CredentialRedactor.contains_credentials(text)
 
 
 @pytest.mark.parametrize("separator", _ALL_SEPARATORS)
@@ -451,7 +451,7 @@ def test_still_requires_matching_begin_and_end_labels(separator: str):
     )
 
     assert CredentialRedactor.redact(text) == text
-    assert CredentialRedactor.contains_credentials(text) is False
+    assert not CredentialRedactor.contains_credentials(text)
 
 
 @pytest.mark.parametrize("opener", _ALL_SEPARATORS)
