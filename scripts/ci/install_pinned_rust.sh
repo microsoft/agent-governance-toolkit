@@ -43,22 +43,44 @@ case "$(uname -s):$(uname -m)" in
     ;;
 esac
 
-TEMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TEMP_DIR"' EXIT
-INSTALLER="$TEMP_DIR/$RUSTUP_FILE"
-curl --proto '=https' --tlsv1.2 --retry 5 --retry-all-errors --retry-delay 5 \
-  --connect-timeout 20 -fSLo "$INSTALLER" \
-  "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_TARGET}/${RUSTUP_FILE}"
-ACTUAL_SHA256="$(python - "$INSTALLER" <<'PY'
-from __future__ import annotations
-
+# Print the lowercase hex SHA-256 of a file using whichever hashing tool the
+# build host provides. Linux and Git Bash ship sha256sum, macOS ships shasum,
+# and any remaining host falls back to a Python interpreter.
+compute_sha256() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+    return
+  fi
+  local python_bin=""
+  if command -v python3 >/dev/null 2>&1; then
+    python_bin="python3"
+  elif command -v python >/dev/null 2>&1; then
+    python_bin="python"
+  else
+    echo "no SHA-256 tool available (need sha256sum, shasum, or python)" >&2
+    exit 1
+  fi
+  "$python_bin" - "$file" <<'PY'
 from hashlib import sha256
 from pathlib import Path
 import sys
 
 print(sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
 PY
-)"
+}
+
+TEMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+INSTALLER="$TEMP_DIR/$RUSTUP_FILE"
+curl --proto '=https' --tlsv1.2 --retry 5 --retry-all-errors --retry-delay 5 \
+  --connect-timeout 20 -fSLo "$INSTALLER" \
+  "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_TARGET}/${RUSTUP_FILE}"
+ACTUAL_SHA256="$(compute_sha256 "$INSTALLER")"
 if [[ "$ACTUAL_SHA256" != "$RUSTUP_SHA256" ]]; then
   echo "rustup installer checksum mismatch" >&2
   exit 1

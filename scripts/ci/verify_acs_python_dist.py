@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 import re
 import tomllib
+from typing import cast
 
 
 _WHEEL_PATTERN = re.compile(
@@ -44,11 +45,11 @@ def _platform_kind(platform: str) -> str:
 
 def _project_version(pyproject: Path) -> str:
     with pyproject.open("rb") as stream:
-        document = tomllib.load(stream)
+        document: dict[str, object] = tomllib.load(stream)
     project = document.get("project")
     if not isinstance(project, dict):
         raise ValueError(f"missing [project] table in {pyproject}")
-    version = project.get("version")
+    version = cast(Mapping[str, object], project).get("version")
     if not isinstance(version, str) or not version:
         raise ValueError(f"missing project.version in {pyproject}")
     return version
