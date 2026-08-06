@@ -58,10 +58,10 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 
 ## Quick Start
 
-**Prerequisites:** Python 3.10+
+**Prerequisites:** Python 3.11+
 
 ```bash
-pip install agent-governance-toolkit[full]
+pip install "agent-governance-toolkit[full]"
 ```
 
 Use the `[full]` extra for the quick-start imports below. The base
@@ -70,9 +70,10 @@ modules live in the consolidated core distribution. The `agentmesh` quick-start
 import remains the current wrapper API. Importing `agent_os` emits a
 `DeprecationWarning` because the old `agent-os-kernel` distribution is deprecated.
 Use `agent-governance-toolkit-core` (or the `[full]` extra that includes it) as
-the replacement distribution. Policy-engine host code uses the `agt-policies`
-and ACS APIs; the pre-ACS `agent_os.policies` rule model is gone, and
-`BREAKING_CHANGES.md` lists its replacements.
+the replacement distribution. Policy-engine host code uses the ACS SDK;
+`agt-policies` provides the one-way v4-to-v5 migration command. The pre-ACS
+`agent_os.policies` rule model is gone, and `BREAKING_CHANGES.md` lists its
+replacements.
 
 For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
 
@@ -89,7 +90,8 @@ from agentmesh.governance import govern
 safe_tool = govern(my_tool, policy="policy.yaml")   # every call checked, logged, enforced
 ```
 
-That's it. `safe_tool` evaluates your YAML policy on every call, logs the decision, and raises `GovernanceDenied` if the action is blocked.
+On every call, `safe_tool` evaluates the YAML policy, logs the decision to an
+audit trail, and raises `GovernanceDenied` when the policy blocks the action.
 
 ```yaml
 # policy.yaml
@@ -136,6 +138,8 @@ result = runtime.evaluate(
 print(result.verdict)
 runtime.close()
 ```
+
+[Run the complete ACS email-tool example](examples/acs-email-tool).
 
 </details>
 
@@ -257,7 +261,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 | Language | Package | Command |
 |----------|---------|---------|
-| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
+| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install "agent-governance-toolkit[full]"` |
 | **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
 | **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
@@ -325,6 +329,8 @@ Full list: [Framework Integrations](agent-governance-python/agentmesh-integratio
 
 | Example | Framework | What it demonstrates |
 |---------|-----------|----------------------|
+| [acs-email-tool](examples/acs-email-tool) | Framework-neutral ACS host | Snapshot, verdict, transform, deny, and host enforcement |
+| [acs-atr-annotator](examples/acs-atr-annotator) | ACS custom policy | Independent threat-rule annotations with fail-closed decisions |
 | [openai-agents-governed](examples/openai-agents-governed) | OpenAI Agents SDK | Policy-gated tool calls with trust tiers |
 | [crewai-governed](examples/crewai-governed) | CrewAI | Multi-agent governance with role-based policies |
 | [smolagents-governed](examples/smolagents-governed) | HuggingFace smolagents | Lightweight agent governance |

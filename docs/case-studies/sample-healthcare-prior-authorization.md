@@ -1,3 +1,9 @@
+---
+title: "HIPAA-Compliant Prior Authorization Agents at Cascade Health Partners"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 # HIPAA-Compliant Prior Authorization Agents at Cascade Health Partners
 _Disclaimer: This document presents a hypothetical use case intended to guide architecture and compliance planning. No real-world company data or metrics are included. This case study references AGT version 3.1.0. Component names and capabilities may differ in newer versions. Refer to the current documentation for the latest features. AGT is a tool to assist with compliance but does not guarantee compliance. Compliance depends on proper implementation and operational practices._
 

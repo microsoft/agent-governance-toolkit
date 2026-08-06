@@ -1,3 +1,9 @@
+---
+title: "Roadmap"
+last_reviewed: 2026-05-19
+owner: agt-maintainers
+---
+
 # Roadmap
 
 Public roadmap for the Agent Governance Toolkit. Items are not commitments -- they

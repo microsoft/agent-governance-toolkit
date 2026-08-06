@@ -1,3 +1,9 @@
+---
+title: "ADR-0024: RL Training Governance with Violation Penalties"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR-0024: RL Training Governance with Violation Penalties
 
 ## Status

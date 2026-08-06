@@ -1,3 +1,9 @@
+---
+title: "AI Agent Impact Assessment Template"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # AI Agent Impact Assessment Template

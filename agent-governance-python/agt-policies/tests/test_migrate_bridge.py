@@ -32,10 +32,23 @@ def test_allowed_tools_become_declared_tools(tmp_path: Path) -> None:
 
 
 def test_tool_and_token_budgets_survive_translation(tmp_path: Path) -> None:
+    """Each budget keeps its v4 scope: consumption points only.
+
+    v4 compared call_count to max_tool_calls at tool interception, so the
+    tool-call budget gates pre_tool_call alone; the cumulative token budget
+    gates the points about to spend tokens.
+    """
     _build(tmp_path, max_tool_calls=3, max_tokens=1000)
     rendered = (tmp_path / "bundle" / "app.rego").read_text(encoding="utf-8")
 
-    assert 'deny_if_budget_exceeded({"tool_call_count": 3, "token_count": 1000})' in rendered
+    assert (
+        'input.intervention_point == "pre_tool_call"\n'
+        '\tv := budgets.deny_if_budget_exceeded({"tool_call_count": 3})'
+    ) in rendered
+    assert (
+        'input.intervention_point in ["pre_model_call", "pre_tool_call"]\n'
+        '\tv := budgets.deny_if_budget_exceeded({"token_count": 1000})'
+    ) in rendered
 
 
 def test_tool_calls_are_mediated_before_the_call(tmp_path: Path) -> None:
@@ -61,7 +74,12 @@ def test_human_approval_is_carried_over(tmp_path: Path) -> None:
     rendered = (tmp_path / "bundle" / "app.rego").read_text(encoding="utf-8")
 
     assert "approval" in manifest
-    assert 'escalate_if_approver_required(["human"])' in rendered
+    # v4 gated approval on tool interception only; the migrated escalation
+    # must stay scoped to pre_tool_call rather than fire at every bound point.
+    assert (
+        'input.intervention_point == "pre_tool_call"\n'
+        '\tv := approval.escalate_if_approver_required(["human"])'
+    ) in rendered
 
 
 def test_no_approval_escalation_when_not_required(tmp_path: Path) -> None:

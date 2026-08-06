@@ -5,6 +5,49 @@ entries appear first.
 
 ---
 
+## `HostSession.post_tool_call` and `pre_model_call` emit the adapter snapshot shape
+
+**Date:** TBD
+
+**Affected**
+
+- manifests binding `post_tool_call` to `$.tool_result`
+- manifests binding `pre_model_call` to `$.request`
+- anything constructing `HostSession` directly rather than going through an
+  `agent_os.integrations` adapter
+
+**What changed**
+
+`HostSession` sent the tool result as a bare value and nested the model request
+under `request`, while the `agent_os.integrations` adapters send `tool_result`
+as `{"value": ..., "error": ..., "duration_ms": ...}` and spread the model
+request over `model`, `messages` and `tools`. Because those two seams
+disagreed, no manifest could bind a policy target that resolved for both:
+whichever seam the policy author did not target failed closed with a
+missing-path error.
+
+`HostSession` now emits the adapter shape at both points, which is also the
+shape AGT-SNAPSHOT-1.0 §2.6 specifies.
+
+This aligns `HostSession` with `agent_os.integrations` only. Other SDK entry
+points, including `AgentControl.run_tool` and the LiteLLM adapter, still send
+the older flat `tool_result` and are not covered by this change.
+
+**How to update**
+
+Repoint the affected policy targets:
+
+| Before | After |
+|--------|-------|
+| `$.tool_result` | `$.tool_result.value` |
+| `$.request` | `$.messages` (or `$.model`, `$.tools`) |
+
+A manifest left on `$.tool_result` still loads and still returns a verdict. It
+matches against an object rather than the result value, so a rule written for a
+string stops denying. Repoint it before upgrading.
+
+---
+
 ## `agt.policies` is removed; hosts call the ACS runtime directly
 
 **Date:** TBD

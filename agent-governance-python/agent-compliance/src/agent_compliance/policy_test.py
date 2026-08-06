@@ -73,7 +73,7 @@ class ReplayReport:
 
     @property
     def ok(self) -> bool:
-        return self.failed == 0
+        return self.total > 0 and self.failed == 0
 
     @property
     def mismatches(self) -> list[FixtureResult]:
@@ -103,7 +103,7 @@ class ReplayReport:
         }
 
 
-def _load_fixtures(fixture_path: Path) -> list[dict[str, Any]]:
+def _load_fixtures(fixture_path: Path) -> list[Any]:
     """Load fixtures from a file or directory.
 
     Supports JSON and YAML. A single file may contain one fixture (object)
@@ -123,18 +123,20 @@ def _load_fixtures(fixture_path: Path) -> list[dict[str, Any]]:
     if not paths:
         raise FileNotFoundError(f"No fixture files found in {fixture_path}")
 
-    fixtures: list[dict[str, Any]] = []
+    fixtures: list[Any] = []
     for p in paths:
         raw = _load_file(p)
         if isinstance(raw, list):
             for item in raw:
-                item.setdefault("_source", str(p))
+                if isinstance(item, dict):
+                    item.setdefault("_source", str(p))
             fixtures.extend(raw)
         elif isinstance(raw, dict):
             # Check for YAML scenarios wrapper (tutorial compat)
             if "scenarios" in raw and isinstance(raw["scenarios"], list):
                 for item in raw["scenarios"]:
-                    item.setdefault("_source", str(p))
+                    if isinstance(item, dict):
+                        item.setdefault("_source", str(p))
                 fixtures.extend(raw["scenarios"])
             else:
                 raw.setdefault("_source", str(p))
@@ -155,20 +157,55 @@ def _load_file(path: Path) -> Any:
     return yaml.safe_load(text)
 
 
+def _validate_fixtures(fixtures: list[Any], fixture_path: Path) -> None:
+    """Reject fixture suites that cannot make a pass/fail assertion."""
+    if not fixtures:
+        raise ValueError(f"No fixtures found in {fixture_path}")
+
+    invalid: list[str] = []
+    for fixture in fixtures:
+        if not isinstance(fixture, dict):
+            invalid.append(
+                f"fixture entry in {str(fixture_path)!r} must be an object, "
+                f"got {type(fixture).__name__}"
+            )
+            continue
+
+        expected_verdict = fixture.get("expected_verdict") or fixture.get(
+            "expected_action"
+        )
+        expected_allowed = fixture.get("expected_allowed")
+        if expected_verdict or expected_allowed is not None:
+            continue
+
+        fixture_id = fixture.get("id") or fixture.get("name", "unnamed")
+        source = fixture.get("_source", str(fixture_path))
+        invalid.append(
+            f"fixture {fixture_id!r} in {source!r} must define expected_verdict, "
+            "expected_action, or expected_allowed"
+        )
+
+    if invalid:
+        details = "\n".join(f"- {message}" for message in invalid)
+        raise ValueError(f"Invalid policy test fixture(s):\n{details}")
+
+
 def replay(
     manifest_path: str | Path,
     fixture_path: str | Path,
 ) -> ReplayReport:
     """Replay fixtures against a native ACS manifest and return a report."""
-    from agent_control_specification import AgentControl, run_sync
-
     manifest_path = Path(manifest_path)
     fixture_path = Path(fixture_path)
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest path not found: {manifest_path}")
 
-    runtime = AgentControl.from_path(str(manifest_path))
     fixtures = _load_fixtures(fixture_path)
+    _validate_fixtures(fixtures, fixture_path)
+
+    from agent_control_specification import AgentControl, run_sync
+
+    runtime = AgentControl.from_path(str(manifest_path))
     report = ReplayReport()
 
     try:
@@ -182,12 +219,6 @@ def replay(
             expected_allowed = fixture.get("expected_allowed")
             source = fixture.get("_source", "")
             resolution_metadata = fixture.get("resolution_metadata")
-
-            if expected_verdict is None and expected_allowed is None:
-                logger.warning(
-                    "Fixture %r has no expected result — skipping", fixture_id
-                )
-                continue
 
             if (
                 isinstance(raw_input, dict)

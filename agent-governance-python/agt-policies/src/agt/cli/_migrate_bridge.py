@@ -19,6 +19,7 @@ from ._migrate_re2 import glob_to_re2, validate_re2
 
 ACS_VERSION = "0.3.0-alpha-agt"
 _REASON_PATTERN = "blocked_pattern_input"
+_CASE_INSENSITIVE = "(?i)"
 
 
 @dataclass
@@ -102,25 +103,10 @@ def build_migrated_manifest(
     )
     (bundle_dir / f"{policy_id}.rego").write_text(rego_source, encoding="utf-8")
 
-    bind_tools = (
-        bool(policy.allowed_tools)
-        or policy.max_tool_calls >= 0
-        or policy.require_human_approval
-    )
     intervention_points = _build_intervention_points(
         policy_id,
-        bind_input=bool(policy.blocked_patterns),
-        bind_tools=bind_tools,
-        bind_output=bool(policy.blocked_patterns),
-        bind_post_model_call=policy.confidence_threshold > 0,
         bind_tools_with_catalog=bool(policy.allowed_tools),
     )
-    if not intervention_points:
-        intervention_points["pre_tool_call"] = {
-            "policy_target": "$.tool_call.args",
-            "policy_target_kind": "tool_args",
-            "policy": {"id": policy_id},
-        }
 
     manifest: dict[str, Any] = {
         "agent_control_specification_version": ACS_VERSION,
@@ -167,16 +153,25 @@ def _find_stock_rego_root() -> Path:
 
 
 def _pattern_to_regex(pattern: str | tuple[str, str]) -> str:
+    # v4 matched case-insensitively for every pattern kind: substrings via
+    # ``pat.lower() in text.lower()``, and REGEX/GLOB via ``re.IGNORECASE``
+    # (agent_os/integrations/base.py:406,413 before the v4 removal). RE2 supports
+    # the inline ``(?i)`` flag, so carry that across for all four kinds rather
+    # than silently tightening migrated policies into case-sensitive matches that
+    # let ``PASSWORD``, ``RM -RF`` or ``SETUP.EXE`` through.
     if isinstance(pattern, str):
-        return re.escape(pattern)
+        return _CASE_INSENSITIVE + re.escape(pattern)
     value, kind = pattern
     if kind == "SUBSTRING":
-        return re.escape(value)
+        return _CASE_INSENSITIVE + re.escape(value)
     if kind == "REGEX":
-        validate_re2(value, require_opa=True)
-        return value
+        composed = _CASE_INSENSITIVE + value
+        validate_re2(composed, require_opa=True)
+        return composed
     if kind == "GLOB":
-        return glob_to_re2(value, require_opa=True)
+        composed = _CASE_INSENSITIVE + glob_to_re2(value, require_opa=True)
+        validate_re2(composed, require_opa=True)
+        return composed
     raise ValueError(f"unsupported PatternType: {kind!r}")
 
 
@@ -202,13 +197,18 @@ def _render_rego(
         "",
         'default verdict := {"decision": "allow"}',
         "",
-        "policy_text := value if {",
+        "# Each string the target carries, matched separately. Collecting leaves",
+        "# rather than json.marshal-ing avoids marshal's escaping of \" \\\\ < > and &,",
+        "# which would stop a pattern containing any of them from matching. Keeping",
+        "# them separate rather than joining preserves whole-string (GLOB) anchors,",
+        "# which against a joined text could only ever match the final leaf.",
+        "policy_texts := [value] if {",
         "\tvalue := input.policy_target.value",
         "\tis_string(value)",
-        "} else := value if {",
+        "} else := texts if {",
         "\ttarget := input.policy_target.value",
         "\tnot is_string(target)",
-        "\tvalue := json.marshal(target)",
+        "\ttexts := [s | walk(target, [_, s]); is_string(s)]",
         "}",
         "",
     ]
@@ -216,18 +216,49 @@ def _render_rego(
     pattern_list = list(blocked_patterns)
     if pattern_list:
         rendered = ", ".join(json.dumps(pattern) for pattern in pattern_list)
+        # Select the matching leaves first, then build one verdict from the
+        # first of them. ``verdict`` is a complete rule, so binding it inside
+        # ``some ... in`` would produce a different object per matching leaf
+        # (deny_if_pattern embeds the match offset) and OPA would raise
+        # eval_conflict_error. matches_any also short-circuits, where
+        # deny_if_pattern scores every pattern against every leaf.
+        lines.extend(
+            [
+                "matched_texts := [t |",
+                "\tsome t in policy_texts",
+                f"\tpatterns.matches_any(t, [{rendered}])",
+                "]",
+                "",
+            ]
+        )
         branches.append(
-            "v := patterns.deny_if_pattern(policy_text, "
+            "count(matched_texts) > 0\n"
+            "\tv := patterns.deny_if_pattern(matched_texts[0], "
             f"[{rendered}], {json.dumps(_REASON_PATTERN)})"
         )
-    thresholds: dict[str, Any] = {}
     if max_tool_calls is not None:
-        thresholds["tool_call_count"] = max_tool_calls
-    if max_tokens is not None:
-        thresholds["token_count"] = max_tokens
-    if thresholds:
+        # v4 checked the tool-call budget only when intercepting a tool call
+        # (PolicyInterceptor compared context.call_count at tool interception),
+        # so an exhausted budget must gate the next tool call and nothing
+        # else; letting it fire at input/pre_model_call/agent_startup would
+        # stop the agent from ever emitting its final model response. It also
+        # cannot fire at post_tool_call: the runtime charges the attempt
+        # during pre_tool_call, so a >= check there would deny the result of
+        # the last permitted call after its side effects committed.
         branches.append(
-            f"v := budgets.deny_if_budget_exceeded({json.dumps(thresholds)})"
+            'input.intervention_point == "pre_tool_call"\n'
+            "\tv := budgets.deny_if_budget_exceeded("
+            f'{json.dumps({"tool_call_count": max_tool_calls})})'
+        )
+    if max_tokens is not None:
+        # The cumulative token budget gates new consumption, so evaluate it
+        # only where the agent is about to spend tokens (model and tool
+        # calls). Denying input or agent_startup on an exhausted budget would
+        # strand the session, and post-action points cannot un-run the spend.
+        branches.append(
+            'input.intervention_point in ["pre_model_call", "pre_tool_call"]\n'
+            "\tv := budgets.deny_if_budget_exceeded("
+            f'{json.dumps({"token_count": max_tokens})})'
         )
     if confidence_threshold is not None and confidence_threshold > 0:
         branches.append(
@@ -235,8 +266,13 @@ def _render_rego(
             f"{json.dumps(confidence_threshold)})"
         )
     if require_human_approval:
+        # v4 gated human approval on tool interception only (PolicyInterceptor
+        # checked require_human_approval when a tool was about to run), so the
+        # migrated escalation stays scoped to pre_tool_call. Escalating at
+        # every bound point would, absent an approver, deny all traffic.
         branches.append(
-            'v := approval.escalate_if_approver_required(["human"])'
+            'input.intervention_point == "pre_tool_call"\n'
+            '\tv := approval.escalate_if_approver_required(["human"])'
         )
     for index, branch in enumerate(branches):
         lines.append("verdict := v if {" if index == 0 else "else := v if {")
@@ -246,43 +282,45 @@ def _render_rego(
     return "\n".join(lines)
 
 
+# The engine denies any point a manifest leaves unbound
+# (``runtime_error:intervention_point_unknown``), so a migrated manifest has to
+# bind every point an adapter evaluates or the agent stops working the moment it
+# produces output or calls a tool. Each target below is the JSONPath for the
+# envelope the adapter runtime actually sends for that point; the generated Rego
+# carries ``default verdict := {"decision": "allow"}``, so binding a point the v4
+# policy said nothing about permits it rather than inventing a new rule.
+_POINT_TARGETS: dict[str, tuple[str, str]] = {
+    "input": ("$.input.body", "user_input"),
+    "output": ("$.response.content", "assistant_output"),
+    "pre_model_call": ("$.messages", "model_request"),
+    "post_model_call": ("$.response", "assistant_output"),
+    "pre_tool_call": ("$.tool_call.args", "tool_args"),
+    "post_tool_call": ("$.tool_result.value", "tool_result"),
+    # AGT-SNAPSHOT-1.0 §2.1 names this field `agent_init`, but both SDK seams
+    # (HostSession.agent_startup and AgentControl.agent_startup) emit `agent`,
+    # and `agent_init` appears nowhere in the runtime. Bind what the hosts
+    # actually send; reconciling the spec with the SDK is a separate decision.
+    # A spec-conformant third-party host fails closed here rather than open.
+    "agent_startup": ("$.agent", "agent_lifecycle"),
+    "agent_shutdown": ("$.summary", "agent_lifecycle"),
+}
+
+
 def _build_intervention_points(
     policy_id: str,
     *,
-    bind_input: bool,
-    bind_tools: bool,
-    bind_output: bool,
-    bind_post_model_call: bool,
     bind_tools_with_catalog: bool,
 ) -> dict[str, Any]:
     bindings: dict[str, Any] = {}
-    if bind_tools:
-        pre_tool: dict[str, Any] = {
-            "policy_target": "$.tool_call.args",
-            "policy_target_kind": "tool_args",
+    for point, (target, kind) in _POINT_TARGETS.items():
+        config: dict[str, Any] = {
+            "policy_target": target,
+            "policy_target_kind": kind,
             "policy": {"id": policy_id},
         }
-        if bind_tools_with_catalog:
-            pre_tool["tool_name_from"] = "$.tool_call.name"
-        bindings["pre_tool_call"] = pre_tool
-    if bind_input:
-        bindings["input"] = {
-            "policy_target": "$.input.body",
-            "policy_target_kind": "user_input",
-            "policy": {"id": policy_id},
-        }
-    if bind_output:
-        bindings["output"] = {
-            "policy_target": "$.response.content",
-            "policy_target_kind": "assistant_output",
-            "policy": {"id": policy_id},
-        }
-    if bind_post_model_call:
-        bindings["post_model_call"] = {
-            "policy_target": "$.response.content",
-            "policy_target_kind": "assistant_output",
-            "policy": {"id": policy_id},
-        }
+        if point == "pre_tool_call" and bind_tools_with_catalog:
+            config["tool_name_from"] = "$.tool_call.name"
+        bindings[point] = config
     return bindings
 
 

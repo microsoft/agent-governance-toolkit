@@ -1,3 +1,9 @@
+---
+title: "ISO 42001 Alignment Assessment"
+last_reviewed: 2026-04-16
+owner: agt-maintainers
+---
+
 # ISO 42001 Alignment Assessment
 
 > Mapping the Agent Governance Toolkit (AGT) v3.1.0 against ISO/IEC 42001:2023 — AI Management System requirements.

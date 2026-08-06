@@ -179,10 +179,13 @@ parameters:
   - name: rustPackages
     type: object
     displayName: 'Rust crates to publish'
+    # Only crates with no unpublished workspace dependency are packaged and
+    # published here. A crate that depends on another crate from this run
+    # (agent-control-specification -> agent-control-specification-core;
+    # agentmesh -> BOTH agentmesh-mcp and agent-control-specification) is
+    # packaged and released later, in dependency order, in dedicated steps in
+    # the Publish_Rust stage.
     default:
-      - name: agentmesh
-        path: agent-governance-rust
-        crate: agentmesh
       - name: agentmesh-mcp
         path: agent-governance-rust
         crate: agentmesh-mcp
@@ -1000,6 +1003,7 @@ stages:
               displayName: 'Run all tests'
 
             - script: |
+                set -euo pipefail
                 mkdir -p $(Pipeline.Workspace)/rust-packages-${{ pkg.name }}
                 echo "=== Packaging ${{ pkg.crate }} ==="
                 cargo package -p "${{ pkg.crate }}" --allow-dirty
@@ -1033,8 +1037,20 @@ stages:
 
           - ${{ each pkg in parameters.rustPackages }}:
             - script: |
+                set -euo pipefail
                 echo "=== ${{ pkg.name }} crate package ==="
-                find "$(Pipeline.Workspace)/rust-publish/${{ pkg.name }}" -name "*.crate" -type f -print
+                CRATE_DIR="$(Pipeline.Workspace)/rust-publish/${{ pkg.name }}"
+                CRATES=$(find "$CRATE_DIR" -name "*.crate" -type f)
+                if [ -z "$CRATES" ]; then
+                  echo "##[error]No .crate file found in $CRATE_DIR; refusing to release an empty payload."
+                  exit 1
+                fi
+                echo "$CRATES"
+                EMPTY=$(find "$CRATE_DIR" -name "*.crate" -type f -empty)
+                if [ -n "$EMPTY" ]; then
+                  echo "##[error]Zero-byte .crate file(s) in $CRATE_DIR: $EMPTY"
+                  exit 1
+                fi
               displayName: 'List ${{ pkg.name }} crate package'
 
             - task: EsrpRelease@11
@@ -1056,10 +1072,15 @@ stages:
                 mainpublisher: 'ESRPRELPACMAN'
                 domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
-          # agent_control_specification depends on agent_control_specification_core.
-          # Cargo refuses to package it until the core crate version exists in
-          # the crates.io index, so the SDK crate is packaged and released only
-          # after the core ESRP release completes.
+          # A crate that depends on another crate released in this run cannot
+          # be packaged until every dependency reaches the crates.io index.
+          # agent-control-specification depends on
+          # agent-control-specification-core (released above); agentmesh
+          # depends on BOTH agentmesh-mcp (released above) and
+          # agent-control-specification, so agentmesh must be packaged and
+          # released last. Overall order: agentmesh-mcp,
+          # agent-control-specification-core, agent-control-specification,
+          # agentmesh.
           - checkout: self
 
           - script: |
@@ -1082,9 +1103,10 @@ stages:
               echo "##vso[task.prependpath]$HOME/.cargo/bin"
               "$HOME/.cargo/bin/rustc" --version
               "$HOME/.cargo/bin/cargo" --version
-            displayName: 'Install Rust ${{ parameters.rustVersion }} for ACS SDK package'
+            displayName: 'Install Rust ${{ parameters.rustVersion }} for late crate packaging'
 
           - script: |
+              set -euo pipefail
               mkdir -p "$(Pipeline.Workspace)/rust-publish/agent-control-specification"
               for ATTEMPT in 1 2 3 4 5; do
                 if cargo package -p agent_control_specification --allow-dirty; then
@@ -1093,11 +1115,16 @@ stages:
                 if [ "$ATTEMPT" = "5" ]; then
                   exit 1
                 fi
-                echo "agent_control_specification_core is not visible in the crates.io index yet; retrying..."
+                echo "cargo package agent_control_specification failed (its dependencies may not be resolvable from crates.io yet); retrying..."
                 sleep 30
               done
               cp target/package/agent_control_specification-*.crate "$(Pipeline.Workspace)/rust-publish/agent-control-specification/"
               find "$(Pipeline.Workspace)/rust-publish/agent-control-specification" -name "*.crate" -type f -print
+              EMPTY=$(find "$(Pipeline.Workspace)/rust-publish/agent-control-specification" -name "*.crate" -type f -empty)
+              if [ -n "$EMPTY" ]; then
+                echo "##[error]Zero-byte .crate file(s): $EMPTY"
+                exit 1
+              fi
             workingDirectory: 'policy-engine'
             displayName: 'Package agent-control-specification crate'
 
@@ -1113,6 +1140,48 @@ stages:
               contenttype: 'Rust'
               contentsource: 'Folder'
               folderlocation: '$(Pipeline.Workspace)/rust-publish/agent-control-specification'
+              waitforreleasecompletion: true
+              owners: '$(ESRP_OWNERS)'
+              approvers: '$(ESRP_APPROVERS)'
+              serviceendpointurl: 'https://api.esrp.microsoft.com'
+              mainpublisher: 'ESRPRELPACMAN'
+              domaintenantid: '$(MICROSOFT_TENANT_ID)'
+
+          - script: |
+              set -euo pipefail
+              mkdir -p "$(Pipeline.Workspace)/rust-publish/agentmesh"
+              for ATTEMPT in 1 2 3 4 5; do
+                if cargo package -p agentmesh --allow-dirty; then
+                  break
+                fi
+                if [ "$ATTEMPT" = "5" ]; then
+                  exit 1
+                fi
+                echo "cargo package agentmesh failed (its dependencies may not be resolvable from crates.io yet); retrying..."
+                sleep 30
+              done
+              cp target/package/agentmesh-*.crate "$(Pipeline.Workspace)/rust-publish/agentmesh/"
+              find "$(Pipeline.Workspace)/rust-publish/agentmesh" -name "*.crate" -type f -print
+              EMPTY=$(find "$(Pipeline.Workspace)/rust-publish/agentmesh" -name "*.crate" -type f -empty)
+              if [ -n "$EMPTY" ]; then
+                echo "##[error]Zero-byte .crate file(s): $EMPTY"
+                exit 1
+              fi
+            workingDirectory: 'agent-governance-rust'
+            displayName: 'Package agentmesh crate'
+
+          - task: EsrpRelease@11
+            displayName: 'ESRP Publish agentmesh to crates.io'
+            inputs:
+              connectedservicename: 'AGT-ESRP-Signing'
+              usemanagedidentity: true
+              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
+              clientid: '$(ESRP_CLIENT_ID)'
+              intent: 'PackageDistribution'
+              contenttype: 'Rust'
+              contentsource: 'Folder'
+              folderlocation: '$(Pipeline.Workspace)/rust-publish/agentmesh'
               waitforreleasecompletion: true
               owners: '$(ESRP_OWNERS)'
               approvers: '$(ESRP_APPROVERS)'

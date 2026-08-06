@@ -1,3 +1,9 @@
+---
+title: "2026-06-09 — Policy Regression Testing: agt test and UTF-8 Schema Fix"
+last_reviewed: 2026-06-11
+owner: agt-maintainers
+---
+
 # 2026-06-09 — Policy Regression Testing: `agt test` and UTF-8 Schema Fix
 
 PR: [microsoft/agent-governance-toolkit#2869](https://github.com/microsoft/agent-governance-toolkit/pull/2869)

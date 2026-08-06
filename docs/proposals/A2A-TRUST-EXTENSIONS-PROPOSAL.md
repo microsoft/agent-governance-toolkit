@@ -1,3 +1,9 @@
+---
+title: "Proposal: A2A Protocol Trust & Payment Extensions"
+last_reviewed: 2026-06-24
+owner: agt-maintainers
+---
+
 # Proposal: A2A Protocol Trust & Payment Extensions
 
 **Status:** ✅ Adapter Shipped — Trust extensions proposed for AAIF contribution  

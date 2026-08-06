@@ -1,3 +1,9 @@
+---
+title: "2026-07-31 - Context accumulation: gate on evaluated restrictions (agent-os)"
+last_reviewed: 2026-08-06
+owner: agt-maintainers
+---
+
 # 2026-07-31 - Context accumulation: gate on evaluated restrictions (agent-os)
 
 PR: microsoft/agent-governance-toolkit#3523
