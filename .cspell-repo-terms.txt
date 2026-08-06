@@ -957,6 +957,58 @@ workiq
 workstream
 worktree
 writeln
+# --- West/North Africa regulatory policy terms ---
+# British spellings used in GDPR-modelled African data protection laws
+minimisation
+Minimisation
+pseudonymisation
+Pseudonymisation
+# Ghana
+Ghanaian
+NIA
+DPC
+# Rwanda
+Rwandan
+Kigali
+Gazetted
+gazetted
+NCSA
+NIDA
+RISA
+# Egypt
+Governorate
+governorate
+Cybercrimes
+cybercrimes
+PDPC
+PDPL
+MCIT
+# Mauritius (no new abbreviations beyond PDPC)
+# Shared currency / country codes used in messages
+GHA
+# Fictitious order-reference prefix used in a Ghana Card regex regression test
+SGHA
+RWF
+EGP
+MUR
+YYMMDD
+
+# --- Additional West/North Africa terms flagged by cspell ---
+# British English used in GDPR-modelled African data protection laws
+organisational
+offences
+organisations
+# Egypt PDPL regex fragments (word stems used in pattern matching)
+licen
+registr
+# Arabic: رقم قومي — "national number" in the Egyptian National ID detection regex
+قومي
+رقم
+# URL hostnames in policy file references
+hostnames
+dataprotection
+# dorny/paths-filter — GitHub Actions dependency used in policy-validation.yml
+dorny
 writerow
 wslc
 x86
