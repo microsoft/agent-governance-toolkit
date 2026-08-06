@@ -36,12 +36,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Fetched without --depth, because scoping the diff to this branch needs the
+      # merge base with the target branch. A depth-limited fetch into the full
+      # clone above writes .git/shallow and truncates that history, after which
+      # `git merge-base` fails and the diff falls back to the base tip -- which is
+      # what made this job spell-check the whole repository on any branch a few
+      # commits behind main.
       - name: Fetch PR base
         run: |
           set -e
-          git fetch origin "${{ github.base_ref }}" --depth=1 || \
-            git fetch --unshallow origin "${{ github.base_ref }}" || \
-            git fetch origin "${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}"
 
       - name: Compute changed lines
         id: diff
