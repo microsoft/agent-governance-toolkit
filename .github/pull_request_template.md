@@ -1,12 +1,19 @@
 ## Related Issue
 <!-- Link the issue this PR resolves, e.g. Fixes #123 or Closes #456. -->
 
-> **If no related issue is linked above, you must complete both "Problem & Solution" and "Alternatives Considered" below.**
+> **If no related issue is linked above, you must complete "Problem & Solution", "Impact on Your Work", and "Alternatives Considered" below.**
 
 ## Problem & Solution
 <!-- Required if no related issue is linked above. Provide both: -->
 <!-- Problem: what is broken, missing, or needed today? -->
 <!-- Solution: what does this PR change to address it? -->
+
+## Impact on Your Work
+<!-- Required if no related issue is linked above. -->
+<!-- How does this change impact your work and what are you trying to achieve? What pain point or blocker prompted it? -->
+
+## Timeline
+<!-- If this is time-sensitive, when do you need it merged by? Write "None" if there's no specific deadline. -->
 
 ## Alternatives Considered
 <!-- Required if no related issue is linked above. -->
@@ -36,6 +43,7 @@
 - [ ] agent-sandbox
 - [ ] agent-discovery
 - [ ] agt-policies
+- [ ] policy-engine
 
 **Platform & tooling:**
 - [ ] agent-hypervisor
@@ -50,7 +58,6 @@
 - [ ] agent-governance CLI plugins (copilot-cli / claude-code / opencode / antigravity-cli)
 
 **Shared / other:**
-- [ ] policy-engine
 - [ ] schemas
 - [ ] action (GitHub Action)
 - [ ] examples
@@ -67,7 +74,7 @@
 <!-- Write "N/A" if manual testing does not apply. -->
 
 ## Checklist
-- [ ] I have linked a related issue above, or completed "Problem & Solution" and "Alternatives Considered"
+- [ ] I have linked a related issue above, or completed "Problem & Solution", "Impact on Your Work", and "Alternatives Considered"
 - [ ] My code follows the project style guidelines (ruff check)
 - [ ] I have added tests that prove my fix/feature works
 - [ ] All new and existing tests pass (pytest)

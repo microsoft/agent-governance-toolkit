@@ -51,9 +51,14 @@ body:
       description: |
         Help us understand your use case: how are you using AGT today, what are you
         trying to achieve, and what pain point or blocker led to this request?
-        If this is critical for you, tell us if there is a timeline by when you need it.
     validations:
       required: true
+  - type: input
+    id: timeline
+    attributes:
+      label: Timeline
+      description: If this is critical for you, when do you need it by? Leave blank if there is no specific deadline.
+      placeholder: e.g. by 2026-09-30, next quarter, or no hard deadline
   - type: textarea
     id: solution
     attributes:

@@ -52,6 +52,12 @@ body:
         What were you trying to do when you hit this, and how is the bug affecting
         you (e.g. fully blocked, workaround available, degraded behavior)? This
         helps us prioritize.
+  - type: input
+    id: timeline
+    attributes:
+      label: Timeline
+      description: If this is time-sensitive, when do you need a fix by? Leave blank if there is no specific deadline.
+      placeholder: e.g. by 2026-09-30, blocking a release, or no hard deadline
   - type: textarea
     id: reproduction
     attributes:
