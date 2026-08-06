@@ -97,7 +97,8 @@
     "headerless",
     "desync",
     "starlette",
-    "realpeerrealpeerrealpeerreal"
+    "realpeerrealpeerrealpeerreal",
+    "clusterfuzzlite"
   ],
   "ignorePaths": [
     "**/node_modules/**",
