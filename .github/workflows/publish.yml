@@ -268,9 +268,10 @@ jobs:
             echo "::error::expected one ACS source distribution, found ${#sdists[@]}"
             exit 1
           fi
-          tar -tzf "${sdists[0]}" | grep -Eq '/core/src/lib.rs$'
-          tar --wildcards -xOf "${sdists[0]}" '*/sdk/python/Cargo.toml' | \
-            grep -Fq 'path = "../../core"'
+          sdist_listing="$(tar -tzf "${sdists[0]}")"
+          grep -Eq '/core/src/lib.rs$' <<<"$sdist_listing"
+          sdist_cargo_toml="$(tar --wildcards -xOf "${sdists[0]}" '*/sdk/python/Cargo.toml')"
+          grep -Fq 'path = "../../core"' <<<"$sdist_cargo_toml"
           rm -rf sdist-wheel
           CARGO_NET_OFFLINE=true python -m pip wheel \
             --disable-pip-version-check \

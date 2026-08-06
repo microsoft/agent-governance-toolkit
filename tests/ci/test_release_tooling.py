@@ -67,15 +67,18 @@ def test_esrp_pipeline_is_restored_as_temporary_registry_publish_path() -> None:
 
 def test_esrp_pipeline_builds_complete_acs_python_distribution() -> None:
     text = ESRP_PIPELINE.read_text(encoding="utf-8")
+    # Check the platform / buildPlatform tokens independently so the test stays
+    # stable against harmless YAML reindentation of the matrix entries.
     expected_matrix_entries = [
-        "platform: linux-x86_64\n              buildPlatform: linux-x86_64",
-        "platform: linux-aarch64\n              buildPlatform: linux-aarch64-cross",
-        "platform: macos-x86_64\n              buildPlatform: macos-x86_64",
-        "platform: macos-arm64\n              buildPlatform: macos-arm64",
-        "platform: windows-x86_64\n              buildPlatform: windows-x86_64",
+        ("platform: linux-x86_64", "buildPlatform: linux-x86_64"),
+        ("platform: linux-aarch64", "buildPlatform: linux-aarch64-cross"),
+        ("platform: macos-x86_64", "buildPlatform: macos-x86_64"),
+        ("platform: macos-arm64", "buildPlatform: macos-arm64"),
+        ("platform: windows-x86_64", "buildPlatform: windows-x86_64"),
     ]
-    for entry in expected_matrix_entries:
-        assert entry in text
+    for platform, build_platform in expected_matrix_entries:
+        assert platform in text
+        assert build_platform in text
 
     assert (
         "condition: and(succeeded(), ne('${{ pkg.name }}', 'agent-control-specification'))"
