@@ -86,23 +86,26 @@ python scripts/contributor_check.py --username <github-handle>
 Example output for a clean contributor:
 
 ```
-Reputation Report: clean-developer
-Risk: LOW
+Contributor Check: clean-developer
+==================================================
+Risk: 🟢 LOW
+
 No signals detected.
 ```
 
 Example output for a suspicious account:
 
 ```
-Reputation Report: suspicious-account
-Risk: HIGH
+Contributor Check: suspicious-account
+==================================================
+Risk: 🔴 HIGH
 
 Signals:
-  [HIGH] recent_repo_burst: 41 repos created in last 90 days
-  [HIGH] cross_repo_spray: Issues filed in 72 repos within 7 days
-  [HIGH] self_promotion_spray: 15 issues promoting own repos across 12 orgs
-  [HIGH] thin_credibility: Repo 'my-project' (22d old, 0 stars) promoted across 28 orgs
-  [HIGH] coordinated_promotion: 8 thin repos promoted to overlapping org set
+  🚩 [HIGH] recent_repo_burst: 41 repos created in last 90 days
+  🚩 [HIGH] cross_repo_spray: Issues filed in 72 repos within 7 days
+  🚩 [HIGH] self_promotion_spray: 15 issues promoting own repos across 12 orgs
+  🚩 [HIGH] thin_credibility: Repo 'my-project' (22d old, 0 stars) promoted across 28 orgs
+  🚩 [HIGH] coordinated_promotion: 8 thin repos promoted to overlapping org set
 ```
 
 ### JSON Output
@@ -332,9 +335,28 @@ jobs:
 1. Extracts the PR/issue author's username
 2. Runs contributor_check.py with `--repo` set to the current repository
 3. Optionally runs credential_audit.py for deeper analysis
-4. Posts a collapsible comment with findings (MEDIUM or higher)
-5. Adds risk labels (`needs-review:MEDIUM` or `needs-review:HIGH`)
+4. Posts a comment with **risk levels only** (MEDIUM or higher)
+5. Adds a risk label (`needs-review:MEDIUM`, `needs-review:HIGH`, or
+   `needs-review:UNKNOWN`)
 6. Comments are idempotent: re-runs update instead of duplicating
+
+### What the Action Does Not Publish
+
+The per-signal detail. The comment carries the risk level for each check group
+and an overall level, and nothing else. Which signals fired, and with what
+numbers, is not posted as a comment, not written to the job summary, and not
+uploaded as an artifact. The job discards it.
+
+That is deliberate. Publishing a scored dossier about a named contributor on
+the issue they just opened is a worse outcome than the spam it defends against,
+and a public accusation is not reversible. Maintainers who want the detail run
+`contributor_check.py` themselves against the same handle: it reads only public
+API data, so any result can be reproduced or contested.
+
+Note also that on a **public** repository, Actions run logs, job summaries, and
+artifacts are readable by anyone. There is no maintainer-only output channel
+inside Actions on a public repo, which is why the detail is dropped rather than
+written somewhere nominally internal.
 
 ### Security Note
 
