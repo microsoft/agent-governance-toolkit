@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from agent_os.credential_redactor import CredentialRedactor, REDACTED_PLACEHOLDER
+from agent_os.credential_redactor import REDACTED_PLACEHOLDER, CredentialRedactor
 
 
 def _fake_github_token(prefix: str) -> str:
@@ -274,6 +274,46 @@ def test_azure_sas_pattern_has_no_quadratic_backtracking():
     assert elapsed < 1.0
 
 
+@pytest.mark.parametrize(
+    "scheme",
+    [
+        "1.https",
+        ("Z" * 65) + "https",
+        ("a." * 65) + "https",
+        "a" + ("1" * 100),
+        "a" + ("." * 100),
+    ],
+    ids=[
+        "punctuation-prefix",
+        "long-word-prefix",
+        "separator-dense-prefix",
+        "long-numeric-tail",
+        "long-punctuation-tail",
+    ],
+)
+def test_basic_auth_uri_remains_fail_closed_with_padded_scheme(scheme: str):
+    secret = "user:pass123"
+    url = f"{scheme}://{secret}@example.com/resource"
+
+    redacted, types = CredentialRedactor.scan_and_redact(url)
+
+    assert "Basic auth secret" in types
+    assert REDACTED_PLACEHOLDER in redacted
+    assert secret not in redacted
+
+
+def test_basic_auth_scan_and_redact_handles_separator_dense_input_quickly():
+    text = "a." * 24_000
+
+    start = time.perf_counter()
+    redacted, types = CredentialRedactor.scan_and_redact(text)
+    elapsed = time.perf_counter() - start
+
+    assert redacted == text
+    assert "Basic auth secret" not in types
+    assert elapsed < 1.0
+
+
 def test_slack_token_fully_redacted_when_followed_by_word_char():
     # Regression: the "-" in the token class let a trailing word boundary
     # backtrack and redact only a prefix, leaking the final secret segment.
@@ -424,6 +464,25 @@ def test_email_detection_remains_fail_closed_next_to_punctuation(
 def test_email_detection_remains_fail_closed_with_uninterrupted_prefix():
     readable_email = "john@corp.com"
     attacker_controlled_text = f"{'Z' * 61}{readable_email}"
+
+    assert CredentialRedactor.contains_pii(attacker_controlled_text)
+
+    matches = CredentialRedactor.find_pii_matches(attacker_controlled_text)
+
+    assert any(
+        match.name == "Email address" and readable_email in match.matched_text
+        for match in matches
+    )
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    ["1", "_", "\N{CYRILLIC SMALL LETTER YA}"],
+    ids=["digit", "underscore", "unicode-word-character"],
+)
+def test_email_detection_remains_fail_closed_with_uninterrupted_suffix(suffix: str):
+    readable_email = "john@corp.com"
+    attacker_controlled_text = f"{readable_email}{suffix}"
 
     assert CredentialRedactor.contains_pii(attacker_controlled_text)
 

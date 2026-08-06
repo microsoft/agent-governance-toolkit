@@ -119,8 +119,15 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="Basic auth secret",
+            # Bound the scheme-like scan at every candidate start. Without this
+            # limit, separator-dense input with no ``://`` makes the unbounded
+            # scheme class scan overlapping suffixes repeatedly. Allow any
+            # scheme character to start the bounded suffix: a long valid scheme
+            # may have only digits or punctuation in its final 64 characters,
+            # but its username/password must still be redacted fail-closed.
             pattern=re.compile(
-                r"(?i)(?:\bBasic\s+[A-Za-z0-9+/=]{8,}\b|\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@)"
+                r"(?i)(?:\bBasic\s+[A-Za-z0-9+/=]{8,}\b|"
+                r"[a-z0-9+.-]{1,64}://[^/\s:@]+:[^@\s/]+@)"
             ),
         ),
         CredentialPattern(
@@ -164,13 +171,12 @@ class CredentialRedactor:
             # every candidate start. Without it, separator-dense input that
             # contains no ``@`` makes the greedy local part scan overlapping
             # suffixes from many candidate starts, producing quadratic behavior.
-            # Deliberately omit a leading word boundary. This is a fail-closed
-            # egress detector, not an RFC validator: if untrusted output pads a
-            # readable address with an uninterrupted word-character prefix, the
-            # engine must be able to report a bounded suffix instead of missing
-            # the address entirely.
+            # Deliberately omit word boundaries around the pattern. This is a
+            # fail-closed egress detector, not an RFC validator: if untrusted
+            # output pads a readable address with uninterrupted word characters,
+            # the engine must report a bounded match instead of missing it.
             pattern=re.compile(
-                r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
+                r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
             ),
         ),
         CredentialPattern(
