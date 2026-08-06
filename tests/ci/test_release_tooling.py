@@ -195,7 +195,8 @@ def test_acs_python_release_builds_complete_platform_matrix() -> None:
     assert "attestations: write" in sdist_build
     assert "contents: read" in acs_publish
     assert "attestations: write" not in acs_publish
-    assert "skip-existing: true" not in acs_publish
+    # skip-existing keeps re-runs idempotent after a partial upload (matches the sibling leg).
+    assert "skip-existing: true" in acs_publish
     # Least-privilege: no publish job should request write access to repo contents.
     assert "contents: write" not in text
 
