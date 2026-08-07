@@ -5,6 +5,46 @@ entries appear first.
 
 ---
 
+## Hypervisor session lifecycle methods are synchronous
+
+**Date:** TBD
+
+**Affected**
+
+- `agent-hypervisor` (`hypervisor.Hypervisor`)
+- callers of `create_session`, `join_session`, `activate_session`,
+  `terminate_session`, `verify_behavior`, and `monitor_sessions`
+
+**What changed**
+
+The following `Hypervisor` methods are now synchronous:
+
+- `create_session`
+- `join_session`
+- `activate_session`
+- `terminate_session`
+- `verify_behavior`
+- `monitor_sessions`
+
+They previously returned coroutines despite having no internal await points.
+They now return their result directly.
+
+**How to migrate**
+
+Remove `await` when calling these methods:
+
+```python
+session = hv.create_session(config=config, creator_did="did:mesh:admin")
+ring = hv.join_session(session.sso.session_id, "did:mesh:agent", sigma_raw=0.85)
+hv.activate_session(session.sso.session_id)
+hash_root = hv.terminate_session(session.sso.session_id)
+```
+
+Keep awaiting unrelated async APIs such as `SagaOrchestrator.execute_step` and
+`SagaOrchestrator.compensate`.
+
+---
+
 ## `HostSession.post_tool_call` and `pre_model_call` emit the adapter snapshot shape
 
 **Date:** TBD
