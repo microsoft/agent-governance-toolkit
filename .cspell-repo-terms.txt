@@ -8,6 +8,7 @@
 # --- TRACE / identity-chain / advisory terms ---
 # --- Test code terms ---
 # --- Vendored ACS (policy-engine) + integration terms (responsibleai MIT subtree) ---
+# --- UK regulatory policy terms ---
 # discarded-verdict census (tests/test_transform_never_dropped.py)
 AACS
 AAIF
@@ -1023,24 +1024,40 @@ zerovec
 zoneinfo
 
 # --- Documentation site and ACS integration terms ---
-AgentRateLimiter
 AEDT
+AgentRateLimiter
 anthonyonazure
 Bigspin
+Caldicott
 Clendenen
+dpia
+DPIA
+DSPT
+DUAA
 Ecommerce
 externalidentity
 fnmatchcase
+foreseeably
+IDTA
 Janssen
 KillSwitch
 langgenius
 MCPGateway
 MCPSecurityScanner
 Merchantlife
+Minimisation
+minimisation
+organisational
+Organisations
+PECR
 PIICRI
+PRIN
 RateLimitMiddleware
 resourceid
 RingBreachDetector
 RingElevationManager
 SpendGuard
+SYSC
+ukgdpr
 Vercel
+vulnerabilit
