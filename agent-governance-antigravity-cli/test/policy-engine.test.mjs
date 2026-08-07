@@ -2,10 +2,11 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { PromptDefenseEvaluator } from "@microsoft/agent-governance-sdk";
 
 import {
@@ -18,7 +19,40 @@ import {
   extractCommandText,
   formatPolicySummary,
   getOutputHandlingMode,
+  loadPolicy,
 } from "../assets/extensions/agt-global-policy/lib/policy.mjs";
+
+const DEFAULT_POLICY_URL = new URL(
+  "../assets/extensions/agt-global-policy/config/default-policy.json",
+  import.meta.url,
+);
+
+async function withPackagedPolicyState(customizePolicy, callback) {
+  const root = await mkdtemp(join(tmpdir(), "agt-antigravity-policy-"));
+  const nodeModulesSource = fileURLToPath(new URL("../node_modules", import.meta.url));
+  const nodeModulesTarget = join(root, "vendor", "agent-governance-sdk", "node_modules");
+  await cp(nodeModulesSource, nodeModulesTarget, { recursive: true });
+
+  const rawPolicy = JSON.parse(await readFile(DEFAULT_POLICY_URL, "utf8"));
+  const policy = customizePolicy(rawPolicy);
+  const policyPath = join(root, "policy.json");
+  await writeFile(policyPath, `${JSON.stringify(policy, null, 2)}\n`, "utf8");
+
+  try {
+    const state = await loadPolicy({
+      defaultPolicyPath: DEFAULT_POLICY_URL,
+      extensionRoot: root,
+      homeDirectory: root,
+      policyPath,
+      env: {
+        AGT_ANTIGRAVITY_AUDIT_PATH: join(root, "audit.json"),
+      },
+    });
+    return await callback(state);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
 
 test("default packaged policy keeps the hardened Antigravity developer-protection baseline", async () => {
   const rawPolicy = JSON.parse(
@@ -318,6 +352,141 @@ test("evaluatePreToolUse denies review-only tools because Antigravity hooks cann
 
   assert.equal(result.permissionDecision, "deny");
   assert.match(result.permissionDecisionReason, /cannot pause for manual approval/i);
+});
+
+test("evaluatePreToolUse denies recursive force deletes", async () => {
+  await withPackagedPolicyState(
+    (policy) => ({
+      ...policy,
+      mode: "enforce",
+      toolPolicies: {
+        ...policy.toolPolicies,
+        allowedTools: ["run_shell_command"],
+        defaultEffect: "allow",
+        reviewTools: [],
+      },
+    }),
+    async (state) => {
+      for (const command of [
+        "rm -r -f important-data",
+        "rm -rf important-data",
+        "rm -fr important-data",
+        "rm -rfv important-data",
+        "rm -rvf important-data",
+        "rm --recursive --force important-data",
+        "rm --force --recursive important-data",
+        "rm important-data -rf",
+        "rm -rf /",
+        "rm -rf ~/.ssh",
+        "/bin/rm -rf important-data",
+        "/usr/bin/rm -rf /",
+        "./rm -rf important-data",
+        "sudo rm -rf /",
+        "Microsoft.PowerShell.Management\\Remove-Item -Recurse -Force important-data",
+        "rm -rf node_modules && rm -rf /",
+        "rm -rf build; rm -rf ~/.ssh",
+        "npm test && rm -rf important-data",
+        "npm test&&rm -rf important-data",
+        "npm test&& rm -rf important-data",
+        "npm test &&rm -rf important-data",
+        "npm test;rm -rf important-data",
+        "npm test||rm -rf important-data",
+        "cat log|rm -rf important-data",
+        "rm -r -fo important-data",
+        "Remove-Item -Recurse -Force important-data",
+        "Remove-Item -r -fo important-data",
+        "ri -r -fo important-data",
+        "rd /s /q important-data",
+        "rmdir /s /q important-data",
+        "del /s/q important-data",
+        "del/s important-data",
+        "erase /s /q important-data",
+        "rm -rf /usr",
+        "rm -rf /sbin",
+        "rmdir /S /Q important-data",
+        "rmdir -Recurse -Force important-data",
+        "rm --recursive important-data",
+        "rm -r important-data",
+        "Remove-Item -Recurse important-data",
+        "Remove-Item -Recurse:$true -Force:$true important-data",
+        "Remove-Item -Recurse:$true important-data",
+        "Remove-Item -Recurse:$TRUE important-data",
+        "Remove-Item -r:$true -fo:$true important-data",
+        "ri -Recurse:$true important-data",
+        "Remove-Item -Recurse:$unresolved important-data",
+        "rm -rfx important-data",
+        "\"rm\" -rf important-data",
+        "'rm' -rf important-data",
+        "`rm -rf /`",
+        "{rm -rf /;}",
+      ]) {
+        const result = await evaluatePreToolUse(state, {
+          toolArgs: { command },
+          toolName: "run_shell_command",
+        });
+
+        assert.equal(result?.permissionDecision, "deny", command);
+      }
+    },
+  );
+});
+
+test("evaluatePreToolUse does not deny safe cleanup or non-recursive force deletes", async () => {
+  await withPackagedPolicyState(
+    (policy) => ({
+      ...policy,
+      mode: "enforce",
+      toolPolicies: {
+        ...policy.toolPolicies,
+        allowedTools: ["run_shell_command"],
+        defaultEffect: "allow",
+        reviewTools: [],
+      },
+    }),
+    async (state) => {
+      for (const command of [
+        "rm -rf node_modules",
+        "rm -rfv node_modules",
+        "rm -rf build",
+        "rm -fr dist",
+        "rm -f important-data",
+        "rm -f important-data&&echo done",
+        "rm -rf node_modules && npm install",
+        "rm -rf dist && npm run build",
+        "cd /tmp && rm -rf build",
+        "rm file && tar -rf archive.tar",
+        "rm important-data && chmod -R 755 .",
+        "rm --force important-data",
+        "rm -i important-data",
+        "Remove-Item -Filter *.tmp important-data",
+        "Remove-Item important-data -Confirm",
+        "Remove-Item -Recurse -Force build",
+        "Remove-Item -Recurse:$false important-data",
+        "Remove-Item -Recurse:$false -Force:$true important-data",
+        "Remove-Item -Force:$true important-data",
+        "Remove-Item -Recurse:$true build",
+        "rd /s /q node_modules",
+        "rmdir /s /q node_modules",
+        "del /s/q node_modules",
+        "del/s node_modules",
+        "erase /s /q node_modules",
+        "rmdir emptydir",
+        "rm -f /usr",
+        "rm -f /srv",
+        "rm /sys",
+        "rm -i /sbin",
+        "rmdir /srv/emptydir",
+        "rmdir -p a/b/c",
+      ]) {
+        const result = await evaluatePreToolUse(state, {
+          toolArgs: { command },
+          toolName: "run_shell_command",
+        });
+
+        assert.notEqual(result?.permissionDecision, "deny", command);
+      }
+    },
+  );
 });
 
 test("evaluateDirectResourceAccess blocks metadata and secret-path reads", () => {

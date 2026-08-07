@@ -525,7 +525,7 @@ function createCommandPatternBackend(policy) {
         if (!matchedPattern) {
           continue;
         }
-        if (shouldBypassBlockedCommandRule(rule, commandText)) {
+        if (shouldBypassBlockedCommandRule(rule, commandText, toolName)) {
           continue;
         }
 
@@ -979,9 +979,9 @@ function createMinimalFallbackPolicy() {
   };
 }
 
-function shouldBypassBlockedCommandRule(rule, commandText) {
+function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
   if (rule.id === "recursive-delete") {
-    return isSafeCleanupCommand(commandText);
+    return !hasUnsafeRecursiveDelete(commandText, toolName);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);
@@ -989,25 +989,59 @@ function shouldBypassBlockedCommandRule(rule, commandText) {
   return false;
 }
 
-function isSafeCleanupCommand(commandText) {
-  if (containsCommandControlOperator(commandText)) {
-    return false;
-  }
-
-  const tokens = tokenizeCommand(commandText);
-  const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|ri|rd|del)$/i.test(stripCommandToken(token)),
-  );
+function getRmCommandDetails(commandText, toolName) {
+  const tokens = tokenizeDeleteCommandParts(commandText);
+  const commandIndex = tokens.findIndex((token) => {
+    const commandName = normalizeCommandNameToken(token);
+    return (
+      /^(rm|remove-item|rmdir|ri|rd|del|erase)$/i.test(commandName) ||
+      /(?:^|[\\/])(rd|rmdir|del|erase)(?:\/[a-z])+$/i.test(
+        stripCommandToken(token).replace(/^[`({$]+/, ""),
+      )
+    );
+  });
   if (commandIndex === -1) {
-    return false;
+    return undefined;
   }
 
+  const commandToken = stripCommandToken(tokens[commandIndex]).replace(/^[`({$]+/, "");
+  const attachedWindowsSwitches =
+    /(?:^|[\\/])(rd|rmdir|del|erase)((?:\/[a-z])+)$/i.exec(commandToken);
+  const commandName = (
+    attachedWindowsSwitches?.[1] ?? normalizeCommandNameToken(tokens[commandIndex])
+  ).toLowerCase();
+  const parsesUnixShortOptions = commandName === "rm" && !isPowerShellTool(toolName);
+  const attachedSwitches = parseWindowsSlashFlags(attachedWindowsSwitches?.[2]);
+  let recursive = attachedSwitches?.recursive ?? false;
+  let force = attachedSwitches?.force ?? false;
   const candidateTargets = [];
   for (const token of tokens.slice(commandIndex + 1)) {
     const normalizedToken = stripCommandToken(token);
-    if (!normalizedToken || normalizedToken.startsWith("-")) {
+    if (!normalizedToken) {
       continue;
     }
+    if (normalizedToken.startsWith("-")) {
+      const normalizedFlag = normalizedToken.toLowerCase();
+      if (
+        normalizedFlag === "--recursive" ||
+        isPowerShellRecursiveParameter(normalizedFlag)
+      ) {
+        recursive = true;
+      } else if (normalizedFlag === "--force" || isPowerShellForceParameter(normalizedFlag)) {
+        force = true;
+      } else if (parsesUnixShortOptions && isUnixRmShortOptionCluster(normalizedFlag)) {
+        recursive ||= /r/i.test(normalizedFlag);
+        force ||= /f/i.test(normalizedFlag);
+      }
+      continue;
+    }
+    const slashFlags = parseWindowsSlashFlags(normalizedToken);
+    if (isWindowsSlashFlagCommand(commandName) && slashFlags) {
+      recursive ||= slashFlags.recursive;
+      force ||= slashFlags.force;
+      continue;
+    }
+
     for (const part of normalizedToken.split(",")) {
       const cleaned = normalizeCommandPathToken(part);
       if (cleaned) {
@@ -1016,7 +1050,144 @@ function isSafeCleanupCommand(commandText) {
     }
   }
 
+  return {
+    force,
+    recursive,
+    targets: candidateTargets,
+  };
+}
+
+function splitCommandSegments(commandText) {
+  // Each command in a chain has to be judged on its own: flags belonging to a
+  // later command must not be attributed to an earlier delete
+  // (`rm file && tar -rf archive.tar`), and a safe cleanup stays a safe cleanup
+  // when it is chained with unrelated work (`rm -rf node_modules && npm install`).
+  // Quoted spans are copied verbatim so an operator inside a literal argument
+  // does not split the command.
+  const text = String(commandText);
+  const segments = [];
+  let current = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"' || character === "'") {
+      const closingIndex = text.indexOf(character, index + 1);
+      const end = closingIndex === -1 ? text.length : closingIndex;
+      current += text.slice(index, end + 1);
+      index = end;
+      continue;
+    }
+    if (/[&|;\r\n]/.test(character)) {
+      segments.push(current);
+      current = "";
+      while (index + 1 < text.length && /[&|;\r\n]/.test(text[index + 1])) {
+        index += 1;
+      }
+      continue;
+    }
+    current += character;
+  }
+  segments.push(current);
+  return segments.map((segment) => segment.trim()).filter(Boolean);
+}
+
+function hasUnsafeRecursiveDelete(commandText, toolName) {
+  return splitCommandSegments(commandText).some(
+    (segment) =>
+      hasRecursiveDelete(segment, toolName) && !isSafeCleanupCommand(segment, toolName),
+  );
+}
+
+function hasRecursiveDelete(commandText, toolName) {
+  // A recursive delete is destructive whether or not a force flag is present, so
+  // the deny decision intentionally does not require force. The `force` detail is
+  // still parsed for completeness and future messaging.
+  const details = getRmCommandDetails(commandText, toolName);
+  return Boolean(details?.recursive);
+}
+
+function isSafeCleanupCommand(commandText, toolName) {
+  if (containsCommandControlOperator(commandText)) {
+    return false;
+  }
+
+  const details = getRmCommandDetails(commandText, toolName);
+  const candidateTargets = details?.targets ?? [];
   return candidateTargets.length > 0 && candidateTargets.every(isSafeCleanupTarget);
+}
+
+function isPowerShellTool(toolName) {
+  return /\b(?:powershell|pwsh)\b/i.test(String(toolName ?? ""));
+}
+
+function parsePowerShellParameter(flag) {
+  // PowerShell switch parameters accept an explicit boolean assignment
+  // (`-Recurse:$true`, `-Force:$false`), so the parameter name has to be matched
+  // separately from any `:<value>` suffix. A bare switch is asserted; `$false`
+  // disables it and must not be read as a recursive delete; any other value,
+  // including an unresolved variable, is treated as asserted so an unknown value
+  // fails safe toward the deny.
+  const match = /^-([a-z]+)(?::(\S*))?$/i.exec(flag);
+  if (!match || flag.startsWith("--")) {
+    return undefined;
+  }
+  const [, parameterName, switchValue] = match;
+  return {
+    asserted: switchValue === undefined || !/^\$false$/i.test(switchValue),
+    name: parameterName.toLowerCase(),
+  };
+}
+
+function isPowerShellRecursiveParameter(flag) {
+  const parameter = parsePowerShellParameter(flag);
+  if (!parameter?.asserted) {
+    return false;
+  }
+  return parameter.name === "recursive" || "recurse".startsWith(parameter.name);
+}
+
+function isPowerShellForceParameter(flag) {
+  const parameter = parsePowerShellParameter(flag);
+  if (!parameter?.asserted) {
+    return false;
+  }
+  return parameter.name.length >= 2 && "force".startsWith(parameter.name);
+}
+
+function isWindowsSlashFlagCommand(commandName) {
+  // Only the cmd.exe delete commands take `/s`-style switches. For `rm` a token
+  // such as `/usr` or `/sbin` is an ordinary absolute path, and reading it as a
+  // switch marked plainly non-recursive deletes (`rm -i /sbin`) as recursive and
+  // hard-denied them, contradicting the recursive-only deny semantics.
+  return (
+    commandName === "rd" ||
+    commandName === "rmdir" ||
+    commandName === "del" ||
+    commandName === "erase"
+  );
+}
+
+function parseWindowsSlashFlags(token) {
+  const value = String(token ?? "");
+  // cmd.exe switches are slash-prefixed letters. Requiring one letter per
+  // segment keeps POSIX paths such as `/srv/emptydir` from looking like `/s`
+  // followed by more switches.
+  if (!/^(?:\/[a-z])+$/i.test(value)) {
+    return undefined;
+  }
+  const flags = value.replaceAll("/", "");
+  return {
+    force: /[fq]/i.test(flags),
+    recursive: /s/i.test(flags),
+  };
+}
+
+function isUnixRmShortOptionCluster(flag) {
+  // Match any single-dash short-option cluster (letters only) rather than an
+  // allow-list of known letters. An allow-list fails open: an unrecognized letter
+  // such as the `x` in `rm -rfx foo` would discard the
+  // whole cluster and hide the recursive/force flags it contains. Matching all
+  // letter clusters fails safe instead.
+  return /^-[a-z]+$/i.test(flag);
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
@@ -1298,8 +1469,32 @@ function tokenizeCommand(commandText) {
   return String(commandText).match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
 }
 
+function tokenizeDeleteCommandParts(commandText) {
+  // `tokenizeCommand` splits on whitespace only, so a delete command glued to a
+  // control operator (`npm test&&rm -rf important-data`) stays inside a single
+  // token and is never recognized as the command name, which would silently skip
+  // the recursive-delete deny. Split unquoted tokens on the shell control
+  // operators so each command in a chain is tokenized on its own. Quoted spans are
+  // left intact so an operator inside a literal argument is not treated as syntax.
+  return tokenizeCommand(commandText).flatMap((token) =>
+    /^["']/.test(token) ? [token] : token.split(/&&|\|\||[;&|]/).filter(Boolean),
+  );
+}
+
 function stripCommandToken(token) {
   return String(token ?? "").replace(/^['"]|['"]$/g, "");
+}
+
+function normalizeCommandNameToken(token) {
+  // Strip surrounding quotes and any leading shell grouping/substitution
+  // delimiters so a command glued to punctuation is still recognized, e.g.
+  // `rm ... ` (backtick substitution), {rm ...;} (brace group), $(rm ...).
+  // Then reduce to the trailing path segment, so a path-qualified invocation
+  // (`/bin/rm`, `./rm`) or a module-qualified cmdlet
+  // (`Microsoft.PowerShell.Management\\Remove-Item`) is still recognized as the
+  // delete command instead of silently skipping the deny.
+  const command = stripCommandToken(token).replace(/^[`({$]+/, "");
+  return command.slice(command.search(/[^\\/]*$/));
 }
 
 function normalizeCommandPathToken(token) {

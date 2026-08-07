@@ -81,6 +81,127 @@ test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persisten
   await rm(root, { recursive: true, force: true });
 });
 
+test("evaluateOpenCodeTool denies recursive force deletes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-rm-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of [
+    "rm -rf important-data",
+    "rm -fr important-data",
+    "rm -rfv important-data",
+    "rm -rvf important-data",
+    "rm -r -f important-data",
+    "rm --recursive --force important-data",
+    "rm --force --recursive important-data",
+    "rm important-data -rf",
+    "rm -rf /",
+    "rm -rf ~/.ssh",
+    "/bin/rm -rf important-data",
+    "/usr/bin/rm -rf /",
+    "./rm -rf important-data",
+    "sudo rm -rf /",
+    "Microsoft.PowerShell.Management\\Remove-Item -Recurse -Force important-data",
+    "rm -rf node_modules && rm -rf /",
+    "rm -rf build; rm -rf ~/.ssh",
+    "npm test && rm -rf important-data",
+    "npm test&&rm -rf important-data",
+    "npm test&& rm -rf important-data",
+    "npm test &&rm -rf important-data",
+    "npm test;rm -rf important-data",
+    "npm test||rm -rf important-data",
+    "cat log|rm -rf important-data",
+    "rm -r -fo important-data",
+    "Remove-Item -Recurse -Force important-data",
+    "Remove-Item -r -fo important-data",
+    "ri -r -fo important-data",
+    "rd /s /q important-data",
+    "rmdir /s /q important-data",
+    "del /s/q important-data",
+    "del/s important-data",
+    "erase /s /q important-data",
+    "rm -rf /usr",
+    "rm -rf /sbin",
+    "rmdir /S /Q important-data",
+    "rmdir -Recurse -Force important-data",
+    "rm --recursive important-data",
+    "rm -r important-data",
+    "Remove-Item -Recurse important-data",
+    "Remove-Item -Recurse:$true -Force:$true important-data",
+    "Remove-Item -Recurse:$true important-data",
+    "Remove-Item -Recurse:$TRUE important-data",
+    "Remove-Item -r:$true -fo:$true important-data",
+    "ri -Recurse:$true important-data",
+    "Remove-Item -Recurse:$unresolved important-data",
+    "rm -rfx important-data",
+    "\"rm\" -rf important-data",
+    "'rm' -rf important-data",
+    "`rm -rf /`",
+    "{rm -rf /;}",
+  ]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "rm-session",
+      cwd: root,
+    });
+
+    assert.equal(result.effect, "deny", command);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("evaluateOpenCodeTool does not deny safe cleanup or non-recursive force deletes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-rm-safe-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of [
+    "rm -rf node_modules",
+    "rm -rfv node_modules",
+    "rm -rf build",
+    "rm -fr dist",
+    "rm -f important-data",
+    "rm -f important-data&&echo done",
+    "rm -rf node_modules && npm install",
+    "rm -rf dist && npm run build",
+    "cd /tmp && rm -rf build",
+    "rm file && tar -rf archive.tar",
+    "rm important-data && chmod -R 755 .",
+    "rm --force important-data",
+    "rm -i important-data",
+    "Remove-Item -Filter *.tmp important-data",
+    "Remove-Item important-data -Confirm",
+    "Remove-Item -Recurse -Force build",
+    "Remove-Item -Recurse:$false important-data",
+    "Remove-Item -Recurse:$false -Force:$true important-data",
+    "Remove-Item -Force:$true important-data",
+    "Remove-Item -Recurse:$true build",
+    "rd /s /q node_modules",
+    "rmdir /s /q node_modules",
+    "del /s/q node_modules",
+    "del/s node_modules",
+    "erase /s /q node_modules",
+    "rmdir emptydir",
+    "rm -f /usr",
+    "rm -f /srv",
+    "rm /sys",
+    "rm -i /sbin",
+    "rmdir /srv/emptydir",
+    "rmdir -p a/b/c",
+  ]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "rm-safe-session",
+      cwd: root,
+    });
+
+    assert.notEqual(result.effect, "deny", command);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("evaluateOpenCodeTool denies metadata URL fetches regardless of arg name", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-url-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });

@@ -38,6 +38,7 @@ It also exposes two MCP tools:
 - Claude slash commands are markdown-driven, so `/agt-governance:agt-status` and `/agt-governance:agt-check` are thin wrappers around MCP tools rather than deterministic code handlers.
 - `PostToolUse` in Claude cannot reliably redact tool output after the tool has already executed, so this package does not claim Copilot-style output suppression parity.
 - Hook execution is out-of-process. The package keeps enforcement in command hooks so policy errors can fail closed.
+- The recursive-delete matcher covers common literal command forms. It does not expand shell variables, decode obfuscated command names, or parse command strings passed to nested interpreters such as `bash -c` or `cmd /c`. Unclassified forms follow the policy's normal `review` path. `git rm --cached -r <path>` is a known false positive: it only updates the index, but the matcher still classifies it as a recursive delete, so it is denied for any target outside the safe-cleanup list.
 
 ## Local development
 
