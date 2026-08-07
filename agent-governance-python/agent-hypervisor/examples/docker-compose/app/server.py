@@ -129,7 +129,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         min_eff_score=hv_cfg.get("min_eff_score", 0.60),
         enable_audit=hv_cfg.get("enable_audit", True),
     )
-    managed = await _hypervisor.create_session(
+    managed = _hypervisor.create_session(
         config=session_config, creator_did="did:mesh:hypervisor"
     )
     _session_id = managed.sso.session_id
@@ -179,7 +179,7 @@ async def register_agent(req: RegisterAgentRequest) -> AgentInfo:
         raise HTTPException(status_code=503, detail="Hypervisor not initialized")
 
     try:
-        ring = await _hypervisor.join_session(
+        ring = _hypervisor.join_session(
             session_id=_session_id,
             agent_did=req.agent_did,
             sigma_raw=req.sigma_raw,

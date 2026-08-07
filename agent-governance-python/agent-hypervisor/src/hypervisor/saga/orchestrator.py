@@ -124,8 +124,11 @@ class SagaOrchestrator:
             step.retry_count = attempt
             step.transition(StepState.EXECUTING)
             try:
+                execution = executor()
+                self._ensure_awaitable(execution, "executor")
+
                 result = await asyncio.wait_for(
-                    executor(),
+                    execution,
                     timeout=step.timeout_seconds,
                 )
                 step.execute_result = result
@@ -190,8 +193,11 @@ class SagaOrchestrator:
 
             step.transition(StepState.COMPENSATING)
             try:
+                compensation = compensator(step)
+                self._ensure_awaitable(compensation, "compensator")
+
                 result = await asyncio.wait_for(
-                    compensator(step),
+                    compensation,
                     timeout=step.timeout_seconds,
                 )
                 step.compensation_result = result
@@ -228,6 +234,10 @@ class SagaOrchestrator:
             for s in self._sagas.values()
             if s.state in (SagaState.RUNNING, SagaState.COMPENSATING)
         ]
+
+    def _ensure_awaitable(self, result: Any, name: str) -> None:
+        if not asyncio.isfuture(result) and not asyncio.iscoroutine(result):
+            raise TypeError(f"{name} must return an awaitable")
 
     def _get_saga(self, saga_id: str) -> Saga:
         saga = self._sagas.get(saga_id)
