@@ -23,70 +23,138 @@ Contributors who have demonstrated familiarity with a specific area of the codeb
 
 ### Maintainer
 
-Maintainers have write access to the repository, can merge PRs, and participate in architectural decisions. Maintainers are responsible for the project's technical direction, release management, and community health.
+Maintainers are trusted community members responsible for one or more project
+areas. They review contributions, guide contributors, drive improvements, and
+maintain technical and community health within their areas. They escalate
+cross-cutting architectural, security, or governance decisions to the Core
+Maintainers.
 
-**Path to Maintainer**: Sustained contribution over 2+ months, including 5+ merged PRs, active issue triage, and demonstrated understanding of the project's architecture and governance scope. Nomination by an existing maintainer, confirmed by consensus among current maintainers.
+Maintainers may receive repository permissions appropriate to their
+responsibilities, but they follow the normal pull-request and code-owner review
+process and do not receive bypass privileges by virtue of the role.
+
+**Path to Maintainer**: Sustained contribution over 2+ months, including 5+
+merged PRs, active issue triage or review, and demonstrated understanding of the
+owned area. Any Maintainer or Core Maintainer may nominate a candidate. A
+majority of Core Maintainers confirms the appointment.
+
+### Core Maintainer
+
+Core Maintainers have broad technical understanding of the project and are
+responsible for its overall direction, technical consistency, security posture,
+and long-term health. They resolve decisions escalated by Maintainers, appoint
+and remove Maintainers, and serve as the repository code owners listed in
+[`.github/CODEOWNERS`](.github/CODEOWNERS).
+
+The project aims to maintain at least three Core Maintainers and requires at
+least two for non-emergency governance decisions.
+
+Core Maintainers use the standard contribution workflow even when their
+repository permissions allow administrative actions. At least one Core
+Maintainer approval is required before a pull request can merge.
+
+**Path to Core Maintainer**: A candidate must meet the Maintainer expectations,
+demonstrate project-wide technical judgment and sustained leadership, and commit
+to the project's long-term health. An existing Core Maintainer nominates the
+candidate, and a two-thirds supermajority of Core Maintainers confirms the
+appointment.
 
 ### Project Lead
 
-The project lead sets overall technical direction, resolves disputes when consensus cannot be reached, and represents the project in external standards bodies and foundation interactions.
+The Project Lead is a Core Maintainer designated to coordinate overall technical
+direction, serve as the tie-breaker for eligible deadlocked decisions, and
+represent the project in external standards bodies and foundation interactions.
+The Project Lead and Core Maintainers form the Technical Steering Committee
+defined in the [Technical Charter](CHARTER.md).
+The Project Lead remains subject to the normal contribution workflow. Any
+configured bypass privilege is reserved for documented emergencies and does not
+waive an explicit voting threshold in this document or the
+[Technical Charter](CHARTER.md).
 
 ## Current Maintainers
 
-See [MAINTAINERS.md](MAINTAINERS.md) for the full list of current maintainers, their areas of ownership, and affiliation details.
+See [MAINTAINERS.md](MAINTAINERS.md) for the current Core Maintainers and
+Maintainers, their areas of ownership, and affiliation details.
 
-We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Maintainers are the code owners listed in [.github/CODEOWNERS](.github/CODEOWNERS); a code-owner approval is required on every pull request before merge.
+We are actively working to grow the maintainer group to include contributors
+from other organizations. If you are interested in becoming a maintainer, start
+by contributing and engaging with the project. Core Maintainers are the code
+owners listed in [`.github/CODEOWNERS`](.github/CODEOWNERS); a Core Maintainer
+code-owner approval is required on every pull request before merge.
 
 ## Decision-Making
 
 ### Day-to-day decisions
 
-Pull requests require approval from at least one maintainer before merge. Maintainers use their judgment on routine changes (bug fixes, documentation, test additions).
+Maintainers use their judgment on routine changes within their areas, including
+bug fixes, documentation, and tests. Pull requests require approval from at
+least one Core Maintainer before merge, as enforced by the repository's
+code-owner rules.
 
 ### Significant changes
 
-Changes that affect the project's architecture, public API surface, security model, or governance scope are discussed publicly via GitHub Issues before implementation. Any maintainer or contributor can raise a concern. The goal is rough consensus among maintainers.
+Changes that affect the project's architecture, public API surface, security
+model, or governance scope are discussed publicly via GitHub Issues before
+implementation. Any contributor may raise a concern. Core Maintainers seek
+rough consensus and record approval from a majority of Core Maintainers before
+the change is merged.
 
 ### Disputes
 
-If maintainers cannot reach consensus, the project lead makes the final decision after considering all perspectives. The rationale is documented in the relevant GitHub Issue.
+Disagreements that Maintainers cannot resolve are escalated to the Core
+Maintainers. Core Maintainers seek consensus and may hold a simple-majority vote
+when needed. If an eligible vote is tied, the Project Lead decides after
+considering the recorded perspectives. The decision and rationale are documented
+in the relevant GitHub Issue. A tie-break does not waive an explicit approval or
+supermajority requirement.
 
 ### Succession Planning
 
-Continuity of maintainership is essential for a foundation-hosted project.
+Continuity of maintainership is essential for a public open-source project.
 
 - **Project lead vacancy**: If the project lead steps down or becomes inactive for
   60+ days, the Core Maintainers elect a new project lead by supermajority (2/3)
-  vote within 30 days. Until a new lead is confirmed, the longest-serving Core
-  Maintainer serves as acting lead.
-- **Maintainer vacancy**: If the number of Core Maintainers drops below three,
-  remaining maintainers must nominate and confirm a replacement within 30 days.
-  No architecture or governance decisions may be made until the minimum of three
-  is restored.
-- **Emeritus**: Maintainers inactive for 3+ months are moved to Emeritus status
-  in [MAINTAINERS.md](MAINTAINERS.md) and lose merge privileges. Emeritus
-  maintainers can be reinstated by consensus of current maintainers.
-- **Deadlock**: If a supermajority vote on project lead succession results in a
-  tie after two rounds of voting, the decision is escalated to the governing
-  foundation (if applicable) or resolved by the longest-serving Core Maintainer.
+  vote within 30 days. Until a new lead is confirmed, the Core Maintainers
+  designate an acting lead by majority vote.
+- **Core Maintainer vacancy**: The project maintains at least two Core
+  Maintainers. If the number drops below two, the remaining Core Maintainer must
+  begin a documented replacement or mentorship process within 30 days. No
+  non-emergency architecture or governance decision may be finalized until the
+  minimum is restored. Security response and operational-continuity decisions
+  may proceed but must be documented.
+- **Inactivity**: A Maintainer or Core Maintainer who has not participated for
+  3+ months may be removed from the active roster by a majority vote of the Core
+  Maintainers. Participation includes code or documentation contributions,
+  reviews, issue triage, releases, security response, and governance work. The
+  affected person does not vote on their removal. Merge, administrative, and
+  publishing privileges are revoked promptly when the removal takes effect.
+- **Deadlock**: If Project Lead succession remains deadlocked after two rounds,
+  or the Project Lead is recused from another tied decision, the decision is
+  escalated to the governing foundation when applicable. Otherwise, the Core
+  Maintainers document and engage a mutually agreed independent mediator.
 
 ### Conflict of Interest
 
-Maintainers must disclose any financial or employment relationship that could
-influence their decisions on project direction, dependency choices, or vendor
-integrations. A maintainer with a conflict of interest on a specific decision
-must recuse themselves from voting on that decision. Disclosures are noted in
-the relevant GitHub Issue or PR.
+Maintainers and Core Maintainers must disclose any financial or employment
+relationship that could influence their decisions on project direction,
+dependency choices, or vendor integrations. A person with a conflict of interest
+on a specific decision must recuse themselves from voting on that decision.
+Disclosures are noted in the relevant GitHub Issue or pull request.
 
 ### Voting Thresholds
 
+Unless a rule states otherwise, votes count eligible, non-recused Core
+Maintainers. A majority is more than half of the eligible voters; a two-thirds
+threshold is rounded up to the next whole vote.
+
 | Decision type | Required votes | Quorum |
 |--------------|---------------|--------|
-| Routine PR merge | 1 maintainer approval | N/A |
-| Architecture / API change | Rough consensus among maintainers | 50% of maintainers |
-| New maintainer nomination | Consensus among current maintainers | 50% of maintainers |
-| Governance document change | 2 maintainer approvals | N/A |
-| Project lead succession | Supermajority (2/3) of maintainers | 75% of maintainers |
+| Routine PR merge | 1 Core Maintainer approval | N/A |
+| Architecture, public API, or security-model change | Majority of Core Maintainers | Majority of Core Maintainers |
+| New Maintainer appointment | Majority of Core Maintainers | Majority of Core Maintainers |
+| New Core Maintainer appointment | Supermajority (2/3) of Core Maintainers | All Core Maintainers |
+| Governance document change | 2 Core Maintainer approvals | N/A |
+| Project Lead succession | Supermajority (2/3) of Core Maintainers | All Core Maintainers |
 
 ## Releases
 
@@ -110,4 +178,6 @@ All participants must comply with applicable competition (antitrust) laws. See [
 
 ## Changes to Governance
 
-Changes to this document require a pull request with approval from at least two maintainers. Significant governance changes (e.g., adding new roles, changing decision processes) should be discussed in a GitHub Issue first.
+Changes to this document require a pull request with approval from at least two
+Core Maintainers. Significant governance changes, including adding roles or
+changing decision processes, must be discussed in a GitHub Issue first.
