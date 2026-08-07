@@ -55,13 +55,13 @@ from hypervisor import Hypervisor, SessionConfig, ConsistencyMode
 hv = Hypervisor()
 
 # Create an isolated session with governance
-session = await hv.create_session(
+session = hv.create_session(
     config=SessionConfig(enable_audit=True),
     creator_did="did:mesh:admin",
 )
 
 # Agent joins, ring assigned automatically by trust score
-ring = await hv.join_session(
+ring = hv.join_session(
     session.sso.session_id,
     "did:mesh:agent-1",
     sigma_raw=0.85,
@@ -69,7 +69,7 @@ ring = await hv.join_session(
 # RING_2_STANDARD (trusted agent)
 
 # Activate and run a governed saga
-await hv.activate_session(session.sso.session_id)
+hv.activate_session(session.sso.session_id)
 saga = session.saga.create_saga(session.sso.session_id)
 step = session.saga.add_step(
     saga.saga_id, "draft_email", "did:mesh:agent-1",
@@ -81,7 +81,7 @@ result = await session.saga.execute_step(
 )
 
 # Terminate, returns tamper-evident audit hash
-hash_root = await hv.terminate_session(session.sso.session_id)
+hash_root = hv.terminate_session(session.sso.session_id)
 ```
 
 ## Configuration
@@ -104,7 +104,7 @@ hv = Hypervisor(
 )
 
 # Create a session with resource limits
-session = await hv.create_session(
+session = hv.create_session(
     config=SessionConfig(
         consistency_mode=ConsistencyMode.EVENTUAL,  # or STRONG
         max_participants=10,           # 1-1000
@@ -116,7 +116,7 @@ session = await hv.create_session(
 )
 
 # Agent joins, ring assigned by trust score
-ring = await hv.join_session(
+ring = hv.join_session(
     session.sso.session_id,
     "did:mesh:agent-1",
     sigma_raw=0.85,   # Raw trust score [0.0-1.0]
@@ -170,8 +170,8 @@ config = SessionConfig(
     enable_audit=True,
 )
 
-session = await hv.create_session(config=config, creator_did="did:mesh:admin")
-await hv.activate_session(session.sso.session_id)
+session = hv.create_session(config=config, creator_did="did:mesh:admin")
+hv.activate_session(session.sso.session_id)
 
 # Session lifecycle: CREATED -> HANDSHAKING -> ACTIVE -> TERMINATING -> ARCHIVED
 ```
