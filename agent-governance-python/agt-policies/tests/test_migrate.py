@@ -515,6 +515,30 @@ policy = GovernancePolicy()
     assert "deny_if_low_confidence(0.8)" in rego
 
 
+def test_confidence_threshold_advisory_survives_write_once(tmp_path: Path) -> None:
+    """The inert confidence rule warning remains visible without duplication."""
+    src = tmp_path / "confidence_bot.py"
+    _write_source(
+        src,
+        "from agent_os.integrations.base import GovernancePolicy\n"
+        "policy = GovernancePolicy(confidence_threshold=0.65)\n",
+    )
+
+    dry_run = migrate_mod.migrate_project(tmp_path, write=False)
+    dry_finding = dry_run.governance_policies[0]
+    assert len(dry_finding.notes) == 1
+    note = dry_finding.notes[0]
+    assert "threshold is not enforced until you do" in note
+
+    written = migrate_mod.migrate_project(tmp_path, write=True)
+    written_finding = written.governance_policies[0]
+    assert written_finding.notes == [note]
+
+    rendered = migrate_mod.render_report(written)
+    assert "**Notes:**" in rendered
+    assert rendered.count(note) == 1
+
+
 def test_substring_patterns_stay_case_insensitive(tmp_path: Path) -> None:
     """v4 matched substrings with ``pat.lower() in text.lower()``.
 
