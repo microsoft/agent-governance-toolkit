@@ -1,3 +1,9 @@
+---
+title: "Glossary"
+last_reviewed: 2026-06-02
+owner: agt-maintainers
+---
+
 # Glossary
 
 Technical terms used across the Agent Governance Toolkit, its specifications, and architecture decision records.

@@ -1,3 +1,9 @@
+---
+title: "Tutorial 47: Red-Team Testing Your AI Agents"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # Tutorial 47: Red-Team Testing Your AI Agents
 
 > **Package:** `agent-governance-toolkit[full]` · **Time:** 20 minutes · **Level:** Intermediate

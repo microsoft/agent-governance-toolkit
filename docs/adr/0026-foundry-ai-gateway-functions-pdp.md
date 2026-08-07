@@ -1,3 +1,9 @@
+---
+title: "ADR 0026: Azure Functions PDP behind AI Gateway for Foundry prompt-based agents"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 # ADR 0026: Azure Functions PDP behind AI Gateway for Foundry prompt-based agents
 
 - Status: proposed
@@ -38,7 +44,7 @@ recommended pattern. The pattern is delivered as:
 
 1. this ADR, recording the limitation and the recommended architecture;
 2. a runnable reference sample under
-   [`examples/foundry-ai-gateway-pdp/`](../../examples/foundry-ai-gateway-pdp/)
+   [`examples/foundry-ai-gateway-pdp/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/foundry-ai-gateway-pdp)
    containing an APIM policy fragment, a minimal Python Azure Function
    implementing the decision contract, a Bicep / `azd` template, and a
    small latency harness.

@@ -1,3 +1,9 @@
+---
+title: "Deploying AGT on Google Cloud GKE"
+last_reviewed: 2026-07-15
+owner: agt-maintainers
+---
+
 # Deploying AGT on Google Cloud GKE
 
 > **No Azure Required** — AGT is pure Python with zero cloud-vendor dependencies.
@@ -91,10 +97,10 @@ kubectl rollout status deployment/agt-governance
 
 AGT includes a native Google ADK adapter. Construct it with `AgentControl` and
 mediate tool calls through the adapter. See
-[examples/quickstart/google_adk_governed.py](../../examples/quickstart/google_adk_governed.py).
+[examples/quickstart/google_adk_governed.py](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/quickstart/google_adk_governed.py).
 
 ## See Also
 
 - [AWS ECS Deployment](aws-ecs.md)
 - [Azure Container Apps Deployment](azure-container-apps.md)
-- [Deployment Overview](README.md)
+- [Deployment Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md)

@@ -1,3 +1,9 @@
+---
+title: "Autonomous contribution policy"
+last_reviewed: 2026-04-30
+owner: agt-maintainers
+---
+
 # Autonomous contribution policy
 
 This document defines which automated agents and bots are authorized to
@@ -8,7 +14,7 @@ permitted, and how to request authorization for new bots.
 
 Autonomous contributions are **not accepted by default**. All contributions
 must have a responsible human who directed the work and can explain and defend
-it. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for the full AI contribution
+it. See [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for the full AI contribution
 policy.
 
 ## Authorized bots
@@ -93,7 +99,7 @@ that violate their permitted scope will be immediately disabled pending review.
 
 ## Relationship to AGENTS.md
 
-The root [AGENTS.md](../../AGENTS.md) file documents how AI coding agents
+The root [AGENTS.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/AGENTS.md) file documents how AI coding agents
 should interact with the codebase (code conventions, testing requirements,
 architecture guidance). This document governs which agents are authorized
 and what repository-level actions they may take. Both documents apply.
