@@ -17,8 +17,9 @@ owner: agt-maintainers
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-governance-python/agent-sre/)
 
-> [!IMPORTANT]
-> **Public Preview** — The `agent-sre` package on PyPI is a public preview release. APIs may change before GA.
+!!! important
+
+    **Public Preview** — The `agent-sre` package on PyPI is a public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent SRE.
 
@@ -664,7 +665,7 @@ MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob
 
 ---
 
-<div align="center">
+<div align="center" markdown>
 
 **Observability tells you what happened. Agent SRE tells you if it was within budget.**
 
