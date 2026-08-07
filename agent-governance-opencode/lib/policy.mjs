@@ -918,19 +918,95 @@ function isSafeCleanupCommand(commandText) {
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
-  if (containsCommandControlOperator(commandText)) {
-    return false;
+  // Every command in a chain is inspected, so a template copy cannot clear a real
+  // secret read that follows it (`cp .env.example x | cat .env`). Splitting is
+  // quote-aware, so a `|` or `&` inside an argument stays argument data: a grep
+  // alternation, a path, or a URL query string is not a second command.
+  const sensitiveTokens = [];
+  for (const segment of splitCommandSegments(commandText)) {
+    const tokens = tokenizeCommand(segment).map(stripCommandToken).filter(Boolean);
+    // For copy/move commands the final path argument is a write destination, not a
+    // read, so scaffolding a real .env from a template (`cp .env.example .env`) must
+    // not be classified as reading the sensitive destination.
+    const readTokens = dropCopyDestinationToken(tokens);
+    sensitiveTokens.push(...readTokens.filter((token) => token.includes(".env")));
   }
-
-  const sensitiveTokens = tokenizeCommand(commandText)
-    .map(stripCommandToken)
-    .filter(Boolean)
-    .filter((token) => token.includes(".env"));
 
   return (
     sensitiveTokens.length > 0 &&
     sensitiveTokens.every((token) => SAFE_ENV_TEMPLATE_NAME.test(getLastPathSegment(token)))
   );
+}
+
+function splitCommandSegments(commandText) {
+  // Quoted spans are copied verbatim so an operator inside a literal argument
+  // does not split the command.
+  const text = String(commandText);
+  const segments = [];
+  let current = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"' || character === "'") {
+      const closingIndex = text.indexOf(character, index + 1);
+      const end = closingIndex === -1 ? text.length : closingIndex;
+      current += text.slice(index, end + 1);
+      index = end;
+      continue;
+    }
+    if (/[&|;\r\n]/.test(character)) {
+      segments.push(current);
+      current = "";
+      while (index + 1 < text.length && /[&|;\r\n]/.test(text[index + 1])) {
+        index += 1;
+      }
+      continue;
+    }
+    current += character;
+  }
+  segments.push(current);
+  return segments.map((segment) => segment.trim()).filter(Boolean);
+}
+
+// Wrapper commands that take another command as their argument. `cp` behind one
+// of these is still a copy, so the destination token has to be found past the
+// wrapper rather than assuming the copy sits at index 0.
+const COMMAND_WRAPPERS = new Set(["command", "doas", "env", "nice", "nohup", "sudo", "time"]);
+
+function findCopyCommandIndex(tokens) {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    // Wrapper options (`sudo -n`) and `env` assignments (`VAR=1`) precede the
+    // real command name.
+    if (token.startsWith("-") || /^[a-z_][a-z0-9_]*=/i.test(token)) {
+      continue;
+    }
+    const name = getLastPathSegment(token).toLowerCase();
+    if (COMMAND_WRAPPERS.has(name)) {
+      continue;
+    }
+    // First non-wrapper word is the command. Anything else means this is not a
+    // copy, and nothing should be dropped.
+    return /^(cp|mv|install)$/.test(name) ? index : -1;
+  }
+  return -1;
+}
+
+function dropCopyDestinationToken(tokens) {
+  const commandIndex = findCopyCommandIndex(tokens);
+  if (commandIndex < 0) {
+    return tokens;
+  }
+  // With an explicit target-directory option (`-t DIR` / `--target-directory`)
+  // the destination is that option's argument, not the trailing token, so every
+  // remaining path is a source and nothing should be dropped.
+  if (tokens.some((token) => /^(?:-t|--target-directory)(?:=|$)/i.test(token))) {
+    return tokens;
+  }
+  const lastPathIndex = tokens.reduce(
+    (acc, token, index) => (index <= commandIndex || token.startsWith("-") ? acc : index),
+    -1,
+  );
+  return lastPathIndex < 0 ? tokens : tokens.filter((_, index) => index !== lastPathIndex);
 }
 
 export function evaluateDirectResourceAccess(policy, context) {
