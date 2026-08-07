@@ -8,6 +8,7 @@ import { checkArbitraryText, getPolicyStatus, loadPolicy } from "../lib/policy.m
 
 const VERSION = "3.6.0";
 const PROTOCOL_VERSION = "2024-11-05";
+const STATELESS_PROTOCOL_VERSION = "2026-07-28";
 const TOOL_DEFINITIONS = [
   {
     name: "agt_policy_status",
@@ -46,6 +47,20 @@ export async function handleJsonRpcRequest(state, request) {
     return jsonRpcError(id, -32600, "Invalid Request");
   }
 
+  if (method === "server/discover") {
+    return jsonRpcResult(id, {
+      protocolVersion: STATELESS_PROTOCOL_VERSION,
+      capabilities: {
+        tools: {},
+      },
+      serverInfo: {
+        name: "agt-governance",
+        version: VERSION,
+      },
+      tools: TOOL_DEFINITIONS,
+    });
+  }
+
   if (method === "initialize") {
     const protocolVersion =
       typeof params.protocolVersion === "string" ? params.protocolVersion : PROTOCOL_VERSION;
@@ -70,12 +85,24 @@ export async function handleJsonRpcRequest(state, request) {
     return jsonRpcResult(id, {});
   }
 
+  const requestMeta =
+    method === "tools/list" || method === "tools/call"
+      ? validateStatelessRequestMeta(request)
+      : undefined;
+  if (requestMeta === null) {
+    return jsonRpcError(
+      id,
+      -32001,
+      "Invalid stateless request metadata: _meta.clientInfo requires non-empty name and version, and _meta.capabilities must be an object.",
+    );
+  }
+
   if (method === "tools/list") {
     return jsonRpcResult(id, { tools: TOOL_DEFINITIONS });
   }
 
   if (method === "tools/call") {
-    return jsonRpcResult(id, await callTool(state, params));
+    return jsonRpcResult(id, withRequestMeta(await callTool(state, params), requestMeta));
   }
 
   return jsonRpcError(id, -32601, `Method not found: ${method}`);
@@ -103,6 +130,49 @@ async function callTool(state, params) {
   }
 
   return asJsonError(`Unknown tool: ${String(name)}`);
+}
+
+function validateStatelessRequestMeta(request) {
+  if (!Object.prototype.hasOwnProperty.call(request, "_meta")) {
+    return undefined;
+  }
+
+  const meta = request._meta;
+  if (
+    !isObject(meta) ||
+    !isObject(meta.clientInfo) ||
+    !isNonEmptyString(meta.clientInfo.name) ||
+    !isNonEmptyString(meta.clientInfo.version) ||
+    !isObject(meta.capabilities)
+  ) {
+    return null;
+  }
+
+  return {
+    clientInfo: {
+      name: meta.clientInfo.name,
+      version: meta.clientInfo.version,
+    },
+    capabilities: meta.capabilities,
+  };
+}
+
+function withRequestMeta(result, requestMeta) {
+  if (requestMeta === undefined) {
+    return result;
+  }
+  return {
+    ...result,
+    _meta: requestMeta,
+  };
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function asJsonContent(value) {
