@@ -49,7 +49,7 @@ from agent_control_specification import (  # noqa: E402
 )
 
 
-_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: maf_adapter_scenarios
 extends: []
@@ -208,7 +208,7 @@ def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> No
                 "decision": "transform",
                 "reason": "pii_redaction",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": "Customer SSN is [REDACTED]",
                 },
             }
@@ -301,7 +301,7 @@ def test_capability_guard_transform_path_rewrites_arguments(tmp_path: Path) -> N
                 "decision": "transform",
                 "reason": "query_sanitized",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"query": "[SANITIZED]"},
                 },
             }
@@ -346,7 +346,7 @@ def test_policy_middleware_refuses_a_replacement_it_cannot_write(
                 "decision": "transform",
                 "reason": "pii_redaction",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"redacted": "Customer SSN is [REDACTED]"},
                 },
             }

@@ -179,7 +179,7 @@ When the host correctly integrates ACS at the declared intervention points and e
 - The runtime validates any `transform` verdict before returning success.
 - The runtime applies a transformed policy target only in enforce mode and only for `transform` verdicts.
 - The runtime never mutates the policy target for `allow`, `warn`, `deny`, `escalate`, or runtime error outcomes.
-- The runtime rejects transform paths that target anything outside `$policy_target`.
+- The runtime rejects transform paths that target anything outside `$target`.
 - The runtime returns no transformed policy target in evaluate only mode.
 - The runtime rejects unresolved `extends` during enforcing runtime construction, so file based loaders must compose inherited file and HTTPS manifests before use and string or FFI loaders must receive an already merged manifest.
 - The runtime emits only low cardinality telemetry metadata and not policy target values, tool arguments, tool results, annotation values, model messages, secrets, or personal data.
@@ -250,7 +250,7 @@ Residual risk remains even when ACS is correctly integrated.
 | Classifier or annotator outage | Annotator failures and timeouts fail closed as runtime errors. | The host configures bounded dispatcher behavior and accepts the availability impact of fail closed checks. | In scope mitigated for runtime behavior. |
 | Policy dispatcher outage | Policy dispatch failure yields a runtime error and a deny verdict. | The host treats deny as blocking and operates policy infrastructure reliably. | In scope mitigated for runtime behavior. |
 | Malformed policy output | Verdict normalization rejects invalid decisions, invalid types, invalid transforms, and reserved runtime error reasons. | The policy dispatcher output is routed through core normalization and not interpreted directly by the host. | In scope mitigated. |
-| Transform escape from policy target | Transform validation requires paths rooted at `$policy_target` and fails closed on forbidden targets. | The host maps only the transformed policy target back into its controlled object. | In scope mitigated. |
+| Transform escape from policy target | Transform validation requires paths rooted at `$target` and fails closed on forbidden targets. | The host maps only the transformed policy target back into its controlled object. | In scope mitigated. |
 | Redaction mismatch | The spec and core replace only the selected policy target path carried by a `transform` verdict. | Span or chunk based redaction systems must convert their result into a valid `transform` body before returning it. | Host responsibility. |
 | Parameter tampering after evaluation | ACS returns the verdict and transformed target for the value it evaluated. | The host executes the same immutable invocation or applies the returned transformed target before execution. | Host responsibility. |
 | Token streaming leakage | The model requires complete snapshots for `post_model_call` and `output`. | The host buffers streams and does not emit chunks before policy evaluation, or it explicitly accepts the leakage risk. | Out of scope. |

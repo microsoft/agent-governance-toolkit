@@ -31,7 +31,7 @@ pytest.importorskip('agent_control_specification')
 pytest.importorskip('agent_os')
 from agent_control_specification import InterventionPointResult
 from agent_control_specification import AgentControl, ApprovalResolution
-_MANIFEST = 'agent_control_specification_version: 0.3.0-alpha-agt\nmetadata:\n  name: guardrails_adapter_scenarios\nextends: []\npolicies:\n  scenario_policy:\n    type: custom\n    adapter: guardrails_adapter_scenarios_adapter\nintervention_points:\n  input:\n    policy_target: $.input.body\n    policy_target_kind: user_input\n    policy:\n      id: scenario_policy\n  output:\n    policy_target: $.response.content\n    policy_target_kind: assistant_output\n    policy:\n      id: scenario_policy\n'
+_MANIFEST = 'agent_control_specification_version: 0.4.0-alpha.1\nmetadata:\n  name: guardrails_adapter_scenarios\nextends: []\npolicies:\n  scenario_policy:\n    type: custom\n    adapter: guardrails_adapter_scenarios_adapter\nintervention_points:\n  input:\n    policy_target: $.input.body\n    policy_target_kind: user_input\n    policy:\n      id: scenario_policy\n  output:\n    policy_target: $.response.content\n    policy_target_kind: assistant_output\n    policy:\n      id: scenario_policy\n'
 
 class _ScriptedPolicy:
     """Tiny ACS PolicyDispatcher that returns a scripted verdict per call."""
@@ -85,7 +85,7 @@ def test_validate_input_deny_path_marks_validation_failed(tmp_path: Path) -> Non
 
 def test_validate_input_transform_rewrites_final_value(tmp_path: Path) -> None:
     """A ``transform`` verdict rewrites :attr:`ValidationResult.final_value`."""
-    runtime, _policy = _build_runtime(tmp_path, [{'decision': 'transform', 'reason': 'pii_redaction', 'transform': {'path': '$policy_target', 'value': 'Customer SSN is [REDACTED]'}}])
+    runtime, _policy = _build_runtime(tmp_path, [{'decision': 'transform', 'reason': 'pii_redaction', 'transform': {'path': '$target', 'value': 'Customer SSN is [REDACTED]'}}])
     kernel = _kernel(runtime)
     result = kernel.validate_input('Customer SSN is 123-45-6789')
     assert result.final_value == 'Customer SSN is [REDACTED]'

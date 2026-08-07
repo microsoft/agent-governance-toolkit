@@ -39,7 +39,7 @@ from agent_control_specification import (  # noqa: E402
 )
 
 
-_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: langchain_adapter_scenarios
 extends: []
@@ -182,7 +182,7 @@ def test_wrap_tool_call_transform_path_rewrites_arguments(tmp_path: Path) -> Non
                 "decision": "transform",
                 "reason": "query_sanitized",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"query": "[SANITIZED]"},
                 },
             },
@@ -279,7 +279,7 @@ def test_wrap_tool_call_refuses_a_transform_it_cannot_write(tmp_path: Path) -> N
             {
                 "decision": "transform",
                 "reason": "pii_redaction",
-                "transform": {"path": "$policy_target", "value": "[REDACTED]"},
+                "transform": {"path": "$target", "value": "[REDACTED]"},
             },
         ],
     )

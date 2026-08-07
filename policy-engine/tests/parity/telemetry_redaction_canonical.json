@@ -227,8 +227,8 @@
   "sdk_enforcement_boundary_events": [
     {
       "name": "decision",
-      "producer": "sdk-approval",
-      "reserved_reason": "runtime_error:approval_resolver_failed",
+      "producer": "agt-host",
+      "reserved_reason": "host_error:approval_resolver_failed",
       "safe_attribute_keys": [
         "event_type",
         "intervention_point",
@@ -257,8 +257,8 @@
     },
     {
       "name": "decision",
-      "producer": "sdk-streaming",
-      "reserved_reason": "runtime_error:streaming_unsupported",
+      "producer": "agt-host",
+      "reserved_reason": "host_error:streaming_unsupported",
       "safe_attribute_keys": [
         "event_type",
         "intervention_point",
@@ -287,8 +287,8 @@
     },
     {
       "name": "decision",
-      "producer": "sdk-adapter",
-      "reserved_reason": "runtime_error:adapter_unsupported",
+      "producer": "agt-host",
+      "reserved_reason": "host_error:adapter_unsupported",
       "safe_attribute_keys": [
         "event_type",
         "intervention_point",
@@ -317,8 +317,8 @@
     },
     {
       "name": "decision",
-      "producer": "sdk-wire",
-      "reserved_reason": "runtime_error:request_invalid",
+      "producer": "agt-host",
+      "reserved_reason": "host_error:context_invalid",
       "safe_attribute_keys": [
         "event_type",
         "intervention_point",

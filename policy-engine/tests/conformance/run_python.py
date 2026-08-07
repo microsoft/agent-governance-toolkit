@@ -55,7 +55,10 @@ class QueueRuntime:
     async def evaluate_intervention_point(self, request):
         policy_input = {"intervention_point": request.intervention_point.value, "snapshot": dict(request.snapshot)}
         return InterventionPointResult(
-            Verdict(Decision.ESCALATE, reason="human_review"),
+            # An escalation is a liftable deny: `deny` carrying an `approval`
+            # block. Emitting the retired ESCALATE left the approval path
+            # unreachable, so the mismatch guard was never exercised.
+            Verdict(Decision.DENY, reason="human_review", approval={}),
             policy_input=policy_input,
             input_identity=action_identity(policy_input),
             enforced_identity=action_identity(policy_input),

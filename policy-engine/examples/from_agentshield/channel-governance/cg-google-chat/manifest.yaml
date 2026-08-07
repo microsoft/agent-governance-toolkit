@@ -1,4 +1,4 @@
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: "cg-google-chat"
 extends: []
@@ -14,7 +14,7 @@ intervention_points:
     tool_name_from: "$.tool_call.name"
     annotations:
       message_dlp:
-        from: "$policy_target.message"
+        from: "$target.message"
     policy:
       id: cg_google_chat
       query: data.agent_control_specification.cg_google_chat.pre_tool_call_verdict

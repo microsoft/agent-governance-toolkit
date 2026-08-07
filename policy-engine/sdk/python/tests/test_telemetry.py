@@ -20,6 +20,7 @@ from agent_control_specification import (
     TelemetryEvent,
     TelemetryEventType,
     Verdict,
+    Warning,
 )
 from agent_control_specification._orchestration import _labels_from_client
 from agent_control_specification._telemetry import error_class_for, safe_reason_code
@@ -71,8 +72,14 @@ class TelemetryEmissionTests(unittest.IsolatedAsyncioTestCase):
     async def test_single_event_with_decision_reason_identity(self):
         result = InterventionPointResult(
             Verdict(
-                Decision.WARN,
+                Decision.ALLOW,
                 reason="rate_limited",
+                warnings=(
+                    Warning(
+                        reason="rate_limited",
+                        message="Requests are arriving too quickly.",
+                    ),
+                ),
                 evidence=Evidence(
                     artefact="sha256:proofblob",
                     verification_pointers={
@@ -96,7 +103,7 @@ class TelemetryEmissionTests(unittest.IsolatedAsyncioTestCase):
         event = sink.events[0]
         self.assertEqual(event.event_type, TelemetryEventType.DECISION)
         self.assertEqual(event.intervention_point, InterventionPoint.PRE_TOOL_CALL)
-        self.assertEqual(event.decision, Decision.WARN)
+        self.assertEqual(event.decision, Decision.ALLOW)
         self.assertEqual(event.reason_code, "rate_limited")
         self.assertIsNone(event.error_class)
         self.assertEqual(event.enforcement_mode, EnforcementMode.ENFORCE)
@@ -116,8 +123,6 @@ class TelemetryEmissionTests(unittest.IsolatedAsyncioTestCase):
         decisions = [
             Decision.ALLOW,
             Decision.DENY,
-            Decision.WARN,
-            Decision.ESCALATE,
             Decision.TRANSFORM,
         ]
         sink = InMemoryTelemetrySink()
@@ -562,7 +567,7 @@ else:
     _NATIVE_AVAILABLE = True
 
 
-_CHAIN_BASE = """agent_control_specification_version: 0.3.1-beta
+_CHAIN_BASE = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: base
 policies:
@@ -579,10 +584,10 @@ intervention_points:
       id: content_policy
     annotations:
       prompt_classifier:
-        from: $policy_target.text
+        from: $target.text
 """
 
-_CHAIN_OVERLAY = """agent_control_specification_version: 0.3.1-beta
+_CHAIN_OVERLAY = """agent_control_specification_version: 0.4.0-alpha.1
 intervention_points:
   output:
     policy_target: $.output
@@ -602,9 +607,14 @@ class NativePolicyLabelTests(unittest.IsolatedAsyncioTestCase):
             def evaluate(self, invocation):
                 return {"decision": "allow"}
 
+        class EmptyAnnotator:
+            def dispatch(self, annotator_name, annotator, preliminary_policy_input):
+                return {}
+
         sink = InMemoryTelemetrySink()
         control = AgentControl.from_manifest_chain(
             [_CHAIN_BASE, _CHAIN_OVERLAY],
+            annotator_dispatcher=EmptyAnnotator(),
             policy_dispatcher=AllowPolicy(),
             telemetry_sink=sink,
         )
@@ -623,9 +633,16 @@ class NativePolicyLabelTests(unittest.IsolatedAsyncioTestCase):
             def evaluate(self, invocation):
                 return {"decision": "allow"}
 
+        class EmptyAnnotator:
+            def dispatch(self, annotator_name, annotator, preliminary_policy_input):
+                return {}
+
         sink = InMemoryTelemetrySink()
         control = AgentControl.from_native(
-            _CHAIN_BASE, policy_dispatcher=AllowPolicy(), telemetry_sink=sink
+            _CHAIN_BASE,
+            annotator_dispatcher=EmptyAnnotator(),
+            policy_dispatcher=AllowPolicy(),
+            telemetry_sink=sink,
         )
 
         await control.evaluate_intervention_point(

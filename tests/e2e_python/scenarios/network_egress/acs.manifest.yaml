@@ -3,7 +3,7 @@
 # point binds a host-owned custom policy that allows egress only to the
 # internal analytics domain and denies everything else. This is the contract a
 # customer would ship; no legacy policy language.
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: network-egress-guard
 policies:

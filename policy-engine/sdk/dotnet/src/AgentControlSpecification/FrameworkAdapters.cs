@@ -391,7 +391,7 @@ public sealed class UnsupportedFrameworkAdapter<TAgent> : IFullCoverageAgentAdap
             InterventionPoint.Input,
             new InterventionPointResult(new Verdict(
                 Decision.Deny,
-                Reason: "runtime_error:adapter_unsupported",
+                Reason: "host_error:adapter_unsupported",
                 Message:
                     $"Package-specific full-coverage {FrameworkName} adapter is not wired in this no-dependency SDK surface; " +
                     "use AgentControl.RunAsync(), AgentControl.RunModelAsync(), AgentControl.ProtectToolAsync(), " +

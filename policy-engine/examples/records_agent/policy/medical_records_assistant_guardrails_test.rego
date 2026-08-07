@@ -19,7 +19,7 @@ test_post_model_call_redacts_phi_via_transform if {
 	}
 	verdict.decision == "transform"
 	verdict.reason == "phi_redacted"
-	verdict.transform.path == "$policy_target.value"
+	verdict.transform.path == "$target.value"
 	verdict.transform.value == "[REDACTED PHI]"
 }
 

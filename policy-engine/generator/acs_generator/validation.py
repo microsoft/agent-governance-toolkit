@@ -21,7 +21,7 @@ from .vocabulary import (
 
 OPA_TIMEOUT_SECONDS = 10
 VALIDATION_DIR_NAME = ".acs_generator_validation"
-_TRANSFORM_PATH_RE = re.compile(r"^\$policy_target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$")
+_TRANSFORM_PATH_RE = re.compile(r"^\$target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$")
 
 
 @dataclass
@@ -593,7 +593,7 @@ def _reject_legacy_effects(rego: str) -> None:
     if re.search(r'"effects"\s*:', rego):
         raise ValidationError(
             "generated Rego emits a removed verdict 'effects' array; AGT D1 replaced it "
-            "with a single 'transform' object on a transform decision rooted at $policy_target"
+            "with a single 'transform' object on a transform decision rooted at $target"
         )
 
 
@@ -628,7 +628,7 @@ def _validate_verdict(verdict: dict[str, Any], query: str) -> None:
     if decision not in DECISIONS:
         raise ValidationError(f"opa eval for {query} returned unsupported decision: {decision}")
     # AGT D1 removed the verdict ``effects`` array in favor of a single
-    # ``transform`` object rooted at ``$policy_target``. The core rejects any
+    # ``transform`` object rooted at ``$target``. The core rejects any
     # verdict carrying ``effects`` with runtime_error:policy_output_invalid, so
     # reject it here too instead of validating the dead shape.
     if "effects" in verdict:
@@ -642,7 +642,7 @@ def _validate_verdict(verdict: dict[str, Any], query: str) -> None:
             raise ValidationError(f"opa eval for {query} transform verdict missing 'transform' object")
         path = transform.get("path")
         if not isinstance(path, str) or not _TRANSFORM_PATH_RE.match(path):
-            raise ValidationError(f"opa eval for {query} transform.path must be a well-formed $policy_target path: {path!r}")
+            raise ValidationError(f"opa eval for {query} transform.path must be a well-formed $target path: {path!r}")
         if "value" not in transform:
             raise ValidationError(f"opa eval for {query} transform verdict missing 'transform.value'")
     elif transform is not None:

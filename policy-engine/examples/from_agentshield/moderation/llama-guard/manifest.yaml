@@ -1,4 +1,4 @@
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: "llama-guard"
 extends: []
@@ -13,7 +13,7 @@ intervention_points:
     policy_target_kind: user_input
     annotations:
       llama_guard:
-        from: "$policy_target.text"
+        from: "$target.text"
     policy:
       id: llama_guard
       query: data.agent_control_specification.llama_guard.input_verdict

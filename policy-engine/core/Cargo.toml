@@ -3,60 +3,45 @@ name = "agent_control_specification_core"
 version = "0.3.1-beta.0"
 edition = "2021"
 rust-version = "1.85"
-description = "Stateless Rust core for Agent Control Specification"
+description = "Deprecated compatibility shim over agent-control-spec. Use agent-control-spec directly."
 license = "MIT"
 readme = "../README.md"
 keywords = ["agents", "policy", "security", "runtime"]
 categories = ["config"]
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib"]
 
 [features]
-# AGT M2.S5 D7 runtime split. The default surface is the historical core plus
-# the bundled OPA Rego dispatcher and the bundled Cedar dispatcher. Hosts that
-# do not want either heavyweight backend can disable default features and
-# opt back in to whichever engines they need.
+# Forwarded to agent-control-spec so existing feature selections keep
+# resolving. The default surface stays the historical core plus the
+# bundled OPA Rego dispatcher and the Cedar dispatcher.
 #
-# * `opa` gates `pub mod opa`, the `Opa*` re-exports, and the OPA arm of the
-#   `default_policy_dispatcher`. The OPA dispatcher only shells out to the
-#   `opa` CLI and therefore carries no Rust build deps; the gate exists so
-#   callers that never use Rego do not see the Rego dispatcher surface.
-# * `cedar` gates the new `CedarBuiltinDispatcher` powered by the upstream
-#   `cedar-policy` crate. The manifest grammar, `PolicyConfig::Cedar`, the
-#   `CedarPolicyDispatcher` trait, the request mapping, the advice
-#   translator, and the always-compiled `CedarTestDispatcher` stay available
-#   under no-default-features per AGT D3.
+# SECURITY: the bundled dispatcher features below reach host environment
+# credentials. AGT gated that on manifest provenance through an
+# `url_sourced` flag, so a manifest fetched over the network could not
+# read host credentials. agent-control-spec 0.4.0-alpha.1 does not carry
+# that gate while it still supports URL sourced `extends`. Treat these
+# features as blocked pending an upstream fix. See docs/acs-retarget.md.
 default = ["opa", "cedar"]
-opa = ["dep:jsonschema"]
-cedar = ["dep:cedar-policy"]
-# Bundled reference dispatchers used to provide zero-config defaults through
-# the FFI builder. OFF by default. Manifest HTTPS extends support is part of
-# file based construction and is independent of this feature.
-default-dispatchers = []
-aacs = ["default-dispatchers"]
-openai_moderation = ["default-dispatchers"]
-perspective = ["default-dispatchers"]
-llama_guard = ["default-dispatchers"]
-lakera_guard = ["default-dispatchers"]
-auto = ["default-dispatchers"]
+opa = ["agent-control-spec/opa"]
+cedar = ["agent-control-spec/cedar"]
+default-dispatchers = ["agent-control-spec/default-dispatchers"]
+aacs = ["agent-control-spec/aacs"]
+openai_moderation = ["agent-control-spec/openai_moderation"]
+perspective = ["agent-control-spec/perspective"]
+llama_guard = ["agent-control-spec/llama_guard"]
+lakera_guard = ["agent-control-spec/lakera_guard"]
+auto = ["agent-control-spec/auto"]
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-regex = "1"
-serde_yaml = "0.9"
-sha2 = "0.10"
-base64 = "0.22"
-url = "2"
-ureq = { version = "2", features = ["json"] }
-cedar-policy = { version = "4", optional = true }
-jsonschema = { version = "0.17", default-features = false, optional = true }
-
-[dev-dependencies]
-jsonschema = { version = "0.17", default-features = false }
-criterion = { version = "0.7.0", features = ["html_reports"] }
-
-[[bench]]
-name = "evaluation"
-harness = false
+agent-control-spec = { version = "=0.4.0-alpha.1", default-features = false }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+# The final serde_yaml release carries build metadata in its version, so
+# "=0.9.34" names nothing on crates.io and the cooling-off scanner cannot
+# resolve it. Cargo ignores the metadata when matching and says so on every
+# build; the pin is exact either way.
+serde_yaml = "=0.9.34+deprecated"
+sha2 = "=0.10.9"
+jsonschema = { version = "=0.17.1", default-features = false }

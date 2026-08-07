@@ -10,12 +10,12 @@ from .vocabulary import INTERVENTION_POINT_NAMES, POLICY_INPUT_POINT_KEY
 
 INDENT = "    "
 
-# Core transform-path grammar, verified empirically against the runtime: $policy_target
+# Core transform-path grammar, verified empirically against the runtime: $target
 # followed by zero or more `.field` (object key) or `[N]` (numeric list index) segments.
-# The core REJECTS quoted/string bracket keys like $policy_target["k"]
+# The core REJECTS quoted/string bracket keys like $target["k"]
 # (runtime_error:policy_invocation_failed) and a trailing-dot/empty segment, so we
 # accept only dotted identifiers and numeric indices and reset anything else to root.
-_TRANSFORM_PATH_RE = re.compile(r"^\$policy_target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$")
+_TRANSFORM_PATH_RE = re.compile(r"^\$target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$")
 
 # Higher value wins when more than one rule body matches the same intervention point.
 # `transform` (mutation/redaction) outranks `warn` so a redact rule is never shadowed
@@ -73,7 +73,7 @@ def _render_verdict(rule: RulePlan) -> tuple[str, list[str]]:
     """Render a verdict object plus any extra Rego body lines it needs.
 
     AGT D1 removed the verdict ``effects`` array. Only a ``transform`` decision
-    may carry a payload, and it is a single object rooted at ``$policy_target``.
+    may carry a payload, and it is a single object rooted at ``$target``.
     ``allow``/``warn``/``deny``/``escalate`` must never mutate, so any effects on
     those decisions are dropped. A ``transform`` decision renders a
     ``transform`` object; a regex redaction is computed in the rule body.
@@ -99,10 +99,10 @@ def _redaction_replacement(effect: dict[str, Any]) -> str:
 
 
 def _read_expr_for_path(path: str) -> str:
-    # Translate a $policy_target transform path to the Rego read expression for
-    # the same location: $policy_target -> input.policy_target.value,
-    # $policy_target.text -> input.policy_target.value.text, [0] -> ...[0].
-    return "input.policy_target.value" + path[len("$policy_target"):]
+    # Translate a $target transform path to the Rego read expression for
+    # the same location: $target -> input.policy_target.value,
+    # $target.text -> input.policy_target.value.text, [0] -> ...[0].
+    return "input.policy_target.value" + path[len("$target"):]
 
 
 def _render_transform_verdict(verdict: dict[str, Any], rule: RulePlan) -> tuple[str, list[str]]:
@@ -111,14 +111,14 @@ def _render_transform_verdict(verdict: dict[str, Any], rule: RulePlan) -> tuple[
     # replacement, not a regex redaction.
     redacts = [e for e in rule.effects if str(e.get("type")) == "redact"]
     if redacts:
-        # Redaction at the rule's target path (default $policy_target). Chain
+        # Redaction at the rule's target path (default $target). Chain
         # regex.replace over the rule's own patterns only. We deliberately do NOT
         # union patterns across sibling rules: a rule's redaction is gated by its
         # own conditions, and applying another rule's pattern when that rule's
         # condition is false would be unauthorized over-redaction. ACS applies one
         # transform per evaluation; author a single rule (as guided-init does) to
         # redact multiple patterns together.
-        path = _normalize_transform_path(str(redacts[0].get("path") or "$policy_target"))
+        path = _normalize_transform_path(str(redacts[0].get("path") or "$target"))
         read_expr = _read_expr_for_path(path)
         extra_body = [f"is_string({read_expr})"]
         expr = read_expr
@@ -128,7 +128,7 @@ def _render_transform_verdict(verdict: dict[str, Any], rule: RulePlan) -> tuple[
         extra_body.append(f"__transform_value := {expr}")
         return _verdict_with_value_ref(verdict, path, "__transform_value"), extra_body
     effect = rule.effects[0] if rule.effects else {}
-    path = _normalize_transform_path(str(effect.get("path") or "$policy_target"))
+    path = _normalize_transform_path(str(effect.get("path") or "$target"))
     if "value" in effect:
         verdict["transform"] = {"path": path, "value": effect["value"]}
         return json.dumps(verdict, indent=4), []
@@ -141,16 +141,16 @@ def _render_transform_verdict(verdict: dict[str, Any], rule: RulePlan) -> tuple[
 def _normalize_transform_path(path: str) -> str:
     # Models routinely append `.value`, conflating the transform root with the
     # input.policy_target.value read path; the policy target *is* the value, so
-    # `$policy_target.value` indexes into it and the core rejects it on a scalar
+    # `$target.value` indexes into it and the core rejects it on a scalar
     # target. Correct that one common literal case before grammar validation,
-    # leaving deeper nested paths ($policy_target.a.b, $policy_target[0]) intact.
-    if path == "$policy_target.value":
-        return "$policy_target"
-    # Anything that is not a well-formed $policy_target path (a bad root such as
-    # "$policy_target" with an unexpected suffix, or a trailing-dot/empty segment) is
+    # leaving deeper nested paths ($target.a.b, $target[0]) intact.
+    if path == "$target.value":
+        return "$target"
+    # Anything that is not a well-formed $target path (a bad root such as
+    # "$target" with an unexpected suffix, or a trailing-dot/empty segment) is
     # reset to the root so the core never fails closed on a malformed path.
     if not _TRANSFORM_PATH_RE.match(path):
-        return "$policy_target"
+        return "$target"
     return path
 
 

@@ -19,7 +19,7 @@ the cedar advice schema at
 | `egress.cedar` | `egress.rego` | `forbid` when destination host is not in the resource allowlist |
 | `drift.cedar` | `drift.rego` | `permit` with `warn` advice when drift score crosses threshold |
 | `confidence.cedar` | `confidence.rego` | `forbid` when confidence score is below threshold |
-| `redact.cedar` | `redact.rego` | `permit` with `transform` advice replacing `$policy_target.value` wholesale |
+| `redact.cedar` | `redact.rego` | `permit` with `transform` advice replacing `$target.value` wholesale |
 | `approval.cedar` | `approval.rego` | `permit` with `escalate` advice for approver gated actions |
 | `ifc.cedar` | `agt_ifc.rego` | `forbid` when sink clearance does not dominate every source label |
 | `agt_default.cedar` | `agt_default.rego` | Composes every gate above with a baseline permit |
@@ -46,7 +46,7 @@ that surfaces on the verdict. The `@advice` annotation on a `permit`
 carries the cedar advice JSON payload. The schema enforces that
 `advice.verdict` is one of `warn`, `escalate`, or `transform`. A
 `transform` advice MUST carry a `transform.path` rooted at
-`$policy_target` and a replacement `transform.value`.
+`$target` and a replacement `transform.value`.
 
 ## Binding a Cedar policy from an AGT manifest
 
@@ -93,7 +93,7 @@ worth knowing.
   `data.agt.egress` parses URLs and applies glob style host patterns.
 - **No multi span transform.** Cedar annotations are static strings.
   The `redact.cedar` library can only emit a fixed transform payload
-  that wholesale replaces `$policy_target.value` with the literal
+  that wholesale replaces `$target.value` with the literal
   `"[REDACTED]"`. The Rego library `data.agt.redact` runs
   `regex.replace` to substitute matched spans in place.
 - **Integer scoring only.** Cedar long values are integer typed and

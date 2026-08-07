@@ -636,14 +636,25 @@ public sealed class AgentControl
         }
 
         var decision = result.Verdict.Decision;
-        if (decision == Decision.Deny)
-        {
-            throw new AgentControlBlockedException(interventionPoint, result);
-        }
 
-        if (decision != Decision.Escalate)
+        // Warn is deprecated and the engine never returns it, but it means
+        // "allow, and record a warning", so it still permits. Treating it as
+        // a block would turn a retained warn into a refusal.
+        if (decision == Decision.Allow || decision == Decision.Transform || decision == Decision.Warn)
         {
             return;
+        }
+
+        // agent-hooks has no separate escalate decision: an escalation is a
+        // liftable deny, a deny carrying an approval block. The deprecated
+        // Escalate member routes the same way for a caller still holding one.
+        // A deny without an approval block is final, and any other decision
+        // fails closed.
+        var liftable = decision == Decision.Escalate
+            || (decision == Decision.Deny && result.Verdict.Approval is not null);
+        if (!liftable)
+        {
+            throw new AgentControlBlockedException(interventionPoint, result);
         }
 
         var resolver = approvalResolver ?? this.approvalResolver;
@@ -699,7 +710,7 @@ public sealed class AgentControl
             new InterventionPointResult(
                 new Verdict(
                     Decision.Deny,
-                    Reason: "runtime_error:streaming_unsupported",
+                    Reason: "host_error:streaming_unsupported",
                     Message: "Streaming model requests are not guarded by RunModelAsync; use RunModelStreamAsync for SSE buffering.")));
     }
 
@@ -720,7 +731,7 @@ public sealed class AgentControl
         new(
             new Verdict(
                 Decision.Deny,
-                Reason: "runtime_error:approval_resolver_failed",
+                Reason: "host_error:approval_resolver_failed",
                 Message: "Approval resolver failed closed."),
             PolicyInput: result.PolicyInput,
             ActionIdentity: result.ActionIdentity);
@@ -744,7 +755,7 @@ public sealed class AgentControl
         throw new AgentControlBlockedException(
             interventionPoint,
             new InterventionPointResult(
-                new Verdict(Decision.Deny, Reason: "runtime_error:approval_action_mismatch")));
+                new Verdict(Decision.Deny, Reason: "host_error:approval_identity_mismatch")));
     }
 
     public static string ActionIdentity(JsonElement policyInput)

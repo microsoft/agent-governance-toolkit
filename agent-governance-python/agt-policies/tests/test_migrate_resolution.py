@@ -731,7 +731,7 @@ def test_resolve_emits_flat_acs_manifest(tmp_path: Path) -> None:
 
     manifest = resolve_manifest(root, root)
 
-    assert manifest["agent_control_specification_version"] == "0.3.0-alpha-agt"
+    assert manifest["agent_control_specification_version"] == "0.4.0-alpha.1"
     assert manifest["extends"] == []
     assert "agt_legacy_rules" in manifest["policies"]
     assert manifest["policies"]["agt_legacy_rules"]["type"] == "rego"

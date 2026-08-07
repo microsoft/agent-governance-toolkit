@@ -37,13 +37,16 @@ else:
     _NATIVE_AVAILABLE = True
 
 
-def verdict(decision=None, transformed_policy_target=None, reason=None):
+def verdict(decision=None, transformed_policy_target=None, reason=None, approval=None):
     # AGT D1: TRANSFORM is the only mutating decision. Default to it when
     # the caller supplied a transformed_policy_target so adapter tests
     # exercise the canonical mutation path under the new gate.
     if decision is None:
         decision = Decision.TRANSFORM if transformed_policy_target is not None else Decision.ALLOW
-    return InterventionPointResult(Verdict(decision, reason=reason), transformed_policy_target=transformed_policy_target)
+    return InterventionPointResult(
+        Verdict(decision, reason=reason, approval=approval),
+        transformed_policy_target=transformed_policy_target,
+    )
 
 
 class QueueRuntime:
@@ -242,7 +245,9 @@ class StreamingAdapterHardeningTests(unittest.IsolatedAsyncioTestCase):
             seen.append((point, result.policy_input, result.action_identity))
             return ApprovalResolution.allow(result.action_identity)
 
-        runtime = QueueRuntime([verdict(), verdict(Decision.ESCALATE, reason="review")])
+        runtime = QueueRuntime(
+            [verdict(), verdict(Decision.DENY, reason="review", approval={})]
+        )
         control = AgentControl(runtime, approval_resolver=approve)
         receive = deque([
             {"type": "http.request", "body": b'{"model":"gpt","messages":[],"stream":true}', "more_body": False}
@@ -263,13 +268,30 @@ class StreamingAdapterHardeningTests(unittest.IsolatedAsyncioTestCase):
             return ApprovalResolution.deny()
 
         with self.assertRaises(AgentControlBlocked):
-            await _call_litellm(raw, QueueRuntime([verdict(), verdict(Decision.ESCALATE, reason="review")]))
+            await _call_litellm(
+                raw,
+                QueueRuntime(
+                    [verdict(), verdict(Decision.DENY, reason="review", approval={})]
+                ),
+            )
         receive = deque([
             {"type": "http.request", "body": b'{"model":"gpt","messages":[],"stream":true}', "more_body": False}
         ])
         with self.assertRaises(AgentControlBlocked):
             await guard_litellm_proxy(
-                AgentControl(QueueRuntime([verdict(), verdict(Decision.ESCALATE, reason="review")]), approval_resolver=reject),
+                AgentControl(
+                    QueueRuntime(
+                        [
+                            verdict(),
+                            verdict(
+                                Decision.DENY,
+                                reason="review",
+                                approval={},
+                            ),
+                        ]
+                    ),
+                    approval_resolver=reject,
+                ),
                 _streaming_app(raw),
             )(
                 {"type": "http", "method": "POST", "path": "/v1/chat/completions", "headers": []},
@@ -301,7 +323,16 @@ class StreamingAdapterHardeningTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(AgentControlBlocked):
             await guard_litellm_proxy(
                 AgentControl(
-                    QueueRuntime([verdict(), verdict(Decision.ESCALATE, reason="review")]),
+                    QueueRuntime(
+                        [
+                            verdict(),
+                            verdict(
+                                Decision.DENY,
+                                reason="review",
+                                approval={},
+                            ),
+                        ]
+                    ),
                     approval_resolver=approval_raises,
                 ),
                 _streaming_app(raw),
@@ -440,7 +471,7 @@ class StreamingAdapterHardeningTests(unittest.IsolatedAsyncioTestCase):
 @unittest.skipUnless(_NATIVE_AVAILABLE, "agent_control_specification._native extension is not built")
 class AnnotatorOrderingStreamingTests(unittest.TestCase):
     def test_annotator_dispatch_precedes_policy_evaluation(self):
-        manifest = """agent_control_specification_version: 0.3.1-beta
+        manifest = """agent_control_specification_version: 0.4.0-alpha.1
 policies:
   p:
     type: custom
@@ -471,7 +502,7 @@ annotators:
                     return {
                         "decision": "transform",
                         "transform": {
-                            "path": "$policy_target.choices[0].message.content",
+                            "path": "$target.choices[0].message.content",
                             "value": "[redacted]",
                         },
                     }
