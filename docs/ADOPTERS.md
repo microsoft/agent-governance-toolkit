@@ -16,8 +16,8 @@ momentum and credibility. Submit a PR editing this file — see
 
 | Organization | Industry | Use Case | Since | Contact |
 |---|---|---|---|---|
-| Microsoft (internal AI agent platform) | AI / Developer Tools | Policy enforcement and governance workflows for multi-agent orchestration | Mar 2026 | [@imran-siddique](https://github.com/imran-siddique) |
-| Microsoft (internal engineering tools) | Engineering Productivity | Agent SRE integration for incident management and reliability monitoring | Apr 2026 | [@imran-siddique](https://github.com/imran-siddique) |
+| Microsoft (internal AI agent platform) | AI / Developer Tools | Policy enforcement and governance workflows for multi-agent orchestration | Mar 2026 | [@MohammadHaroonAbuomar](https://github.com/MohammadHaroonAbuomar) |
+| Microsoft (internal engineering tools) | Engineering Productivity | Agent SRE integration for incident management and reliability monitoring | Apr 2026 | [@MohammadHaroonAbuomar](https://github.com/MohammadHaroonAbuomar) |
 | [Dayos](https://dayos.com) | Enterprise AI / ERP Automation | Policy enforcement and prompt-injection detection for a multi-agent system built on Google ADK -- Cedar-based tool-dispatch governance across finance and operations workflows | May 2026 | [@miyannishar](https://github.com/miyannishar) |
 
 ## Evaluation / Pilot
@@ -25,8 +25,8 @@ momentum and credibility. Submit a PR editing this file — see
 | Organization | Industry | Use Case | Since | Contact |
 |---|---|---|---|---|
 | [Nobulex](https://github.com/arian-gogani/nobulex) | AI Agent Security | Bilateral receipt primitive for tamper-evident agent audit trails (PRs #1302, #1333) | Mar 2026 | [@arian-gogani](https://github.com/arian-gogani) |
-| [GitHub -- awesome-copilot](https://github.com/github/awesome-copilot) | Developer Tools | AGT contributor reputation check (`agt-contributor-check`) integrated into CI for PR risk scoring | Apr 2026 | [@imran-siddique](https://github.com/imran-siddique) |
-| Azure (internal project) | Cloud Infrastructure | AGT identity layer integration for agent mesh trust verification | Apr 2026 | [@imran-siddique](https://github.com/imran-siddique) |
+| [GitHub -- awesome-copilot](https://github.com/github/awesome-copilot) | Developer Tools | AGT contributor reputation check (`agt-contributor-check`) integrated into CI for PR risk scoring | Apr 2026 | [@MohammadHaroonAbuomar](https://github.com/MohammadHaroonAbuomar) |
+| Azure (internal project) | Cloud Infrastructure | AGT identity layer integration for agent mesh trust verification | Apr 2026 | [@MohammadHaroonAbuomar](https://github.com/MohammadHaroonAbuomar) |
 | [chamber](https://github.com/ianphil/chamber) | AI Agent Infrastructure | AGT governance workflows for agent execution policy enforcement | Apr 2026 | [@ianphil](https://github.com/ianphil) |
 | [MythologIQ Labs, LLC](https://github.com/MythologIQ-Labs-LLC) | AI Governance / Agent Security | Evaluating AGT as an isolated upstream governance dependency for [Qortara](https://qortara.com), including LangChain/LangGraph tool-dispatch governance through [`qortara-governance-langchain`](https://github.com/MythologIQ-Labs-LLC/qortara-governance). | May 2026 | [@Knapp-Kevin](https://github.com/Knapp-Kevin) |
 | [GenAI-Gurus](https://github.com/GenAI-Gurus) | AI Governance / EU AI Act Compliance | EU AI Act compliance tooling and resource curation ([awesome-eu-ai-act](https://github.com/GenAI-Gurus/awesome-eu-ai-act)), cross-referencing AGT's compliance checklist | May 2026 | [@carloshvp](https://github.com/carloshvp) |
