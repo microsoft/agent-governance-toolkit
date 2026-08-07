@@ -42,10 +42,20 @@ jobs:
       # `git merge-base` fails and the diff falls back to the base tip -- which is
       # what made this job spell-check the whole repository on any branch a few
       # commits behind main.
+      # The refspec is explicit because `git fetch origin <branch>` only writes
+      # FETCH_HEAD unless the configured refspec happens to cover the branch.
+      # actions/checkout narrows remote.origin.fetch to the ref it checked out,
+      # so on a PR the wildcard is absent and `refs/remotes/origin/<base>` keeps
+      # whatever value it had at checkout time. `--base origin/<base>` below then
+      # resolves a merge base against a stale ref, which succeeds (no warning)
+      # while pointing far enough back that every commit landing on the base
+      # since is reported as added. That is how a two-file PR came to be
+      # spell-checked against several hundred lines it never touched.
       - name: Fetch PR base
         run: |
           set -e
-          git fetch origin "${{ github.base_ref }}"
+          git fetch --no-tags origin \
+            "+${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
 
       - name: Compute changed lines
         id: diff

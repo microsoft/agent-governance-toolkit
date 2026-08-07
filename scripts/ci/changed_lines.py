@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -75,10 +76,15 @@ def resolve_merge_base(repo: Path, base: str) -> str:
         # stderr, not stdout: without `--output` this script emits its result on
         # stdout, so a warning printed there is read back as one of the changed
         # file names (or as an added line) by whatever consumes it.
-        print(
-            f"warning: cannot resolve merge base with {base} ({message}); diffing against its tip instead",
-            file=sys.stderr,
-        )
+        text = f"cannot resolve merge base with {base} ({message}); diffing against its tip instead"
+        print(f"warning: {text}", file=sys.stderr)
+        # Also surface it as a workflow annotation. On stderr alone this notice
+        # is buried in the step log, so an over-reporting run is indistinguishable
+        # from a correctly scoped one at the point where someone reads the check
+        # result -- which is why the scoping regression this guards against went
+        # unnoticed while it failed unrelated PRs.
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            print(f"::warning::changed_lines: {text}", file=sys.stderr)
         return base
     return result.stdout.strip() or base
 
