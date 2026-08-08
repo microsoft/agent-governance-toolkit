@@ -1,0 +1,36 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "acs-multi-agent-multi-policy"
+extends: []
+policies:
+  input_firewall:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.multi.input_verdict
+  prompt_firewall:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.multi.pre_model_call_verdict
+  output_guard:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.multi.output_verdict
+intervention_points:
+  input:
+    policy_target: "$.input.body"
+    policy_target_kind: user_input
+    policy:
+      id: input_firewall
+      query: data.agent_control_specification.multi.input_verdict
+  pre_model_call:
+    policy_target: "$.messages"
+    policy_target_kind: model_messages
+    policy:
+      id: prompt_firewall
+      query: data.agent_control_specification.multi.pre_model_call_verdict
+  output:
+    policy_target: "$.response.content"
+    policy_target_kind: assistant_output
+    policy:
+      id: output_guard
+      query: data.agent_control_specification.multi.output_verdict
