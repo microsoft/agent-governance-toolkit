@@ -222,7 +222,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     // Also guard against NaN, non-integers, null, undefined, and strings.
     const rawTimeout = cfg.timeoutSeconds;
     const timeoutSeconds = Number.isFinite(rawTimeout) && Number.isInteger(rawTimeout) && rawTimeout >= 1
-      ? Math.floor(rawTimeout)
+      ? rawTimeout
       : 1;
 
     const executionId = randomUUID();
@@ -250,9 +250,9 @@ export class DockerSandboxProvider implements SandboxProvider {
         // previous `error.code as number ?? 1` cast handled the `null` case
         // by accident — `null ?? 1` is `1` — but on the spawn-failure path it
         // let the string ('ENOENT') flow through as a `number`-typed exit
-        // code, and downstream consumers treating `exitCode` as numeric saw
+        // code, and downstream consumers treating `exitCode` as numeric saw / a string.
         // Narrow explicitly: only accept a numeric code; otherwise
-                // synthesize 1 for any error (signal kill, spawn failure, etc.).
+        // synthesise 1 for any error (signal kill, spawn failure, etc.).
         const exitCode = error
           ? typeof error.code === 'number' ? error.code : 1
           : 0;
