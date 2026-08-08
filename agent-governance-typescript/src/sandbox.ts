@@ -247,11 +247,11 @@ export class DockerSandboxProvider implements SandboxProvider {
         // Node's ExecException.code can be: a numeric exit code (child exited
         // non-zero), `null` (child killed by a signal — `error.signal` is set
         // instead), or a string like 'ENOENT' (the spawn itself failed). The
-        // The previous `error.code as number ?? 1` cast handled the `null` case
+        // previous `error.code as number ?? 1` cast handled the `null` case
         // by accident — `null ?? 1` is `1` — but on the spawn-failure path it
         // let the string ('ENOENT') flow through as a `number`-typed exit
-        // code, and downstream consumers treating `exitCode` as numeric
-        // saw a string. Narrow explicitly: only accept a numeric code;
+        // code, and downstream consumers treating `exitCode` as numeric saw
+        // a string. Narrow explicitly: only accept a numeric code;
         // otherwise synthesise 1 for any error (signal kill, spawn failure, etc.).
         const exitCode = error
           ? typeof error.code === 'number' ? error.code : 1
