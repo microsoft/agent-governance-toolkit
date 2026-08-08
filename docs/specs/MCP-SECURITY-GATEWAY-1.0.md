@@ -1,3 +1,9 @@
+---
+title: "MCP Security Gateway -- Version 1.0"
+last_reviewed: 2026-07-07
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # MCP Security Gateway -- Version 1.0

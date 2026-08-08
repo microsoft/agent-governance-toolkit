@@ -13,7 +13,7 @@ This is the canonical home for all security documentation in Agent Governance To
 | Topic | Page |
 |-------|------|
 | How threats are modeled across AGT's trust boundaries | [Threat Model](threat-model.md) |
-| Multi-tenant isolation guarantees and operator checklist | [Tenant Isolation](tenant-isolation.md) · [Checklist](tenant-isolation-checklist.md) |
+| Multi-tenant isolation guarantees and operator checklist | [Tenant Isolation](tenant-isolation.md) |
 | Trust score calibration methodology and thresholds | [Trust Score Calibration](trust-score-calibration.md) |
 | Plugin and dependency scanning that runs on every PR | [Security Scanning](scanning.md) |
 | How AGT maps to the OWASP Agentic Top 10 | [OWASP ASI coverage](../compliance/owasp-agentic-top10-architecture.md) |

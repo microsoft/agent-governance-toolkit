@@ -1,3 +1,9 @@
+---
+title: "Tutorial 37: Multi-Stage Policy Pipeline"
+last_reviewed: 2026-04-23
+owner: agt-maintainers
+---
+
 # Tutorial 37: Multi-Stage Policy Pipeline
 
 > **Time**: 15 minutes · **Level**: Intermediate · **Prerequisites**: Tutorial 36 (govern basics)

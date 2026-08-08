@@ -1,19 +1,25 @@
-> この文書は [README.md](/README.md) の日本語訳です。最新の情報は英語版をご確認ください。
+---
+title: "Agent Governance Toolkit へようこそ！"
+last_reviewed: 2026-07-15
+owner: agt-maintainers
+---
 
-🌍 [English](/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md)
+> この文書は [README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md) の日本語訳です。最新の情報は英語版をご確認ください。
 
-![Agent Governance Toolkit](../../docs/assets/readme-banner.svg)
+🌍 [English](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md)
+
+![Agent Governance Toolkit](../assets/readme-banner.svg)
 
 # Agent Governance Toolkit へようこそ！
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-npm_%40agentmesh%2Fsdk-blue?logo=typescript)](../../agent-governance-typescript/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-npm_%40microsoft%2Fagent--governance--sdk-blue?logo=typescript)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript)
 [![.NET 8.0+](https://img.shields.io/badge/.NET_8.0+-NuGet-blue?logo=dotnet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
-[![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](../../agent-governance-rust/agentmesh/)
-[![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](../../agent-governance-golang/)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/compliance/owasp-agentic-top10-architecture.md)
+[![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-rust/agentmesh)
+[![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-golang)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../compliance/owasp-agentic-top10-architecture.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
@@ -83,44 +89,44 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 
 ### 📚 ドキュメント
 
-- **[クイックスタート](../../docs/quickstart.md)** — ゼロからガバナンス付きエージェントを10分で構築（Python · TypeScript · .NET · Rust · Go）
-- **[TypeScript パッケージ](../../agent-governance-typescript/README.md)** — ID、トラスト、ポリシー、監査機能を備えた npm パッケージ
-- **[.NET パッケージ](../../agent-governance-dotnet/README.md)** — 完全な OWASP カバレッジを備えた NuGet パッケージ
-- **[Rust クレート](../../agent-governance-rust/agentmesh/README.md)** — ポリシー、トラスト、監査、ID、MCP ガバナンスプリミティブを備えた crates.io クレート
-- **[Rust MCP クレート](../../agent-governance-rust/agentmesh-mcp/README.md)** — MCP ガバナンスおよびセキュリティプリミティブのスタンドアロン crates.io クレート
-- **[Go モジュール](../../agent-governance-golang/README.md)** — ポリシー、トラスト、監査、ID 機能を備えた Go モジュール
-- **[チュートリアル](../../docs/tutorials/)** — ポリシー、ID、統合、コンプライアンス、SRE、サンドボックスのステップバイステップガイド
-- **[Azure デプロイ](../../docs/deployment/README.md)** — AKS、Azure AI Foundry、Container Apps、OpenClaw サイドカー
-- **[OWASP コンプライアンス](../../docs/compliance/owasp-agentic-top10-architecture.md)** — ASI-01 から ASI-10 の完全マッピング
-- **[脅威モデル](../../docs/security/threat-model.md)** — 信頼境界、攻撃面、STRIDE 分析
-- **[アーキテクチャ](../../docs/ARCHITECTURE.md)** — システム設計、セキュリティモデル、トラストスコアリング
-- **[アーキテクチャ決定記録](../../docs/adr/README.md)** — ID、ランタイム、ポリシーに関する主要な ADR ログ
-- **[NIST RFI マッピング](../../docs/compliance/nist-rfi-2026-00206.md)** — NIST AI Agent セキュリティ RFI（2026-00206）へのマッピング
+- **[クイックスタート](../quickstart.md)** — ゼロからガバナンス付きエージェントを10分で構築（Python · TypeScript · .NET · Rust · Go）
+- **[TypeScript パッケージ](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-typescript/README.md)** — ID、トラスト、ポリシー、監査機能を備えた npm パッケージ
+- **[.NET パッケージ](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/README.md)** — 完全な OWASP カバレッジを備えた NuGet パッケージ
+- **[Rust クレート](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-rust/agentmesh/README.md)** — ポリシー、トラスト、監査、ID、MCP ガバナンスプリミティブを備えた crates.io クレート
+- **[Rust MCP クレート](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-rust/agentmesh-mcp/README.md)** — MCP ガバナンスおよびセキュリティプリミティブのスタンドアロン crates.io クレート
+- **[Go モジュール](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-golang/README.md)** — ポリシー、トラスト、監査、ID 機能を備えた Go モジュール
+- **[チュートリアル](../tutorials/index.md)** — ポリシー、ID、統合、コンプライアンス、SRE、サンドボックスのステップバイステップガイド
+- **[Azure デプロイ](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md)** — AKS、Azure AI Foundry、Container Apps、OpenClaw サイドカー
+- **[OWASP コンプライアンス](../compliance/owasp-agentic-top10-architecture.md)** — ASI-01 から ASI-10 の完全マッピング
+- **[脅威モデル](../security/threat-model.md)** — 信頼境界、攻撃面、STRIDE 分析
+- **[アーキテクチャ](../ARCHITECTURE.md)** — システム設計、セキュリティモデル、トラストスコアリング
+- **[アーキテクチャ決定記録](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/adr/README.md)** — ID、ランタイム、ポリシーに関する主要な ADR ログ
+- **[NIST RFI マッピング](../compliance/nist-rfi-2026-00206.md)** — NIST AI Agent セキュリティ RFI（2026-00206）へのマッピング
 
-ご質問がありましたら、[GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) を作成するか、[コミュニティページ](../../docs/COMMUNITY.md) をご覧ください。
+ご質問がありましたら、[GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) を作成するか、[コミュニティページ](../COMMUNITY.md) をご覧ください。
 
 ### ✨ **ハイライト**
 
 - **決定論的ポリシー適用**: すべてのエージェントアクションが実行*前*にポリシーに基づいて評価され、サブミリ秒のレイテンシ（<0.1 ms）で処理
-  - [ポリシーエンジン](../../agent-governance-python/agent-os/) | [ベンチマーク](../../docs/BENCHMARKS.md)
+  - [ポリシーエンジン](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os) | [ベンチマーク](../BENCHMARKS.md)
 - **ゼロトラストエージェントID**: Ed25519 暗号資格情報、SPIFFE/SVID サポート、0〜1000 スケールのトラストスコアリング
-  - [AgentMesh](../../agent-governance-python/agent-mesh/) | [トラストスコアリング](../../agent-governance-python/agent-mesh/)
+  - [AgentMesh](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh) | [トラストスコアリング](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh)
 - **実行サンドボックス**: 4 階層の特権リング、Saga オーケストレーション、終了制御、キルスイッチ
-  - [Agent Runtime](../../agent-governance-python/agent-runtime/) | [Agent Hypervisor](../../agent-governance-python/agent-hypervisor/)
+  - [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-runtime) | [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-hypervisor)
 - **エージェント SRE**: SLO、エラーバジェット、リプレイデバッグ、カオスエンジニアリング、サーキットブレーカー、プログレッシブデリバリー
-  - [Agent SRE](../../agent-governance-python/agent-sre/) | [オブザーバビリティ統合](../../agent-governance-python/agent-hypervisor/src/hypervisor/observability/)
+  - [Agent SRE](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-sre) | [オブザーバビリティ統合](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-hypervisor/src/hypervisor/observability)
 - **MCP セキュリティスキャナー**: MCP ツール定義におけるツールポイズニング、タイポスクワッティング、隠し命令、ラグプル攻撃を検出
-  - [MCP スキャナー](../../agent-governance-python/agent-os/src/agent_os/mcp_security.py) | [CLI](../../agent-governance-python/agent-os/src/agent_os/cli/mcp_scan.py)
+  - [MCP スキャナー](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/src/agent_os/mcp_security.py) | [CLI](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/src/agent_os/cli/mcp_scan.py)
 - **トラストレポート CLI**: `agentmesh trust report` — トラストスコア、タスクの成功/失敗、エージェントアクティビティを可視化
-  - [トラスト CLI](../../agent-governance-python/agent-mesh/src/agentmesh/cli/trust_cli.py)
+  - [トラスト CLI](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/src/agentmesh/cli/trust_cli.py)
 - **シークレットスキャンとファジング**: Gitleaks ワークフロー、ポリシー・インジェクション・サンドボックス・トラスト・MCP をカバーする7つのファズターゲット
-  - [セキュリティワークフロー](../../.github/workflows/)
+  - [セキュリティワークフロー](https://github.com/microsoft/agent-governance-toolkit/tree/main/.github/workflows)
 - **12 以上のフレームワーク統合**: Microsoft Agent Framework、LangChain、CrewAI、AutoGen、Dify、LlamaIndex、OpenAI Agents、Google ADK など
-  - [フレームワーククイックスタート](../../examples/quickstart/) | [統合提案](../../docs/proposals/)
+  - [フレームワーククイックスタート](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/quickstart) | [統合提案](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/proposals)
 - **完全な OWASP カバレッジ**: Agentic Top 10 リスクの 10/10 を対応済み、各 ASI カテゴリに専用のコントロールを提供
-  - [OWASP コンプライアンス](../../docs/compliance/owasp-agentic-top10-architecture.md) | [競合比較](../../docs/COMPARISON.md)
+  - [OWASP コンプライアンス](../compliance/owasp-agentic-top10-architecture.md) | [競合比較](../COMPARISON.md)
 - **CI/CD 向け GitHub Actions**: Agent Governance Verify による CI/CD でのガバナンス検証
-  - [Agent Governance Verify Action](../../action/)
+  - [Agent Governance Verify Action](https://github.com/microsoft/agent-governance-toolkit/tree/main/action)
 
 ### 💬 **フィードバックをお待ちしています！**
 
@@ -219,13 +225,13 @@ python examples/maf-integration/01-loan-processing/python/main.py --include-atta
 
 ## その他のサンプルと例
 
-- **[フレームワーククイックスタート](../../examples/quickstart/)** — LangChain、CrewAI、AutoGen、OpenAI Agents、Google ADK 向けの単一ファイルガバナンス付きエージェント
+- **[フレームワーククイックスタート](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/quickstart)** — LangChain、CrewAI、AutoGen、OpenAI Agents、Google ADK 向けの単一ファイルガバナンス付きエージェント
 - **チュートリアル 1: Policy Engine** — ガバナンスポリシーの定義と適用
-- **[チュートリアル 2: Trust & Identity](../../docs/tutorials/02-trust-and-identity.md)** — ゼロトラストエージェント資格情報
-- **[チュートリアル 3: Framework Integrations](../../docs/tutorials/03-framework-integrations.md)** — 任意のフレームワークにガバナンスを追加
-- **[チュートリアル 4: Audit & Compliance](../../docs/tutorials/04-audit-and-compliance.md)** — OWASP コンプライアンスとアテステーション
-- **[チュートリアル 5: Agent Reliability](../../docs/tutorials/05-agent-reliability.md)** — SLO、エラーバジェット、カオステスト
-- **[チュートリアル 6: Execution Sandboxing](../../docs/tutorials/06-execution-sandboxing.md)** — 特権リングと終了制御
+- **[チュートリアル 2: Trust & Identity](../tutorials/02-trust-and-identity.md)** — ゼロトラストエージェント資格情報
+- **[チュートリアル 3: Framework Integrations](../tutorials/03-framework-integrations.md)** — 任意のフレームワークにガバナンスを追加
+- **[チュートリアル 4: Audit & Compliance](../tutorials/04-audit-and-compliance.md)** — OWASP コンプライアンスとアテステーション
+- **[チュートリアル 5: Agent Reliability](../tutorials/05-agent-reliability.md)** — SLO、エラーバジェット、カオステスト
+- **[チュートリアル 6: Execution Sandboxing](../tutorials/06-execution-sandboxing.md)** — 特権リングと終了制御
 
 ## OPA/Rego & Cedar ポリシーサポート
 
@@ -274,11 +280,11 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | 言語 | パッケージ | インストール |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit[full]`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | [`@microsoft/agent-governance-sdk`](../../agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
+| **TypeScript** | [`@microsoft/agent-governance-sdk`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript) | `npm install @microsoft/agent-governance-sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
 | **Rust MCP** | [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) | `cargo add agentmesh-mcp` |
-| **Go** | [`agentmesh`](../../agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
+| **Go** | [`agentmesh`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-golang) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 ### Python パッケージ (PyPI)
 
@@ -286,11 +292,11 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 |---------|------|-------------|
 | **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | ポリシーエンジン — 決定論的アクション評価、ケイパビリティモデル、監査ログ、アクションインターセプション、MCP ゲートウェイ |
 | **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | エージェント間トラスト — Ed25519 ID、SPIFFE/SVID 資格情報、トラストスコアリング、A2A/MCP/IATP プロトコルブリッジ |
-| **Agent Runtime** | [`agentmesh-runtime`](../../agent-governance-python/agent-runtime/) | 実行スーパーバイザー — 4 階層特権リング、Saga オーケストレーション、終了制御、連帯責任、追記専用監査ログ |
+| **Agent Runtime** | [`agentmesh-runtime`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-runtime) | 実行スーパーバイザー — 4 階層特権リング、Saga オーケストレーション、終了制御、連帯責任、追記専用監査ログ |
 | **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-governance-python/agent-sre/) | 信頼性エンジニアリング — SLO、エラーバジェット、リプレイデバッグ、カオスエンジニアリング、プログレッシブデリバリー |
 | **Agent Compliance** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | ランタイムポリシー適用 — OWASP ASI 2026 コントロール、ガバナンスアテステーション、完全性検証 |
-| **Agent Marketplace** | [`agentmesh-marketplace`](../../agent-governance-python/agent-marketplace/) | プラグインライフサイクル — プラグインの検出、インストール、検証、署名 |
-| **Agent Lightning** | [`agentmesh-lightning`](../../agent-governance-python/agent-lightning/) | 強化学習トレーニングガバナンス — ガバナンス付きランナー、ポリシー報酬 |
+| **Agent Marketplace** | [`agentmesh-marketplace`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-marketplace) | プラグインライフサイクル — プラグインの検出、インストール、検証、署名 |
+| **Agent Lightning** | [`agentmesh-lightning`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-lightning) | 強化学習トレーニングガバナンス — ガバナンス付きランナー、ポリシー報酬 |
 
 ## フレームワーク統合
 
@@ -325,7 +331,7 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | 人間-エージェント間の信頼不足 | ASI-09 | ✅ 完全な監査証跡 + フライトレコーダー |
 | 不正エージェント | ASI-10 | ✅ キルスイッチ + リング分離 + 行動異常検知 |
 
-実装の詳細とテストエビデンスを含む完全なマッピング: **[OWASP-COMPLIANCE.md](../../docs/compliance/owasp-agentic-top10-architecture.md)**
+実装の詳細とテストエビデンスを含む完全なマッピング: **[OWASP-COMPLIANCE.md](../compliance/owasp-agentic-top10-architecture.md)**
 
 ### 規制への適合
 
@@ -349,7 +355,7 @@ AGT は**ランタイムガバナンス** — エージェントが実行を許�
 | アダプターオーバーヘッド | 0.004–0.006 ms | 130K–230K ops/sec |
 | 並行スループット（50エージェント） | — | 35,481 ops/sec |
 
-完全な方法論とアダプターごとの詳細: **[BENCHMARKS.md](../../docs/BENCHMARKS.md)**
+完全な方法論とアダプターごとの詳細: **[BENCHMARKS.md](../BENCHMARKS.md)**
 
 ## セキュリティモデルと制限事項
 
@@ -366,7 +372,7 @@ AGT は**ランタイムガバナンス** — エージェントが実行を許�
 - 各エージェントを**個別のコンテナ**で実行し、OS レベルの分離を実現
 - すべてのセキュリティポリシールールは**設定可能なサンプル構成**として提供 — お使いの環境に合わせてレビューおよびカスタマイズしてください（`examples/policies/` 参照）
 - 組み込みのルールセットを網羅的と見なすべきではありません
-- 詳細は [Architecture — Security Model & Boundaries](../../docs/ARCHITECTURE.md) を参照
+- 詳細は [Architecture — Security Model & Boundaries](../ARCHITECTURE.md) を参照
 
 ### セキュリティツール
 
@@ -382,12 +388,12 @@ AGT は**ランタイムガバナンス** — エージェントが実行を許�
 
 ## コントリビューターリソース
 
-- [コントリビューションガイド](../../CONTRIBUTING.md)
-- [コミュニティ](../../docs/COMMUNITY.md)
-- [セキュリティポリシー](../../SECURITY.md)
-- [アーキテクチャ](../../docs/ARCHITECTURE.md)
-- [変更履歴](../../CHANGELOG.md)
-- [サポート](../../SUPPORT.md)
+- [コントリビューションガイド](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md)
+- [コミュニティ](../COMMUNITY.md)
+- [セキュリティポリシー](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md)
+- [アーキテクチャ](../ARCHITECTURE.md)
+- [変更履歴](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md)
+- [サポート](https://github.com/microsoft/agent-governance-toolkit/blob/main/SUPPORT.md)
 
 ## 重要事項
 
@@ -395,7 +401,7 @@ Agent Governance Toolkit を使用してサードパーティのエージェン�
 
 ## ライセンス
 
-このプロジェクトは [MIT License](../../LICENSE) に基づいてライセンスされています。
+このプロジェクトは [MIT License](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) に基づいてライセンスされています。
 
 ## 商標
 

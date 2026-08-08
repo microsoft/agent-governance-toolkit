@@ -1,7 +1,13 @@
+---
+title: "@microsoft/agent-governance-claude-code — Claude Code governance package"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # @microsoft/agent-governance-claude-code — Claude Code governance package
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 
 `@microsoft/agent-governance-claude-code` is the first-party AGT package surface for local Claude
 Code governance. It ships a Claude Code plugin root with deterministic command hooks for session,
@@ -77,7 +83,7 @@ Override with `AGT_CLAUDE_AUDIT_PATH`.
 
 For a scenario-driven walkthrough with a sample policy override and expected outcomes, see:
 
-- [`examples/claude-code-agt`](../../examples/claude-code-agt/README.md)
+- [`examples/claude-code-agt`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/claude-code-agt/README.md)
 
 ## Validation
 

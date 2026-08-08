@@ -194,3 +194,5 @@ updates:
       codeql-action:
         patterns:
           - "github/codeql-action*"
+    cooldown:
+      default-days: 7

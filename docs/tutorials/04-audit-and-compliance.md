@@ -1,3 +1,9 @@
+---
+title: "Tutorial 04 — Audit Logging & Compliance"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Tutorial 04 — Audit Logging & Compliance
 
 > **Package:** `agent-governance-toolkit` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+

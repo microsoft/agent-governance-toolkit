@@ -1,3 +1,9 @@
+---
+title: "Known Limitations & Design Boundaries"
+last_reviewed: 2026-05-19
+owner: agt-maintainers
+---
+
 # Known Limitations & Design Boundaries
 
 > **Transparency is a feature.** This document describes what AGT does *not* do

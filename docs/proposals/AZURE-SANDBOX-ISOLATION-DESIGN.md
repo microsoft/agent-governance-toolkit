@@ -41,6 +41,6 @@ the default requested state remains deny.
 
 ## Related implementation
 
-- [`ACASandboxProvider`](../../agent-governance-python/agent-sandbox/src/agent_sandbox/aca_sandbox_provider/aca_sandbox_provider.py)
-- [`SandboxProvider`](../../agent-governance-python/agent-sandbox/src/agent_sandbox/sandbox_provider.py)
-- [Agent Sandbox README](../../agent-governance-python/agent-sandbox/README.md)
+- [`ACASandboxProvider`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/src/agent_sandbox/aca_sandbox_provider/aca_sandbox_provider.py)
+- [`SandboxProvider`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/src/agent_sandbox/sandbox_provider.py)
+- [Agent Sandbox README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/README.md)
