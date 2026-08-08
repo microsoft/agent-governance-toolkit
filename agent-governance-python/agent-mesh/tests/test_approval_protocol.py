@@ -562,3 +562,72 @@ class TestChainIntegrity:
         )
         assert not verdict.allowed
         assert verdict.reason_code == ReasonCode.NOT_TERMINAL_ALLOW
+
+
+# --------------------------------------------------------------------------- #
+# Chain configuration validation
+# --------------------------------------------------------------------------- #
+
+
+class TestChainConfigValidation:
+    """A misconfigured chain must be rejected before it can open a request.
+
+    Ported from the Go parity port's ``validateConfig`` table
+    (``TestApprovalCoordinatorOpenRequestInvalidConfig``).
+    """
+
+    @pytest.mark.parametrize(
+        "stages",
+        [
+            pytest.param(
+                (
+                    ApprovalStage(0, allowed_identities=frozenset({ALICE})),
+                    ApprovalStage(0, allowed_roles=frozenset({"compliance"})),
+                ),
+                id="duplicate-stage-index",
+            ),
+            pytest.param(
+                (
+                    ApprovalStage(0, allowed_identities=frozenset({ALICE})),
+                    ApprovalStage(1, allowed_roles=frozenset({"compliance"})),
+                    ApprovalStage(0, allowed_identities=frozenset({BOB})),
+                ),
+                id="duplicate-stage-index-non-adjacent",
+            ),
+            pytest.param(
+                (ApprovalStage(-1, allowed_identities=frozenset({ALICE})),),
+                id="negative-stage-index",
+            ),
+        ],
+    )
+    def test_invalid_stage_indexes_rejected_at_construction(self, stages):
+        with pytest.raises(ApprovalProtocolError, match="invalid_approval_chain"):
+            ApprovalChain(chain_id="misconfigured", version="1", stages=stages)
+
+    def test_distinct_stage_indexes_accepted(self):
+        """The guard must not reject a well-formed chain, including out-of-order indexes."""
+        chain = ApprovalChain(
+            chain_id="ordered",
+            version="1",
+            stages=(
+                ApprovalStage(1, allowed_roles=frozenset({"compliance"})),
+                ApprovalStage(0, allowed_identities=frozenset({ALICE})),
+            ),
+        )
+        assert chain.stage(0) is not None
+        assert chain.stage(1) is not None
+
+    def test_loose_duplicate_cannot_satisfy_a_strict_stage(self):
+        """The bypass this guard closes: one approval satisfying two distinct stages.
+
+        Without construction-time rejection, ``stage()`` resolves index 0 to the
+        first (non-required, BOB-authorized) stage while ``_maybe_resolve``
+        collapses the required set to ``{0}``. BOB, who is not permitted on the
+        required stage, would then resolve the request ALLOW.
+        """
+        stages = (
+            ApprovalStage(0, allowed_identities=frozenset({BOB}), required=False),
+            ApprovalStage(0, allowed_identities=frozenset({ALICE}), required=True),
+        )
+        with pytest.raises(ApprovalProtocolError, match="duplicated"):
+            ApprovalChain(chain_id="bypass", version="1", stages=stages)
