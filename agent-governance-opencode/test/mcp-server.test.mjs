@@ -153,6 +153,20 @@ test("stdio server rejects oversized incomplete MCP headers", async () => {
   assert.equal(response.error.code, -32603);
 });
 
+test("stdio server rejects oversized complete MCP headers", async () => {
+  const [response] = await requestChunksOverStdio([
+    Buffer.from(`Content-Length: 1\r\nX-Extension: ${"x".repeat(8193)}\r\n\r\n`, "utf8"),
+  ]);
+
+  assert.equal(response.error.code, -32603);
+});
+
+test("stdio server rejects oversized unterminated MCP headers", async () => {
+  const [response] = await requestChunksOverStdio([Buffer.from("x".repeat(8193), "utf8")]);
+
+  assert.equal(response.error.code, -32603);
+});
+
 async function requestOverStdio(payload, splitAt) {
   const frame = Buffer.from(encodeJsonRpcMessage(payload), "utf8");
   const chunks =

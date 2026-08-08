@@ -172,6 +172,9 @@ async function drainBuffer(state, buffer) {
   while (remaining.length > 0) {
     const headerEnd = remaining.indexOf(HEADER_SEPARATOR);
     if (headerEnd >= 0) {
+      if (headerEnd > MAX_HEADER_BYTES) {
+        throw new Error("MCP header exceeds maximum size");
+      }
       const headerBlock = remaining.subarray(0, headerEnd).toString("utf8");
       const lengthMatch = /Content-Length:\s*(\d+)/i.exec(headerBlock);
       if (!lengthMatch) {
@@ -195,6 +198,9 @@ async function drainBuffer(state, buffer) {
 
     const newlineIndex = remaining.indexOf(0x0a);
     if (newlineIndex < 0) {
+      if (remaining.length > MAX_HEADER_BYTES) {
+        throw new Error("MCP header exceeds maximum size");
+      }
       return remaining;
     }
 
