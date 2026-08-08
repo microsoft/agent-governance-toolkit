@@ -3,7 +3,13 @@
 agent_control_specification_version: 0.3.1-beta
 metadata:
   name: bvn-nin-protection
-  version: "1.0"
+  version: "1.1"
+  description: >
+    Updated for NIMC Act 2026 (signed 26 June 2026): adds purpose limitation,
+    illegal data persistence prohibition, mandatory NIN gate for regulated
+    services, and bulk export ban. Enforces NDPA 2023 Schedule 1 (biometric
+    data as sensitive personal data) and CBN BVN operational guidelines.
+  regulatory_change: "NIMC Act 2026 signed 26 June 2026 — replaces NIMC Act Cap N99 LFN 2004"
 extends: []
 policies:
   bvn_nin_protection:
