@@ -19,7 +19,26 @@ logger = logging.getLogger(__name__)
 
 
 PII_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\b\d{3}[\s.-]?\d{2}[\s.-]?\d{4}\b"),
+    # US SSN. A separator is REQUIRED: these patterns drive blocking paths
+    # (autogen_adapter DropMessage, PolicyViolationError on state updates,
+    # bedrock_adapter), so an optional separator matched any bare nine-digit
+    # run and hard-denied ordinary traffic carrying a tracking number, ABA
+    # routing number, or ZIP+4. Ported from the gateway-side fix in #3531
+    # (agent_os/credential_redactor.py, "US SSN"), which closed the same
+    # gateway-DoS on the MCP path; issue #3532 tracks this adapter-side copy.
+    # Lookarounds rather than ``\b`` so an SSN glued to ``_``
+    # (``employee_123-45-6789``) is still detected.
+    # NOT yet in step with the two Rego copies, which still carry the loose
+    # form: policy-engine/policy/lib/patterns.rego and agt-policies
+    # .../cli/_stock_rego/patterns.rego. The first declares that it tracks
+    # this constant and is reachable as a hard block through
+    # patterns.deny_if_pattern (agt_default.rego), so the same over-block
+    # survives on the OPA path; the wheel-shipped copy carries the pattern
+    # with no such note. They cannot take this pattern verbatim: RE2
+    # has no lookarounds, so an equivalent has to anchor with
+    # ``(^|[^A-Za-z0-9])`` / ``([^A-Za-z0-9]|$)``, which consumes a character
+    # and shifts the span offset that deny_if_pattern reports.
+    re.compile(r"(?<![A-Za-z0-9])\d{3}[\s.-]\d{2}[\s.-]\d{4}(?![A-Za-z0-9])"),
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
     re.compile(r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\b"),
     re.compile(
