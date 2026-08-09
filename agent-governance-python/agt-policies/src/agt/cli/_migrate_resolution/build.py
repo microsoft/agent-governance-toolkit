@@ -26,6 +26,7 @@ from .discover import discover_policies
 from .errors import ResolutionError
 from .merge import merge_documents, merge_top_level_section
 from .scope import filter_by_scope
+from .._migrate_re2 import validate_re2
 
 logger = logging.getLogger(__name__)
 
@@ -367,6 +368,22 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
     literal = json.dumps(value)
     indent = "    "
     if operator == "eq":
+        if value is None and action != "deny":
+            # allow/warn ``eq null`` must NOT fire on an ABSENT field. The
+            # array-path accessor returns the null default for both an absent
+            # field and a genuinely present null, collapsing the two, so a
+            # bare ``== null`` is fail-open (it can preempt a lower-priority
+            # deny in the first-match chain). Rebuild the accessor with an
+            # object sentinel default so an absent field yields a non-null
+            # object; ``== null`` is then true only for a present null. deny
+            # keeps the null default so an absent field still fires (fail closed).
+            sentinel_accessor = accessor
+            if accessor.endswith(", null)"):
+                sentinel_accessor = (
+                    accessor[: -len(", null)")]
+                    + f", {json.dumps({'__agt_absent__': True})})"
+                )
+            return f"{indent}{sentinel_accessor} == {literal}"
         return f"{indent}{accessor} == {literal}"
     if operator == "ne":
         if action == "deny":
@@ -394,24 +411,38 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}contains(_v, {literal})"
         )
     if operator == "startswith":
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}startswith(_v, {literal})"
         )
     if operator == "endswith":
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}endswith(_v, {literal})"
         )
     if operator in {"matches", "regex"}:
+        # Validate the pattern at build time via the repo's authoritative RE2
+        # checker. A non-string or uncompilable pattern would make regex.match
+        # raise at eval time, leaving a silently dead deny (fail open). Return
+        # None instead so the caller emits a fail-closed always-matching deny.
+        if not isinstance(value, str):
+            return None
+        try:
+            validate_re2(value)
+        except Exception:
+            return None
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}regex.match({literal}, _v)"
         )
     return None
