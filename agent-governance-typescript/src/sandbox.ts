@@ -251,8 +251,8 @@ export class DockerSandboxProvider implements SandboxProvider {
         // by accident — `null ?? 1` is `1` — but on the spawn-failure path it
         // let the string ('ENOENT') flow through as a `number`-typed exit
         // code, and downstream consumers treating `exitCode` as numeric saw
-        // a string. Narrow explicitly: only accept a numeric code;
-        // otherwise synthesise 1 for any error (signal kill, spawn failure, etc.).
+        // a string. Narrow explicitly: only accept a numeric code; otherwise
+        // synthesise 1 for any error (signal kill, spawn failure, etc.).
         const exitCode = error
           ? typeof error.code === 'number' ? error.code : 1
           : 0;
