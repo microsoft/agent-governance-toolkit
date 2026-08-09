@@ -224,6 +224,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     const timeoutSeconds = Number.isFinite(rawTimeout) && Number.isInteger(rawTimeout) && rawTimeout >= 1
       ? rawTimeout
       : 1;
+    // Note: Number.isInteger already guarantees an integer, so Math.floor is not needed.
 
     const executionId = randomUUID();
     const startTime = Date.now();
@@ -251,7 +252,8 @@ export class DockerSandboxProvider implements SandboxProvider {
         // by accident — `null ?? 1` is `1` — but on the spawn-failure path it
         // let the string ('ENOENT') flow through as a `number`-typed exit
         // code, and downstream consumers treating `exitCode` as numeric saw
-        // a string. Narrow explicitly: only accept a numeric code; otherwise
+        // a string.
+        // Narrow explicitly: only accept a numeric code; otherwise
         // synthesise 1 for any error (signal kill, spawn failure, etc.).
         const exitCode = error
           ? typeof error.code === 'number' ? error.code : 1
