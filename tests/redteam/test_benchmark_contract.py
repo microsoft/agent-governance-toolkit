@@ -117,6 +117,37 @@ class BenchmarkContractTests(unittest.TestCase):
         self.assertTrue(all(trace["side_effects"] == "none" for trace in traces))
         self.assertTrue(all(trace["audit_event_present"] for trace in traces))
 
+    def test_scenario_set_hash_is_independent_of_scenario_order(self):
+        scenarios = self.benchmark.load_scenarios(SCENARIOS)
+
+        original_hash = self.benchmark.run_benchmark(scenarios)[1]["scenario_set_hash"]
+        reordered_hash = self.benchmark.run_benchmark(list(reversed(scenarios)))[1][
+            "scenario_set_hash"
+        ]
+
+        self.assertEqual(original_hash, reordered_hash)
+
+    def test_report_validation_rejects_forged_scenario_identity(self):
+        scenarios = self.benchmark.load_scenarios(SCENARIOS)
+        report = self.benchmark.run_benchmark(scenarios)[1]
+
+        forged_hash = copy.deepcopy(report)
+        forged_hash["scenario_set_hash"] = "sha256:" + ("0" * 64)
+        with self.assertRaisesRegex(
+            self.benchmark.ContractError, "scenario_set_hash does not match"
+        ):
+            self.benchmark.validate_report(forged_hash, scenarios=scenarios)
+
+        forged_results = copy.deepcopy(report)
+        forged_results["results"][1] = copy.deepcopy(forged_results["results"][0])
+        forged_results["summary"] = self.benchmark.summarize_results(
+            forged_results["results"]
+        )
+        with self.assertRaisesRegex(
+            self.benchmark.ContractError, "result scenario_ids do not match"
+        ):
+            self.benchmark.validate_report(forged_results, scenarios=scenarios)
+
     def test_unknown_raw_payload_field_is_rejected(self):
         scenarios = self.benchmark.load_scenarios(SCENARIOS)
         scenarios[0]["payload"] = "untrusted raw content"

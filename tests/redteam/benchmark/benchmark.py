@@ -484,7 +484,8 @@ def summary_passes(summary: dict[str, Any]) -> bool:
 
 
 def _scenario_set_hash(scenarios: list[dict[str, Any]]) -> str:
-    canonical = json.dumps(scenarios, sort_keys=True, separators=(",", ":")).encode()
+    ordered = sorted(scenarios, key=lambda scenario: scenario["id"])
+    canonical = json.dumps(ordered, sort_keys=True, separators=(",", ":")).encode()
     return "sha256:" + hashlib.sha256(canonical).hexdigest()
 
 
@@ -507,7 +508,7 @@ def run_benchmark(
         "summary": summary,
         "results": results,
     }
-    validate_report(report)
+    validate_report(report, scenarios=scenarios)
     return traces, report
 
 
@@ -522,7 +523,9 @@ def _validate_count_map(value: Any, fields: frozenset[str], label: str) -> None:
         raise ContractError(f"{label} values must be non-negative integers")
 
 
-def validate_report(report: Any) -> None:
+def validate_report(
+    report: Any, *, scenarios: list[dict[str, Any]] | None = None
+) -> None:
     if not isinstance(report, dict):
         raise ContractError("report must be an object")
     _unexpected_fields(report, REPORT_FIELDS, "report")
@@ -540,6 +543,21 @@ def validate_report(report: Any) -> None:
         raise ContractError("report scenario_count must be exactly 24")
     if not isinstance(report["results"], list) or len(report["results"]) != 24:
         raise ContractError("report must contain exactly 24 results")
+    if scenarios is not None:
+        validate_scenarios(scenarios)
+        if report["scenario_set_hash"] != _scenario_set_hash(scenarios):
+            raise ContractError("report scenario_set_hash does not match scenarios")
+        expected_ids = sorted(scenario["id"] for scenario in scenarios)
+        result_ids: list[str] = []
+        for result in report["results"]:
+            scenario_id = (
+                result.get("scenario_id") if isinstance(result, dict) else None
+            )
+            if not isinstance(scenario_id, str):
+                raise ContractError("report result scenario_ids do not match scenarios")
+            result_ids.append(scenario_id)
+        if sorted(result_ids) != expected_ids:
+            raise ContractError("report result scenario_ids do not match scenarios")
     summary = report["summary"]
     if not isinstance(summary, dict):
         raise ContractError("report summary must be an object")
@@ -644,7 +662,7 @@ def main(argv: list[str] | None = None) -> int:
         scenarios = load_scenarios(args.scenarios)
         validate_scenarios(scenarios)
         report = _load_json(args.report, "report")
-        validate_report(report)
+        validate_report(report, scenarios=scenarios)
         traces = _load_jsonl(args.traces)
         if len(traces) != 24:
             raise ContractError(
