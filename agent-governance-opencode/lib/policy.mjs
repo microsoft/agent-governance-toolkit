@@ -1318,7 +1318,7 @@ function normalizeEffectForOpenCode(state, effectiveDecision) {
     return "deny";
   }
   if (effectiveDecision === "review") {
-    return state.policy.mode === "advisory" ? "review" : "review";
+    return state.policy.mode === "advisory" ? "review" : "deny";
   }
   return "allow";
 }
@@ -1360,4 +1360,3 @@ function redactSecretLikeContent(text, _findings) {
 function describeSecretFindings(findings) {
   return `matched ${findings.length} secret pattern(s): ${findings.join(", ")}`;
 }
-

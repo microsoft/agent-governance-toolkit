@@ -54,7 +54,7 @@ test("evaluateOpenCodePrompt allows benign prompts", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persistence writes", async () => {
+test("evaluateOpenCodeTool denies dangerous bash bootstrap and enforce-mode review tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-tool-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });
 
@@ -72,11 +72,36 @@ test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persisten
     sessionId: "write-session",
     cwd: root,
   });
-  assert.equal(reviewResult.effect, "review");
+  assert.equal(reviewResult.effect, "deny");
 
   const status = await getPolicyStatus(state);
   assert.ok(status.auditEntries >= 2);
   assert.equal(status.auditValid, true);
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("bundled policy denies recursive deletion flag variants", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-rm-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of [
+    "rm -rf /",
+    "rm -fr /",
+    "rm -r -f /",
+    "rm --recursive --force /",
+    "rm --force --recursive /",
+  ]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "recursive-delete-session",
+      cwd: root,
+    });
+
+    assert.equal(result.effect, "deny", command);
+    assert.match(result.reason, /recursive delete/i, command);
+  }
 
   await rm(root, { recursive: true, force: true });
 });
