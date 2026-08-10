@@ -111,6 +111,9 @@ extra:
     - name: English
       link: ./
       lang: en
+    - name: Español
+      link: i18n/README.es/
+      lang: es
     - name: 日本語
       link: i18n/README.ja/
       lang: ja
