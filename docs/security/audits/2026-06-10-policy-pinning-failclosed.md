@@ -1,3 +1,9 @@
+---
+title: "2026-06-10 - Policy Pinning and Fail-Closed Scoped Evaluation"
+last_reviewed: 2026-06-10
+owner: agt-maintainers
+---
+
 # 2026-06-10 - Policy Pinning and Fail-Closed Scoped Evaluation
 
 PR: [microsoft/agent-governance-toolkit#2946](https://github.com/microsoft/agent-governance-toolkit/pull/2946)

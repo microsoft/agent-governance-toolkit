@@ -1,175 +1,22 @@
-# agt-policies-africa
-# Ethiopia Personal Data Protection — Governance Policy
-#
-# Regulatory reference: Ethiopia Personal Data Protection Proclamation No. 1321/2024
-#                       (Enacted July 24, 2024 — Federal Negarit Gazette)
-#                       Ethiopia Computer Crime Proclamation No. 958/2016
-#                       (retained for unauthorised access controls)
-# Enforcing authority: Ethiopian Communications Authority (ECA)
-#
-# Key obligations covered:
-#   Art. 9   — Sensitive personal data (health, biometric, genetic, ethnic, religious)
-#   Art. 18  — Principle of data transfer (adequacy requirement)
-#   Art. 20  — Conditions for cross-border transfer (consent, necessity, safeguards)
-#   Art. 22  — Data sovereignty (critical data must remain in-country)
-#   Art. 43  — Breach notification to ECA within 72 hours
-#   Art. 46  — Record of processing operations (audit trail)
-#   Art. 52  — Accountability (controller demonstrates compliance)
-#   Proc. 958/2016 — Unauthorised access to computer systems is a criminal offence
-#
-# ⚠️  This is a community-maintained governance starter policy.
-# It is NOT a certified legal compliance instrument. Organisations must
-# perform their own compliance assessments with qualified advisors.
-# Verify thresholds and adequacy lists against current ECA guidance.
-
-version: "1.0"
-name: ethiopia-pdp
-description: >
-  Ethiopia data protection governance policy for AI agents processing Ethiopian
-  personal data. Based on Personal Data Protection Proclamation No. 1321/2024
-  (enacted July 24, 2024) and Computer Crime Proclamation No. 958/2016.
-  Covers cross-border restrictions (Art. 18-20), sensitive data controls (Art. 9),
-  breach notification (Art. 43), data sovereignty (Art. 22), and accountability (Art. 52).
-
-rules:
-
-  # =========================================================================
-  # Breach Notification — Art. 43: 72 hours to ECA after becoming aware
-  # AI agents must not suppress breach alerts or delay incident reporting.
-  # =========================================================================
-
-  - name: ethiopia-breach-suppression
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+report)"
-    action: deny
-    priority: 1
-    message: "Ethiopia PDPP 1321/2024 Art. 43: Agent cannot suppress breach notifications — ECA must be notified within 72 hours of awareness"
-
-  # =========================================================================
-  # Sensitive Personal Data — Art. 9
-  # Prohibited categories: health, genetic, biometric, ethnic origin, political
-  # opinions, religious beliefs, trade union membership, sexual orientation,
-  # criminal offences, communication data.
-  # =========================================================================
-
-  - name: ethiopia-health-data-in-output
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription)"
-    action: escalate
-    priority: 1
-    message: "Ethiopia PDPP 1321/2024 Art. 9: Health/genetic sensitive data detected — requires explicit consent or documented lawful condition"
-
-  - name: ethiopia-special-category-data
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(ethnic\\s+origin|tribe|political\\s+opinion|religious\\s+belief|trade\\s+union|sexual\\s+orientation|criminal\\s+conviction)"
-    action: escalate
-    priority: 1
-    message: "Ethiopia PDPP 1321/2024 Art. 9: Special category personal data detected — requires explicit consent or lawful processing condition"
-
-  - name: ethiopia-biometric-data
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(fingerprint|facial\\s+recognition|retina|iris\\s+scan|voice\\s+print|biometric\\s+(template|hash|data))"
-    action: deny
-    priority: 1
-    message: "Ethiopia PDPP 1321/2024 Art. 9: Biometric data detected — must not be transmitted without documented lawful basis and ECA notification"
-
-  # =========================================================================
-  # Cross-Border Data Transfers — Art. 18, 19, 20, 22
-  # Art. 18: Transfer requires adequate protection in destination jurisdiction
-  # Art. 20: Without adequacy: explicit consent, necessity, or public interest
-  # Art. 22: Data sovereignty — critical data must remain in-country
-  # =========================================================================
-
-  - name: ethiopia-cross-border-language-in-output
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+ethiopia|cross.?border|international\\s+transfer|offshore)"
-    action: escalate
-    priority: 1
-    message: "Ethiopia PDPP 1321/2024 Art. 18: Cross-border data transfer language detected — requires ECA adequacy verification before proceeding"
-
-  - name: ethiopia-cross-border-action
-    condition:
-      field: action
-      operator: matches
-      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
-    action: escalate
-    priority: 2
-    message: "Ethiopia PDPP 1321/2024 Art. 20: Cross-border data transfer action requires adequacy check or documented derogation (Art. 20)"
-
-  # =========================================================================
-  # Unauthorised Data Access — Computer Crime Proclamation No. 958/2016
-  # Unauthorised access to computer systems and personal data is a criminal
-  # offence under 958/2016. AI agents must not facilitate or obscure it.
-  # =========================================================================
-
-  - name: ethiopia-unauthorised-access-signal
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(unauthori[sz]ed\\s+(access|login|entry)|bypass(ing)?\\s+(auth|security|login)|circumvent(ing)?\\s+(access|control))"
-    action: deny
-    priority: 1
-    message: "Ethiopia Proclamation 958/2016: Unauthorised system access signal detected — blocked. This constitutes a criminal offence."
-
-  # =========================================================================
-  # Data Minimisation / Data Sovereignty — Art. 22
-  # =========================================================================
-
-  - name: ethiopia-bulk-data-export
-    condition:
-      field: action
-      operator: matches
-      value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
-    action: escalate
-    priority: 2
-    message: "Ethiopia PDPP 1321/2024 Art. 22: Bulk personal data export — data sovereignty principle requires documented lawful basis and DPO review"
-
-  # =========================================================================
-  # Ethiopian National ID — Fayda/MOSIP Number
-  # Ethiopia's digital identity system (Fayda/MOSIP) issues national IDs.
-  # Exposure of Fayda IDs in agent output constitutes a data breach (Art. 43).
-  # Note: Fayda falls under Art. 2 "identifier" definition in Proclamation 1321/2024.
-  # =========================================================================
-
-  - name: ethiopia-fayda-id-in-output
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(fayda\\s+(id|number|no)|ethiopia\\s+(national\\s+)?id|mosip\\s+id)[\\s:=]{0,5}[0-9]{10,16}"
-    action: deny
-    priority: 1
-    message: "Ethiopia PDPP 1321/2024 Art. 43: Fayda/National ID number detected in agent output — blocked to prevent identity data breach"
-
-  # =========================================================================
-  # Accountability / Audit Trail — Art. 46, Art. 52
-  # Art. 46: Controllers must maintain records of processing operations
-  # Art. 52: Accountability — controller must demonstrate compliance to ECA
-  # =========================================================================
-
-  - name: ethiopia-pii-access-audit
-    condition:
-      field: action
-      operator: matches
-      value: "read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii"
-    action: audit
-    priority: 3
-    message: "Ethiopia PDPP 1321/2024 Art. 46/52: Personal data access logged — ECA record of processing operations and accountability requirement"
-
-  - name: ethiopia-pii-modification-audit
-    condition:
-      field: action
-      operator: matches
-      value: "update_user|modify_profile|patch_account|edit_customer|change_personal"
-    action: audit
-    priority: 3
-    message: "Ethiopia PDPP 1321/2024 Art. 46/52: Personal data modification logged — ECA record of processing operations and accountability requirement"
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: ethiopia-pdp
+  version: "1.0"
+extends: []
+policies:
+  ethiopia_pdp:
+    type: rego
+    bundle: rego
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: ethiopia_pdp
+      query: data.agt_policies_africa.ethiopia_pdp.acs_input_result
+  output:
+    policy_target: $.output.content
+    policy:
+      id: ethiopia_pdp
+      query: data.agt_policies_africa.ethiopia_pdp.acs_output_result

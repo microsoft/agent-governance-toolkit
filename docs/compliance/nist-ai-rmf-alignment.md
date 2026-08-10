@@ -1,3 +1,9 @@
+---
+title: "NIST AI Risk Management Framework (AI RMF 1.0) — Alignment Assessment"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <!--
   MIT License
 
@@ -39,10 +45,10 @@
 
 1. [Executive Summary](#1-executive-summary)
 2. [Methodology](#2-methodology)
-3. [GOVERN — Policies, Processes, and Procedures](#3-govern--policies-processes-and-procedures)
-4. [MAP — Context and Risk Identification](#4-map--context-and-risk-identification)
-5. [MEASURE — Assessment, Analysis, and Tracking](#5-measure--assessment-analysis-and-tracking)
-6. [MANAGE — Risk Response and Monitoring](#6-manage--risk-response-and-monitoring)
+3. [GOVERN — Policies, Processes, and Procedures](#3-govern-policies-processes-and-procedures)
+4. [MAP — Context and Risk Identification](#4-map-context-and-risk-identification)
+5. [MEASURE — Assessment, Analysis, and Tracking](#5-measure-assessment-analysis-and-tracking)
+6. [MANAGE — Risk Response and Monitoring](#6-manage-risk-response-and-monitoring)
 7. [Coverage Summary Matrix](#7-coverage-summary-matrix)
 8. [Gap Analysis and Recommended Actions](#8-gap-analysis-and-recommended-actions)
 9. [Cross-References to Other Compliance Frameworks](#9-cross-references-to-other-compliance-frameworks)
@@ -98,6 +104,8 @@ Coverage levels are assigned as:
 
 ---
 
+<a id="3-govern-policies-processes-and-procedures"></a>
+
 ## 3. GOVERN — Policies, Processes, and Procedures
 
 ### GOVERN 1: Policies Reflecting Risk Management Are in Place
@@ -109,9 +117,9 @@ validation, versioning, conflict resolution, and multiple backend support.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Core policy evaluator | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` | `PolicyEvaluator` |
-| Async policy evaluator | `agent-governance-python/agent-os/src/agent_os/policies/async_evaluator.py` | `AsyncPolicyEvaluator` |
-| Shared/cross-project policies | `agent-governance-python/agent-os/src/agent_os/policies/shared.py` | `SharedPolicyEvaluator` |
+| Core policy runtime | `policy-engine/sdk/python/agent_control_specification/_client.py` | `AgentControl` |
+| Adapter session runtime | `policy-engine/sdk/python/agent_control_specification/_host.py` | `HostSession` |
+| Manifest composition | `policy-engine/sdk/python/agent_control_specification/validation.py` | ACS manifest |
 | AgentMesh policy engine | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy.py:317` | `PolicyEngine` |
 | AgentMesh policy evaluator | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy_evaluator.py:33` | `PolicyEvaluator` |
 | .NET policy engine | `agent-governance-dotnet/src/AgentGovernance/Policy/PolicyEngine.cs:16` | `PolicyEngine` |
@@ -121,8 +129,8 @@ validation, versioning, conflict resolution, and multiple backend support.
 | Semantic policy engine | `agent-governance-python/agent-os/src/agent_os/semantic_policy.py:248` | `SemanticPolicyEngine` |
 | IATP policy engine | `agent-governance-python/agent-os/modules/iatp/iatp/policy_engine.py:78` | `IATPPolicyEngine` |
 | Control-plane policy engine | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/policy_engine.py:178` | `PolicyEngine` |
-| Conflict resolution | `agent-governance-python/agent-os/src/agent_os/policies/conflict_resolution.py` | `ResolutionResult` |
-| Policy schema (JSON) | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json` | JSON Schema |
+| Native composition | `policy-engine/sdk/python/agent_control_specification/validation.py` | ACS `extends` |
+| Policy schema (JSON) | `policy-engine/spec/schema/manifest.schema.json` | ACS manifest schema |
 | OPA integration | `agent-governance-python/agent-mesh/src/agentmesh/governance/opa.py` | OPA/Rego backend |
 | Cedar integration | `agent-governance-python/agent-mesh/src/agentmesh/governance/cedar.py` | Cedar backend |
 | Policy templates | `agent-governance-python/agent-os/templates/policies/*.yaml` | GDPR, production, enterprise, data-protection, content-safety |
@@ -270,6 +278,8 @@ to the eighth framework.
 
 ---
 
+<a id="4-map-context-and-risk-identification"></a>
+
 ## 4. MAP — Context and Risk Identification
 
 ### MAP 1: Context Is Established
@@ -281,7 +291,7 @@ to the eighth framework.
 | Execution context | `agent-governance-python/agent-os/src/agent_os/execution_context_policy.py:62` | `ContextualPolicyEngine` |
 | Stateless kernel context | `agent-governance-python/agent-os/src/agent_os/stateless.py` | `ExecutionContext` |
 | Governance tiers | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring 0–3 privilege separation |
-| Policy modes | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:34-41` | `strict`, `permissive`, `audit` |
+| Enforcement modes | `policy-engine/sdk/python/agent_control_specification/_client.py` | ACS enforcement mode |
 | Context budget | `agent-governance-python/agent-os/src/agent_os/context_budget.py` | `ContextScheduler` |
 
 **How AGT addresses this subcategory:** `ContextualPolicyEngine` binds policy
@@ -380,10 +390,10 @@ lacks ML-based bias detection or fairness evaluation.
 |-----------|------|--------------------|
 | GDPR policy template | `agent-governance-python/agent-os/templates/policies/gdpr.yaml` | 10+ PII pattern categories, right to erasure, data minimization |
 | Data protection template | `agent-governance-python/agent-os/templates/policies/data-protection.yaml` | Data protection rules |
-| PII detection policy | `agent-governance-python/agent-os/examples/shared-policies/no-pii.yaml` | Shareable PII blocking policy |
+| PII detection policy | `examples/policies/production/healthcare.yaml` | Native ACS healthcare profile |
 | Memory guard PII redaction | `agent-governance-python/agent-os/src/agent_os/memory_guard.py` | PII redaction in context |
 | Content governance | `agent-governance-python/agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
-| HIPAA example | `agent-governance-python/agent-os/tutorials/hipaa-compliant-agent/demo.py` | Healthcare compliance demo |
+| HIPAA example | `examples/maf-integration/03-healthcare/python/main.py` | Native ACS healthcare demo |
 | Healthcare HIPAA example | `agent-governance-python/agent-mesh/examples/03-healthcare-hipaa/main.py` | PHI protection demo |
 
 **How AGT addresses this subcategory:** GDPR policy templates provide declarative
@@ -399,6 +409,8 @@ agent tutorials demonstrate PHI protection patterns.
 - No Data Subject Access Request (DSAR) workflow automation
 
 ---
+
+<a id="5-measure-assessment-analysis-and-tracking"></a>
 
 ## 5. MEASURE — Assessment, Analysis, and Tracking
 
@@ -441,7 +453,7 @@ platforms.
 | Content quality evaluator | `agent-governance-python/agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
 | Plugin quality assessor | `agent-governance-python/agent-marketplace/src/agent_marketplace/quality_assessment.py:120` | `QualityAssessor` |
 | Red team dataset | `agent-governance-python/agent-os/modules/control-plane/benchmarks/red_team_dataset.py` | Red-team benchmark data |
-| Policy benchmark suite | `agent-governance-python/agent-os/benchmarks/bench_policy.py` | 30-scenario OWASP benchmark |
+| Policy replay suite | `tests/unit/test_policy_test.py` | Native manifest regression fixtures |
 | CMVK verification | `agent-governance-python/agent-os/modules/cmvk/src/cmvk/constitutional.py` | Cross-Model Verification Kernel |
 
 **How AGT addresses this subcategory:** Content quality evaluation and plugin
@@ -507,6 +519,8 @@ whether those measurements are themselves effective.
 
 ---
 
+<a id="6-manage-risk-response-and-monitoring"></a>
+
 ## 6. MANAGE — Risk Response and Monitoring
 
 ### MANAGE 1: Risks Prioritized and Responded To
@@ -554,7 +568,7 @@ operations upon failure.
 | Ring demotion | `agent-governance-python/agent-hypervisor/session/__init__.py` | `update_ring()` |
 | Trust-tier filtering | `agent-governance-python/agent-marketplace/src/agent_marketplace/trust_tiers.py` | `filter_capabilities()` |
 | Progressive delivery | `agent-governance-python/agent-sre/src/agent_sre/delivery/` | Canary deploys, GitOps |
-| NoOp fallbacks | `agent-governance-python/agent-os/src/agent_os/compat.py:37` | `NoOpPolicyEvaluator` |
+| Fail-closed runtime | `policy-engine/sdk/python/agent_control_specification/_client.py` | Runtime error verdicts |
 | RL training governance | `agent-governance-python/agent-lightning/` | Policy rewards for RL training |
 
 **How AGT addresses this subcategory:** Trust-based capability delegation
@@ -714,7 +728,7 @@ requirements overlap with other frameworks.
 ### Related Documents
 
 - **ATF Conformance Assessment:** [`docs/compliance/atf-conformance-assessment.md`](atf-conformance-assessment.md)
-- **OWASP Agentic Top 10:** [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md)
+- **OWASP Agentic Top 10:** [`../../docs/compliance/owasp-agentic-top10-architecture.md`](./owasp-agentic-top10-architecture.md)
 - **OWASP LLM Top 10:** [`docs/compliance/owasp-llm-top10-mapping.md`](owasp-llm-top10-mapping.md)
 - **EU AI Act Checklist:** [`docs/compliance/eu-ai-act-checklist.md`](eu-ai-act-checklist.md)
 - **SOC 2 Mapping:** [`docs/compliance/soc2-mapping.md`](soc2-mapping.md)
@@ -728,4 +742,4 @@ requirements overlap with other frameworks.
 and Technology (NIST) in response to the AI Risk Management Framework (AI RMF
 1.0) alignment assessment process. It reflects the state of the Agent Governance
 Toolkit as of 2026-07-14. For questions or clarifications, please refer to the
-project's [SUPPORT.md](../../SUPPORT.md) or open an issue on GitHub.*
+project's [SUPPORT.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SUPPORT.md) or open an issue on GitHub.*

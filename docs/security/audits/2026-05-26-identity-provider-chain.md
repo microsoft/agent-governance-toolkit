@@ -1,3 +1,9 @@
+---
+title: "Security Audit: IdentityProviderChain and HandshakeResult.externalidentity"
+last_reviewed: 2026-06-17
+owner: agt-maintainers
+---
+
 # Security Audit: IdentityProviderChain and HandshakeResult.external_identity
 
 - **Date:** 2026-05-26

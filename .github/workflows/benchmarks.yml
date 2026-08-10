@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
@@ -25,10 +25,6 @@ jobs:
         working-directory: agent-governance-python/agent-sre
         run: pip install --no-cache-dir -e ".[dev]" --quiet  # Install local package (Scorecard: pinned via pyproject.toml)
 
-      - name: Run policy benchmarks
-        working-directory: agent-governance-python/agent-os
-        run: python benchmarks/bench_policy.py | tee /tmp/bench_policy.json
-
       - name: Run kernel benchmarks
         working-directory: agent-governance-python/agent-os
         run: python benchmarks/bench_kernel.py | tee /tmp/bench_kernel.json
@@ -36,10 +32,6 @@ jobs:
       - name: Run audit benchmarks
         working-directory: agent-governance-python/agent-os
         run: python benchmarks/bench_audit.py | tee /tmp/bench_audit.json
-
-      - name: Run adapter benchmarks
-        working-directory: agent-governance-python/agent-os
-        run: python benchmarks/bench_adapters.py | tee /tmp/bench_adapters.json
 
       - name: Run SRE benchmarks
         working-directory: agent-governance-python/agent-sre

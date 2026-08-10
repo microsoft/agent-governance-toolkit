@@ -1,3 +1,9 @@
+---
+title: "Tutorial 19 — .NET package (Microsoft.AgentGovernance)"
+last_reviewed: 2026-07-15
+owner: agt-maintainers
+---
+
 # Tutorial 19 — .NET package (Microsoft.AgentGovernance)
 
 > **Package:** `Microsoft.AgentGovernance` · **Time:** 30 minutes · **Prerequisites:** .NET 8.0+
@@ -16,7 +22,7 @@ beyond YamlDotNet**.
 > \* *Version current as of this revision. Always check the latest stable
 > release on [NuGet.org](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 > before pinning, and cross-reference
-> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](../../agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj)
+> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj)
 > when building from source.*
 
 ---
@@ -58,7 +64,7 @@ Or add it to your `.csproj` directly:
 > revision. Before copy-pasting, check the latest published version on
 > [NuGet.org](https://www.nuget.org/packages/Microsoft.AgentGovernance) and
 > the in-repo source of truth at
-> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](../../agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj).
+> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj).
 > The same applies to the companion extension packages below.
 
 The package targets `net8.0` and has a single dependency — `YamlDotNet` for
@@ -224,6 +230,13 @@ match. It is **thread-safe** — policies are stored in a lock-protected list an
 evaluation is side-effect free.
 
 ### Policy YAML syntax
+
+!!! note "This page documents the .NET engine's own policy format"
+
+    The Python, Rust, and TypeScript runtimes evaluate ACS v5 manifests. The
+    .NET `PolicyEngine` still uses the `governance.toolkit/v1` document shown
+    below, and this page will change when that engine migrates. Do not use
+    this shape with the other runtimes.
 
 ```yaml
 apiVersion: governance.toolkit/v1
@@ -1224,7 +1237,7 @@ tutorials for deeper conceptual coverage:
 
 | .NET Feature | Python Tutorial | Notes |
 |-------------|-----------------|-------|
-| `PolicyEngine` | [Tutorial 01 — Policy Engine](01-policy-engine.md) | Same YAML syntax, same condition operators |
+| `PolicyEngine` | Tutorial 01 — Policy Engine | Same YAML syntax, same condition operators |
 | `AgentIdentity` / `FileTrustStore` | [Tutorial 02 — Trust & Identity](02-trust-and-identity.md) | DID format and trust decay are identical |
 | `GovernanceMiddleware` | [Tutorial 03 — Framework Integrations](03-framework-integrations.md) | MAF adapter pattern |
 | `AuditEmitter` / `GovernanceEvent` | [Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md) | Same event types and structure |
@@ -1266,7 +1279,7 @@ tutorials for deeper conceptual coverage:
    ```
 
 6. **Read the OWASP coverage** — The
-   [.NET package README](../../agent-governance-dotnet/README.md) maps
+   [.NET package README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/README.md) maps
    each OWASP Agentic AI Top 10 risk to the package's mitigation.
 
 7. **Explore build-time enforcement** — The .NET SDK enforces nullable

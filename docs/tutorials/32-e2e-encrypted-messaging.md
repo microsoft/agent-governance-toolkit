@@ -1,3 +1,9 @@
+---
+title: "Tutorial 32 — E2E Encrypted Agent Messaging"
+last_reviewed: 2026-06-10
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 32 — E2E Encrypted Agent Messaging

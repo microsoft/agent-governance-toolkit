@@ -11,6 +11,7 @@
     }
   ],
   "words": [
+    "dorny",
     "subn",
     "redactable",
     "accountkey",
@@ -56,8 +57,10 @@
     "splitlines",
     "tomllib",
     "uvicorn",
+    "levelno",
     "tomli",
     "fastapi",
+    "starlette",
     "structlog",
     "scipy",
     "chromadb",
@@ -86,7 +89,19 @@
     "SCITT",
     "Dayos",
     "Provedit",
-    "Nobulex"
+    "Nobulex",
+    "acks",
+    "nofrom",
+    "onclose",
+    "Microtask",
+    "headerless",
+    "desync",
+    "starlette",
+    "realpeerrealpeerrealpeerreal",
+    "pwsh",
+    "notlike",
+    "sdists",
+    "shellcheck"
   ],
   "ignorePaths": [
     "**/node_modules/**",

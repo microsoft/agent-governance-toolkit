@@ -1,0 +1,36 @@
+# Deny outbound fetches to non-allowlisted hosts for research agents.
+# Native Agent Control Specification manifest: the pre_tool_call intervention
+# point binds a host-owned custom policy that allows egress only to the
+# internal analytics domain and denies everything else. This is the contract a
+# customer would ship; no legacy policy language.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: network-egress-guard
+policies:
+  tool_guard:
+    type: custom
+    adapter: e2e_rule
+    config:
+      rule:
+        kind: arg_allowlist
+        tool: fetch_url
+        arg: url
+        allow_hosts:
+          - "*.internal.example"
+        allow:
+          reason: network.allow-internal-egress
+          message: Egress to an allowlisted internal host allowed
+        deny:
+          reason: network.deny-external-egress
+          message: Egress to a non-allowlisted host denied
+intervention_points:
+  pre_tool_call:
+    policy_target_kind: tool_args
+    policy_target: "$.tool_call.args"
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: tool_guard
+tools:
+  fetch_url:
+    type: Tool
+    id: fetch_url

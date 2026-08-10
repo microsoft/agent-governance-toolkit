@@ -16,16 +16,19 @@ The suite covers the algorithm contract from ``plan.md`` §5 / M6.S1:
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import pytest
 import yaml
 
 from agt.cli import migrate as migrate_mod
+from agent_control_specification import parse_manifest
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +140,20 @@ policy = GovernancePolicy(
     assert "GovernancePolicy" in gp.rewrite_snippet
 
 
+def test_finds_aliased_governance_policy_constructor(tmp_path: Path) -> None:
+    src = tmp_path / "app.py"
+    _write_source(
+        src,
+        "from agent_os.integrations.base import GovernancePolicy as GP\n"
+        "policy = GP(max_tokens=2048)\n",
+    )
+
+    report = migrate_mod.migrate_project(tmp_path, write=False)
+
+    assert len(report.governance_policies) == 1
+    assert report.governance_policies[0].migration_kwargs["max_tokens"] == 2048
+
+
 def test_finds_policy_action_block_references(tmp_path: Path) -> None:
     """PolicyAction.BLOCK references are recorded with location + rewrite."""
     src = tmp_path / "policy_use.py"
@@ -180,6 +197,8 @@ registry.add_backend(CedarBackend(policy_file="my.cedar"))
     cb = report.cedar_backends[0]
     assert cb.location.path == src
     assert "type: cedar" in cb.rewrite_snippet
+    assert "policy_path:" in cb.rewrite_snippet
+    assert "bundle:" not in cb.rewrite_snippet
     assert "CedarBackend" in cb.rewrite_snippet
 
 
@@ -274,7 +293,12 @@ def test_write_produces_v5_artifacts(tmp_path: Path) -> None:
     data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     assert data["extends"] == []
     assert "agt_legacy_rules" in data["policies"]
-    bundle_dir = Path(data["policies"]["agt_legacy_rules"]["bundle"])
+    # Recorded relative to the manifest so the migrated project stays portable.
+    # Assert that explicitly: ``Path("/a") / "/abs"`` discards the left operand,
+    # so joining alone would pass just as well against an absolute path.
+    recorded = data["policies"]["agt_legacy_rules"]["bundle"]
+    assert not Path(recorded).is_absolute(), recorded
+    bundle_dir = manifest_path.parent / recorded
     assert bundle_dir.is_dir()
     assert (bundle_dir / "agt_legacy.rego").is_file()
 
@@ -291,6 +315,136 @@ def test_write_backs_up_governance_yaml(tmp_path: Path) -> None:
     backup = tmp_path / ".governance.yaml.v4-backup"
     assert backup.is_file()
     assert backup.read_text(encoding="utf-8") == original
+
+
+def test_child_chain_migration_preserves_inherited_parent_governance(
+    tmp_path: Path,
+) -> None:
+    """Migrating a nested chain must not touch parent governance it inherits.
+
+    The resolved chain lists governance.yaml from ``chain_root`` up to the
+    project root. Only files local to ``chain_root`` may be backed up and
+    removed; the shared parent file is migrated by its own chain and would
+    break sibling chains if removed here.
+    """
+    _write_governance(tmp_path / "governance.yaml", rule_name="deny_parent")
+    child = tmp_path / "svc" / "billing"
+    child.mkdir(parents=True)
+    _write_governance(child / "governance.yaml", rule_name="deny_child")
+
+    finding = migrate_mod._migrate_governance_chain(
+        child.resolve(), tmp_path.resolve(), write=True
+    )
+
+    assert finding.error is None, finding.error
+    # Parent governance.yaml (ABOVE chain_root) is untouched.
+    assert (tmp_path / "governance.yaml").is_file()
+    assert not (tmp_path / ".governance.yaml.v4-backup").exists()
+    # The child's own governance.yaml is backed up and removed.
+    assert not (child / "governance.yaml").exists()
+    assert (child / ".governance.yaml.v4-backup").is_file()
+
+
+@pytest.mark.parametrize("link_name", ["policy", "manifest.yaml"])
+def test_governance_chain_refuses_output_symlink(
+    tmp_path: Path, link_name: str
+) -> None:
+    """A broken/relative symlink at the output path must not let the migration
+    write its bundle outside chain_root and delete governance.
+
+    ``Path.exists()`` follows symlinks and returns False for a broken one, so a
+    symlink named ``policy``/``manifest.yaml`` would slip past the overwrite
+    guard; the write would then land through the link (outside the project)
+    while governance is still unlinked, and the migration would report success.
+    """
+    external = tmp_path / "external_target"
+    _write_governance(tmp_path / "governance.yaml")
+    (tmp_path / link_name).symlink_to(external)
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    assert report.governance_chains[0].error is not None
+    assert "refusing to overwrite" in report.governance_chains[0].error
+    assert (tmp_path / "governance.yaml").is_file()
+    assert not external.exists()
+
+
+@pytest.mark.parametrize("existing_name", ["manifest.yaml", "policy"])
+def test_governance_chain_never_overwrites_existing_output(
+    tmp_path: Path, existing_name: str
+) -> None:
+    governance = tmp_path / "governance.yaml"
+    _write_governance(governance)
+    existing = tmp_path / existing_name
+    if existing_name == "policy":
+        existing.mkdir()
+        sentinel = existing / "sentinel"
+    else:
+        sentinel = existing
+    sentinel.write_text("keep", encoding="utf-8")
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    assert report.governance_chains[0].error is not None
+    assert "refusing to overwrite" in report.governance_chains[0].error
+    assert governance.is_file()
+    assert sentinel.read_text(encoding="utf-8") == "keep"
+
+
+def test_governance_chain_never_overwrites_existing_backup(
+    tmp_path: Path,
+) -> None:
+    governance = tmp_path / "governance.yaml"
+    _write_governance(governance)
+    backup = tmp_path / ".governance.yaml.v4-backup"
+    backup.write_text("keep", encoding="utf-8")
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    assert report.governance_chains[0].error is not None
+    assert "backup already exists" in report.governance_chains[0].error
+    assert governance.is_file()
+    assert backup.read_text(encoding="utf-8") == "keep"
+    assert not (tmp_path / "manifest.yaml").exists()
+    assert not (tmp_path / "policy").exists()
+
+
+def test_chain_migration_write_failure_restores_originals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure mid-write must restore the governance file and leave no output.
+
+    The write path places the manifest and renames each governance file to its
+    ``.v4-backup`` with ``os.replace``, rolling back on failure. Force the backup
+    rename to fail after the manifest is placed: rollback must remove the placed
+    manifest and leave the original governance file untouched (the failed rename
+    is atomic, so the original is intact), restoring the pre-migration state.
+    """
+    gov_yaml = tmp_path / "governance.yaml"
+    _write_governance(gov_yaml, rule_name="deny_yaml")
+    original_yaml = gov_yaml.read_text(encoding="utf-8")
+
+    real_replace = migrate_mod.os.replace
+
+    def flaky_replace(src, dst, *args, **kwargs):
+        if str(dst).endswith(".v4-backup"):
+            raise OSError("simulated backup failure")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(migrate_mod.os, "replace", flaky_replace)
+
+    finding = migrate_mod._migrate_governance_chain(
+        tmp_path.resolve(), tmp_path.resolve(), write=True
+    )
+
+    assert finding.error is not None
+    assert "chain migration failed" in finding.error
+    # The original is intact (its rename failed atomically) and no output survives.
+    assert gov_yaml.is_file()
+    assert gov_yaml.read_text(encoding="utf-8") == original_yaml
+    assert not (tmp_path / "manifest.yaml").exists()
+    assert not (tmp_path / ".governance.yaml.v4-backup").exists()
+    assert not (tmp_path / "policy").exists()
 
 
 def test_write_governance_policy_creates_manifest_per_source(tmp_path: Path) -> None:
@@ -326,9 +480,438 @@ policy = GovernancePolicy(
     declared = set(data["policies"].keys())
     for binding in data["intervention_points"].values():
         assert binding["policy"]["id"] in declared
-    bundle = Path(data["policies"]["billing_bot"]["bundle"])
+    # The bundle is recorded relative to the manifest so the migrated project
+    # stays portable; resolve it the way a host loading the manifest would.
+    bundle = out.parent / data["policies"]["billing_bot"]["bundle"]
     assert bundle.is_dir()
     assert (bundle / "billing_bot.rego").is_file()
+    assert parse_manifest(out.read_text(encoding="utf-8")) == data
+
+
+def test_governance_policy_defaults_are_migrated_exactly(tmp_path: Path) -> None:
+    src = tmp_path / "default_bot.py"
+    _write_source(
+        src,
+        """
+from agent_os.integrations.base import GovernancePolicy
+policy = GovernancePolicy()
+""".strip(),
+    )
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    finding = report.governance_policies[0]
+    assert finding.manual_review == []
+    assert finding.manifest_path is not None
+    manifest = parse_manifest(
+        Path(finding.manifest_path).read_text(encoding="utf-8")
+    )
+    policy = manifest["policies"]["default_bot"]
+    rego = (
+        Path(finding.manifest_path).parent / policy["bundle"] / "default_bot.rego"
+    ).read_text(encoding="utf-8")
+    assert '"token_count": 4096' in rego
+    assert '"tool_call_count": 10' in rego
+    assert "deny_if_low_confidence(0.8)" in rego
+
+
+def test_substring_patterns_stay_case_insensitive(tmp_path: Path) -> None:
+    """v4 matched substrings with ``pat.lower() in text.lower()``.
+
+    Migrating to a case-sensitive regex silently unprotects every v4 policy
+    against differently-cased text, so the generated Rego has to carry the
+    RE2 ``(?i)`` flag.
+    """
+    from agt.cli._migrate_bridge import (
+        MigrationPolicyInput,
+        build_migrated_manifest,
+    )
+
+    bundle = tmp_path / "b"
+    build_migrated_manifest(
+        MigrationPolicyInput(name="p", blocked_patterns=["password"]),
+        bundle_dir=bundle,
+        policy_id="p",
+    )
+    rego = (bundle / "p.rego").read_text(encoding="utf-8")
+    assert "(?i)password" in rego
+
+
+def test_every_adapter_point_is_bound(tmp_path: Path) -> None:
+    """The engine denies any point the manifest leaves unbound.
+
+    A migrated policy that binds only some points stops the agent the moment it
+    produces output or calls a tool, so every point an adapter evaluates has to
+    be present even when the v4 policy said nothing about it.
+    """
+    from agt.cli._migrate_bridge import (
+        MigrationPolicyInput,
+        build_migrated_manifest,
+    )
+
+    manifest = build_migrated_manifest(
+        MigrationPolicyInput(name="p", allowed_tools=["search"]),
+        bundle_dir=tmp_path / "b",
+        policy_id="p",
+    )
+    assert set(manifest["intervention_points"]) == {
+        "input",
+        "output",
+        "pre_model_call",
+        "post_model_call",
+        "pre_tool_call",
+        "post_tool_call",
+        "agent_startup",
+        "agent_shutdown",
+    }
+
+
+def _assert_denies(
+    bundle: Path,
+    patterns: list[Any],
+    cases: list[tuple[str, Any]],
+) -> None:
+    """Evaluate a migrated policy against the real engine at post_model_call.
+
+    The generated Rego is only correct if the engine agrees, so assert verdicts
+    rather than grepping the emitted text.
+    """
+    import shutil
+
+    import yaml as _yaml
+
+    if shutil.which("opa") is None and not os.environ.get("ACS_OPA_PATH"):
+        pytest.skip("OPA is required to evaluate a migrated policy")
+    from agent_control_specification import AgentControl, HostSession
+
+    from agt.cli._migrate_bridge import (
+        MigrationPolicyInput,
+        build_migrated_manifest,
+    )
+
+    manifest = build_migrated_manifest(
+        MigrationPolicyInput(name="p", blocked_patterns=patterns),
+        bundle_dir=bundle,
+        policy_id="p",
+    )
+    manifest["policies"]["p"]["bundle"] = str(bundle)
+    path = bundle.parent / "assert_denies.manifest.yaml"
+    path.write_text(_yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+    session = HostSession(
+        AgentControl.from_path(str(path)), agent_id="a", session_id="s"
+    )
+    for label, payload in cases:
+        verdict = session.post_model_call(payload).verdict
+        assert verdict.decision.value == "deny", f"{label}: {verdict.decision}"
+        assert verdict.reason == "blocked_pattern_input", f"{label}: {verdict.reason}"
+
+
+def test_object_targets_match_without_json_escaping(tmp_path: Path) -> None:
+    """OPA's json.marshal escapes " \\ < > and &.
+
+    Marshalling an object-valued policy target would silently stop matching any
+    pattern containing one of those, so the generated Rego collects string
+    leaves instead.
+    """
+    from agt.cli._migrate_bridge import (
+        MigrationPolicyInput,
+        build_migrated_manifest,
+    )
+
+    bundle = tmp_path / "b"
+    build_migrated_manifest(
+        MigrationPolicyInput(name="p", blocked_patterns=["<script>"]),
+        bundle_dir=bundle,
+        policy_id="p",
+    )
+    rego = (bundle / "p.rego").read_text(encoding="utf-8")
+    assert "value := json.marshal(target)" not in rego
+    assert "walk(target" in rego
+    _assert_denies(
+        tmp_path / "esc",
+        ["<script>", ('*.exe', "GLOB")],
+        [
+            # OPA walks objects in sorted key order, not insertion order, so
+            # the key names decide which leaf comes first.
+            ("object, offending leaf last", {"a": "ok", "z": "x<script>y"}),
+            ("object, offending leaf first", {"a": "x<script>y", "z": "ok"}),
+            ("glob leaf first", {"a": "payload.exe", "z": "ok"}),
+            ("glob leaf last", {"a": "ok", "z": "payload.exe"}),
+            ("two matching leaves at different offsets", {"a": "x<script>y", "z": "q<script>"}),
+            ("plain string", "x<script>y"),
+        ],
+    )
+
+
+def test_budgets_do_not_fire_after_the_action_ran(tmp_path: Path) -> None:
+    """A budget gates an action; it cannot un-run one.
+
+    The runtime charges a tool call during pre_tool_call, so a >= budget check
+    at post_tool_call would deny the result of the last permitted call after its
+    side effects committed.
+    """
+    from agt.cli._migrate_bridge import (
+        MigrationPolicyInput,
+        build_migrated_manifest,
+    )
+
+    bundle = tmp_path / "b"
+    build_migrated_manifest(
+        MigrationPolicyInput(name="p", max_tool_calls=2),
+        bundle_dir=bundle,
+        policy_id="p",
+    )
+    rego = (bundle / "p.rego").read_text(encoding="utf-8")
+    assert 'input.intervention_point == "pre_tool_call"' in rego
+    assert (
+        'input.intervention_point in ["pre_model_call", "pre_tool_call"]'
+    ) in rego
+
+
+def _migrated_session(policy: Any, tmp_path: Path):
+    """Load a migrated policy into the real engine and open a host session."""
+    import shutil
+
+    import yaml as _yaml
+
+    if shutil.which("opa") is None and not os.environ.get("ACS_OPA_PATH"):
+        pytest.skip("OPA is required to evaluate a migrated policy")
+    from agent_control_specification import AgentControl, HostSession
+
+    from agt.cli._migrate_bridge import build_migrated_manifest
+
+    manifest = build_migrated_manifest(
+        policy, bundle_dir=tmp_path / "b", policy_id="p"
+    )
+    path = tmp_path / "manifest.yaml"
+    path.write_text(_yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+    return HostSession(
+        AgentControl.from_path(str(path)), agent_id="a", session_id="s"
+    )
+
+
+def test_approval_stays_scoped_to_tool_calls(tmp_path: Path) -> None:
+    """v4 gated require_human_approval on tool interception only.
+
+    Binding all eight intervention points must not widen the escalation:
+    firing it everywhere would, absent an approver, deny every input, model
+    call, and startup of a migrated agent.
+    """
+    from agt.cli._migrate_bridge import MigrationPolicyInput
+
+    session = _migrated_session(
+        MigrationPolicyInput(
+            name="p", require_human_approval=True, confidence_threshold=0.0
+        ),
+        tmp_path,
+    )
+    messages = {"model": "m", "messages": [{"role": "user", "content": "hi"}]}
+    for label, result in (
+        ("input", session.input("hello")),
+        ("pre_model_call", session.pre_model_call(messages)),
+        ("agent_startup", session.agent_startup({"id": "a"})),
+    ):
+        assert result.verdict.decision.value == "allow", label
+    verdict = session.pre_tool_call(tool_name="t", args={}).verdict
+    # The escalation fires only here; with no approver configured the
+    # session resolves it to a denial.
+    assert verdict.decision.value == "deny"
+    assert verdict.reason == "approval_denied"
+
+
+def test_tool_call_budget_gates_only_the_next_tool_call(tmp_path: Path) -> None:
+    """v4 compared context.call_count to max_tool_calls at tool interception.
+
+    An exhausted tool-call budget must deny the next tool call and nothing
+    else; denying pre_model_call or input as well would stop the agent from
+    ever emitting its final model response.
+    """
+    from agt.cli._migrate_bridge import MigrationPolicyInput
+
+    session = _migrated_session(
+        MigrationPolicyInput(
+            name="p",
+            max_tool_calls=1,
+            max_tokens=1_000_000,
+            confidence_threshold=0.0,
+        ),
+        tmp_path,
+    )
+    first = session.pre_tool_call(tool_name="t", args={}).verdict
+    assert first.decision.value == "allow"
+    session.builder.record_tool_call()
+    second = session.pre_tool_call(tool_name="t", args={}).verdict
+    assert second.decision.value == "deny"
+    assert second.reason == "budget_tool_calls_exceeded"
+    followup = session.pre_model_call(
+        {"model": "m", "messages": [{"role": "user", "content": "summarize"}]}
+    ).verdict
+    assert followup.decision.value == "allow"
+    assert session.input("next user turn").verdict.decision.value == "allow"
+
+
+def test_zero_width_patterns_still_deny(tmp_path: Path) -> None:
+    """A zero-length leftmost match must not fall through to allow.
+
+    matches_any selects the leaf, deny_if_pattern builds the verdict; if the
+    two disagree the branch goes undefined and the else-chain reaches the
+    default allow.
+    """
+    _assert_denies(
+        tmp_path / "zw",
+        [("[0-9]*", "REGEX")],
+        [
+            ("digits at the start", "4111111111111111"),
+            ("digits after text", "card 4111111111111111"),
+            ("object target", {"b": "card 4111111111111111"}),
+            # The round-4 regression shape: an empty leaf sorts first and
+            # yields the zero-length match, so the leaf that actually carries
+            # the number is only reached if the span stays defined.
+            ("empty leaf ahead of the match", {"a": "", "z": "card 4111111111111111"}),
+            ("only an empty leaf", {"a": ""}),
+        ],
+    )
+
+
+def test_pattern_types_are_preserved_in_generated_rego(tmp_path: Path) -> None:
+    src = tmp_path / "patterns.py"
+    _write_source(
+        src,
+        """
+from agent_os.integrations.base import GovernancePolicy, PatternType
+policy = GovernancePolicy(
+    blocked_patterns=[
+        ("secret-[0-9]+", PatternType.REGEX),
+        ("*.exe", PatternType.GLOB),
+    ],
+)
+""".strip(),
+    )
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    finding = report.governance_policies[0]
+    assert finding.manual_review == []
+    manifest = parse_manifest(
+        Path(finding.manifest_path).read_text(encoding="utf-8")
+    )
+    rego = (
+        Path(finding.manifest_path).parent
+        / manifest["policies"]["patterns"]["bundle"]
+        / "patterns.rego"
+    ).read_text(encoding="utf-8")
+    # Every pattern kind ships with the RE2 case-insensitive flag, matching v4,
+    # which compiled REGEX and GLOB with re.IGNORECASE and lowercased both sides
+    # for substrings.
+    assert "secret-[0-9]+" in rego
+    assert json.dumps("(?i)" + r"(?s:.*\.exe)\z") in rego
+    # Each pattern is rendered in both the matched_texts helper and the deny
+    # branch, so assert per-pattern rather than on a raw count.
+    assert rego.count(json.dumps("(?i)secret-[0-9]+")) == 2
+    assert rego.count(json.dumps("(?i)" + r"(?s:.*\.exe)\z")) == 2
+
+
+@pytest.mark.parametrize(
+    "argument, expected",
+    [
+        ("max_tokens=get_limit()", "dynamic expression"),
+        (
+            'blocked_patterns=[("x", PatternType.UNKNOWN)]',
+            "unsupported PatternType.UNKNOWN",
+        ),
+        (
+            'blocked_patterns=[("(", PatternType.REGEX)]',
+            ("not valid Go RE2", "OPA is required"),
+        ),
+        (
+            r'blocked_patterns=[("(a)\\1", PatternType.REGEX)]',
+            ("not valid Go RE2", "OPA is required"),
+        ),
+        ("timeout_seconds=30", "host configuration"),
+        ("**settings", "**kwargs expansion"),
+    ],
+)
+def test_ambiguous_policy_constructor_refuses_write(
+    tmp_path: Path, argument: str, expected: str | tuple[str, ...]
+) -> None:
+    src = tmp_path / "ambiguous.py"
+    _write_source(
+        src,
+        (
+            "from agent_os.integrations.base import GovernancePolicy, PatternType\n"
+            f"policy = GovernancePolicy({argument})\n"
+        ),
+    )
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    finding = report.governance_policies[0]
+    expected_fragments = (expected,) if isinstance(expected, str) else expected
+    assert any(
+        fragment in reason
+        for reason in finding.manual_review
+        for fragment in expected_fragments
+    )
+    assert finding.manifest_path is None
+    assert not (tmp_path / "policies" / "ambiguous.manifest.yaml").exists()
+    assert "Manual review required" in finding.rewrite_snippet
+
+
+def test_existing_outputs_are_never_overwritten(tmp_path: Path) -> None:
+    src = tmp_path / "bot.py"
+    _write_source(
+        src,
+        "from agent_os.integrations.base import GovernancePolicy\n"
+        "policy = GovernancePolicy()\n",
+    )
+    output = tmp_path / "policies" / "bot.manifest.yaml"
+    output.parent.mkdir()
+    output.write_text("sentinel", encoding="utf-8")
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    finding = report.governance_policies[0]
+    assert finding.manifest_path is None
+    assert any("refusing to overwrite" in reason for reason in finding.manual_review)
+    assert output.read_text(encoding="utf-8") == "sentinel"
+
+
+def test_multiple_policies_in_one_source_refuse_partial_write(
+    tmp_path: Path,
+) -> None:
+    _write_source(
+        tmp_path / "bots.py",
+        "from agent_os.integrations.base import GovernancePolicy\n"
+        "reader = GovernancePolicy(name='reader')\n"
+        "writer = GovernancePolicy(name='writer')\n",
+    )
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    assert len(report.governance_policies) == 2
+    assert all(finding.manual_review for finding in report.governance_policies)
+    assert all(
+        finding.manifest_path is None
+        for finding in report.governance_policies
+    )
+    assert not (tmp_path / "policies").exists()
+
+
+def test_manual_review_blocks_all_project_writes(tmp_path: Path) -> None:
+    governance = tmp_path / "governance.yaml"
+    _write_governance(governance)
+    _write_source(
+        tmp_path / "app.py",
+        "from agent_os.integrations.base import GovernancePolicy\n"
+        "policy = GovernancePolicy(max_tokens=get_limit())\n",
+    )
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    assert report.requires_manual_review()
+    assert governance.is_file()
+    assert not (tmp_path / "manifest.yaml").exists()
+    assert not (tmp_path / ".governance.yaml.v4-backup").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +975,21 @@ def test_dry_run_handles_empty_project(tmp_path: Path) -> None:
     assert not report.has_findings()
     text = migrate_mod.render_report(report)
     assert "No v4 artifacts detected" in text
+
+
+def test_unparseable_python_is_reported_not_silently_skipped(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "broken.py").write_text(
+        "from agent_os.integrations.base import GovernancePolicy\n"
+        "policy = GovernancePolicy(\n",
+        encoding="utf-8",
+    )
+
+    report = migrate_mod.migrate_project(tmp_path, write=False)
+
+    assert report.errors
+    assert "cannot parse Python source" in report.errors[0]
 
 
 # ---------------------------------------------------------------------------
@@ -463,6 +1061,34 @@ def test_cli_dry_run_and_write_are_mutually_exclusive(tmp_path: Path) -> None:
     assert "mutually exclusive" in proc.stderr
 
 
+def test_cli_write_exits_nonzero_when_manual_review_is_required(
+    tmp_path: Path,
+) -> None:
+    _write_source(
+        tmp_path / "app.py",
+        "from agent_os.integrations.base import GovernancePolicy\n"
+        "policy = GovernancePolicy(max_tokens=get_limit())\n",
+    )
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agt.cli",
+            "migrate",
+            "v4-to-v5",
+            str(tmp_path),
+            "--write",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode == 1
+    assert "Manual review required" in proc.stdout
+
+
 # ---------------------------------------------------------------------------
 # Iteration helpers
 # ---------------------------------------------------------------------------
@@ -511,10 +1137,10 @@ def test_module_imports_cleanly() -> None:
     importlib.import_module("agt.cli.__main__")
 
 
-def test_bridge_unavailable_path_still_reports(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """If the v5 bridge import fails at runtime, --write must still record
-    the manifest path in the report so users can re-run after fixing
-    their install."""
+def test_write_does_not_import_public_runtime_bridge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The one-way migrator is isolated from the runtime compatibility bridge."""
     src = tmp_path / "mod.py"
     _write_source(
         src,
@@ -527,15 +1153,15 @@ policy = GovernancePolicy(name="x")
     real_import = __builtins__["__import__"] if isinstance(__builtins__, dict) else __import__
 
     def fake_import(name, *args, **kwargs):  # type: ignore[no-untyped-def]
-        if name == "agt.policies.bridge":
+        if name == "agt.cli._migrate_bridge":
             raise ImportError("simulated missing bridge")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr("builtins.__import__", fake_import)
 
     report = migrate_mod.migrate_project(tmp_path, write=True)
-    assert report.governance_policies
-    gp = report.governance_policies[0]
-    # The rewrite snippet is rendered even when the bridge fails to import,
-    # so users get actionable output.
-    assert "GovernancePolicy" in gp.rewrite_snippet
+    finding = report.governance_policies[0]
+    assert finding.manual_review == []
+    assert finding.manifest_path is not None
+    assert finding.manifest_path.is_file()
+    assert "agt.cli._migrate_bridge" not in finding.rewrite_snippet

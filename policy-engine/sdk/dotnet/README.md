@@ -11,6 +11,7 @@ For zero-config Rego policies, `ACS_OPA_PATH` is authoritative when set and must
 Available today:
 
 - enums and records for intervention points, enforcement mode, decisions, verdicts, intervention point requests, and intervention point results
+- `ArtifactValidator.Validate(...)` for structured manifest and Rego validation through the shared Rust core
 - `IAnnotatorDispatcher`, `IPolicyDispatcher`, and `IAgentControlRuntime` contracts
 - `AgentControl.EvaluateInterventionPointAsync()`
 - lifecycle/single-point helpers: `EvaluateAgentStartupAsync()`, `EvaluateAgentShutdownAsync()`, `EvaluateInputAsync()`, `EvaluateOutputAsync()`, `EvaluatePreModelCallAsync()`, `EvaluatePostModelCallAsync()`, `EvaluatePreToolCallAsync()`, and `EvaluatePostToolCallAsync()`
@@ -34,6 +35,15 @@ Available today:
   - `AgentControlSpecification.SemanticKernel` registers an `IAutoFunctionInvocationFilter` through `IKernelBuilder.UseAgentControl(...)` or `AsGuarded(...)`, and decorates individual `IChatCompletionService` instances with the `AgentControlChatCompletionService` constructor
   - `AgentControlSpecification.AutoGen` wraps real AutoGen `IAgent` instances with `UseAgentControl(...)` or `AsGuarded(...)`
   - `AgentControlSpecification.AgentFramework` wraps real `Microsoft.Agents.AI.AIAgent` instances with `UseAgentControl(...)` or `AsGuarded(...)`
+
+```csharp
+var validation = ArtifactValidator.Validate(
+    manifestYaml,
+    new Dictionary<string, string>
+    {
+        ["policy.rego"] = regoSource,
+    });
+```
 
 `RunToolAsync()` and `ProtectToolAsync()` always evaluate both `pre_tool_call` and `post_tool_call`. Manifests used with these helpers must configure both intervention points. If no post-tool policy is needed, configure `post_tool_call` with an allow policy so the helper does not fail closed after the tool returns.
 

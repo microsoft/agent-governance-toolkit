@@ -1,3 +1,9 @@
+---
+title: "2026-05-30 — Entra-signed JWT verification for AgentMesh relay + registry"
+last_reviewed: 2026-05-31
+owner: agt-maintainers
+---
+
 # 2026-05-30 — Entra-signed JWT verification for AgentMesh relay + registry
 
 PR: [microsoft/agent-governance-toolkit#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659)

@@ -3,18 +3,15 @@
 """
 Dynamic policy context for Agent-OS governance.
 
-Extends PolicyEvaluator with runtime-dependent information such as the
-current time, session cost, API quota, and system load.  Conditions in
-policy rules may reference these values via dot-notation field paths::
+Carries runtime-dependent information such as the current time, session cost,
+API quota, and system load. Hosts can project these values into ACS snapshots::
 
     context.time.hour
     context.cost.budget_remaining
     context.quota.api_calls_remaining
     context.system.load
 
-Backward compatibility guarantee: all existing callers that pass only an
-action context dict to ``PolicyEvaluator.evaluate()`` continue to work
-unchanged.  Dynamic context is strictly additive.
+Dynamic context is host-owned and strictly additive.
 """
 
 from __future__ import annotations
