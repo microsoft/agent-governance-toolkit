@@ -54,6 +54,35 @@ test("evaluateOpenCodePrompt allows benign prompts", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+test("getPolicyStatus distinguishes effective defenses from configured context", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-defense-status-"));
+  const policyPath = join(root, "policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      version: 1,
+      minimumPromptDefenseGrade: "B",
+      additionalContext: [],
+      toolPolicies: { allowedTools: ["*"] },
+    }),
+    "utf8",
+  );
+  const state = await loadPolicy({ policyPath, auditPath: join(root, "audit.json") });
+
+  const status = await getPolicyStatus(state);
+
+  assert.equal(status.promptDefenseScope, "effective-context");
+  assert.equal(status.promptDefenseGrade, "A");
+  assert.equal(status.configuredPromptDefenseScope, "operator-additional-context");
+  assert.equal(status.configuredPromptDefenseGrade, "F");
+  assert.equal(status.configuredPromptDefenseCoverage, "0/12");
+  assert.equal(status.configuredPromptDefenseMissing.length, 12);
+  assert.equal(status.promptDefenseBlockingScope, "effective-context");
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persistence writes", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-tool-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });
