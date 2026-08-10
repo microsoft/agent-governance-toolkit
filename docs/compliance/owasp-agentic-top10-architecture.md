@@ -1,6 +1,6 @@
 ---
 title: OWASP Agentic Security Initiative Reference Architecture
-last_reviewed: 2026-07-11
+last_reviewed: 2026-08-10
 owner: agt-maintainers
 ---
 
@@ -35,10 +35,10 @@ it is not an eleventh entry in the official OWASP list.
 | ASI03 | Identity and Privilege Abuse | ✅ Full | ACS labels, identity binding, and host RBAC |
 | ASI04 | Agentic Supply Chain | ⚠️ Partial | Policy YAML tool pinning; no SBOM |
 | ASI05 | Unexpected Code Execution | ✅ Full | Static reviewer detects pickle/eval |
-| ASI06 | Memory and Context Poisoning | ⚠️ Partial | Audit hash-chain; no memory sandbox |
+| ASI06 | Memory and Context Poisoning | ⚠️ Partial | `MemoryGuard` integrity and injection checks; integration is opt-in |
 | ASI07 | Insecure Inter-Agent Communication | ✅ Full | Trust-gate with DID verification |
 | ASI08 | Cascading Agent Failures | ✅ Full | Circuit breaker, rate limiter |
-| ASI09 | Human-Agent Trust Exploitation | ⚠️ Partial | Audit trail; no UI-level guardrails |
+| ASI09 | Human-Agent Trust Exploitation | ⚠️ Partial | Action-bound approval protocol and approval backends; no universal UI integration |
 | ASI10 | Rogue Agents | ✅ Full | `AgentBehaviorMonitor`, quarantine |
 | AGT extension | Agent Traceability | ✅ Full | Tamper-evident audit log (hash chain) |
 
@@ -164,15 +164,21 @@ and `exec()` in agent code via lint rules.
 
 **Risk:** Persistent memory stores are manipulated to corrupt future decisions.
 
-**AGT Mitigation:** The audit hash-chain provides tamper detection for any
-persisted state. However, AGT does not yet sandbox agent memory stores or
-provide memory integrity checksums at the application layer.
+**AGT Mitigation:** `MemoryGuard` screens memory writes for prompt injection,
+dangerous code, tool-poisoning markup, and Unicode manipulation. It records a
+SHA-256 digest per entry, verifies integrity after reads, supports batch scans,
+and keeps a write audit trail. The general audit hash-chain provides additional
+tamper evidence for governance events.
 
-**Known Gap:** No dedicated memory-sandbox or context-integrity module.
-Consider adding a `ContextValidator` that hashes memory snapshots.
+**Known Gap:** `MemoryGuard` is an opt-in Agent OS component rather than a
+universal storage sandbox. Applications and framework adapters must place it on
+their actual memory read/write path; AGT cannot guarantee coverage for an
+arbitrary external memory provider that has not integrated the guard.
 
 **Evidence:**
+- `agent-governance-python/agent-os/src/agent_os/memory_guard.py`
 - `agent-governance-python/agent-os/src/agent_os/audit/hash_chain.py`
+- `docs/packages/agent-os.md` — MemoryGuard and ASI06 package coverage
 
 **Coverage:** ⚠️ Partial
 
@@ -214,14 +220,22 @@ failures, preventing cascade. Rate limiting caps per-minute tool invocations.
 
 **Risk:** Humans over-trust agent outputs and skip validation.
 
-**AGT Mitigation:** Tamper-evident audit logs let reviewers verify what the
-agent actually did. The static reviewer flags code with no audit logging.
+**AGT Mitigation:** The action-bound approval protocol defines
+`require_approval` as a suspended, fail-closed decision tied to the exact
+action digest. Agent OS also provides in-memory and webhook approval backends,
+quorum and expiration handling, and approval callbacks for MCP gateway actions.
+Tamper-evident audit logs let reviewers verify what the agent actually did,
+and the static reviewer flags code with no audit logging.
 
-**Known Gap:** No UI-level confirmation dialogs or "human-in-the-loop"
-approval workflows are built into AGT. Consider adding a `HumanApproval`
-middleware for high-risk actions.
+**Known Gap:** AGT supplies approval protocols and backends, not one universal
+operator UI. Teams must integrate an appropriate identity-aware approval
+experience and present action consequences; package availability alone does
+not prove that a particular agent surface enforces human review.
 
 **Evidence:**
+- `docs/adr/0030-action-bound-approval-protocol.md`
+- `agent-governance-python/agent-os/src/agent_os/integrations/escalation.py`
+- `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py`
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-audit-logging`
 
 **Coverage:** ⚠️ Partial
