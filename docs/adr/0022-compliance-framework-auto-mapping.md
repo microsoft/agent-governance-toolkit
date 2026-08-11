@@ -1,3 +1,9 @@
+---
+title: "ADR-0022: Compliance Framework Auto-Mapping"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR-0022: Compliance Framework Auto-Mapping
 
 ## Status

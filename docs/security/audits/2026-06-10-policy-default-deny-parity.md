@@ -1,3 +1,9 @@
+---
+title: "2026-06-10 — Policy Engine Default-Deny Parity"
+last_reviewed: 2026-06-10
+owner: agt-maintainers
+---
+
 # 2026-06-10 — Policy Engine Default-Deny Parity
 
 PR: [microsoft/agent-governance-toolkit#2949](https://github.com/microsoft/agent-governance-toolkit/pull/2949)

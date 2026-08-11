@@ -1,3 +1,9 @@
+---
+title: "Tutorial 44 — A2A Conversation Policy & Feedback Loop Prevention"
+last_reviewed: 2026-06-10
+owner: agt-maintainers
+---
+
 # Tutorial 44 — A2A Conversation Policy & Feedback Loop Prevention
 
 > **Package:** `agentmesh-platform` · **Time:** 20 minutes · **Level:** Advanced

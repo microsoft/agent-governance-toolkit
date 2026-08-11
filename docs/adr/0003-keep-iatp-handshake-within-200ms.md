@@ -1,3 +1,9 @@
+---
+title: "ADR 0003: Keep the IATP trust handshake within a 200ms SLA"
+last_reviewed: 2026-03-26
+owner: agt-maintainers
+---
+
 # ADR 0003: Keep the IATP trust handshake within a 200ms SLA
 
 - Status: accepted

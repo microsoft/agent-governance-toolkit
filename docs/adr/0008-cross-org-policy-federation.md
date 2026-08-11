@@ -1,3 +1,9 @@
+---
+title: "ADR 0008: Cross-org policy federation above identity"
+last_reviewed: 2026-04-25
+owner: agt-maintainers
+---
+
 # ADR 0008: Cross-org policy federation above identity
 
 - Status: proposed
