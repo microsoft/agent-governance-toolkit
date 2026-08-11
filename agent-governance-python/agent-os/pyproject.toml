@@ -59,7 +59,7 @@ dev = [
 # `agent_os.prompt_injection_embedding`. Never required: the module is inert
 # unless explicitly enabled, and an embedder can be injected instead.
 embedding = [
-    "fastembed>=0.3.0,<1.0",
+    "fastembed>=0.8.0,<1.0",
 ]
 
 [project.urls]
