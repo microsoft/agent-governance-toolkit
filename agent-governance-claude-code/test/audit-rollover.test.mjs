@@ -69,7 +69,7 @@ test("audit rollover keeps the surviving chain verifiable", async () => {
   }
 });
 
-test("legacy truncated arrays recover without weakening in-place tamper detection", async () => {
+test("bare arrays stay anchored to genesis so prefix deletion is detected", async () => {
   const { directory, path } = await createTempAudit();
   try {
     await appendEntries(path, 4);
@@ -78,17 +78,44 @@ test("legacy truncated arrays recover without weakening in-place tamper detectio
     await writeFile(path, `${JSON.stringify(truncated, null, 2)}\n`, "utf8");
 
     assert.notEqual(truncated[0].previousHash, GENESIS);
-    assert.equal((await getAuditStatus(path)).valid, true);
-    await appendAuditEntry(path, {
-      agentId: "agent-a",
-      action: "tool.after-recovery",
-      decision: "allow",
-    });
-    assert.equal((await getAuditStatus(path)).valid, true);
+    assert.equal((await loadAuditFile(path)).seamHash, null);
+    assert.equal((await getAuditStatus(path)).valid, false);
+    await assert.rejects(
+      appendAuditEntry(path, {
+        agentId: "agent-a",
+        action: "tool.after-truncation",
+        decision: "allow",
+      }),
+      /failed hash-chain verification/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
-    const afterRecovery = await loadAuditFile(path);
-    afterRecovery.entries[1].decision = "deny";
-    await writeFile(path, `${JSON.stringify(afterRecovery.entries, null, 2)}\n`, "utf8");
+test("a rolled-over log detects entry and seam tampering", async () => {
+  const { directory, path } = await createTempAudit();
+  try {
+    const limit = 3;
+    for (let index = 0; index < limit + 2; index += 1) {
+      await appendAuditEntry(
+        path,
+        { agentId: "agent-a", action: `tool.test-${index}`, decision: "allow" },
+        { limit },
+      );
+    }
+
+    const rolled = await loadAuditFile(path);
+    assert.ok(rolled.seamHash);
+
+    const editedEntry = structuredClone(rolled);
+    editedEntry.entries[1].decision = "deny";
+    await writeFile(path, `${JSON.stringify(editedEntry, null, 2)}\n`, "utf8");
+    assert.equal((await getAuditStatus(path)).valid, false);
+
+    const editedSeam = structuredClone(rolled);
+    editedSeam.seamHash = "f".repeat(64);
+    await writeFile(path, `${JSON.stringify(editedSeam, null, 2)}\n`, "utf8");
     assert.equal((await getAuditStatus(path)).valid, false);
   } finally {
     await rm(directory, { recursive: true, force: true });

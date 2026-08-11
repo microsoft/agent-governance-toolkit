@@ -83,15 +83,10 @@ export async function loadAuditFile(auditPath) {
     const text = await readFile(auditPath, "utf8");
     const value = JSON.parse(text);
     if (Array.isArray(value)) {
-      // A legacy log may already have been front-truncated by the old
-      // implementation. Recover its surviving chain while documenting that
-      // the derived seam cannot authenticate the deleted prefix.
-      const head = value[0];
-      const seamHash =
-        head && typeof head.previousHash === "string" && head.previousHash !== GENESIS_HASH
-          ? head.previousHash
-          : null;
-      return { seamHash, entries: value };
+      // A bare array is always anchored to GENESIS. Deriving a seam from the
+      // surviving head instead would let anyone delete a prefix of the log
+      // without failing verification.
+      return { seamHash: null, entries: value };
     }
     if (value && typeof value === "object" && Array.isArray(value.entries)) {
       return {
