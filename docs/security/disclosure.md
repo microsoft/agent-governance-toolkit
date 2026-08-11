@@ -8,7 +8,7 @@ owner: agt-maintainers
 
 If you believe you have found a security vulnerability in Agent Governance
 Toolkit, **do not file a public GitHub issue**. The canonical reporting process
-is documented in the repository root file [SECURITY.md](../../SECURITY.md),
+is documented in the repository root file [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md),
 which follows the Microsoft Security Response Center (MSRC) flow required for
 all Microsoft-owned open-source projects.
 
@@ -21,7 +21,7 @@ In short:
    PGP-encrypted message using the
    [MSRC public PGP key](https://aka.ms/msrcpgpkey).
 3. Include the information requested by the
-   [reporting template](../../SECURITY.md#security-contact) so MSRC
+   [reporting template](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md#security-contact) so MSRC
    can triage the report quickly.
 
 ## What to expect
@@ -41,5 +41,5 @@ English is preferred for all communications.
 Microsoft follows the principle of
 [Coordinated Vulnerability Disclosure](https://aka.ms/opensource/security/cvd).
 The full text of AGT's security policy lives in
-[SECURITY.md](../../SECURITY.md) at the repository root so that GitHub picks it
+[SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) at the repository root so that GitHub picks it
 up for the repository's Security tab.

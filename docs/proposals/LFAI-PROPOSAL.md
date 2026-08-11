@@ -1,3 +1,9 @@
+---
+title: "LF AI & Data Foundation — Sandbox Project Proposal"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # LF AI & Data Foundation — Sandbox Project Proposal
 
 **Submission:** [lfai/proposing-projects#102](https://github.com/lfai/proposing-projects/pull/102)

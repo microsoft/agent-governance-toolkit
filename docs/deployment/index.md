@@ -1,3 +1,9 @@
+---
+title: "Deployment Guides"
+last_reviewed: 2026-05-10
+owner: agt-maintainers
+---
+
 # Deployment Guides
 
 Deploy AGT on any cloud or container platform. AGT is pure Python/TypeScript/.NET with zero cloud-vendor lock-in.

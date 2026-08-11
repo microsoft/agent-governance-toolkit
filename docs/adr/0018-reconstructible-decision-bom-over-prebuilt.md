@@ -1,3 +1,9 @@
+---
+title: "ADR-0018: Reconstructible Decision BOM Over Pre-built"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR-0018: Reconstructible Decision BOM Over Pre-built
 
 ## Status

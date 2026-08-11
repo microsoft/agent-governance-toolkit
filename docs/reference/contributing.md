@@ -1,3 +1,9 @@
+---
+title: "Contributing to Agent Governance Toolkit"
+last_reviewed: 2026-07-01
+owner: agt-maintainers
+---
+
 # Contributing to Agent Governance Toolkit
 
 This project welcomes contributions and suggestions. Most contributions require you to agree to a
@@ -226,7 +232,7 @@ pytest tests/ -x -q
 
 ### Security
 
-- Review the [SECURITY.md](../../SECURITY.md) file for vulnerability reporting procedures.
+- Review the [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) file for vulnerability reporting procedures.
 - **Security scanning runs automatically** on all PRs — see [docs/security/scanning.md](../security/scanning.md) for details
 - Use `.security-exemptions.json` to suppress false positives (requires justification)
 - Never commit secrets, credentials, or tokens.
@@ -245,7 +251,7 @@ This policy is enforced by:
 **Why this policy exists:** PRs #357 and #362 were auto-merged without maintainer review and reintroduced a command injection vulnerability (`subprocess.run(shell=True)`) that had been fixed for MSRC Case 111178 just days earlier. AI code review agents did not catch the security regression.
 
 **What counts as maintainer approval:**
-- ✅ A GitHub "Approve" review from a code owner (see [.github/CODEOWNERS](../../.github/CODEOWNERS))
+- ✅ A GitHub "Approve" review from a code owner (see [.github/CODEOWNERS](https://github.com/microsoft/agent-governance-toolkit/blob/main/.github/CODEOWNERS))
 - ❌ AI/bot approval (Copilot, Sourcery, etc.) — does not count
 - ❌ Author self-approval — does not count
 - ❌ Admin bypass — should not be used for external PRs
@@ -257,7 +263,7 @@ This policy is enforced by:
 
 ## Licensing
 
-By contributing to this project, you agree that your contributions will be licensed under the [MIT License](../../LICENSE).
+By contributing to this project, you agree that your contributions will be licensed under the [MIT License](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE).
 
 ## Integration Author Guide
 

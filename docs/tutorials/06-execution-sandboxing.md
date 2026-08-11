@@ -1,3 +1,9 @@
+---
+title: "Tutorial 06 Execution Sandboxing"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 # Tutorial 06 Execution Sandboxing
 
 > **Package:** `agentmesh-runtime` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
@@ -14,7 +20,7 @@
 
 **Isolate AI agents at runtime using privilege rings, saga transactions, and kill switches.**
 
-See also: [Deployment Guide](../deployment/README.md) | [Agent Runtime README](../../agent-governance-python/agent-runtime/README.md)
+See also: [Deployment Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) | [Agent Runtime README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-runtime/README.md)
 
 ---
 

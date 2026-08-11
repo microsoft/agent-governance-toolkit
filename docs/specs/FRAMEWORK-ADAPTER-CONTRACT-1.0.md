@@ -14,5 +14,5 @@ effects or disclosure, surface native `PolicyEvaluation` errors, and keep
 session counters outside the stateless runtime. Approval resolution belongs to
 the runtime.
 
-See [Agent Control Specification](../../policy-engine/spec/SPECIFICATION.md)
+See [Agent Control Specification](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/SPECIFICATION.md)
 and [v4 policy-language removal](../v4-removal.md).

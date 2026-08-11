@@ -9,4 +9,4 @@ owner: docs-team
 Test manifests and bundles against representative snapshots. Assert the
 verdict, reason code, transform, evidence, and identities.
 
-See the [policy-engine test assets](../../../policy-engine/tests/).
+See the [policy-engine test assets](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/tests).
