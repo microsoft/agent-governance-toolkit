@@ -3,7 +3,10 @@ name: PR Title Check
 
 on:
   pull_request_target:
-    types: [opened, edited, synchronize, reopened]
+    # `labeled`/`unlabeled` are here because the exemption below is keyed on a
+    # label. Without them a PR labelled after it opened would keep the verdict
+    # from the run that saw no labels.
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -34,6 +37,16 @@ jobs:
             build
             revert
           requireScope: false
+          # Dependabot writes its own titles and there is no setting that makes
+          # them satisfy `subjectPattern`. It uses "bump <dep> from a to b" for a
+          # version bump and "Update <dep> requirement from x to y" for a
+          # requirement range, so roughly half of what it opens starts with a
+          # capital U and fails a rule the author cannot act on. The check exists
+          # to keep human titles consistent for the changelog; a bot that already
+          # writes a conventional prefix every time is not the thing it guards
+          # against.
+          ignoreLabels: |
+            dependencies
           subjectPattern: ^(?![A-Z]).+$
           subjectPatternError: |
             The PR title subject "{subject}" must not start with an uppercase letter.
