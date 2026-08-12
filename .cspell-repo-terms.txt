@@ -1023,11 +1023,12 @@ zerovec
 zoneinfo
 
 # --- Documentation site and ACS integration terms ---
-AgentRateLimiter
 AEDT
+AgentRateLimiter
 anthonyonazure
 Bigspin
 Clendenen
+cooldown
 Ecommerce
 externalidentity
 fnmatchcase
