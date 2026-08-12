@@ -1051,3 +1051,7 @@ Bleichenbacher
 FFDH
 OCSP
 SPKI
+
+GPAI
+Harmonised
+deployers
