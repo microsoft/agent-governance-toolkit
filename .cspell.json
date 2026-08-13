@@ -101,7 +101,16 @@
     "pwsh",
     "notlike",
     "sdists",
-    "shellcheck"
+    "shellcheck",
+    "chacha",
+    "chacha20",
+    "getrandom",
+    "spki",
+    "zerocopy",
+    "rngs",
+    "keygen",
+    "csprng",
+    "CSPRNG"
   ],
   "ignorePaths": [
     "**/node_modules/**",
