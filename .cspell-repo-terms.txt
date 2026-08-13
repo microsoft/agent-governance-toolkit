@@ -1044,3 +1044,10 @@ RingBreachDetector
 RingElevationManager
 SpendGuard
 Vercel
+
+# --- cloud-board cryptography 50.0.0 audit terms (flagged by cspell) ---
+AESGCM
+Bleichenbacher
+FFDH
+OCSP
+SPKI
