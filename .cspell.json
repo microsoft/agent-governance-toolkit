@@ -101,7 +101,8 @@
     "pwsh",
     "notlike",
     "sdists",
-    "shellcheck"
+    "shellcheck",
+    "clusterfuzzlite"
   ],
   "ignorePaths": [
     "**/node_modules/**",
