@@ -1081,7 +1081,7 @@ def test_inspect_streamable_http_server_lists_tools_and_sends_spec_headers():
     assert tools_request["headers"].get("Mcp-Session-Id") == _StreamableHTTPMCPHandler.session_id
 
 
-def test_inspect_streamable_http_server_prefers_server_discover_when_supported():
+def test_inspect_streamable_http_server_prefers_server_discover_when_supported(recwarn):
     # Issue #3130: when the peer advertises 2026-07-28, the scanner must
     # use stateless ``server/discover`` instead of ``initialize``, attach
     # per-request ``_meta``, and never set ``Mcp-Session-Id``.
@@ -1104,6 +1104,13 @@ def test_inspect_streamable_http_server_prefers_server_discover_when_supported()
     assert inspection.ok is True
     assert inspection.protocol_version == "2026-07-28"
     assert inspection.tools[0]["name"] == "http_admin"
+
+    # Issue #3130: 2026-07-28 is newer than the legacy baseline, so the
+    # stateless fast path must not be reported as an "older MCP protocol"
+    # downgrade.
+    assert not any(
+        "older MCP protocol" in str(w.message) for w in recwarn if issubclass(w.category, UserWarning)
+    )
 
     methods_seen = [r["payload"].get("method") for r in _StreamableHTTPMCPHandler.requests]
     assert methods_seen[0] == "server/discover"

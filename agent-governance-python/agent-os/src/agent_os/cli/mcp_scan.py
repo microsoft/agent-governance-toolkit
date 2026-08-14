@@ -1021,7 +1021,10 @@ def _validate_initialize_result(result: Any) -> dict[str, Any]:
             f"unsupported MCP protocol version: {protocol_version!r}; "
             f"supported: {sorted(_SUPPORTED_PROTOCOL_VERSIONS)}"
         )
-    if protocol_version != MCP_PROTOCOL_VERSION:
+    # Only warn when the peer negotiated a genuinely older protocol than the
+    # legacy baseline: the stateless ``2026-07-28`` version is newer, so the
+    # stateless ``server/discover`` path must not be reported as a downgrade.
+    if protocol_version < MCP_PROTOCOL_VERSION:
         warnings.warn(
             f"Server uses older MCP protocol {protocol_version!r}; latest is {MCP_PROTOCOL_VERSION}",
             stacklevel=2,
