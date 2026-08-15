@@ -1,3 +1,9 @@
+---
+title: "Tutorial 15 — RL Training Governance"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Tutorial 15 — RL Training Governance
 
 > **Package:** `agentmesh-lightning` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+
@@ -1049,7 +1055,7 @@ training. Here's where to go next:
 | Wire up distributed tracing and metrics | [Tutorial 13 — Observability & Tracing](13-observability-and-tracing.md) |
 | Sandbox agent execution during training | [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md) |
 | Add reliability (SLOs, circuit breakers) | [Tutorial 05 — Agent Reliability](05-agent-reliability.md) |
-| Browse the full Agent-Lightning README | [`agent-governance-python/agent-lightning/README.md`](../../agent-governance-python/agent-lightning/README.md) |
+| Browse the full Agent-Lightning README | [`agent-governance-python/agent-lightning/README.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-lightning/README.md) |
 
 ### Key takeaways
 
@@ -1068,4 +1074,4 @@ training. Here's where to go next:
 
 ---
 
-*Part of the [Agent Governance Toolkit](../../README.md) tutorial series.*
+*Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md) tutorial series.*

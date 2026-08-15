@@ -1,0 +1,69 @@
+# Committed ACS manifest for the Azure AI Foundry tool-governance example.
+#
+# This is the whole governance contract for foundry_agents.py. A real
+# integration ships this file (and the ./policy bundle) in version control and
+# loads it with AgentControl.from_path(...). The example injects three
+# per-deployment Azure fields at load time (see below), because an Azure
+# resource endpoint is environment configuration, not a committed artifact.
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: "foundry-governed-agent"
+extends: []
+
+# The intent_judge annotator is a live Azure OpenAI classifier. The API key is
+# read from AZURE_OPENAI_API_KEY (never committed). endpoint, deployment, and
+# api_version are per-deployment values injected from the environment by
+# build_control() before construction; a from_path-only reader adds them here.
+annotators:
+  intent_judge:
+    type: llm
+    provider: azure_openai
+    api_key_env: AZURE_OPENAI_API_KEY
+    label_field: label
+    timeout_ms: 60000
+    provider_config:
+      response_format:
+        type: json_object
+      max_completion_tokens: 2000
+    system_prompt: |
+      You are a security classifier for database tool calls made by an AI agent.
+      Given the tool argument text, decide whether it is destructive (it drops,
+      deletes, truncates, or alters data or schema) or safe (it only reads).
+      Respond with ONLY compact JSON and no markdown, exactly one of
+      {"label": "destructive"} or {"label": "safe"}.
+
+# The deterministic decision lives in the ./policy Rego bundle, not in host
+# code. It fails closed: a tool call proceeds only when the judge labels it
+# "safe".
+policies:
+  tool_guard:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.foundry_tool_guard.verdict
+
+intervention_points:
+  pre_tool_call:
+    policy_target_kind: tool_args
+    policy_target: "$.tool_call.args"
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      intent_judge:
+        from: "$.tool_call.args.query"
+    policy:
+      id: tool_guard
+      query: data.agent_control_specification.foundry_tool_guard.pre_tool_call_verdict
+  post_tool_call:
+    policy_target_kind: tool_result
+    policy_target: "$.tool_result"
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: tool_guard
+      query: data.agent_control_specification.foundry_tool_guard.post_tool_call_verdict
+
+tools:
+  search_records:
+    type: Tool
+    id: search_records
+  run_sql:
+    type: Tool
+    id: run_sql

@@ -6,12 +6,13 @@ Agent Control Specification (ACS) is a stateless, deterministic, fail-closed pol
 
 This package is the thin Python surface for the stateless Agent Control Specification runtime.
 
-It intentionally owns Python async orchestration and host/framework integration while the native core owns deterministic intervention point evaluation. `AgentControl.from_path("manifest.yaml")` builds a control backed by the bundled Rust core through the `_native` extension, which is built when the package is installed with maturin. With no dispatcher arguments the bundled OPA policy dispatcher and annotator dispatcher are wired automatically, so a host that uses Rego policies integrates in roughly three lines. Pass `annotator_dispatcher=` and `policy_dispatcher=` (or use `from_native(manifest, ...)`) to override either bundled default with host-specific logic. The zero-config construction section in the root README describes when to supply custom dispatchers.
+It intentionally owns Python async orchestration and host/framework integration while the native core owns deterministic intervention point evaluation. `AgentControl.from_path("manifest.yaml")` builds a control backed by the bundled Rust core through the `_native` extension. The release pipeline produces CPython 3.11+ ABI3 wheels for Linux x86_64 and ARM64 with glibc 2.28 or newer, macOS Intel and Apple Silicon, and Windows x86_64. Installing one of those wheels does not require Rust. On other platforms pip falls back to the source distribution and builds the extension locally with maturin and Rust. With no dispatcher arguments the bundled OPA policy dispatcher and annotator dispatcher are wired automatically, so a host that uses Rego policies integrates in roughly three lines. Pass `annotator_dispatcher=` and `policy_dispatcher=` (or use `from_native(manifest, ...)`) to override either bundled default with host-specific logic. The zero-config construction section in the root README describes when to supply custom dispatchers.
 
 Runnable pieces today:
 
 - dataclasses/enums for `InterventionPointRequest`, `InterventionPointResult`, `Verdict`, intervention points, decisions, and enforcement mode
 - protocols for host-supplied annotator and policy dispatchers
+- `parse_manifest()`, `validate_manifest()`, and `validate_manifest_overlay()` backed by the Rust runtime parser
 - `AgentControl.evaluate_intervention_point()` delegating to an abstract runtime client
 - `AgentControl.run()` enforcing `input` and `output`
 - `AgentControl.protect_tool()` / `run_tool()` enforcing `pre_tool_call` and `post_tool_call`
@@ -26,6 +27,20 @@ Runnable pieces today:
   - duck-typed async shapes for LangChain (`guard_langchain_runnable()` and `guard_langchain_tool()`), OpenAI clients (`guard_openai_client()`), OpenAI Agents Runner (`guard_openai_agents_runner()`), Anthropic (`guard_anthropic_client()`), AutoGen (`guard_autogen_agent()`), and CrewAI (`guard_crewai_crew()`)
 
 Adapters are intentionally stateless. Pass ambient per-call data with the reserved keyword `agent_control_snapshot={...}`; it is merged over any default snapshot supplied when creating the wrapper. Unsupported or potentially bypassing methods raise `AdapterUnsupportedError` rather than returning an unguarded path. `guard_mcp_server()` covers MCP tool calls only. MCP resources, prompts, streams, and lifecycle hooks still need package-specific adapters, and known unsupported methods on a wrapped provider are blocked instead of being delegated. `guard_litellm_proxy()` buffers JSON ASGI request/response bodies and streaming chat responses instead of bypassing controls. `AgentControlLiteLLMGuardrail` maps LiteLLM `pre_call` and `post_call` guardrail hooks to ACS input, model, tool, and output intervention points. Install the optional proxy dependency with `pip install "agent-control-specification[litellm-proxy]"`.
+
+Use `parse_manifest(text)` when a host needs the runtime parser's YAML or JSON value before applying another contract such as JSON Schema. Use `validate_manifest(text)` for a complete manifest and `validate_manifest_overlay(text)` for resolution-independent checks on a partial manifest with `extends`. All three functions use the same bounded `serde_yaml` implementation as runtime construction.
+
+```python
+from agent_control_specification import validate_acs_artifacts
+
+report = validate_acs_artifacts(
+    manifest=request.manifest,
+    rego={"payments.rego": request.rego},
+)
+return report.to_dict()
+```
+
+The validation API delegates canonical JSON Schema validation, complete or overlay-specific typed checks, and OPA parsing to the shared Rust core. It bounds manifest and Rego input plus returned diagnostics. Rego bundle compilation and runtime evaluation remain separate host or generator checks.
 
 `guard_litellm_proxy()` targets the LiteLLM proxy server ASGI app and needs the proxy extra. Install real-package tests with `litellm[proxy]`, not bare `litellm`. Pass `litellm.proxy.proxy_server.app` explicitly or let `guard_litellm_proxy(control)` load it lazily. The LiteLLM proxy rejects client supplied `api_base` and credentials unless proxy configuration allows client-side credentials, for example `proxy_server.general_settings["allow_client_side_credentials"] = True` in local tests.
 

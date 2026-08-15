@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 /**
- * createGovernedTool — wraps a Mastra tool with governance, trust, and audit.
+ * createGovernedTool wraps a Mastra tool with ACS, trust, and audit.
  *
  * Combines all three middleware layers into a single wrapper that
  * intercepts tool execution with policy checks, trust verification,
@@ -22,10 +22,7 @@
  * });
  *
  * const governedSearch = createGovernedTool(searchTool, {
- *   governance: {
- *     rateLimitPerMinute: 30,
- *     blockedPatterns: ["(?i)ignore previous instructions"],
- *   },
+ *   control: AgentControl.fromPath("./manifest.yaml"),
  *   trust: {
  *     minTrustScore: 500,
  *     getTrustScore: async (agentId) => 750,
@@ -35,17 +32,29 @@
  * ```
  */
 
-import { governanceMiddleware } from "./governance";
+import {
+  AgentControlBlockedError,
+  type AgentControl,
+  type InterventionPointResult,
+  type JsonValue,
+} from "agent-control-specification";
 import { trustGate } from "./trust";
 import { auditMiddleware } from "./audit";
-import type { GovernancePolicy, TrustConfig, AuditConfig } from "./types";
+import type {
+  AuditConfig,
+  PolicyDecisionAudit,
+  TrustConfig,
+} from "./types";
 
 export interface GovernedToolOptions {
-  governance?: GovernancePolicy;
+  /** Native ACS runtime created from a manifest. */
+  control: AgentControl;
   trust?: TrustConfig;
   audit?: AuditConfig;
   /** Agent ID for trust and audit (default: "default-agent"). */
   agentId?: string;
+  /** Complete host snapshot fields merged into tool intervention points. */
+  snapshot?: Record<string, JsonValue>;
 }
 
 /**
@@ -58,9 +67,7 @@ export function createGovernedTool<T extends { id: string; execute: (...args: an
   tool: T,
   options: GovernedToolOptions
 ): T {
-  const gov = options.governance
-    ? governanceMiddleware(options.governance)
-    : null;
+  const control = options.control;
   const trust = options.trust ? trustGate(options.trust) : null;
   const audit = options.audit ? auditMiddleware(options.audit) : null;
   const agentId = options.agentId ?? "default-agent";
@@ -91,67 +98,61 @@ export function createGovernedTool<T extends { id: string; execute: (...args: an
       }
     }
 
-    // 2. Governance policy check
-    if (gov) {
-      const result = await gov.check(input, tool.id, agentId);
-      if (!result.allowed) {
-        if (audit) {
-          await audit.record({
-            toolId: tool.id,
-            agentId,
-            action: "deny",
-            input,
-            governance: result,
-          });
-        }
-        throw new Error(
-          `Governance policy violation: ${result.violations.join("; ")}`
-        );
-      }
-      // Use redacted input if PII was stripped
-      if (result.redactedInput !== undefined) {
-        args[0] = result.redactedInput;
-      }
-    }
-
-    // 3. Record invocation
-    if (audit) {
-      await audit.record({
-        toolId: tool.id,
-        agentId,
-        action: "invoke",
-        input,
-      });
-    }
-
-    // 4. Execute the original tool
+    // 2. ACS policy evaluation, transform application, and tool execution
     try {
-      const output = await originalExecute.apply(this, args);
+      const result = await control.runTool(
+        tool.id,
+        input as JsonValue,
+        async (effectiveInput) => {
+          args[0] = effectiveInput;
+          if (audit) {
+            await audit.record({
+              toolId: tool.id,
+              agentId,
+              action: "invoke",
+              input: effectiveInput,
+            });
+          }
+          return (await originalExecute.apply(this, args)) as JsonValue;
+        },
+        { snapshot: options.snapshot },
+      );
       const duration_ms = Date.now() - startTime;
 
-      // 5. Record completion
       if (audit) {
         await audit.record({
           toolId: tool.id,
           agentId,
           action: "complete",
-          output,
+          output: result.value,
           duration_ms,
+          policy: toPolicyAudit(result.postToolCallResult),
         });
       }
 
-      return output;
+      return result.value;
     } catch (error) {
       const duration_ms = Date.now() - startTime;
 
       if (audit) {
-        await audit.record({
-          toolId: tool.id,
-          agentId,
-          action: "error",
-          input,
-          duration_ms,
-        });
+        if (error instanceof AgentControlBlockedError) {
+          await audit.record({
+            toolId: tool.id,
+            agentId,
+            action: "deny",
+            input,
+            duration_ms,
+            policy: toPolicyAudit(error.result),
+          });
+        } else {
+          await audit.record({
+            toolId: tool.id,
+            agentId,
+            action: "error",
+            input,
+            duration_ms,
+          });
+        }
       }
 
       throw error;
@@ -159,4 +160,15 @@ export function createGovernedTool<T extends { id: string; execute: (...args: an
   };
 
   return { ...tool, execute: governedExecute } as T;
+}
+
+function toPolicyAudit(
+  result: InterventionPointResult,
+): PolicyDecisionAudit {
+  return {
+    verdict: result.verdict.decision,
+    reason: result.verdict.reason ?? undefined,
+    inputIdentity: result.inputIdentity ?? undefined,
+    enforcedIdentity: result.enforcedIdentity ?? undefined,
+  };
 }

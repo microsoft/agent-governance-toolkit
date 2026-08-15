@@ -1,3 +1,9 @@
+---
+title: "Tutorial 41: Defense-in-Depth with Advisory Classifiers"
+last_reviewed: 2026-04-23
+owner: agt-maintainers
+---
+
 # Tutorial 41: Defense-in-Depth with Advisory Classifiers
 
 > **Time**: 15 minutes · **Level**: Advanced · **Prerequisites**: Tutorial 36 (govern basics)

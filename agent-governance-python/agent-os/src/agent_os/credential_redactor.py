@@ -171,7 +171,17 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="US SSN",
-            pattern=re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+            # Accept the space and dot separated forms the dash-only pattern
+            # missed (issue #3239). A separator is required: this module feeds
+            # the MCP gateway, where pii_leak is a hard-block category, so a
+            # bare nine-digit match would deny any request carrying a tracking
+            # number, ZIP+4, or ABA routing number. policy/lib/patterns.rego
+            # keeps the looser form for detection-only reporting.
+            # Use the lookaround idiom documented above rather than ``\b`` so an
+            # SSN adjacent to ``_`` (``employee_123-45-6789``) is still detected.
+            pattern=re.compile(
+                r"(?<![A-Za-z0-9])\d{3}[\s.-]\d{2}[\s.-]\d{4}(?![A-Za-z0-9])"
+            ),
         ),
         CredentialPattern(
             name="Credit card number",

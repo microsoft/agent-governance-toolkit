@@ -1,3 +1,9 @@
+---
+title: "Known Limitations & Design Boundaries"
+last_reviewed: 2026-05-19
+owner: agt-maintainers
+---
+
 # Known Limitations & Design Boundaries
 
 > **Transparency is a feature.** This document describes what AGT does *not* do
@@ -93,10 +99,10 @@ AGT is designed for enterprise governance. For simple use cases, the full stack
 
 **Minimal path (no mesh, no identity):**
 ```python
-from agent_os.policies import PolicyEvaluator
-evaluator = PolicyEvaluator()
-evaluator.load_policies("policies/")
-# That's it — just policy evaluation, no crypto, no mesh
+from agent_control_specification import AgentControl
+
+runtime = AgentControl.from_path("policies/manifest.yaml")
+# Native ACS policy evaluation, with no mesh or identity dependency.
 ```
 
 **Full path (everything):**

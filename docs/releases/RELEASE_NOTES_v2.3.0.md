@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit v2.3.0"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit v2.3.0
 
 > [!IMPORTANT]
@@ -49,7 +55,7 @@ entire codebase and two PyPI package renames to avoid namespace collisions.
 ### Runtime Reliability & Observability
 
 - **Event bus** — Cross-gate publish/subscribe system (`GovernanceEventBus`) enabling loose
-  coupling between governance gates (PolicyEvaluator, TrustGate, CircuitBreaker) with standard
+  coupling between governance gates, trust checks, and circuit breakers with standard
   event types for policy violations, trust changes, circuit state, and budget overages
   (#398, #415)
 - **Task outcomes** — `TaskOutcomeRecorder` tracks agent task successes/failures with
@@ -59,8 +65,8 @@ entire codebase and two PyPI package renames to avoid namespace collisions.
   overhead on incremental policy updates (#395, #415)
 - **Sandbox provider** — Pluggable sandbox provider abstraction for swapping isolation backends
   (#394, #415)
-- **Graceful degradation** — `agent_os.compat` module provides no-op fallbacks
-  (`NoOpPolicyEvaluator`, `NoOpGovernanceMiddleware`) allowing consumers to optionally depend
+- **Graceful degradation** — the release provided no-op governance fallbacks,
+  allowing consumers to optionally depend
   on the toolkit without try/except boilerplate (#410, #414)
 - **Budget policies** — `BudgetPolicy` dataclass defines resource consumption limits (max tokens,
   tool calls, cost, duration) with `BudgetTracker` for monitoring usage and detecting overages
@@ -261,10 +267,10 @@ Two PyPI packages have been renamed to avoid namespace collisions:
 
 ## Full Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes.
+See [CHANGELOG.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md) for the complete list of changes.
 
 **Full Changelog:** https://github.com/microsoft/agent-governance-toolkit/compare/v2.2.0...v2.3.0
 
 ## License
 
-[MIT](LICENSE) — © Microsoft Corporation
+[MIT](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) — © Microsoft Corporation

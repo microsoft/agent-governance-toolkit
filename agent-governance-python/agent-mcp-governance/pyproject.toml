@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=83.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent_mcp_governance"
@@ -11,11 +11,23 @@ requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-protocols>=4.1.0,<6.0"]
+dependencies = ["agent-governance-toolkit-protocols>=5.0.0,<6.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 "Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/agent_mcp_governance"]
+# Dep-only deprecation stub: the published wheel ships NO source, it only
+# redirects to agent-governance-toolkit-protocols (see [project].dependencies).
+# The `agent_mcp_governance` top-level package is owned solely by -protocols,
+# which force-includes ../agent-mcp-governance/src/agent_mcp_governance.
+# Shipping it here too would put the same top-level import path in two
+# distributions and cause an order/version-dependent "Frankenstein" install.
+# Hatchling's bypass-selection cannot express this here: its default heuristic
+# runs first and would re-ship src/agent_mcp_governance because the
+# distribution name matches the tree. An explicit setuptools `packages = []`
+# (the agentmesh-primitives stub pattern) builds a wheel with no package of its
+# own. The src/ tree stays in-repo for CI and as the source of truth
+# force-included by -protocols.
+[tool.setuptools]
+packages = []
