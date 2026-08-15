@@ -1,3 +1,9 @@
+---
+title: "🛡️ OWASP MCP Top 10 — Compliance Mapping"
+last_reviewed: 2026-07-07
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # 🛡️ OWASP MCP Top 10 — Compliance Mapping

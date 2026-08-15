@@ -44,5 +44,5 @@ instead of widening access. Unrestricted container networking requires
 
 ## Related implementation
 
-- [`DockerSandboxProvider`](../../agent-governance-python/agent-sandbox/src/agent_sandbox/docker_provider/provider.py)
-- [Agent Sandbox README](../../agent-governance-python/agent-sandbox/README.md)
+- [`DockerSandboxProvider`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/src/agent_sandbox/docker_provider/provider.py)
+- [Agent Sandbox README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/README.md)

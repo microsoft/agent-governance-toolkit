@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -40,6 +41,48 @@ def extract_added_lines(diff_text: str) -> str:
     return "\n".join(added_lines) + ("\n" if added_lines else "")
 
 
+def resolve_merge_base(repo: Path, base: str) -> str:
+    """Return the commit where `base` and the working tree's history diverged.
+
+    `git diff <base>` compares the tip of the base branch against the working
+    tree, so every commit landing on the base after the branch was cut shows up
+    as a change here -- and the pre-existing side of each of those appears as an
+    *added* line, because the working tree still holds it while the base no
+    longer does. A branch a few dozen commits behind main therefore reports most
+    of the repository as newly added, and a caller scoping a check to "what this
+    branch added" gets the whole divergence instead.
+
+    Diffing from the merge base excludes the base-side commits and leaves only
+    what this branch did. Uncommitted work is still included, which is why this
+    resolves the base rather than switching to `git diff base...HEAD` -- that
+    form compares two commits and would ignore the working tree, and this script
+    is also run locally before committing.
+    """
+    result = subprocess.run(
+        ["git", "merge-base", base, "HEAD"],
+        cwd=repo,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        # No merge base: unrelated histories, or a shallow clone whose grafts do
+        # not reach far enough back. Fall back to the base tip, which is what
+        # this script always used. Over-reporting is the safe direction for the
+        # checks built on this -- they flag too much rather than miss something.
+        message = result.stderr.strip() or f"git merge-base exited {result.returncode}"
+        # stderr, not stdout: without `--output` this script emits its result on
+        # stdout, so a warning printed there is read back as one of the changed
+        # file names (or as an added line) by whatever consumes it.
+        print(
+            f"warning: cannot resolve merge base with {base} ({message}); diffing against its tip instead",
+            file=sys.stderr,
+        )
+        return base
+    return result.stdout.strip() or base
+
+
 def run_git_diff(
     repo: Path,
     base: str,
@@ -58,7 +101,7 @@ def run_git_diff(
         command.append("--name-only")
     else:
         command.append("--unified=0")
-    command.extend([base, "--", *pathspecs])
+    command.extend([resolve_merge_base(repo, base), "--", *pathspecs])
     result = subprocess.run(
         command,
         cwd=repo,

@@ -1,3 +1,9 @@
+---
+title: "Tutorial 05 — Agent Reliability Engineering"
+last_reviewed: 2026-05-11
+owner: agt-maintainers
+---
+
 # Tutorial 05 — Agent Reliability Engineering
 
 > **Windows users:** If characters appear corrupted in your terminal, run `chcp 65001` before starting, or use Windows Terminal / VS Code terminal which support UTF-8 by default.
@@ -19,7 +25,7 @@ rogue detection, circuit breakers, SLOs, chaos testing, and cost controls.
 
 > **Install:** `pip install agent-sre`
 >
-> **See also:** [Deployment Guides](../deployment/README.md) | [OWASP ASI Reference](https://owaspai.org/)
+> **See also:** [Deployment Guides](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) | [OWASP ASI Reference](https://owaspai.org/)
 
 ---
 

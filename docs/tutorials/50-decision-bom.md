@@ -1,3 +1,9 @@
+---
+title: "Tutorial 50: Decision Bill of Materials (Decision BOM)"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 # Tutorial 50: Decision Bill of Materials (Decision BOM)
 
 > **Package:** `agentmesh-platform` · **Time:** 15 minutes · **Level:** Advanced

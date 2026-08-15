@@ -99,6 +99,8 @@ class GovernancePolicyFinding:
     kwargs: dict[str, Any]
     migration_kwargs: dict[str, Any] = field(default_factory=dict)
     manual_review: list[str] = field(default_factory=list)
+    # Advisory only: recorded in the report but never blocks the migration.
+    notes: list[str] = field(default_factory=list)
     manifest_path: Path | None = None
     rewrite_snippet: str = ""
     applied: bool = False
@@ -624,6 +626,14 @@ def _migrate_governance_chain(
         return finding
 
     if write:
+        # Same portability rule the GovernancePolicy path follows: the manifest
+        # lands in chain_root next to its bundle, so record the bundle
+        # relatively or the project stops working once cloned or containerized.
+        policy = manifest.get("policies", {}).get("agt_legacy_rules")
+        if isinstance(policy, dict) and policy.get("bundle"):
+            policy["bundle"] = os.path.relpath(
+                Path(policy["bundle"]).resolve(), manifest_path.parent.resolve()
+            )
         with tempfile.TemporaryDirectory(
             prefix=".agt_chain_migration_", dir=chain_root
         ) as staging_dir:
@@ -721,6 +731,20 @@ def _migrate_governance_policy(
         )
         return
 
+    # The generated confidence rule reads ``input.annotations.confidence.score``,
+    # which only an annotator can populate. The migrator has no annotator to
+    # declare, so the rule is inert until the user wires one up. Say so instead
+    # of letting a v4 policy look like it still enforces a threshold it cannot.
+    if inputs.confidence_threshold > 0:
+        _add_note(
+            finding,
+            "confidence_threshold "
+            f"({inputs.confidence_threshold}) migrated to a Rego rule that reads "
+            "'input.annotations.confidence.score'. Nothing populates that field "
+            "until you declare an annotator that emits a confidence score, so "
+            "the threshold is not enforced until you do.",
+        )
+
     bundle_dir = policies_dir / f"{base_name}_bundle"
     if manifest_path.exists() or bundle_dir.exists():
         finding.manual_review.append(
@@ -751,8 +775,11 @@ def _migrate_governance_policy(
                 bundle_dir=staging_bundle,
                 policy_id=policy_id,
             )
-            manifest["policies"][policy_id]["bundle"] = str(
-                bundle_dir.resolve()
+            # Relative to the manifest so the migrated project stays portable:
+            # an absolute path breaks the moment the repo is cloned elsewhere or
+            # built into a container.
+            manifest["policies"][policy_id]["bundle"] = os.path.relpath(
+                bundle_dir.resolve(), manifest_path.parent.resolve()
             )
             validate_manifest(yaml.safe_dump(manifest, sort_keys=False))
             staged_manifest = staging / "manifest.yaml"
@@ -783,6 +810,12 @@ def _migrate_governance_policy(
             return
     finding.manifest_path = manifest_path
     finding.applied = True
+
+
+def _add_note(finding: GovernancePolicyFinding, note: str) -> None:
+    """Record an advisory note once; this runs again on the --write pass."""
+    if note not in finding.notes:
+        finding.notes.append(note)
 
 
 def _render_governance_rewrite_snippet(
@@ -927,6 +960,12 @@ def render_report(report: MigrationReport) -> str:
                 lines.append("")
                 for reason in gp.manual_review:
                     lines.append(f"- {_md_escape(reason)}")
+                lines.append("")
+            if gp.notes:
+                lines.append("**Notes:**")
+                lines.append("")
+                for note in gp.notes:
+                    lines.append(f"- {_md_escape(note)}")
                 lines.append("")
             lines.append("**Suggested code rewrite:**")
             lines.append("")

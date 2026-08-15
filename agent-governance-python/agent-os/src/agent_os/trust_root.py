@@ -71,7 +71,26 @@ class TrustRoot:
         is_agent = supervisor_config.get("is_agent", True)
         if level is None or not supervisor_config.get("name"):
             return False
-        return not (level == 0 and is_agent)
+
+        # The level must be a real integer before it can be compared against the
+        # root. ``"0" == 0`` is False in Python, so a string level skipped the
+        # determinism check below entirely rather than failing it. ``bool`` is a
+        # subclass of ``int`` and ``False == 0``, so it is excluded explicitly
+        # instead of being read as the root level.
+        if isinstance(level, bool) or not isinstance(level, int):
+            return False
+
+        # Level 0 is the root; higher levels are closer to workers. A negative
+        # level would sit *above* the deterministic root, which is the one place
+        # in the hierarchy that must not be occupied by an agent.
+        if level < 0:
+            return False
+
+        # Root level must be deterministic — not an LLM agent
+        if level == 0 and is_agent:
+            return False
+
+        return True
 
     def is_deterministic(self) -> bool:
         """The authority delegates only to the deterministic ACS runtime."""

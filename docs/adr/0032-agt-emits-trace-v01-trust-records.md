@@ -1,3 +1,9 @@
+---
+title: "ADR 0032: AGT emits TRACE v0.1 Trust Records"
+last_reviewed: 2026-06-17
+owner: agt-maintainers
+---
+
 # ADR 0032: AGT emits TRACE v0.1 Trust Records
 
 - Status: accepted

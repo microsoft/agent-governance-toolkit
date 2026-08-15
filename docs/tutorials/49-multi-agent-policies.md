@@ -1,3 +1,9 @@
+---
+title: "Tutorial 49: Multi-Agent Collective Policies"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 # Tutorial 49: Multi-Agent Collective Policies
 
 > **Package:** `agentmesh-platform` · **Time:** 20 minutes · **Level:** Advanced

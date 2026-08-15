@@ -1,3 +1,9 @@
+---
+title: "SEC-Compliant Algorithmic Trading Agents at Merchantlife Trading Group"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # SEC-Compliant Algorithmic Trading Agents at Merchantlife Trading Group
 _Disclaimer: This document presents a hypothetical use case intended to guide architecture and compliance planning. No real-world company data or metrics are included. This case study references AGT version 3.1.0. Component names and capabilities may differ in newer versions. Refer to the current documentation for the latest features. AGT is a tool to assist with compliance but does not guarantee compliance. Compliance depends on proper implementation and operational practices._
 
