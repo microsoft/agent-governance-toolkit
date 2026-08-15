@@ -369,8 +369,11 @@ class MerkleAuditChain:
             left_idx = parent_idx * 2
             right_idx = left_idx + 1
 
+            # After the capacity-doubling above, every level has an even length,
+            # so a left node at an even index always has its right sibling in
+            # range; no odd-duplication fallback is needed (matching _rebuild_tree).
             left = self._tree[level_idx][left_idx]
-            right = self._tree[level_idx][right_idx] if right_idx < len(self._tree[level_idx]) else left
+            right = self._tree[level_idx][right_idx]
 
             combined = left.hash + right.hash
             parent_hash = hashlib.sha256(combined.encode()).hexdigest()

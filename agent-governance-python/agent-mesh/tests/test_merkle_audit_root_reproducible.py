@@ -130,15 +130,21 @@ class TestMerkleRootReproducible:
         assert _textbook_merkle_root([e.entry_hash for e in chain._entries]) == recorded
 
     def test_inclusion_proofs_verify_against_recorded_root(self):
-        chain = MerkleAuditChain()
-        entries = [_entry(i) for i in range(5)]
-        for entry in entries:
-            chain.add_entry(entry)
-        root = chain.get_root_hash()
-        for entry in entries:
-            proof = chain.get_proof(entry.entry_id)
-            assert proof is not None
-            assert chain.verify_proof(entry.entry_hash, proof, root)
+        # Proofs changed across every affected size, not just the n=5 reproducer,
+        # so verify every entry's proof at several sizes that span capacity
+        # doublings (6, 9, 13 and 20 all diverged before the fix).
+        for n in (5, 6, 9, 13, 20):
+            chain = MerkleAuditChain()
+            entries = [_entry(i) for i in range(n)]
+            for entry in entries:
+                chain.add_entry(entry)
+            root = chain.get_root_hash()
+            for entry in entries:
+                proof = chain.get_proof(entry.entry_id)
+                assert proof is not None, f"n={n}: no proof for {entry.entry_id}"
+                assert chain.verify_proof(entry.entry_hash, proof, root), (
+                    f"n={n}: proof for {entry.entry_id} did not verify against the recorded root"
+                )
 
     def test_tampered_leaf_changes_the_rebuilt_root(self):
         chain = MerkleAuditChain()
