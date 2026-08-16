@@ -260,6 +260,7 @@ export interface KillSwitchResult {
   action?: string;
   reason: string;
   killedAt: string;
+  terminated: boolean;
   callbacksExecuted: number;
   compensationsExecuted: number;
   handoffAgentId?: string;
