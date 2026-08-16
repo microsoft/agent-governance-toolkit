@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from agentmesh.engine_api.capabilities import capability_flags
 from agentmesh.engine_api.models import AuditLogResponse
@@ -34,6 +34,7 @@ router = APIRouter()
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def get_audit_log(
     request: Request,
+    response: Response,
     pagination: PaginationParams = Depends(),
     agent_did: str | None = Query(None, description="Filter by acting agent DID"),
     from_: datetime | None = Query(
@@ -42,5 +43,6 @@ async def get_audit_log(
     to: datetime | None = Query(None, description="End of time range (date-time)"),
 ) -> AuditLogResponse:
     """Return audit log entries (empty until the audit backend ships)."""
+    response.headers["X-AGT-Backend-Status"] = "placeholder"
     items, page = paginate([], pagination)
     return AuditLogResponse(items=items, pagination=page)
