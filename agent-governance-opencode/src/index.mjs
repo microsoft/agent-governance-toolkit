@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import { resolve } from "node:path";
+
 import {
   checkArbitraryText,
   evaluateOpenCodePrompt,
@@ -9,6 +11,11 @@ import {
   getPolicyStatus,
   loadPolicy,
 } from "../lib/policy.mjs";
+
+// Track registrations by OpenCode client instance and normalized workspace.
+// The WeakMap lets registrations disappear with their host client instead of
+// keeping process-wide workspace state alive indefinitely.
+const registrationsByClient = new WeakMap();
 
 /**
  * AGT governance plugin for OpenCode.
@@ -32,6 +39,12 @@ import {
  * @type {Plugin}
  */
 export const AgtGovernance = async (ctx) => {
+  const registration = claimRegistration(ctx);
+  if (registration.duplicate) {
+    await logDuplicateRegistration(ctx, registration.workspace);
+    return {};
+  }
+
   // OpenCode loads plugins once per process. Cache the compiled policy so we
   // don't re-read it on every hook invocation.
   let stateCache;
@@ -89,7 +102,7 @@ export const AgtGovernance = async (ctx) => {
       });
 
       if (result.effect === "deny") {
-        // throwing here silently breaks the OpenCode session. Exception message is never displayed to the user, this is not the way to go...       
+        // throwing here silently breaks the OpenCode session. Exception message is never displayed to the user, this is not the way to go...
         throw new Error(result.reason || "AGT governance blocked the submitted prompt.");
       }
     },
@@ -151,9 +164,9 @@ export const AgtGovernance = async (ctx) => {
       agt_policy_check_text: {
         description:
           "Check text against AGT prompt, context-poisoning, and MCP-style threat detectors.",
-          args: {
-            text: { type: "string", description: "Text to inspect." },
-          },
+        args: {
+          text: { type: "string", description: "Text to inspect." },
+        },
         async execute(args) {
           const state = await getState();
           const text = typeof args?.text === "string" ? args.text : "";
@@ -165,6 +178,56 @@ export const AgtGovernance = async (ctx) => {
 };
 
 export default AgtGovernance;
+
+function claimRegistration(ctx) {
+  const client = ctx?.client;
+  const clientType = typeof client;
+  const workspaceValue =
+    typeof ctx?.worktree === "string" && ctx.worktree.trim()
+      ? ctx.worktree
+      : typeof ctx?.directory === "string" && ctx.directory.trim()
+        ? ctx.directory
+        : undefined;
+  const workspace = workspaceValue ? resolve(workspaceValue) : undefined;
+
+  // Without both a stable client object and workspace path, do not suppress a
+  // registration because independent OpenCode instances cannot be distinguished.
+  if ((clientType !== "object" && clientType !== "function") || client === null || !workspace) {
+    return { duplicate: false, workspace };
+  }
+
+  let workspaces = registrationsByClient.get(client);
+  if (!workspaces) {
+    workspaces = new Set();
+    registrationsByClient.set(client, workspaces);
+  }
+
+  if (workspaces.has(workspace)) {
+    return { duplicate: true, workspace };
+  }
+
+  workspaces.add(workspace);
+  return { duplicate: false, workspace };
+}
+
+async function logDuplicateRegistration(ctx, workspace) {
+  if (typeof ctx?.client?.app?.log !== "function") {
+    return;
+  }
+  try {
+    await ctx.client.app.log({
+      body: {
+        service: "agt-governance",
+        level: "warn",
+        message:
+          `[AGT] Duplicate OpenCode governance registration ignored for workspace ${workspace}. ` +
+          "Remove duplicate AGT workspace shims or package registrations.",
+      },
+    });
+  } catch {
+    // best-effort — duplicate suppression must not depend on the log sink
+  }
+}
 
 function extractPromptFromEvent(event) {
   if (!event || typeof event !== "object") {
