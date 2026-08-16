@@ -636,4 +636,144 @@ public class PolicyRuleTests
         var context = new Dictionary<string, object> { ["score"] = 0.1 + 0.2 };
         Assert.False(rule.Evaluate(context));
     }
+
+    [Fact]
+    public void Evaluate_NumericInequality_MissingField_ReturnsTrue()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-missing",
+            Condition = "count != 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>();
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericInequality_NaNField_ReturnsTrue()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-nan",
+            Condition = "score != 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = double.NaN };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericInequality_StringFieldCannotParse_ReturnsTrue()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-unparseable",
+            Condition = "count != 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = "five" };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_NaNField_ReturnsFalse()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-nan",
+            Condition = "score == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = double.NaN };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_NullField_ReturnsFalse()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-null",
+            Condition = "count == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = null };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericInequality_NullField_ReturnsTrue()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-null",
+            Condition = "count != 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = null };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_NumericStringField_Matches()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-string-coerce",
+            Condition = "count == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["count"] = "5" };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_NegativeZero_MatchesZero()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-negative-zero",
+            Condition = "score == 0",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = -0.0 };
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericEquality_InfinityField_ReturnsFalse()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-eq-infinity",
+            Condition = "score == 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = double.PositiveInfinity };
+        Assert.False(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_NumericInequality_InfinityField_ReturnsTrue()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "test-numeric-neq-infinity",
+            Condition = "score != 5",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object> { ["score"] = double.PositiveInfinity };
+        Assert.True(rule.Evaluate(context));
+    }
 }
