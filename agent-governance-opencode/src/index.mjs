@@ -20,8 +20,8 @@ const registrationsByClient = new WeakMap();
 /**
  * AGT governance plugin for OpenCode.
  *
- * Loads the AGT policy once per OpenCode process and wires it into the
- * OpenCode plugin contract:
+ * Loads the AGT policy once per effective plugin registration and wires it into
+ * the OpenCode plugin contract:
  *
  *  - session.created           — log AGT governance status at session start
  *  - event (chat.params/start) — scan submitted prompts; throw to block
@@ -45,8 +45,8 @@ export const AgtGovernance = async (ctx) => {
     return {};
   }
 
-  // OpenCode loads plugins once per process. Cache the compiled policy so we
-  // don't re-read it on every hook invocation.
+  // Cache the compiled policy for this effective registration so we do not
+  // re-read it on every hook invocation.
   let stateCache;
   let stateError;
 
