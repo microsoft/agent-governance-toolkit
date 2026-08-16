@@ -12,7 +12,7 @@ consistency before matching.
 
 from __future__ import annotations
 
-from fnmatch import fnmatch
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Optional
 
@@ -50,4 +50,4 @@ def filter_by_scope(
         scope_dir = normalized_scope.rstrip("/")
         return action_rel == scope_dir or action_rel.startswith(f"{scope_dir}/")
 
-    return fnmatch(action_rel, normalized_scope)
+    return fnmatchcase(action_rel, normalized_scope)
