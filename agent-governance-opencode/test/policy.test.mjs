@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { appendAuditEntry } from "../lib/audit.mjs";
 import {
   checkArbitraryText,
   evaluateOpenCodePrompt,
@@ -183,6 +184,29 @@ test("corrupt audit logs are reported invalid and fail closed on new decisions",
 
   assert.equal(result.effect, "deny");
   assert.match(result.reason, /failed closed/i);
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("concurrent appendAuditEntry calls serialize and maintain valid hash chain", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-concurrent-"));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath });
+
+  await Promise.all(
+    Array.from({ length: 15 }, (_, i) =>
+      appendAuditEntry(auditPath, {
+        agentId: `test-agent-${i}`,
+        action: `tool.test_${i}`,
+        decision: "allow",
+      }),
+    ),
+  );
+
+  const status = await getPolicyStatus(state);
+  assert.equal(status.auditValid, true);
+  assert.equal(status.auditEntries, 15);
+  assert.equal(status.auditError, undefined);
 
   await rm(root, { recursive: true, force: true });
 });

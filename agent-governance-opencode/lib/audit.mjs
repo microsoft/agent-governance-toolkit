@@ -9,7 +9,22 @@ import { dirname } from "node:path";
 const GENESIS_HASH = "0".repeat(64);
 const MAX_ENTRIES = 10000;
 
+let writeQueue = Promise.resolve();
+
 export async function appendAuditEntry(auditPath, entry) {
+  return new Promise((resolve, reject) => {
+    writeQueue = writeQueue
+      .then(async () => {
+        const result = await _appendAuditEntryInternal(auditPath, entry);
+        resolve(result);
+      })
+      .catch((err) => {
+        reject(err);
+      });
+  });
+}
+
+async function _appendAuditEntryInternal(auditPath, entry) {
   const entries = await loadAuditEntries(auditPath);
   if (!verifyAuditEntries(entries)) {
     throw new Error(`Audit log at ${auditPath} failed hash-chain verification.`);
@@ -62,7 +77,11 @@ export async function loadAuditEntries(auditPath) {
   }
 
   try {
-    const text = await readFile(auditPath, "utf8");
+    const raw = await readFile(auditPath, "utf8");
+    const text = raw.replace(/\0/g, "").trim();
+    if (!text) {
+      return [];
+    }
     const value = JSON.parse(text);
     if (!Array.isArray(value)) {
       throw new Error(`Audit log at ${auditPath} is not a JSON array.`);
@@ -105,7 +124,8 @@ export function verifyAuditEntries(entries) {
 
 async function writeAuditEntries(auditPath, entries) {
   await mkdir(dirname(auditPath), { recursive: true });
-  const tempPath = `${auditPath}.tmp-${process.pid}`;
+  const uniqueId = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const tempPath = `${auditPath}.tmp-${uniqueId}`;
   await writeFile(tempPath, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
   await rename(tempPath, auditPath);
 }
