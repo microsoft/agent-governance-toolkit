@@ -157,6 +157,19 @@ class CredentialRedactor:
     # These catch personally identifiable information that should not flow
     # into LLM context in enterprise governance scenarios.
     PII_PATTERNS: tuple[CredentialPattern, ...] = (
+        # --- HIPAA PHI Patterns added by SolidScripts.io ---
+        CredentialPattern(
+            name="Medical Record Number (MRN)",
+            pattern=re.compile(r"(?i)\b(?:mrn|medical\s*record)[\s#-]*([A-Z0-9]{6,12})\b"),
+        ),
+        CredentialPattern(
+            name="National Provider Identifier (NPI)",
+            pattern=re.compile(r"\b\d{10}\b"),
+        ),
+        CredentialPattern(
+            name="Health Plan ID",
+            pattern=re.compile(r"(?i)\b(?:hpid|member\s*id|policy\s*id)[\s#-]*([A-Z0-9]{8,15})\b"),
+        ),
         CredentialPattern(
             name="Email address",
             pattern=re.compile(
