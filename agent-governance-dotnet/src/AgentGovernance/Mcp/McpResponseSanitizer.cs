@@ -61,7 +61,7 @@ public sealed class McpSanitizedResponse
 /// Detects prompt injection tags, imperative override phrasing,
 /// credential leakage, and data exfiltration URLs. Thread-safe.
 /// </summary>
-public sealed class McpResponseSanitizer
+public sealed class McpResponseSanitizer : IResponseSanitizer
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(200);
 

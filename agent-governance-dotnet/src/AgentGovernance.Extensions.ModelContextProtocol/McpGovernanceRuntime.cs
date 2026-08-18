@@ -12,12 +12,12 @@ namespace AgentGovernance.Extensions.ModelContextProtocol;
 internal sealed class McpGovernanceRuntime
 {
     private readonly GovernanceKernel _kernel;
-    private readonly McpResponseSanitizer _sanitizer;
+    private readonly IResponseSanitizer _sanitizer;
     private readonly McpGovernanceOptions _options;
 
     public McpGovernanceRuntime(
         GovernanceKernel kernel,
-        McpResponseSanitizer sanitizer,
+        IResponseSanitizer sanitizer,
         IOptions<McpGovernanceOptions> options)
     {
         _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
