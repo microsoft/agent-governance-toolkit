@@ -253,6 +253,15 @@ export interface RingViolation {
 export interface KillSwitchConfig {
   enabled?: boolean;
   defaultSubstituteAgentId?: string;
+  /**
+   * Wall-clock budget for a single termination or compensation callback, in
+   * milliseconds. A callback that exceeds it is abandoned and reported as not
+   * executed, so a hung callback cannot stall the kill flow.
+   *
+   * Defaults to 5000, matching `DEFAULT_CALLBACK_TIMEOUT_SECONDS` in the
+   * Python kill switch.
+   */
+  callbackTimeoutMs?: number;
 }
 
 export interface KillSwitchResult {
