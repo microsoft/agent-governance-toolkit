@@ -13,6 +13,9 @@ authors = [
 ]
 dependencies = ["agent-governance-toolkit-integrations[openshell]>=5.0.0,<6.0"]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0,<10.0"]
+
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 "Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"

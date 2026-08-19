@@ -781,6 +781,8 @@ jobs:
             import-module: openai_agents_agentmesh
           - package: openai-agents-trust
             import-module: openai_agents_trust
+          - package: openshell-skill
+            import-module: openshell_agentmesh
           - package: pydantic-ai-governance
             import-module: pydantic_ai_governance
     steps:
