@@ -358,16 +358,37 @@ class MCPGateway:
                 )
             else:
                 sanitized, removed = self._response_scanner.sanitize_response(text, tool_name)
-                # Fail closed if sanitization errored or left a credential behind,
-                # so relaxing the credential hard-block above can never leak.
+                # Re-scan the converged output because stripping tags can splice
+                # together a previously hidden instruction tag, PII value, or
+                # exfiltration URL. Imperative prose remains allowed in SANITIZE
+                # mode; only categories the sanitizer promises to remove or the
+                # gateway cannot safely return are fail-closed here.
+                residual_scan = self._response_scanner.scan_response(sanitized, tool_name)
+                residual_block_categories = hard_block_categories | {"instruction_injection"}
+                residual_blocked = {
+                    t.category
+                    for t in residual_scan.threats
+                    if t.category in residual_block_categories
+                }
                 sanitize_failed = any(t.category == "error" for t in removed)
+                residual_scan_failed = any(t.category == "error" for t in residual_scan.threats)
                 residual_credential = CredentialRedactor.contains_credentials(sanitized)
-                if sanitize_failed or residual_credential:
+                if (
+                    sanitize_failed
+                    or residual_scan_failed
+                    or residual_credential
+                    or residual_blocked
+                ):
+                    residual_threats = [
+                        {"category": t.category, "description": t.description}
+                        for t in residual_scan.threats
+                        if t.category in residual_block_categories or t.category == "error"
+                    ]
                     decision = MCPResponseDecision(
                         allowed=False,
                         reason="Response blocked — sanitization incomplete (fail closed)",
                         content=None,
-                        threats=threat_dicts,
+                        threats=threat_dicts + residual_threats,
                         action="blocked",
                     )
                 else:
