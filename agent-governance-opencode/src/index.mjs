@@ -211,21 +211,25 @@ function claimRegistration(ctx) {
 }
 
 async function logDuplicateRegistration(ctx, workspace) {
+  const message =
+    `[AGT] Duplicate OpenCode governance registration ignored for workspace ${workspace}. ` +
+    "Remove duplicate AGT workspace shims or package registrations.";
+
   if (typeof ctx?.client?.app?.log !== "function") {
+    console.warn(message);
     return;
   }
+
   try {
     await ctx.client.app.log({
       body: {
         service: "agt-governance",
         level: "warn",
-        message:
-          `[AGT] Duplicate OpenCode governance registration ignored for workspace ${workspace}. ` +
-          "Remove duplicate AGT workspace shims or package registrations.",
+        message,
       },
     });
   } catch {
-    // best-effort — duplicate suppression must not depend on the log sink
+    console.warn(message);
   }
 }
 
