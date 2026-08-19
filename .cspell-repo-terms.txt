@@ -550,6 +550,7 @@ levelname
 liamcrumm
 libagent
 libc
+linkbase
 linkcheck
 linkified
 linkpkg
