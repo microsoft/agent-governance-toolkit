@@ -127,6 +127,45 @@ The plugin loads policy from (in order):
 Audit log path defaults to `~/.config/opencode/agt/audit.json` and can be
 overridden via `AGT_OPENCODE_AUDIT_PATH`.
 
+### Positive command and URL allowlists
+
+Positive allowlists are opt-in, so existing policies keep their current
+behavior. Set the relevant default effect to `deny` to make unmatched values
+fail closed.
+
+For command-bearing tool calls, configure `toolPolicies` with:
+
+- `allowedCommandPatterns`: regex pattern objects with `source` and optional
+  `flags`
+- `commandDefaultEffect`: `allow` (default) or `deny`
+
+Commands are normalized only for outer whitespace and CRLF line endings before
+matching. Use anchored patterns when the whole command must match. Stateful
+regex flags (`g` and `y`) are rejected because they make repeated evaluations
+history-dependent.
+
+For HTTP(S) resources, configure `directResourcePolicies` with:
+
+- `allowedDomains`: exact hosts or `*.example.com` subdomain wildcards, with an
+  optional explicit port such as `internal.example:8443`
+- `allowedUrlPatterns`: regex pattern objects evaluated against the normalized
+  full URL
+- `urlDefaultEffect`: `allow` (default) or `deny`
+
+A wildcard such as `*.example.com` does not include the apex `example.com`.
+A domain without a port matches that host on any port; specifying a port
+restricts the match to that effective port. Every HTTP(S) string found in tool
+arguments is checked, so an allowed primary URL does not make a separate,
+unapproved redirect-target argument acceptable. Runtime redirects that are not
+surfaced to the plugin remain the responsibility of the HTTP client or host.
+
+Existing deny and review rules keep their precedence. An allowlist match only
+means the positive gate is satisfied; it cannot override a deny from
+`blockedToolCalls`, `urlRules`, or another policy backend.
+
+A complete opt-in example is provided at
+`config/allowlist-policy.example.json`.
+
 ## Important parity notes
 
 - OpenCode's in-process plugin contract does not currently expose a server-side
