@@ -45,15 +45,14 @@ governance tools from external workflows.
 
 ## Current scope
 
-This initial package enforces:
+This package enforces:
 
-- `session.start`           — injects AGT governance context into the session
-- `event` (chat-style)      — scans submitted prompts; throws to block
+- `session.created`         — logs AGT governance status at session start
+- `event`                   — scans prompt-bearing events; throws to block
 - `tool.execute.before`     — allow / review / deny tool calls
 - `tool.execute.after`      — scans tool output and redacts known secret
                               patterns (AWS, GitHub PAT, OpenAI, JWT, PEM
                               private keys, Azure storage keys)
-- `tool.execute.error`      — records audit entry for failed tool calls
 
 It also exposes two custom tools (in-process **and** via the stdio MCP server):
 
@@ -76,10 +75,15 @@ npm run check
 OpenCode loads plugins from:
 
 1. `opencode.json` `plugin` entries (npm specifiers)
-2. `~/.config/opencode/plugins/*.{ts,js,mjs}` (user-global)
-3. `.opencode/plugins/*.{ts,js,mjs}` (workspace-local)
+2. `~/.config/opencode/plugin/*.{ts,js}` or `~/.config/opencode/plugins/*.{ts,js}`
+   (user-global)
+3. `.opencode/plugin/*.{ts,js}` or `.opencode/plugins/*.{ts,js}`
+   (workspace-local)
 
-### Option A — workspace `opencode.json`
+OpenCode 1.18.x auto-discovers only `.ts` and `.js` workspace plugin files —
+`.mjs` shims are not discovered.
+
+### Option A — workspace `opencode.json` (recommended)
 
 ```json
 {
@@ -88,9 +92,11 @@ OpenCode loads plugins from:
 }
 ```
 
-### Option B — workspace plugin file (no install required)
+### Option B — workspace plugin file (repo-local development)
 
-Create `.opencode/plugins/agt.mjs`:
+Create `.opencode/plugins/agt.js`. The re-export below resolves against an
+AGT monorepo checkout, so this option is intended for developing the plugin
+from this repository — it is not installation-free for general consumers:
 
 ```js
 export { default } from "../../agent-governance-opencode/src/index.mjs";

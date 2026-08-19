@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-05-29
+last_reviewed: 2026-08-19
 owner: agt-maintainers
 title: OpenCode CLI governance package
 description: AGT in-process plugin for the OpenCode CLI — enforce policy on prompts, tools, and tool output.
@@ -30,11 +30,10 @@ That model lets this package:
 
 | OpenCode hook | AGT behavior |
 |---|---|
-| `session.start` | Injects governance context describing the active policy and mode. |
-| `event` (chat-style) | Scans the submitted prompt with the AGT prompt-defense backend. Throws on `deny`. |
+| `session.created` | Logs AGT governance status at session start (best-effort; does not inject session context). |
+| `event` | Scans prompt-bearing events (`message.part.updated` text parts) with the AGT prompt-defense backend. Throws on `deny`. |
 | `tool.execute.before` | Runs `evaluateOpenCodeTool`. Throws on `deny`; marks args on `review`. |
 | `tool.execute.after` | Scans tool output for AWS keys, GitHub PATs, OpenAI keys, Azure storage keys, JWTs, and PEM private keys. Redacts in enforce mode. |
-| `tool.execute.error` | Records an audit entry without re-running policy. |
 
 It also publishes a stdio MCP server (`server/agt-mcp.mjs`) for operators who
 want to invoke `agt_policy_status` or `agt_policy_check_text` from external
