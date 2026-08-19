@@ -47,6 +47,28 @@ test("duplicate registration for the same client and workspace is suppressed", a
   }
 });
 
+test("duplicate registration falls back to console.warn without app logger", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-console-warning-"));
+  const client = {};
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+
+  try {
+    await AgtGovernance({ directory: root, worktree: root, client });
+    const duplicate = await AgtGovernance({ directory: root, worktree: root, client });
+
+    assert.deepEqual(duplicate, {});
+    assert.ok(
+      warnings.some((warning) => /Duplicate OpenCode governance registration ignored/.test(warning)),
+      "duplicate registration should remain observable without client.app.log",
+    );
+  } finally {
+    console.warn = originalWarn;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("different workspaces on the same OpenCode client are not suppressed", async () => {
   const rootA = await mkdtemp(join(tmpdir(), "agt-opencode-workspace-a-"));
   const rootB = await mkdtemp(join(tmpdir(), "agt-opencode-workspace-b-"));
