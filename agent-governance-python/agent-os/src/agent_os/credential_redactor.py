@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
-from typing import Any
 from .hipaa_patterns import HIPAA_PHI_RAW_PATTERNS
+from dataclasses import dataclass
+from typing import Any, Callable
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class CredentialPattern:
 
     name: str
     pattern: re.Pattern[str]
+    validator: Callable[[re.Match[str]], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -159,8 +161,12 @@ class CredentialRedactor:
     # into LLM context in enterprise governance scenarios.
     PII_PATTERNS: tuple[CredentialPattern, ...] = (
         *(
-            CredentialPattern(name=name, pattern=re.compile(pattern))
-            for name, pattern in HIPAA_PHI_RAW_PATTERNS
+            CredentialPattern(
+                name=p[0],
+                pattern=re.compile(p[1]),
+                validator=p[2] if len(p) > 2 else None,
+            )
+            for p in HIPAA_PHI_RAW_PATTERNS
         ),
         CredentialPattern(
             name="Email address",
@@ -221,6 +227,8 @@ class CredentialRedactor:
         matches: list[CredentialMatch] = []
         for pii_pattern in cls.PII_PATTERNS:
             for match in pii_pattern.pattern.finditer(value):
+                if pii_pattern.validator and not pii_pattern.validator(match):
+                    continue
                 matches.append(
                     CredentialMatch(
                         name=pii_pattern.name,
