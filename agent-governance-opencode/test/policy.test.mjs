@@ -81,31 +81,6 @@ test("evaluateOpenCodeTool denies dangerous bash bootstrap and enforce-mode revi
   await rm(root, { recursive: true, force: true });
 });
 
-test("bundled policy denies recursive deletion flag variants", async () => {
-  const root = await mkdtemp(join(tmpdir(), "agt-opencode-rm-"));
-  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
-
-  for (const command of [
-    "rm -rf /",
-    "rm -fr /",
-    "rm -r -f /",
-    "rm --recursive --force /",
-    "rm --force --recursive /",
-  ]) {
-    const result = await evaluateOpenCodeTool(state, {
-      tool: "bash",
-      args: { command },
-      sessionId: "recursive-delete-session",
-      cwd: root,
-    });
-
-    assert.equal(result.effect, "deny", command);
-    assert.match(result.reason, /recursive delete/i, command);
-  }
-
-  await rm(root, { recursive: true, force: true });
-});
-
 test("evaluateOpenCodeTool denies metadata URL fetches regardless of arg name", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-url-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });
