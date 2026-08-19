@@ -1009,6 +1009,8 @@ hostnames
 dataprotection
 # dorny/paths-filter — GitHub Actions dependency used in policy-validation.yml
 dorny
+# YAML ordered-map tag (!!omap), cited in dependency audits
+omap
 writerow
 wslc
 x86
