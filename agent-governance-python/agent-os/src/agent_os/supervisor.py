@@ -61,12 +61,23 @@ class SupervisorHierarchy:
         """Check hierarchy rules and return a list of violations (empty = valid).
 
         Rules:
+        - Supervisor levels must be integers (``bool`` is not accepted as a level).
         - No supervisor may sit above the root: levels MUST NOT be negative.
         - Level 0 MUST exist and MUST be deterministic (not an LLM agent).
         - Middle levels (1–N) may be agent-based.
         - Each level present must have at least one supervisor.
         """
         violations: list[str] = []
+
+        valid_supervisors: list[_Supervisor] = []
+        for s in self._supervisors:
+            if not isinstance(s.level, int) or isinstance(s.level, bool):
+                violations.append(
+                    f"Supervisor '{s.name}' has non-integer level {s.level!r}; "
+                    "levels must be integers"
+                )
+                continue
+            valid_supervisors.append(s)
 
         # Checked before anything else: level 0 is the root, so a negative level
         # places a supervisor *above* the deterministic authority. The
@@ -75,14 +86,14 @@ class SupervisorHierarchy:
         # negative level was invisible to both — an agent registered at level -1
         # produced no violations at all while ranking ahead of the trust root in
         # ``get_authority_chain``.
-        for s in self._supervisors:
+        for s in valid_supervisors:
             if s.level < 0:
                 violations.append(
                     f"Supervisor '{s.name}' has negative level {s.level}; level 0 is the "
                     "root and nothing may sit above it"
                 )
 
-        level_0 = [s for s in self._supervisors if s.level == 0]
+        level_0 = [s for s in valid_supervisors if s.level == 0]
         if not level_0:
             violations.append("Level 0 (root) has no registered supervisor")
         else:
@@ -93,10 +104,10 @@ class SupervisorHierarchy:
                     )
 
         # Ensure no gaps in levels (every level between 0 and max has a supervisor)
-        if self._supervisors:
-            max_level = max(s.level for s in self._supervisors)
+        if valid_supervisors:
+            max_level = max(s.level for s in valid_supervisors)
             for lvl in range(1, max_level + 1):
-                if not any(s.level == lvl for s in self._supervisors):
+                if not any(s.level == lvl for s in valid_supervisors):
                     violations.append(f"Level {lvl} has no registered supervisor")
 
         return violations
