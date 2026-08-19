@@ -8,7 +8,7 @@ import logging
 import re
 from dataclasses import dataclass
 from typing import Any
-from .hipaa_patterns import HIPAA_PHI_PATTERNS
+from .hipaa_patterns import HIPAA_PHI_RAW_PATTERNS
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,6 @@ class CredentialRedactor:
     # ``(?<![A-Za-z0-9])`` treats ``_`` (and ``-``, ``/``, ``.``, whitespace) as a
     # valid left edge while still not matching inside an alphanumeric word.
     PATTERNS: tuple[CredentialPattern, ...] = (
-        *HIPAA_PHI_PATTERNS,
         CredentialPattern(
             name="OpenAI API key",
             pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}\b"),
@@ -159,6 +158,10 @@ class CredentialRedactor:
     # These catch personally identifiable information that should not flow
     # into LLM context in enterprise governance scenarios.
     PII_PATTERNS: tuple[CredentialPattern, ...] = (
+        *(
+            CredentialPattern(name=name, pattern=re.compile(pattern))
+            for name, pattern in HIPAA_PHI_RAW_PATTERNS
+        ),
         CredentialPattern(
             name="Email address",
             pattern=re.compile(
