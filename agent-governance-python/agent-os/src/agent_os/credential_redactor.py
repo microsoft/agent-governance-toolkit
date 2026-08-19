@@ -8,7 +8,7 @@ import logging
 import re
 from dataclasses import dataclass
 from typing import Any
-from .hipaa_patterns import HIPAA_PHI_PATTERNS
+from .hipaa_patterns import HIPAA_PHI_RAW_PATTERNS
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,6 @@ class CredentialRedactor:
     # because their value class includes ``-``, and a trailing ``\b`` would
     # backtrack and redact only a prefix, leaking the final segment.
     PATTERNS: tuple[CredentialPattern, ...] = (
-        *HIPAA_PHI_PATTERNS,
         CredentialPattern(
             name="OpenAI API key",
             pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9])"),
@@ -199,6 +198,10 @@ class CredentialRedactor:
     # These catch personally identifiable information that should not flow
     # into LLM context in enterprise governance scenarios.
     PII_PATTERNS: tuple[CredentialPattern, ...] = (
+        *(
+            CredentialPattern(name=name, pattern=re.compile(pattern))
+            for name, pattern in HIPAA_PHI_RAW_PATTERNS
+        ),
         CredentialPattern(
             name="Email address",
             # RFC 5321 limits the local part to 64 octets. The character class
