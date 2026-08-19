@@ -177,7 +177,7 @@ arbitrary external memory provider that has not integrated the guard.
 
 **Evidence:**
 - `agent-governance-python/agent-os/src/agent_os/memory_guard.py`
-- `agent-governance-python/agent-os/src/agent_os/audit/hash_chain.py`
+- `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py`
 - `docs/packages/agent-os.md` — MemoryGuard and ASI06 package coverage
 
 **Coverage:** ⚠️ Partial
@@ -271,7 +271,7 @@ risks, especially ASI02, ASI08, ASI09, and ASI10. It is an AGT control
 objective, not an official `ASI11` entry in the 2026 OWASP Top 10.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/audit/hash_chain.py`
+- `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py`
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-audit-logging`
 
 **Coverage:** ✅ Full
