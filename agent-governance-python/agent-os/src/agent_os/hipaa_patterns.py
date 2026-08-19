@@ -44,15 +44,15 @@ def validate_npi_match(match: re.Match[str]) -> bool:
 HIPAA_PHI_RAW_PATTERNS = (
     (
         "Medical Record Number (MRN)",
-        r"(?i)(?<![A-Za-z0-9])(?:mrn|medical\s*record)[\s#:-]*([A-Z0-9]{6,12})(?![A-Za-z0-9])",
+        r"(?i)(?<![A-Za-z0-9])(?:mrn|medical[\s_-]*record)[\s#:-]*([A-Z0-9]{6,12})(?![A-Za-z0-9])",
     ),
     (
         "National Provider Identifier (NPI)",
-        r"(?i)(?<![0-9])(?:npi|provider[_-]?id)[\s#:-]*(\d{10})(?![0-9])",
+        r"(?i)(?<![0-9])(?:npi|provider[\s_-]*id)[\s#:-]*(\d{10})(?![0-9])",
         validate_npi_match,
     ),
     (
         "Health Plan ID",
-        r"(?i)(?<![A-Za-z0-9])(?:hpid|member\s*id|policy[_-]?id)[\s#:-]*([A-Z0-9]{8,15})(?![A-Za-z0-9])",
+        r"(?i)(?<![A-Za-z0-9])(?:hpid|member[\s_-]*id|policy[\s_-]*id)[\s#:-]*([A-Z0-9]{8,15})(?![A-Za-z0-9])",
     ),
 )
