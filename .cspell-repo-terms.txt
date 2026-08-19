@@ -1009,6 +1009,12 @@ hostnames
 dataprotection
 # dorny/paths-filter — GitHub Actions dependency used in policy-validation.yml
 dorny
+# git fetch destination-ref syntax, spell-check.yml base fetch
+refspec
+# Step id in ci.yml's markdown-link-check merge-base scoping (#3620)
+linkbase
+# Test name in the TypeScript approval-protocol suite (#3200)
+unpermitted
 writerow
 wslc
 x86
