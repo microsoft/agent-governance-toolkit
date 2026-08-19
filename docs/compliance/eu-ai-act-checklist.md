@@ -188,7 +188,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 **Gaps**:
 
-- [ ] **No retention enforcement**: Art. 12(4) requires deployers to preserve logs for at least 6 months. The toolkit provides append-only logs but no retention enforcement, expiration management, or archival lifecycle.
+- [ ] **No retention enforcement**: Art. 19(1) requires providers, and Art. 26(6) deployers, to preserve logs for at least 6 months. The toolkit provides append-only logs but no retention enforcement, expiration management, or archival lifecycle.
 - [ ] **DeltaEngine chain verification is a stub**: `verify_chain()` at `delta.py:99` always returns `True` with comment "Public Preview: no chain verification." The hypervisor's audit trail has zero tamper evidence.
 - [ ] **FlightRecorder hash covers INSERT, not final state**: Hash is computed at insert time with `policy_verdict='pending'`, but the verdict is later updated to `'allowed'`/`'blocked'`. Tampering of the verdict field is not detectable by integrity verification.
 - [ ] **Anomaly detections not in tamper-evident chain**: `RogueAgentDetector` stores assessments in an in-memory list, not in the integrity-protected audit chain.
@@ -387,15 +387,15 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 | Art. 10 | Data governance (training data) | Gap | N/A | Out of scope |
 | Art. 11 | Technical documentation (Annex IV) | Partial | `annex_iv.py:35-514`, `evidence_pipeline.py:56-358` | Structured draft and evidence inventory shipped; incomplete coverage and provider-authored content remain |
 | Art. 12(1) | Automatic event logging | Partial | `audit.py:23-512`, `audit_logger.py:19-136`, `flight_recorder.py:33-79` | Multiple layers, but 3 of 4 have integrity defects |
-| Art. 12(4) | 6-month log retention | Gap | `policy_schema.json:215-218` (default 90, min 1) | **Violates minimum** |
+| Art. 19(1) | 6-month log retention (provider) | Gap | `policy_schema.json:215-218` (default 90, min 1) | **Violates minimum** |
 | Art. 13(1) | Output interpretability | Partial | `audit.py:90-128` (CloudEvents), `schema.py:52-58` (rule messages) | Basic; no structured explainability |
 | Art. 13(3) | Instructions for use | Gap | N/A | Not implemented |
 | Art. 14(1) | Effective human oversight | Partial | `escalation.py:48-583` | Escalation system with quorum and fatigue detection |
 | Art. 14(4)(d) | Decline/override/reverse | Partial | `escalation.py:120-213` (approve/deny) | Pre-execution only; no reversal |
 | Art. 14(4)(e) | Stop mechanism | Partial | `kill_switch.py:64-136` | Returns structured results; placeholder handoff, no process termination |
 | Art. 15(1) | Accuracy levels | Partial | `indicators.py:159-468` | SLIs exist; no formal declaration mechanism |
-| Art. 15(3) | Robustness | Partial | `engine.py:246`, `circuit_breaker.py:90` | Framework exists; no actual fault injection |
-| Art. 15(4) | Cybersecurity | Partial | `handshake.py:158-456`, `mcp_security.py:272+`, `audit_backends.py:61-87` | Ed25519, HMAC-SHA256 (symmetric key risk), MCP scanning (incomplete rules) |
+| Art. 15(4) | Robustness | Partial | `engine.py:246`, `circuit_breaker.py:90` | Framework exists; no actual fault injection |
+| Art. 15(5) | Cybersecurity | Partial | `handshake.py:158-456`, `mcp_security.py:272+`, `audit_backends.py:61-87` | Ed25519, HMAC-SHA256 (symmetric key risk), MCP scanning (incomplete rules) |
 | Art. 26(2) | Human oversight by competent persons | Partial | `escalation.py:120-583`, `kill_switch.py:64-136` | Mechanisms exist; no competency tracking |
 | Art. 26(6) | 6-month log retention | Gap | `policy_schema.json:218` (minimum: 1) | **Must-fix: default 90, minimum 1** |
 | Art. 50(1) | AI interaction disclosure | Gap | `compliance_checker.py:186-231` (example) | Config check only; no runtime delivery |
@@ -510,11 +510,11 @@ Fixing certain gaps yields improvements across multiple articles simultaneously:
 
 | Fix | Articles Improved | Leverage |
 |-----|-------------------|----------|
-| Retention enforcement (minimum 180 days + runtime) | Art. 12(4), Art. 26(6) | **Highest** -- single fix resolves two regulatory contradictions |
+| Retention enforcement (minimum 180 days + runtime) | Art. 19(1), Art. 26(6) | **Highest** -- single fix resolves two regulatory contradictions |
 | Promote example classifier to library code | Art. 6, Art. 9, Art. 50 | Risk tier drives classification, management, and transparency triggers |
 | Instructions-for-use exporter | Art. 11, Art. 13(3) | Both require structured system description artifacts |
 | KillSwitch actual termination | Art. 14(4)(e), Art. 26(2) | Stop mechanism and deployer oversight both depend on it |
-| Audit chain integrity (DeltaEngine, FlightRecorder hash) | Art. 12, Art. 15(4), Art. 26(6) | Tamper evidence underpins logging, cybersecurity, and retention |
+| Audit chain integrity (DeltaEngine, FlightRecorder hash) | Art. 12, Art. 15(5), Art. 26(6) | Tamper evidence underpins logging, cybersecurity, and retention |
 
 ## Defense-in-Depth Warnings
 
