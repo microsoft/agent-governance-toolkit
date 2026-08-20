@@ -104,8 +104,27 @@ def test_negative_level_outranks_the_root_in_the_authority_chain() -> None:
 
 @pytest.mark.parametrize('level', [-1, -7])
 def test_negative_level_is_reported_even_without_a_level_0(level: int) -> None:
-    # The gap scan walks range(1, max_level + 1), which is empty when the highest
-    # level is negative, so nothing else would fire here either.
+    # Negative-only hierarchies never enter the non-negative gap scan.
     hierarchy = SupervisorHierarchy(trust_root=_root())
     hierarchy.register_supervisor('only', level=level, is_agent=True)
     assert any('negative level' in v for v in hierarchy.validate_hierarchy())
+
+
+def test_hierarchy_gap_scan_reports_missing_middle_levels() -> None:
+    hierarchy = SupervisorHierarchy(trust_root=_root())
+    hierarchy.register_supervisor('trust-root', level=0, is_agent=False)
+    hierarchy.register_supervisor('worker', level=3, is_agent=True)
+    violations = hierarchy.validate_hierarchy()
+    assert 'Level 1 has no registered supervisor' in violations
+    assert 'Level 2 has no registered supervisor' in violations
+
+
+def test_pathological_supervisor_level_does_not_hang_validation() -> None:
+    """``range(1, max_level + 1)`` hung forever for huge integer levels (#3788)."""
+    hierarchy = SupervisorHierarchy(trust_root=_root())
+    hierarchy.register_supervisor('trust-root', level=0, is_agent=False)
+    hierarchy.register_supervisor('far-away', level=10**100, is_agent=True)
+    violations = hierarchy.validate_hierarchy()
+    assert violations
+    assert any('missing levels' in v for v in violations)
+    assert not any(v.startswith('Level 1 has no') for v in violations)
