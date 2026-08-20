@@ -129,9 +129,8 @@ overridden via `AGT_OPENCODE_AUDIT_PATH`.
 
 ### Positive command and URL allowlists
 
-Positive allowlists are opt-in, so existing policies keep their current
-behavior. Set the relevant default effect to `deny` to make unmatched values
-fail closed.
+Positive allowlist gates are opt-in. Set the relevant default effect to `deny`
+to make unmatched values fail closed.
 
 For command-bearing tool calls, configure `toolPolicies` with:
 
@@ -140,9 +139,11 @@ For command-bearing tool calls, configure `toolPolicies` with:
 - `commandDefaultEffect`: `allow` (default) or `deny`
 
 Commands are normalized only for outer whitespace and CRLF line endings before
-matching. Use anchored patterns when the whole command must match. Stateful
-regex flags (`g` and `y`) are rejected because they make repeated evaluations
-history-dependent.
+matching. When the whole command must be approved, use fully anchored patterns
+and avoid broad suffixes such as `(?:\\s|$)` that also accept shell chaining,
+command substitution, or additional arguments. The shipped example uses exact,
+fully anchored command forms. Regex flags `g`, `y`, `m`, and `s` are rejected so
+stateful or multiline matching cannot weaken an anchored command policy.
 
 For HTTP(S) resources, configure `directResourcePolicies` with:
 
@@ -153,11 +154,26 @@ For HTTP(S) resources, configure `directResourcePolicies` with:
 - `urlDefaultEffect`: `allow` (default) or `deny`
 
 A wildcard such as `*.example.com` does not include the apex `example.com`.
-A domain without a port matches that host on any port; specifying a port
-restricts the match to that effective port. Every HTTP(S) string found in tool
-arguments is checked, so an allowed primary URL does not make a separate,
-unapproved redirect-target argument acceptable. Runtime redirects that are not
-surfaced to the plugin remain the responsibility of the HTTP client or host.
+A domain without a port matches that host on any port and on both `http://` and
+`https://`; specifying a port restricts the match to that effective port. If a
+policy must allow only HTTPS for a destination, use an anchored
+`allowedUrlPatterns` entry for `https://...` rather than an `allowedDomains`
+entry for that host.
+
+`urlDefaultEffect: "deny"` governs HTTP(S) strings that are surfaced as tool
+arguments. It is not a process-wide or network-layer default deny. URLs embedded
+inside shell command strings, scheme-relative values such as `//evil.example`,
+`ftp:` URLs, schemeless hosts, and redirects hidden inside an HTTP client are
+outside this URL hook boundary. Pair URL restrictions with
+`commandDefaultEffect: "deny"` and a narrow command allowlist when command tools
+can initiate network access.
+
+Every surfaced HTTP(S) string is checked, so an allowed primary URL does not
+make a separate, unapproved redirect-target argument acceptable. HTTP(S) values
+are canonicalized before existing `urlRules` are evaluated, including slashless
+special-scheme forms such as `https:example.com`. Raw HTTP(S) authorities that
+contain a backslash are denied because downstream clients can disagree about
+which host such a value targets.
 
 Existing deny and review rules keep their precedence. An allowlist match only
 means the positive gate is satisfied; it cannot override a deny from
