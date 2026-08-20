@@ -15,11 +15,11 @@
     "commandDefaultEffect": "deny",
     "allowedCommandPatterns": [
       {
-        "source": "^git\\s+(?:status|diff)(?:\\s|$)",
+        "source": "^git[ \\t]+(?:status|diff)$",
         "flags": "i"
       },
       {
-        "source": "^npm\\s+(?:test|run\\s+(?:test|lint|check))(?:\\s|$)",
+        "source": "^npm[ \\t]+(?:test|run[ \\t]+(?:test|lint|check))$",
         "flags": "i"
       }
     ]
