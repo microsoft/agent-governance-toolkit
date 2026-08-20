@@ -65,7 +65,9 @@ export const AgtGovernance = async (ctx) => {
               level: "info",
               message:
                 `[AGT] OpenCode governance active — mode=${status.mode} source=${status.source} ` +
-                `promptDefense=${status.promptDefenseGrade} audit=${status.auditEntries}`,
+                `promptDefenseEffective=${status.promptDefenseGrade} ` +
+                `promptDefenseConfigured=${status.configuredPromptDefenseGrade} ` +
+                `audit=${status.auditEntries}`,
             },
           });
         }
