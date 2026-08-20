@@ -127,6 +127,61 @@ The plugin loads policy from (in order):
 Audit log path defaults to `~/.config/opencode/agt/audit.json` and can be
 overridden via `AGT_OPENCODE_AUDIT_PATH`.
 
+### Positive command and URL allowlists
+
+Positive allowlist gates are opt-in. Set the relevant default effect to `deny`
+to make unmatched values fail closed.
+
+For command-bearing tool calls, configure `toolPolicies` with:
+
+- `allowedCommandPatterns`: regex pattern objects with `source` and optional
+  `flags`
+- `commandDefaultEffect`: `allow` (default) or `deny`
+
+Commands are normalized only for outer whitespace and CRLF line endings before
+matching. When the whole command must be approved, use fully anchored patterns
+and avoid broad suffixes such as `(?:\\s|$)` that also accept shell chaining,
+command substitution, or additional arguments. The shipped example uses exact,
+fully anchored command forms. Regex flags `g`, `y`, `m`, and `s` are rejected so
+stateful or multiline matching cannot weaken an anchored command policy.
+
+For HTTP(S) resources, configure `directResourcePolicies` with:
+
+- `allowedDomains`: exact hosts or `*.example.com` subdomain wildcards, with an
+  optional explicit port such as `internal.example:8443`
+- `allowedUrlPatterns`: regex pattern objects evaluated against the normalized
+  full URL
+- `urlDefaultEffect`: `allow` (default) or `deny`
+
+A wildcard such as `*.example.com` does not include the apex `example.com`.
+A domain without a port matches that host on any port and on both `http://` and
+`https://`; specifying a port restricts the match to that effective port. If a
+policy must allow only HTTPS for a destination, use an anchored
+`allowedUrlPatterns` entry for `https://...` rather than an `allowedDomains`
+entry for that host.
+
+`urlDefaultEffect: "deny"` governs HTTP(S) strings that are surfaced as tool
+arguments. It is not a process-wide or network-layer default deny. URLs embedded
+inside shell command strings, scheme-relative values such as `//evil.example`,
+`ftp:` URLs, host names without a scheme, and redirects hidden inside an HTTP
+client are outside this URL hook boundary. Pair URL restrictions with
+`commandDefaultEffect: "deny"` and a narrow command allowlist when command tools
+can initiate network access.
+
+Every surfaced HTTP(S) string is checked, so an allowed primary URL does not
+make a separate, unapproved redirect-target argument acceptable. HTTP(S) values
+are canonicalized before existing `urlRules` are evaluated, including special
+scheme forms without `//` such as `https:example.com`. Raw HTTP(S) authorities
+that contain a backslash are denied because downstream clients can disagree
+about which host such a value targets.
+
+Existing deny and review rules keep their precedence. An allowlist match only
+means the positive gate is satisfied; it cannot override a deny from
+`blockedToolCalls`, `urlRules`, or another policy backend.
+
+A complete opt-in example is provided at
+`config/allowlist-policy.example.json`.
+
 ## Important parity notes
 
 - OpenCode's in-process plugin contract does not currently expose a server-side
