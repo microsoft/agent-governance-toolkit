@@ -312,24 +312,24 @@ def _rego_field_accessor(field: str) -> str | None:
             ``envelope.budgets.tool_call_count``.
 
     Returns:
-        Rego source like ``input.snapshot.tool_call.args.amount_usd``.
-        Each segment is checked with ``object.get`` so missing fields
-        evaluate to undefined (matches §5.2 of the ACS spec on missing
-        fields).
+        Rego source like
+        ``object.get(input.snapshot, ["tool_call", "args", "amount_usd"], null)``.
+
+        The array-path form of ``object.get`` yields the null default when a
+        leaf *or* an intermediate segment is missing. Chained
+        ``object.get(object.get(...), ...)`` returns undefined (not null) when
+        a parent is absent, which made deny ``ne`` / ``not_in`` rules fail open
+        (see microsoft/agent-governance-toolkit#3360).
     """
     parts = [p for p in field.split(".") if p]
     if not parts:
         return "input.snapshot"
-    # Use chained object.get with a sentinel undefined value so each
-    # level fails closed when the field is absent.
-    expr = "input.snapshot"
     for part in parts:
         # Validate the part is a simple identifier; reject anything
         # weird to avoid Rego injection from policy authors.
         if not part.replace("_", "").isalnum():
             return None
-        expr = f"object.get({expr}, {json.dumps(part)}, null)"
-    return expr
+    return f"object.get(input.snapshot, {json.dumps(parts)}, null)"
 
 
 def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
@@ -342,7 +342,10 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "eq":
         return f"{indent}{accessor} == {literal}"
     if operator == "ne":
-        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v != {literal}"
+        # Missing paths resolve to null via the array-path accessor. Keep
+        # ``null != value`` as a match so deny-side ``ne`` fails closed when
+        # intermediate segments are omitted (#3360).
+        return f"{indent}_v := {accessor}\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
     if operator == "lt":
@@ -354,7 +357,9 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "in":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
     if operator == "not_in":
-        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not _v in {literal}"
+        # Same fail-closed posture as ``ne``: a missing path (null) is not a
+        # member of the allowlist, so ``not_in`` matches (#3360).
+        return f"{indent}_v := {accessor}\n{indent}not _v in {literal}"
     if operator == "exists":
         return f"{indent}{accessor} != null"
     if operator == "contains":
