@@ -92,12 +92,32 @@ class SupervisorHierarchy:
                         f"Level 0 supervisor '{s.name}' must be deterministic, not an LLM agent"
                     )
 
-        # Ensure no gaps in levels (every level between 0 and max has a supervisor)
-        if self._supervisors:
-            max_level = max(s.level for s in self._supervisors)
-            for lvl in range(1, max_level + 1):
-                if not any(s.level == lvl for s in self._supervisors):
-                    violations.append(f"Level {lvl} has no registered supervisor")
+        # Ensure no gaps in levels (every level between 0 and max has a supervisor).
+        # Derive gaps from the sorted set of registered non-negative levels rather
+        # than ``range(1, max_level + 1)``. A pathological level such as
+        # ``10**100`` would otherwise hang validation forever (#3788).
+        non_negative = sorted({s.level for s in self._supervisors if s.level >= 0})
+        if non_negative:
+            chain: list[int] = []
+            for lvl in (0, *non_negative):
+                if not chain or chain[-1] != lvl:
+                    chain.append(lvl)
+            # Enumerate individual missing levels for small gaps so existing
+            # callers keep seeing ``Level N has no registered supervisor``.
+            # Collapse huge gaps into one summary message.
+            max_enumerated_gap = 64
+            for prev, curr in zip(chain, chain[1:]):
+                missing = curr - prev - 1
+                if missing <= 0:
+                    continue
+                if missing <= max_enumerated_gap:
+                    for lvl in range(prev + 1, curr):
+                        violations.append(f"Level {lvl} has no registered supervisor")
+                else:
+                    violations.append(
+                        f"Levels {prev + 1} through {curr - 1} have no registered "
+                        f"supervisor ({missing} missing levels)"
+                    )
 
         return violations
 
