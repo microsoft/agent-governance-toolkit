@@ -39,7 +39,7 @@ autonomous_trading_actions := {
 
 # PRIN 2A: consumer harm language
 deny contains msg if {
-	regex.match(`(?i)(mislead\s+(the\s+)?customer|hide\s+(fees|charges|risks)|exploit\s+vulnerabilit|target\s+vulnerable\s+customer|dark\s+pattern|push\s+unsuitable\s+product)`, _output_text)
+	regex.match(`(?i)(mislead\s+(the\s+)?customer|hide\s+(fees|charges|risks)|exploit\s+(vulnerability|vulnerabilities)|target\s+vulnerable\s+customer|dark\s+pattern|push\s+unsuitable\s+product)`, _output_text)
 	msg := "FCA Consumer Duty (PRIN 2A): agent cannot propose actions that foreseeably harm customers"
 }
 

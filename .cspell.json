@@ -97,7 +97,15 @@
     "headerless",
     "desync",
     "starlette",
-    "realpeerrealpeerrealpeerreal"
+    "realpeerrealpeerrealpeerreal",
+    "pwsh",
+    "notlike",
+    "sdists",
+    "shellcheck",
+    "binascii",
+    "locmem",
+    "altchars",
+    "filebased"
   ],
   "ignorePaths": [
     "**/node_modules/**",

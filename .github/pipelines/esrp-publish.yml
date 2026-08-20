@@ -271,6 +271,7 @@ stages:
       - ${{ each pkg in parameters.pypiPackages }}:
         - job: Build_PyPI_${{ replace(pkg.name, '-', '_') }}
           displayName: 'Build ${{ pkg.name }}'
+          condition: and(succeeded(), ne('${{ pkg.name }}', 'agent-control-specification'))
           steps:
             - checkout: self
 
@@ -316,9 +317,7 @@ stages:
             - script: |
                 # Consolidated packages use force-include with sibling paths,
                 # which only works when building a wheel directly from source.
-                if [[ "${{ pkg.name }}" == "agent-control-specification" ]]; then
-                  bash "$(Build.SourcesDirectory)/scripts/ci/build_acs_python_wheel.sh" "$(Build.SourcesDirectory)"
-                elif [[ "${{ coalesce(pkg.noBuildIsolation, 'false') }}" == "true" ]]; then
+                if [[ "${{ coalesce(pkg.noBuildIsolation, 'false') }}" == "true" ]]; then
                   python -m build --no-isolation
                 elif [[ "${{ pkg.name }}" == agent-governance-toolkit-* ]]; then
                   python -m build --wheel
@@ -344,6 +343,313 @@ stages:
                 artifact: 'pypi-${{ pkg.name }}'
                 publishLocation: 'pipeline'
               displayName: 'Publish ${{ pkg.name }} artifacts'
+
+      - job: Build_PyPI_ACS_wheels
+        displayName: 'Build ACS Python wheel matrix'
+        strategy:
+          maxParallel: 5
+          matrix:
+            linux_x86_64:
+              platform: linux-x86_64
+              buildPlatform: linux-x86_64
+              target: x86_64-unknown-linux-gnu
+              vmImage: ubuntu-24.04
+              builder: manylinux
+              expectedWheel: '*manylinux_2_28_x86_64.whl'
+              macosDeploymentTarget: ''
+              smoke: 'true'
+            linux_aarch64:
+              platform: linux-aarch64
+              buildPlatform: linux-aarch64-cross
+              target: aarch64-unknown-linux-gnu
+              vmImage: ubuntu-24.04
+              builder: manylinux
+              expectedWheel: '*manylinux_2_28_aarch64.whl'
+              macosDeploymentTarget: ''
+              smoke: 'false'
+            macos_x86_64:
+              platform: macos-x86_64
+              buildPlatform: macos-x86_64
+              target: x86_64-apple-darwin
+              vmImage: macOS-15
+              builder: native
+              expectedWheel: '*macosx_10_12_x86_64.whl'
+              macosDeploymentTarget: '10.12'
+              smoke: 'true'
+            macos_arm64:
+              platform: macos-arm64
+              buildPlatform: macos-arm64
+              target: aarch64-apple-darwin
+              vmImage: macOS-15
+              builder: native
+              expectedWheel: '*macosx_11_0_arm64.whl'
+              macosDeploymentTarget: '11.0'
+              smoke: 'false'
+            windows_x86_64:
+              platform: windows-x86_64
+              buildPlatform: windows-x86_64
+              target: x86_64-pc-windows-msvc
+              vmImage: windows-2022
+              builder: native
+              expectedWheel: '*win_amd64.whl'
+              macosDeploymentTarget: ''
+              smoke: 'true'
+        pool:
+          vmImage: $(vmImage)
+        steps:
+          - checkout: self
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '${{ parameters.pythonVersion }}'
+            displayName: 'Use Python ${{ parameters.pythonVersion }}'
+
+          - bash: |
+              python -m pip install --no-cache-dir --disable-pip-version-check \
+                --require-hashes --no-deps \
+                -r "$(Build.SourcesDirectory)/.github/release-tools/release-tools.txt"
+            condition: and(succeeded(), eq(variables['builder'], 'native'), ne(variables['platform'], 'windows-x86_64'))
+            displayName: 'Install build tools (hash-pinned)'
+
+          - pwsh: |
+              python -m pip install --no-cache-dir --disable-pip-version-check --require-hashes --no-deps -r "$(Build.SourcesDirectory)\.github\release-tools\release-tools.txt"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            condition: and(succeeded(), eq(variables['platform'], 'windows-x86_64'))
+            displayName: 'Install Windows build tools (hash-pinned)'
+
+          - bash: |
+              set -euo pipefail
+              bash scripts/ci/install_pinned_rust.sh "$ACS_RUST_TARGET"
+            condition: and(succeeded(), eq(variables['builder'], 'native'), ne(variables['platform'], 'windows-x86_64'))
+            env:
+              ACS_RUST_TARGET: $(target)
+            displayName: 'Install checksum-verified Rust toolchain'
+
+          - pwsh: |
+              & "$(Build.SourcesDirectory)\scripts\ci\install_pinned_rust_windows.ps1" -Target $env:ACS_RUST_TARGET
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            condition: and(succeeded(), eq(variables['platform'], 'windows-x86_64'))
+            env:
+              ACS_RUST_TARGET: $(target)
+            displayName: 'Install checksum-verified Windows Rust toolchain'
+
+          - bash: |
+              set -euo pipefail
+              rm -rf dist
+              if [ -n "$ACS_MACOSX_DEPLOYMENT_TARGET" ]; then
+                export MACOSX_DEPLOYMENT_TARGET="$ACS_MACOSX_DEPLOYMENT_TARGET"
+              fi
+              python -m maturin build \
+                --release \
+                --locked \
+                --target "$ACS_RUST_TARGET" \
+                --out dist \
+                --manifest-path Cargo.toml
+            condition: and(succeeded(), eq(variables['builder'], 'native'), ne(variables['platform'], 'windows-x86_64'))
+            env:
+              ACS_RUST_TARGET: $(target)
+              ACS_MACOSX_DEPLOYMENT_TARGET: $(macosDeploymentTarget)
+            workingDirectory: 'policy-engine/sdk/python'
+            displayName: 'Build native ACS Python wheel'
+
+          - pwsh: |
+              Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
+              python -m maturin build --release --locked --target $env:ACS_RUST_TARGET --out dist --manifest-path Cargo.toml
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            condition: and(succeeded(), eq(variables['platform'], 'windows-x86_64'))
+            env:
+              ACS_RUST_TARGET: $(target)
+            workingDirectory: 'policy-engine/sdk/python'
+            displayName: 'Build native ACS Python Windows wheel'
+
+          - bash: |
+              set -euo pipefail
+              bash "$(Build.SourcesDirectory)/scripts/ci/build_acs_python_wheel.sh" \
+                "$(Build.SourcesDirectory)" "$ACS_BUILD_PLATFORM" false
+            condition: and(succeeded(), eq(variables['builder'], 'manylinux'))
+            env:
+              ACS_BUILD_PLATFORM: $(buildPlatform)
+            displayName: 'Build manylinux ACS Python wheel'
+
+          - bash: |
+              set -euo pipefail
+              shopt -s nullglob
+              wheels=(policy-engine/sdk/python/dist/*.whl)
+              if [ "${#wheels[@]}" -ne 1 ]; then
+                echo "##[error]Expected one ACS wheel, found ${#wheels[@]}"
+                exit 1
+              fi
+              case "$(basename "${wheels[0]}")" in
+                $EXPECTED_WHEEL) ;;
+                *) echo "##[error]Unexpected ACS wheel tag: $(basename "${wheels[0]}")"; exit 1 ;;
+              esac
+            condition: and(succeeded(), ne(variables['platform'], 'windows-x86_64'))
+            env:
+              EXPECTED_WHEEL: $(expectedWheel)
+            displayName: 'Verify ACS Python wheel tag'
+
+          - pwsh: |
+              $wheels = @(Get-ChildItem "policy-engine\sdk\python\dist\*.whl")
+              if ($wheels.Count -ne 1) {
+                  throw "Expected one ACS wheel, found $($wheels.Count)"
+              }
+              if ($wheels[0].Name -notlike $env:EXPECTED_WHEEL) {
+                  throw "Unexpected ACS wheel tag: $($wheels[0].Name)"
+              }
+            condition: and(succeeded(), eq(variables['platform'], 'windows-x86_64'))
+            env:
+              EXPECTED_WHEEL: $(expectedWheel)
+            displayName: 'Verify ACS Python Windows wheel tag'
+
+          - bash: |
+              set -euo pipefail
+              wheel=$(find policy-engine/sdk/python/dist -maxdepth 1 -type f -name '*.whl' -print -quit)
+              python scripts/ci/smoke_acs_python_wheel.py "$wheel"
+            condition: and(succeeded(), eq(variables['smoke'], 'true'), ne(variables['platform'], 'windows-x86_64'))
+            displayName: 'Smoke test ACS Python wheel'
+
+          - pwsh: |
+              $wheel = Get-ChildItem "policy-engine\sdk\python\dist\*.whl" | Select-Object -First 1
+              python scripts\ci\smoke_acs_python_wheel.py $wheel.FullName
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            condition: and(succeeded(), eq(variables['smoke'], 'true'), eq(variables['platform'], 'windows-x86_64'))
+            displayName: 'Smoke test ACS Python Windows wheel'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: 'policy-engine/sdk/python/dist'
+              artifact: 'acs-python-wheel-$(platform)'
+              publishLocation: 'pipeline'
+            displayName: 'Publish ACS Python wheel artifact'
+
+      - job: Build_PyPI_ACS_sdist
+        displayName: 'Build ACS Python source distribution'
+        pool:
+          vmImage: ubuntu-24.04
+        steps:
+          - checkout: self
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '${{ parameters.pythonVersion }}'
+            displayName: 'Use Python ${{ parameters.pythonVersion }}'
+
+          - script: |
+              python -m pip install --no-cache-dir --disable-pip-version-check \
+                --require-hashes --no-deps \
+                -r $(Build.SourcesDirectory)/.github/release-tools/release-tools.txt
+            displayName: 'Install build tools (hash-pinned)'
+
+          - bash: |
+              set -euo pipefail
+              bash scripts/ci/install_pinned_rust.sh
+            displayName: 'Install checksum-verified Rust toolchain'
+
+          - bash: |
+              set -euo pipefail
+              rm -rf dist
+              cargo fetch --locked --manifest-path Cargo.toml
+              python -m maturin sdist --out dist --manifest-path Cargo.toml
+            workingDirectory: 'policy-engine/sdk/python'
+            displayName: 'Build ACS Python source distribution'
+
+          - bash: |
+              set -euo pipefail
+              shopt -s nullglob
+              sdists=(dist/*.tar.gz)
+              if [ "${#sdists[@]}" -ne 1 ]; then
+                echo "##[error]Expected one ACS source distribution, found ${#sdists[@]}"
+                exit 1
+              fi
+              sdist_listing="$(tar -tzf "${sdists[0]}")"
+              grep -Eq '/core/src/lib.rs$' <<<"$sdist_listing"
+              sdist_cargo_toml="$(tar --wildcards -xOf "${sdists[0]}" '*/sdk/python/Cargo.toml')"
+              grep -Fq 'path = "../../core"' <<<"$sdist_cargo_toml"
+              rm -rf sdist-wheel
+              CARGO_NET_OFFLINE=true python -m pip wheel \
+                --disable-pip-version-check \
+                --no-deps \
+                --no-build-isolation \
+                --wheel-dir sdist-wheel \
+                "${sdists[0]}"
+              wheels=(sdist-wheel/*.whl)
+              if [ "${#wheels[@]}" -ne 1 ]; then
+                echo "##[error]Expected one wheel from the ACS sdist, found ${#wheels[@]}"
+                exit 1
+              fi
+              python "$(Build.SourcesDirectory)/scripts/ci/smoke_acs_python_wheel.py" "${wheels[0]}"
+            workingDirectory: 'policy-engine/sdk/python'
+            displayName: 'Build and smoke test a wheel from the ACS source distribution'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: 'policy-engine/sdk/python/dist'
+              artifact: 'acs-python-sdist'
+              publishLocation: 'pipeline'
+            displayName: 'Publish ACS Python source distribution artifact'
+
+      - job: Aggregate_PyPI_ACS
+        displayName: 'Aggregate ACS Python distribution'
+        dependsOn:
+          - Build_PyPI_ACS_wheels
+          - Build_PyPI_ACS_sdist
+        steps:
+          - checkout: self
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '${{ parameters.pythonVersion }}'
+            displayName: 'Use Python ${{ parameters.pythonVersion }}'
+
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'acs-python-wheel-linux-x86_64'
+              targetPath: '$(Pipeline.Workspace)/acs-python-dist'
+            displayName: 'Download ACS Python Linux x86_64 wheel'
+
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'acs-python-wheel-linux-aarch64'
+              targetPath: '$(Pipeline.Workspace)/acs-python-dist'
+            displayName: 'Download ACS Python Linux ARM64 wheel'
+
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'acs-python-wheel-macos-x86_64'
+              targetPath: '$(Pipeline.Workspace)/acs-python-dist'
+            displayName: 'Download ACS Python macOS x86_64 wheel'
+
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'acs-python-wheel-macos-arm64'
+              targetPath: '$(Pipeline.Workspace)/acs-python-dist'
+            displayName: 'Download ACS Python macOS ARM64 wheel'
+
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'acs-python-wheel-windows-x86_64'
+              targetPath: '$(Pipeline.Workspace)/acs-python-dist'
+            displayName: 'Download ACS Python Windows x86_64 wheel'
+
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'acs-python-sdist'
+              targetPath: '$(Pipeline.Workspace)/acs-python-dist'
+            displayName: 'Download ACS Python source distribution'
+
+          - bash: |
+              set -euo pipefail
+              dist='$(Pipeline.Workspace)/acs-python-dist'
+              python scripts/ci/verify_acs_python_dist.py "$dist" \
+                --pyproject policy-engine/sdk/python/pyproject.toml
+            displayName: 'Verify complete ACS Python distribution'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(Pipeline.Workspace)/acs-python-dist'
+              artifact: 'pypi-agent-control-specification'
+              publishLocation: 'pipeline'
+            displayName: 'Publish complete ACS Python distribution'
 
   # All PyPI packages publish in parallel after build completes.
   - stage: Publish_PyPI

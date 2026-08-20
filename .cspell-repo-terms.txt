@@ -1060,4 +1060,10 @@ SpendGuard
 SYSC
 ukgdpr
 Vercel
-vulnerabilit
+
+# --- cloud-board cryptography 50.0.0 audit terms (flagged by cspell) ---
+AESGCM
+Bleichenbacher
+FFDH
+OCSP
+SPKI
