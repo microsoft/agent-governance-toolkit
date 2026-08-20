@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -82,6 +82,80 @@ test("command allowlist normalizes outer whitespace and denies unmatched command
       });
       assert.equal(denied.effect, "deny");
       assert.match(denied.reason, /command allowlist denied/i);
+    },
+  );
+});
+
+test("shipped allowlist example denies command chaining and substitution", async () => {
+  const example = JSON.parse(
+    await readFile(new URL("../config/allowlist-policy.example.json", import.meta.url), "utf8"),
+  );
+
+  await withPolicy(example, async (state, root) => {
+    for (const command of [
+      "git status ; echo chained",
+      "git status && echo chained",
+      "git status\nprintf chained",
+      "git status $(printf chained)",
+      "git status `printf chained`",
+    ]) {
+      const result = await evaluateOpenCodeTool(state, {
+        tool: "bash",
+        args: { command },
+        cwd: root,
+        sessionId: `example-command-deny-${command}`,
+      });
+      assert.equal(result.effect, "deny", command);
+      assert.match(result.reason, /command allowlist denied/i);
+    }
+  });
+});
+
+test("command allowlist evaluates every present command argument key", async () => {
+  await withPolicy(
+    makePolicy({
+      toolPolicies: {
+        commandDefaultEffect: "deny",
+        allowedCommandPatterns: [{ source: "^git status$", flags: "i" }],
+      },
+    }),
+    async (state, root) => {
+      for (const args of [
+        { command: "git status", script: "npm publish" },
+        { cmd: "npm publish", command: "git status" },
+      ]) {
+        const result = await evaluateOpenCodeTool(state, {
+          tool: "bash",
+          args,
+          cwd: root,
+          sessionId: `multi-command-key-${JSON.stringify(args)}`,
+        });
+        assert.equal(result.effect, "deny");
+        assert.match(result.reason, /command allowlist denied/i);
+      }
+    },
+  );
+});
+
+test("command allowlist denies non-string command argument values", async () => {
+  await withPolicy(
+    makePolicy({
+      toolPolicies: {
+        commandDefaultEffect: "deny",
+        allowedCommandPatterns: [{ source: "^git status$", flags: "i" }],
+      },
+    }),
+    async (state, root) => {
+      for (const command of [["rm", "-rf", "/"], 42, { executable: "rm" }, null]) {
+        const result = await evaluateOpenCodeTool(state, {
+          tool: "bash",
+          args: { command },
+          cwd: root,
+          sessionId: `malformed-command-${JSON.stringify(command)}`,
+        });
+        assert.equal(result.effect, "deny");
+        assert.match(result.reason, /malformed command arguments/i);
+      }
     },
   );
 });
@@ -176,6 +250,7 @@ test("URL allowlist supports exact hosts, wildcard subdomains, URL patterns, and
     async (state, root) => {
       for (const url of [
         "https://api.github.com/repos/microsoft/agent-governance-toolkit",
+        "http://api.github.com/repos/microsoft/agent-governance-toolkit",
         "https://build.example.com/artifacts",
         "https://deep.build.example.com/artifacts",
         "https://internal.example.net:8443/v1",
@@ -220,15 +295,15 @@ test("URL default deny canonicalizes alternate HTTP(S) spellings", async () => {
     async (state, root) => {
       const allowed = await evaluateOpenCodeTool(state, {
         tool: "webfetch",
-        args: { url: String.raw`https:\\api.github.com/repos/microsoft/agent-governance-toolkit` },
+        args: { url: "https:/api.github.com/repos/microsoft/agent-governance-toolkit" },
         cwd: root,
         sessionId: "url-canonicalized-allow",
       });
       assert.equal(allowed.effect, "allow");
 
       for (const url of [
-        String.raw`https:\\collector.invalid/next`,
         "https:/collector.invalid/next",
+        "https:collector.invalid/next",
       ]) {
         const denied = await evaluateOpenCodeTool(state, {
           tool: "webfetch",
@@ -238,6 +313,32 @@ test("URL default deny canonicalizes alternate HTTP(S) spellings", async () => {
         });
         assert.equal(denied.effect, "deny", url);
         assert.match(denied.reason, /collector\.invalid/i);
+      }
+    },
+  );
+});
+
+test("URL governance rejects backslashes in the raw HTTP(S) authority", async () => {
+  await withPolicy(
+    makePolicy({
+      directResourcePolicies: {
+        urlDefaultEffect: "deny",
+        allowedDomains: ["api.github.com"],
+      },
+    }),
+    async (state, root) => {
+      for (const url of [
+        String.raw`https://api.github.com\@evil.com/`,
+        String.raw`https:\\api.github.com/repos/microsoft/agent-governance-toolkit`,
+      ]) {
+        const result = await evaluateOpenCodeTool(state, {
+          tool: "webfetch",
+          args: { url },
+          cwd: root,
+          sessionId: `url-authority-backslash-${url}`,
+        });
+        assert.equal(result.effect, "deny", url);
+        assert.match(result.reason, /ambiguous.*backslash/i);
       }
     },
   );
@@ -289,7 +390,7 @@ test("URL allowlist cannot override a direct-resource deny", async () => {
     async (state, root) => {
       for (const url of [
         "http://169.254.169.254/latest/meta-data/",
-        String.raw`http:\\169.254.169.254\latest\meta-data`,
+        "http:169.254.169.254/latest/meta-data/",
       ]) {
         const result = await evaluateOpenCodeTool(state, {
           tool: "webfetch",
@@ -324,7 +425,7 @@ test("canonicalized direct-resource denies apply when URL allowlists are disable
     async (state, root) => {
       const result = await evaluateOpenCodeTool(state, {
         tool: "webfetch",
-        args: { url: String.raw`http:\\169.254.169.254\latest\meta-data` },
+        args: { url: "http:169.254.169.254/latest/meta-data/" },
         cwd: root,
         sessionId: "metadata-deny-without-url-allowlist",
       });
@@ -378,19 +479,22 @@ test("domain validation rejects URL-parser separator ambiguities", async () => {
   );
 });
 
-test("stateful regex flags are rejected to keep allowlist decisions deterministic", async () => {
-  await withPolicy(
-    makePolicy({
-      toolPolicies: {
-        commandDefaultEffect: "deny",
-        allowedCommandPatterns: [{ source: "^git status$", flags: "g" }],
+test("unsafe regex flags are rejected for allowlist patterns", async () => {
+  for (const flags of ["g", "y", "m", "s"]) {
+    await withPolicy(
+      makePolicy({
+        toolPolicies: {
+          commandDefaultEffect: "deny",
+          allowedCommandPatterns: [{ source: "^git status$", flags }],
+        },
+      }),
+      async (state) => {
+        assert.match(
+          state.configuredPolicyError?.message ?? "",
+          /must not use g\/y\/m\/s regex flags/i,
+          flags,
+        );
       },
-    }),
-    async (state) => {
-      assert.match(
-        state.configuredPolicyError?.message ?? "",
-        /must not use stateful g\/y regex flags/i,
-      );
-    },
-  );
+    );
+  }
 });
