@@ -1017,3 +1017,54 @@ def test_resolution_error_message_includes_reason_string() -> None:
     err = ResolutionError.path_traversal("detail-x")
     assert "runtime_error:resolution_path_traversal" in str(err)
     assert "detail-x" in str(err)
+
+
+def test_rego_field_accessor_uses_array_path_for_nested_fields() -> None:
+    """#3360: intermediate-missing paths must still resolve to null."""
+    from agt.cli._migrate_resolution.build import _rego_field_accessor, _rego_op_clause
+
+    accessor = _rego_field_accessor("tool_call.args.region")
+    assert accessor == (
+        'object.get(input.snapshot, ["tool_call", "args", "region"], null)'
+    )
+    assert "object.get(object.get" not in (accessor or "")
+
+    ne_clause = _rego_op_clause("ne", accessor, "eu")
+    assert ne_clause is not None
+    assert "_v != null" not in ne_clause
+    assert '_v != "eu"' in ne_clause
+
+    not_in_clause = _rego_op_clause("not_in", accessor, ["eu", "us"])
+    assert not_in_clause is not None
+    assert "_v != null" not in not_in_clause
+    assert "not _v in" in not_in_clause
+
+
+def test_resolve_renders_array_path_accessor_for_nested_ne(tmp_path: Path) -> None:
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "deny-missing-region",
+                    "deny",
+                    {
+                        "field": "tool_call.args.region",
+                        "operator": "ne",
+                        "value": "eu",
+                    },
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    manifest = resolve_manifest(root, root)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+
+    assert (
+        'object.get(input.snapshot, ["tool_call", "args", "region"], null)' in rego
+    )
+    assert "object.get(object.get" not in rego
