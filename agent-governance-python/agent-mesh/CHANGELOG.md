@@ -35,6 +35,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Policy directory loaders fail closed on an unloadable file.** The agent-mesh
+  sidecar (`AGT_POLICY_STRICT`) and policy server (`AGENTMESH_POLICY_STRICT`) now
+  refuse to start when a `*.yaml`/`*.json` file in the configured policy directory
+  fails to load, instead of logging a warning and serving without it (issue
+  #3538). A silently dropped deny alongside a broader allow could otherwise flip
+  the effective decision to allow. Both toggles default to strict and treat any
+  blank or unrecognised value as strict, so a misconfigured manifest cannot
+  quietly reopen best-effort loading; set the toggle to `0`, `false`, `no`, or
+  `off` to restore best-effort loading, which logs each unloadable file at error
+  level and reports a skipped count through `/api/v1/policies`. A deployment that
+  previously started degraded now refuses to start at upgrade time.
 - **Displaced connections now close with a distinct WebSocket code.** When a second
   connection authenticates for a DID, the relay closes the displaced socket with
   `4006` (`WS_CLOSE_SESSION_REPLACED`) instead of `1000`. `1000` was reported by

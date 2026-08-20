@@ -642,6 +642,7 @@ nonimport
 nonlocal
 nono
 nonpositive
+nonstrict
 nonstring
 noqa
 noresolver
@@ -906,6 +907,7 @@ unconfigured
 unicodedata
 uninspectable
 unioned
+unloadable
 unmigrated
 unparse
 unparseable
