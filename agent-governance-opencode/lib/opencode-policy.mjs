@@ -118,10 +118,11 @@ function compileRegexPatterns(value, label) {
     if (typeof flags !== "string") {
       throw new Error(`${label}[${index}].flags must be a string.`);
     }
-    // Global/sticky regexes mutate lastIndex across calls and would make a
-    // policy decision depend on evaluation history.
-    if (/[gy]/.test(flags)) {
-      throw new Error(`${label}[${index}] must not use stateful g/y regex flags.`);
+    // Stateful and line/dot mode regexes can make security-sensitive matching
+    // history-dependent or allow an anchored pattern to match only one line of
+    // a multi-command string.
+    if (/[gyms]/.test(flags)) {
+      throw new Error(`${label}[${index}] must not use g/y/m/s regex flags.`);
     }
 
     let regex;
@@ -282,39 +283,66 @@ function evaluateCommandAllowlist(commandPolicy, context) {
     return null;
   }
 
-  const command = extractAllowlistedCommand(context);
-  if (!command) {
-    return null;
-  }
-
-  if (commandPolicy.patterns.some((pattern) => pattern.regex.test(command))) {
-    return null;
-  }
-
   const toolName = String(context.toolName ?? "unknown");
-  return {
-    backend: "agt-positive-allowlists",
-    decision: "deny",
-    reason: `Command allowlist denied an unapproved command for tool '${toolName}'.`,
-  };
+  const commandResult = collectAllowlistedCommands(context);
+  if (commandResult.invalid) {
+    return {
+      backend: "agt-positive-allowlists",
+      decision: "deny",
+      reason: `Command allowlist denied malformed command arguments for tool '${toolName}'.`,
+    };
+  }
+  if (commandResult.commands.length === 0) {
+    return null;
+  }
+
+  for (const command of commandResult.commands) {
+    if (commandPolicy.patterns.some((pattern) => pattern.regex.test(command))) {
+      continue;
+    }
+    return {
+      backend: "agt-positive-allowlists",
+      decision: "deny",
+      reason: `Command allowlist denied an unapproved command for tool '${toolName}'.`,
+    };
+  }
+
+  return null;
 }
 
-function extractAllowlistedCommand(context) {
+function collectAllowlistedCommands(context) {
   const args = context.rawToolArgs;
+  const commands = [];
+  let sawCommandKey = false;
+
   if (args && typeof args === "object" && !Array.isArray(args)) {
     for (const key of COMMAND_ARGUMENT_KEYS) {
-      const value = args[key];
-      if (typeof value === "string" && value.trim()) {
-        return normalizeCommandText(value);
+      if (!Object.prototype.hasOwnProperty.call(args, key)) {
+        continue;
       }
+      sawCommandKey = true;
+      const value = args[key];
+      if (typeof value !== "string" || !value.trim()) {
+        return { commands: [], invalid: true };
+      }
+      commands.push(normalizeCommandText(value));
     }
+  }
+
+  if (sawCommandKey) {
+    return { commands, invalid: false };
   }
 
   const toolName = String(context.toolName ?? "").trim();
   if (!COMMAND_TOOL_NAME_PATTERN.test(toolName)) {
-    return "";
+    return { commands: [], invalid: false };
   }
-  return normalizeCommandText(context.commandText);
+
+  const fallbackCommand = normalizeCommandText(context.commandText);
+  return {
+    commands: fallbackCommand ? [fallbackCommand] : [],
+    invalid: false,
+  };
 }
 
 function normalizeCommandText(value) {
@@ -328,13 +356,16 @@ function evaluateUrlAllowlist(urlPolicy, basePolicy, context) {
 
   for (const candidate of candidates) {
     if (!candidate.valid) {
-      if (!enforcePositiveAllowlist) {
+      const denyAmbiguousAuthority = candidate.invalidReason === "ambiguous-authority-backslash";
+      if (!enforcePositiveAllowlist && !denyAmbiguousAuthority) {
         continue;
       }
       return {
         backend: "agt-positive-allowlists",
         decision: "deny",
-        reason: "URL allowlist denied a malformed HTTP(S) URL in tool arguments.",
+        reason: denyAmbiguousAuthority
+          ? "URL governance denied an ambiguous HTTP(S) authority containing a backslash."
+          : "URL allowlist denied a malformed HTTP(S) URL in tool arguments.",
       };
     }
 
@@ -387,19 +418,27 @@ function collectHttpUrlCandidates(value) {
       }
 
       let candidate;
-      try {
-        const url = new URL(raw);
-        if (url.protocol !== "http:" && url.protocol !== "https:") {
-          continue;
-        }
+      if (hasAmbiguousHttpAuthorityBackslash(raw)) {
         candidate = {
-          normalizedUrl: url.toString(),
-          origin: url.origin,
-          url,
-          valid: true,
+          invalidReason: "ambiguous-authority-backslash",
+          raw,
+          valid: false,
         };
-      } catch {
-        candidate = { valid: false };
+      } else {
+        try {
+          const url = new URL(raw);
+          if (url.protocol !== "http:" && url.protocol !== "https:") {
+            continue;
+          }
+          candidate = {
+            normalizedUrl: url.toString(),
+            origin: url.origin,
+            url,
+            valid: true,
+          };
+        } catch {
+          candidate = { raw, valid: false };
+        }
       }
 
       const key = candidate.valid ? candidate.normalizedUrl : `invalid:${raw}`;
@@ -426,6 +465,23 @@ function collectHttpUrlCandidates(value) {
   }
 
   return candidates;
+}
+
+function hasAmbiguousHttpAuthorityBackslash(raw) {
+  const scheme = /^https?:/i.exec(raw)?.[0];
+  if (!scheme) {
+    return false;
+  }
+
+  let remainder = raw.slice(scheme.length);
+  if (remainder.startsWith("//")) {
+    remainder = remainder.slice(2);
+  }
+
+  const boundaryIndexes = [remainder.indexOf("/"), remainder.indexOf("?"), remainder.indexOf("#")]
+    .filter((index) => index >= 0);
+  const authorityEnd = boundaryIndexes.length ? Math.min(...boundaryIndexes) : remainder.length;
+  return remainder.slice(0, authorityEnd).includes("\\");
 }
 
 function isAllowedUrlCandidate(candidate, urlPolicy) {
