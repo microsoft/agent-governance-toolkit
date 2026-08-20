@@ -305,6 +305,36 @@ test("URL allowlist cannot override a direct-resource deny", async () => {
   );
 });
 
+test("canonicalized direct-resource denies apply when URL allowlists are disabled", async () => {
+  await withPolicy(
+    makePolicy({
+      directResourcePolicies: {
+        urlRules: [
+          {
+            id: "metadata",
+            effect: "deny",
+            reason: "Metadata endpoint remains blocked.",
+            urlPatterns: [
+              { source: "^http://169\\.254\\.169\\.254(?:/|$)", flags: "i" },
+            ],
+          },
+        ],
+      },
+    }),
+    async (state, root) => {
+      const result = await evaluateOpenCodeTool(state, {
+        tool: "webfetch",
+        args: { url: String.raw`http:\\169.254.169.254\latest\meta-data` },
+        cwd: root,
+        sessionId: "metadata-deny-without-url-allowlist",
+      });
+
+      assert.equal(result.effect, "deny");
+      assert.match(result.reason, /metadata endpoint remains blocked/i);
+    },
+  );
+});
+
 test("invalid positive-allowlist configuration is a fail-closed policy error", async () => {
   await withPolicy(
     makePolicy({

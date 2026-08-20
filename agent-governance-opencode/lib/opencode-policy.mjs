@@ -322,15 +322,15 @@ function normalizeCommandText(value) {
 }
 
 function evaluateUrlAllowlist(urlPolicy, basePolicy, context) {
-  if (urlPolicy.defaultEffect !== "deny") {
-    return null;
-  }
-
+  const enforcePositiveAllowlist = urlPolicy.defaultEffect === "deny";
   const candidates = collectHttpUrlCandidates(context.rawToolArgs);
   let reviewDecision;
 
   for (const candidate of candidates) {
     if (!candidate.valid) {
+      if (!enforcePositiveAllowlist) {
+        continue;
+      }
       return {
         backend: "agt-positive-allowlists",
         decision: "deny",
@@ -358,7 +358,7 @@ function evaluateUrlAllowlist(urlPolicy, basePolicy, context) {
       };
     }
 
-    if (isAllowedUrlCandidate(candidate, urlPolicy)) {
+    if (!enforcePositiveAllowlist || isAllowedUrlCandidate(candidate, urlPolicy)) {
       continue;
     }
 
