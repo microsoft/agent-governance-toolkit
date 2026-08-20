@@ -163,17 +163,17 @@ entry for that host.
 `urlDefaultEffect: "deny"` governs HTTP(S) strings that are surfaced as tool
 arguments. It is not a process-wide or network-layer default deny. URLs embedded
 inside shell command strings, scheme-relative values such as `//evil.example`,
-`ftp:` URLs, schemeless hosts, and redirects hidden inside an HTTP client are
-outside this URL hook boundary. Pair URL restrictions with
+`ftp:` URLs, host names without a scheme, and redirects hidden inside an HTTP
+client are outside this URL hook boundary. Pair URL restrictions with
 `commandDefaultEffect: "deny"` and a narrow command allowlist when command tools
 can initiate network access.
 
 Every surfaced HTTP(S) string is checked, so an allowed primary URL does not
 make a separate, unapproved redirect-target argument acceptable. HTTP(S) values
-are canonicalized before existing `urlRules` are evaluated, including slashless
-special-scheme forms such as `https:example.com`. Raw HTTP(S) authorities that
-contain a backslash are denied because downstream clients can disagree about
-which host such a value targets.
+are canonicalized before existing `urlRules` are evaluated, including special
+scheme forms without `//` such as `https:example.com`. Raw HTTP(S) authorities
+that contain a backslash are denied because downstream clients can disagree
+about which host such a value targets.
 
 Existing deny and review rules keep their precedence. An allowlist match only
 means the positive gate is satisfied; it cannot override a deny from
