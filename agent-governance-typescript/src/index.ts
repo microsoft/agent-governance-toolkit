@@ -149,6 +149,47 @@ export type {
   OciPackageResult,
 } from './types';
 export type { PromptDefenseConfig, PromptDefenseFinding, PromptDefenseReport } from './prompt-defense';
+
+// Context Accumulation Governance (issue #3084 — parity with Python agent-os)
+export {
+  DataClassification,
+  DataAccessEvaluator,
+  makeDataLabel,
+  makeABACPolicy,
+  detectPii,
+  detectPhi,
+  detectPci,
+  classifyText,
+} from './data-classification';
+export type { DataLabel, ABACPolicy, DataAccessDecision } from './data-classification';
+export {
+  makeContextEnvelope,
+  fold,
+  applyRestrictions,
+  envelopeReference,
+} from './context-envelope';
+export type { ContextEnvelope, EnvelopeReference } from './context-envelope';
+export { makeAggregationRule, evaluateAggregation } from './context-aggregation';
+export type {
+  AggregationRule,
+  AggregationRuleSet,
+  AggregationResult,
+} from './context-aggregation';
+export { makeObligationSet, allSatisfied } from './obligations';
+export type { Obligation, ObligationSet } from './obligations';
+export { accumulate, decideNext, toContextPolicyAction } from './context-accumulation';
+export type { ContextOutcome, ContextDecision } from './context-accumulation';
+export { mergeRestrictions } from './context-delegation';
+export {
+  contextEvent,
+  CONTEXT_ENVELOPE_CREATED,
+  CONTEXT_ENVELOPE_UPDATED,
+  CONTEXT_AGGREGATION_ELEVATED,
+  CONTEXT_DELEGATED,
+  CONTEXT_REDACTED,
+  DERIVED_ARTIFACT_LABELED,
+} from './context-audit';
+export type { ContextEvent } from './context-audit';
 export type {
   ControlResult,
   FileIntegrityResult,
