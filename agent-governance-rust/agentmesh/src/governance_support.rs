@@ -1538,13 +1538,14 @@ pub enum PolicyCategory {
     Spend,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum DataClassification {
     Public,
     Internal,
     Confidential,
     Restricted,
+    TopSecret,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
