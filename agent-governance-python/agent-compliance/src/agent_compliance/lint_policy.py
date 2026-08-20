@@ -1,12 +1,32 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Lint native ACS manifests for schema and provenance errors."""
+"""
+Policy linter for Agent Governance Toolkit.
+
+Handles two file kinds:
+
+* **ACS manifests** — identified by ``agent_control_specification_version``
+  at the top level. Validated via the ``agent_control_specification``
+  library; dangling bundle/path references are reported as errors.
+
+* **Governance policy YAML** — identified by a top-level ``rules`` list
+  *without* ``agent_control_specification_version``. Validated for
+  impossible conditions: an ``in`` or ``not_in`` operator whose ``value``
+  list is empty can never match any context, so every rule containing one
+  is a silent no-op that masks the configured default action.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+# ---------------------------------------------------------------------------
+# Membership operators whose value list must be non-empty to be satisfiable
+# ---------------------------------------------------------------------------
+
+_MEMBERSHIP_OPERATORS: frozenset[str] = frozenset({"in", "not_in"})
 
 
 @dataclass
@@ -67,37 +87,113 @@ class LintResult:
         }
 
 
-def lint_file(path: str | Path) -> LintResult:
-    """Validate one native ACS manifest and its relative references."""
+# ---------------------------------------------------------------------------
+# Governance policy YAML linting
+# ---------------------------------------------------------------------------
 
-    from agent_control_specification import parse_manifest, validate_manifest
 
-    manifest_path = Path(path)
-    result = LintResult()
-    if not manifest_path.is_file():
+def _conditions_from_rule(rule: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract all condition dicts from a rule, handling both singular
+    ``condition`` and plural ``conditions`` keys."""
+    out: list[dict[str, Any]] = []
+    c = rule.get("condition")
+    if isinstance(c, dict):
+        out.append(c)
+    cs = rule.get("conditions")
+    if isinstance(cs, list):
+        out.extend(item for item in cs if isinstance(item, dict))
+    return out
+
+
+def _lint_governance_conditions(
+    data: dict[str, Any],
+    filepath: str,
+    result: LintResult,
+) -> None:
+    """Check a governance policy document for impossible conditions.
+
+    Currently detects:
+
+    * ``in`` / ``not_in`` operator with an empty ``value`` list.
+      Such a condition can never match any context value, so the rule is
+      a silent no-op: the evaluator falls through to the default action
+      without logging a match or a miss against that rule.
+
+    The ``field`` typo case (e.g. ``toolname`` instead of ``tool_name``) is
+    context-dependent and cannot be checked without a schema that enumerates
+    every valid field for the target evaluator.  If you add a
+    ``KNOWN_CONTEXT_FIELDS`` vocabulary to your project, a straightforward
+    extension of this function can warn on unrecognised field names.
+    """
+    rules = data.get("rules")
+    if not isinstance(rules, list):
+        return
+
+    for idx, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            continue
+
+        rule_name = rule.get("name", f"rule[{idx}]")
+
+        for cond in _conditions_from_rule(rule):
+            operator = cond.get("operator", "")
+            if operator not in _MEMBERSHIP_OPERATORS:
+                continue
+
+            value = cond.get("value")
+            if value is None or (isinstance(value, list) and len(value) == 0):
+                field_hint = cond.get("field", "")
+                field_clause = f" on field '{field_hint}'" if field_hint else ""
+                result.messages.append(
+                    LintMessage(
+                        "error",
+                        f"Rule '{rule_name}': operator '{operator}'{field_clause} "
+                        f"has an empty value list — condition can never match; "
+                        f"the evaluator will always apply the default action instead",
+                        filepath,
+                        1,
+                    )
+                )
+
+
+def _is_governance_policy(data: Any) -> bool:
+    """Return True when *data* looks like a governance policy document.
+
+    A governance policy document has a ``rules`` list but does *not* carry
+    the ``agent_control_specification_version`` key that marks ACS manifests.
+    """
+    return (
+        isinstance(data, dict)
+        and "rules" in data
+        and "agent_control_specification_version" not in data
+    )
+
+
+# ---------------------------------------------------------------------------
+# ACS manifest linting
+# ---------------------------------------------------------------------------
+
+
+def _lint_acs_manifest(
+    manifest_text: str,
+    manifest_path: Path,
+    result: LintResult,
+) -> None:
+    """Validate an ACS manifest using the ``agent_control_specification`` library."""
+    try:
+        from agent_control_specification import parse_manifest, validate_manifest
+    except ImportError as exc:
         result.messages.append(
             LintMessage(
                 "error",
-                f"Manifest file not found: {manifest_path}",
+                f"agent_control_specification is not installed: {exc}",
                 str(manifest_path),
                 1,
             )
         )
-        return result
-
-    if manifest_path.suffix.lower() not in {".yaml", ".yml", ".json"}:
-        result.messages.append(
-            LintMessage(
-                "error",
-                "Manifest must be YAML or JSON",
-                str(manifest_path),
-                1,
-            )
-        )
-        return result
+        return
 
     try:
-        manifest_text = manifest_path.read_text(encoding="utf-8")
         validate_manifest(manifest_text)
         manifest = parse_manifest(manifest_text)
     except Exception as exc:
@@ -109,7 +205,7 @@ def lint_file(path: str | Path) -> LintResult:
                 1,
             )
         )
-        return result
+        return
 
     for policy_id, policy in (manifest.get("policies") or {}).items():
         references = [
@@ -143,6 +239,69 @@ def lint_file(path: str | Path) -> LintResult:
                 1,
             )
         )
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def lint_file(path: str | Path) -> LintResult:
+    """Validate one policy file.
+
+    Governance YAML policy documents (files with a ``rules`` list but no
+    ``agent_control_specification_version``) are linted for impossible
+    conditions.  ACS manifests are validated via the
+    ``agent_control_specification`` library.
+    """
+    import yaml
+
+    manifest_path = Path(path)
+    result = LintResult()
+
+    if not manifest_path.is_file():
+        result.messages.append(
+            LintMessage(
+                "error",
+                f"File not found: {manifest_path}",
+                str(manifest_path),
+                1,
+            )
+        )
+        return result
+
+    if manifest_path.suffix.lower() not in {".yaml", ".yml", ".json"}:
+        result.messages.append(
+            LintMessage(
+                "error",
+                "Policy file must be YAML or JSON",
+                str(manifest_path),
+                1,
+            )
+        )
+        return result
+
+    try:
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        result.messages.append(
+            LintMessage("error", f"Cannot read file: {exc}", str(manifest_path), 1)
+        )
+        return result
+
+    try:
+        data = yaml.safe_load(manifest_text)
+    except yaml.YAMLError as exc:
+        result.messages.append(
+            LintMessage("error", f"Invalid YAML: {exc}", str(manifest_path), 1)
+        )
+        return result
+
+    if _is_governance_policy(data):
+        _lint_governance_conditions(data, str(manifest_path), result)
+        return result
+
+    _lint_acs_manifest(manifest_text, manifest_path, result)
     return result
 
 

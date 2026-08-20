@@ -1,11 +1,13 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for native ACS manifest linting."""
+"""Tests for policy file linting (ACS manifests and governance YAML)."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+
+import pytest
 
 from agent_compliance.lint_policy import (
     LintMessage,
@@ -37,6 +39,12 @@ def _write_manifest(path: Path, *, bundle: str | None = None) -> Path:
     return path
 
 
+def _write_governance_policy(path: Path, content: str) -> Path:
+    """Write a governance policy YAML file and return its path."""
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
 def test_lint_message_and_result_serialization() -> None:
     message = LintMessage("error", "bad", "manifest.yaml", 5)
     result = LintResult([message])
@@ -54,31 +62,33 @@ def test_empty_result_passes() -> None:
 
 
 def test_valid_native_manifest_passes(tmp_path: Path) -> None:
+    pytest.importorskip("agent_control_specification")
     path = _write_manifest(tmp_path / "manifest.yaml")
 
     assert lint_file(path).passed
 
 
 def test_json_manifest_passes(tmp_path: Path) -> None:
+    pytest.importorskip("agent_control_specification")
     path = _write_manifest(tmp_path / "manifest.json")
 
     assert lint_file(path).passed
 
 
-def test_old_rule_document_is_rejected(tmp_path: Path) -> None:
-    path = tmp_path / "old.yaml"
-    path.write_text(
+def test_governance_policy_with_empty_rules_passes(tmp_path: Path) -> None:
+    """A governance YAML with an empty rule list has no impossible conditions."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
         "version: '1.0'\nname: old\nrules: []\n",
-        encoding="utf-8",
     )
 
     result = lint_file(path)
 
-    assert not result.passed
-    assert "agent_control_specification_version" in result.errors[0].message
+    assert result.passed
 
 
 def test_missing_bundle_is_rejected(tmp_path: Path) -> None:
+    pytest.importorskip("agent_control_specification")
     path = _write_manifest(tmp_path / "manifest.yaml", bundle="missing")
 
     result = lint_file(path)
@@ -105,6 +115,7 @@ def test_unsupported_extension_is_rejected(tmp_path: Path) -> None:
 
 
 def test_directory_lints_all_manifests(tmp_path: Path) -> None:
+    pytest.importorskip("agent_control_specification")
     _write_manifest(tmp_path / "one.yaml")
     _write_manifest(tmp_path / "two.json")
 
@@ -122,3 +133,157 @@ def test_missing_path_errors(tmp_path: Path) -> None:
     result = lint_path(tmp_path / "missing")
 
     assert not result.passed
+
+
+# ---------------------------------------------------------------------------
+# Governance policy YAML — impossible-condition detection (issue #3661)
+# ---------------------------------------------------------------------------
+
+
+def test_governance_in_empty_value_is_error(tmp_path: Path) -> None:
+    """An 'in' operator with an empty value list can never match — error.
+
+    Reproduces the first failing case from issue #3661:
+      run("empty value set:", "tool_name", [])  # evaluator returns allowed=True
+    """
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: block\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: tool_name\n"
+        "      operator: in\n"
+        "      value: []\n",
+    )
+
+    result = lint_file(path)
+
+    assert not result.passed
+    errors = result.errors
+    assert len(errors) == 1
+    assert "block" in errors[0].message
+    assert "in" in errors[0].message
+    assert "empty" in errors[0].message
+
+
+def test_governance_not_in_empty_value_is_error(tmp_path: Path) -> None:
+    """A 'not_in' operator with an empty value list can never match — error."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: restrict\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: tool_name\n"
+        "      operator: not_in\n"
+        "      value: []\n",
+    )
+
+    result = lint_file(path)
+
+    assert not result.passed
+    assert any("not_in" in m.message and "empty" in m.message for m in result.errors)
+
+
+def test_governance_in_nonempty_value_passes(tmp_path: Path) -> None:
+    """An 'in' operator with a non-empty value list is satisfiable — no error."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: block-delete\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: tool_name\n"
+        "      operator: in\n"
+        "      value:\n"
+        "        - delete_file\n",
+    )
+
+    result = lint_file(path)
+
+    assert result.passed
+
+
+def test_governance_conditions_list_empty_in_is_error(tmp_path: Path) -> None:
+    """Empty IN inside a 'conditions' list is also caught."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: multi-cond\n"
+        "    action: deny\n"
+        "    conditions:\n"
+        "      - field: tool_name\n"
+        "        operator: in\n"
+        "        value: []\n",
+    )
+
+    result = lint_file(path)
+
+    assert not result.passed
+    assert any("multi-cond" in m.message for m in result.errors)
+
+
+def test_governance_non_membership_operator_empty_value_passes(tmp_path: Path) -> None:
+    """Non-membership operators are not subject to the empty-value check."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: check-trust\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: trust_score\n"
+        "      operator: lt\n"
+        "      value: 700\n",
+    )
+
+    result = lint_file(path)
+
+    assert result.passed
+
+
+def test_governance_multiple_rules_independent_errors(tmp_path: Path) -> None:
+    """Each rule with an empty membership set produces its own error."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: rule-a\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: tool_name\n"
+        "      operator: in\n"
+        "      value: []\n"
+        "  - name: rule-b\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: agent.namespace\n"
+        "      operator: not_in\n"
+        "      value: []\n",
+    )
+
+    result = lint_file(path)
+
+    assert not result.passed
+    assert len(result.errors) == 2
+    messages = {m.message for m in result.errors}
+    assert any("rule-a" in m for m in messages)
+    assert any("rule-b" in m for m in messages)
+
+
+def test_governance_directory_with_impossible_condition(tmp_path: Path) -> None:
+    """lint_path propagates governance condition errors from directory scans."""
+    _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: never-fires\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: tool_name\n"
+        "      operator: in\n"
+        "      value: []\n",
+    )
+
+    result = lint_path(tmp_path)
+
+    assert not result.passed
+    assert any("never-fires" in m.message for m in result.errors)
