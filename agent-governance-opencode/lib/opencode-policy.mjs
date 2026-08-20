@@ -4,12 +4,16 @@
 import { isIP } from "node:net";
 
 import {
+  evaluateDirectResourceAccess,
   loadPolicy as loadBasePolicy,
 } from "./policy.mjs";
 
 export * from "./policy.mjs";
 
 const DEFAULT_ALLOWLIST_EFFECT = "allow";
+const COMMAND_ARGUMENT_KEYS = ["command", "bash", "powershell", "script", "cmd"];
+const COMMAND_TOOL_NAME_PATTERN =
+  /(?:^|[._:/-])(?:bash|shell|sh|zsh|fish|powershell|pwsh|cmd|terminal|exec|execute|command)(?:$|[._:/-])/i;
 
 /**
  * Load the existing OpenCode policy and attach positive command/URL allowlists.
@@ -25,7 +29,9 @@ export async function loadPolicy(options = {}) {
   try {
     const positiveAllowlists = compilePositiveAllowlistPolicy(state.policy.raw);
     state.policy.positiveAllowlists = positiveAllowlists;
-    state.policyEngine.registerBackend(createPositiveAllowlistBackend(positiveAllowlists));
+    state.policyEngine.registerBackend(
+      createPositiveAllowlistBackend(positiveAllowlists, state.policy),
+    );
   } catch (error) {
     const policyError = error instanceof Error ? error : new Error(String(error));
     state.policy.positiveAllowlists = emptyPositiveAllowlistPolicy();
@@ -156,7 +162,7 @@ function compileAllowedDomain(entry, index) {
   }
 
   const source = entry.trim().toLowerCase();
-  if (source.includes("://") || /[\s/@?#]/.test(source)) {
+  if (source.includes("://") || /[\s/@?#\\]/.test(source)) {
     throw new Error(
       `directResourcePolicies.allowedDomains[${index}] must contain only a host and optional port.`,
     );
@@ -248,7 +254,7 @@ function stripIpv6Brackets(hostname) {
   return hostname.replace(/^\[/, "").replace(/\]$/, "");
 }
 
-function createPositiveAllowlistBackend(policy) {
+function createPositiveAllowlistBackend(positivePolicy, basePolicy) {
   return {
     name: "agt-positive-allowlists",
     evaluateAction(action, context) {
@@ -256,12 +262,12 @@ function createPositiveAllowlistBackend(policy) {
         return "allow";
       }
 
-      const commandDecision = evaluateCommandAllowlist(policy.commands, context);
+      const commandDecision = evaluateCommandAllowlist(positivePolicy.commands, context);
       if (commandDecision) {
         return commandDecision;
       }
 
-      const urlDecision = evaluateUrlAllowlist(policy.urls, context);
+      const urlDecision = evaluateUrlAllowlist(positivePolicy.urls, basePolicy, context);
       if (urlDecision) {
         return urlDecision;
       }
@@ -276,7 +282,7 @@ function evaluateCommandAllowlist(commandPolicy, context) {
     return null;
   }
 
-  const command = normalizeCommandText(context.commandText);
+  const command = extractAllowlistedCommand(context);
   if (!command) {
     return null;
   }
@@ -293,22 +299,62 @@ function evaluateCommandAllowlist(commandPolicy, context) {
   };
 }
 
+function extractAllowlistedCommand(context) {
+  const args = context.rawToolArgs;
+  if (args && typeof args === "object" && !Array.isArray(args)) {
+    for (const key of COMMAND_ARGUMENT_KEYS) {
+      const value = args[key];
+      if (typeof value === "string" && value.trim()) {
+        return normalizeCommandText(value);
+      }
+    }
+  }
+
+  const toolName = String(context.toolName ?? "").trim();
+  if (!COMMAND_TOOL_NAME_PATTERN.test(toolName)) {
+    return "";
+  }
+  return normalizeCommandText(context.commandText);
+}
+
 function normalizeCommandText(value) {
   return String(value ?? "").replace(/\r\n?/g, "\n").trim();
 }
 
-function evaluateUrlAllowlist(urlPolicy, context) {
+function evaluateUrlAllowlist(urlPolicy, basePolicy, context) {
   if (urlPolicy.defaultEffect !== "deny") {
     return null;
   }
 
   const candidates = collectHttpUrlCandidates(context.rawToolArgs);
+  let reviewDecision;
+
   for (const candidate of candidates) {
     if (!candidate.valid) {
       return {
         backend: "agt-positive-allowlists",
         decision: "deny",
         reason: "URL allowlist denied a malformed HTTP(S) URL in tool arguments.",
+      };
+    }
+
+    const existingDecision = evaluateDirectResourceAccess(basePolicy, {
+      cwd: context.cwd,
+      rawToolArgs: { url: candidate.normalizedUrl },
+      toolName: context.toolName,
+    });
+    if (existingDecision?.effect === "deny") {
+      return {
+        backend: "agt-positive-allowlists",
+        decision: "deny",
+        reason: existingDecision.reason,
+      };
+    }
+    if (existingDecision?.effect === "review") {
+      reviewDecision ??= {
+        backend: "agt-positive-allowlists",
+        decision: "review",
+        reason: existingDecision.reason,
       };
     }
 
@@ -323,7 +369,7 @@ function evaluateUrlAllowlist(urlPolicy, context) {
     };
   }
 
-  return null;
+  return reviewDecision ?? null;
 }
 
 function collectHttpUrlCandidates(value) {
@@ -336,7 +382,7 @@ function collectHttpUrlCandidates(value) {
     const current = stack.pop();
     if (typeof current === "string") {
       const raw = current.trim();
-      if (!/^https?:\/\//i.test(raw)) {
+      if (!/^https?:/i.test(raw)) {
         continue;
       }
 

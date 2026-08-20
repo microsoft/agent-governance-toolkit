@@ -86,6 +86,47 @@ test("command allowlist normalizes outer whitespace and denies unmatched command
   );
 });
 
+test("command allowlist is limited to command-bearing tool calls", async () => {
+  await withPolicy(
+    makePolicy({
+      toolPolicies: {
+        commandDefaultEffect: "deny",
+        allowedCommandPatterns: [{ source: "^git\\s+status$", flags: "i" }],
+      },
+      directResourcePolicies: {
+        urlDefaultEffect: "deny",
+        allowedDomains: ["api.github.com"],
+      },
+    }),
+    async (state, root) => {
+      const webfetch = await evaluateOpenCodeTool(state, {
+        tool: "webfetch",
+        args: { url: "https://api.github.com/repos/microsoft/agent-governance-toolkit" },
+        cwd: root,
+        sessionId: "command-scope-webfetch",
+      });
+      assert.equal(webfetch.effect, "allow");
+
+      const allowedInput = await evaluateOpenCodeTool(state, {
+        tool: "bash",
+        args: { input: "git status" },
+        cwd: root,
+        sessionId: "command-scope-bash-input-allow",
+      });
+      assert.equal(allowedInput.effect, "allow");
+
+      const deniedInput = await evaluateOpenCodeTool(state, {
+        tool: "bash",
+        args: { input: "npm publish" },
+        cwd: root,
+        sessionId: "command-scope-bash-input-deny",
+      });
+      assert.equal(deniedInput.effect, "deny");
+      assert.match(deniedInput.reason, /command allowlist denied/i);
+    },
+  );
+});
+
 test("command allowlist does not override an existing deny rule", async () => {
   await withPolicy(
     makePolicy({
@@ -168,6 +209,40 @@ test("URL allowlist supports exact hosts, wildcard subdomains, URL patterns, and
   );
 });
 
+test("URL default deny canonicalizes alternate HTTP(S) spellings", async () => {
+  await withPolicy(
+    makePolicy({
+      directResourcePolicies: {
+        urlDefaultEffect: "deny",
+        allowedDomains: ["api.github.com"],
+      },
+    }),
+    async (state, root) => {
+      const allowed = await evaluateOpenCodeTool(state, {
+        tool: "webfetch",
+        args: { url: String.raw`https:\\api.github.com/repos/microsoft/agent-governance-toolkit` },
+        cwd: root,
+        sessionId: "url-canonicalized-allow",
+      });
+      assert.equal(allowed.effect, "allow");
+
+      for (const url of [
+        String.raw`https:\\collector.invalid/next`,
+        "https:/collector.invalid/next",
+      ]) {
+        const denied = await evaluateOpenCodeTool(state, {
+          tool: "webfetch",
+          args: { url },
+          cwd: root,
+          sessionId: `url-canonicalized-deny-${url}`,
+        });
+        assert.equal(denied.effect, "deny", url);
+        assert.match(denied.reason, /collector\.invalid/i);
+      }
+    },
+  );
+});
+
 test("URL default deny checks every URL-valued argument including redirect targets", async () => {
   await withPolicy(
     makePolicy({
@@ -212,15 +287,20 @@ test("URL allowlist cannot override a direct-resource deny", async () => {
       },
     }),
     async (state, root) => {
-      const result = await evaluateOpenCodeTool(state, {
-        tool: "webfetch",
-        args: { url: "http://169.254.169.254/latest/meta-data/" },
-        cwd: root,
-        sessionId: "metadata-deny",
-      });
+      for (const url of [
+        "http://169.254.169.254/latest/meta-data/",
+        String.raw`http:\\169.254.169.254\latest\meta-data`,
+      ]) {
+        const result = await evaluateOpenCodeTool(state, {
+          tool: "webfetch",
+          args: { url },
+          cwd: root,
+          sessionId: `metadata-deny-${url}`,
+        });
 
-      assert.equal(result.effect, "deny");
-      assert.match(result.reason, /metadata endpoint remains blocked/i);
+        assert.equal(result.effect, "deny", url);
+        assert.match(result.reason, /metadata endpoint remains blocked/i);
+      }
     },
   );
 });
@@ -247,6 +327,23 @@ test("invalid positive-allowlist configuration is a fail-closed policy error", a
       });
       assert.equal(result.effect, "deny");
       assert.match(result.reason, /policy could not be loaded/i);
+    },
+  );
+});
+
+test("domain validation rejects URL-parser separator ambiguities", async () => {
+  await withPolicy(
+    makePolicy({
+      directResourcePolicies: {
+        urlDefaultEffect: "deny",
+        allowedDomains: [String.raw`example.com\unexpected`],
+      },
+    }),
+    async (state) => {
+      assert.match(
+        state.configuredPolicyError?.message ?? "",
+        /allowedDomains.*host and optional port/i,
+      );
     },
   );
 });
