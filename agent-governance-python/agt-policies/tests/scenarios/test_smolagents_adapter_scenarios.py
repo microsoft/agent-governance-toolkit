@@ -41,7 +41,7 @@ from agent_control_specification import (  # noqa: E402
 )
 
 
-_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: smolagents_adapter_scenarios
 extends: []
@@ -188,7 +188,7 @@ def test_before_tool_call_transform_path_rewrites_args(tmp_path: Path) -> None:
                 "decision": "transform",
                 "reason": "args_sanitized",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"q": "[SANITIZED]"},
                 },
             }
@@ -304,7 +304,7 @@ def test_step_callback_transform_path_rewrites_args(tmp_path: Path) -> None:
                 "decision": "transform",
                 "reason": "args_sanitized",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"q": "[SANITIZED]"},
                 },
             }

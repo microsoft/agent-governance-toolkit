@@ -1,11 +1,12 @@
 use crate::{
-    AnnotatorDispatcher, EnforcementMode, InterventionPoint, InterventionPointRequest,
-    InterventionPointResult, JsonValue, Limits, Manifest, PolicyDispatcher, Runtime, RuntimeError,
+    AnnotatorDispatcher, EnforcementMode, InterceptionPoint, JsonValue, Limits, Manifest,
+    PolicyDispatcher, Runtime, RuntimeError,
 };
-use std::{convert::Infallible, fmt, path::Path, sync::Arc};
+use std::{convert::Infallible, fmt, fs, path::Path, sync::Arc};
 
 mod approval;
 mod error;
+mod evaluation;
 mod options;
 mod results;
 mod snapshot;
@@ -15,6 +16,7 @@ pub use approval::{ApprovalOutcome, ApprovalResolution, ApprovalResolver};
 pub use error::{
     AgentControlBlocked, AgentControlError, AgentControlInterruption, AgentControlSuspended,
 };
+pub use evaluation::{identity, with_transformed_target, HostEvaluation};
 pub use options::{RunOptions, ToolRunOptions};
 pub use results::{ModelRunResult, RunResult, ToolRunResult};
 use snapshot::{
@@ -26,10 +28,221 @@ pub use tool::{
     UnsupportedFrameworkAdapter, UnsupportedFrameworkAdapterError,
 };
 
+/// Stands in for an annotator dispatcher when the manifest declares no
+/// annotators and the bundled dispatchers are not compiled in. The
+/// runtime only dispatches annotators a manifest names, so `dispatch`
+/// is unreachable; it fails closed rather than returning a value that
+/// would silently satisfy a policy.
+#[cfg(not(feature = "bundled-dispatchers"))]
+struct NoAnnotatorDispatcher;
+
+#[cfg(not(feature = "bundled-dispatchers"))]
+impl AnnotatorDispatcher for NoAnnotatorDispatcher {
+    fn dispatch(
+        &self,
+        annotator_name: &str,
+        _annotator: &agent_control_spec::AnnotatorInvocation,
+        _preliminary_policy_input: &JsonValue,
+    ) -> Result<JsonValue, RuntimeError> {
+        Err(RuntimeError::PolicyInvocationFailed(format!(
+            "annotator `{annotator_name}` was dispatched but no annotator dispatcher is \
+             registered; register one explicitly, or build with the `bundled-dispatchers` \
+             feature, which reads host environment credentials"
+        )))
+    }
+}
+
+/// Select the host-safe default annotator dispatcher.
+///
+/// The credential-reading bundled dispatcher is available only when the
+/// `bundled-dispatchers` feature is explicitly enabled. Without it, manifests
+/// that declare no annotators receive a fail-closed unreachable fallback, while
+/// manifests that declare annotators must supply a host dispatcher.
+pub fn default_host_annotator_dispatcher(
+    manifest: &Manifest,
+) -> Result<Arc<dyn AnnotatorDispatcher>, RuntimeError> {
+    #[cfg(feature = "bundled-dispatchers")]
+    {
+        let _ = manifest;
+        Ok(agent_control_spec::dispatchers::default_annotator_dispatcher())
+    }
+    #[cfg(not(feature = "bundled-dispatchers"))]
+    {
+        if manifest.annotators.is_empty() {
+            Ok(Arc::new(NoAnnotatorDispatcher))
+        } else {
+            Err(RuntimeError::PolicyInvocationFailed(format!(
+                "manifest declares {} annotator(s) but no annotator dispatcher was supplied and \
+                 the bundled dispatchers are not enabled; register one explicitly, or build with \
+                 the `bundled-dispatchers` feature, which reads host environment credentials",
+                manifest.annotators.len()
+            )))
+        }
+    }
+}
+
+/// Select the bundled OPA policy dispatcher.
+pub fn default_host_policy_dispatcher(
+    manifest: &Manifest,
+) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
+    agent_control_spec::dispatchers::default_policy_dispatcher(manifest)
+}
+
+/// Load a top-level manifest URL through ACS's URL `extends` resolver.
+///
+/// The temporary manifest is created under the current working directory
+/// rather than the system temporary directory. ACS performs the HTTPS trust
+/// checks, bounded fetch, redirect handling, optional SHA-256 verification,
+/// and recursive `extends` resolution.
+/// Return true for IP destinations a manifest URL fetch must not target.
+///
+/// Prevents server side request forgery to the host itself or to a cloud
+/// metadata endpoint. Loopback, the unspecified address, the IPv4 broadcast
+/// address, and link-local (IPv4 169.254.0.0/16 including 169.254.169.254, and
+/// IPv6 fe80::/10) are blocked. RFC1918 and IPv6 unique-local are deliberately
+/// allowed so internal HTTPS policy hosting keeps working. IPv4-mapped
+/// (`::ffff:a.b.c.d`) and IPv4-compatible (`::a.b.c.d`) literals canonicalize
+/// to their embedded IPv4 first, so a dual-stack host cannot route past the
+/// guard through `[::ffff:169.254.169.254]`.
+///
+/// Ported from the engine AGT vendored before the retarget;
+/// `agent-control-spec` 0.4.0-alpha.1 validates only scheme, credentials and
+/// fragment. Filed upstream as agent-control-spec#20.
+fn is_blocked_fetch_ip(ip: std::net::IpAddr) -> bool {
+    fn blocked_v4(v4: std::net::Ipv4Addr) -> bool {
+        v4.is_loopback() || v4.is_link_local() || v4.is_unspecified() || v4.is_broadcast()
+    }
+    match ip {
+        std::net::IpAddr::V4(v4) => blocked_v4(v4),
+        std::net::IpAddr::V6(v6) => {
+            // Native IPv6 specials first: to_ipv4 would map ::1 to 0.0.0.1
+            // and let it through.
+            if v6.is_loopback() || v6.is_unspecified() || (v6.segments()[0] & 0xffc0) == 0xfe80 {
+                return true;
+            }
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return blocked_v4(v4);
+            }
+            if let Some(v4) = v6.to_ipv4() {
+                return blocked_v4(v4);
+            }
+            false
+        }
+    }
+}
+
+/// Reject a URL whose host is a literal IP the fetch guard blocks.
+///
+/// Only literal addresses are checked. A hostname that resolves to a blocked
+/// address still passes, which is the same coverage the pre-retarget engine
+/// had: closing that needs resolution-time interception in the fetcher.
+fn reject_blocked_fetch_host(url: &str) -> Result<(), RuntimeError> {
+    let host = url
+        .split("://")
+        .nth(1)
+        .and_then(|rest| rest.split(['/', '?', '#']).next())
+        .map(|authority| authority.rsplit('@').next().unwrap_or(authority))
+        .unwrap_or_default();
+    let host = host.rsplit_once(':').map_or(host, |(h, port)| {
+        if port.chars().all(|c| c.is_ascii_digit()) && !h.is_empty() {
+            h
+        } else {
+            host
+        }
+    });
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    if let Ok(ip) = bare.parse::<std::net::IpAddr>() {
+        if is_blocked_fetch_ip(ip) {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "URL '{url}' targets a loopback or link-local address, which is blocked to \
+                 prevent SSRF to a host-local or cloud metadata endpoint"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn manifest_from_url(
+    url: &str,
+    sha256: Option<&str>,
+    limits: Limits,
+) -> Result<Manifest, RuntimeError> {
+    reject_blocked_fetch_host(url)?;
+    // A URL `extends` never resolves against the base directory, so this
+    // synthetic manifest can live in the system temp dir. Writing it into
+    // the working directory would fail on a read-only checkout and would
+    // leave a stray directory behind if the process died mid-fetch.
+    let temp_dir = tempfile::Builder::new()
+        .prefix(".acs-url-manifest-")
+        .tempdir()
+        .map_err(|error| {
+            RuntimeError::ManifestInvalid(format!(
+                "failed to create a temporary directory for URL manifest loading: {error}"
+            ))
+        })?;
+    let path = temp_dir.path().join("manifest.yaml");
+    let mut synthetic = format!(
+        "agent_control_specification_version: 0.4.0-alpha.1\nextends:\n  - url: {}\n",
+        serde_json::to_string(url).map_err(|error| {
+            RuntimeError::ManifestInvalid(format!("failed to encode manifest URL: {error}"))
+        })?
+    );
+    if let Some(sha256) = sha256 {
+        synthetic.push_str(&format!(
+            "    sha256: {}\n",
+            serde_json::to_string(sha256).map_err(|error| {
+                RuntimeError::ManifestInvalid(format!(
+                    "failed to encode manifest SHA-256 pin: {error}"
+                ))
+            })?
+        ));
+    }
+    fs::write(&path, synthetic).map_err(|error| {
+        RuntimeError::ManifestInvalid(format!(
+            "failed to write the temporary URL manifest '{}': {error}",
+            path.display()
+        ))
+    })?;
+    Manifest::from_path_with_limits(path, limits)
+}
+
+/// Resolved policy identifier and sorted annotator names per interception point.
+pub fn policy_labels(manifest: &Manifest) -> JsonValue {
+    let mut points = serde_json::Map::new();
+    for (interception_point, config) in &manifest.intervention_points {
+        let mut annotators: Vec<String> = config.annotations.keys().cloned().collect();
+        annotators.sort();
+        points.insert(
+            interception_point.as_str().to_string(),
+            serde_json::json!({
+                "policy_id": config.policy.id,
+                "annotators": annotators,
+            }),
+        );
+    }
+    JsonValue::Object(points)
+}
+
 #[derive(Clone)]
 pub struct AgentControl {
     runtime: Runtime,
     approval_resolver: Option<ApprovalResolver>,
+    /// Retained so [`AgentControl::with_telemetry`] can rebuild the
+    /// runtime. `agent_control_spec::Runtime` takes its telemetry sink at
+    /// construction and exposes no setter.
+    parts: Option<RuntimeParts>,
+}
+
+/// The inputs a `Runtime` is built from.
+#[derive(Clone)]
+struct RuntimeParts {
+    manifest: Manifest,
+    annotations: Arc<dyn AnnotatorDispatcher>,
+    policy: Arc<dyn PolicyDispatcher>,
+    /// Retained so rebuilding for telemetry keeps the caller's budget.
+    /// Dropping it would silently restore `Limits::default()`, widening
+    /// limits the caller deliberately tightened.
+    limits: Limits,
 }
 
 /// Mutable session handle passed to [`AgentControl::guard_session`]. Assign
@@ -65,6 +278,7 @@ impl AgentControl {
         Self {
             runtime,
             approval_resolver: None,
+            parts: None,
         }
     }
 
@@ -78,40 +292,6 @@ impl AgentControl {
         policy: Option<Arc<dyn PolicyDispatcher>>,
     ) -> Result<Self, RuntimeError> {
         let manifest = Manifest::from_path(path)?;
-        Self::from_manifest_with_dispatchers(manifest, annotations, policy)
-    }
-
-    /// Load a top level manifest from an HTTPS URL. The URL MUST be HTTPS. The
-    /// `sha256` pin is optional, mirroring URL `extends`, and when supplied MUST
-    /// be a 64 character hexadecimal digest over the fetched bytes. See
-    /// [`agent_control_specification_core::Manifest::from_url`] for the trust
-    /// gate, which fails closed on a non HTTPS URL, a malformed pin, a fetch
-    /// error, a body size breach, or a hash mismatch.
-    pub fn from_url(url: &str, sha256: Option<&str>) -> Result<Self, RuntimeError> {
-        Self::from_url_with_dispatchers(url, sha256, None, None)
-    }
-
-    /// Load a top level manifest from an HTTPS URL with explicit URL fetch
-    /// `limits`, so a host that tightened `max_manifest_url_bytes`,
-    /// `manifest_url_timeout_ms`, or `max_manifest_url_redirects` has those
-    /// honored by the bundled default dispatchers for a dispatch time
-    /// `system_prompt_url` fetch. `from_url` uses the default limits.
-    pub fn from_url_with_limits(
-        url: &str,
-        sha256: Option<&str>,
-        limits: Limits,
-    ) -> Result<Self, RuntimeError> {
-        let manifest = Manifest::from_url(url, sha256)?;
-        Self::from_manifest_with_dispatchers_and_limits(manifest, None, None, limits)
-    }
-
-    pub fn from_url_with_dispatchers(
-        url: &str,
-        sha256: Option<&str>,
-        annotations: Option<Arc<dyn AnnotatorDispatcher>>,
-        policy: Option<Arc<dyn PolicyDispatcher>>,
-    ) -> Result<Self, RuntimeError> {
-        let manifest = Manifest::from_url(url, sha256)?;
         Self::from_manifest_with_dispatchers(manifest, annotations, policy)
     }
 
@@ -132,31 +312,69 @@ impl AgentControl {
         )
     }
 
-    /// Build from a manifest with explicit URL fetch `limits` threaded to the
-    /// bundled default dispatchers, so a tightened body size, timeout, or
-    /// redirect cap is honored for a dispatch time `system_prompt_url` or file
-    /// sourced `bundle_url` fetch. The other constructors pass the default limits.
+    /// Build from a manifest with explicit `limits`. The other constructors
+    /// pass the default limits.
+    ///
+    /// `limits` bounds two things: the engine resource budget (snapshot size,
+    /// policy input size, annotators per interception point), and the manifest
+    /// `extends` URL fetch performed at load time.
+    ///
+    /// It does **not** bound a dispatch time fetch. `agent-control-spec`
+    /// 0.4.0-alpha.1 constructs the bundled dispatchers without limits, so a
+    /// `system_prompt_url` or `bundle_url` fetched by an annotator uses that
+    /// crate's own defaults regardless of what is set here. Do not rely on
+    /// this to cap outbound requests from a dispatcher.
     pub fn from_manifest_with_dispatchers_and_limits(
         manifest: Manifest,
         annotations: Option<Arc<dyn AnnotatorDispatcher>>,
         policy: Option<Arc<dyn PolicyDispatcher>>,
         limits: Limits,
     ) -> Result<Self, RuntimeError> {
-        let annotations = annotations.unwrap_or_else(|| {
-            agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
-                &manifest, limits,
-            )
-        });
-        let policy = match policy {
-            Some(policy) => policy,
+        // Falling back to the bundled annotator dispatcher would hand a
+        // URL sourced manifest a path to host environment credentials,
+        // which is the exposure `bundled-dispatchers` gates. A manifest
+        // that declares no annotators never reaches a dispatcher, so it
+        // keeps working without the feature.
+        let annotations = match annotations {
+            Some(annotations) => annotations,
+            #[cfg(feature = "bundled-dispatchers")]
+            None => agent_control_spec::dispatchers::default_annotator_dispatcher(),
+            #[cfg(not(feature = "bundled-dispatchers"))]
+            None if manifest.annotators.is_empty() => Arc::new(NoAnnotatorDispatcher),
+            #[cfg(not(feature = "bundled-dispatchers"))]
             None => {
-                agent_control_specification_core::dispatchers::default_policy_dispatcher_with_limits(
-                    &manifest, limits,
-                )?
+                return Err(RuntimeError::PolicyInvocationFailed(format!(
+                    "manifest declares {} annotator(s) but no annotator dispatcher was \
+                     supplied and the bundled dispatchers are not enabled; register one \
+                     explicitly, or build with the `bundled-dispatchers` feature, which \
+                     reads host environment credentials",
+                    manifest.annotators.len()
+                )))
             }
         };
-        let runtime = Runtime::new(manifest, annotations, policy)?;
-        Ok(Self::new(runtime))
+        let policy = match policy {
+            Some(policy) => policy,
+            None => agent_control_spec::dispatchers::default_policy_dispatcher(&manifest)?,
+        };
+        // `Limits` carries the engine resource budget (snapshot size,
+        // policy input size, annotators per point), so it must reach the
+        // runtime rather than be dropped. It does not reach the bundled
+        // dispatchers, whose URL fetch budget stays at their own
+        // defaults; tracked in docs/acs-retarget.md.
+        let runtime = Runtime::with_limits(
+            manifest.clone(),
+            Arc::clone(&annotations),
+            Arc::clone(&policy),
+            limits,
+        )?;
+        let mut control = Self::new(runtime);
+        control.parts = Some(RuntimeParts {
+            manifest,
+            annotations,
+            policy,
+            limits,
+        });
+        Ok(control)
     }
 
     pub fn from_manifest_chain(manifests: &[&str]) -> Result<Self, RuntimeError> {
@@ -183,8 +401,24 @@ impl AgentControl {
     /// `InMemoryTelemetrySink`, `StdoutJsonTelemetrySink`, or `MultiSink`, or the
     /// `OtelTelemetrySink` from the `agent_control_specification_otel` crate
     /// (added as a dependency) for OpenTelemetry metrics.
+    /// Requires an `AgentControl` built from a manifest. `agent_control_spec`
+    /// takes the sink at `Runtime` construction and exposes no setter and no
+    /// accessors, so a control built through [`AgentControl::new`] from a
+    /// pre-built `Runtime` has nothing to rebuild from and keeps the sink the
+    /// runtime was constructed with. Tracked in docs/acs-retarget.md.
     pub fn with_telemetry(mut self, telemetry: Arc<dyn crate::TelemetrySink>) -> Self {
-        self.runtime.set_telemetry(telemetry);
+        if let Some(parts) = self.parts.clone() {
+            if let Ok(runtime) = Runtime::with_telemetry_perf_and_limits(
+                parts.manifest,
+                parts.annotations,
+                parts.policy,
+                telemetry,
+                crate::PerfTelemetry::default(),
+                parts.limits,
+            ) {
+                self.runtime = runtime;
+            }
+        }
         self
     }
 
@@ -194,15 +428,24 @@ impl AgentControl {
 
     pub fn evaluate_intervention_point(
         &self,
-        intervention_point: InterventionPoint,
+        intervention_point: InterceptionPoint,
         snapshot: JsonValue,
         mode: EnforcementMode,
-    ) -> InterventionPointResult {
-        self.runtime
-            .evaluate_intervention_point(InterventionPointRequest {
-                intervention_point,
-                snapshot,
-                mode,
+    ) -> HostEvaluation {
+        let engine = self.runtime.evaluate_point(intervention_point, snapshot);
+        let limits = self
+            .parts
+            .as_ref()
+            .map(|parts| parts.limits)
+            .unwrap_or_default();
+        HostEvaluation::from_engine_with_limits(intervention_point, engine, mode, limits)
+            .unwrap_or_else(|(error, detail)| HostEvaluation {
+                verdict: agent_hooks::Verdict::host_error(error, Some(detail)),
+                policy_input: None,
+                transformed_policy_target: None,
+                action_identity: None,
+                input_identity: None,
+                enforced_identity: None,
             })
     }
 
@@ -216,8 +459,8 @@ impl AgentControl {
     /// it. Other modes never block.
     pub fn enforce(
         &self,
-        intervention_point: InterventionPoint,
-        intervention_point_result: &InterventionPointResult,
+        intervention_point: InterceptionPoint,
+        intervention_point_result: &HostEvaluation,
         mode: EnforcementMode,
         approval_resolver: Option<&ApprovalResolver>,
     ) -> Result<(), AgentControlInterruption> {
@@ -236,7 +479,7 @@ impl AgentControl {
     pub fn effective_policy_target(
         &self,
         raw: JsonValue,
-        intervention_point_result: &InterventionPointResult,
+        intervention_point_result: &HostEvaluation,
         mode: EnforcementMode,
     ) -> JsonValue {
         effective_policy_target(raw, intervention_point_result, mode)
@@ -246,7 +489,7 @@ impl AgentControl {
     pub fn agent_startup(
         &self,
         agent: JsonValue,
-    ) -> Result<InterventionPointResult, AgentControlInterruption> {
+    ) -> Result<HostEvaluation, AgentControlInterruption> {
         self.agent_startup_with_options(agent, RunOptions::default())
     }
 
@@ -254,18 +497,18 @@ impl AgentControl {
         &self,
         agent: JsonValue,
         options: RunOptions,
-    ) -> Result<InterventionPointResult, AgentControlInterruption> {
+    ) -> Result<HostEvaluation, AgentControlInterruption> {
         let mode = options.mode;
         let resolver = options
             .approval_resolver
             .as_ref()
             .or(self.approval_resolver.as_ref());
         let result = self.evaluate_intervention_point(
-            InterventionPoint::AgentStartup,
+            InterceptionPoint::AgentStartup,
             snapshot_with_value(&options.ambient_snapshot, "agent", agent),
             mode,
         );
-        enforce(InterventionPoint::AgentStartup, &result, mode, resolver)?;
+        enforce(InterceptionPoint::AgentStartup, &result, mode, resolver)?;
         Ok(result)
     }
 
@@ -273,7 +516,7 @@ impl AgentControl {
     pub fn agent_shutdown(
         &self,
         summary: JsonValue,
-    ) -> Result<InterventionPointResult, AgentControlInterruption> {
+    ) -> Result<HostEvaluation, AgentControlInterruption> {
         self.agent_shutdown_with_options(summary, RunOptions::default())
     }
 
@@ -281,18 +524,18 @@ impl AgentControl {
         &self,
         summary: JsonValue,
         options: RunOptions,
-    ) -> Result<InterventionPointResult, AgentControlInterruption> {
+    ) -> Result<HostEvaluation, AgentControlInterruption> {
         let mode = options.mode;
         let resolver = options
             .approval_resolver
             .as_ref()
             .or(self.approval_resolver.as_ref());
         let result = self.evaluate_intervention_point(
-            InterventionPoint::AgentShutdown,
+            InterceptionPoint::AgentShutdown,
             snapshot_with_value(&options.ambient_snapshot, "summary", summary),
             mode,
         );
-        enforce(InterventionPoint::AgentShutdown, &result, mode, resolver)?;
+        enforce(InterceptionPoint::AgentShutdown, &result, mode, resolver)?;
         Ok(result)
     }
 
@@ -419,12 +662,12 @@ impl AgentControl {
             .as_ref()
             .or(self.approval_resolver.as_ref());
         let input_intervention_point_result = self.evaluate_intervention_point(
-            InterventionPoint::Input,
+            InterceptionPoint::Input,
             snapshot_with_value(&options.ambient_snapshot, "input", input.clone()),
             mode,
         );
         enforce(
-            InterventionPoint::Input,
+            InterceptionPoint::Input,
             &input_intervention_point_result,
             mode,
             resolver,
@@ -435,7 +678,7 @@ impl AgentControl {
         let raw_output = execute(effective_input.clone()).map_err(AgentControlError::Execute)?;
 
         let output_intervention_point_result = self.evaluate_intervention_point(
-            InterventionPoint::Output,
+            InterceptionPoint::Output,
             snapshot_with_values(
                 &options.ambient_snapshot,
                 [
@@ -446,7 +689,7 @@ impl AgentControl {
             mode,
         );
         enforce(
-            InterventionPoint::Output,
+            InterceptionPoint::Output,
             &output_intervention_point_result,
             mode,
             resolver,
@@ -536,7 +779,7 @@ impl AgentControl {
         tool_name: impl Into<String>,
         args: JsonValue,
         options: ToolRunOptions,
-    ) -> Result<(JsonValue, InterventionPointResult), AgentControlInterruption> {
+    ) -> Result<(JsonValue, HostEvaluation), AgentControlInterruption> {
         let mode = options.mode;
         let resolver = options
             .approval_resolver
@@ -546,7 +789,7 @@ impl AgentControl {
         let raw_tool_call =
             tool_call_snapshot(&tool_name, args.clone(), options.tool_call_id.as_deref());
         let pre_tool_call_intervention_point_result = self.evaluate_intervention_point(
-            InterventionPoint::PreToolCall,
+            InterceptionPoint::PreToolCall,
             snapshot_with_value(
                 &options.ambient_snapshot,
                 "tool_call",
@@ -555,7 +798,7 @@ impl AgentControl {
             mode,
         );
         enforce(
-            InterventionPoint::PreToolCall,
+            InterceptionPoint::PreToolCall,
             &pre_tool_call_intervention_point_result,
             mode,
             resolver,
@@ -572,7 +815,7 @@ impl AgentControl {
         effective_args: JsonValue,
         raw_result: JsonValue,
         options: ToolRunOptions,
-    ) -> Result<(JsonValue, InterventionPointResult), AgentControlInterruption> {
+    ) -> Result<(JsonValue, HostEvaluation), AgentControlInterruption> {
         let mode = options.mode;
         let resolver = options
             .approval_resolver
@@ -586,7 +829,7 @@ impl AgentControl {
             options.tool_call_id.as_deref(),
         );
         let post_tool_call_intervention_point_result = self.evaluate_intervention_point(
-            InterventionPoint::PostToolCall,
+            InterceptionPoint::PostToolCall,
             snapshot_with_values(
                 &options.ambient_snapshot,
                 [
@@ -597,7 +840,7 @@ impl AgentControl {
             mode,
         );
         enforce(
-            InterventionPoint::PostToolCall,
+            InterceptionPoint::PostToolCall,
             &post_tool_call_intervention_point_result,
             mode,
             resolver,
@@ -668,12 +911,12 @@ impl AgentControl {
             .as_ref()
             .or(self.approval_resolver.as_ref());
         let pre_model_call_intervention_point_result = self.evaluate_intervention_point(
-            InterventionPoint::PreModelCall,
+            InterceptionPoint::PreModelCall,
             model_call_snapshot(&options.ambient_snapshot, model_request.clone(), None),
             mode,
         );
         enforce(
-            InterventionPoint::PreModelCall,
+            InterceptionPoint::PreModelCall,
             &pre_model_call_intervention_point_result,
             mode,
             resolver,
@@ -688,7 +931,7 @@ impl AgentControl {
             execute(effective_request.clone()).map_err(AgentControlError::Execute)?;
 
         let post_model_call_intervention_point_result = self.evaluate_intervention_point(
-            InterventionPoint::PostModelCall,
+            InterceptionPoint::PostModelCall,
             model_call_snapshot(
                 &options.ambient_snapshot,
                 effective_request.clone(),
@@ -697,7 +940,7 @@ impl AgentControl {
             mode,
         );
         enforce(
-            InterventionPoint::PostModelCall,
+            InterceptionPoint::PostModelCall,
             &post_model_call_intervention_point_result,
             mode,
             resolver,

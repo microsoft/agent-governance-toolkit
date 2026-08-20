@@ -45,7 +45,9 @@ class QueueRuntime:
 
 
 def _escalate():
-    return InterventionPointResult(Verdict(Decision.ESCALATE, reason="needs approval"))
+    return InterventionPointResult(
+        Verdict(Decision.DENY, reason="needs approval", approval={})
+    )
 
 
 def _allow():
@@ -79,10 +81,14 @@ class EscalationConformanceTests(unittest.IsolatedAsyncioTestCase):
             executed = True
             return value
 
-        with self.assertRaises(AgentControlBlocked):
+        with self.assertRaises(AgentControlBlocked) as caught:
             await control.run({"text": "x"}, execute)
 
         self.assertFalse(executed)
+        self.assertEqual(
+            caught.exception.result.verdict.reason,
+            "host_error:approval_unresolved",
+        )
 
     async def test_resolver_failure_fails_closed_with_resolver_failed_reason(self):
         async def raising(intervention_point, result):
@@ -105,7 +111,7 @@ class EscalationConformanceTests(unittest.IsolatedAsyncioTestCase):
                 await control.run({"text": "x"}, execute)
             self.assertEqual(
                 caught.exception.result.verdict.reason,
-                "runtime_error:approval_resolver_failed",
+                "host_error:approval_resolver_failed",
             )
             self.assertEqual(
                 caught.exception.result.verdict.message,
@@ -128,7 +134,7 @@ class EscalationConformanceTests(unittest.IsolatedAsyncioTestCase):
         without consulting any approval resolver.
         """
 
-        transform = Transform(path="$policy_target.text", value="redacted")
+        transform = Transform(path="$target.text", value="redacted")
         runtime = QueueRuntime(
             [
                 InterventionPointResult(
@@ -200,7 +206,10 @@ class EscalationConformanceTests(unittest.IsolatedAsyncioTestCase):
         control = AgentControl(runtime, approval_resolver=resolver)
         with self.assertRaises(AgentControlBlocked) as caught:
             await control.run("hi", _noop_execute())
-        self.assertEqual(caught.exception.result.verdict.reason, "runtime_error:approval_action_mismatch")
+        self.assertEqual(
+            caught.exception.result.verdict.reason,
+            "host_error:approval_identity_mismatch",
+        )
 
     async def test_escalate_deny_blocks(self):
         runtime = QueueRuntime([_escalate()])

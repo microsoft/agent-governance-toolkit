@@ -1,4 +1,4 @@
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: acs-agentdojo-benchmark
   version: "0.1.0"
@@ -12,7 +12,7 @@ intervention_points:
     policy_target: "$.input"
     annotations:
       prompt_classifier:
-        from: "$policy_target.text"
+        from: "$target.text"
     policy:
       id: agentdojo_policy
   pre_tool_call:
@@ -21,7 +21,7 @@ intervention_points:
     tool_name_from: "$.tool_call.name"
     annotations:
       tool_args_classifier:
-        from: "$policy_target"
+        from: "$target"
     policy:
       id: agentdojo_policy
   post_tool_call:
@@ -30,7 +30,7 @@ intervention_points:
     tool_name_from: "$.tool_call.name"
     annotations:
       tool_result_classifier:
-        from: "$policy_target"
+        from: "$target"
     policy:
       id: agentdojo_policy
 annotators:

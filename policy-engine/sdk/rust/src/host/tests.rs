@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
-    action_identity, AnnotatorDispatcher, AnnotatorInvocation, Decision, Manifest,
-    PolicyDispatcher, PreparedPolicyInvocation, RuntimeError,
+    AnnotatorDispatcher, AnnotatorInvocation, Decision, Manifest, PolicyDispatcher,
+    PreparedPolicyInvocation, RuntimeError,
 };
 use serde_json::json;
 use std::{
@@ -69,7 +69,7 @@ fn runtime(manifest_yaml: &str, policy: Arc<QueuePolicy>) -> Runtime {
 }
 
 fn run_manifest() -> &'static str {
-    r#"agent_control_specification_version: 0.3.1-beta
+    r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   test_policy:
     type: test
@@ -87,13 +87,94 @@ intervention_points:
 }
 
 #[test]
+fn policy_labels_expose_policy_ids_and_sorted_annotators() {
+    let manifest = Manifest::from_yaml_str(
+        r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  test_policy:
+    type: test
+annotators:
+  zeta:
+    type: classifier
+  alpha:
+    type: classifier
+intervention_points:
+  input:
+    policy:
+      id: test_policy
+    policy_target: $snap.input
+    annotations:
+      zeta:
+        from: $target
+      alpha:
+        from: $target"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        policy_labels(&manifest),
+        json!({
+            "input": {
+                "policy_id": "test_policy",
+                "annotators": ["alpha", "zeta"],
+            }
+        })
+    );
+}
+
+#[test]
+fn manifest_from_url_rejects_non_https_before_fetch() {
+    let error = manifest_from_url(
+        "http://policy.example/manifest.yaml",
+        None,
+        Limits::default(),
+    )
+    .unwrap_err();
+
+    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    assert!(error.detail().contains("unsupported URL scheme"));
+}
+
+#[cfg(not(feature = "bundled-dispatchers"))]
+#[test]
+fn default_annotator_dispatcher_requires_opt_in_when_manifest_declares_annotators() {
+    let manifest = Manifest::from_yaml_str(
+        r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  test_policy:
+    type: test
+annotators:
+  classifier:
+    type: classifier
+intervention_points:
+  input:
+    policy:
+      id: test_policy
+    policy_target: $snap.input
+    annotations:
+      classifier:
+        from: $target"#,
+    )
+    .unwrap();
+
+    let error = match default_host_annotator_dispatcher(&manifest) {
+        Ok(_) => panic!("annotator dispatcher should require explicit opt-in"),
+        Err(error) => error,
+    };
+    assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    assert!(error
+        .detail()
+        .contains("bundled dispatchers are not enabled"));
+}
+
+#[test]
 fn from_path_zero_config_evaluates_rego_manifest() {
     let manifest_path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/ifc_agent/manifest.yaml");
     let control = AgentControl::from_path(manifest_path).unwrap();
 
     let result = control.evaluate_intervention_point(
-        InterventionPoint::PreToolCall,
+        InterceptionPoint::PreToolCall,
         json!({
             "tool_call": { "name": "trusted_archive", "args": { "body": "record" } },
             "ifc": { "source_labels": ["confidential"] }
@@ -103,44 +184,6 @@ fn from_path_zero_config_evaluates_rego_manifest() {
 
     assert_eq!(result.verdict.decision, Decision::Allow);
     assert!(result.policy_input.is_some());
-}
-
-#[test]
-fn from_url_rejects_non_https_without_network() {
-    // The HTTPS requirement holds with or without a pin, and is checked before
-    // any network access.
-    let error = AgentControl::from_url("http://policy.example/manifest.yaml", None).unwrap_err();
-    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
-    assert!(error.detail().contains("unsupported URL scheme"));
-}
-
-#[test]
-fn from_url_accepts_optional_pin_argument() {
-    // The pin is optional; a supplied but malformed pin still fails closed once
-    // the (here non-https) URL is rejected, confirming the argument threads
-    // through to the core loader.
-    let error = AgentControl::from_url(
-        "http://policy.example/manifest.yaml",
-        Some(&"00".repeat(32)),
-    )
-    .unwrap_err();
-    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
-}
-
-#[test]
-fn from_url_with_limits_threads_limits_argument() {
-    // The limits-aware constructor still applies the HTTPS gate before any
-    // network access, confirming the new public argument threads through.
-    let limits = crate::Limits {
-        max_manifest_url_bytes: 4096,
-        max_manifest_url_redirects: 0,
-        ..crate::Limits::default()
-    };
-    let error =
-        AgentControl::from_url_with_limits("http://policy.example/manifest.yaml", None, limits)
-            .unwrap_err();
-    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
-    assert!(error.detail().contains("unsupported URL scheme"));
 }
 
 #[test]
@@ -167,7 +210,7 @@ fn from_manifest_with_dispatchers_and_limits_builds_and_evaluates() {
     .unwrap();
 
     let result = control.evaluate_intervention_point(
-        InterventionPoint::Input,
+        InterceptionPoint::Input,
         json!({ "input": { "text": "blocked" } }),
         EnforcementMode::Enforce,
     );
@@ -190,7 +233,7 @@ fn from_manifest_with_dispatchers_prefers_host_policy() {
     .unwrap();
 
     let result = control.evaluate_intervention_point(
-        InterventionPoint::Input,
+        InterceptionPoint::Input,
         json!({ "input": { "text": "blocked" } }),
         EnforcementMode::Enforce,
     );
@@ -202,7 +245,7 @@ fn from_manifest_with_dispatchers_prefers_host_policy() {
 
 fn tool_manifest(policy_target: &str) -> String {
     format!(
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   test_policy:
     type: test
@@ -233,7 +276,7 @@ fn tool_run_options_reject_empty_tool_call_id() {
 
 fn model_manifest(pre_target: &str, post_target: &str) -> String {
     format!(
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   test_policy:
     type: test
@@ -285,7 +328,7 @@ fn run_allows_and_blocks_input_denial_before_execute() {
         })
         .unwrap_err();
 
-    assert_eq!(blocked.intervention_point(), InterventionPoint::Input);
+    assert_eq!(blocked.intervention_point(), InterceptionPoint::Input);
     assert_eq!(
         blocked.intervention_point_result().verdict.decision,
         Decision::Deny
@@ -306,10 +349,10 @@ fn run_allows_and_blocks_input_denial_before_execute() {
 fn run_uses_transformed_input_and_output_in_enforce_mode() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.text", "value": "sanitized"}
+            "decision": "transform", "transform": {"path": "$target.text", "value": "sanitized"}
         }),
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.text", "value": "final"}
+            "decision": "transform", "transform": {"path": "$target.text", "value": "final"}
         }),
     ]));
     let control = AgentControl::new(runtime(run_manifest(), policy));
@@ -344,7 +387,7 @@ fn run_uses_transformed_input_and_output_in_enforce_mode() {
 fn evaluate_only_does_not_block_or_apply_transforms() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.text", "value": "changed"}
+            "decision": "transform", "transform": {"path": "$target.text", "value": "changed"}
         }),
         json!({"decision": "deny", "reason": "observed_only"}),
     ]));
@@ -397,10 +440,10 @@ fn try_run_preserves_execute_errors() {
 fn protected_tool_enforces_pre_and_post_with_stored_execute_repeatedly() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.query", "value": "safe"}
+            "decision": "transform", "transform": {"path": "$target.query", "value": "safe"}
         }),
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.answer", "value": "redacted"}
+            "decision": "transform", "transform": {"path": "$target.answer", "value": "redacted"}
         }),
     ]));
     let control = AgentControl::new(runtime(&tool_manifest("$snap.tool_call.args"), policy));
@@ -483,7 +526,7 @@ fn run_model_allows_and_emits_model_snapshots() {
 fn run_model_uses_pre_transform_for_execute_and_post_snapshot() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.prompt", "value": "safe"}
+            "decision": "transform", "transform": {"path": "$target.prompt", "value": "safe"}
         }),
         json!({"decision": "allow"}),
     ]));
@@ -517,7 +560,7 @@ fn run_model_uses_post_transform_for_returned_value() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({"decision": "allow"}),
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.text", "value": "redacted"}
+            "decision": "transform", "transform": {"path": "$target.text", "value": "redacted"}
         }),
     ]));
     let control = AgentControl::new(runtime(
@@ -554,7 +597,7 @@ fn run_model_blocks_pre_denial_before_execute() {
 
     assert_eq!(
         blocked.intervention_point(),
-        InterventionPoint::PreModelCall
+        InterceptionPoint::PreModelCall
     );
     assert_eq!(
         blocked.intervention_point_result().verdict.decision,
@@ -581,7 +624,7 @@ fn run_model_blocks_post_denial() {
 
     assert_eq!(
         blocked.intervention_point(),
-        InterventionPoint::PostModelCall
+        InterceptionPoint::PostModelCall
     );
     assert_eq!(
         blocked.intervention_point_result().verdict.decision,
@@ -606,7 +649,7 @@ fn malformed_tool_args_fail_closed_before_execute() {
         })
         .unwrap_err();
 
-    assert_eq!(blocked.intervention_point(), InterventionPoint::PreToolCall);
+    assert_eq!(blocked.intervention_point(), InterceptionPoint::PreToolCall);
     assert_eq!(
         blocked.intervention_point_result().verdict.decision,
         Decision::Deny
@@ -627,7 +670,7 @@ fn malformed_tool_args_fail_closed_before_execute() {
 fn lifecycle_intervention_point_names_are_current_and_aliases_are_rejected() {
     for intervention_point in ["agent_startup", "output", "agent_shutdown"] {
         assert_eq!(
-            InterventionPoint::from_str(intervention_point)
+            InterceptionPoint::from_str(intervention_point)
                 .unwrap()
                 .as_str(),
             intervention_point
@@ -635,7 +678,7 @@ fn lifecycle_intervention_point_names_are_current_and_aliases_are_rejected() {
     }
     for alias in ["startup", "shutdown", "final_output", "state", "endpoint"] {
         assert!(
-            InterventionPoint::from_str(alias).is_err(),
+            InterceptionPoint::from_str(alias).is_err(),
             "{alias} should be rejected"
         );
     }
@@ -663,10 +706,10 @@ fn rig_like_tool_wrapper_guards_tool_without_rig_dependency() {
 
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.query", "value": "safe"}
+            "decision": "transform", "transform": {"path": "$target.query", "value": "safe"}
         }),
         json!({
-            "decision": "transform", "transform": {"path": "$policy_target.answer", "value": "redacted"}
+            "decision": "transform", "transform": {"path": "$target.answer", "value": "redacted"}
         }),
     ]));
     let control = AgentControl::new(runtime(&tool_manifest("$snap.tool_call.args"), policy));
@@ -717,7 +760,7 @@ fn escalate_without_resolver_fails_closed() {
         .unwrap_err();
 
     assert!(matches!(interruption, AgentControlInterruption::Blocked(_)));
-    assert_eq!(interruption.intervention_point(), InterventionPoint::Input);
+    assert_eq!(interruption.intervention_point(), InterceptionPoint::Input);
     assert!(!*executed.lock().unwrap());
 }
 
@@ -756,11 +799,11 @@ fn escalate_approval_receives_and_matches_action_identity() {
     ]));
     let control = AgentControl::new(runtime(run_manifest(), policy));
     let result = control.evaluate_intervention_point(
-        InterventionPoint::Input,
+        InterceptionPoint::Input,
         json!({"input": {"text": "x"}}),
         EnforcementMode::Enforce,
     );
-    let expected = action_identity(result.policy_input.as_ref().unwrap()).unwrap();
+    let expected = identity(result.policy_input.as_ref().unwrap()).unwrap();
     let resolver: ApprovalResolver = Arc::new(move |_, result| {
         assert_eq!(result.action_identity.as_deref(), Some(expected.as_str()));
         ApprovalResolution::allow(expected.clone())
@@ -768,7 +811,7 @@ fn escalate_approval_receives_and_matches_action_identity() {
 
     control
         .enforce(
-            InterventionPoint::Input,
+            InterceptionPoint::Input,
             &result,
             EnforcementMode::Enforce,
             Some(&resolver),
@@ -783,7 +826,7 @@ fn escalate_approval_action_mismatch_fails_closed() {
     ]));
     let control = AgentControl::new(runtime(run_manifest(), policy));
     let mut result = control.evaluate_intervention_point(
-        InterventionPoint::Input,
+        InterceptionPoint::Input,
         json!({"input": {"text": "x"}}),
         EnforcementMode::Enforce,
     );
@@ -796,7 +839,7 @@ fn escalate_approval_action_mismatch_fails_closed() {
 
     let interruption = control
         .enforce(
-            InterventionPoint::Input,
+            InterceptionPoint::Input,
             &result,
             EnforcementMode::Enforce,
             Some(&resolver),
@@ -809,7 +852,7 @@ fn escalate_approval_action_mismatch_fails_closed() {
             .verdict
             .reason
             .as_deref(),
-        Some("runtime_error:approval_action_mismatch")
+        Some("host_error:approval_identity_mismatch")
     );
 }
 
@@ -842,7 +885,7 @@ fn escalate_suspend_raises_suspended_with_handle() {
     let interruption = control.run(json!({"text": "x"}), |v| v).unwrap_err();
     match interruption {
         AgentControlInterruption::Suspended(suspended) => {
-            assert_eq!(suspended.intervention_point, InterventionPoint::Input);
+            assert_eq!(suspended.intervention_point, InterceptionPoint::Input);
             assert_eq!(suspended.handle, Some(json!({"ticket": "abc"})));
         }
         other => panic!("expected suspended, got {other:?}"),
@@ -938,23 +981,29 @@ fn post_tool_escalate_runs_tool_but_blocks_result() {
     assert!(matches!(interruption, AgentControlInterruption::Blocked(_)));
     assert_eq!(
         interruption.intervention_point(),
-        InterventionPoint::PostToolCall
+        InterceptionPoint::PostToolCall
     );
     assert!(*executed.lock().unwrap());
 }
 
 #[test]
 fn with_telemetry_emits_one_decision_event_per_evaluation() {
-    use crate::InMemoryTelemetrySink;
+    use agent_control_specification_core::InMemoryTelemetrySink;
 
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({"decision": "deny", "reason": "blocked"}),
     ]));
     let sink = Arc::new(InMemoryTelemetrySink::new());
-    let control = AgentControl::new(runtime(run_manifest(), policy)).with_telemetry(sink.clone());
+    let control = AgentControl::from_manifest_with_dispatchers(
+        Manifest::from_yaml_str(run_manifest()).unwrap(),
+        Some(Arc::new(NoopAnnotator)),
+        Some(policy),
+    )
+    .unwrap()
+    .with_telemetry(sink.clone());
 
     let result = control.evaluate_intervention_point(
-        InterventionPoint::Input,
+        InterceptionPoint::Input,
         json!({"input": {"text": "hi"}}),
         EnforcementMode::Enforce,
     );
@@ -963,9 +1012,41 @@ fn with_telemetry_emits_one_decision_event_per_evaluation() {
     let events = sink.events();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].decision, Some(Decision::Deny));
-    assert_eq!(events[0].intervention_point, InterventionPoint::Input);
+    assert_eq!(events[0].intervention_point, InterceptionPoint::Input);
     // The manifest binds policy "test_policy" on input; the core sources it.
     assert_eq!(events[0].policy_id.as_deref(), Some("test_policy"));
     // Free-text reason is reduced to a safe code by the core redaction helper.
     assert_eq!(events[0].reason_code.as_deref(), Some("blocked"));
+}
+
+#[test]
+fn manifest_from_url_blocks_ssrf_targets() {
+    // Every form the pre-retarget engine blocked, including the dual-stack
+    // bypasses that motivated the IPv4 canonicalization.
+    for url in [
+        "https://127.0.0.1/m.yaml",
+        "https://169.254.169.254/latest/meta-data",
+        "https://[::1]/m.yaml",
+        "https://[::ffff:169.254.169.254]/m.yaml",
+        "https://[::ffff:127.0.0.1]/m.yaml",
+        "https://0.0.0.0/m.yaml",
+        "https://255.255.255.255/m.yaml",
+        "https://user:pw@127.0.0.1:8443/m.yaml",
+    ] {
+        let error = crate::manifest_from_url(url, None, crate::Limits::default())
+            .expect_err(&format!("{url} must be refused"));
+        assert!(
+            error.to_string().contains("loopback or link-local"),
+            "{url} gave {error}"
+        );
+    }
+
+    // RFC1918 stays allowed so internal policy hosting keeps working: this
+    // one fails at the fetch, not at the guard.
+    let error = crate::manifest_from_url("https://10.0.0.5/m.yaml", None, crate::Limits::default())
+        .expect_err("unreachable host still errors");
+    assert!(
+        !error.to_string().contains("loopback or link-local"),
+        "RFC1918 must not be blocked by the guard: {error}"
+    );
 }

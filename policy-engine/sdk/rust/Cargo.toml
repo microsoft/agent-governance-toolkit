@@ -1,16 +1,68 @@
 [package]
 name = "agent_control_specification"
-version = "0.3.1-beta.0"
+version = "0.4.0-beta.0"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT"
 description = "Rust SDK for the Agent Control Specification runtime."
 readme = "../../README.md"
 
+[features]
+# SECURITY: the bundled annotator dispatchers read host environment
+# credentials. AGT gated that on manifest provenance through a
+# `url_sourced` flag, so a manifest fetched over the network could not
+# reach host credentials. agent-control-spec 0.4.0-alpha.1 dropped the
+# gate while still supporting URL `extends`, so the complete chain
+# remote manifest -> llm/endpoint annotator -> attacker endpoint ->
+# `api_key_env: <host secret>` is reachable.
+#
+# What is gated here is installing the bundled *annotator* dispatcher,
+# which is that credential-reading path. The bundled *policy* dispatcher
+# stays on so the zero-config Rego default keeps working.
+#
+# That is a narrower guarantee than "the policy dispatcher is safe". It
+# shells out to `opa` without clearing the environment, and Rego can read
+# the inherited environment through `opa.runtime().env`, so a manifest
+# that controls the query can read a host secret. Verified:
+#   ACS_SENTINEL=x opa eval --format json --stdin-input \
+#     'opa.runtime().env.ACS_SENTINEL' <<<'{}'
+# returns "x". This predates the retarget; the previous embedded engine
+# spawned `opa` the same way. Fixing it needs `env_clear` at the spawn
+# site inside agent-control-spec, so it is an upstream issue rather than
+# something AGT can close from here. Treat a manifest as trusted input to
+# the policy plane.
+#
+# Off by default. A host that opts in accepts that exposure until the
+# provenance gate is restored upstream. See docs/acs-retarget.md.
+default = []
+opa = ["agent_control_specification_core/opa"]
+bundled-dispatchers = [
+    "agent-control-spec/aacs",
+    "agent-control-spec/openai_moderation",
+    "agent-control-spec/perspective",
+    "agent-control-spec/llama_guard",
+    "agent-control-spec/lakera_guard",
+    "agent-control-spec/auto",
+]
+
+[lib]
+# `cdylib` for the C ABI the .NET SDK loads; `lib` so the Rust crates in this
+# workspace keep linking against it normally.
+crate-type = ["lib", "cdylib"]
+
 [dependencies]
-agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core", features = ["opa", "cedar", "default-dispatchers", "aacs", "openai_moderation", "perspective", "llama_guard", "lakera_guard", "auto"] }
+agent-control-spec = { version = "=0.4.0-alpha.1", features = ["opa", "cedar", "default-dispatchers"] }
+agent-hooks-sdk = "=0.1.0-alpha.3"
+# Carries the AGT-only artifact validation the C ABI exposes.
+agent_control_specification_core = { version = "=0.3.1-beta.0", path = "../../core", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "=0.10.9"
+tempfile = "=3.27.0"
+
+[dev-dependencies]
+# Used by the conformance corpus runner to validate case files.
+jsonschema = { version = "=0.17.1", default-features = false }
 
 [[example]]
 name = "basic_host"

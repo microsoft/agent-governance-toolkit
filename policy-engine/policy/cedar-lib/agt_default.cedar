@@ -220,7 +220,7 @@ permit (
 
 // ── redact (transform via advice) ────────────────────────────────────
 
-@advice("{\"verdict\":\"transform\",\"reason\":\"redaction_applied\",\"transform\":{\"path\":\"$policy_target.value\",\"value\":\"[REDACTED]\"}}")
+@advice("{\"verdict\":\"transform\",\"reason\":\"redaction_applied\",\"transform\":{\"path\":\"$target.value\",\"value\":\"[REDACTED]\"}}")
 @id("agt.redact.pii")
 permit (
   principal,

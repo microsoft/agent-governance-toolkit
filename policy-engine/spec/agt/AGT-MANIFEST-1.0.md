@@ -14,7 +14,7 @@ through the one-way migration command.
 ## 1. Layout
 
 ```yaml
-agent_control_specification_version: "0.3.0-alpha-agt"  # see §2
+agent_control_specification_version: "0.4.0-alpha.1"  # see §2
 metadata: {...}                                          # free-form
 extends: []                                              # native ACS composition
 policies: {...}                                          # ACS-defined; supports rego, cedar, test, custom
@@ -101,7 +101,7 @@ their semantics are documented in `SPECIFICATION.md` §24.
 A minimal AGT manifest binding an OPA policy at `pre_tool_call`:
 
 ```yaml
-agent_control_specification_version: "0.3.0-alpha-agt"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: support-agent
 policies:

@@ -82,7 +82,7 @@ over_limit := budgets.max_tool_calls_exceeded(10)
     )
     pi = {
         "intervention_point": "pre_tool_call",
-        "policy_target": {"kind": "tool_args", "path": "$policy_target", "value": {}},
+        "policy_target": {"kind": "tool_args", "path": "$target", "value": {}},
         "snapshot": snap,
         "annotations": {},
         "tool": {"name": "t"},
@@ -105,7 +105,7 @@ count_of_pii := count(patterns.pii_patterns)
 """
     pi = {
         "intervention_point": "input",
-        "policy_target": {"kind": "input_body", "path": "$policy_target", "value": ""},
+        "policy_target": {"kind": "input_body", "path": "$target", "value": ""},
         "snapshot": {},
         "annotations": {},
         "tool": None,
@@ -130,7 +130,7 @@ egress_module_loaded := true
 """
     pi = {
         "intervention_point": "input",
-        "policy_target": {"kind": "input_body", "path": "$policy_target", "value": ""},
+        "policy_target": {"kind": "input_body", "path": "$target", "value": ""},
         "snapshot": {},
         "annotations": {},
         "tool": None,
@@ -155,7 +155,7 @@ stock_libraries_load := true
 """
     pi = {
         "intervention_point": "input",
-        "policy_target": {"kind": "input_body", "path": "$policy_target", "value": ""},
+        "policy_target": {"kind": "input_body", "path": "$target", "value": ""},
         "snapshot": {},
         "annotations": {},
         "tool": None,
@@ -182,7 +182,7 @@ labels := ifc.source_labels
     }
     pi = {
         "intervention_point": "input",
-        "policy_target": {"kind": "input_body", "path": "$policy_target", "value": "..."},
+        "policy_target": {"kind": "input_body", "path": "$target", "value": "..."},
         "snapshot": snap,
         "annotations": {},
         "tool": None,

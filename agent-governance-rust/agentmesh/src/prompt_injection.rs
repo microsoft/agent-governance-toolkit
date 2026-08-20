@@ -307,12 +307,22 @@ pub struct EvidenceSignal {
 impl EvidenceSignal {
     /// Build an advisory evidence signal carrying a score.
     pub fn new(backend: impl Into<String>, score: Option<f64>) -> Self {
-        Self { backend: backend.into(), score, blocks: false, error: None }
+        Self {
+            backend: backend.into(),
+            score,
+            blocks: false,
+            error: None,
+        }
     }
 
     /// Build an evidence signal carrying a static error code.
     pub fn with_error(backend: impl Into<String>, code: impl Into<String>) -> Self {
-        Self { backend: backend.into(), score: None, blocks: false, error: Some(code.into()) }
+        Self {
+            backend: backend.into(),
+            score: None,
+            blocks: false,
+            error: Some(code.into()),
+        }
     }
 }
 

@@ -1,4 +1,5 @@
-use crate::{InterventionPoint, InterventionPointResult, JsonValue};
+use super::HostEvaluation;
+use crate::{InterceptionPoint, JsonValue};
 use std::sync::Arc;
 
 /// Outcome of resolving an `escalate` verdict through an [`ApprovalResolver`].
@@ -57,4 +58,4 @@ impl ApprovalResolution {
 /// completion inline. A resolver that wants to signal failure must return
 /// [`ApprovalResolution::deny`] (the runtime fails closed).
 pub type ApprovalResolver =
-    Arc<dyn Fn(InterventionPoint, &InterventionPointResult) -> ApprovalResolution + Send + Sync>;
+    Arc<dyn Fn(InterceptionPoint, &HostEvaluation) -> ApprovalResolution + Send + Sync>;

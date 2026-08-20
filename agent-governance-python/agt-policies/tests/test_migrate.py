@@ -474,7 +474,9 @@ policy = GovernancePolicy(
     # The bridge output MUST validate against the AGT-MANIFEST-1.0 shape
     # (version string, empty extends, every binding policy_id is declared,
     # bundle directory exists on disk).
-    assert data["agent_control_specification_version"].endswith("-agt")
+    # agent-control-spec accepts exactly one manifest version; the old
+    # "-agt" suffixed variants are not in its supported list.
+    assert data["agent_control_specification_version"] == "0.4.0-alpha.1"
     assert data["extends"] == []
     assert data["intervention_points"], "manifest needs at least one binding"
     declared = set(data["policies"].keys())
@@ -714,9 +716,10 @@ def test_approval_stays_scoped_to_tool_calls(tmp_path: Path) -> None:
         assert result.verdict.decision.value == "allow", label
     verdict = session.pre_tool_call(tool_name="t", args={}).verdict
     # The escalation fires only here; with no approver configured the
-    # session resolves it to a denial.
+    # session fails closed. agent-hooks reserves a name for exactly this,
+    # so it is no longer an invented `approval_denied`.
     assert verdict.decision.value == "deny"
-    assert verdict.reason == "approval_denied"
+    assert verdict.reason == "host_error:approval_unresolved"
 
 
 def test_tool_call_budget_gates_only_the_next_tool_call(tmp_path: Path) -> None:

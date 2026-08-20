@@ -1,9 +1,14 @@
+use agent_control_specification::{
+    default_host_annotator_dispatcher, default_host_policy_dispatcher, manifest_from_url,
+    policy_labels, runtime_error_verdict, AnnotatorDispatcher, AnnotatorInvocation,
+    EnforcementMode, HostError, HostEvaluation, InterceptionPoint, JsonValue, Limits, Manifest,
+    NoopTelemetrySink, PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
+    RuntimeError, Verdict,
+};
 use agent_control_specification_core::{
     parse_manifest_yaml_value, validate_acs_artifacts as validate_artifacts_core,
     validate_acs_manifest as validate_manifest_artifact_core, validate_manifest_overlay_yaml,
-    validate_manifest_yaml, AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode,
-    InterventionPoint, InterventionPointRequest, InterventionPointResult, JsonValue, Manifest,
-    PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
+    validate_manifest_yaml,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -130,7 +135,7 @@ fn annotation_error(error: PyErr) -> RuntimeError {
     }
 }
 
-fn result_to_py(py: Python<'_>, result: InterventionPointResult) -> PyResult<Py<PyAny>> {
+fn result_to_py(py: Python<'_>, result: HostEvaluation) -> PyResult<Py<PyAny>> {
     let output = PyDict::new(py);
     let verdict = serde_json::to_value(&result.verdict)
         .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
@@ -153,12 +158,20 @@ fn result_to_py(py: Python<'_>, result: InterventionPointResult) -> PyResult<Py<
         Some(value) => output.set_item("action_identity", value)?,
         None => output.set_item("action_identity", py.None())?,
     }
+    match &result.input_identity {
+        Some(value) => output.set_item("input_identity", value)?,
+        None => output.set_item("input_identity", py.None())?,
+    }
+    match &result.enforced_identity {
+        Some(value) => output.set_item("enforced_identity", value)?,
+        None => output.set_item("enforced_identity", py.None())?,
+    }
     Ok(output.into_any().unbind())
 }
 
-fn runtime_error_result(error: RuntimeError) -> InterventionPointResult {
-    InterventionPointResult {
-        verdict: Verdict::runtime_error(&error),
+fn empty_host_result(verdict: Verdict) -> HostEvaluation {
+    HostEvaluation {
+        verdict,
         transformed_policy_target: None,
         policy_input: None,
         action_identity: None,
@@ -167,22 +180,35 @@ fn runtime_error_result(error: RuntimeError) -> InterventionPointResult {
     }
 }
 
-fn request_invalid_result() -> InterventionPointResult {
-    InterventionPointResult {
-        verdict: Verdict {
-            decision: Decision::Deny,
-            reason: Some("runtime_error:request_invalid".to_string()),
-            message: Some("Request blocked by Agent Control Specification.".to_string()),
-            transform: None,
-            evidence: None,
-            result_labels: Vec::new(),
-        },
-        transformed_policy_target: None,
-        policy_input: None,
-        action_identity: None,
-        input_identity: None,
-        enforced_identity: None,
+/// A failure out of `HostEvaluation::from_engine` is host work, not the
+/// engine's, so it carries a reserved `host_error:*` name.
+fn host_error_result((error, detail): (HostError, String)) -> HostEvaluation {
+    empty_host_result(Verdict::host_error(error, Some(detail)))
+}
+
+fn request_invalid_result() -> HostEvaluation {
+    empty_host_result(Verdict::host_error(
+        HostError::ContextInvalid,
+        Some("Request blocked by Agent Control Specification.".to_string()),
+    ))
+}
+
+fn parse_enforcement_mode(value: &str) -> Option<EnforcementMode> {
+    match value {
+        "enforce" => Some(EnforcementMode::Enforce),
+        "evaluate_only" => Some(EnforcementMode::EvaluateOnly),
+        _ => None,
     }
+}
+
+fn evaluate_host(
+    runtime: &Runtime,
+    point: InterceptionPoint,
+    snapshot: JsonValue,
+    mode: EnforcementMode,
+) -> HostEvaluation {
+    let engine = runtime.evaluate_point(point, snapshot);
+    HostEvaluation::from_engine(point, engine, mode).unwrap_or_else(host_error_result)
 }
 
 struct PyAnnotatorDispatcher {
@@ -237,6 +263,7 @@ impl PolicyDispatcher for PyPolicyDispatcher {
 #[pyclass]
 struct NativeRuntime {
     runtime: Runtime,
+    policy_labels: JsonValue,
 }
 
 #[pymethods]
@@ -255,7 +282,7 @@ impl NativeRuntime {
             annotator_cb,
             policy_cb,
             perf_telemetry,
-            agent_control_specification_core::Limits::default(),
+            Limits::default(),
         )
     }
 
@@ -273,7 +300,7 @@ impl NativeRuntime {
             annotator_cb,
             policy_cb,
             perf_telemetry,
-            agent_control_specification_core::Limits::default(),
+            Limits::default(),
         )
     }
 
@@ -290,8 +317,8 @@ impl NativeRuntime {
         url_timeout_ms: Option<u64>,
         max_url_redirects: Option<u32>,
     ) -> PyResult<Self> {
-        let manifest = Manifest::from_url(&url, sha256.as_deref()).map_err(runtime_error)?;
         let limits = url_fetch_limits(max_url_bytes, url_timeout_ms, max_url_redirects);
+        let manifest = manifest_from_url(&url, sha256.as_deref(), limits).map_err(runtime_error)?;
         Self::from_manifest(manifest, annotator_cb, policy_cb, perf_telemetry, limits)
     }
 
@@ -310,7 +337,7 @@ impl NativeRuntime {
             annotator_cb,
             policy_cb,
             perf_telemetry,
-            agent_control_specification_core::Limits::default(),
+            Limits::default(),
         )
     }
 
@@ -326,13 +353,13 @@ impl NativeRuntime {
         else {
             return result_to_py(py, request_invalid_result());
         };
-        let intervention_point = match InterventionPoint::from_str(intervention_point) {
+        let intervention_point = match InterceptionPoint::from_str(intervention_point) {
             Ok(value) => value,
             Err(_) => {
                 return result_to_py(
                     py,
-                    runtime_error_result(RuntimeError::InterventionPointUnknown(
-                        intervention_point.to_string(),
+                    empty_host_result(runtime_error_verdict(
+                        &RuntimeError::InterventionPointUnknown(intervention_point.to_string()),
                     )),
                 );
             }
@@ -345,22 +372,17 @@ impl NativeRuntime {
         }
         let mode = match object.get("mode") {
             None => EnforcementMode::Enforce,
-            Some(JsonValue::String(value)) => match EnforcementMode::from_str(value) {
-                Ok(mode) => mode,
-                Err(_) => return result_to_py(py, request_invalid_result()),
+            Some(JsonValue::String(value)) => match parse_enforcement_mode(value) {
+                Some(mode) => mode,
+                None => return result_to_py(py, request_invalid_result()),
             },
             Some(_) => return result_to_py(py, request_invalid_result()),
-        };
-        let request = InterventionPointRequest {
-            intervention_point,
-            snapshot,
-            mode,
         };
 
         // Release the GIL while the Rust core runs. If the core invokes host
         // dispatchers, those synchronous Python callables re-acquire it with
         // `Python::attach` on the calling thread.
-        let result = py.detach(|| self.runtime.evaluate_intervention_point(request));
+        let result = py.detach(|| evaluate_host(&self.runtime, intervention_point, snapshot, mode));
 
         result_to_py(py, result)
     }
@@ -370,7 +392,7 @@ impl NativeRuntime {
     /// once at construction so events are labelled on every constructor,
     /// including `from_url` and `from_manifest_chain`.
     fn policy_labels(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        json_value_to_py(py, &self.runtime.policy_labels())
+        json_value_to_py(py, &self.policy_labels)
     }
 }
 
@@ -380,30 +402,32 @@ impl NativeRuntime {
         annotator_cb: Option<Py<PyAny>>,
         policy_cb: Option<Py<PyAny>>,
         perf_telemetry: u8,
-        limits: agent_control_specification_core::Limits,
+        limits: Limits,
     ) -> PyResult<Self> {
         let perf_telemetry = PerfTelemetry::from_u8(perf_telemetry)
             .ok_or_else(|| PyValueError::new_err("perf_telemetry must be 0, 1, or 2"))?;
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_cb {
             Some(cb) => Arc::new(PyAnnotatorDispatcher { cb }),
-            None => {
-                agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
-                    &manifest, limits,
-                )
-            }
+            None => default_host_annotator_dispatcher(&manifest).map_err(runtime_error)?,
         };
         let policy: Arc<dyn PolicyDispatcher> = match policy_cb {
             Some(cb) => Arc::new(PyPolicyDispatcher { cb }),
-            None => {
-                agent_control_specification_core::dispatchers::default_policy_dispatcher_with_limits(
-                    &manifest, limits,
-                )
-                .map_err(runtime_error)?
-            }
+            None => default_host_policy_dispatcher(&manifest).map_err(runtime_error)?,
         };
-        let runtime = Runtime::with_perf_telemetry(manifest, annotations, policy, perf_telemetry)
-            .map_err(runtime_error)?;
-        Ok(Self { runtime })
+        let labels = policy_labels(&manifest);
+        let runtime = Runtime::with_telemetry_perf_and_limits(
+            manifest,
+            annotations,
+            policy,
+            Arc::new(NoopTelemetrySink),
+            perf_telemetry,
+            limits,
+        )
+        .map_err(runtime_error)?;
+        Ok(Self {
+            runtime,
+            policy_labels: labels,
+        })
     }
 }
 
@@ -415,8 +439,8 @@ fn url_fetch_limits(
     max_bytes: Option<u64>,
     timeout_ms: Option<u64>,
     max_redirects: Option<u32>,
-) -> agent_control_specification_core::Limits {
-    let mut limits = agent_control_specification_core::Limits::default();
+) -> Limits {
+    let mut limits = Limits::default();
     if let Some(bytes) = max_bytes {
         limits.max_manifest_url_bytes = bytes as usize;
     }

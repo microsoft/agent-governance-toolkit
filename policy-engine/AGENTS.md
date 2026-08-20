@@ -2,16 +2,18 @@
 
 ## Repository overview
 
-Agent Control Specification is a stateless, deterministic, intervention point policy runtime for agent security. The Rust core owns pure decision logic and exposes C ABI, PyO3, napi, and P/Invoke surfaces through SDKs.
+The policy decision runtime now ships from the registry as `agent-control-spec`, rebased on the agent-hooks control contract. This tree is what AGT layers on top of it. `core/` is a deprecation shim that keeps the historical `agent_control_specification_core` symbols importable for one release cycle, and `sdk/rust/` is AGT's host SDK.
+
+Read `docs/acs-retarget.md` before changing anything here.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| `core/` | Pure Rust runtime, manifest loading, policy input construction, verdict normalization, effects, FFI, and core tests. |
-| `sdk/rust/` | Rust SDK crate and examples. |
-| `sdk/python/` | Python SDK over the native core plus adapter helpers and tests. |
-| `sdk/node/` | Node.js SDK over the native core plus TypeScript adapter helpers and tests. |
+| `core/` | Deprecation shim over `agent-control-spec`, plus the surface that crate does not carry. That surface is artifact validation, the bounded manifest YAML parser, the richer telemetry sinks, and the policy input digest. |
+| `sdk/rust/` | AGT's host SDK. Owns the host obligations under AGENT-HOOKS-0.1 sections 8 to 10, which are transform application, `evaluate_only`, approval resolution, and identity. |
+| `sdk/python/` | Python SDK. Not yet retargeted. The published `agent-control-spec` Python package exposes only `AcsInterceptor`, so the manifest and artifact validation this SDK is built on has no published equivalent. |
+| `sdk/node/` | Node SDK. Same blocker as the Python SDK. |
 | `sdk/dotnet/` | .NET SDK over the native core plus framework adapter shapes and tests. |
 | `integrations/` | Reference annotators, OpenTelemetry, and Rig integration crates. |
 | `generator/` | ACS policy artifact generator. |
@@ -24,17 +26,17 @@ Agent Control Specification is a stateless, deterministic, intervention point po
 
 Use ACS terms when writing issues, docs, tests, and code comments.
 
-- Intervention point.
+- Interception point. The agent-hooks name. `InterventionPoint` is the retired AGT spelling.
 - Snapshot.
 - Policy input.
-- Verdict with `allow`, `warn`, `deny`, or `escalate`.
-- Effect scoped to the policy target.
+- Verdict with `allow`, `deny`, or `transform`. The set is closed at three under AGENT-HOOKS-0.1 section 5.1. A former `warn` is an `allow` carrying `warnings[]`, and a former `escalate` is a liftable `deny` carrying an `approval` block.
+- Transform scoped to the policy target. This is the only value changing decision. The effects plane is gone.
 - Annotator.
-- Manifest with `extends`.
-- Fail closed runtime error.
-- Host approval handling for `escalate`.
+- Manifest with `extends`. Paths root at `$target`, not `$policy_target`.
+- Fail closed runtime error. The engine emits `runtime_error:*`. The `host_error:*` namespace is reserved for hosts and an interceptor must never emit it.
+- Host approval handling for a liftable `deny`.
 
-Do not introduce predecessor project concepts that ACS removed.
+Do not introduce predecessor project concepts that ACS removed, and do not reintroduce the five verdict model.
 
 ## Build and test
 
@@ -44,19 +46,20 @@ Run the narrow command for the area you changed, then run the broader command be
 | --- | --- |
 | Rust workspace | `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` |
 | Core example | `cargo run -p agent_control_specification --example basic_host --quiet` |
-| Python SDK and generator | `python -m pip install ./sdk/python ./generator pytest` then `pytest sdk/python generator` |
+| Generator | `python -m pip install ./generator pytest` then `pytest generator` |
 | Node SDK | `cd sdk/node && npm ci && npm test` |
 | .NET SDK | `cd sdk/dotnet && dotnet build AgentControlSpecification.sln` then `dotnet run --project tests/AgentControlSpecification.Tests` |
 | Formal model | `quint test tests/formal/acs_mediation.qnt` when Quint is available |
-| Performance harness | `cargo bench -p agent_control_specification_core` when touching hot paths |
+| Rego policies | `cd policy/lib && opa test .` |
 
 OPA backed tests and examples need `opa` on `PATH`. Use `AGENT_CONTROL_REQUIRE_OPA=1` when validating CI parity locally.
 
 ## Runtime invariants
 
 - The runtime is stateless. Hosts provide the complete snapshot for every evaluation.
-- Runtime errors fail closed to `deny` with a reserved runtime error reason and no effects.
-- Effects apply only when the verdict allows effect application.
+- Runtime errors fail closed to `deny` with a reserved `runtime_error:*` reason.
+- A `transform` is the only value changing decision and is scoped to the policy target.
+- Applying a transform, honouring `evaluate_only`, resolving approvals, and computing identity are host obligations under AGENT-HOOKS-0.1 sections 8 to 10. They live in `sdk/rust/src/host/`, never in the policy plane.
 - Annotator output is isolated under `annotations.<name>`.
 - File based `extends` resolution is confined to the top level manifest root.
 - Approval identity must bind to the canonical policy input for the action being approved.
@@ -64,7 +67,7 @@ OPA backed tests and examples need `opa` on `PATH`. Use `AGENT_CONTROL_REQUIRE_O
 ## Change rules
 
 - Keep changes focused and avoid unrelated cleanup.
-- Put pure decision behavior in `core/` first, then expose it through SDKs.
+- Pure decision behavior belongs upstream in `agent-control-spec`, not here. File a proposal on that repository rather than forking semantics into `core/`.
 - Keep SDK code responsible for host async orchestration and idiomatic adapter shapes.
 - Update parity fixtures when a cross SDK contract changes.
 - Update specification text only when the normative contract changes.

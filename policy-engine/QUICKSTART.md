@@ -50,7 +50,7 @@ For Node artifact installs, replace `agent-control-specification-linux-x64-gnu` 
 A manifest binds named policies to intervention points. The smallest useful manifest declares one Rego policy and guards one point. Save this as `manifest.yaml` next to your host.
 
 ```yaml
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: "my-agent"
 policies:

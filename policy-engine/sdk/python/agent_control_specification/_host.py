@@ -288,7 +288,8 @@ class HostSession:
         )
         if (
             self._mode is EnforcementMode.ENFORCE
-            and result.verdict.decision is Decision.ESCALATE
+            and result.verdict.decision is Decision.DENY
+            and result.verdict.approval is not None
         ):
             return self._resolve_escalation(intervention_point, result)
         return result
@@ -311,14 +312,22 @@ class HostSession:
             if self._approval_on_timeout == "allow":
                 return _with_decision(result, Decision.ALLOW, "approval_timeout")
             return _with_decision(
-                result, Decision.DENY, "runtime_error:approval_timeout"
+                result, Decision.DENY, "host_error:approval_unresolved"
             )
         except AgentControlSuspended:
             return result
-        except AgentControlBlocked:
-            return _with_decision(result, Decision.DENY, "approval_denied")
+        except AgentControlBlocked as blocked:
+            # The blocking result already carries a classified reason, either
+            # the policy's own or a reserved host_error the enforcement layer
+            # synthesized. Overwriting it with a name of our own destroyed
+            # that and invented a reason outside the closed set.
+            return _with_decision(
+                result, Decision.DENY, blocked.result.verdict.reason
+            )
         except Exception:  # noqa: BLE001 - a broken resolver must not permit
-            return _with_decision(result, Decision.DENY, "approval_failed")
+            return _with_decision(
+                result, Decision.DENY, "host_error:approval_resolver_failed"
+            )
         return _with_decision(result, Decision.ALLOW, result.verdict.reason)
 
     def agent_startup(self, agent: JsonValue | None = None) -> InterventionPointResult:

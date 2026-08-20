@@ -791,7 +791,7 @@ class TestCLIAuditExtended:
 
 def _native_manifest(name: str = "test-policy") -> str:
     return (
-        "agent_control_specification_version: 0.3.1-beta\n"
+        "agent_control_specification_version: 0.4.0-alpha.1\n"
         "metadata:\n"
         f"  name: {name}\n"
         '  version: "1.0"\n'

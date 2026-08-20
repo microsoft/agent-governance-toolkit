@@ -4,7 +4,7 @@ namespace AgentControlSpecification.Interop;
 
 internal static partial class NativeMethods
 {
-    internal const string NativeLibraryName = "agent_control_specification_core";
+    internal const string NativeLibraryName = "agent_control_specification";
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate IntPtr AcsAnnotatorCallback(

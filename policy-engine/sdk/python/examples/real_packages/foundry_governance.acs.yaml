@@ -5,7 +5,7 @@
 # loads it with AgentControl.from_path(...). The example injects three
 # per-deployment Azure fields at load time (see below), because an Azure
 # resource endpoint is environment configuration, not a committed artifact.
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: "foundry-governed-agent"
 extends: []

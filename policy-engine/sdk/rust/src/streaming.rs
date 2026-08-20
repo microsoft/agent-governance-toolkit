@@ -1,6 +1,6 @@
 use crate::{
-    AgentControl, AgentControlBlocked, AgentControlInterruption, Decision, InterventionPoint,
-    InterventionPointResult, JsonValue, ModelRunResult, RunOptions, Verdict,
+    AgentControl, AgentControlBlocked, AgentControlInterruption, Decision, HostEvaluation,
+    InterceptionPoint, JsonValue, ModelRunResult, RunOptions, Verdict,
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -37,8 +37,8 @@ pub struct ModelStreamRunResult {
     pub bytes: Vec<u8>,
     pub assembled_response: JsonValue,
     pub original_bytes: Vec<u8>,
-    pub pre_model_call_intervention_point_result: InterventionPointResult,
-    pub post_model_call_intervention_point_result: InterventionPointResult,
+    pub pre_model_call_intervention_point_result: HostEvaluation,
+    pub post_model_call_intervention_point_result: HostEvaluation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -614,12 +614,14 @@ fn model_stream_result(
 
 fn streaming_fail_closed(message: &str) -> AgentControlInterruption {
     AgentControlInterruption::Blocked(AgentControlBlocked::new(
-        InterventionPoint::PostModelCall,
-        InterventionPointResult {
+        InterceptionPoint::PostModelCall,
+        HostEvaluation {
             verdict: Verdict {
                 decision: Decision::Deny,
-                reason: Some("runtime_error:streaming_unsupported".to_string()),
+                reason: Some("host_error:streaming_unsupported".to_string()),
                 message: Some(message.to_string()),
+                warnings: Vec::new(),
+                approval: None,
                 transform: None,
                 evidence: None,
                 result_labels: Vec::new(),
