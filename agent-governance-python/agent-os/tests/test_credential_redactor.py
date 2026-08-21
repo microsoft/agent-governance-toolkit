@@ -397,3 +397,68 @@ def test_ssn_pattern_rejects_bare_nine_digit_forms(text: str):
     assert not any(
         m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text)
     )
+
+
+# ------------------------------------------------------------------
+# Context-cued bare SSN detection (issue #3592)
+# ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "SSN: 745102386",
+        "ssn=745102386",
+        "ssn 745102386",
+        "SSN:745102386",
+        "social security number 745102386",
+        "Social Security 745102386",
+        "social security num 745102386",
+        "social security no 745102386",
+        "social security # 745102386",
+        "soc sec 745102386",
+        "socsec 745102386",
+    ],
+)
+def test_context_cued_bare_ssn_is_detected(text: str):
+    """A bare nine-digit run preceded by an SSN cue word must be caught.
+
+    These forms evade the separator-required pattern but are unambiguously
+    SSNs.  Issue #3592.
+    """
+    matches = CredentialRedactor.find_pii_matches(text)
+    assert any(
+        m.name == "US SSN (context-cued)" for m in matches
+    ), f"context-cued SSN not detected in {text!r}; got {matches!r}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tracking: 123456789",       # bare, no cue
+        "order_123456789",           # nine-digit id, no cue
+        "invoice 745102386",         # unrelated cue word
+        "ABA 021000021",             # routing number
+        "order 1234567890 shipped",  # ten digits
+        "phone 745102386",           # not an SSN cue
+    ],
+)
+def test_context_cued_ssn_does_not_match_uncued_bare_digits(text: str):
+    """A bare nine-digit run without an SSN cue must NOT trigger the
+    context-cued pattern.  This preserves the false-positive suppression
+    from #3531.
+    """
+    assert not any(
+        m.name == "US SSN (context-cued)"
+        for m in CredentialRedactor.find_pii_matches(text)
+    )
+
+
+def test_context_cued_ssn_match_captures_digits_only():
+    """The matched_text for a context-cued SSN must include the full regex
+    match (cue + digits) so redaction covers the cue too.
+    """
+    matches = CredentialRedactor.find_pii_matches("SSN: 745102386")
+    cued = [m for m in matches if m.name == "US SSN (context-cued)"]
+    assert len(cued) == 1
+    assert "745102386" in cued[0].matched_text
