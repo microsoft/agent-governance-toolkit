@@ -83,3 +83,45 @@ def test_bedrock_scan_pii_blocks_every_ssn_variant(variant: str) -> None:
     matches = bedrock_adapter._scan_pii(f'customer ssn {variant} on file')
     ssn_pattern_str = _ssn_pattern().pattern
     assert ssn_pattern_str in matches, f'bedrock._scan_pii did not report the shared SSN regex for variant {variant!r}; got {matches!r}'
+
+
+# ------------------------------------------------------------------
+# Context-cued bare SSN in shared PII_PATTERNS (issue #3592)
+# ------------------------------------------------------------------
+
+def _context_cued_ssn_pattern():
+    """Return the context-cued SSN regex from the shared ``PII_PATTERNS`` tuple."""
+    return PII_PATTERNS[1]
+
+_CONTEXT_CUED_MATCHES = (
+    'SSN: 745102386',
+    'ssn=745102386',
+    'social security number 745102386',
+    'Social Security 745102386',
+    'soc sec 745102386',
+)
+
+_CONTEXT_CUED_NON_MATCHES = (
+    'Tracking: 123456789',
+    'order_123456789',
+    'invoice 745102386',
+    'phone 745102386',
+)
+
+@pytest.mark.parametrize('text', _CONTEXT_CUED_MATCHES)
+def test_shared_context_cued_ssn_matches_cued_bare_digits(text: str) -> None:
+    """The adapter-side PII_PATTERNS must catch bare nine-digit runs when
+    preceded by an explicit SSN cue word.  Issue #3592."""
+    pattern = _context_cued_ssn_pattern()
+    assert pattern.search(text) is not None, (
+        f'shared context-cued SSN regex {pattern.pattern!r} failed to match {text!r}'
+    )
+
+@pytest.mark.parametrize('text', _CONTEXT_CUED_NON_MATCHES)
+def test_shared_context_cued_ssn_rejects_uncued_bare_digits(text: str) -> None:
+    """Bare nine-digit runs without an SSN cue must NOT trigger the context-
+    cued pattern, preserving the false-positive suppression from #3531."""
+    pattern = _context_cued_ssn_pattern()
+    assert pattern.search(text) is None, (
+        f'shared context-cued SSN regex unexpectedly matched {text!r}'
+    )

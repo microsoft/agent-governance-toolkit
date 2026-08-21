@@ -184,6 +184,23 @@ class CredentialRedactor:
             ),
         ),
         CredentialPattern(
+            name="US SSN (context-cued)",
+            # A bare nine-digit run (no separators) evades the separator-
+            # required pattern above, but when preceded by an explicit cue
+            # (``ssn``, ``social security``, ``soc sec``) it is almost
+            # certainly a Social Security Number.  The cue window is kept
+            # tight (keyword, optional separator/punctuation, then digits)
+            # to avoid matching unrelated nine-digit numbers.  Issue #3592.
+            pattern=re.compile(
+                r"(?i)(?:social\s+security(?:\s+(?:number|num|no|#))?"
+                r"|soc(?:ial)?\s*sec"
+                r"|ssn)"
+                r"[\s:=]*"
+                r"(?P<bare_ssn>\d{9})"
+                r"(?!\d)"
+            ),
+        ),
+        CredentialPattern(
             name="Credit card number",
             pattern=re.compile(r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b"),
         ),

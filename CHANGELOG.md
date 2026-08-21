@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runtime=` plus explicit `SandboxConfig`.
 
 ### Fixed
+- **Context-cued bare SSNs are now detected by both the credential redactor
+  and the adapter PII patterns** — `CredentialRedactor.PII_PATTERNS` and
+  `integrations.base.PII_PATTERNS` required a separator between digit groups,
+  so a bare nine-digit SSN next to an explicit cue (`SSN: 745102386`,
+  `ssn=745102386`, `social security number 745102386`) evaded both detectors.
+  A context-cued branch now matches an undelimited nine-digit run when preceded
+  by `ssn`, `social security`, or `soc sec`; uncued bare digits remain
+  non-matches to preserve the false-positive suppression from #3531.
+  Both patterns are kept in lockstep. (#3592)
 - **Spell check no longer reports the base branch's own history as a
   contributor's changes** — `scripts/ci/changed_lines.py` diffed from the tip of
   the base branch, so on a branch behind `main` every line `main` had since
