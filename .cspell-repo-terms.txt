@@ -669,6 +669,7 @@ oneshot
 opencode
 openpolicyagent
 openshell
+orcarouter
 oserror
 ospo
 otlp

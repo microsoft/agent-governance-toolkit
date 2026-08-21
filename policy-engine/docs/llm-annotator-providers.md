@@ -5,6 +5,7 @@ The bundled host side `llm` annotator dispatcher supports several request adapte
 | Provider | Manifest `provider` | Request shape | Response text source | Default credential |
 | --- | --- | --- | --- | --- |
 | OpenAI | `openai` | `/v1/chat/completions` with JSON object response format | `choices[0].message.content` | `OPENAI_API_KEY` |
+| OrcaRouter | `orcarouter` | OpenAI chat completions against the [OrcaRouter](https://www.orcarouter.ai) gateway | `choices[0].message.content` | `ORCAROUTER_API_KEY` |
 | OpenAI compatible | `openai_compatible` | OpenAI chat completions | `choices[0].message.content` | none unless `api_key_env` or `api_key` is set |
 | Azure OpenAI | `azure_openai` | Azure chat completions deployment URL | `choices[0].message.content` | `AZURE_OPENAI_API_KEY` |
 | Amazon Bedrock | `bedrock` | Bedrock Converse | `output.message.content[].text` | `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` |
@@ -52,6 +53,12 @@ annotators:
     provider: gemini
     model: gemini-1.5-flash
     api_key_env: GEMINI_API_KEY
+
+  orcarouter_judge:
+    type: llm
+    provider: orcarouter
+    model: orcarouter/auto
+    api_key_env: ORCAROUTER_API_KEY
 
   ollama_judge:
     type: llm
