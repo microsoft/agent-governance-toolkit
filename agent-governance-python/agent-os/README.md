@@ -920,6 +920,7 @@ See [MCP server documentation](extensions/mcp-server/README.md) for full details
 ### Reference
 - [Quickstart Guide](docs/quickstart.md) — 60 seconds to first agent
 - [Framework Integrations](docs/integrations.md) — LangChain, OpenAI, etc.
+- [MCP Auth TLS Gate](docs/mcp-auth-tls.md) — TLS enforcement for MCP server connections
 - [Kernel Internals](docs/kernel-internals.md) — How the kernel works
 - [Architecture Overview](docs/quickstart.md) — Getting started
 - [Kernel Internals](docs/kernel-internals.md) — How the kernel works
