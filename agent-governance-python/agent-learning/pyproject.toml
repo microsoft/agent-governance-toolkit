@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools==83.0.0", "wheel==0.47.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent_learning_gov"
+version = "5.0.0"
+description = "Public Preview - Governance controls, audit, reward shaping, and policy promotion for Microsoft Agent Learning"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
+]
+maintainers = [
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
+]
+keywords = [
+    "agent-learning", "ai-agents", "governance", "policy-enforcement",
+    "reinforcement-learning", "bayesian-decision-making", "audit",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+dependencies = [
+    "agent-learning>=0.8.0,<0.9.0",
+    "agent-governance-toolkit-core>=5.0.0,<6.0.0",
+]
+
+[project.optional-dependencies]
+framework = [
+    "agent-framework>=1.13.0,<1.14.0",
+]
+foundry = [
+    "agent-framework>=1.13.0,<1.14.0",
+    "agent-framework-foundry>=1.10.4,<1.11.0",
+    "azure-identity>=1.25.3,<1.26.0",
+]
+dev = [
+    "build==1.5.0",
+    "pytest==9.1.1",
+    "pytest-cov>=6.0.0,<7.0.0",
+    "ruff>=0.12.0,<0.13.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-learning"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agent_learning_gov = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -1,6 +1,6 @@
 ---
 title: "Tutorials"
-last_reviewed: 2026-07-31
+last_reviewed: 2026-08-20
 owner: agt-maintainers
 ---
 
@@ -96,6 +96,7 @@ Choose the end-to-end scenario closest to your use case.
 | Scenario | Description |
 |----------|-------------|
 | [Govern an AI Agent (Python)](04-audit-and-compliance.md) | Full audit trail with compliance mapping for a Python agent |
+| [Govern Agent Learning](56-agent-learning-governance.md) | Govern discrete-action capture, rewards, Bayesian decisions, offline learning, and promotion |
 | [Govern MCP Tool Servers](07-mcp-security-gateway.md) | Per-tool policy enforcement for MCP servers |
 | [.NET MAF Integration](34-maf-integration.md) | Govern agents built with Microsoft Agent Framework |
 | [.NET MAF Hook](43-dotnet-maf-hook-integration.md) | Add governance hooks to .NET MAF agents |
