@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import random
 import subprocess
@@ -26,6 +27,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -578,6 +580,11 @@ def check_feature_overlap(username: str, target_repo: str | None = None) -> list
                     final_buckets.add(bucket)
                     break
 
+        # A repo that is itself aged + well-starred (>=1yr, >=10 stars) is a
+        # domain specialist's own mature project, not a fresh clone. Skip it.
+        if _is_established_repo_aged(repo):
+            continue
+
         created = datetime.fromisoformat(repo["created_at"].replace("Z", "+00:00"))
         age_days = (now - created).days
         stars = repo.get("stargazers_count", 0)
@@ -788,19 +795,62 @@ def check_spray_pattern(
     return signals
 
 
+def _is_established_repo(repo: dict) -> bool:
+    """Return True if a repo has enough traction to be considered established."""
+    stars = repo.get("stargazers_count", 0)
+    if stars >= 50:
+        return True
+    created = repo.get("created_at", "")
+    if created:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(
+                created.replace("Z", "+00:00")
+            )).days
+            if age >= 365 and stars >= 10:
+                return True
+        except (ValueError, TypeError):
+            pass
+    return False
+
+
+def _is_established_repo_aged(repo: dict) -> bool:
+    """Stricter establishment: only the AGE branch (>=1yr old AND >=10 stars).
+
+    Used where star-count alone is too cheap to trust. A same-week star-bought
+    repo cannot qualify -- only one that has existed >=1 year with sustained
+    traction.
+    """
+    stars = repo.get("stargazers_count", 0)
+    created = repo.get("created_at", "")
+    if not created or stars < 10:
+        return False
+    try:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(
+            created.replace("Z", "+00:00")
+        )).days
+    except (ValueError, TypeError):
+        return False
+    return age >= 365
+
+
 def _check_self_promotion(
     username: str,
     issues: list[dict],
     user_repos: list[dict] | None = None,
 ) -> list[Signal]:
-    """Detect issues that promote the author's own repos across other orgs."""
+    """Detect issues that promote the author's own repos across other orgs.
+
+    Distinguishes between thin-credibility spam and legitimate cross-ecosystem
+    references to established projects (>50 stars, or >1yr with >10 stars).
+    """
     signals: list[Signal] = []
     if not user_repos:
         return signals
 
-    # Build lookup of user's non-fork repo identifiers
+    # Build lookup of user's non-fork repo identifiers and quality
     own_repo_names: set[str] = set()
     own_repo_full: set[str] = set()
+    repo_quality: dict[str, bool] = {}  # full_name -> is_established
     for repo in user_repos:
         if repo.get("fork"):
             continue
@@ -808,6 +858,7 @@ def _check_self_promotion(
         full = repo.get("full_name", f"{username}/{name}").lower()
         own_repo_names.add(name)
         own_repo_full.add(full)
+        repo_quality[full] = _is_established_repo(repo)
 
     if not own_repo_names:
         return signals
@@ -815,6 +866,7 @@ def _check_self_promotion(
     username_lower = username.lower()
     promo_orgs: set[str] = set()
     promo_issues = 0
+    promoted_repos: set[str] = set()
 
     for issue in issues:
         repo_url = issue.get("repository_url", "")
@@ -829,42 +881,98 @@ def _check_self_promotion(
         text = f"{title} {body}"
 
         # Strong match: full_name or GitHub URL
-        has_promo = False
+        matched_repo: str | None = None
         for full in own_repo_full:
             if full in text or f"github.com/{full}" in text:
-                has_promo = True
+                matched_repo = full
                 break
 
-        if not has_promo:
-            # Weaker match: repo name as a whole word, but only for
-            # distinctive names (>= 4 chars, not generic)
-            generic = {"app", "api", "cli", "web", "bot", "docs", "test", "demo", "core", "data", "main"}
+        if not matched_repo:
+            # Weaker match: repo name in a URL or owner/repo format only.
             for name in own_repo_names:
-                if len(name) >= 4 and name not in generic and name in text:
-                    has_promo = True
+                if len(name) < 6:
+                    continue
+                url_form = f"github.com/{username_lower}/{name}"
+                slash_form = f"{username_lower}/{name}"
+                if url_form in text or slash_form in text:
+                    matched_repo = f"{username_lower}/{name}"
                     break
 
-        if has_promo:
+        if matched_repo:
             promo_issues += 1
             promo_orgs.add(issue_org)
+            promoted_repos.add(matched_repo)
 
-    if promo_issues >= 5 and len(promo_orgs) >= 3:
+    if promo_issues < 3 or len(promo_orgs) < 2:
+        return signals
+
+    # Only thin-repo promotions count as spam; referencing established projects
+    # is legitimate.
+    thin_repos = {r for r in promoted_repos if not repo_quality.get(r, False)}
+    established_refs = {r for r in promoted_repos if repo_quality.get(r, False)}
+
+    if thin_repos:
+        thin_promo_issues = 0
+        thin_promo_orgs: set[str] = set()
+
+        for issue in issues:
+            repo_url = issue.get("repository_url", "")
+            issue_org = repo_url.replace("https://api.github.com/repos/", "").split("/")[0].lower()
+            if issue_org == username_lower:
+                continue
+
+            body = (issue.get("body") or "").lower()
+            title = (issue.get("title") or "").lower()
+            text = f"{title} {body}"
+
+            mentions_thin = False
+            for full in thin_repos:
+                if full in text or f"github.com/{full}" in text:
+                    mentions_thin = True
+                    break
+            if not mentions_thin:
+                for r in thin_repos:
+                    name = r.split("/")[-1]
+                    owner = r.split("/")[0] if "/" in r else username_lower
+                    url_form = f"github.com/{owner}/{name}"
+                    if len(name) >= 6 and (url_form in text or r in text):
+                        mentions_thin = True
+                        break
+
+            if mentions_thin:
+                thin_promo_issues += 1
+                thin_promo_orgs.add(issue_org)
+
+        if thin_promo_issues >= 5 and len(thin_promo_orgs) >= 3:
+            signals.append(Signal(
+                name="self_promotion_spray",
+                severity="HIGH",
+                detail=(
+                    f"{thin_promo_issues} issues promoting thin repos across "
+                    f"{len(thin_promo_orgs)} orgs ({', '.join(sorted(thin_promo_orgs)[:5])})"
+                ),
+                value=thin_promo_issues,
+            ))
+        elif thin_promo_issues >= 3 and len(thin_promo_orgs) >= 2:
+            signals.append(Signal(
+                name="self_promotion_spray",
+                severity="MEDIUM",
+                detail=(
+                    f"{thin_promo_issues} issues promoting thin repos across "
+                    f"{len(thin_promo_orgs)} orgs"
+                ),
+                value=thin_promo_issues,
+            ))
+
+    # Log established-project cross-references at LOW severity for transparency
+    if established_refs:
         signals.append(Signal(
-            name="self_promotion_spray",
-            severity="HIGH",
+            name="established_project_reference",
+            severity="LOW",
             detail=(
-                f"{promo_issues} issues promoting own repos across "
+                f"{promo_issues} cross-ecosystem references to established repos "
+                f"({len(established_refs)} repos with significant traction) across "
                 f"{len(promo_orgs)} orgs ({', '.join(sorted(promo_orgs)[:5])})"
-            ),
-            value=promo_issues,
-        ))
-    elif promo_issues >= 3 and len(promo_orgs) >= 2:
-        signals.append(Signal(
-            name="self_promotion_spray",
-            severity="MEDIUM",
-            detail=(
-                f"{promo_issues} issues promoting own repos across "
-                f"{len(promo_orgs)} orgs"
             ),
             value=promo_issues,
         ))
@@ -920,6 +1028,259 @@ def check_credential_spray(username: str, target_repo: str | None = None) -> lis
         ))
 
     return signals
+
+
+# ---------------------------------------------------------------------------
+# Established-account credibility and dampening
+# ---------------------------------------------------------------------------
+
+# Signal names that indicate deliberate abuse patterns. If any of these
+# are present, the account's age/followers should NOT soften the verdict.
+_ABUSE_SIGNALS = frozenset({
+    "thin_credibility",
+    "credential_laundering",
+    "coordinated_promotion",
+    "self_promotion_spray",
+})
+
+# Signals eligible for dampening and the maximum value at which dampening
+# is applied.  Beyond the cap the signal keeps its original severity.
+_DAMPEN_RULES: dict[str, tuple[str, int | None]] = {
+    "recent_repo_burst": ("LOW", 30),
+    "cross_repo_spray":  ("MEDIUM", 8),
+    "cross_repo_spread": ("LOW", None),
+    "awesome_fork_burst": ("MEDIUM", 6),
+    "feature_overlap": ("MEDIUM", 5),
+}
+
+# Signals a PARTIAL credibility tier (org-backed / prior-interaction only)
+# is allowed to dampen.
+_PARTIAL_DAMPEN_SIGNALS = frozenset({"feature_overlap", "cross_repo_spread"})
+
+
+def _is_established(user: dict) -> bool:
+    """Return True if the account shows strong organic credibility."""
+    created = datetime.fromisoformat(user["created_at"].replace("Z", "+00:00"))
+    age_days = (datetime.now(timezone.utc) - created).days
+    followers = user.get("followers", 0)
+    public_repos = user.get("public_repos", 0)
+    return age_days >= 366 and followers >= 50 and public_repos >= 20
+
+
+def _user_contributed_to(owner: str, repo_name: str, username: str) -> bool:
+    """Return True if ``username`` appears in the repo's contributor list."""
+    contributors = _api(f"/repos/{owner}/{repo_name}/contributors", {"per_page": "100"})
+    if not isinstance(contributors, list):
+        return False
+    uname = username.lower()
+    return any(
+        isinstance(c, dict) and str(c.get("login", "")).lower() == uname
+        for c in contributors
+    )
+
+
+def _org_owned_established(username: str) -> tuple[bool, str]:
+    """Return (True, evidence) if the user is a CONTRIBUTOR to an AGED,
+    well-starred repo owned by an org they publicly belong to.
+    """
+    orgs = _api(f"/users/{username}/orgs", {"per_page": "100"})
+    if not isinstance(orgs, list):
+        return False, ""
+    for org in orgs[:10]:
+        login = org.get("login")
+        if not login:
+            continue
+        repos = _api(f"/orgs/{login}/repos", {"per_page": "100", "sort": "pushed"})
+        if not isinstance(repos, list):
+            continue
+        for repo in repos[:50]:
+            name = repo.get("name")
+            if (not repo.get("fork") and name and _is_established_repo_aged(repo)
+                    and _user_contributed_to(login, name, username)):
+                stars = repo.get("stargazers_count", 0)
+                return True, f"{login}/{name} ({stars} stars)"
+    return False, ""
+
+
+def _is_public_org_member(org: str, login: str) -> bool:
+    """Return True if ``login`` is a PUBLIC member of ``org``.
+
+    Fail-closed: any error or non-204 status -> False.
+    """
+    if not org or not login:
+        return False
+    req = Request(f"https://api.github.com/orgs/{org}/public_members/{login}")
+    req.add_header("Authorization", f"Bearer {_get_token()}")
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("X-GitHub-Api-Version", "2022-11-28")
+    try:
+        with urlopen(req, timeout=15) as resp:
+            return getattr(resp, "status", resp.getcode()) == 204
+    except Exception:
+        return False
+
+
+# Seconds to wait between successive per-PR detail calls in the maintainer-merged
+# lookup. Tests set this to 0.
+_MAINTAINER_LOOKUP_PACE_SECONDS = 0.5
+
+
+def _has_prior_target_contribution(username: str, target_repo: str | None) -> bool:
+    """Return True if the user has >=2 merged PRs in the target repo each merged
+    by a DISTINCT maintainer (a public member of the target org).
+    """
+    if not target_repo or "/" not in target_repo:
+        return False
+    target_org = target_repo.split("/")[0]
+    prs = _search_issues(
+        f"repo:{target_repo} author:{username} is:pr is:merged", per_page=10
+    )
+    if not prs:
+        return False
+    return _count_maintainer_merged(target_repo, target_org, username, prs, need=2) >= 2
+
+
+def _count_maintainer_merged(
+    target_repo: str, target_org: str, username: str, prs: list[dict], need: int
+) -> int:
+    """Count distinct maintainers (public org members != author) who merged the
+    user's PRs. Capped at ten candidates, early-exit once ``need`` is met.
+    """
+    maintainers: set[str] = set()
+    made_api_call = False
+    for pr in prs[:10]:
+        number = pr.get("number")
+        if not number:
+            continue
+        if made_api_call and _MAINTAINER_LOOKUP_PACE_SECONDS:
+            time.sleep(_MAINTAINER_LOOKUP_PACE_SECONDS)
+        made_api_call = True
+        detail = _api(f"/repos/{target_repo}/pulls/{number}")
+        merged_login = ((detail or {}).get("merged_by") or {}).get("login", "")
+        if not merged_login or merged_login.lower() == username.lower():
+            continue
+        if merged_login.lower() in maintainers:
+            continue
+        if _is_public_org_member(target_org, merged_login):
+            maintainers.add(merged_login.lower())
+            if len(maintainers) >= need:
+                break
+    return len(maintainers)
+
+
+def _established_credibility(
+    user: dict, org_backed: bool = False, prior_interaction: bool = False
+) -> tuple[bool, bool]:
+    """Return ``(credible, full_tier)``."""
+    full = _is_established(user)
+    credible = full or org_backed or prior_interaction
+    return credible, full
+
+
+_ALLOWLIST_PATH = Path(__file__).resolve().parent / "contributor_check_allowlist.json"
+
+
+def _load_allowlist(path: "Path | None" = None) -> tuple[set[str], set[str]]:
+    """Load the maintainer-curated allowlist of trusted users and orgs.
+
+    Returns ``(users, orgs)`` as lowercased sets. A missing or invalid file
+    yields empty sets (fail-closed: an absent allowlist grants no exemption).
+    """
+    p = path or _ALLOWLIST_PATH
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set(), set()
+    users = {str(u).lower() for u in data.get("users", []) if isinstance(u, str)}
+    orgs = {str(o).lower() for o in data.get("orgs", []) if isinstance(o, str)}
+    return users, orgs
+
+
+def _is_allowlisted(
+    username: str, user_orgs: list[str], allowlist: tuple[set[str], set[str]]
+) -> bool:
+    """Return True if the user, or one of their orgs, is on the allowlist."""
+    users, orgs = allowlist
+    if username.lower() in users:
+        return True
+    return any(o.lower() in orgs for o in user_orgs)
+
+
+def _apply_allowlist(report: ReputationReport) -> None:
+    """Apply the maintainer allowlist to an already-matched contributor.
+
+    Only SOFTENS the auto-flag (HIGH -> MEDIUM); never sets LOW and never
+    bypasses code review. Does NOT apply when deliberate-abuse signals are
+    present or when a multi-repo split-clone pattern (>=2 feature_overlap HIGH)
+    is detected.
+    """
+    abuse = bool({s.name for s in report.signals} & _ABUSE_SIGNALS)
+    split_clone = sum(
+        1 for s in report.signals
+        if s.name == "feature_overlap" and s.severity == "HIGH"
+    ) >= 2
+    if abuse or split_clone:
+        report.add(Signal(
+            name="allowlist_blocked",
+            severity="HIGH",
+            detail="maintainer allowlist NOT applied: "
+                   + ("deliberate-abuse signal present" if abuse
+                      else "multi-repo split-clone pattern present"),
+        ))
+    elif report.risk == "HIGH":
+        report.risk = "MEDIUM"
+        report.add(Signal(
+            name="allowlisted",
+            severity="MEDIUM",
+            detail="maintainer allowlist: auto-flag softened HIGH→MEDIUM "
+                   "(still surfaced; does not bypass code review)",
+        ))
+
+
+def _dampen_for_established_accounts(
+    report: ReputationReport,
+    user: dict,
+    *,
+    established: "bool | None" = None,
+    full: bool = True,
+) -> None:
+    """Down-grade volume/activity signals for accounts with organic credibility.
+
+    ``full=False`` selects the PARTIAL tier: only ``_PARTIAL_DAMPEN_SIGNALS``
+    are eligible, so raw volume/velocity bursts stay at full severity.
+
+    Hard guards: deliberate-abuse signals present, or two or more distinct
+    feature_overlap HIGH signals (a split-clone) block dampening.
+    """
+    if established is None:
+        established = _is_established(user)
+    if not established:
+        return
+
+    signal_names = {s.name for s in report.signals}
+    if signal_names & _ABUSE_SIGNALS:
+        return
+
+    overlap_high = sum(
+        1 for s in report.signals if s.name == "feature_overlap" and s.severity == "HIGH"
+    )
+    multi_overlap = overlap_high >= 2
+
+    for signal in report.signals:
+        rule = _DAMPEN_RULES.get(signal.name)
+        if rule is None:
+            continue
+        if not full and signal.name not in _PARTIAL_DAMPEN_SIGNALS:
+            continue
+        if signal.name == "feature_overlap" and multi_overlap:
+            continue
+        new_severity, max_value = rule
+        if max_value is not None and signal.value is not None and signal.value > max_value:
+            continue
+        old = signal.severity
+        if old != new_severity:
+            signal.severity = new_severity
+            signal.detail += f" [dampened {old}\u2192{new_severity}: established account]"
 
 
 # ---------------------------------------------------------------------------
@@ -982,7 +1343,32 @@ def check_contributor(username: str, target_repo: str | None = None) -> Reputati
         for signal in check_feature_overlap(username, target_repo):
             report.add(signal)
 
+    # Org-aware + prior-interaction established credibility
+    try:
+        org_backed, _org_evidence = _org_owned_established(username)
+        prior_interaction = _has_prior_target_contribution(username, target_repo)
+    except Exception:
+        org_backed, prior_interaction = False, False
+    established, full_tier = _established_credibility(user, org_backed, prior_interaction)
+
+    _dampen_for_established_accounts(report, user, established=established, full=full_tier)
     report.compute_risk()
+
+    # Maintainer-curated allowlist: final auditable escape hatch
+    allow_users, allow_orgs = _load_allowlist()
+    if allow_users or allow_orgs:
+        try:
+            _orgs_resp = _api(f"/users/{username}/orgs", {"per_page": "100"})
+        except Exception:
+            _orgs_resp = []
+        user_orgs = (
+            [o.get("login", "") for o in _orgs_resp if isinstance(o, dict)]
+            if isinstance(_orgs_resp, list)
+            else []
+        )
+        if _is_allowlisted(username, user_orgs, (allow_users, allow_orgs)):
+            _apply_allowlist(report)
+
     return report
 
 
