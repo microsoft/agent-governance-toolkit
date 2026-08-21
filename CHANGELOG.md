@@ -31,6 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository-wide vocabulary. The base is now resolved to its merge base, and
   the depth-limited base fetch in `spell-check.yml` is gone because it truncated
   the history that resolution needs.
+- **Supervisor hierarchy validation no longer hangs on a large integer
+  level** — `supervisor.validate_hierarchy()` iterated
+  `range(1, max_level + 1)` to detect gaps, which is O(max_level):
+  proportional to the numeric value of the highest level, not the number
+  of supervisors. A supervisor registered at e.g. `level=10**100` made
+  the loop hang indefinitely — a denial-of-service vector when levels
+  come from attacker-influenced configuration. The gap scan now walks
+  the sorted set of occupied levels (O(n log n) in supervisors),
+  `register_supervisor` rejects levels above `MAX_SUPERVISOR_LEVEL`
+  (1 000) at registration time, and `TrustRoot.validate_supervisor`
+  mirrors the bound.
 
 ## [5.0.0] - 2026-06-25
 

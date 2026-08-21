@@ -10,6 +10,11 @@ from typing import Any
 from agent_os.integrations._native_adapter_runtime import NativeAdapterRuntime
 from agent_os.integrations.base import AdapterExecutionState
 
+# Mirrored from agent_os.supervisor to avoid a circular import (supervisor
+# imports TrustDecision and TrustRoot from this module).  The authoritative
+# definition lives in supervisor.py; keep the two in sync.
+_MAX_SUPERVISOR_LEVEL = 1_000
+
 
 @dataclass
 class TrustDecision:
@@ -84,6 +89,14 @@ class TrustRoot:
         # level would sit *above* the deterministic root, which is the one place
         # in the hierarchy that must not be occupied by an agent.
         if level < 0:
+            return False
+
+        # An absurdly large level is a denial-of-service vector: the gap scan
+        # in ``SupervisorHierarchy.validate_hierarchy`` was previously O(max_level),
+        # so a level of ``10**100`` made validation hang. Even after the scan
+        # itself is safe (O(n log n) in supervisors), a level that could never
+        # be a realistic hierarchy position is rejected early.
+        if level > _MAX_SUPERVISOR_LEVEL:
             return False
 
         # Root level must be deterministic — not an LLM agent
