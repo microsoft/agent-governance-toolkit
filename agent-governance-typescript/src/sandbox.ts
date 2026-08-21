@@ -76,6 +76,20 @@ export function defaultSandboxConfig(): SandboxConfig {
   };
 }
 
+// resolveTimeoutMs converts a configured timeoutSeconds into an exec timeout in
+// milliseconds, falling back to the default when the value is not a positive,
+// finite number. This is a safety control: Node's execFile treats timeout: 0
+// (or NaN) as "no timeout", so a degenerate config (e.g. a value that arrived
+// via `any`, or a non-positive operator input) must not be allowed to silently
+// disable the sandbox timeout.
+function resolveTimeoutMs(timeoutSeconds: number): number {
+  const seconds =
+    Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
+      ? timeoutSeconds
+      : defaultSandboxConfig().timeoutSeconds;
+  return seconds * 1000;
+}
+
 // ---------------------------------------------------------------------------
 // Abstract interface
 // ---------------------------------------------------------------------------
@@ -190,7 +204,7 @@ export class DockerSandboxProvider implements SandboxProvider {
         .trim();
 
       this.containers.set(sessionId, containerId);
-      this.sessionTimeoutsMs.set(sessionId, cfg.timeoutSeconds * 1000);
+      this.sessionTimeoutsMs.set(sessionId, resolveTimeoutMs(cfg.timeoutSeconds));
 
       return {
         agentId,
@@ -223,7 +237,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     // Previously this was hard-coded to 60_000 ms, so a custom timeoutSeconds
     // was silently ignored and the sandbox ran longer than the caller allowed.
     const timeoutMs =
-      this.sessionTimeoutsMs.get(sessionId) ?? defaultSandboxConfig().timeoutSeconds * 1000;
+      this.sessionTimeoutsMs.get(sessionId) ?? resolveTimeoutMs(defaultSandboxConfig().timeoutSeconds);
 
     return new Promise<ExecutionHandle>((resolve) => {
       const encoded = Buffer.from(code).toString('base64');

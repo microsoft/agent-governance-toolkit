@@ -1,4 +1,5 @@
-// Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 // Regression tests for issue #3118: DockerSandboxProvider.executeCode() must
 // honour the session's configured timeoutSeconds rather than a hard-coded
@@ -67,5 +68,30 @@ describe('DockerSandboxProvider executeCode timeout (issue #3118)', () => {
     await provider.executeCode('agent', session.sessionId, 'print("hi")');
 
     expect(capturedTimeoutMs).toBe(defaultSandboxConfig().timeoutSeconds * 1000);
+  });
+
+  // A non-positive timeoutSeconds must not become `timeout: 0`, which Node's
+  // execFile treats as "no timeout" and would disable the sandbox safety cap.
+  it('clamps a non-positive timeoutSeconds to the default', async () => {
+    const provider = new DockerSandboxProvider();
+    const config = { ...defaultSandboxConfig(), timeoutSeconds: 0 };
+    const session = await provider.createSession('agent', config);
+
+    await provider.executeCode('agent', session.sessionId, 'print("hi")');
+
+    expect(capturedTimeoutMs).toBe(defaultSandboxConfig().timeoutSeconds * 1000);
+    expect(capturedTimeoutMs).not.toBe(0);
+  });
+
+  it('clamps a non-finite timeoutSeconds to the default', async () => {
+    const provider = new DockerSandboxProvider();
+    // Simulate a value that arrived via `any` and bypassed static typing.
+    const config = { ...defaultSandboxConfig(), timeoutSeconds: NaN as number };
+    const session = await provider.createSession('agent', config);
+
+    await provider.executeCode('agent', session.sessionId, 'print("hi")');
+
+    expect(capturedTimeoutMs).toBe(defaultSandboxConfig().timeoutSeconds * 1000);
+    expect(Number.isFinite(capturedTimeoutMs)).toBe(true);
   });
 });
