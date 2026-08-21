@@ -21,6 +21,7 @@ import argparse
 import json
 import math
 import os
+import random
 import subprocess
 import sys
 import time
@@ -28,7 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -67,6 +68,20 @@ def _get_token() -> str:
     return token
 
 
+# Retry configuration. Three attempts; exponential backoff with full jitter
+# spreads concurrent CLI invocations and prevents thundering-herd retries.
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_BASE_SECONDS = 1.0
+_RETRY_MAX_SLEEP_SECONDS = 60.0
+
+
+def _retry_sleep_seconds(attempt: int) -> float:
+    """Full-jitter exponential backoff: random in [0, base * 2**attempt)."""
+    upper = _RETRY_BASE_SECONDS * (2 ** attempt)
+    upper = min(upper, _RETRY_MAX_SLEEP_SECONDS)
+    return random.uniform(0, upper)
+
+
 def _api(path: str, params: dict[str, str] | None = None) -> Any:
     """Call the GitHub REST API and return parsed JSON."""
     url = f"https://api.github.com{path}"
@@ -79,20 +94,45 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
     req.add_header("Accept", "application/vnd.github+json")
     req.add_header("X-GitHub-Api-Version", "2022-11-28")
 
-    for attempt in range(3):
+    last_exc: Exception | None = None
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
         try:
             with urlopen(req, timeout=15) as resp:
                 return json.loads(resp.read())
         except HTTPError as exc:
-            if exc.code == 403 and attempt < 2:
+            last_exc = exc
+            if exc.code == 403 and attempt < _RETRY_MAX_ATTEMPTS - 1:
                 wait = int(exc.headers.get("Retry-After", "10"))
                 wait = min(max(wait, 5), 60)
                 print(f"  Rate limited, waiting {wait}s...", file=sys.stderr)
-                import time; time.sleep(wait)
+                time.sleep(wait)
+                continue
+            if 500 <= exc.code < 600 and attempt < _RETRY_MAX_ATTEMPTS - 1:
+                wait = _retry_sleep_seconds(attempt)
+                print(
+                    f"  Server error {exc.code}, retrying in {wait:.1f}s...",
+                    file=sys.stderr,
+                )
+                time.sleep(wait)
                 continue
             if exc.code == 404:
                 return None
             raise
+        except URLError as exc:
+            last_exc = exc
+            if attempt < _RETRY_MAX_ATTEMPTS - 1:
+                wait = _retry_sleep_seconds(attempt)
+                print(
+                    f"  Network error ({exc.reason}), retrying in {wait:.1f}s...",
+                    file=sys.stderr,
+                )
+                time.sleep(wait)
+                continue
+            raise
+
+    if last_exc is not None:
+        raise last_exc
+    return None
 
 
 def _search_issues(query: str, per_page: int = 30) -> list[dict]:
