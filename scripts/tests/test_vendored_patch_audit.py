@@ -60,9 +60,9 @@ def test_major_dependabot_failure_prints_copyable_audit_template(tmp_path: Path)
 
     assert result.returncode == 1
     assert "Dependency audit template" in result.stdout
-    assert "## Which Dependencies Changed And Why" in result.stdout
-    assert "## Security Advisory Relevance" in result.stdout
-    assert "## Breaking Change Risk Assessment" in result.stdout
+    assert "## Which dependencies changed and why" in result.stdout
+    assert "## Security advisory relevance" in result.stdout
+    assert "## Breaking change risk assessment" in result.stdout
     assert "docs/dependency-audits/" in result.stdout
 
 
