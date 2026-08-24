@@ -81,16 +81,16 @@ owner: <github-handle>
 
 # <dependency change summary>
 
-## Which Dependencies Changed And Why
+## Which dependencies changed and why
 
 - <dependency>: <old version> -> <new version>
 - Reason: <why this update is needed>
 
-## Security Advisory Relevance
+## Security advisory relevance
 
 - <CVE / advisory relevance, or "No known advisory addressed">
 
-## Breaking Change Risk Assessment
+## Breaking change risk assessment
 
 - <compatibility risk and validation performed>
 \`\`\`
