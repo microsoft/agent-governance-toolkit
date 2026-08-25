@@ -46,7 +46,7 @@
     "@noble/curves": "2.3.0",
     "@noble/ed25519": "3.1.0",
     "@noble/hashes": "2.3.0",
-    "js-yaml": "5.2.3"
+    "js-yaml": "5.3.0"
   },
   "engines": {
     "node": ">=18.0.0"
