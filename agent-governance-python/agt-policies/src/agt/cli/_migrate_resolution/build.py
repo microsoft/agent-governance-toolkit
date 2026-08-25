@@ -243,7 +243,11 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         message = str(rule.get("message", ""))
 
         accessor = _rego_field_accessor(field)
-        op_clause = _rego_op_clause(operator, accessor, value) if accessor is not None else None
+        op_clause = (
+            _rego_op_clause(operator, accessor, value, action=action)
+            if accessor is not None
+            else None
+        )
         if op_clause is None:
             # Unsupported operators or invalid field paths MUST fail
             # closed. Render an always-matching deny rule so evaluation
@@ -332,7 +336,9 @@ def _rego_field_accessor(field: str) -> str | None:
     return f"object.get(input.snapshot, {json.dumps(parts)}, null)"
 
 
-def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
+def _rego_op_clause(
+    operator: str, accessor: str, value: Any, *, action: str
+) -> Optional[str]:
     """Render the body of a `_match[i]` rule for a given operator.
 
     Returns None for unsupported operators; the caller turns the rule into a fail-closed deny.
@@ -345,7 +351,8 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
         # Missing paths resolve to null via the array-path accessor. Keep
         # ``null != value`` as a match so deny-side ``ne`` fails closed when
         # intermediate segments are omitted (#3360).
-        return f"{indent}_v := {accessor}\n{indent}_v != {literal}"
+        null_guard = "" if action == "deny" else f"\n{indent}_v != null"
+        return f"{indent}_v := {accessor}{null_guard}\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
     if operator == "lt":
@@ -359,7 +366,8 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "not_in":
         # Same fail-closed posture as ``ne``: a missing path (null) is not a
         # member of the allowlist, so ``not_in`` matches (#3360).
-        return f"{indent}_v := {accessor}\n{indent}not _v in {literal}"
+        null_guard = "" if action == "deny" else f"\n{indent}_v != null"
+        return f"{indent}_v := {accessor}{null_guard}\n{indent}not _v in {literal}"
     if operator == "exists":
         return f"{indent}{accessor} != null"
     if operator == "contains":

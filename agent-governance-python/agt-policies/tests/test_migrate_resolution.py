@@ -9,8 +9,12 @@ resolution reasons in ``policy-engine/spec/SPECIFICATION.md`` §16.
 
 from __future__ import annotations
 
+import json
+import os
 import random
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -1029,15 +1033,101 @@ def test_rego_field_accessor_uses_array_path_for_nested_fields() -> None:
     )
     assert "object.get(object.get" not in (accessor or "")
 
-    ne_clause = _rego_op_clause("ne", accessor, "eu")
+    ne_clause = _rego_op_clause("ne", accessor, "eu", action="deny")
     assert ne_clause is not None
     assert "_v != null" not in ne_clause
     assert '_v != "eu"' in ne_clause
 
-    not_in_clause = _rego_op_clause("not_in", accessor, ["eu", "us"])
+    not_in_clause = _rego_op_clause(
+        "not_in", accessor, ["eu", "us"], action="deny"
+    )
     assert not_in_clause is not None
     assert "_v != null" not in not_in_clause
     assert "not _v in" in not_in_clause
+
+
+@pytest.mark.parametrize(
+    ("operator", "value"),
+    [("ne", "eu"), ("not_in", ["eu", "us"])],
+)
+def test_allow_operator_keeps_missing_field_guard(
+    operator: str, value: object
+) -> None:
+    from agt.cli._migrate_resolution.build import _rego_op_clause
+
+    clause = _rego_op_clause(
+        operator,
+        'object.get(input.snapshot, ["tool_call", "args", "region"], null)',
+        value,
+        action="allow",
+    )
+
+    assert clause is not None
+    assert "_v != null" in clause
+
+
+@pytest.mark.parametrize(
+    ("operator", "value"),
+    [("ne", "eu"), ("not_in", ["eu", "us"])],
+)
+def test_allow_missing_field_does_not_preempt_later_deny(
+    tmp_path: Path, operator: str, value: object
+) -> None:
+    """An allow condition cannot match when its selected field is absent."""
+    opa = os.environ.get("ACS_OPA_PATH") or shutil.which("opa")
+    if opa is None:
+        pytest.skip("OPA is required to evaluate generated Rego")
+
+    from agt.cli._migrate_resolution.build import _render_rego
+
+    rego_path = tmp_path / "agt_legacy.rego"
+    rego_path.write_text(
+        _render_rego(
+            [
+                _rule_with_condition(
+                    "allow-non-eu",
+                    "allow",
+                    {
+                        "field": "tool_call.args.region",
+                        "operator": operator,
+                        "value": value,
+                    },
+                    10,
+                ),
+                _rule_with_condition(
+                    "deny-deploy",
+                    "deny",
+                    {
+                        "field": "tool_call.name",
+                        "operator": "eq",
+                        "value": "deploy",
+                    },
+                    0,
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            opa,
+            "eval",
+            "--format=raw",
+            "--data",
+            str(rego_path),
+            "--stdin-input",
+            "data.agt.legacy.verdict",
+        ],
+        input=json.dumps({"snapshot": {"tool_call": {"name": "deploy"}}}),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    verdict = json.loads(result.stdout)
+    assert verdict["decision"] == "deny"
+    assert verdict["reason"] == "deny-deploy"
 
 
 def test_resolve_renders_array_path_accessor_for_nested_ne(tmp_path: Path) -> None:
