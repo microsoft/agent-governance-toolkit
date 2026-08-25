@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import logging
 import math
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from io import BytesIO
 from typing import Any
@@ -28,7 +28,14 @@ from django.core.cache.backends.redis import RedisCache
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest, HttpResponse, JsonResponse
 
-from .request_auth import build_request_signature_payload
+from agentmesh.integrations.request_auth import (
+    RequestTargetMode,
+    decoded_target,
+    select_signed_headers,
+    wsgi_raw_target,
+)
+
+from .request_auth import build_request_signature_payload, replay_key
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +43,40 @@ logger = logging.getLogger(__name__)
 _TRUST_EXEMPT_ATTR = "_agentmesh_trust_exempt"
 # Marker attribute set by @trust_required decorator (per-view min score)
 _TRUST_REQUIRED_ATTR = "_agentmesh_min_trust_score"
+
+#: Score awarded to a caller whose Ed25519 signature verified over the full
+#: envelope. Unauthenticated callers never reach a score comparison at all.
+_VERIFIED_TRUST_SCORE = 750
+
+
+@dataclass(frozen=True, slots=True)
+class TrustEvaluation:
+    """Outcome of verifying one request.
+
+    ``authenticated`` is deliberately separate from ``score``. A score alone
+    cannot express "this caller proved nothing": zero is a perfectly valid
+    threshold, so a policy of ``@trust_required(min_score=0)`` would admit an
+    unauthenticated caller if the gate were a numeric comparison only. Callers
+    must check :attr:`authenticated` first.
+    """
+
+    authenticated: bool
+    score: int
+    reason: str
+    status: int = 403
+
+    @classmethod
+    def denied(cls, reason: str, status: int = 403) -> TrustEvaluation:
+        return cls(authenticated=False, score=0, reason=reason, status=status)
+
+    @classmethod
+    def verified(cls) -> TrustEvaluation:
+        return cls(
+            authenticated=True,
+            score=_VERIFIED_TRUST_SCORE,
+            reason="",
+            status=200,
+        )
 
 
 def _get_setting(name: str, default: Any) -> Any:
@@ -69,11 +110,24 @@ class AgentTrustMiddleware:
             replay-cache lifetime (default 300)
         - ``AGENTMESH_MAX_SIGNED_BODY_BYTES`` — maximum request body size covered
             by signature verification (default 2.5 MiB)
+        - ``AGENTMESH_REQUEST_TARGET_MODE`` — ``"raw"`` (default) verifies the
+            signature over the undecoded request target, which requires a WSGI
+            server that sets ``RAW_URI`` or ``REQUEST_URI`` (gunicorn, uWSGI,
+            mod_wsgi). Django's ``runserver`` does not, so development setups
+            must either accept a 500 or set ``"decoded"``, which signs the
+            percent-decoded path and therefore cannot distinguish ``/a%2Fb``
+            from ``/a/b``.
+        - ``AGENTMESH_SIGNED_HEADERS`` — additional headers covered by the
+            signature (default ``("content-type",)``)
     - ``AGENTMESH_EXEMPT_PATHS`` — list of URL path prefixes that skip
       trust verification (default ``[]``)
 
-    On success the middleware sets ``request.agent_did`` and
-    ``request.agent_trust_score`` for downstream views.
+    On success the middleware sets ``request.agent_did``,
+    ``request.agent_trust_score`` and ``request.agent_authenticated`` for
+    downstream views. On every other path — exempt views, exempt paths, and
+    denials — it sets ``agent_did`` and ``agent_trust_score`` to ``None`` and
+    ``agent_authenticated`` to ``False``. Views must check
+    ``request.agent_authenticated`` before acting on ``request.agent_did``.
     """
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
@@ -84,6 +138,8 @@ class AgentTrustMiddleware:
             raise ImproperlyConfigured("AGENTMESH_REPLAY_WINDOW_SECONDS must be positive")
         if self._max_signed_body_bytes() <= 0:
             raise ImproperlyConfigured("AGENTMESH_MAX_SIGNED_BODY_BYTES must be positive")
+        # Raises on an invalid value; better at startup than per request.
+        self._request_target_mode()
         cache_alias = str(_get_setting("AGENTMESH_REPLAY_CACHE_ALIAS", "")).strip()
         if not cache_alias:
             raise ImproperlyConfigured(
@@ -141,6 +197,25 @@ class AgentTrustMiddleware:
         return int(_get_setting("AGENTMESH_MAX_SIGNED_BODY_BYTES", 2_621_440))
 
     @staticmethod
+    def _request_target_mode() -> RequestTargetMode:
+        mode = str(_get_setting("AGENTMESH_REQUEST_TARGET_MODE", "raw"))
+        if mode not in ("raw", "decoded"):
+            raise ImproperlyConfigured(
+                f"AGENTMESH_REQUEST_TARGET_MODE must be 'raw' or 'decoded', not {mode!r}"
+            )
+        return mode  # type: ignore[return-value]
+
+    @staticmethod
+    def _signed_header_names() -> tuple[str, ...]:
+        """Headers covered by the signature, beyond the always-covered fields.
+
+        Server-chosen, never client-declared: a caller who could pick which
+        headers are signed could simply decline to sign the ones that matter.
+        """
+        names = _get_setting("AGENTMESH_SIGNED_HEADERS", ("content-type",))
+        return tuple(str(name).strip().lower() for name in names if str(name).strip())
+
+    @staticmethod
     def _exempt_paths() -> list[str]:
         return list(_get_setting("AGENTMESH_EXEMPT_PATHS", []))
 
@@ -162,6 +237,8 @@ class AgentTrustMiddleware:
         # Check path-based exemptions first
         for prefix in self._exempt_paths():
             if request.path.startswith(prefix):
+                # Nothing was verified, so nothing is asserted about the caller.
+                self._mark_unverified(request)
                 return self.get_response(request)
 
         # V17: Validate request comes from a trusted proxy when configured
@@ -198,6 +275,7 @@ class AgentTrustMiddleware:
         )
 
         if not agent_did:
+            self._mark_unverified(request)
             return JsonResponse(
                 {
                     "error": "Missing agent DID",
@@ -209,9 +287,11 @@ class AgentTrustMiddleware:
         # Resolve per-view override via @trust_required decorator
         view_func = self._resolve_view_func(request)
         if view_func is not None and getattr(view_func, _TRUST_EXEMPT_ATTR, False):
-            # @trust_exempt — skip verification entirely
-            request.agent_did = agent_did  # type: ignore[attr-defined]
-            request.agent_trust_score = None  # type: ignore[attr-defined]
+            # @trust_exempt — skip verification entirely. The DID header is
+            # unverified attacker-controlled input on this path, so it is not
+            # published to the view; doing so would let anyone impersonate any
+            # agent simply by hitting an exempt endpoint.
+            self._mark_unverified(request)
             return self.get_response(request)
 
         per_view_score: int | None = None
@@ -220,10 +300,7 @@ class AgentTrustMiddleware:
 
         min_score = per_view_score if per_view_score is not None else self._min_trust_score()
 
-        # Derive trust score — simple heuristic:
-        # agents that provide a valid DID get a baseline score; agents that
-        # also provide a signature get a higher score.
-        trust_score = self._evaluate_trust(
+        evaluation = self._evaluate_trust(
             request,
             agent_did,
             agent_sig,
@@ -231,13 +308,27 @@ class AgentTrustMiddleware:
             agent_nonce,
         )
 
-        if trust_score < min_score:
+        # Authentication is checked before the score, and never as a score.
+        # A threshold of 0 is a legitimate policy ("any authenticated agent");
+        # it must not become "any caller who typed a DID header".
+        if not evaluation.authenticated:
+            logger.warning(
+                "Trust verification failed for %s: %s", agent_did, evaluation.reason
+            )
+            self._mark_unverified(request)
+            return JsonResponse(
+                {"error": "Trust verification failed", "detail": evaluation.reason},
+                status=evaluation.status,
+            )
+
+        if evaluation.score < min_score:
             logger.warning(
                 "Trust verification failed for %s: score %d < required %d",
                 agent_did,
-                trust_score,
+                evaluation.score,
                 min_score,
             )
+            self._mark_unverified(request)
             return JsonResponse(
                 {"error": "Trust verification failed"},
                 status=403,
@@ -245,8 +336,21 @@ class AgentTrustMiddleware:
 
         # Attach trust info to request for downstream views
         request.agent_did = agent_did  # type: ignore[attr-defined]
-        request.agent_trust_score = trust_score  # type: ignore[attr-defined]
+        request.agent_trust_score = evaluation.score  # type: ignore[attr-defined]
+        request.agent_authenticated = True  # type: ignore[attr-defined]
         return self.get_response(request)
+
+    @staticmethod
+    def _mark_unverified(request: HttpRequest) -> None:
+        """Publish an explicitly unauthenticated identity to downstream code.
+
+        The attributes are always set, never left absent, so a view reading
+        ``request.agent_did`` gets ``None`` rather than an ``AttributeError``
+        or — worse — a value carried over from an unverified header.
+        """
+        request.agent_did = None  # type: ignore[attr-defined]
+        request.agent_trust_score = None  # type: ignore[attr-defined]
+        request.agent_authenticated = False  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # internal
@@ -259,28 +363,31 @@ class AgentTrustMiddleware:
         agent_sig: str,
         agent_timestamp: str,
         agent_nonce: str,
-    ) -> int:
-        """Return trust score for the given agent.
+    ) -> TrustEvaluation:
+        """Verify the request and report whether the caller is authenticated.
 
         Verifies an Ed25519 signature over a versioned envelope binding the
         agent identity, audience, freshness values, and HTTP request.
 
         The verifying public key is looked up via the Django setting
         ``AGENTMESH_AGENT_KEYS``, a dict mapping DID → Ed25519PublicKey.
-        Agents not in the registry or with invalid signatures receive a
-        score of 0.
+        Every failure returns an unauthenticated result; only a verified
+        signature and a successfully claimed nonce produce ``authenticated``.
         """
         if not all((agent_did, agent_sig, agent_timestamp, agent_nonce)):
-            return 0
+            return TrustEvaluation.denied("Incomplete trust headers")
 
         audience = str(_get_setting("AGENTMESH_AUDIENCE", "")).strip()
         if not audience:
             logger.error("AGENTMESH_AUDIENCE is required for request verification")
-            return 0
+            return TrustEvaluation.denied("Trust verification is misconfigured", status=500)
 
+        target_mode = self._request_target_mode()
         replay_window = self._replay_window_seconds()
-        if replay_window <= 0 or len(agent_timestamp) > 64:
-            return 0
+        if replay_window <= 0:
+            return TrustEvaluation.denied("Trust verification is misconfigured", status=500)
+        if len(agent_timestamp) > 64:
+            return TrustEvaluation.denied("Malformed timestamp")
         timestamp_value = (
             agent_timestamp[:-1] + "+00:00"
             if agent_timestamp.endswith("Z")
@@ -289,39 +396,46 @@ class AgentTrustMiddleware:
         try:
             timestamp = datetime.fromisoformat(timestamp_value)
         except ValueError:
-            return 0
+            return TrustEvaluation.denied("Malformed timestamp")
         if timestamp.tzinfo is None:
-            return 0
+            return TrustEvaluation.denied("Timestamp is missing a timezone")
         if abs((_utcnow() - timestamp).total_seconds()) > replay_window:
-            return 0
+            return TrustEvaluation.denied("Timestamp is outside the replay window")
 
         if len(agent_nonce) > 128:
-            return 0
+            return TrustEvaluation.denied("Malformed nonce")
         try:
             padded_nonce = agent_nonce + "=" * (-len(agent_nonce) % 4)
             nonce_bytes = base64.b64decode(padded_nonce, altchars=b"-_", validate=True)
         except (ValueError, binascii.Error):
-            return 0
+            return TrustEvaluation.denied("Malformed nonce")
         if not 16 <= len(nonce_bytes) <= 64:
-            return 0
+            return TrustEvaluation.denied("Malformed nonce")
 
         agent_keys: dict = _get_setting("AGENTMESH_AGENT_KEYS", {})
         public_key = agent_keys.get(agent_did)
         if public_key is None:
             logger.warning("No public key registered for agent %s", agent_did)
-            return 0
+            return TrustEvaluation.denied("Unknown agent")
+
+        request_target = self._signed_target(request, target_mode)
+        if request_target is None:
+            logger.error(
+                "This WSGI server does not expose the undecoded request target "
+                "(neither RAW_URI nor REQUEST_URI is set in META), so a signature over it "
+                "cannot be checked. Run behind gunicorn, uWSGI, or mod_wsgi, or set "
+                "AGENTMESH_REQUEST_TARGET_MODE='decoded'."
+            )
+            return TrustEvaluation.denied("Trust verification is misconfigured", status=500)
+
+        body = self._read_request_body(request)
+        if body is None:
+            return TrustEvaluation.denied("Request body could not be verified")
 
         try:
             sig_bytes = base64.b64decode(agent_sig, validate=True)
             if len(sig_bytes) != 64:
-                return 0
-            query_string = request.META.get("QUERY_STRING", "")
-            request_target = request.path
-            if query_string:
-                request_target = f"{request_target}?{query_string}"
-            body = self._read_request_body(request)
-            if body is None:
-                return 0
+                return TrustEvaluation.denied("Malformed signature")
             payload = build_request_signature_payload(
                 agent_did=agent_did,
                 audience=audience,
@@ -329,18 +443,22 @@ class AgentTrustMiddleware:
                 nonce=agent_nonce,
                 method=request.method,
                 request_target=request_target,
+                target_mode=target_mode,
                 body=body,
-                content_type=request.META.get("CONTENT_TYPE", ""),
+                signed_headers=select_signed_headers(
+                    self._signed_header_names(),
+                    lambda name: request.headers.get(name),
+                ),
             )
             public_key.verify(sig_bytes, payload)
         except Exception:
             logger.warning("Signature verification failed for agent %s", agent_did)
-            return 0
+            return TrustEvaluation.denied("Signature verification failed")
 
         now = _utcnow()
         age_seconds = abs((now - timestamp).total_seconds())
         if age_seconds > replay_window:
-            return 0
+            return TrustEvaluation.denied("Timestamp is outside the replay window")
 
         # Retain the nonce until the signed timestamp's complete validity
         # interval ends, including any accepted future clock skew.
@@ -349,18 +467,27 @@ class AgentTrustMiddleware:
             math.ceil((timestamp - now).total_seconds() + replay_window),
         )
 
-        replay_key_material = agent_did.encode("utf-8") + b"\0" + nonce_bytes
-        replay_key = "agentmesh:request-nonce:" + hashlib.sha256(replay_key_material).hexdigest()
+        replay_cache_key = replay_key(agent_did, audience, nonce_bytes)
         try:
-            if not self._replay_cache.add(replay_key, True, timeout=replay_timeout):
+            if not self._replay_cache.add(replay_cache_key, True, timeout=replay_timeout):
                 logger.warning("Replay detected for agent %s", agent_did)
-                return 0
+                return TrustEvaluation.denied("Replayed or expired request")
         except Exception:
             logger.exception("Replay cache failure while verifying agent %s", agent_did)
-            return 0
+            # The caller did nothing wrong; a cache outage is our fault, and
+            # recording it as an attack would corrupt the audit trail.
+            return TrustEvaluation.denied("Replay protection unavailable", status=503)
         if abs((_utcnow() - timestamp).total_seconds()) > replay_window:
-            return 0
-        return 750
+            return TrustEvaluation.denied("Timestamp is outside the replay window")
+        return TrustEvaluation.verified()
+
+    @staticmethod
+    def _signed_target(request: HttpRequest, mode: RequestTargetMode) -> str | None:
+        """Return the request target to verify, or ``None`` when the raw form is
+        required but this server does not provide it."""
+        if mode == "raw":
+            return wsgi_raw_target(request.META)
+        return decoded_target(request.path, request.META.get("QUERY_STRING", ""))
 
     def _read_request_body(self, request: HttpRequest) -> bytes | None:
         max_body_bytes = self._max_signed_body_bytes()
