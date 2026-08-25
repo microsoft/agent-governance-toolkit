@@ -19,18 +19,25 @@ from .langflow import TrustGatedFlow, TrustVerificationComponent, IdentityCompon
 from .flowise import TrustGatedFlowiseClient, FlowiseNodeIdentity, FlowiseTrustPolicy
 from .haystack import TrustedPipeline, TrustGateComponent, TrustAgentComponent
 from .http_middleware import (
+    BODY_LIMIT_SCOPE_KEY,
     PeerCredential,
     SignedBodyLimitMiddleware,
     TrustConfig,
     TrustMiddleware,
     VerificationResult,
+    install_fastapi_trust,
     registry_resolver,
 )
 from .request_auth import (
     InMemoryReplayCache,
     ReplayCache,
     ReplayCacheFull,
+    RequestTargetMode,
+    asgi_raw_target,
     build_request_signature_payload,
+    decoded_target,
+    select_signed_headers,
+    wsgi_raw_target,
 )
 
 __all__ = [
@@ -79,9 +86,16 @@ __all__ = [
     "VerificationResult",
     "registry_resolver",
     "SignedBodyLimitMiddleware",
+    "BODY_LIMIT_SCOPE_KEY",
+    "install_fastapi_trust",
     # Request authentication primitives
     "build_request_signature_payload",
     "InMemoryReplayCache",
     "ReplayCache",
     "ReplayCacheFull",
+    "RequestTargetMode",
+    "asgi_raw_target",
+    "decoded_target",
+    "select_signed_headers",
+    "wsgi_raw_target",
 ]

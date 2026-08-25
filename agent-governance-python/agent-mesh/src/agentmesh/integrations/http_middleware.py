@@ -31,6 +31,7 @@ it matches the registered key exactly.
 from __future__ import annotations
 
 import hmac
+import inspect
 import json
 import logging
 import math
@@ -39,7 +40,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any
+from typing import Any, Protocol
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -49,15 +50,20 @@ from agentmesh.integrations.request_auth import (
     InMemoryReplayCache,
     ReplayCache,
     ReplayCacheFull,
+    RequestTargetMode,
+    asgi_raw_target,
     build_request_signature_payload,
     capability_satisfied,
     decode_nonce,
     decode_public_key,
     decode_signature,
+    decoded_target,
     parse_timestamp,
     replay_key,
     sanitize_did,
+    select_signed_headers,
     utcnow,
+    wsgi_raw_target,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,7 +107,35 @@ class PeerCredential:
 
 
 #: Resolves a DID to its registered credential, or ``None`` when unknown.
-PeerResolver = Callable[[str], PeerCredential | None]
+#:
+#: A resolver may additionally accept a ``timeout_seconds`` keyword. When it
+#: does, the middleware passes the remaining share of the request budget and the
+#: resolver MUST bound its I/O by it — the middleware calls the resolver
+#: synchronously and cannot interrupt it. Support is detected once, at
+#: construction, so a plain ``Callable[[str], PeerCredential | None]`` keeps
+#: working unchanged.
+class PeerResolver(Protocol):
+    def __call__(self, did: str, /) -> PeerCredential | None: ...
+
+
+_TIMEOUT_KWARG = "timeout_seconds"
+
+
+def _accepts_timeout(func: Any) -> bool:
+    """Whether ``func`` can be passed the remaining request budget.
+
+    Introspection runs once per middleware, never per request. A callable that
+    cannot be introspected is assumed not to accept the deadline, which is the
+    safe assumption: passing an unexpected keyword would raise on every request.
+    """
+    try:
+        parameters = inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return False
+    keyword = parameters.get(_TIMEOUT_KWARG)
+    if keyword is not None and keyword.kind is not inspect.Parameter.POSITIONAL_ONLY:
+        return True
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values())
 
 
 @dataclass(frozen=True)
@@ -111,18 +145,35 @@ class TrustConfig:
     Frozen: the ``permissive_mode`` guard below is an invariant, and a mutable
     dataclass would let a caller reconstruct the exact configuration it exists
     to forbid by assigning the field after construction.
+
+    Field order matters. ``required_trust_score``, ``required_capabilities``,
+    and ``permissive_mode`` keep the positions they held before request signing
+    was introduced, so an existing positional ``TrustConfig(0.8, ["admin"])``
+    still means what it always meant. Every field added since is appended.
     """
 
-    #: Identifier of *this* service, covered by the caller's signature. Required.
-    audience: str = ""
     required_trust_score: float = 0.5
     required_capabilities: tuple[str, ...] = ()
-    #: Accepted clock skew and nonce retention, in seconds.
-    replay_window_seconds: int = 300
-    max_signed_body_bytes: int = _DEFAULT_MAX_SIGNED_BODY_BYTES
     #: Allow requests that carry *no* DID header through as unauthenticated.
     #: Such results always have ``authenticated=False`` and ``trust_score=0.0``.
     permissive_mode: bool = False
+    #: Identifier of *this* service, covered by the caller's signature. Required.
+    audience: str = ""
+    #: Accepted clock skew and nonce retention, in seconds.
+    replay_window_seconds: int = 300
+    max_signed_body_bytes: int = _DEFAULT_MAX_SIGNED_BODY_BYTES
+    #: Request headers the signature must cover, lowercase. The *server* fixes
+    #: this set, so a caller cannot narrow coverage to headers that do not
+    #: matter. Add any header the endpoint acts on — a tenant, an API version,
+    #: an idempotency key — and it becomes tamper-evident.
+    signed_header_names: tuple[str, ...] = ("content-type",)
+    #: Which form of the request target the signature binds. ``"raw"`` requires
+    #: the server to expose the undecoded target and is the secure default;
+    #: ``"decoded"`` is an explicit opt-out for servers that cannot.
+    request_target_mode: RequestTargetMode = "raw"
+    #: Budget, in seconds, for the I/O verification performs: peer resolution,
+    #: the replay-store claim, and reading the request body.
+    io_timeout_seconds: float = 5.0
 
     def __post_init__(self) -> None:
         # A bare str is iterable, so tuple("admin") would silently become five
@@ -134,10 +185,31 @@ class TrustConfig:
         # Accept any iterable (lists are common at call sites) but store an
         # immutable tuple so the authorization set cannot be mutated later.
         object.__setattr__(self, "required_capabilities", tuple(self.required_capabilities))
+        if isinstance(self.signed_header_names, str):
+            raise ValueError(
+                "signed_header_names must be a sequence of header names, not a single string"
+            )
+        # Lowercase and de-duplicate: HTTP header names are case-insensitive, so
+        # "Content-Type" and "content-type" are one covered header, not two.
+        normalised: list[str] = []
+        for name in self.signed_header_names:
+            key = name.strip().lower()
+            if not key:
+                raise ValueError("signed_header_names entries must be non-empty header names")
+            if key not in normalised:
+                normalised.append(key)
+        object.__setattr__(self, "signed_header_names", tuple(normalised))
+        if self.request_target_mode not in ("raw", "decoded"):
+            raise ValueError(
+                "request_target_mode must be 'raw' or 'decoded', not "
+                f"{self.request_target_mode!r}"
+            )
         if self.replay_window_seconds <= 0:
             raise ValueError("replay_window_seconds must be positive")
         if self.max_signed_body_bytes <= 0:
             raise ValueError("max_signed_body_bytes must be positive")
+        if self.io_timeout_seconds <= 0:
+            raise ValueError("io_timeout_seconds must be positive")
         if self.permissive_mode:
             # An anonymous caller has no proven capabilities and a trust score
             # of 0.0, so pairing permissive mode with an authorization gate is
@@ -166,13 +238,17 @@ class VerificationResult:
     was cryptographically proven". They differ only in permissive mode, where an
     anonymous caller is allowed through without proving anything — downstream
     code must branch on ``authenticated`` before trusting ``peer_did``.
+
+    As with :class:`TrustConfig`, the four original fields keep their positions
+    and the two that request signing added are appended, so existing positional
+    construction still binds the values its author intended.
     """
 
     verified: bool
-    authenticated: bool = False
     trust_score: float = 0.0
     reason: str = ""
     peer_did: str = ""
+    authenticated: bool = False
     capabilities: tuple[str, ...] = ()
 
 
@@ -207,10 +283,20 @@ def registry_resolver(
 
 
 def _header(headers: Mapping[str, str], name: str) -> str:
-    """Case-insensitive header lookup.
+    """Case-insensitive header lookup, empty string when absent.
 
     Starlette lowercases header keys while Werkzeug preserves the wire casing,
     so an exact-match lookup silently misses on one framework or the other.
+    """
+    value = _optional_header(headers, name)
+    return value if value is not None else ""
+
+
+def _optional_header(headers: Mapping[str, str], name: str) -> str | None:
+    """Case-insensitive header lookup that distinguishes absent from empty.
+
+    The signed-header set needs that distinction: a header sent as ``""`` and a
+    header not sent at all must not produce the same signed envelope.
     """
     value = headers.get(name)
     if value is not None:
@@ -219,7 +305,17 @@ def _header(headers: Mapping[str, str], name: str) -> str:
     for key, candidate in headers.items():
         if key.lower() == target:
             return candidate
-    return ""
+    return None
+
+
+def _remaining(deadline: float) -> float:
+    """Seconds left in the request budget, never negative."""
+    return max(0.0, deadline - time.monotonic())
+
+
+def _expired(deadline: float) -> bool:
+    """Whether the request budget is spent."""
+    return time.monotonic() >= deadline
 
 
 class TrustMiddleware:
@@ -274,6 +370,11 @@ class TrustMiddleware:
                 )
             replay_cache = InMemoryReplayCache()
         self._replay_cache = replay_cache
+        # Introspect the ports once here rather than on every request: the
+        # deadline is only passed to implementations that declare they accept
+        # it, so existing plain resolvers and caches keep working.
+        self._resolver_accepts_timeout = _accepts_timeout(peer_resolver)
+        self._replay_cache_accepts_timeout = _accepts_timeout(replay_cache.add)
 
     @classmethod
     def from_registry(
@@ -304,7 +405,6 @@ class TrustMiddleware:
         method: str | None = None,
         request_target: str | None = None,
         body: bytes | None = None,
-        content_type: str | None = None,
     ) -> tuple[VerificationResult, dict[str, Any] | None]:
         """Authenticate a request and return *(result, error_body | None)*.
 
@@ -315,6 +415,11 @@ class TrustMiddleware:
 
         ``method``, ``request_target`` and ``body`` are required: the signature
         covers the full request, so verification fails closed without them.
+        ``request_target`` must be in the form named by
+        :attr:`TrustConfig.request_target_mode` — the undecoded origin-form
+        target for ``"raw"``, the decoded path (plus query) for ``"decoded"``.
+        The covered headers are taken from ``headers`` using
+        :attr:`TrustConfig.signed_header_names`; the caller does not choose them.
 
         Never raises. Every input to this method is attacker-controlled, so an
         unexpected error is converted into a denial rather than being allowed to
@@ -327,7 +432,6 @@ class TrustMiddleware:
                 method=method,
                 request_target=request_target,
                 body=body,
-                content_type=content_type,
             )
         except Exception:
             # Recovering the DID is best-effort: `headers` is attacker-supplied
@@ -359,9 +463,12 @@ class TrustMiddleware:
         method: str | None = None,
         request_target: str | None = None,
         body: bytes | None = None,
-        content_type: str | None = None,
     ) -> tuple[VerificationResult, dict[str, Any] | None]:
         cfg = config_override or self.config
+        # Everything from here to the protected action shares one budget, so a
+        # slow registry cannot be paid for twice by also spending the replay
+        # store's share.
+        deadline = time.monotonic() + cfg.io_timeout_seconds
         if not cfg.audience.strip():
             return self._deny("Middleware misconfigured: audience is not set", status=500)
 
@@ -414,7 +521,7 @@ class TrustMiddleware:
             return self._deny(f"Missing or malformed {HEADER_NONCE} header", status=401,
                               peer_did=peer_did)
 
-        credential = self._resolve_credential(peer_did)
+        credential = self._resolve_credential(peer_did, deadline)
         if credential is None:
             # Pre-authentication failures are logged at DEBUG: the caller has
             # proven nothing, so anyone on the network could otherwise drive
@@ -449,8 +556,12 @@ class TrustMiddleware:
             nonce=raw_nonce,
             method=method,
             request_target=request_target,
+            target_mode=cfg.request_target_mode,
             body=body,
-            content_type=content_type or "",
+            signed_headers=select_signed_headers(
+                cfg.signed_header_names,
+                lambda name: _optional_header(headers, name),
+            ),
         )
         try:
             ed25519.Ed25519PublicKey.from_public_bytes(verify_key_bytes).verify(signature, payload)
@@ -458,9 +569,17 @@ class TrustMiddleware:
             logger.debug("Signature verification failed for agent %s", peer_did)
             return self._deny("Signature verification failed", status=401, peer_did=peer_did)
 
+        # The resolver may have consumed the whole budget. Check before claiming
+        # the nonce so a stalled registry cannot burn a caller's single-use
+        # nonce on a request that is about to be refused anyway.
+        if _expired(deadline):
+            return self._deny(
+                "Trust verification exceeded its time budget", status=503, peer_did=peer_did
+            )
+
         # Burn the nonce only after the signature proves the caller holds the
         # key, so an unauthenticated attacker cannot exhaust or poison the cache.
-        nonce_denial = self._consume_nonce(peer_did, nonce_bytes, timestamp, now, cfg)
+        nonce_denial = self._consume_nonce(peer_did, nonce_bytes, timestamp, now, cfg, deadline)
         if nonce_denial is not None:
             reason, status = nonce_denial
             return self._deny(reason, status=status, peer_did=peer_did)
@@ -530,8 +649,8 @@ class TrustMiddleware:
 
     # -- internals ---------------------------------------------------------
 
-    def _resolve_credential(self, peer_did: str) -> PeerCredential | None:
-        """Resolve the peer's registered credential.
+    def _resolve_credential(self, peer_did: str, deadline: float) -> PeerCredential | None:
+        """Resolve the peer's registered credential within the request budget.
 
         A resolver that *raises* is a registry fault, not a credential fault, so
         the exception is allowed to reach ``verify_request``'s never-raise
@@ -540,6 +659,8 @@ class TrustMiddleware:
         credentials", hiding it from any alert keyed on 5xx. Only an explicit
         ``None`` — this DID is not registered — is an authentication failure.
         """
+        if self._resolver_accepts_timeout:
+            return self._resolve_peer(peer_did, timeout_seconds=_remaining(deadline))  # type: ignore[call-arg]
         return self._resolve_peer(peer_did)
 
     def _consume_nonce(
@@ -549,21 +670,31 @@ class TrustMiddleware:
         timestamp: Any,
         now: Any,
         cfg: TrustConfig,
+        deadline: float,
     ) -> tuple[str, int] | None:
         """Atomically claim the nonce.
 
         Returns ``None`` on success, or a ``(reason, status)`` denial. A replay
-        is reported as 401 and blamed on the caller; a cache that is unavailable
-        or full is reported as 503, because the caller did nothing wrong and
-        recording it as an attack would corrupt the audit trail.
+        is reported as 401 and blamed on the caller; a cache that is unavailable,
+        full, or too slow is reported as 503, because the caller did nothing
+        wrong and recording it as an attack would corrupt the audit trail.
         """
         # Retain the nonce for the signed timestamp's whole validity interval,
         # including accepted future clock skew.
         ttl = max(1, math.ceil((timestamp - now).total_seconds() + cfg.replay_window_seconds))
+        key = replay_key(peer_did, cfg.audience, nonce_bytes)
         try:
-            claimed = self._replay_cache.add(replay_key(peer_did, cfg.audience, nonce_bytes), ttl)
+            if self._replay_cache_accepts_timeout:
+                claimed = self._replay_cache.add(
+                    key, ttl, timeout_seconds=_remaining(deadline)
+                )
+            else:
+                claimed = self._replay_cache.add(key, ttl)
         except ReplayCacheFull:
             logger.error("Replay cache is at capacity; denying request from agent %s", peer_did)
+            return ("Replay protection unavailable", 503)
+        except TimeoutError:
+            logger.error("Replay cache timed out while verifying agent %s", peer_did)
             return ("Replay protection unavailable", 503)
         except Exception:
             # Post-authentication, but a cache outage under real traffic would
@@ -577,6 +708,11 @@ class TrustMiddleware:
             # authenticated event and safe to log at WARNING.
             logger.warning("Replay detected for agent %s", peer_did)
             return ("Replayed or expired request", 401)
+        # The claim itself may have overrun the budget. Refuse rather than admit
+        # a request whose freshness we can no longer vouch for; the nonce stays
+        # burned, so this cannot be retried into a replay.
+        if _expired(deadline):
+            return ("Trust verification exceeded its time budget", 503)
         return None
 
     @staticmethod
@@ -631,7 +767,7 @@ class _DenialSignal:
     flood the log, but that alone leaves a default (INFO) deployment with no
     signal at all that it is under attack. This emits at most one WARNING per
     reason per interval and reports how many were suppressed, so a 401 storm is
-    visible without being floodable.
+    visible without handing an attacker a way to flood it.
 
     Keyed only on the middleware's own fixed reason strings — never on
     attacker-supplied data — so the map is inherently bounded.
@@ -718,6 +854,47 @@ _BODY_UNREADABLE: dict[str, Any] = {
     "status": 503,
 }
 
+_BODY_READ_TIMEOUT: dict[str, Any] = {
+    "error": "Trust verification unavailable",
+    "reason": "Request body was not received within the verification time budget",
+    "status": 503,
+}
+
+#: ASGI scope key set by :class:`SignedBodyLimitMiddleware` to prove the body is
+#: bounded ahead of routing. The FastAPI dependency refuses to run without it.
+BODY_LIMIT_SCOPE_KEY = "agentmesh.signed_body_limit"
+
+_BODY_GUARD_MISSING: dict[str, Any] = {
+    "error": "Trust middleware misconfigured",
+    "reason": (
+        "SignedBodyLimitMiddleware is not installed. FastAPI reads a declared request body "
+        "before it solves dependencies, so without that ASGI guard an unauthenticated caller "
+        "can make the server buffer an unbounded body. Use install_fastapi_trust(app, ...), "
+        "or add the middleware explicitly."
+    ),
+    "status": 500,
+}
+
+_RAW_TARGET_UNAVAILABLE: dict[str, Any] = {
+    "error": "Trust middleware misconfigured",
+    "reason": (
+        "This server does not expose the undecoded request target (ASGI 'raw_path', or WSGI "
+        "'RAW_URI'/'REQUEST_URI'), so a signature over it cannot be checked. Run behind a "
+        "server that provides it (uvicorn, hypercorn, gunicorn, uWSGI, mod_wsgi), or set "
+        "TrustConfig.request_target_mode='decoded' to accept a target that cannot tell "
+        "'/a%2Fb' from '/a/b'."
+    ),
+    "status": 500,
+}
+
+
+def _signed_target(cfg: TrustConfig, *, raw: str | None, decoded: str) -> str | None:
+    """Pick the request target to sign, or ``None`` when the raw form is required
+    but this server cannot supply it."""
+    if cfg.request_target_mode == "raw":
+        return raw
+    return decoded
+
 
 # -- Framework-specific decorators -----------------------------------------
 
@@ -750,18 +927,22 @@ def _read_flask_body(request: Any, limit: int) -> bytes | None:
     return data if len(data) <= limit else None
 
 
-async def _read_starlette_body(request: Any, limit: int) -> bytes | None:
+async def _read_starlette_body(request: Any, limit: int, timeout_seconds: float) -> bytes | None:
     """Read at most ``limit`` bytes of the Starlette/FastAPI request body.
 
-    ``Request.body()`` buffers without bound, so the body is streamed against a
-    budget instead and then cached on the request so the endpoint can still read
-    it normally.
+    ``Request.body()`` buffers without bound and waits without bound, so the
+    body is streamed against both a size budget and the caller's time budget,
+    then cached on the request so the endpoint can still read it normally.
+
+    Returns ``None`` when the body exceeds ``limit``. Raises ``TimeoutError``
+    when a client stops sending, so a stalled upload cannot pin the verifier
+    open indefinitely.
 
     This is defence in depth, not a complete bound. FastAPI reads the body
     inside its route handler *before* dependencies are solved, so for any route
     that declares a body parameter the request is already buffered by the time
-    a dependency runs. Install :class:`SignedBodyLimitMiddleware` to bound those
-    routes; it runs ahead of routing, which is the only layer that can.
+    a dependency runs. :class:`SignedBodyLimitMiddleware` bounds those routes;
+    it runs ahead of routing, which is the only layer that can.
     """
     raw_length = request.headers.get("content-length")
     if raw_length is not None:
@@ -775,11 +956,17 @@ async def _read_starlette_body(request: Any, limit: int) -> bytes | None:
     if cached is not None:
         return cached if len(cached) <= limit else None
 
+    # Imported here, not at module scope: this module must stay importable for
+    # Flask- and Django-only deployments, which have no ASGI stack. Starlette
+    # depends on anyio, so on this code path it is always present.
+    import anyio  # noqa: PLC0415
+
     buffer = bytearray()
-    async for chunk in request.stream():
-        buffer.extend(chunk)
-        if len(buffer) > limit:
-            return None
+    with anyio.fail_after(timeout_seconds):
+        async for chunk in request.stream():
+            buffer.extend(chunk)
+            if len(buffer) > limit:
+                return None
     body = bytes(buffer)
     # Prime Starlette's own cache so downstream `await request.body()` works.
     request._body = body
@@ -818,6 +1005,10 @@ class SignedBodyLimitMiddleware:
             return
 
         limit = self.max_body_bytes
+        # Proof-of-installation for the trust dependency downstream. It runs
+        # after FastAPI has already buffered any declared body, so it can only
+        # verify that this guard ran, not impose the bound itself.
+        scope[BODY_LIMIT_SCOPE_KEY] = limit
         if self._declared_length_exceeds(scope, limit):
             await self._reject(send)
             return
@@ -898,14 +1089,19 @@ def _flask_verify(
     # latin-1 never fails and round-trips arbitrary bytes; the Starlette path
     # decodes the same way so both frameworks sign identical bytes.
     query = request.query_string.decode("latin-1")
-    target = f"{request.path}?{query}" if query else request.path
+    target = _signed_target(
+        cfg,
+        raw=wsgi_raw_target(request.environ),
+        decoded=decoded_target(request.path, query),
+    )
+    if target is None:
+        return None, dict(_RAW_TARGET_UNAVAILABLE)
     return middleware.verify_request(
         dict(request.headers),
         config,
         method=request.method,
         request_target=target,
         body=body,
-        content_type=request.headers.get("Content-Type", ""),
     )
 
 
@@ -975,8 +1171,18 @@ async def _fastapi_verify(
     already-consumed stream), so it is wrapped here.
     """
     cfg = config or middleware.config
+    # FastAPI reads a declared body before it solves dependencies, so by the
+    # time this runs the bound must already exist upstream. Refuse rather than
+    # pretend to enforce a limit we cannot enforce here.
+    if request.scope.get(BODY_LIMIT_SCOPE_KEY) is None:
+        return None, dict(_BODY_GUARD_MISSING)
     try:
-        body = await _read_starlette_body(request, cfg.max_signed_body_bytes)
+        body = await _read_starlette_body(
+            request, cfg.max_signed_body_bytes, cfg.io_timeout_seconds
+        )
+    except TimeoutError:
+        logger.warning("ASGI request body was not received within the verification budget")
+        return None, dict(_BODY_READ_TIMEOUT)
     except Exception:
         _denial_signal.log_exception(
             "asgi_body_read", "Failed to read ASGI request body; denying request"
@@ -990,15 +1196,35 @@ async def _fastapi_verify(
     # bytes, and matches how the Flask path decodes the same field.
     query = request.scope.get("query_string", b"").decode("latin-1")
     path = request.scope.get("path", "")
-    target = f"{path}?{query}" if query else path
+    target = _signed_target(
+        cfg,
+        raw=asgi_raw_target(request.scope),
+        decoded=decoded_target(path, query),
+    )
+    if target is None:
+        return None, dict(_RAW_TARGET_UNAVAILABLE)
     return middleware.verify_request(
         dict(request.headers),
         config,
         method=request.method,
         request_target=target,
         body=body,
-        content_type=request.headers.get("content-type", ""),
     )
+
+
+def _with_resolved_request_annotation(dependency: Callable, request_cls: type) -> Callable:
+    """Bind ``request``'s annotation to the real class before FastAPI reads it.
+
+    This module uses ``from __future__ import annotations``, so the dependency's
+    ``request: Request`` annotation is stored as the *string* ``"Request"``, and
+    ``fastapi`` is imported lazily inside the factory so this module stays
+    importable without it. FastAPI resolves string annotations against the
+    function's module globals, where ``Request`` therefore does not exist — it
+    falls back to treating ``request`` as a query parameter and every call
+    returns ``422``. Substituting the resolved class keeps both properties.
+    """
+    dependency.__annotations__["request"] = request_cls
+    return dependency
 
 
 def fastapi_trust_required(
@@ -1022,7 +1248,7 @@ def fastapi_trust_required(
             raise _fastapi_http_exc(401, dict(_NOT_AUTHENTICATED))
         return result
 
-    return dependency
+    return _with_resolved_request_annotation(dependency, Request)
 
 
 def fastapi_trust_optional(
@@ -1043,7 +1269,43 @@ def fastapi_trust_optional(
             raise _fastapi_http_exc(_error_status(err), err)
         return result
 
-    return dependency
+    return _with_resolved_request_annotation(dependency, Request)
+
+
+def install_fastapi_trust(
+    app: Any,
+    middleware: TrustMiddleware,
+    config: TrustConfig | None = None,
+    *,
+    optional: bool = False,
+) -> Callable:
+    """Install the body guard and return the matching trust dependency.
+
+    The guard and the dependency are two halves of one control: FastAPI reads a
+    declared request body *before* it solves dependencies, so the dependency
+    alone cannot bound memory, and the guard alone does not authenticate. Wiring
+    them separately makes it possible to ship half of it, so this installs both::
+
+        trust = install_fastapi_trust(app, middleware, config)
+
+        @app.post("/task")
+        async def run(payload: Task, result: VerificationResult = Depends(trust)):
+            ...
+
+    Set ``optional=True`` for the permissive-mode dependency, which lets
+    anonymous callers reach the route; the route must then branch on
+    ``result.authenticated`` before trusting ``result.peer_did``.
+
+    Installing twice is harmless — the guard is idempotent and the second
+    instance simply re-asserts the same bound — but the second call's
+    ``max_signed_body_bytes`` wins, because ASGI middleware is applied
+    outermost-last.
+    """
+    cfg = config or middleware.config
+    app.add_middleware(SignedBodyLimitMiddleware, max_body_bytes=cfg.max_signed_body_bytes)
+    if optional:
+        return fastapi_trust_optional(middleware, config)
+    return fastapi_trust_required(middleware, config)
 
 
 def _fastapi_http_exc(status: int, detail: Any) -> Exception:
@@ -1052,6 +1314,7 @@ def _fastapi_http_exc(status: int, detail: Any) -> Exception:
 
 
 __all__ = [
+    "BODY_LIMIT_SCOPE_KEY",
     "HEADER_CAPABILITIES",
     "HEADER_DID",
     "HEADER_NONCE",
@@ -1068,5 +1331,6 @@ __all__ = [
     "fastapi_trust_required",
     "flask_trust_optional",
     "flask_trust_required",
+    "install_fastapi_trust",
     "registry_resolver",
 ]

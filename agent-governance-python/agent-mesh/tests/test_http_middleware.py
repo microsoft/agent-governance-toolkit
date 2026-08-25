@@ -28,6 +28,7 @@ from agentmesh.integrations.http_middleware import (
     VerificationResult,
     registry_resolver,
 )
+from agentmesh.integrations.http_middleware import BODY_LIMIT_SCOPE_KEY
 from agentmesh.integrations.request_auth import (
     REQUEST_SIGNATURE_VERSION,
     InMemoryReplayCache,
@@ -41,7 +42,11 @@ from agentmesh.integrations.request_auth import (
 AUDIENCE = "tests.agentmesh.example"
 TARGET = "/protected"
 BODY = b""
-CONTENT_TYPE = ""
+# None means "no Content-Type header", which is what a real client sends on a
+# GET with no body. An empty string is not a valid wire value: Werkzeug drops an
+# empty CONTENT_TYPE when iterating headers, so signing "" would produce an
+# envelope no server could ever reproduce.
+CONTENT_TYPE = None
 
 
 # ---------------------------------------------------------------------------
@@ -90,18 +95,24 @@ def _signed_headers(
     nonce: str | None = None,
     method: str = "GET",
     request_target: str = TARGET,
+    target_mode: str = "raw",
     body: bytes = BODY,
-    content_type: str = CONTENT_TYPE,
+    content_type: str | None = CONTENT_TYPE,
     extra: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Build correctly signed AgentMesh auth headers.
 
     ``timestamp``/``nonce`` are auto-generated only when ``None``; an explicit
     empty string is passed through so malformed-input cases stay testable.
+
+    ``content_type`` is both signed and emitted as a real header, because the
+    server derives the covered header set from the request it actually
+    received. Pass ``None`` to omit it entirely.
     """
     did = did if did is not None else str(signer.did)
     timestamp = datetime.now(UTC).isoformat() if timestamp is None else timestamp
     nonce = _nonce() if nonce is None else nonce
+    signed_header_values = {} if content_type is None else {"content-type": content_type}
     payload = build_request_signature_payload(
         agent_did=did,
         audience=audience,
@@ -109,8 +120,9 @@ def _signed_headers(
         nonce=nonce,
         method=method,
         request_target=request_target,
+        target_mode=target_mode,
         body=body,
-        content_type=content_type,
+        signed_headers=signed_header_values,
     )
     headers = {
         "X-Agent-DID": did,
@@ -118,6 +130,8 @@ def _signed_headers(
         "X-Agent-Timestamp": timestamp,
         "X-Agent-Nonce": nonce,
     }
+    if content_type is not None:
+        headers["Content-Type"] = content_type
     headers.update(extra or {})
     return headers
 
@@ -127,10 +141,18 @@ def _ctx(**overrides):
         "method": "GET",
         "request_target": TARGET,
         "body": BODY,
-        "content_type": CONTENT_TYPE,
     }
     ctx.update(overrides)
     return ctx
+
+
+def _credential(identity: AgentIdentity, trust_score: float = 750.0) -> PeerCredential:
+    """Build the credential a registry would return for this identity."""
+    return PeerCredential(
+        public_key=identity.public_key,
+        capabilities=tuple(identity.capabilities),
+        trust_score=trust_score,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +294,7 @@ class TestSignedRequestAccepted:
         result, err = mw.verify_request(
             headers,
             **_ctx(method="POST", request_target="/deploy?env=prod",
-                   body=b'{"replicas":1}', content_type="application/json"),
+                   body=b'{"replicas":1}'),
         )
         assert result.verified is True, err
 
@@ -329,20 +351,41 @@ class TestTamperAndReplay:
     """Signature binding, freshness, and single-use nonce enforcement."""
 
     @pytest.mark.parametrize(
-        "ctx_override",
+        ("ctx_override", "header_override"),
         [
-            {"method": "DELETE"},
-            {"request_target": "/admin/delete"},
-            {"body": b"tampered"},
-            {"content_type": "text/plain"},
+            ({"method": "DELETE"}, {}),
+            ({"request_target": "/admin/delete"}, {}),
+            ({"body": b"tampered"}, {}),
+            ({}, {"Content-Type": "text/plain"}),
+            # Presence is signed, not just the value: stripping a covered
+            # header must not silently narrow what the signature protects.
+            ({}, {"Content-Type": None}),
         ],
-        ids=["method", "target", "body", "content_type"],
+        ids=["method", "target", "body", "content_type", "content_type_removed"],
     )
-    def test_request_tampering_rejected(self, ctx_override):
+    def test_request_tampering_rejected(self, ctx_override, header_override):
         agent = _make_identity()
         mw = _middleware(_registry(agent))
+        headers = _signed_headers(agent, content_type="application/json")
+        for name, value in header_override.items():
+            if value is None:
+                headers.pop(name, None)
+            else:
+                headers[name] = value
 
-        result, err = mw.verify_request(_signed_headers(agent), **_ctx(**ctx_override))
+        result, err = mw.verify_request(headers, **_ctx(**ctx_override))
+
+        assert result.verified is False
+        assert err["status"] == 401
+
+    def test_unsigned_content_type_cannot_be_added(self):
+        """A header absent at signing time must not be accepted at verify time."""
+        agent = _make_identity()
+        mw = _middleware(_registry(agent))
+        headers = _signed_headers(agent, content_type=None)
+        headers["Content-Type"] = "application/json"
+
+        result, err = mw.verify_request(headers, **_ctx())
 
         assert result.verified is False
         assert err["status"] == 401
@@ -648,6 +691,24 @@ class TestVerificationResult:
         with pytest.raises(Exception):
             result.verified = True  # type: ignore[misc]
 
+    def test_positional_field_order_is_preserved(self):
+        """Published dataclasses are a positional API for external callers.
+
+        Inserting a field ahead of an existing one silently rebinds every
+        positional construction in downstream code, so new fields go last.
+        """
+        result = VerificationResult(True, 750.0, "ok", "did:mesh:abc")
+        assert result.verified is True
+        assert result.trust_score == 750.0
+        assert result.reason == "ok"
+        assert result.peer_did == "did:mesh:abc"
+
+    def test_trust_config_positional_field_order_is_preserved(self):
+        config = TrustConfig(600.0, ("read",), False, audience=AUDIENCE)
+        assert config.required_trust_score == 600.0
+        assert config.required_capabilities == ("read",)
+        assert config.permissive_mode is False
+
 
 # ---------------------------------------------------------------------------
 # Envelope compatibility, input bounding, and never-raise guarantees
@@ -657,12 +718,14 @@ class TestCanonicalEnvelope:
     """The signed envelope is a wire contract shared by Django/Flask/FastAPI."""
 
     GOLDEN = (
-        b'agentmesh-http-request-v1\n'
+        b'agentmesh-http-request-v2\n'
         b'{"agent_did":"did:mesh:0123456789abcdef0123456789abcdef",'
         b'"audience":"golden.agentmesh.example",'
         b'"body_sha256":"93a23971a914e5eacbf0a8d25154cda309c3c1c72fbb9914d47c60f3cb681588",'
-        b'"content_type":"application/json","method":"POST",'
+        b'"method":"POST",'
         b'"nonce":"Z29sZGVuLW5vbmNlLTAwMQ","request_target":"/v1/resource?x=1",'
+        b'"signed_headers":{"content-type":"application/json"},'
+        b'"target_mode":"raw",'
         b'"timestamp":"2026-01-02T03:04:05+00:00"}'
     )
 
@@ -675,8 +738,9 @@ class TestCanonicalEnvelope:
             "nonce": "Z29sZGVuLW5vbmNlLTAwMQ",
             "method": "post",
             "request_target": "/v1/resource?x=1",
+            "target_mode": "raw",
             "body": b'{"hello":"world"}',
-            "content_type": "application/json",
+            "signed_headers": {"Content-Type": "application/json"},
         }
 
     def test_payload_matches_frozen_vector(self):
@@ -684,7 +748,7 @@ class TestCanonicalEnvelope:
         assert build_request_signature_payload(**self._golden_kwargs()) == self.GOLDEN
 
     def test_version_prefix_is_stable(self):
-        assert REQUEST_SIGNATURE_VERSION == "agentmesh-http-request-v1"
+        assert REQUEST_SIGNATURE_VERSION == "agentmesh-http-request-v2"
 
     def test_django_and_generic_share_one_implementation(self):
         """Django must not drift into a second, incompatible envelope."""
@@ -694,6 +758,254 @@ class TestCanonicalEnvelope:
 
         assert django_builder is build_request_signature_payload
         assert django_builder(**self._golden_kwargs()) == self.GOLDEN
+
+    def test_percent_encoded_separator_is_distinguishable_from_a_real_one(self):
+        """Regression: the envelope claims to bind the request target.
+
+        Signing the framework-decoded path made ``/files/a%2Fb`` and
+        ``/files/a/b`` produce identical bytes, so one signature authorised
+        both. Anything downstream that re-reads the raw target — a proxy, a
+        gateway, an audit log — could be pointed at a path the signer never
+        approved.
+        """
+        common = {
+            "agent_did": "did:mesh:0123456789abcdef0123456789abcdef",
+            "audience": AUDIENCE,
+            "timestamp": "2026-01-02T03:04:05+00:00",
+            "nonce": "Z29sZGVuLW5vbmNlLTAwMQ",
+            "method": "GET",
+            "target_mode": "raw",
+            "body": b"",
+            "signed_headers": {},
+        }
+        encoded = build_request_signature_payload(request_target="/files/a%2Fb", **common)
+        literal = build_request_signature_payload(request_target="/files/a/b", **common)
+
+        assert encoded != literal
+
+    def test_target_mode_is_part_of_the_signed_bytes(self):
+        """A raw signature must not be replayable as a decoded one."""
+        common = {
+            "agent_did": "did:mesh:0123456789abcdef0123456789abcdef",
+            "audience": AUDIENCE,
+            "timestamp": "2026-01-02T03:04:05+00:00",
+            "nonce": "Z29sZGVuLW5vbmNlLTAwMQ",
+            "method": "GET",
+            "request_target": "/files/a/b",
+            "body": b"",
+            "signed_headers": {},
+        }
+        assert (
+            build_request_signature_payload(target_mode="raw", **common)
+            != build_request_signature_payload(target_mode="decoded", **common)
+        )
+
+    def test_absent_header_is_not_signed_as_empty(self):
+        """"Not sent" and "sent empty" must not collapse to the same envelope."""
+        common = {
+            "agent_did": "did:mesh:0123456789abcdef0123456789abcdef",
+            "audience": AUDIENCE,
+            "timestamp": "2026-01-02T03:04:05+00:00",
+            "nonce": "Z29sZGVuLW5vbmNlLTAwMQ",
+            "method": "GET",
+            "request_target": "/x",
+            "target_mode": "raw",
+            "body": b"",
+        }
+        assert (
+            build_request_signature_payload(signed_headers={}, **common)
+            != build_request_signature_payload(signed_headers={"content-type": ""}, **common)
+        )
+
+    def test_select_signed_headers_omits_absent_headers(self):
+        from agentmesh.integrations.request_auth import select_signed_headers
+
+        present = {"content-type": "application/json"}
+        assert select_signed_headers(
+            ("content-type", "x-not-sent"), present.get
+        ) == {"content-type": "application/json"}
+
+
+class TestRawRequestTarget:
+    """The signed target must reflect the wire, not the framework's decoding."""
+
+    def test_raw_target_is_preferred_over_the_decoded_path(self):
+        from agentmesh.integrations.request_auth import asgi_raw_target, wsgi_raw_target
+
+        assert asgi_raw_target(
+            {"raw_path": b"/files/a%2Fb", "query_string": b"q=x%2Fy"}
+        ) == "/files/a%2Fb?q=x%2Fy"
+        assert wsgi_raw_target({"RAW_URI": "/files/a%2Fb?q=x%2Fy"}) == "/files/a%2Fb?q=x%2Fy"
+        assert wsgi_raw_target({"REQUEST_URI": "/files/a%2Fb"}) == "/files/a%2Fb"
+
+    def test_absolute_form_is_reduced_to_origin_form(self):
+        """A proxy may forward an absolute target; it must sign the same bytes."""
+        from agentmesh.integrations.request_auth import wsgi_raw_target
+
+        assert wsgi_raw_target({"RAW_URI": "https://svc.example/files?a=1"}) == "/files?a=1"
+
+    def test_missing_raw_target_is_reported_not_guessed(self):
+        from agentmesh.integrations.request_auth import asgi_raw_target, wsgi_raw_target
+
+        assert wsgi_raw_target({"PATH_INFO": "/files/a/b"}) is None
+        assert asgi_raw_target({"path": "/files/a/b"}) is None
+
+    @staticmethod
+    def _request_without_raw_target(agent):
+        """A real Flask request from a server that hides the wire target.
+
+        Werkzeug's EnvironBuilder sets both RAW_URI and REQUEST_URI; stripping
+        them reproduces wsgiref-style servers (Django's runserver among them)
+        without hand-rolling a request fake that could drift from the real one.
+        """
+        from flask import Request
+        from werkzeug.test import EnvironBuilder
+
+        environ = EnvironBuilder(
+            path="/protected", headers={"X-Agent-DID": str(agent.did)}
+        ).get_environ()
+        environ.pop("RAW_URI", None)
+        environ.pop("REQUEST_URI", None)
+        return Request(environ)
+
+    def test_flask_adapter_fails_closed_without_a_raw_target(self):
+        """A server that cannot prove the wire target must not authenticate."""
+        from agentmesh.integrations.http_middleware import _flask_verify
+
+        agent = _make_identity()
+        mw = _middleware(_registry(agent))
+
+        result, err = _flask_verify(mw, None, self._request_without_raw_target(agent))
+
+        assert result is None
+        assert err["status"] == 500
+        assert "REQUEST_URI" in err["reason"]
+
+    def test_decoded_mode_is_an_explicit_opt_out(self):
+        """Servers without a raw target can still run, but must say so."""
+        from agentmesh.integrations.http_middleware import _flask_verify
+
+        agent = _make_identity()
+        mw = _middleware(
+            _registry(agent),
+            TrustConfig(audience=AUDIENCE, request_target_mode="decoded"),
+        )
+
+        _result, err = _flask_verify(mw, None, self._request_without_raw_target(agent))
+
+        # Reaches real verification and fails on the bare DID, not on config.
+        assert err["status"] == 401
+
+
+class TestVerificationDeadline:
+    """Verification runs on a bounded budget shared by every I/O port."""
+
+    def test_budget_is_passed_to_a_timeout_aware_resolver(self):
+        agent = _make_identity()
+        credential = _credential(agent)
+        observed: list[float] = []
+
+        def resolver(did: str, *, timeout_seconds: float) -> PeerCredential:
+            observed.append(timeout_seconds)
+            return credential
+
+        mw = TrustMiddleware(
+            config=TrustConfig(audience=AUDIENCE, io_timeout_seconds=2.5),
+            peer_resolver=resolver,
+            allow_insecure_replay_cache=True,
+        )
+
+        result, err = mw.verify_request(_signed_headers(agent), **_ctx())
+
+        assert result.authenticated is True, err
+        assert observed and 0 < observed[0] <= 2.5
+
+    def test_resolver_without_a_timeout_parameter_is_still_called(self):
+        """Deadline support is optional; a plain resolver must keep working."""
+        agent = _make_identity()
+        credential = _credential(agent)
+
+        def resolver(did: str) -> PeerCredential:
+            return credential
+
+        mw = TrustMiddleware(
+            config=TrustConfig(audience=AUDIENCE),
+            peer_resolver=resolver,
+            allow_insecure_replay_cache=True,
+        )
+
+        result, err = mw.verify_request(_signed_headers(agent), **_ctx())
+        assert result.authenticated is True, err
+
+    def test_exhausted_budget_denies_with_503_before_the_nonce_is_burned(self):
+        """A slow registry is our fault, not the caller's, and must not
+        consume their single-use nonce."""
+        agent = _make_identity()
+        credential = _credential(agent)
+        cache = InMemoryReplayCache()
+        clock = iter([0.0, 0.0, 99.0, 99.0, 99.0, 99.0])
+
+        def resolver(did: str) -> PeerCredential:
+            return credential
+
+        mw = TrustMiddleware(
+            config=TrustConfig(audience=AUDIENCE, io_timeout_seconds=1.0),
+            peer_resolver=resolver,
+            replay_cache=cache,
+        )
+        headers = _signed_headers(agent)
+
+        with mock.patch.object(_http.time, "monotonic", lambda: next(clock)):
+            result, err = mw.verify_request(headers, **_ctx())
+
+        assert result.authenticated is False
+        assert err["status"] == 503
+        # The nonce survives, so a well-behaved caller can retry.
+        assert cache.add(replay_key(str(agent.did), AUDIENCE, b"x" * 16), 60) is True
+
+    def test_timeout_aware_replay_cache_receives_the_remaining_budget(self):
+        agent = _make_identity()
+        credential = _credential(agent)
+        observed: list[float] = []
+
+        class _TimeoutAwareCache:
+            def add(self, key, ttl_seconds, *, timeout_seconds=None):
+                observed.append(timeout_seconds)
+                return True
+
+        mw = TrustMiddleware(
+            config=TrustConfig(audience=AUDIENCE, io_timeout_seconds=3.0),
+            peer_resolver=lambda did: credential,
+            replay_cache=_TimeoutAwareCache(),
+        )
+
+        result, err = mw.verify_request(_signed_headers(agent), **_ctx())
+
+        assert result.authenticated is True, err
+        assert observed and 0 < observed[0] <= 3.0
+
+    def test_replay_cache_timeout_is_503_not_401(self):
+        agent = _make_identity()
+        credential = _credential(agent)
+
+        class _StalledCache:
+            def add(self, key, ttl_seconds, *, timeout_seconds=None):
+                raise TimeoutError("replay store did not answer")
+
+        mw = TrustMiddleware(
+            config=TrustConfig(audience=AUDIENCE),
+            peer_resolver=lambda did: credential,
+            replay_cache=_StalledCache(),
+        )
+
+        result, err = mw.verify_request(_signed_headers(agent), **_ctx())
+
+        assert result.authenticated is False
+        assert err["status"] == 503
+
+    def test_io_timeout_must_be_positive(self):
+        with pytest.raises(ValueError, match="io_timeout_seconds"):
+            TrustConfig(audience=AUDIENCE, io_timeout_seconds=0)
 
 
 class TestReplayKeyNamespacing:
@@ -963,7 +1275,7 @@ class TestDenialTelemetry:
         agent = _make_identity()
         mw = _middleware(_registry(agent))
         headers = _signed_headers(agent)
-        headers["X-Agent-DID"] = "did:mesh:deadbeefdeadbeefdeadbeefdeadbeef"
+        headers["X-Agent-DID"] = "did:mesh:" + "ab" * 16
 
         with caplog.at_level("WARNING", logger=_http.__name__):
             mw.verify_request(headers, **_ctx())
@@ -1258,21 +1570,18 @@ class TestFastAPIDependency:
     """Tests for FastAPI integration with TrustMiddleware."""
 
     def _app(self, middleware: TrustMiddleware):
-        from fastapi import Depends, FastAPI, Request
+        from fastapi import Depends, FastAPI
 
         from agentmesh.integrations.http_middleware import (
             _error_status,
-            fastapi_trust_required,
+            install_fastapi_trust,
         )
 
         app = FastAPI()
-        dependency = fastapi_trust_required(middleware)
-
-        async def trust_dep(request: Request):
-            return await dependency(request)
+        trust = install_fastapi_trust(app, middleware)
 
         @app.post("/protected")
-        async def protected(result=Depends(trust_dep)):
+        async def protected(result=Depends(trust)):
             return {"ok": True, "peer_did": result.peer_did}
 
         assert callable(_error_status)
@@ -1337,28 +1646,132 @@ class TestFastAPIDependency:
         assert resp.status_code == 401
 
     def test_trust_optional_admits_anonymous_but_marks_it(self):
-        from fastapi import Depends, FastAPI, Request
+        from fastapi import Depends, FastAPI
         from starlette.testclient import TestClient
 
-        from agentmesh.integrations.http_middleware import fastapi_trust_optional
+        from agentmesh.integrations.http_middleware import install_fastapi_trust
 
         mw = _middleware(
             _registry(),
             TrustConfig(audience=AUDIENCE, permissive_mode=True, required_trust_score=0.0),
         )
         app = FastAPI()
-        dependency = fastapi_trust_optional(mw)
-
-        async def trust_dep(request: Request):
-            return await dependency(request)
+        trust = install_fastapi_trust(app, mw, optional=True)
 
         @app.post("/open")
-        async def open_route(result=Depends(trust_dep)):
+        async def open_route(result=Depends(trust)):
             return {"authenticated": result.authenticated, "did": result.peer_did}
 
         resp = TestClient(app).post("/open")
         assert resp.status_code == 200
         assert resp.json() == {"authenticated": False, "did": ""}
+
+    def test_dependency_is_usable_directly_with_depends(self):
+        """``Depends(install_fastapi_trust(...))`` must not need a wrapper.
+
+        This module uses ``from __future__ import annotations`` and imports
+        ``fastapi`` lazily, so the dependency's ``request: Request`` annotation
+        is the string ``"Request"`` and ``Request`` is absent from the module
+        globals FastAPI resolves against. Left alone, FastAPI silently treats
+        ``request`` as a *query parameter* and every call fails with 422 —
+        including correctly signed ones. Hand-wrapping the dependency in the
+        caller's own annotated function hides the defect, so this test uses the
+        dependency exactly as the docs tell people to.
+        """
+        import inspect
+
+        from fastapi import Depends, FastAPI, Request
+        from starlette.testclient import TestClient
+
+        from agentmesh.integrations.http_middleware import install_fastapi_trust
+
+        agent = _make_identity()
+        mw = _middleware(_registry(agent))
+        app = FastAPI()
+        trust = install_fastapi_trust(app, mw)
+
+        assert inspect.signature(trust).parameters["request"].annotation is Request
+
+        @app.post("/direct")
+        async def direct(result=Depends(trust)):
+            return {"did": result.peer_did}
+
+        client = TestClient(app)
+        assert client.post("/direct").status_code == 401  # not 422
+
+        headers = _signed_headers(
+            agent, method="POST", request_target="/direct",
+            body=b'{"a":1}', content_type="application/json",
+        )
+        resp = client.post("/direct", headers=headers, content=b'{"a":1}')
+        assert resp.status_code == 200, resp.json()
+        assert resp.json() == {"did": str(agent.did)}
+
+    def test_dependency_without_the_body_guard_fails_closed(self):
+        """The dependency cannot bound a declared body, so it must refuse to try.
+
+        FastAPI reads a declared body in ``get_request_handler`` before it
+        solves dependencies. Silently authenticating without the ASGI guard
+        would leave an unauthenticated caller able to make the server buffer an
+        unbounded body, so a missing guard is a 500, not a pass.
+        """
+        from fastapi import Depends, FastAPI, Request
+        from starlette.testclient import TestClient
+
+        from agentmesh.integrations.http_middleware import fastapi_trust_required
+
+        agent = _make_identity()
+        app = FastAPI()
+        dependency = fastapi_trust_required(_middleware(_registry(agent)))
+
+        async def trust_dep(request: Request):
+            return await dependency(request)
+
+        @app.post("/protected")
+        async def protected(result=Depends(trust_dep)):
+            return {"ok": True}
+
+        headers = _signed_headers(
+            agent, method="POST", request_target="/protected",
+            body=b'{"a":1}', content_type="application/json",
+        )
+        resp = TestClient(app).post("/protected", headers=headers, content=b'{"a":1}')
+
+        assert resp.status_code == 500
+        assert "SignedBodyLimitMiddleware" in resp.json()["detail"]["reason"]
+
+    def test_installer_bounds_declared_body_routes(self):
+        """install_fastapi_trust must wire the guard, not just the dependency."""
+        from fastapi import Depends, FastAPI, Request
+        from pydantic import BaseModel
+        from starlette.testclient import TestClient
+
+        from agentmesh.integrations.http_middleware import install_fastapi_trust
+
+        agent = _make_identity()
+        mw = _middleware(
+            _registry(agent),
+            TrustConfig(audience=AUDIENCE, max_signed_body_bytes=64),
+        )
+        app = FastAPI()
+        dependency = install_fastapi_trust(app, mw)
+
+        class Payload(BaseModel):
+            blob: str
+
+        async def trust_dep(request: Request):
+            return await dependency(request)
+
+        @app.post("/declared")
+        async def declared(payload: Payload, result=Depends(trust_dep)):
+            return {"ok": True}
+
+        resp = TestClient(app).post(
+            "/declared",
+            headers={"X-Agent-DID": str(agent.did)},
+            content=b'{"blob":"' + b"x" * 100_000 + b'"}',
+        )
+        assert resp.status_code == 413
 
     def test_oversized_body_is_rejected_without_buffering(self):
         """M-1 regression: `await request.body()` buffers without bound."""
@@ -1376,35 +1789,6 @@ class TestFastAPIDependency:
             content=b"x" * 100_000,
         )
         assert resp.status_code == 413
-
-    def test_documented_add_middleware_snippet_actually_works(self):
-        """The docs' install snippet is the only body bound for declared-body routes.
-
-        A wrong kwarg there fails at app build, so it is worth executing rather
-        than trusting. Also guards against future doc drift.
-        """
-        import inspect
-        import pathlib
-        import re
-
-        from fastapi import FastAPI
-
-        from agentmesh.integrations import SignedBodyLimitMiddleware
-
-        doc = pathlib.Path(__file__).parent.parent / "docs/integrations/http-middleware.md"
-        kwargs = re.findall(
-            r"add_middleware\(\s*SignedBodyLimitMiddleware\s*,\s*(\w+)\s*=", doc.read_text()
-        )
-        assert kwargs, "the docs must show how to install the ASGI body guard"
-
-        params = inspect.signature(SignedBodyLimitMiddleware.__init__).parameters
-        for kwarg in kwargs:
-            assert kwarg in params, f"docs pass {kwarg}=, which is not a constructor parameter"
-
-        # Starlette instantiates it exactly this way; prove it builds.
-        app = FastAPI()
-        app.add_middleware(SignedBodyLimitMiddleware, **{kwargs[0]: 2_621_440})
-        app.build_middleware_stack()
 
     def test_asgi_middleware_bounds_routes_that_declare_a_body(self):
         """A dependency runs after FastAPI has already buffered a declared body.
@@ -1525,12 +1909,12 @@ class TestFastAPIDependency:
         from fastapi import Depends, FastAPI, Request
         from starlette.testclient import TestClient
 
-        from agentmesh.integrations.http_middleware import fastapi_trust_required
+        from agentmesh.integrations.http_middleware import install_fastapi_trust
 
         agent = _make_identity()
         mw = _middleware(_registry(agent))
         app = FastAPI()
-        dependency = fastapi_trust_required(mw)
+        dependency = install_fastapi_trust(app, mw)
 
         async def trust_dep(request: Request):
             return await dependency(request)
@@ -1580,6 +1964,7 @@ class TestFastAPIDependency:
             ],
             "client": ("127.0.0.1", 5000),
             "server": ("testserver", 80),
+            BODY_LIMIT_SCOPE_KEY: 2_621_440,
         }
 
         async def receive():
@@ -1619,6 +2004,7 @@ class TestFastAPIDependency:
             "headers": [(b"x-agent-did", str(agent.did).encode("latin-1"))],
             "client": ("127.0.0.1", 5000),
             "server": ("testserver", 80),
+            BODY_LIMIT_SCOPE_KEY: 2_621_440,
         }
 
         async def receive():
@@ -1668,6 +2054,7 @@ class TestFastAPIDependency:
             "root_path": "", "scheme": "http",
             "headers": [(b"x-agent-did", str(agent.did).encode("latin-1"))],
             "client": ("127.0.0.1", 5000), "server": ("testserver", 80),
+            BODY_LIMIT_SCOPE_KEY: 2_621_440,
         }
 
         async def receive():
@@ -1702,6 +2089,7 @@ class TestFastAPIDependency:
                 "path": "/protected", "raw_path": b"/protected", "query_string": b"",
                 "root_path": "", "scheme": "http", "headers": [],
                 "client": ("127.0.0.1", 5000), "server": ("testserver", 80),
+                BODY_LIMIT_SCOPE_KEY: 2_621_440,
             }
 
         async def receive():

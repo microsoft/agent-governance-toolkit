@@ -600,8 +600,8 @@ from agentmesh.integrations.http_middleware import (
     TrustConfig,
     TrustMiddleware,
     VerificationResult,
-    fastapi_trust_required,
     flask_trust_required,
+    install_fastapi_trust,
 )
 from agentmesh.integrations.request_auth import build_request_signature_payload
 
@@ -625,7 +625,8 @@ def _auth_headers(signer, *, target="/x", method="GET", body=b"", audience=_AUDI
     nonce = _b64.urlsafe_b64encode(_secrets.token_bytes(16)).decode().rstrip("=")
     payload = build_request_signature_payload(
         agent_did=str(signer.did), audience=audience, timestamp=stamp, nonce=nonce,
-        method=method, request_target=target, body=body, content_type="",
+        method=method, request_target=target, target_mode="raw", body=body,
+        signed_headers={},
     )
     return {
         "X-Agent-DID": str(signer.did),
@@ -635,7 +636,11 @@ def _auth_headers(signer, *, target="/x", method="GET", body=b"", audience=_AUDI
     }
 
 
-_CTX = {"method": "GET", "request_target": "/x", "body": b"", "content_type": ""}
+_CTX = {
+    "method": "GET",
+    "request_target": "/x",
+    "body": b"",
+}
 
 
 class TestTrustMiddleware:
@@ -785,19 +790,16 @@ class TestFlaskTrustRequired:
 
 
 class TestFastapiTrustRequired:
-    """Tests for fastapi_trust_required against a real ASGI request."""
+    """Tests for the FastAPI dependency against a real ASGI request."""
 
     def _client(self, mw):
         pytest.importorskip("fastapi")
         pytest.importorskip("httpx")
-        from fastapi import Depends, FastAPI, Request
+        from fastapi import Depends, FastAPI
         from starlette.testclient import TestClient
 
         app = FastAPI()
-        dependency = fastapi_trust_required(mw)
-
-        async def dep(request: Request):
-            return await dependency(request)
+        dep = install_fastapi_trust(app, mw)
 
         @app.get("/x")
         async def view(result=Depends(dep)):

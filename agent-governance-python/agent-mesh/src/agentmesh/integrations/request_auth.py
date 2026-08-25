@@ -4,14 +4,16 @@
 
 This module is framework-agnostic and imports only the standard library, so the
 Django, Flask, and FastAPI integrations all authenticate requests against the
-*same* signed envelope. It owns four things:
+*same* signed envelope. It owns five things:
 
 * :func:`build_request_signature_payload` — the canonical bytes an agent signs.
+* :func:`asgi_raw_target` / :func:`wsgi_raw_target` — recovery of the undecoded
+  request target the signature binds.
 * :func:`sanitize_did` — bounds untrusted DID input before it is resolved or logged.
 * :class:`ReplayCache` — the atomic single-use nonce interface.
 * :class:`InMemoryReplayCache` — a bounded, single-process implementation.
 
-Note that importing it still initialises the ``agentmesh`` package; it is a
+Note that importing it still initializes the ``agentmesh`` package; it is a
 stdlib-only *leaf*, not an isolated distribution.
 
 Security note
@@ -31,10 +33,21 @@ import hashlib
 import json
 import threading
 import time
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
-REQUEST_SIGNATURE_VERSION = "agentmesh-http-request-v1"
+REQUEST_SIGNATURE_VERSION = "agentmesh-http-request-v2"
+
+#: How the signed ``request_target`` was derived.
+#:
+#: ``"raw"`` is the origin-form target exactly as it appeared on the wire, so
+#: ``/files/a%2Fb`` and ``/files/a/b`` sign different bytes. ``"decoded"`` is the
+#: percent-decoded path the framework routes on; the two spellings collapse to
+#: one value there, so a captured signature covers both. The mode is part of the
+#: signed envelope, which means a caller cannot silently downgrade a server that
+#: requires ``"raw"`` — the bytes simply fail to verify.
+RequestTargetMode = Literal["raw", "decoded"]
 
 # Ed25519 signatures are always 64 bytes; anything else is malformed.
 _ED25519_SIGNATURE_BYTES = 64
@@ -55,7 +68,7 @@ _PURGE_INTERVAL_SECONDS = 60.0
 
 
 def sanitize_did(value: str) -> str | None:
-    """Return ``value`` if it is a plausible, safely loggable DID, else ``None``.
+    """Return ``value`` if it is a plausible DID that is safe to log, else ``None``.
 
     This bounds untrusted header input *before* it reaches a resolver or a log
     sink. It deliberately does not pin a single DID method — resolvers are
@@ -103,27 +116,123 @@ def build_request_signature_payload(
     nonce: str,
     method: str,
     request_target: str,
+    target_mode: RequestTargetMode,
     body: bytes,
-    content_type: str = "",
+    signed_headers: Mapping[str, str],
 ) -> bytes:
     """Build the canonical bytes covered by an AgentMesh HTTP signature.
 
     The envelope binds the caller identity, the intended audience, freshness
     values, and the full HTTP request so a captured signature cannot be
-    replayed against a different service, route, method, or body.
+    replayed against a different service, route, method, body, or header set.
+
+    ``request_target`` must match ``target_mode``: the origin-form target as
+    sent on the wire for ``"raw"``, or the framework-decoded path (plus query)
+    for ``"decoded"``. The mode travels inside the signed bytes so the two forms
+    can never be confused for one another.
+
+    ``signed_headers`` is the set of request headers the *server* requires to be
+    covered, keyed by lowercase name. Only headers present on the request are
+    included, so adding or removing one of them changes the envelope and
+    invalidates the signature. The caller does not choose this set, which is
+    what stops an attacker from narrowing coverage to headers that do not
+    matter.
+
+    The envelope is serialised as canonical JSON — sorted keys, no insignificant
+    whitespace, ASCII-escaped — so no field value can be shifted into a
+    neighboring field the way a delimiter-joined string allows.
     """
-    envelope = {
+    envelope: dict[str, Any] = {
         "agent_did": agent_did,
         "audience": audience,
         "body_sha256": hashlib.sha256(body).hexdigest(),
-        "content_type": content_type,
         "method": method.upper(),
         "nonce": nonce,
         "request_target": request_target,
+        "signed_headers": {name.lower(): value for name, value in signed_headers.items()},
+        "target_mode": target_mode,
         "timestamp": timestamp,
     }
     canonical_json = json.dumps(envelope, sort_keys=True, separators=(",", ":"))
     return f"{REQUEST_SIGNATURE_VERSION}\n{canonical_json}".encode()
+
+
+def select_signed_headers(
+    names: Sequence[str],
+    get_header: Callable[[str], str | None],
+) -> dict[str, str]:
+    """Collect the header values covered by the signature, keyed by lowercase name.
+
+    Headers absent from the request are omitted rather than signed as an empty
+    string, so "header not sent" and "header sent empty" are distinguishable
+    inside the envelope.
+    """
+    selected: dict[str, str] = {}
+    for name in names:
+        key = name.lower()
+        value = get_header(key)
+        if value is not None:
+            selected[key] = value
+    return selected
+
+
+def origin_form_target(target: str) -> str:
+    """Reduce a request target to origin form (``/path?query``).
+
+    A proxy may forward an absolute-form target (``https://host/path``). Signing
+    it verbatim would make the same request sign differently depending on the
+    hop it arrived through, so the scheme and authority are dropped. The
+    audience field already binds the request to this service.
+    """
+    for scheme in ("http://", "https://"):
+        if target.startswith(scheme):
+            slash = target.find("/", len(scheme))
+            return target[slash:] if slash != -1 else "/"
+    return target
+
+
+def asgi_raw_target(scope: Mapping[str, Any]) -> str | None:
+    """Return the undecoded origin-form target from an ASGI scope, if available.
+
+    ``raw_path`` is optional in the ASGI spec, but uvicorn, hypercorn, daphne,
+    and Starlette's own test client all set it. ``None`` means this server
+    cannot prove what was actually on the wire, and the caller must decide
+    whether to fail closed.
+    """
+    raw_path = scope.get("raw_path")
+    if isinstance(raw_path, (bytes, bytearray)):
+        target = bytes(raw_path).decode("latin-1")
+    elif isinstance(raw_path, str) and raw_path:
+        target = raw_path
+    else:
+        return None
+
+    query = scope.get("query_string")
+    if isinstance(query, (bytes, bytearray)) and query:
+        target = f"{target}?{bytes(query).decode('latin-1')}"
+    elif isinstance(query, str) and query:
+        target = f"{target}?{query}"
+    return origin_form_target(target)
+
+
+def wsgi_raw_target(environ: Mapping[str, Any]) -> str | None:
+    """Return the undecoded origin-form target from a WSGI environ, if available.
+
+    ``PATH_INFO`` is percent-decoded by the WSGI server, so it cannot serve as
+    the signed target. ``RAW_URI`` (gunicorn, werkzeug) and ``REQUEST_URI``
+    (uWSGI, mod_wsgi) carry the original. Servers that expose neither — Django's
+    ``runserver`` and ``RequestFactory`` among them — return ``None``.
+    """
+    for key in ("RAW_URI", "REQUEST_URI"):
+        value = environ.get(key)
+        if isinstance(value, str) and value:
+            return origin_form_target(value)
+    return None
+
+
+def decoded_target(path: str, query_string: str) -> str:
+    """Build the framework-decoded request target used by ``"decoded"`` mode."""
+    return f"{path}?{query_string}" if query_string else path
 
 
 def utcnow() -> datetime:
@@ -212,12 +321,21 @@ class ReplayCache(Protocol):
     ``add`` in multi-process deployments.
     """
 
-    def add(self, key: str, ttl_seconds: int) -> bool:
+    def add(self, key: str, ttl_seconds: int, *, timeout_seconds: float | None = None) -> bool:
         """Insert ``key`` if absent. Return ``True`` only for the first caller.
 
         Implementations that cannot accept the key because they are at capacity
         should raise :class:`ReplayCacheFull` rather than returning ``False``,
         so callers can distinguish exhaustion from a genuine replay.
+
+        ``timeout_seconds`` is the remaining share of the caller's request
+        budget. An implementation that performs network I/O MUST bound that I/O
+        by it — for example, a Redis client's socket timeout — and raise on
+        expiry. The middleware runs this call synchronously and cannot interrupt
+        it, so a store that ignores the deadline can still stall a request for
+        as long as its own transport allows. Implementations that never block
+        may ignore the argument. Accepting it is optional: the middleware
+        detects support once, at construction, and omits it otherwise.
         """
         ...
 
@@ -245,7 +363,10 @@ class InMemoryReplayCache:
         self._lock = threading.Lock()
         self._next_purge = 0.0
 
-    def add(self, key: str, ttl_seconds: int) -> bool:
+    def add(self, key: str, ttl_seconds: int, *, timeout_seconds: float | None = None) -> bool:
+        # This cache is a bounded dict behind a lock: it performs no I/O, so it
+        # always finishes well inside any deadline and the budget is unused.
+        del timeout_seconds
         if ttl_seconds <= 0:
             return False
         now = time.monotonic()
@@ -281,13 +402,19 @@ __all__ = [
     "InMemoryReplayCache",
     "ReplayCache",
     "ReplayCacheFull",
+    "RequestTargetMode",
+    "asgi_raw_target",
     "build_request_signature_payload",
     "capability_satisfied",
     "decode_nonce",
     "decode_public_key",
     "decode_signature",
+    "decoded_target",
+    "origin_form_target",
     "parse_timestamp",
     "replay_key",
     "sanitize_did",
+    "select_signed_headers",
     "utcnow",
+    "wsgi_raw_target",
 ]
