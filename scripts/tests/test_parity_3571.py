@@ -6,15 +6,18 @@
 Verifies that scripts/contributor_check.py and scripts/credential_audit.py
 have full retry behaviour (URLError + 5xx) and that both the scripts path and
 the agent_compliance.cli package path expose the same key functions and
-produce equivalent results.  This file only imports the scripts modules (no
-package install required).
+produce equivalent results. Package-parity checks require agent_compliance to
+be installed, as it is in the CI job that runs this file.
 """
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 import os
 import sys
+import textwrap
 import time
 from datetime import datetime, timedelta, timezone
 from io import StringIO
@@ -250,6 +253,23 @@ class TestContributorCheckHardening:
             signals = cc.check_feature_overlap("user", "org/repo")
         assert not any(s.name == "feature_overlap" for s in signals)
 
+    def test_future_account_timestamp_is_high_and_age_is_clamped(self):
+        user = {
+            "created_at": (
+                datetime.now(timezone.utc) + timedelta(days=2)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "followers": 1,
+            "following": 0,
+            "public_repos": 21,
+        }
+
+        signals = cc.check_account_shape(user)
+
+        future = next(signal for signal in signals if signal.name == "future_account_timestamp")
+        assert future.severity == "HIGH"
+        burst = next(signal for signal in signals if signal.name == "new_account_burst")
+        assert burst.detail == "Account is 0 days old with 21 repos"
+
 
 # ===========================================================================
 # 4. Function-surface parity: scripts vs agent_compliance.cli package
@@ -293,18 +313,14 @@ class TestFunctionSurfaceParity:
         assert missing == [], f"scripts/credential_audit.py missing: {missing}"
 
     def test_cli_package_contributor_check_has_required_symbols(self):
-        try:
-            import agent_compliance.cli.contributor_check as cli_cc
-        except ImportError:
-            pytest.skip("agent_compliance package not installed")
+        import agent_compliance.cli.contributor_check as cli_cc
+
         missing = [sym for sym in self.REQUIRED_CC if not hasattr(cli_cc, sym)]
         assert missing == [], f"agent_compliance.cli.contributor_check missing: {missing}"
 
     def test_cli_package_credential_audit_has_required_symbols(self):
-        try:
-            import agent_compliance.cli.credential_audit as cli_ca
-        except ImportError:
-            pytest.skip("agent_compliance package not installed")
+        import agent_compliance.cli.credential_audit as cli_ca
+
         missing = [sym for sym in self.REQUIRED_CA if not hasattr(cli_ca, sym)]
         assert missing == [], f"agent_compliance.cli.credential_audit missing: {missing}"
 
@@ -313,3 +329,14 @@ class TestFunctionSurfaceParity:
         assert cc._RETRY_MAX_ATTEMPTS == ca._RETRY_MAX_ATTEMPTS, (
             "Retry attempt count diverged between contributor_check and credential_audit"
         )
+
+    def test_check_account_shape_implementation_matches_package(self):
+        import agent_compliance.cli.contributor_check as cli_cc
+
+        def normalized_ast(function):
+            source = textwrap.dedent(inspect.getsource(function))
+            return ast.dump(ast.parse(source), include_attributes=False)
+
+        assert normalized_ast(cc.check_account_shape) == normalized_ast(
+            cli_cc.check_account_shape
+        ), "check_account_shape implementation drifted between scripts and package"

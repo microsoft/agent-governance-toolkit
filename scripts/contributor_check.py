@@ -189,7 +189,15 @@ def check_account_shape(user: dict) -> list[Signal]:
     signals: list[Signal] = []
 
     created = datetime.fromisoformat(user["created_at"].replace("Z", "+00:00"))
-    age_days = (datetime.now(timezone.utc) - created).days
+    age_days = max((datetime.now(timezone.utc) - created).days, 0)
+
+    # Future created_at (clock skew or tampered API response) is itself suspicious
+    if age_days == 0 and created > datetime.now(timezone.utc):
+        signals.append(Signal(
+            name="future_account_timestamp",
+            severity="HIGH",
+            detail=f"Account created_at is in the future: {user['created_at']}",
+        ))
 
     public_repos = user.get("public_repos", 0)
     followers = user.get("followers", 0)

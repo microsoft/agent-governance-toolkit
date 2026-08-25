@@ -105,6 +105,9 @@ jobs:
               - 'agent-governance-python/agent-sre/**'
             pkg-agent-compliance:
               - 'agent-governance-python/agent-compliance/**'
+              - 'scripts/contributor_check.py'
+              - 'scripts/credential_audit.py'
+              - 'scripts/tests/test_parity_3571.py'
             pkg-agent-runtime:
               - 'agent-governance-python/agent-runtime/**'
             pkg-agent-lightning:
@@ -428,6 +431,9 @@ jobs:
             echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
           fi
           pip install --no-cache-dir pytest-cov==7.1.0  # Scorecard: version-pinned
+      - name: Contributor checker script/package parity
+        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-compliance'
+        run: python -m pytest scripts/tests/test_parity_3571.py -q --tb=short
       - name: Conformance (agent-os parity + adapter contract)
         if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
         working-directory: agent-governance-python/agent-os
