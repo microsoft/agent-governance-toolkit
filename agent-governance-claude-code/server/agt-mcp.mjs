@@ -82,8 +82,8 @@ export async function handleJsonRpcRequest(state, request) {
 }
 
 export function encodeJsonRpcMessage(message) {
-  const body = JSON.stringify(message);
-  return `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
+  // MCP stdio transport: newline-delimited JSON, not LSP Content-Length framing.
+  return `${JSON.stringify(message)}\n`;
 }
 
 async function callTool(state, params) {
