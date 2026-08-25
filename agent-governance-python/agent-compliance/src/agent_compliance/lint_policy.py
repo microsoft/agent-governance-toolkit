@@ -11,9 +11,8 @@ Handles two file kinds:
 
 * **Governance policy YAML** — identified by a top-level ``rules`` list
   *without* ``agent_control_specification_version``. Validated for
-  impossible conditions: an ``in`` or ``not_in`` operator whose ``value``
-  list is empty can never match any context, so every rule containing one
-  is a silent no-op that masks the configured default action.
+  unsafe empty membership conditions: ``in []`` never matches, while
+  ``not_in []`` matches every resolved field value.
 """
 
 from __future__ import annotations
@@ -23,10 +22,28 @@ from pathlib import Path
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Membership operators whose value list must be non-empty to be satisfiable
+# Condition operators supported by the in-repo governance evaluators
 # ---------------------------------------------------------------------------
 
 _MEMBERSHIP_OPERATORS: frozenset[str] = frozenset({"in", "not_in"})
+_KNOWN_CONDITION_OPERATORS: frozenset[str] = frozenset(
+    {
+        "contains",
+        "endswith",
+        "eq",
+        "exists",
+        "gt",
+        "gte",
+        "in",
+        "lt",
+        "lte",
+        "matches",
+        "ne",
+        "not_in",
+        "regex",
+        "startswith",
+    }
+)
 
 
 @dataclass
@@ -110,14 +127,14 @@ def _lint_governance_conditions(
     filepath: str,
     result: LintResult,
 ) -> None:
-    """Check a governance policy document for impossible conditions.
+    """Check a governance policy document for invalid or unsafe conditions.
 
     Currently detects:
 
-    * ``in`` / ``not_in`` operator with an empty ``value`` list.
-      Such a condition can never match any context value, so the rule is
-      a silent no-op: the evaluator falls through to the default action
-      without logging a match or a miss against that rule.
+    * An operator unsupported by every in-repo governance evaluator.
+    * ``in`` with an empty ``value`` list, which never matches.
+    * ``not_in`` with an empty ``value`` list, which matches every resolved
+      field value and therefore imposes no restriction on the rule.
 
     The ``field`` typo case (e.g. ``toolname`` instead of ``tool_name``) is
     context-dependent and cannot be checked without a schema that enumerates
@@ -134,22 +151,43 @@ def _lint_governance_conditions(
             continue
 
         rule_name = rule.get("name", f"rule[{idx}]")
+        action = rule.get("action", "configured")
 
         for cond in _conditions_from_rule(rule):
             operator = cond.get("operator", "")
+            if (
+                not isinstance(operator, str)
+                or operator not in _KNOWN_CONDITION_OPERATORS
+            ):
+                result.messages.append(
+                    LintMessage(
+                        "error",
+                        f"Rule '{rule_name}': unknown operator {operator!r}",
+                        filepath,
+                        1,
+                    )
+                )
+                continue
+
             if operator not in _MEMBERSHIP_OPERATORS:
                 continue
 
             value = cond.get("value")
-            if value is None or (isinstance(value, list) and len(value) == 0):
+            if isinstance(value, list) and len(value) == 0:
                 field_hint = cond.get("field", "")
                 field_clause = f" on field '{field_hint}'" if field_hint else ""
+                if operator == "in":
+                    diagnosis = "condition never matches, so this rule can never apply"
+                else:
+                    diagnosis = (
+                        "condition matches every resolved field value; "
+                        f"it does not constrain when the '{action}' action applies"
+                    )
                 result.messages.append(
                     LintMessage(
                         "error",
                         f"Rule '{rule_name}': operator '{operator}'{field_clause} "
-                        f"has an empty value list — condition can never match; "
-                        f"the evaluator will always apply the default action instead",
+                        f"has an empty value list — {diagnosis}",
                         filepath,
                         1,
                     )
@@ -298,6 +336,14 @@ def lint_file(path: str | Path) -> LintResult:
         return result
 
     if _is_governance_policy(data):
+        result.messages.append(
+            LintMessage(
+                "warning",
+                "Governance policy is missing agent_control_specification_version",
+                str(manifest_path),
+                1,
+            )
+        )
         _lint_governance_conditions(data, str(manifest_path), result)
         return result
 

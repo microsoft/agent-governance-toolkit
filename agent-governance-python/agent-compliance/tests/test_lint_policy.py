@@ -75,8 +75,8 @@ def test_json_manifest_passes(tmp_path: Path) -> None:
     assert lint_file(path).passed
 
 
-def test_governance_policy_with_empty_rules_passes(tmp_path: Path) -> None:
-    """A governance YAML with an empty rule list has no impossible conditions."""
+def test_governance_policy_without_acs_version_warns(tmp_path: Path) -> None:
+    """A legacy governance document keeps its missing-version diagnostic."""
     path = _write_governance_policy(
         tmp_path / "policy.yaml",
         "version: '1.0'\nname: old\nrules: []\n",
@@ -85,6 +85,10 @@ def test_governance_policy_with_empty_rules_passes(tmp_path: Path) -> None:
     result = lint_file(path)
 
     assert result.passed
+    assert any(
+        "agent_control_specification_version" in warning.message
+        for warning in result.warnings
+    )
 
 
 def test_missing_bundle_is_rejected(tmp_path: Path) -> None:
@@ -165,10 +169,11 @@ def test_governance_in_empty_value_is_error(tmp_path: Path) -> None:
     assert "block" in errors[0].message
     assert "in" in errors[0].message
     assert "empty" in errors[0].message
+    assert "rule can never apply" in errors[0].message
 
 
 def test_governance_not_in_empty_value_is_error(tmp_path: Path) -> None:
-    """A 'not_in' operator with an empty value list can never match — error."""
+    """An empty 'not_in' list matches every resolved field value."""
     path = _write_governance_policy(
         tmp_path / "policy.yaml",
         "version: '1.0'\nname: t\nrules:\n"
@@ -183,7 +188,37 @@ def test_governance_not_in_empty_value_is_error(tmp_path: Path) -> None:
     result = lint_file(path)
 
     assert not result.passed
-    assert any("not_in" in m.message and "empty" in m.message for m in result.errors)
+    assert any(
+        "not_in" in error.message
+        and "empty" in error.message
+        and "condition matches every resolved field value" in error.message
+        and "does not constrain when the 'deny' action applies" in error.message
+        for error in result.errors
+    )
+
+
+@pytest.mark.parametrize("operator", ["in", "not_in"])
+@pytest.mark.parametrize("value_line", ["      value: null\n", ""])
+def test_governance_null_membership_value_is_not_an_empty_list_error(
+    tmp_path: Path,
+    operator: str,
+    value_line: str,
+) -> None:
+    """A missing/null value must not receive the empty-list diagnosis."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: null-value\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: tool_name\n"
+        f"      operator: {operator}\n"
+        f"{value_line}",
+    )
+
+    result = lint_file(path)
+
+    assert all("empty value list" not in message.message for message in result.messages)
 
 
 def test_governance_in_nonempty_value_passes(tmp_path: Path) -> None:
@@ -224,6 +259,32 @@ def test_governance_conditions_list_empty_in_is_error(tmp_path: Path) -> None:
     assert any("multi-cond" in m.message for m in result.errors)
 
 
+def test_governance_conditions_list_empty_not_in_is_composition_neutral(
+    tmp_path: Path,
+) -> None:
+    """The diagnostic does not assume whether plural conditions use AND or OR."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: multi-cond\n"
+        "    action: allow\n"
+        "    conditions:\n"
+        "      - field: tool_name\n"
+        "        operator: not_in\n"
+        "        value: []\n"
+        "      - field: environment\n"
+        "        operator: eq\n"
+        "        value: production\n",
+    )
+
+    result = lint_file(path)
+
+    assert any(
+        "does not constrain when the 'allow' action applies" in error.message
+        for error in result.errors
+    )
+
+
 def test_governance_non_membership_operator_empty_value_passes(tmp_path: Path) -> None:
     """Non-membership operators are not subject to the empty-value check."""
     path = _write_governance_policy(
@@ -240,6 +301,28 @@ def test_governance_non_membership_operator_empty_value_passes(tmp_path: Path) -
     result = lint_file(path)
 
     assert result.passed
+
+
+def test_governance_unknown_operator_is_error(tmp_path: Path) -> None:
+    """An operator unsupported by every in-repo evaluator is rejected."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: typo\n"
+        "    action: deny\n"
+        "    condition:\n"
+        "      field: trust_score\n"
+        "      operator: greater_than\n"
+        "      value: 700\n",
+    )
+
+    result = lint_file(path)
+
+    assert not result.passed
+    assert any(
+        "greater_than" in error.message and "unknown operator" in error.message
+        for error in result.errors
+    )
 
 
 def test_governance_multiple_rules_independent_errors(tmp_path: Path) -> None:
