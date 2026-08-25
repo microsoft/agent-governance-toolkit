@@ -74,8 +74,7 @@ def _run_check(
     Retries the subprocess call with exponential backoff before giving up.
     A single transient failure (a GitHub API blip inside the child script, a
     momentary timeout) no longer collapses straight to UNKNOWN: UNKNOWN now
-    means "checked and could not determine", not "one call failed". See
-    agentrust-io/.github#27.
+    means "checked and could not determine", not "one call failed".
     """
     last_exc: Exception | None = None
     for attempt in range(max_attempts):
