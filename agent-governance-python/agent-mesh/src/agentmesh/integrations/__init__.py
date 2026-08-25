@@ -18,7 +18,20 @@ from .crewai import TrustAwareAgent, TrustAwareCrew
 from .langflow import TrustGatedFlow, TrustVerificationComponent, IdentityComponent
 from .flowise import TrustGatedFlowiseClient, FlowiseNodeIdentity, FlowiseTrustPolicy
 from .haystack import TrustedPipeline, TrustGateComponent, TrustAgentComponent
-from .http_middleware import TrustMiddleware, TrustConfig
+from .http_middleware import (
+    PeerCredential,
+    SignedBodyLimitMiddleware,
+    TrustConfig,
+    TrustMiddleware,
+    VerificationResult,
+    registry_resolver,
+)
+from .request_auth import (
+    InMemoryReplayCache,
+    ReplayCache,
+    ReplayCacheFull,
+    build_request_signature_payload,
+)
 
 __all__ = [
     # AI Card (cross-protocol identity standard)
@@ -62,4 +75,13 @@ __all__ = [
     # HTTP Middleware
     "TrustMiddleware",
     "TrustConfig",
+    "PeerCredential",
+    "VerificationResult",
+    "registry_resolver",
+    "SignedBodyLimitMiddleware",
+    # Request authentication primitives
+    "build_request_signature_payload",
+    "InMemoryReplayCache",
+    "ReplayCache",
+    "ReplayCacheFull",
 ]

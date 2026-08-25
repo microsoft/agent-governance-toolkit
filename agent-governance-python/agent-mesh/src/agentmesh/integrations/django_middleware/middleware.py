@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import logging
 import math
 from collections.abc import Callable
@@ -28,7 +27,7 @@ from django.core.cache.backends.redis import RedisCache
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest, HttpResponse, JsonResponse
 
-from .request_auth import build_request_signature_payload
+from .request_auth import build_request_signature_payload, replay_key
 
 logger = logging.getLogger(__name__)
 
@@ -349,10 +348,9 @@ class AgentTrustMiddleware:
             math.ceil((timestamp - now).total_seconds() + replay_window),
         )
 
-        replay_key_material = agent_did.encode("utf-8") + b"\0" + nonce_bytes
-        replay_key = "agentmesh:request-nonce:" + hashlib.sha256(replay_key_material).hexdigest()
+        replay_cache_key = replay_key(agent_did, audience, nonce_bytes)
         try:
-            if not self._replay_cache.add(replay_key, True, timeout=replay_timeout):
+            if not self._replay_cache.add(replay_cache_key, True, timeout=replay_timeout):
                 logger.warning("Replay detected for agent %s", agent_did)
                 return 0
         except Exception:
