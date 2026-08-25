@@ -40,6 +40,14 @@ from agentmesh.integrations.request_auth import (
 )
 
 AUDIENCE = "tests.agentmesh.example"
+
+# Framework-dependent tests are skipped per class or per test, never at module
+# scope: a module-level importorskip would silently drop the bypass regressions
+# that need no framework at all.
+flask = pytest.mark.skipif(
+    importlib.util.find_spec("flask") is None, reason="Flask not installed"
+)
+
 TARGET = "/protected"
 BODY = b""
 # None means "no Content-Type header", which is what a real client sends on a
@@ -868,6 +876,7 @@ class TestRawRequestTarget:
         environ.pop("REQUEST_URI", None)
         return Request(environ)
 
+    @flask
     def test_flask_adapter_fails_closed_without_a_raw_target(self):
         """A server that cannot prove the wire target must not authenticate."""
         from agentmesh.integrations.http_middleware import _flask_verify
@@ -881,6 +890,7 @@ class TestRawRequestTarget:
         assert err["status"] == 500
         assert "REQUEST_URI" in err["reason"]
 
+    @flask
     def test_decoded_mode_is_an_explicit_opt_out(self):
         """Servers without a raw target can still run, but must say so."""
         from agentmesh.integrations.http_middleware import _flask_verify
@@ -1350,12 +1360,6 @@ class TestCapabilityMatching:
 # ---------------------------------------------------------------------------
 # Flask decorator tests (skipped if Flask not installed)
 # ---------------------------------------------------------------------------
-
-# Framework decorators are skipped per class, never at module scope: a
-# module-level importorskip would silently drop the bypass regressions above.
-flask = pytest.mark.skipif(
-    importlib.util.find_spec("flask") is None, reason="Flask not installed"
-)
 
 
 @flask

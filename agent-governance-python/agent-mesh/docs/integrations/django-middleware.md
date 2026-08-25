@@ -56,8 +56,9 @@ Every authenticated request requires these headers:
 | `X-Agent-Nonce` | Unique base64url value containing 16 to 64 random bytes |
 | `X-Agent-Signature` | Base64-encoded Ed25519 signature of the canonical request payload |
 
-Use `build_request_signature_payload` to produce the canonical bytes. The path must include the
-query string in its transmitted order, and `body` must contain the exact bytes sent on the wire.
+Use `build_request_signature_payload` to produce the canonical bytes. `request_target` must be the
+**undecoded** target exactly as it goes on the wire, including the query string in its transmitted
+order, and `body` must contain the exact bytes sent.
 
 ```python
 import base64
@@ -80,8 +81,9 @@ payload = build_request_signature_payload(
     nonce=nonce,
     method="POST",
     request_target="/v1/payments?mode=immediate",
+    target_mode="raw",
     body=body,
-    content_type=content_type,
+    signed_headers={"content-type": content_type},
 )
 signature = base64.b64encode(private_key.sign(payload)).decode("ascii")
 
@@ -94,9 +96,45 @@ headers = {
 }
 ```
 
-The signed envelope binds the DID, configured audience, timestamp, nonce, HTTP method, path and
-query, content type, and SHA-256 body digest. Changing any of these values invalidates the
-signature. A correctly signed nonce is accepted once and retained in the replay cache for the
-configured replay window. Cache errors fail closed.
+The signed envelope binds the DID, configured audience, timestamp, nonce, HTTP method, undecoded
+request target, target mode, covered request headers, and SHA-256 body digest. Changing any of
+these values invalidates the signature. A correctly signed nonce is accepted once and retained in
+the replay cache for the configured replay window. Cache errors fail closed with `503`.
+
+Only headers that are actually present are covered, so *removing* `Content-Type` invalidates the
+signature just as surely as changing it. The covered set is chosen by the server
+(`AGENTMESH_SIGNED_HEADERS`), never declared by the caller — a caller who could pick which headers
+are signed could simply decline to sign the ones that matter.
+
+### Undecoded request targets
+
+`AGENTMESH_REQUEST_TARGET_MODE` defaults to `"raw"`, which signs the target as sent. This requires
+a WSGI server that publishes it as `RAW_URI` or `REQUEST_URI` — gunicorn, uWSGI, and mod_wsgi all
+do. Django's `runserver` and `RequestFactory` do **not**, so the middleware returns `500` with an
+actionable message rather than silently verifying something weaker.
+
+For development, set:
+
+```python
+AGENTMESH_REQUEST_TARGET_MODE = "decoded"
+```
+
+`"decoded"` signs Django's percent-decoded `request.path`, which cannot distinguish `/files/a%2Fb`
+from `/files/a/b`. Both forms travel inside the signed bytes, so a signature produced in one mode
+is never accepted in the other.
+
+### Identity attributes on the request
+
+After the middleware runs, views can read:
+
+| Attribute | Meaning |
+|-----------|---------|
+| `request.agent_authenticated` | `True` only when a signature verified |
+| `request.agent_did` | Verified DID, or `None` |
+| `request.agent_trust_score` | Verified score, or `None` |
+
+Check `request.agent_authenticated` before acting on `request.agent_did`. Exempt views and exempt
+path prefixes verify nothing, so they set `agent_did` to `None` — the raw `X-Agent-DID` header is
+attacker-controlled and is never published to application code.
 
 Signatures over only the agent DID are not accepted.
