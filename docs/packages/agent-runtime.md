@@ -55,7 +55,8 @@ hv = Hypervisor()
 
 # Create a governed session
 session = hv.create_session(
-    config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL)
+    config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL),
+    creator_did="did:mesh:admin",
 )
 
 # Execute with privilege enforcement
