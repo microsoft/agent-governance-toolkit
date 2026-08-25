@@ -1,6 +1,6 @@
 ---
 title: OWASP Agentic Security Initiative Reference Architecture
-last_reviewed: 2026-07-11
+last_reviewed: 2026-08-25
 owner: agt-maintainers
 ---
 
@@ -12,7 +12,7 @@ owner: agt-maintainers
 > **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
 
 
-> **Version:** 1.1 · **Taxonomy:** OWASP Top 10 for Agentic Applications 2026 (ASI01–ASI10), plus an AGT traceability extension
+> **Version:** 1.2 · **Taxonomy:** OWASP Top 10 for Agentic Applications 2026 (ASI01–ASI10), plus an AGT traceability extension
 > **Scope:** Agent Governance Toolkit (AGT) mitigation patterns, code evidence, and gap analysis.
 
 ---
@@ -33,16 +33,16 @@ it is not an eleventh entry in the official OWASP list.
 | ASI01 | Agent Goal Hijack | ✅ Full | ACS input annotators and policy bindings |
 | ASI02 | Tool Misuse and Exploitation | ✅ Full | ACS tool catalog and `AgentControl.runTool` |
 | ASI03 | Identity and Privilege Abuse | ✅ Full | ACS labels, identity binding, and host RBAC |
-| ASI04 | Agentic Supply Chain | ⚠️ Partial | Policy YAML tool pinning; no SBOM |
-| ASI05 | Unexpected Code Execution | ✅ Full | Static reviewer detects pickle/eval |
-| ASI06 | Memory and Context Poisoning | ⚠️ Partial | Audit hash-chain; no memory sandbox |
+| ASI04 | Agentic Supply Chain | ⚠️ Partial | Tool pinning, marketplace signing; release SBOM only |
+| ASI05 | Unexpected Code Execution | ⚠️ Partial | Reviewer detects unsafe pickle; sandbox scanner blocks subprocess |
+| ASI06 | Memory and Context Poisoning | ⚠️ Partial | `MemoryGuard`, RAG governor, context-poisoning detector |
 | ASI07 | Insecure Inter-Agent Communication | ✅ Full | Trust-gate with DID verification |
 | ASI08 | Cascading Agent Failures | ✅ Full | Circuit breaker, rate limiter |
 | ASI09 | Human-Agent Trust Exploitation | ⚠️ Partial | Audit trail; no UI-level guardrails |
 | ASI10 | Rogue Agents | ✅ Full | `AgentBehaviorMonitor`, quarantine |
 | AGT extension | Agent Traceability | ✅ Full | Tamper-evident audit log (hash chain) |
 
-**Official ASI coverage: 7/10 Full, 3/10 Partial, 0 Gaps.**
+**Official ASI coverage: 6/10 Full, 4/10 Partial, 0 Gaps.**
 
 ---
 
@@ -130,14 +130,24 @@ hosts can audit transforms and approval decisions.
 **Risk:** Compromised plugins or sub-agents inject malicious behaviour.
 
 **AGT Mitigation:** Policy YAML `allowed_tools` pins the exact set of
-permitted tool IDs. The static reviewer detects hardcoded deny-lists (which
-attackers can reverse-engineer) and recommends externalised config.
+permitted tool IDs. The marketplace installer verifies Ed25519 signatures
+against a trusted-key registry before installing plugins, and
+`MCPSecurityScanner` fingerprints MCP tool definitions to detect
+post-registration mutation. The static reviewer detects hardcoded deny-lists
+(which attackers can reverse-engineer) and recommends externalised config.
+AGT's own release pipeline generates SBOMs for toolkit artifacts.
 
-**Known Gap:** No SBOM generation or dependency vulnerability scanning is
-built into AGT. Recommend integrating with GitHub Advanced Security /
-Dependabot for dependency-level supply-chain coverage.
+**Known Gap:** SBOM generation covers only AGT's own releases; nothing in the
+SDKs generates an SBOM/AIBOM for a governed application's runtime component
+set. Dependency vulnerability scanning is delegated to GitHub Advanced
+Security / Dependabot. Marketplace signing uses a local trusted-key
+dictionary with no revocation or transparency-log integration, and MCP tool
+fingerprints are trust-on-first-use.
 
 **Evidence:**
+- `agent-governance-python/agent-marketplace/src/agent_marketplace/installer.py` — Ed25519 signature verification
+- `agent-governance-python/agent-os/src/agent_os/mcp_security.py` — MCP tool fingerprinting
+- `.github/workflows/sbom.yml` — release SBOM generation
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `hardcoded-security-denylist`
 - Policy YAML schema: `allowed_tools`, `blocked_tools`
 
@@ -150,13 +160,24 @@ Dependabot for dependency-level supply-chain coverage.
 **Risk:** Agent-driven code paths achieve arbitrary code execution.
 
 **AGT Mitigation:** The static reviewer detects `pickle.loads()` without HMAC
-verification and flags it as critical. The governance policy blocks `eval()`
-and `exec()` in agent code via lint rules.
+verification and flags it as critical. The agent-sandbox static scanner
+blocks `subprocess`, `os.exec*`, and `pty.spawn` patterns before sandboxed
+code runs, and a hardened sandbox container image provides
+defense-in-depth when policy requires command-denylist enforcement.
+
+**Known Gap:** No shipped rule detects Python's `eval()`, `exec()`, or
+`compile()` builtins — the reviewer's rules cover unsafe deserialization
+but not eval/exec, and the sandbox scanner targets process-spawning
+patterns only. Text-pattern command blocking at the CLI-hook layer is a
+guardrail, not a security boundary; the hardened sandbox image closes this
+but is opt-in.
 
 **Evidence:**
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `unsafe-deserialization`
+- `agent-governance-python/agent-sandbox/src/agent_sandbox/code_scanner.py` — pre-execution subprocess denial
+- `agent-governance-python/agent-sandbox/docker/Dockerfile.sandbox` — hardened sandbox image
 
-**Coverage:** ✅ Full
+**Coverage:** ⚠️ Partial
 
 ---
 
@@ -164,15 +185,24 @@ and `exec()` in agent code via lint rules.
 
 **Risk:** Persistent memory stores are manipulated to corrupt future decisions.
 
-**AGT Mitigation:** The audit hash-chain provides tamper detection for any
-persisted state. However, AGT does not yet sandbox agent memory stores or
-provide memory integrity checksums at the application layer.
+**AGT Mitigation:** `MemoryGuard` validates agent memory writes and flags
+tampering and dangerous content, including mixed-script (homoglyph-style)
+injection. The agent-rag-governance package screens retrieved content
+(`ContentScanner`) and governs retrieval with provenance labels
+(`RAGGovernor`). The TypeScript SDK ships a `ContextPoisoningDetector` for
+accumulated-context screening.
 
-**Known Gap:** No dedicated memory-sandbox or context-integrity module.
-Consider adding a `ContextValidator` that hashes memory snapshots.
+**Known Gap:** The policy-engine spec defines no memory-write or retrieval
+intervention points, so these controls live in SDK code and cannot be
+expressed as policy manifests. Go, Rust, and .NET SDKs have no
+MemoryGuard/ContextPoisoningDetector equivalent, and detection is
+regex/heuristic with caller-asserted (not cryptographically attested)
+provenance labels.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/audit/hash_chain.py`
+- `agent-governance-python/agent-os/src/agent_os/memory_guard.py`
+- `agent-governance-python/agent-rag-governance/src/agent_rag_governance/content_scanner.py`
+- `agent-governance-typescript/src/context-poisoning.ts`
 
 **Coverage:** ⚠️ Partial
 
@@ -187,7 +217,8 @@ before any agent-to-agent handoff. The static reviewer detects missing trust
 verification in multi-agent orchestration code.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/trust/gate.py`
+- `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py` — DID-based challenge-response handshake
+- `agent-governance-python/agentmesh-integrations/a2a-protocol/a2a_agentmesh/trust_gate.py` — A2A handoff trust gate
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-trust-verification`
 
 **Coverage:** ✅ Full
@@ -248,16 +279,18 @@ exceed thresholds.
 
 **Risk:** Agent actions lack logging, provenance, or audit trails.
 
-**AGT Mitigation:** The audit middleware produces a hash-chain log where each
-entry contains the SHA-256 of the previous entry, making tampering detectable.
-The static reviewer flags code without audit logging.
+**AGT Mitigation:** The agentmesh integration audit loggers (Haystack,
+Flowise, Langflow, OpenAI Agents) produce hash-chain logs where each entry
+contains the SHA-256 of the previous entry, making tampering detectable and
+verifiable. The static reviewer flags code without audit logging.
 
 **Taxonomy note:** Traceability supports mitigation across the official ASI
 risks, especially ASI02, ASI08, ASI09, and ASI10. It is an AGT control
 objective, not an official `ASI11` entry in the 2026 OWASP Top 10.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/audit/hash_chain.py`
+- `agent-governance-python/agentmesh-integrations/haystack-agentmesh/src/haystack_agentmesh/audit.py` — chained entries with `verify_chain()`
+- `agent-governance-python/agentmesh-integrations/openai-agents-trust/src/openai_agents_trust/audit.py` — `previous_hash` chaining
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-audit-logging`
 
 **Coverage:** ✅ Full
