@@ -3,12 +3,19 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { encodeJsonRpcMessage, handleJsonRpcRequest } from "../server/agt-mcp.mjs";
 
 import { loadPolicy } from "../lib/policy.mjs";
 
-const state = await loadPolicy();
+const testRoot = await mkdtemp(join(tmpdir(), "agt-claude-mcp-"));
+const state = await loadPolicy({
+  auditPath: join(testRoot, "audit.json"),
+  policyPath: join(testRoot, "no-user-policy.json"),
+});
 
 test("initialize returns MCP server metadata", async () => {
   const response = await handleJsonRpcRequest(state, {
