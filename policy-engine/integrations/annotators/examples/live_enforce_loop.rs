@@ -4,9 +4,9 @@
 // path end to end against a live service rather than a stub.
 
 use agent_control_specification::{
-    AgentControl, AgentControlInterruption, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, InterventionPointResult, JsonValue, Manifest, OpaRegoRunner,
-    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError,
+    AgentControl, AgentControlInterruption, EnforcementMode, HostEvaluation, InterceptionPoint,
+    JsonValue, Manifest, OpaRegoRunner, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
+    RuntimeError,
 };
 use agent_control_specification_annotators::ClassifierAnnotator;
 use serde_json::json;
@@ -34,14 +34,12 @@ fn opa_path() -> PathBuf {
         .join(".local/bin/opa")
 }
 
-fn evaluate(control: &AgentControl, snapshot: JsonValue) -> InterventionPointResult {
-    control
+fn evaluate(control: &AgentControl, snapshot: JsonValue) -> HostEvaluation {
+    let result = control
         .runtime()
-        .evaluate_intervention_point(InterventionPointRequest {
-            intervention_point: InterventionPoint::Input,
-            snapshot,
-            mode: EnforcementMode::Enforce,
-        })
+        .evaluate_point(InterceptionPoint::Input, snapshot);
+    HostEvaluation::from_engine(InterceptionPoint::Input, result, EnforcementMode::Enforce)
+        .expect("host evaluation")
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -80,7 +78,7 @@ input_verdict := {
     )?;
 
     let manifest_yaml = format!(
-        r#"agent_control_specification_version: "0.3.1-beta"
+        r#"agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: "live-content-safety-loop"
 policies:
@@ -127,17 +125,17 @@ intervention_points:
     let benign_result = evaluate(&control, benign.clone());
     println!(
         "  decision => {} reason={}",
-        benign_result.verdict.decision,
+        benign_result.verdict.decision.as_str(),
         benign_result.verdict.reason.as_deref().unwrap_or("ok")
     );
     control.enforce(
-        InterventionPoint::Input,
+        InterceptionPoint::Input,
         &benign_result,
         EnforcementMode::Enforce,
         None,
     )?;
     assert_eq!(
-        benign_result.verdict.decision.to_string(),
+        benign_result.verdict.decision.as_str(),
         "allow",
         "benign input must be allowed"
     );
@@ -147,11 +145,11 @@ intervention_points:
     let harmful_result = evaluate(&control, harmful);
     println!(
         "  decision => {} reason={}",
-        harmful_result.verdict.decision,
+        harmful_result.verdict.decision.as_str(),
         harmful_result.verdict.reason.as_deref().unwrap_or("ok")
     );
     match control.enforce(
-        InterventionPoint::Input,
+        InterceptionPoint::Input,
         &harmful_result,
         EnforcementMode::Enforce,
         None,
@@ -162,7 +160,7 @@ intervention_points:
         other => panic!("expected harmful input to be blocked, got {other:?}"),
     }
     assert_eq!(
-        harmful_result.verdict.decision.to_string(),
+        harmful_result.verdict.decision.as_str(),
         "deny",
         "harmful input must be denied"
     );

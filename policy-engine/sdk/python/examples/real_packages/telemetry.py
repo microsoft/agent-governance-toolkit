@@ -20,7 +20,7 @@ from agent_control_specification import (
     OtelMetricsTelemetrySink,
 )
 
-MANIFEST = """agent_control_specification_version: 0.3.1-beta
+MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: telemetry-example
 policies:
@@ -44,7 +44,10 @@ class ExamplePolicy:
 
     def evaluate(self, invocation):
         if invocation["input"]["intervention_point"] == "output":
-            return {"decision": "warn", "reason": "review_recommended"}
+            return {
+                "decision": "allow",
+                "warnings": [{"reason": "review_recommended"}],
+            }
         return {"decision": "allow"}
 
 

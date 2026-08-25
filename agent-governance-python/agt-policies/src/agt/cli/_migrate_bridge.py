@@ -17,7 +17,7 @@ from agent_control_specification import validate_manifest
 
 from ._migrate_re2 import glob_to_re2, validate_re2
 
-ACS_VERSION = "0.3.0-alpha-agt"
+ACS_VERSION = "0.4.0-alpha.1"
 _REASON_PATTERN = "blocked_pattern_input"
 _CASE_INSENSITIVE = "(?i)"
 

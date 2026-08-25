@@ -57,13 +57,13 @@ redact_card := transform_redact("redact_card_in_response", "Card number detected
 	count(m) > 0
 }
 # AGT-DELTA D1.1: rewrite the single regex match through a Transform
-# verdict scoped to ``$policy_target.text``. The Rust core rejects any
+# verdict scoped to ``$target.text``. The Rust core rejects any
 # verdict carrying ``effects`` with ``runtime_error:policy_output_invalid``.
 transform_redact(reason, message, replacement, match) := {
 	"decision": "transform",
 	"reason": reason,
 	"message": message,
-	"transform": {"path": "$policy_target.text", "value": replace(output_text, match, replacement)},
+	"transform": {"path": "$target.text", "value": replace(output_text, match, replacement)},
 }
 
 deny(reason, message) := {"decision": "deny", "reason": reason, "message": message}

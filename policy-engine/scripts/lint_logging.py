@@ -11,8 +11,23 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STYLE_GUIDE = REPO_ROOT / "docs" / "logging-style-guide.md"
 OBSERVABILITY = REPO_ROOT / "docs" / "observability.md"
-TELEMETRY_RS = REPO_ROOT / "core" / "src" / "telemetry.rs"
-RUNTIME_RS = REPO_ROOT / "core" / "src" / "runtime.rs"
+# The engine moved to the `agent-control-spec` crate, so `telemetry.rs` and
+# `runtime.rs` are no longer in this repository. Resolve them from the vendored
+# crate source when it is present; the checks that read them are skipped, with
+# a notice, when it is not. Everything this repository still owns is checked
+# either way.
+def _engine_src() -> Path | None:
+    for candidate in sorted(
+        Path.home().glob(".cargo/registry/src/*/agent-control-spec-*/src"), reverse=True
+    ):
+        if (candidate / "telemetry.rs").is_file():
+            return candidate
+    return None
+
+
+ENGINE_SRC = _engine_src()
+TELEMETRY_RS = ENGINE_SRC / "telemetry.rs" if ENGINE_SRC else None
+RUNTIME_RS = ENGINE_SRC / "runtime.rs" if ENGINE_SRC else None
 OTEL_RS = REPO_ROOT / "integrations" / "otel" / "src" / "lib.rs"
 REDACTION_FIXTURE = REPO_ROOT / "tests" / "parity" / "telemetry_redaction_canonical.json"
 
@@ -107,6 +122,8 @@ def check(condition: bool, message: str, violations: list[str]) -> None:
 
 
 def telemetry_enum() -> dict[str, str]:
+    if TELEMETRY_RS is None:
+        return {}
     text = TELEMETRY_RS.read_text(encoding="utf-8")
     return dict(re.findall(r"Self::(\w+)\s*=>\s*\"([a-z0-9_]+)\"", text))
 
@@ -191,6 +208,13 @@ def scan_rust_emissions(allowed_fields: set[str], violations: list[str]) -> None
                 for token in SENSITIVE_TOKENS:
                     check(token.replace(".", "_").replace("*", "") not in lowered, f"{rel(path)}:{line_number} metadata key {key} looks payload bearing", violations)
 
+    if RUNTIME_RS is None:
+        print(
+            "notice: skipping the engine telemetry builder scan; "
+            "agent-control-spec source is not vendored locally",
+            file=sys.stderr,
+        )
+        return
     runtime_text = RUNTIME_RS.read_text(encoding="utf-8")
     for match in re.finditer(r"TelemetryEvent::new\(.*?\);", runtime_text, flags=re.S):
         block = match.group(0).lower()

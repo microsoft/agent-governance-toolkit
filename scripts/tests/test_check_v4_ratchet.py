@@ -364,7 +364,7 @@ def test_all_yaml_json_are_routed_to_policy_data():
 
 
 def test_policy_data_excludes_acs_and_k8s():
-    acs = "agent_control_specification_version: '0.3.1'\nnetwork_allowlist: []\n"
+    acs = "agent_control_specification_version: '0.4.0-alpha.1'\nnetwork_allowlist: []\n"
     assert not ratchet._is_v4_policy_document("x/policies/a.yaml", acs)
     k8s = "apiVersion: v1\nkind: ConfigMap\ntool_allowlist: []\n"
     assert not ratchet._is_v4_policy_document("x/policies/k.yaml", k8s)

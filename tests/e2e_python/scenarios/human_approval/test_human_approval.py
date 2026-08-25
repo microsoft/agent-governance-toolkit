@@ -49,7 +49,7 @@ def run_human_approval(
 
     audit_trail: list[dict[str, str]] = []
     approved = False
-    if decision.verdict == "escalate":
+    if decision.requires_approval:
         audit_trail.append(
             {"event_type": "escalated", "reason": decision.reason or ""}
         )
@@ -75,7 +75,9 @@ def test_high_risk_action_executes_after_approval(artifact_dir: Path) -> None:
     result, store, audit_trail, policy_decision = run_human_approval(human_approval=True)
 
     # ACS escalates the high-risk deletion before any human decision.
-    assert policy_decision.verdict == "escalate"
+    # An escalation is a liftable deny: `deny` carrying an `approval` block.
+    assert policy_decision.verdict == "deny"
+    assert policy_decision.requires_approval
     assert policy_decision.reason == "approval.escalate-high-risk-delete"
     assert "escalated" in {event["event_type"] for event in audit_trail}
 
@@ -91,7 +93,9 @@ def test_high_risk_action_blocked_after_rejection(artifact_dir: Path) -> None:
     result, store, audit_trail, policy_decision = run_human_approval(human_approval=False)
 
     # ACS escalates the high-risk deletion before any human decision.
-    assert policy_decision.verdict == "escalate"
+    # An escalation is a liftable deny: `deny` carrying an `approval` block.
+    assert policy_decision.verdict == "deny"
+    assert policy_decision.requires_approval
     assert policy_decision.reason == "approval.escalate-high-risk-delete"
     assert "escalated" in {event["event_type"] for event in audit_trail}
 

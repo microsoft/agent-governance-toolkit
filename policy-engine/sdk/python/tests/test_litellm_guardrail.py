@@ -23,7 +23,7 @@ def result(decision=Decision.ALLOW, transformed_policy_target=None):
     if transformed_policy_target is not None and decision == Decision.ALLOW:
         decision = Decision.TRANSFORM
     transform = (
-        Transform(path="$policy_target", value=transformed_policy_target)
+        Transform(path="$target", value=transformed_policy_target)
         if decision == Decision.TRANSFORM
         else None
     )

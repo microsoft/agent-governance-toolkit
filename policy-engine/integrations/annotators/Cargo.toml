@@ -1,6 +1,6 @@
 [package]
 name = "agent_control_specification_annotators"
-version = "0.3.1-beta.0"
+version = "0.4.0-beta.0"
 edition = "2021"
 rust-version = "1.85"
 publish = false
@@ -8,16 +8,16 @@ description = "Reference annotator dispatchers backed by Agent Control Specifica
 
 [features]
 default = []
-aacs = ["agent_control_specification_core/aacs"]
-openai_moderation = ["agent_control_specification_core/openai_moderation"]
-perspective = ["agent_control_specification_core/perspective"]
-llama_guard = ["agent_control_specification_core/llama_guard"]
-lakera_guard = ["agent_control_specification_core/lakera_guard"]
-auto = ["agent_control_specification_core/auto"]
+aacs = ["agent-control-spec/aacs"]
+openai_moderation = ["agent-control-spec/openai_moderation"]
+perspective = ["agent-control-spec/perspective"]
+llama_guard = ["agent-control-spec/llama_guard"]
+lakera_guard = ["agent-control-spec/lakera_guard"]
+auto = ["agent-control-spec/auto"]
 
 [dependencies]
-agent_control_specification = { version = "0.3.1-beta.0", path = "../../sdk/rust" }
-agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core", features = ["default-dispatchers"] }
+agent_control_specification = { path = "../../sdk/rust" }
+agent-control-spec = { version = "=0.4.0-alpha.1", features = ["default-dispatchers"] }
 serde_json = "1"
 ureq = { version = "2", features = ["json"] }
 

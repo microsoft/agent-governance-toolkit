@@ -19,7 +19,7 @@ test_post_tool_call_pii_transform if {
 	}
 	verdict.decision == "transform"
 	verdict.reason == "pii_redact_tool_output"
-	verdict.transform.path == "$policy_target.value"
+	verdict.transform.path == "$target.value"
 	verdict.transform.value == "ssn [PII REDACTED] trailing"
 }
 

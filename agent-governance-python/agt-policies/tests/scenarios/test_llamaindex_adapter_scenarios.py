@@ -41,7 +41,7 @@ from agent_control_specification import (  # noqa: E402
 )
 
 
-_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: llamaindex_adapter_scenarios
 extends: []
@@ -176,7 +176,7 @@ def test_chat_transform_path_redacts_outbound_message(tmp_path: Path) -> None:
                 "decision": "transform",
                 "reason": "pii_redaction",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": "Customer SSN is [REDACTED]",
                 },
             },
@@ -205,7 +205,7 @@ def test_output_transform_path_redacts_response(tmp_path: Path) -> None:
                 "decision": "transform",
                 "reason": "output_redaction",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": "[REDACTED OUTPUT]",
                 },
             },

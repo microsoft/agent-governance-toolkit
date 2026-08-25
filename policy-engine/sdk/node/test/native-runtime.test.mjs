@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { AgentControl, Decision, EnforcementMode, InterventionPoint, actionIdentity, resolveBundledOpa } = require("../dist/index.js");
 
-const manifest = `agent_control_specification_version: 0.3.1-beta
+const manifest = `agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: basic-host-node-test
 policies:
@@ -24,7 +24,7 @@ annotators:
   prompt_classifier:
     type: classifier`;
 
-const baseManifest = `agent_control_specification_version: 0.3.1-beta
+const baseManifest = `agent_control_specification_version: 0.4.0-alpha.1
 policies:
   input_custom_policy:
     type: custom
@@ -36,7 +36,7 @@ intervention_points:
       id: input_custom_policy
     policy_target: $.input`;
 
-const overlayManifest = `agent_control_specification_version: 0.3.1-beta
+const overlayManifest = `agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: node-chain-test
 intervention_points:
@@ -65,7 +65,7 @@ function policyForAccountNumber(invocation) {
     reason: "account_number_redacted",
     message: "Account number was redacted before continuing.",
     transform: {
-      path: "$policy_target.text",
+      path: "$target.text",
       value: "Please summarize account [REDACTED].",
     },
   };
@@ -207,7 +207,7 @@ test("native runtime composes manifest chains", async () => {
 
   const result = await evaluateText(agentControl, "Please summarize account 1234.");
   assert.equal(result.verdict.decision, Decision.Transform);
-  assert.equal(result.verdict.transform.path, "$policy_target.text");
+  assert.equal(result.verdict.transform.path, "$target.text");
   assert.deepEqual(result.transformedPolicyTarget, { text: "Please summarize account [REDACTED]." });
 });
 
@@ -244,7 +244,7 @@ function withCleanEnv(overrides, body) {
   }
 }
 
-const nonRegoManifest = `agent_control_specification_version: 0.3.1-beta
+const nonRegoManifest = `agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: zero-config-non-rego
 policies:
@@ -258,7 +258,7 @@ intervention_points:
       id: p
     policy_target: $.input`;
 
-const regoManifest = `agent_control_specification_version: 0.3.1-beta
+const regoManifest = `agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: zero-config-rego
 policies:
@@ -368,8 +368,57 @@ test("native runtime returns policy result_labels for IFC propagation", async ()
   assert.deepEqual(result.verdict.result_labels, ["confidential"]);
 });
 
+test("native runtime preserves warnings and approval without rewriting decisions", async () => {
+  const warningControl = AgentControl.fromNative(
+    manifest,
+    {
+      async dispatch() {
+        return { annotator: "prompt_classifier", contains_account_number: false };
+      },
+    },
+    {
+      async evaluate() {
+        return {
+          decision: Decision.Allow,
+          warnings: [
+            { reason: "review_recommended", message: "A reviewer should inspect this action." },
+            { reason: "secondary_signal" },
+          ],
+        };
+      },
+    },
+  );
+  const warningResult = await evaluateText(warningControl, "hello");
+  assert.equal(warningResult.verdict.decision, Decision.Allow);
+  assert.deepEqual(warningResult.verdict.warnings, [
+    { reason: "review_recommended", message: "A reviewer should inspect this action." },
+    { reason: "secondary_signal", message: undefined },
+  ]);
+
+  const approvalControl = AgentControl.fromNative(
+    manifest,
+    {
+      async dispatch() {
+        return { annotator: "prompt_classifier", contains_account_number: false };
+      },
+    },
+    {
+      async evaluate() {
+        return {
+          decision: Decision.Deny,
+          reason: "human_review_required",
+          approval: { channel: "security" },
+        };
+      },
+    },
+  );
+  const approvalResult = await evaluateText(approvalControl, "hello");
+  assert.equal(approvalResult.verdict.decision, Decision.Deny);
+  assert.deepEqual(approvalResult.verdict.approval, { channel: "security" });
+});
+
 test("native runtime preserves explicit null transforms", async () => {
-  const nullTransformManifest = `agent_control_specification_version: 0.3.1-beta
+  const nullTransformManifest = `agent_control_specification_version: 0.4.0-alpha.1
 policies:
   p:
     type: custom
@@ -391,7 +440,7 @@ intervention_points:
         if (invocation.input.intervention_point !== InterventionPoint.Input) return { decision: Decision.Allow };
         return {
           decision: Decision.Transform,
-          transform: { path: "$policy_target", value: null },
+          transform: { path: "$target", value: null },
         };
       },
     },
@@ -435,7 +484,7 @@ test("native runtime malformed request envelopes fail closed", async () => {
   for (const request of cases) {
     const result = await agentControl.runtimeClient.evaluateInterventionPoint(request);
     assert.equal(result.verdict.decision, Decision.Deny);
-    assert.equal(result.verdict.reason, "runtime_error:request_invalid");
+    assert.equal(result.verdict.reason, "host_error:context_invalid");
     assert.equal(result.policyInput, undefined);
   }
 
@@ -448,7 +497,7 @@ test("native runtime malformed request envelopes fail closed", async () => {
 
 test("SDK action identity matches native core for non-BMP object keys", async () => {
   const agentControl = AgentControl.fromNative(
-    `agent_control_specification_version: 0.3.1-beta
+    `agent_control_specification_version: 0.4.0-alpha.1
 policies:
   p:
     type: custom
@@ -459,7 +508,7 @@ intervention_points:
       id: p
     policy_target: $.input`,
     { dispatch() { return {}; } },
-    { evaluate() { return { decision: Decision.Escalate }; } },
+    { evaluate() { return { decision: Decision.Allow }; } },
   );
   const result = await agentControl.evaluateInterventionPoint(InterventionPoint.Input, {
     input: { "𐀀": 1, "\uE000": 2 },

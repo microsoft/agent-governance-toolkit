@@ -3,7 +3,7 @@
 #
 # AGT stock redaction transform. Combines `agt.patterns` regex matching with
 # the AGT transform verdict shape (SPECIFICATION.md §14). The
-# returned verdict carries `transform.path = "$policy_target"` and a fully
+# returned verdict carries `transform.path = "$target"` and a fully
 # replaced value, so the dispatcher can apply the substitution without
 # additional logic on the host side. The substitution runs in Rego via
 # `regex.replace` over a combined alternation, keeping it deterministic
@@ -41,7 +41,7 @@ redact_text(text, pats, replacement) := verdict if {
 		"decision": "transform",
 		"reason": "redaction_applied",
 		"transform": {
-			"path": "$policy_target",
+			"path": "$target",
 			"value": new_value,
 		},
 	}

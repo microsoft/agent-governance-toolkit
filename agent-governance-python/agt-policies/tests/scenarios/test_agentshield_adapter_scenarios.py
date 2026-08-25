@@ -41,7 +41,7 @@ from agent_control_specification import (  # noqa: E402
 )
 
 
-_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: agentshield_adapter_scenarios
 extends: []
@@ -168,7 +168,7 @@ def test_validate_input_transform_path_sets_modified_value(tmp_path: Path) -> No
                 "decision": "transform",
                 "reason": "pii_redaction",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": "Customer SSN is [REDACTED]",
                 },
             }
@@ -244,7 +244,7 @@ def test_validate_tool_call_transform_rewrites_parameters(tmp_path: Path) -> Non
                 "decision": "transform",
                 "reason": "args_sanitized",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"to": "[REDACTED]"},
                 },
             }
@@ -299,7 +299,7 @@ def test_validate_output_transform_redacts_response(tmp_path: Path) -> None:
                 "decision": "transform",
                 "reason": "pii_redaction",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": "Order processed for [REDACTED]",
                 },
             }

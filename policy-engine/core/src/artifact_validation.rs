@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 use crate::{
-    manifest::parse_manifest_yaml_value, opa::OpaRegoRunner, JsonValue, Manifest, RuntimeError,
+    manifest_yaml::parse_manifest_yaml_value, JsonValue, Manifest, OpaRegoRunner, RuntimeError,
 };
 use jsonschema::JSONSchema;
 use serde::{Deserialize, Serialize};
@@ -223,7 +223,7 @@ fn validate_typed_manifest(value: JsonValue, overlay: bool) -> Result<(), Runtim
     let manifest: Manifest = serde_json::from_value(value)
         .map_err(|error| RuntimeError::ManifestInvalid(error.to_string()))?;
     if overlay {
-        manifest.validate_overlay()
+        crate::manifest_yaml::validate_overlay(&manifest)
     } else {
         manifest.validate()
     }
@@ -583,7 +583,7 @@ impl ValidationTempDir {
             "acs-artifact-validation-{}-{nanos}-{count}",
             std::process::id()
         ));
-        crate::opa::create_private_dir(&path)?;
+        create_private_dir(&path)?;
         Ok(Self { path })
     }
 
@@ -598,6 +598,22 @@ impl Drop for ValidationTempDir {
     }
 }
 
+/// Create a directory that only the owner can traverse.
+///
+/// The embedded engine kept this next to the Rego runner. `agent_control_spec`
+/// does not export it, and it is a filesystem helper rather than policy
+/// contract, so AGT carries it here.
+#[cfg(unix)]
+fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new().mode(0o700).create(path)
+}
+
+#[cfg(not(unix))]
+fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -605,7 +621,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
 
     fn valid_manifest() -> &'static str {
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   p:
     type: rego
@@ -686,7 +702,7 @@ intervention_points:
     #[test]
     fn manifest_schema_preserves_extends_composition_contract() {
         let valid = [
-            r#"agent_control_specification_version: 0.3.1-beta
+            r#"agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: composition-root
 extends:
@@ -694,7 +710,7 @@ extends:
   - url: https://example.test/remote.yaml
     sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 "#,
-            r#"agent_control_specification_version: 0.3.1-beta
+            r#"agent_control_specification_version: 0.4.0-alpha.1
 extends:
   - base/manifest.yaml
 annotators:
@@ -704,7 +720,7 @@ intervention_points:
   input:
     annotations:
       overlay:
-        from: $policy_target.text
+        from: $target.text
 "#,
         ];
         for manifest in valid {
@@ -713,15 +729,15 @@ intervention_points:
         }
 
         let invalid = [
-            "agent_control_specification_version: 0.3.1-beta\n",
-            "agent_control_specification_version: 0.3.1-beta\nextends: [http://example.test/base.yaml]\n",
-            r#"agent_control_specification_version: 0.3.1-beta
+            "agent_control_specification_version: 0.4.0-alpha.1\n",
+            "agent_control_specification_version: 0.4.0-alpha.1\nextends: [http://example.test/base.yaml]\n",
+            r#"agent_control_specification_version: 0.4.0-alpha.1
 extends:
   - url: https://example.test/base.yaml
     integrity: sha256-abc
     sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 "#,
-            r#"agent_control_specification_version: 0.3.1-beta
+            r#"agent_control_specification_version: 0.4.0-alpha.1
 extends:
   - base/manifest.yaml
 annotators:
@@ -731,7 +747,7 @@ intervention_points:
   input:
     annotations:
       review_signal:
-        from: $policy_target.text
+        from: $target.text
         annotator: overlay
 "#,
         ];

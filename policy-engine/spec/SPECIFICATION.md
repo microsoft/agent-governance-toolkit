@@ -1,6 +1,6 @@
 # Agent Control Specification
 
-This document specifies version `0.3.1-beta` of the Agent Control Specification (ACS). Its status is Draft.
+This document specifies the runtime semantics AGT hosts against. The engine is the `agent-control-spec` crate, pinned at 0.4.0-alpha.1, which is the only manifest `agent_control_specification_version` it accepts. Its status is Draft.
 
 The machine readable manifest contract is `schema/manifest.schema.json` in artifact kits and `spec/schema/manifest.schema.json` in this repository. That schema governs manifest syntax. This document governs runtime semantics, which are the evaluation order, the policy input shape, verdict handling, transform application, and fail closed behavior.
 
@@ -42,9 +42,9 @@ This section defines the terms this document uses with a specific meaning. Every
 
 **Dispatcher.** A host supplied synchronous interface the runtime calls to run an annotator or a policy. Dispatchers carry host trust and perform the input and output the runtime does not.
 
-**Verdict.** The normalized decision the runtime returns, one of `allow`, `warn`, `deny`, `escalate`, or `transform`, together with a reason.
+**Verdict.** The normalized decision the engine returns, one of `allow`, `deny`, or `transform`, together with a reason. The set is closed. A policy MAY still express the intents `warn` and `escalate`; the engine normalizes `warn` to `allow` plus a `warnings[]` entry and `escalate` to a `deny` carrying an `approval` block, which section 17 calls a liftable `deny`.
 
-**Transform.** A replacement the runtime applies to the policy target, carried by a `transform` verdict, to produce the transformed policy target.
+**Transform.** A replacement carried by a `transform` verdict. The engine returns it and the host applies it to the policy target, producing the transformed policy target.
 
 **Mode.** The binding setting of an evaluation request, either `enforce` or `evaluate_only`, defined in section 5.
 
@@ -69,7 +69,7 @@ A manifest MUST be validated before any evaluation uses it. A manifest that fail
 
 ### 2.1 Version
 
-`agent_control_specification_version` MUST be a non empty string. This document describes the value `0.3.1-beta`.
+`agent_control_specification_version` MUST be a non empty string. This document describes the value `0.4.0-alpha.1`.
 
 ### 2.2 extends
 
@@ -98,7 +98,7 @@ A required path that does not resolve MUST fail closed with `runtime_error:path_
 | `$snap` | The raw host snapshot for the current intervention point. |
 | `$` and `$.name` | Aliases that normalize to `$snap` and `$snap.name`. |
 | `$pi` | The canonical policy input from section 7. |
-| `$policy_target` | The value at `$pi.policy_target.value`. |
+| `$target` | The value at `$pi.policy_target.value`. |
 | `$tool` | The value at `$pi.tool`, which is `null` when no tool is projected. |
 
 ### 3.2 Allowed roots by field
@@ -107,10 +107,10 @@ A required path that does not resolve MUST fail closed with `runtime_error:path_
 | --- | --- |
 | `policy_target` | `$snap`, `$`, `$.name` |
 | `tool_name_from` | `$snap`, `$`, `$.name` |
-| annotation `from` | `$pi` excluding `$pi.annotations`, `$policy_target`, `$tool`, `$snap`, `$`, `$.name` |
-| `transform` `path` | `$policy_target` |
+| annotation `from` | `$pi` excluding `$pi.annotations`, `$target`, `$tool`, `$snap`, `$`, `$.name` |
+| `transform` `path` | `$target` |
 
-A manifest path that uses a root outside its allowed set MUST fail closed with `runtime_error:manifest_invalid`. A `transform` path outside `$policy_target` MUST fail closed with `runtime_error:transform_target_forbidden`. An annotation `from` path that reads `$pi.annotations` MUST fail closed with `runtime_error:manifest_invalid`, because annotator outputs do not exist when annotator inputs are resolved.
+A manifest path that uses a root outside its allowed set MUST fail closed with `runtime_error:manifest_invalid`. A `transform` path outside `$target` MUST fail closed with `runtime_error:transform_target_forbidden`. An annotation `from` path that reads `$pi.annotations` MUST fail closed with `runtime_error:manifest_invalid`, because annotator outputs do not exist when annotator inputs are resolved.
 
 ## 4. Intervention points
 
@@ -137,7 +137,7 @@ The schema rejects unknown members inside an intervention point entry. `policy_t
 
 ## 5. Modes
 
-An evaluation request carries one mode. In `enforce` mode the runtime applies the transform of a `transform` verdict and returns the transformed policy target. In `evaluate_only` mode the runtime runs the same pipeline and validates a `transform` verdict but applies none and returns no transformed policy target, which lets a host observe what the policy would decide without acting on it. The computed verdict, including `deny` and `escalate`, is the same in both modes. A runtime error fails closed to a `deny` verdict in both modes. Acting on a `deny` or an `escalate` verdict is the host obligation defined in section 17 and applies in `enforce` mode.
+The engine never applies a transform and never rewrites the context; it returns the verdict and the host acts on it. The host layer carries the mode. In `enforce` mode the host applies the transform of a `transform` verdict and substitutes the transformed policy target. In `evaluate_only` mode the host validates the transform but applies none and returns no transformed policy target, which lets it observe what the policy would decide without acting on it. The computed verdict is the same in both modes. A runtime error fails closed to a `deny` verdict in both modes. Acting on a `deny`, including a liftable `deny`, is the host obligation defined in section 17 and applies in `enforce` mode.
 
 ## 6. Evaluation order
 
@@ -274,11 +274,11 @@ Cedar's authorization result maps to a verdict. `Allow` maps to an `allow` verdi
   "verdict": "warn | escalate | transform",
   "reason": "<optional reason string>",
   "message": "<optional human message>",
-  "transform": {"path": "$policy_target...", "value": "<any>"}
+  "transform": {"path": "$target...", "value": "<any>"}
 }
 ```
 
-The dispatcher extracts the advice, validates it against [`spec/schema/cedar_advice.schema.json`](schema/cedar_advice.schema.json), and produces the corresponding verdict. Advice that does not match the schema MUST fail closed with `runtime_error:policy_output_invalid`. A `transform` advice without a `transform` body MUST fail closed with `runtime_error:transform_invalid`, and a `transform` advice whose `path` is outside `$policy_target` MUST fail closed with `runtime_error:transform_target_forbidden`.
+The dispatcher extracts the advice, validates it against [`spec/schema/cedar_advice.schema.json`](schema/cedar_advice.schema.json), and produces the corresponding verdict. Advice that does not match the schema MUST fail closed with `runtime_error:policy_output_invalid`. A `transform` advice without a `transform` body MUST fail closed with `runtime_error:transform_invalid`, and a `transform` advice whose `path` is outside `$target` MUST fail closed with `runtime_error:transform_target_forbidden`.
 
 The runtime offers an optional bundled `cedar` dispatcher that links the Cedar Rust crate when the `cedar` build feature is enabled. A host MAY supply its own dispatcher instead. A dispatcher error MUST fail closed with `runtime_error:policy_invocation_failed`.
 
@@ -288,10 +288,10 @@ A policy dispatcher returns a JSON object. The runtime normalizes it into a verd
 
 | Member | Required | Type | Constraint |
 | --- | --- | --- | --- |
-| `decision` | yes | string | One of `allow`, `deny`, `warn`, `escalate`, `transform`. |
+| `decision` | yes | string | One of `allow`, `deny`, `transform`, or the intents `warn` and `escalate`, which the engine normalizes as described in section 14. |
 | `reason` | no | string | MUST NOT start with `runtime_error:`. |
 | `message` | no | string | Free form text for a caller. |
-| `transform` | required when `decision` is `transform`, forbidden otherwise | object | A `{path, value}` replacement rooted at `$policy_target` per section 14. |
+| `transform` | required when `decision` is `transform`, forbidden otherwise | object | A `{path, value}` replacement rooted at `$target` per section 14. |
 | `evidence` | no | object | Offline verification evidence per section 13.3. |
 | `result_labels` | no | array of strings | Information-flow labels for the data produced at this sink, returned verbatim to the host. See section 13.2. |
 
@@ -299,15 +299,15 @@ Normalization MUST fail closed with `runtime_error:policy_output_invalid` when t
 
 ### 13.1 Decisions
 
-`allow` permits the action with no change to the policy target. `warn` permits the action with no change to the policy target and records a warning. `transform` permits the action and replaces the policy target as defined in section 14. `deny` refuses the action. `escalate` defers the action to the host approval path defined in section 17.1. A host that previously expressed permit with redaction as a permit verdict that also rewrote the policy target MUST now express it as a `transform` verdict, or as an annotator that performs the rewrite upstream of the policy.
+`allow` permits the action with no change to the policy target. `transform` permits the action and replaces the policy target as defined in section 14. `deny` refuses the action. The intent `warn` normalizes to `allow` with an entry appended to `warnings[]`; it permits the action with no change to the policy target and records the warning. The intent `escalate` normalizes to a `deny` carrying an `approval` block, which defers the action to the host approval path defined in section 17.1. A host that previously expressed permit with redaction as a permit verdict that also rewrote the policy target MUST now express it as a `transform` verdict, or as an annotator that performs the rewrite upstream of the policy.
 
-The runtime derives two action identities for each successful evaluation. Each is encoded as `sha256:` followed by lowercase hexadecimal bytes. `input_identity` is the SHA-256 digest of the canonical policy input JSON that the policy evaluated. `enforced_identity` is the SHA-256 digest of the canonical policy input after a `transform` path is applied to the policy target. The two identities are equal for `allow`, `warn`, `deny`, and `escalate`, and they are equal in `evaluate_only` mode because no transform is applied. Both identities cover the intervention point, policy target, full snapshot, annotations, and projected tool data that the policy evaluated. The escalation approval path in section 17.1 binds to `enforced_identity` so that the approver consents to the action that will execute.
+The runtime derives two action identities for each successful evaluation. Each is encoded as `sha256:` followed by lowercase hexadecimal bytes. `input_identity` is the SHA-256 digest of the canonical policy input JSON that the policy evaluated. `enforced_identity` is the SHA-256 digest of the canonical policy input after a `transform` path is applied to the policy target. The two identities are equal for every decision other than `transform`, and they are equal in `evaluate_only` mode because no transform is applied. Both identities cover the intervention point, policy target, full snapshot, annotations, and projected tool data that the policy evaluated. The escalation approval path in section 17.1 binds to `enforced_identity` so that the approver consents to the action that will execute.
 
 ### 13.2 Result labels
 
 `result_labels` is the runtime's return channel for stateless information-flow control. A policy MAY return an array of label strings describing the data produced at the evaluated sink. The runtime returns the array verbatim in the verdict and does nothing else with it: it stores no labels, propagates no taint, and performs no information-flow check of its own. When the member is absent or `null` the runtime returns an empty array.
 
-The host owns propagation. A host that practices information-flow control persists the returned `result_labels` alongside the data the sink produced, such as a tool result or a model output, and supplies them as `snapshot.ifc.source_labels` on later evaluations whose policy target derives from that data. This keeps label flow correct across turns without the runtime holding state. The host MUST NOT propagate `result_labels` for an action that did not proceed, such as a `deny` verdict or an `escalate` verdict that the approval seam did not approve: the member is only meaningful when the sink's data is actually produced. Accordingly the `agent_control_specification.lib.ifc` helpers omit `result_labels` on non-allow verdicts. Section 17 defines the host obligation; the reusable Rego library `agent_control_specification.lib.ifc` provides lattice and label-join helpers that compute the value a policy returns here.
+The host owns propagation. A host that practices information-flow control persists the returned `result_labels` alongside the data the sink produced, such as a tool result or a model output, and supplies them as `snapshot.ifc.source_labels` on later evaluations whose policy target derives from that data. This keeps label flow correct across turns without the runtime holding state. The host MUST NOT propagate `result_labels` for an action that did not proceed, such as a `deny` verdict, including a liftable `deny` that the approval seam did not approve: the member is only meaningful when the sink's data is actually produced. Accordingly the `agent_control_specification.lib.ifc` helpers omit `result_labels` on non-allow verdicts. Section 17 defines the host obligation; the reusable Rego library `agent_control_specification.lib.ifc` provides lattice and label-join helpers that compute the value a policy returns here.
 
 ### 13.3 Evidence
 
@@ -332,18 +332,18 @@ The runtime treats `evidence` as opaque. It does not validate `artefact` and doe
 
 ## 14. Transform
 
-A `transform` verdict carries a single replacement that the runtime applies to the policy target and to nothing else. The `transform` body has two members.
+A `transform` verdict carries a single replacement that applies to the policy target and to nothing else. The engine returns it unapplied; applying it is a host obligation under section 17. The `transform` body has two members.
 
 | Field | Required | Type | Constraint |
 | --- | --- | --- | --- |
-| `path` | yes | string | MUST be rooted at `$policy_target`. |
+| `path` | yes | string | MUST be rooted at `$target`. |
 | `value` | yes | any | New JSON value to set at `path`. |
 
 The runtime resolves `path` against the current policy target and replaces the value at that location with `value`. The transformation is confined to the policy target. The runtime MUST NOT change the snapshot, the annotations, the projected tool, or any host state.
 
-A `transform` whose `path` is rooted outside `$policy_target` MUST fail closed with `runtime_error:transform_target_forbidden`. A `transform` whose `path` cannot be parsed, whose `path` does not resolve against the policy target, whose `value` cannot be set because of a path type mismatch, or whose `value` member is missing MUST fail closed with `runtime_error:transform_invalid`.
+A `transform` whose `path` is rooted outside `$target` MUST fail closed with `runtime_error:transform_target_forbidden`. A `transform` whose `path` cannot be parsed, whose `path` does not resolve against the policy target, whose `value` cannot be set because of a path type mismatch, or whose `value` member is missing MUST fail closed with `runtime_error:transform_invalid`.
 
-In `enforce` mode the runtime applies the transform and the result is the transformed policy target. In `evaluate_only` mode the runtime validates the transform but applies none and returns no transformed policy target.
+In `enforce` mode the host applies the transform and the result is the transformed policy target. In `evaluate_only` mode the host validates the transform but applies none and returns no transformed policy target, so a shadow run surfaces a transform that could not resolve rather than hiding it until the first enforced request.
 
 `transform` is the only form of value rewriting a verdict can request. A host that needs multi step rewriting at one intervention point expresses it by chaining intervention points, for example an annotator at `pre_model_call` produces sanitized text under `annotations.<name>` and the bound policy reads from that annotation.
 
@@ -367,37 +367,43 @@ A runtime failure yields a `deny` verdict whose `reason` is one of the identifie
 | `runtime_error:policy_invocation_failed` | Policy preparation or dispatch failed. |
 | `runtime_error:policy_output_invalid` | The dispatcher output could not be normalized. |
 | `runtime_error:transform_invalid` | A `transform` was malformed, its path did not resolve, or its value could not be set. |
-| `runtime_error:transform_target_forbidden` | A `transform` path pointed outside `$policy_target`. |
+| `runtime_error:transform_target_forbidden` | A `transform` path pointed outside `$target`. |
 | `runtime_error:resource_limit_exceeded` | Evaluation or manifest loading exceeded a configured resource limit. |
-| `runtime_error:approval_action_mismatch` | An approved action identity did not match the current action identity. |
-| `runtime_error:approval_resolver_missing` | An `escalate` verdict was returned but no resolver matched the manifest `approval.default_resolver`. |
+| `runtime_error:resolution_cycle` | Manifest `extends` resolution met a cycle. |
+| `runtime_error:resolution_merge_conflict` | Two manifests in an `extends` chain defined the same key incompatibly. |
+| `runtime_error:resolution_path_traversal` | An `extends` reference escaped its base directory. |
+| `runtime_error:resolution_invalid_governance` | A resolved manifest chain produced an invalid governance block. |
 
-An SDK enforcement layer MAY also fail closed with a reserved `runtime_error:` reason that the core runtime never produces. Such a reason is SDK produced and is attributed to its producing layer. The reasons below are reserved for SDK enforcement helpers.
+The host layer fails closed in its own namespace. `host_error:*` is host only: the host synthesizes these and an interceptor MUST NOT emit one. The names are a closed set defined by the agent-hooks contract; AGT mints none of its own. The reasons below are the ones AGT's host layer produces.
 
 | Reason | Producer | Cause |
 | --- | --- | --- |
-| `runtime_error:approval_resolver_failed` | `sdk-approval` | An SDK approval resolver raised, returned an unrecognized result, or otherwise failed closed. |
-| `runtime_error:streaming_unsupported` | `sdk-streaming` | An SDK streaming helper could not assemble a complete response snapshot for evaluation and failed closed. |
-| `runtime_error:adapter_unsupported` | `sdk-adapter` | An SDK adapter detected an unmediated framework method or unsupported call shape and failed closed instead of invoking upstream code. |
-| `runtime_error:request_invalid` | `sdk-wire` | A JSON wire binding received a malformed intervention request envelope and failed closed before policy input construction. |
+| `host_error:approval_identity_mismatch` | `agt-host` | The enforced identity rederived from the current policy input did not match the identity the approval was granted against. |
+| `host_error:approval_resolver_failed` | `agt-host` | An approval resolver raised, returned an unrecognized result, or otherwise failed closed. |
+| `host_error:streaming_unsupported` | `agt-host` | A streaming helper could not assemble a complete response snapshot for evaluation and failed closed. |
+| `host_error:transform_target_forbidden` | `agt-host` | The host refused a transform arriving at an interception point where the contract does not permit one. The engine's `runtime_error` twin covers a path pointing outside `$target`. |
+| `host_error:transform_invalid` | `agt-host` | The host could not apply a transform: the body was missing after normalization, or the path did not resolve. |
+| `host_error:adapter_unsupported` | `agt-host` | An adapter detected an unmediated framework method or unsupported call shape and failed closed instead of invoking upstream code. |
+| `host_error:approval_unresolved` | `agt-host` | A liftable deny required approval but no resolver was configured, or the approval did not resolve, so the host failed closed. |
+| `host_error:context_invalid` | `agt-host` | A JSON wire binding received a malformed request envelope and failed closed before policy input construction. |
 
-A machine readable inventory of every reserved reason with producer attribution lives in [`spec/reserved-reasons.json`](reserved-reasons.json). A policy MUST NOT emit any reason that starts with `runtime_error:`, including the SDK layer reasons.
+A machine readable inventory of every reserved reason with producer attribution lives in [`spec/reserved-reasons.json`](reserved-reasons.json). A policy MUST NOT emit any reason in either reserved namespace.
 
 ## 17. Host obligations
 
-The runtime returns a verdict and, for a `transform` verdict in enforce mode, an optional transformed policy target. The host enforces them. In `enforce` mode the host MUST NOT carry out the action of a `deny` verdict, MUST route an `escalate` verdict to an approval path and MUST NOT carry out the action until that path resolves, and MUST use the transformed policy target in place of the original policy target when one is present. In `evaluate_only` mode the host MAY carry out the original action and SHOULD record the verdict. A host that ignores a `deny` or an unresolved `escalate` is not conformant.
+The engine returns a verdict and never mutates the context. Applying a `transform`, honouring `evaluate_only`, and resolving an approval are all host obligations. In `enforce` mode the host MUST NOT carry out the action of a `deny` verdict; when that `deny` carries an `approval` block it is liftable, and the host MUST route it to an approval path and MUST NOT carry out the action until that path resolves. A `deny` without an `approval` block is final. For a `transform` verdict the host MUST apply the transform and use the result in place of the original policy target. In `evaluate_only` mode the host MAY carry out the original action and SHOULD record the verdict, and MUST NOT apply the transform. A host that ignores a `deny` or an unresolved liftable `deny` is not conformant.
 
 ### 17.1 Approval path
 
-The approval path is a host concern and is not part of the policy input contract. An SDK MAY expose it as an approval resolver. The resolver is a host supplied callback that the SDK consults only for an `escalate` verdict in `enforce` mode. The resolver payload MUST include the `enforced_identity` returned by evaluation. The approval outcome MUST carry the approved `enforced_identity` for an allow or suspend result. The SDK MUST rederive the `enforced_identity` from the current policy input before proceeding and MUST fail closed with `runtime_error:approval_action_mismatch` when it differs from the approved identity. An SDK that consults a manifest declared resolver but finds none matching the manifest `approval.default_resolver` MUST fail closed with `runtime_error:approval_resolver_missing`. The path resolves to one of three outcomes.
+The approval path is a host concern and is not part of the policy input contract. An SDK MAY expose it as an approval resolver. The resolver is a host supplied callback that the SDK consults only for a liftable `deny`, that is a `deny` carrying an `approval` block, in `enforce` mode. The resolver payload MUST include the `enforced_identity` returned by evaluation. The approval outcome MUST carry the approved `enforced_identity` for an allow or suspend result. The SDK MUST rederive the `enforced_identity` from the current policy input before proceeding and MUST fail closed with `host_error:approval_identity_mismatch` when it differs from the approved identity. The path resolves to one of three outcomes.
 
-1. Allow. The host carries out the action. An `escalate` verdict does not return or apply a transformed policy target.
+1. Allow. The host carries out the action. A liftable `deny` neither returns nor applies a transformed policy target.
 2. Deny. The host MUST NOT carry out the action.
 3. Suspend. The host stops the current run and hands the decision to an out of band process. Suspension is terminal for the run. Resumption is the host's responsibility and is not a runtime operation.
 
-When no approval path is configured, or when the path fails or returns an unrecognized outcome, the host MUST fail closed and treat the `escalate` verdict as a `deny`. A `deny` verdict MUST NOT consult the approval path.
+When no approval path is configured, or when the path fails or returns an unrecognized outcome, the host MUST fail closed and treat the liftable `deny` as a final `deny`. A `deny` that carries no `approval` block MUST NOT consult the approval path.
 
-An `escalate` verdict at a post action intervention point, such as `post_model_call` or `post_tool_call`, is reached only after the action has already executed. A host that suspends at such a point and later resumes MUST deliver the result that was already produced and MUST NOT execute the action a second time.
+A liftable `deny` at a post action interception point, such as `post_model_call` or `post_tool_call`, is reached only after the action has already executed. A host that suspends at such a point and later resumes MUST deliver the result that was already produced and MUST NOT execute the action a second time.
 
 ## 18. Streaming and parallel tools
 
@@ -419,7 +425,7 @@ An implementation conforms to this document as a runtime, as a host, or as both.
 
 A conformant runtime MUST evaluate in the order defined in section 6, build the policy input defined in section 7, serialize it canonically as defined in section 8, normalize results into the verdicts defined in section 13, validate and apply a transform as defined in section 14, enforce the resource limits in section 15, and report failures using only the reserved reasons in section 16. It MUST be stateless and deterministic as defined in section 1.1 and MUST fail closed on every error.
 
-A conformant host MUST honor the obligations in section 17. It MUST NOT carry out a denied action, MUST NOT carry out an action whose `escalate` verdict has not resolved to an allow, and MUST substitute the transformed policy target for the original when the runtime returns one. A host MUST NOT present an `evaluate_only` result as enforcement.
+A conformant host MUST honor the obligations in section 17. It MUST NOT carry out a denied action, MUST NOT carry out an action whose liftable `deny` has not resolved to an allow, and MUST apply a `transform` verdict and substitute the result for the original policy target. A host MUST NOT present an `evaluate_only` result as enforcement.
 
 The reference conformance suite in the repository exercises these requirements across the core runtime and every SDK and is the practical test of conformance.
 
@@ -431,9 +437,9 @@ The runtime trusts the snapshot the host supplies. It does not authenticate the 
 
 Annotations are untrusted signal. An annotator observes potentially adversarial content such as a user prompt or a tool result. A policy MUST treat annotation values as data and MUST NOT let them widen authority. A failed annotator fails closed, so an annotator failure cannot silently allow an action.
 
-A `transform` verdict is bounded to the policy target. The runtime applies a transform only within `$policy_target` and rejects any `transform` path rooted outside it, so a policy cannot use a transform to reach the snapshot, the projected tool, or host state.
+A `transform` verdict is bounded to the policy target. A transform applies only within `$target`, and a `transform` path rooted outside it is rejected, so a policy cannot use a transform to reach the snapshot, the projected tool, or host state. The engine rejects an out-of-target path during normalization; the host rejects one that arrives at an interception point where the contract permits no transform.
 
-Approvals bind to `enforced_identity`. An `escalate` verdict is approved against the `enforced_identity` of the action that will execute, and the SDK rederives that identity before proceeding and fails closed on a mismatch. This prevents an approval granted for one action from authorizing a different action and closes a time of check to time of use gap.
+Approvals bind to `enforced_identity`. A liftable `deny` is approved against the `enforced_identity` of the action that will execute, and the SDK rederives that identity before proceeding and fails closed on a mismatch. This prevents an approval granted for one action from authorizing a different action and closes a time of check to time of use gap.
 
 Telemetry MUST NOT carry sensitive values. The runtime emits low cardinality metadata only and never the values enumerated in section 19.
 
@@ -471,7 +477,7 @@ The current version carries the `-alpha` pre release tag and the status Draft. W
 
 ## 24. Approval manifest section
 
-A manifest MAY carry a top level `approval` object that declares how a host resolves an `escalate` verdict. The section is optional. A manifest without it has no declared resolvers and a host falls back to its own approval configuration as described in section 17.1.
+A manifest MAY carry a top level `approval` object that declares how a host resolves a liftable `deny`. The section is optional. A manifest without it has no declared resolvers and a host falls back to its own approval configuration as described in section 17.1.
 
 | Field | Required | Type | Meaning |
 | --- | --- | --- | --- |
@@ -482,7 +488,7 @@ A manifest MAY carry a top level `approval` object that declares how a host reso
 | `fatigue_window_seconds` | no | integer | Window across which the fatigue counter accumulates. |
 | `resolvers` | no | object | Map of resolver name to an opaque resolver descriptor that carries a discriminating `type` field. |
 
-The runtime validates the shape of `approval`. It MUST fail closed with `runtime_error:manifest_invalid` when `approval` is present and is not an object, when `default_resolver` or `on_timeout` is present and is not a string, when `timeout_seconds`, `fatigue_threshold`, or `fatigue_window_seconds` is present and is not a non negative integer, or when `resolvers` is present and is not an object. The runtime treats each resolver descriptor as opaque beyond its `type` discriminator and does not interpret the rest of its contents. Resolution of a resolver name to a concrete approval mechanism is a host concern defined in section 17.1. When an `escalate` verdict is returned and no resolver matches the `default_resolver`, the SDK enforcement layer MUST fail closed with `runtime_error:approval_resolver_missing`.
+The runtime validates the shape of `approval`. It MUST fail closed with `runtime_error:manifest_invalid` when `approval` is present and is not an object, when `default_resolver` or `on_timeout` is present and is not a string, when `timeout_seconds`, `fatigue_threshold`, or `fatigue_window_seconds` is present and is not a non negative integer, or when `resolvers` is present and is not an object. The runtime treats each resolver descriptor as opaque beyond its `type` discriminator and does not interpret the rest of its contents. Resolution of a resolver name to a concrete approval mechanism is a host concern defined in section 17.1. When a liftable `deny` is returned and no resolver matches the `default_resolver`, the host layer MUST fail closed with `host_error:approval_unresolved`.
 
 The `approval` schema is published at [`spec/schema/approval.schema.json`](schema/approval.schema.json).
 
@@ -493,7 +499,7 @@ This appendix is informative. It walks one evaluation from end to end.
 A host governs the `input` intervention point with a custom policy. The manifest binds the policy and selects the user text as the policy target.
 
 ```yaml
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: worked-example
 policies:

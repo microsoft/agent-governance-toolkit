@@ -7,7 +7,7 @@ using AutoGen.Core;
 using Microsoft.Extensions.AI;
 
 const string BasicHostManifest = """
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: basic-host-example
 policies:
@@ -28,7 +28,7 @@ annotators:
     type: classifier
 """;
 
-var nativeLibraryPath = Path.Combine(AppContext.BaseDirectory, "libagent_control_specification_core.so");
+var nativeLibraryPath = Path.Combine(AppContext.BaseDirectory, "libagent_control_specification.so");
 Assert(File.Exists(nativeLibraryPath), $"Native library was not copied to test output: {nativeLibraryPath}");
 
 using (var corpus = JsonDocument.Parse(
@@ -59,7 +59,7 @@ using (var corpus = JsonDocument.Parse(
 }
 
 const string ValidOverlayManifest = """
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 extends: [base.yaml]
 """;
 var embeddedNullValidation = ArtifactValidator.Validate(
@@ -92,7 +92,7 @@ var result = await control.EvaluateInputAsync(
 AssertEqual(Decision.Transform, result.Verdict.Decision, "input policy should transform.");
 Assert(result.TransformedPolicyTarget.HasValue, "transform verdict should include a transformed policy target.");
 Assert(result.Verdict.Transform is not null, "transform verdict should carry the transform payload.");
-AssertEqual("$policy_target.text", result.Verdict.Transform!.Path, "transform path should round-trip from the dispatcher.");
+AssertEqual("$target.text", result.Verdict.Transform!.Path, "transform path should round-trip from the dispatcher.");
 var transformedPolicyTarget = result.TransformedPolicyTarget!.Value;
 AssertEqual(
     "Please summarize account [REDACTED].",
@@ -121,7 +121,7 @@ AssertEqual(1, labelingResult.Verdict.ResultLabels!.Count, "result_labels should
 AssertEqual("confidential", labelingResult.Verdict.ResultLabels![0], "result_labels should round-trip verbatim.");
 
 const string InputOutputManifest = """
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 policies:
   p:
     type: custom
@@ -358,7 +358,7 @@ try
 }
 catch (AgentControlBlockedException ex)
 {
-    AssertEqual("runtime_error:approval_action_mismatch", ex.Result.Verdict.Reason, "mismatched approval should use the reserved reason.");
+    AssertEqual("host_error:approval_identity_mismatch", ex.Result.Verdict.Reason, "mismatched approval should use the reserved reason.");
 }
 
 var denyApprovalControl = new AgentControl(escalateInputRuntime, DenyApproval());
@@ -440,7 +440,7 @@ try
 }
 catch (AgentControlBlockedException ex)
 {
-    AssertEqual("runtime_error:approval_resolver_failed", ex.Result.Verdict.Reason, "a resolver failure should use the reserved reason.");
+    AssertEqual("host_error:approval_resolver_failed", ex.Result.Verdict.Reason, "a resolver failure should use the reserved reason.");
     Assert(ex.Result.PolicyInput.HasValue, "a resolver failure should retain the original policy input.");
     AssertEqual(
         AgentControl.ActionIdentity(ex.Result.PolicyInput!.Value),
@@ -455,7 +455,7 @@ var invalidModeResult = await control.EvaluateInputAsync(
     new { text = "invalid mode" },
     mode: (EnforcementMode)999);
 AssertEqual(Decision.Deny, invalidModeResult.Verdict.Decision, "an invalid enforcement mode should fail closed.");
-AssertEqual("runtime_error:request_invalid", invalidModeResult.Verdict.Reason, "an invalid enforcement mode should map to request_invalid.");
+AssertEqual("host_error:context_invalid", invalidModeResult.Verdict.Reason, "an invalid enforcement mode should map to request_invalid.");
 
 // Adapter-level approval-resolver parity.
 var escalateModelRuntime = new DelegateRuntime(request =>
@@ -486,7 +486,7 @@ try
 }
 catch (AgentControlBlockedException ex)
 {
-    AssertEqual("runtime_error:adapter_unsupported", ex.Result.Verdict.Reason, "unsupported framework adapter should use the reserved reason.");
+    AssertEqual("host_error:adapter_unsupported", ex.Result.Verdict.Reason, "unsupported framework adapter should use the reserved reason.");
 }
 
 var agentMiddleware = new AgentControlAgentMiddleware<string, string>(new AgentControl(escalateInputRuntime));
@@ -838,7 +838,7 @@ foreach (var caseElement in parityFixture.RootElement.GetProperty("cases").Enume
 }
 
 const string ChainChildManifest = """
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 tools:
   noop_tool:
     clearance: public
@@ -966,7 +966,7 @@ static InterventionPointResult MismatchedEscalateResult()
         ["snapshot"] = new Dictionary<string, object?> { ["input"] = "mutated" },
     });
     return new InterventionPointResult(
-        new Verdict(Decision.Escalate),
+        new Verdict(Decision.Deny, Approval: JsonSerializer.SerializeToElement(new Dictionary<string, object>())),
         PolicyInput: mutatedPolicyInput,
         ActionIdentity: AgentControl.ActionIdentity(originalPolicyInput));
 }
@@ -978,7 +978,7 @@ static InterventionPointResult NestedOutputTransformResult()
         ["policy_target"] = new Dictionary<string, object?> { ["path"] = "$.output.raw" },
     });
     return new InterventionPointResult(
-        new Verdict(Decision.Transform, Transform: new Transform("$policy_target", "token [REDACTED]")),
+        new Verdict(Decision.Transform, Transform: new Transform("$target", "token [REDACTED]")),
         JsonSerializer.SerializeToElement("token [REDACTED]"),
         policyInput,
         AgentControl.ActionIdentity(policyInput),
@@ -998,15 +998,34 @@ static InterventionPointResult Result(Decision decision, object? transformedPoli
             nameof(transformedPolicyTarget));
     }
 
+    // The engine normalizes the retired intents before a verdict reaches the
+    // host: warn becomes allow plus warnings[], escalate becomes a deny
+    // carrying approval. Test fixtures ask for the intent and get the shape
+    // the host would really see, so the call sites stay readable.
+    var warnings = decision == Decision.Warn
+        ? new[] { new Warning("fixture_warning") }
+        : null;
+    var approval = decision == Decision.Escalate
+        ? JsonSerializer.SerializeToElement(new Dictionary<string, object>())
+        : (JsonElement?)null;
+    var normalized = decision switch
+    {
+        Decision.Warn => Decision.Allow,
+        Decision.Escalate => Decision.Deny,
+        _ => decision,
+    };
+
     return new(
         new Verdict(
-            decision,
+            normalized,
             // AGT D1.1: Transform decisions MUST carry the `transform` payload.
-            // We synthesize a $policy_target replacement here so simulated
+            // We synthesize a $target replacement here so simulated
             // transforms match the wire shape the FFI surfaces.
             Transform: decision == Decision.Transform && transformedPolicyTarget is not null
-                ? new Transform("$policy_target", transformedPolicyTarget)
-                : null),
+                ? new Transform("$target", transformedPolicyTarget)
+                : null,
+            Warnings: warnings,
+            Approval: approval),
         transformedPolicyTarget is null ? null : JsonSerializer.SerializeToElement(transformedPolicyTarget),
         TransformedPolicyTargetApplied: transformedPolicyTarget is not null);
 }
@@ -1237,7 +1256,7 @@ file sealed class CustomPolicy : IPolicyDispatcher
                 message = "Account number was redacted before continuing.",
                 transform = new
                 {
-                    path = "$policy_target.text",
+                    path = "$target.text",
                     value = "Please summarize account [REDACTED].",
                 },
             }));
@@ -1287,7 +1306,7 @@ file sealed class NullTransformPolicy : IPolicyDispatcher
             decision = "transform",
             transform = new
             {
-                path = "$policy_target",
+                path = "$target",
                 value = (object?)null,
             },
         }));

@@ -724,7 +724,10 @@ impl<'v> CredentialInjector<'v> {
         let requested = collect_placeholders(&payload);
 
         // 1. Reject anything outside the workflow-supplied allowlist.
-        let outside: Vec<&String> = requested.iter().filter(|n| !allowlist.contains(n.as_str())).collect();
+        let outside: Vec<&String> = requested
+            .iter()
+            .filter(|n| !allowlist.contains(n.as_str()))
+            .collect();
         if !outside.is_empty() {
             let event = VaultAuditEvent {
                 timestamp: now_seconds(),
@@ -857,10 +860,7 @@ fn substitute(payload: serde_json::Value, resolved: &HashMap<String, String>) ->
     })
 }
 
-fn map_strings<F: Fn(&str) -> String>(
-    payload: serde_json::Value,
-    fn_: &F,
-) -> serde_json::Value {
+fn map_strings<F: Fn(&str) -> String>(payload: serde_json::Value, fn_: &F) -> serde_json::Value {
     match payload {
         serde_json::Value::String(s) => serde_json::Value::String(fn_(&s)),
         serde_json::Value::Array(arr) => {
@@ -887,8 +887,7 @@ fn map_strings<F: Fn(&str) -> String>(
 /// resolved credential values.
 #[must_use]
 pub fn audit_digest(events: &[VaultAuditEvent], key: &[u8]) -> String {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key)
-        .expect("HMAC accepts any key length");
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC accepts any key length");
     for ev in events {
         let json = serde_json::to_vec(ev).unwrap_or_default();
         mac.update(&json);

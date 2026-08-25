@@ -123,8 +123,9 @@ test("GHCP parses JSON-string tool args into an object for the policy target", a
 test("GHCP escalate maps to a Copilot ask decision by default", async () => {
   const { extension } = makeExtension(({ interventionPoint }) => ({
     verdict: {
-      decision: interventionPoint === InterventionPoint.PreToolCall ? Decision.Escalate : Decision.Allow,
+      decision: interventionPoint === InterventionPoint.PreToolCall ? Decision.Deny : Decision.Allow,
       message: "needs approval",
+      ...(interventionPoint === InterventionPoint.PreToolCall ? { approval: {} } : {}),
     },
   }));
   extension.onEvent(toolRequestEvent("s1", [{ role: "user", content: "x" }]));
@@ -138,8 +139,9 @@ test("GHCP escalate maps to deny when escalate option is 'deny'", async () => {
   const { extension } = makeExtension(
     ({ interventionPoint }) => ({
       verdict: {
-        decision: interventionPoint === InterventionPoint.PreToolCall ? Decision.Escalate : Decision.Allow,
+        decision: interventionPoint === InterventionPoint.PreToolCall ? Decision.Deny : Decision.Allow,
         message: "needs approval",
+        ...(interventionPoint === InterventionPoint.PreToolCall ? { approval: {} } : {}),
       },
     }),
     { escalate: "deny" },
@@ -153,8 +155,11 @@ test("GHCP escalate maps to deny when escalate option is 'deny'", async () => {
 test("GHCP warn is non-blocking and proceeds as allow", async () => {
   const { extension } = makeExtension(({ interventionPoint }) => ({
     verdict: {
-      decision: interventionPoint === InterventionPoint.PreToolCall ? Decision.Warn : Decision.Allow,
+      decision: Decision.Allow,
       message: "heads up",
+      ...(interventionPoint === InterventionPoint.PreToolCall
+        ? { warnings: [{ message: "heads up" }] }
+        : {}),
     },
   }));
   extension.onEvent(toolRequestEvent("s1", [{ role: "user", content: "x" }]));

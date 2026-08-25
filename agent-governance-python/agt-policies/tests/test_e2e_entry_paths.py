@@ -83,7 +83,7 @@ verdict := v if {
         encoding="utf-8",
     )
     manifest = {
-        "agent_control_specification_version": "0.3.0-alpha-agt",
+        "agent_control_specification_version": "0.4.0-alpha.1",
         "metadata": {"name": "direct_budget_e2e"},
         "extends": [],
         "policies": {
@@ -168,7 +168,7 @@ def test_direct_entry_path_cedar_schema_path_if_available(
     _write_yaml(
         manifest_path,
         {
-            "agent_control_specification_version": "0.3.0-alpha-agt",
+            "agent_control_specification_version": "0.4.0-alpha.1",
             "metadata": {"name": "cedar_schema_path_e2e"},
             "policies": {
                 "guard": {
@@ -206,7 +206,7 @@ def test_direct_entry_path_cedar_schema_path_if_available(
 def test_runtime_approval_timeout_denies_promptly(tmp_path: Path) -> None:
     manifest_path = tmp_path / "approval_manifest.yaml"
     manifest_path.write_text(
-        """agent_control_specification_version: 0.3.0-alpha-agt
+        """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: approval_timeout_e2e
 extends: []
@@ -254,4 +254,6 @@ approval:
 
     assert elapsed < 1.5
     assert result.verdict.decision.value == "deny"
-    assert result.verdict.reason == "runtime_error:approval_timeout"
+    # A timed out approval is an approval that did not resolve, and
+    # `approval_timeout` is not in the reserved set.
+    assert result.verdict.reason == "host_error:approval_unresolved"
