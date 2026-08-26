@@ -9,7 +9,6 @@ from types import SimpleNamespace
 
 import pytest
 
-import agentmesh.governance.approval as approval_module
 from agentmesh.governance.approval import (
     ApprovalDecision,
     ApprovalRequest,
@@ -56,11 +55,11 @@ class TestCallbackTimeoutDeprecation:
             CallbackApproval(_cb(), on_timeout="allow", strict=False)
 
     def test_timeout_always_denies(self, monkeypatch):
-        # Use a deterministic clock rather than real sleep. Windows monotonic
-        # clocks may have coarser resolution than a short test sleep.
+        # Patch the exact function-global clock so the test is deterministic
+        # even when package consolidation loads the implementation elsewhere.
         ticks = iter((100.0, 100.001))
-        monkeypatch.setattr(
-            approval_module,
+        monkeypatch.setitem(
+            CallbackApproval.request_approval.__globals__,
             "time",
             SimpleNamespace(monotonic=lambda: next(ticks)),
         )
