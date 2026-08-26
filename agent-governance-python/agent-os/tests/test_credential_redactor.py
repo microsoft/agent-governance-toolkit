@@ -454,6 +454,25 @@ def test_context_cued_ssn_does_not_match_uncued_bare_digits(text: str):
     )
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Homeowners Assn: 745102386",  # "Assn" ends in "ssn"
+        "ISSN 123456789",              # "ISSN" ends in "SSN"
+        "Confessn 745102386",          # fabricated word ending in "ssn"
+    ],
+)
+def test_context_cued_ssn_rejects_word_ending_in_ssn(text: str):
+    """A word that merely *ends* in 'ssn' (Assn, ISSN) must not cue the
+    detector, or the gateway hard-blocks ordinary traffic — re-breaking
+    the #3531 false-positive suppression.
+    """
+    assert not any(
+        m.name == "US SSN (context-cued)"
+        for m in CredentialRedactor.find_pii_matches(text)
+    )
+
+
 def test_context_cued_ssn_match_captures_digits_only():
     """The matched_text for a context-cued SSN must include the full regex
     match (cue + digits) so redaction covers the cue too.

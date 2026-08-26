@@ -192,7 +192,7 @@ class CredentialRedactor:
             # tight (keyword, optional separator/punctuation, then digits)
             # to avoid matching unrelated nine-digit numbers.  Issue #3592.
             pattern=re.compile(
-                r"(?i)(?:social\s+security(?:\s+(?:number|num|no|#))?"
+                r"(?i)(?<![A-Za-z])(?:social\s+security(?:\s+(?:number|num|no|#))?"
                 r"|soc(?:ial)?\s*sec"
                 r"|ssn)"
                 r"[\s:=]*"

@@ -26,7 +26,7 @@ PII_PATTERNS: tuple[re.Pattern[str], ...] = (
     # CredentialRedactor.PII_PATTERNS so both detectors stay in lockstep.
     # Issue #3592.
     re.compile(
-        r"(?i)(?:social\s+security(?:\s+(?:number|num|no|#))?"
+        r"(?i)(?<![A-Za-z])(?:social\s+security(?:\s+(?:number|num|no|#))?"
         r"|soc(?:ial)?\s*sec"
         r"|ssn)"
         r"[\s:=]*"

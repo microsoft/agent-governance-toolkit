@@ -106,6 +106,9 @@ _CONTEXT_CUED_NON_MATCHES = (
     'order_123456789',
     'invoice 745102386',
     'phone 745102386',
+    'Homeowners Assn: 745102386',  # "Assn" ends in "ssn"
+    'ISSN 123456789',              # "ISSN" ends in "SSN"
+    'Confessn 745102386',          # fabricated word ending in "ssn"
 )
 
 @pytest.mark.parametrize('text', _CONTEXT_CUED_MATCHES)
