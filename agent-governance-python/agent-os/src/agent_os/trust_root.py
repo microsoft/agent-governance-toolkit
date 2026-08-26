@@ -7,13 +7,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from agent_os._supervisor_constants import MAX_SUPERVISOR_LEVEL
 from agent_os.integrations._native_adapter_runtime import NativeAdapterRuntime
 from agent_os.integrations.base import AdapterExecutionState
-
-# Mirrored from agent_os.supervisor to avoid a circular import (supervisor
-# imports TrustDecision and TrustRoot from this module).  The authoritative
-# definition lives in supervisor.py; keep the two in sync.
-_MAX_SUPERVISOR_LEVEL = 1_000
 
 
 @dataclass
@@ -96,7 +92,7 @@ class TrustRoot:
         # so a level of ``10**100`` made validation hang. Even after the scan
         # itself is safe (O(n log n) in supervisors), a level that could never
         # be a realistic hierarchy position is rejected early.
-        if level > _MAX_SUPERVISOR_LEVEL:
+        if level > MAX_SUPERVISOR_LEVEL:
             return False
 
         # Root level must be deterministic — not an LLM agent

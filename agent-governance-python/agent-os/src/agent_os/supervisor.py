@@ -11,14 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from agent_os._supervisor_constants import MAX_SUPERVISOR_LEVEL
 from agent_os.trust_root import TrustDecision, TrustRoot
-
-# An integer level exceeding this bound is rejected at registration.
-# Real supervision hierarchies rarely exceed single digits; 1 000 is generous
-# enough to never constrain legitimate use. Without this, Python's unbounded
-# integers allow a pathologically large level (e.g. ``10**100``) that makes
-# ``validate_hierarchy`` hang if it ever tries to iterate the numeric range.
-MAX_SUPERVISOR_LEVEL = 1_000
 
 
 @dataclass
@@ -123,9 +117,12 @@ class SupervisorHierarchy:
         # regardless of how large the numeric values are.
         if self._supervisors:
             occupied = sorted({s.level for s in self._supervisors if s.level >= 0})
-            for i in range(1, len(occupied)):
-                gap_start = occupied[i - 1] + 1
-                gap_end = occupied[i]
+            # Anchor at 0 so gaps below the minimum occupied level are reported
+            # (e.g. levels=[3] must report 1 and 2 missing, not nothing).
+            anchored = [0, *occupied] if occupied and occupied[0] != 0 else occupied
+            for i in range(1, len(anchored)):
+                gap_start = anchored[i - 1] + 1
+                gap_end = anchored[i]
                 for lvl in range(gap_start, gap_end):
                     violations.append(f"Level {lvl} has no registered supervisor")
 

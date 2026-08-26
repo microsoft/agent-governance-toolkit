@@ -151,13 +151,9 @@ class TestRegisterSupervisorRejectsOverLimitLevel:
             hierarchy.register_supervisor('bad', level=MAX_SUPERVISOR_LEVEL + 1)
 
     def test_astronomically_large_level_is_rejected(self) -> None:
-        """The original DoS vector: ``level=10**100`` hung ``validate_hierarchy``.
-
-        Measured on a 3.4 GHz machine before the fix: ``range(1, 10**100 + 1)``
-        never completes — CPython cannot even allocate the range iterator's
-        internal state for a 100-digit upper bound in finite time. With the
-        bound, registration fails instantly.
-        """
+        """The original DoS vector: ``level=10**100`` hung ``validate_hierarchy``
+        because the gap scan iterated ``range(1, 10**100 + 1)``.  With the
+        bound, registration fails instantly."""
         hierarchy = SupervisorHierarchy(trust_root=_root())
         with pytest.raises(ValueError, match="exceeds the maximum"):
             hierarchy.register_supervisor('dos', level=10**100)
@@ -165,13 +161,13 @@ class TestRegisterSupervisorRejectsOverLimitLevel:
     def test_level_at_the_limit_is_accepted(self) -> None:
         hierarchy = SupervisorHierarchy(trust_root=_root())
         hierarchy.register_supervisor('edge', level=MAX_SUPERVISOR_LEVEL)
-        assert any(s.name == 'edge' for s in hierarchy._supervisors)
+        assert 'edge' in hierarchy.get_authority_chain({})
 
     def test_rejected_level_does_not_enter_the_hierarchy(self) -> None:
         hierarchy = SupervisorHierarchy(trust_root=_root())
         with pytest.raises(ValueError):
             hierarchy.register_supervisor('ghost', level=MAX_SUPERVISOR_LEVEL + 1)
-        assert not any(s.name == 'ghost' for s in hierarchy._supervisors)
+        assert 'ghost' not in hierarchy.get_authority_chain({})
 
 
 class TestGapScanWithSortedSet:
@@ -215,6 +211,18 @@ class TestGapScanWithSortedSet:
         assert len(gap_violations) == 5
         missing = {int(v.split('Level ')[1].split(' ')[0]) for v in gap_violations}
         assert missing == {1, 2, 4, 5, 6}
+
+    def test_gaps_below_minimum_occupied_level_are_reported(self) -> None:
+        """Counterexample from review: levels=[0,3] must report levels 1 and 2
+        missing.  Without anchoring at 0 the sorted-set walk starts at the
+        minimum occupied level and silently drops gaps below it."""
+        hierarchy = SupervisorHierarchy(trust_root=_root())
+        hierarchy.register_supervisor('root', level=0, is_agent=False)
+        hierarchy.register_supervisor('far', level=3, is_agent=True)
+        violations = hierarchy.validate_hierarchy()
+        gap_violations = [v for v in violations if 'has no registered supervisor' in v]
+        missing = {int(v.split('Level ')[1].split(' ')[0]) for v in gap_violations}
+        assert missing == {1, 2}
 
     def test_gap_scan_ignores_negative_levels(self) -> None:
         """Negative levels are reported by the separate check, not the gap scan.
