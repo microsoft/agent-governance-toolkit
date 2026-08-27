@@ -4,6 +4,7 @@
 package agentmesh
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -18,6 +19,12 @@ const (
 	DataClassificationRestricted
 	DataClassificationTopSecret
 )
+
+// Defined reports whether the classification is a member of the supported
+// sensitivity ladder.
+func (dc DataClassification) Defined() bool {
+	return dc >= DataClassificationPublic && dc <= DataClassificationTopSecret
+}
 
 // String returns the lowercase display spelling of the classification.
 func (dc DataClassification) String() string {
@@ -66,14 +73,28 @@ func NewContextEnvelope(envelopeID, workflowID, createdAt string) ContextEnvelop
 }
 
 // FoldContext returns the next envelope version after folding result labels.
-func FoldContext(env ContextEnvelope, newLabels []string, newSensitivity DataClassification) ContextEnvelope {
+// Undefined classifications return a validation error and a top-secret envelope.
+func FoldContext(
+	env ContextEnvelope,
+	newLabels []string,
+	newSensitivity DataClassification,
+) (ContextEnvelope, error) {
 	out := cloneContextEnvelope(env)
+	if err := validateDataClassification(
+		"envelope aggregate sensitivity",
+		out.AggregateSensitivity,
+	); err != nil {
+		return failClosedContextEnvelope(out), err
+	}
+	if err := validateDataClassification("new sensitivity", newSensitivity); err != nil {
+		return failClosedContextEnvelope(out), err
+	}
 	out.Labels = unionTokens(out.Labels, newLabels)
 	if newSensitivity > out.AggregateSensitivity {
 		out.AggregateSensitivity = newSensitivity
 	}
 	out.Version++
-	return out
+	return out, nil
 }
 
 // ApplyContextRestrictions returns the next envelope version with restrictions added.
@@ -120,8 +141,23 @@ type AggregationResult struct {
 }
 
 // EvaluateAggregation applies matching rules and escalates unknown combinations at the threshold.
-func EvaluateAggregation(env ContextEnvelope, ruleset AggregationRuleSet, nCategoryThreshold int) AggregationResult {
+// Invalid classifications or rules return a validation error and an escalating
+// top-secret result.
+func EvaluateAggregation(
+	env ContextEnvelope,
+	ruleset AggregationRuleSet,
+	nCategoryThreshold int,
+) (AggregationResult, error) {
 	env = cloneContextEnvelope(env)
+	if err := validateDataClassification(
+		"envelope aggregate sensitivity",
+		env.AggregateSensitivity,
+	); err != nil {
+		return failClosedAggregationResult(env), err
+	}
+	if err := validateAggregationRuleSet(ruleset); err != nil {
+		return failClosedAggregationResult(env), err
+	}
 	sensitivity := env.AggregateSensitivity
 	restrictions := cloneTokens(env.Restrictions)
 	var applied []string
@@ -142,7 +178,7 @@ func EvaluateAggregation(env ContextEnvelope, ruleset AggregationRuleSet, nCateg
 		Restrictions:         restrictions,
 		Escalate:             len(applied) == 0 && len(env.Labels) >= nCategoryThreshold,
 		RulesApplied:         applied,
-	}
+	}, nil
 }
 
 // ContextOutcome is the governance-level result of a context-aware decision.
@@ -186,18 +222,27 @@ type ContextDecision struct {
 }
 
 // AccumulateContext folds an action result into the envelope and reruns aggregation.
+// Invalid classifications or rules return a validation error and a top-secret envelope.
 func AccumulateContext(
 	env ContextEnvelope,
 	resultLabels []string,
 	resultSensitivity DataClassification,
 	ruleset AggregationRuleSet,
 	nCategoryThreshold int,
-) ContextEnvelope {
-	folded := FoldContext(env, resultLabels, resultSensitivity)
-	aggregation := EvaluateAggregation(folded, ruleset, nCategoryThreshold)
+) (ContextEnvelope, error) {
+	folded, err := FoldContext(env, resultLabels, resultSensitivity)
+	if err != nil {
+		return folded, err
+	}
+	aggregation, err := EvaluateAggregation(folded, ruleset, nCategoryThreshold)
+	if err != nil {
+		folded.AggregateSensitivity = aggregation.AggregateSensitivity
+		folded.Restrictions = unionTokens(folded.Restrictions, aggregation.Restrictions)
+		return folded, err
+	}
 	raised := cloneContextEnvelope(folded)
 	raised.AggregateSensitivity = aggregation.AggregateSensitivity
-	return ApplyContextRestrictions(raised, aggregation.Restrictions)
+	return ApplyContextRestrictions(raised, aggregation.Restrictions), nil
 }
 
 // DecideNextContext gates the next action using the default Restricted sensitivity floor.
@@ -206,20 +251,27 @@ func DecideNextContext(
 	action string,
 	ruleset AggregationRuleSet,
 	nCategoryThreshold int,
-) ContextDecision {
+) (ContextDecision, error) {
 	return DecideNextContextWithFloor(env, action, ruleset, nCategoryThreshold, DataClassificationRestricted)
 }
 
 // DecideNextContextWithFloor gates the next action against the accumulated envelope.
+// Invalid classifications or rules return a validation error and a deny decision.
 func DecideNextContextWithFloor(
 	env ContextEnvelope,
 	action string,
 	ruleset AggregationRuleSet,
 	nCategoryThreshold int,
 	restrictedFloor DataClassification,
-) ContextDecision {
+) (ContextDecision, error) {
 	env = cloneContextEnvelope(env)
-	aggregation := EvaluateAggregation(env, ruleset, nCategoryThreshold)
+	if err := validateDataClassification("restricted floor", restrictedFloor); err != nil {
+		return failClosedContextDecision(env, err), err
+	}
+	aggregation, err := EvaluateAggregation(env, ruleset, nCategoryThreshold)
+	if err != nil {
+		return failClosedContextDecision(env, err), err
+	}
 	if aggregation.Escalate {
 		return ContextDecision{
 			Outcome: ContextOutcomeEscalate,
@@ -228,7 +280,7 @@ func DecideNextContextWithFloor(
 			},
 			AggregateSensitivity: aggregation.AggregateSensitivity,
 			Reason:               "aggregation threshold crossed with no governing rule",
-		}
+		}, nil
 	}
 
 	gating := contextRestrictedActions[action]
@@ -253,7 +305,7 @@ func DecideNextContextWithFloor(
 			},
 			AggregateSensitivity: aggregation.AggregateSensitivity,
 			Reason:               reason,
-		}
+		}, nil
 	}
 
 	return ContextDecision{
@@ -262,7 +314,7 @@ func DecideNextContextWithFloor(
 			ResultLabels: cloneTokens(env.Labels),
 		},
 		AggregateSensitivity: aggregation.AggregateSensitivity,
-	}
+	}, nil
 }
 
 // PolicyDecision collapses a context-aware decision onto the existing policy verdicts.
@@ -383,4 +435,59 @@ func containsAllTokens(have []string, need []string) bool {
 		}
 	}
 	return true
+}
+
+func validateDataClassification(name string, classification DataClassification) error {
+	if classification.Defined() {
+		return nil
+	}
+	return fmt.Errorf(
+		"%s must be a defined DataClassification value: %d",
+		name,
+		classification,
+	)
+}
+
+func validateAggregationRuleSet(ruleset AggregationRuleSet) error {
+	for index, rule := range ruleset.Rules {
+		if len(normalizeTokens(rule.AllLabels)) == 0 {
+			return fmt.Errorf(
+				"aggregation rule %d (%q) must require at least one label",
+				index,
+				strings.TrimSpace(rule.Name),
+			)
+		}
+		if err := validateDataClassification(
+			fmt.Sprintf("aggregation rule %d (%q) sensitivity", index, strings.TrimSpace(rule.Name)),
+			rule.SetsSensitivity,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func failClosedContextEnvelope(env ContextEnvelope) ContextEnvelope {
+	out := cloneContextEnvelope(env)
+	out.AggregateSensitivity = DataClassificationTopSecret
+	return out
+}
+
+func failClosedAggregationResult(env ContextEnvelope) AggregationResult {
+	return AggregationResult{
+		AggregateSensitivity: DataClassificationTopSecret,
+		Restrictions:         cloneTokens(env.Restrictions),
+		Escalate:             true,
+	}
+}
+
+func failClosedContextDecision(env ContextEnvelope, err error) ContextDecision {
+	return ContextDecision{
+		Outcome: ContextOutcomeDeny,
+		Obligations: ContextObligationSet{
+			ResultLabels: cloneTokens(env.Labels),
+		},
+		AggregateSensitivity: DataClassificationTopSecret,
+		Reason:               err.Error(),
+	}
 }

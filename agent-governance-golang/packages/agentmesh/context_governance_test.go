@@ -32,6 +32,26 @@ func TestNewContextEnvelopeUsesCallerSuppliedCreatedAt(t *testing.T) {
 	}
 }
 
+func TestDataClassificationDefinedRejectsOutOfRangeValues(t *testing.T) {
+	for _, classification := range []DataClassification{
+		DataClassificationPublic,
+		DataClassificationInternal,
+		DataClassificationConfidential,
+		DataClassificationRestricted,
+		DataClassificationTopSecret,
+	} {
+		if !classification.Defined() {
+			t.Fatalf("classification %d should be defined", classification)
+		}
+	}
+
+	for _, classification := range []DataClassification{-1, 5, 99} {
+		if classification.Defined() {
+			t.Fatalf("classification %d should be undefined", classification)
+		}
+	}
+}
+
 func TestFoldContextJoinsLabelsAndRaisesSensitivity(t *testing.T) {
 	env := ContextEnvelope{
 		EnvelopeID:           "env-1",
@@ -40,7 +60,10 @@ func TestFoldContextJoinsLabelsAndRaisesSensitivity(t *testing.T) {
 		AggregateSensitivity: DataClassificationInternal,
 	}
 
-	out := FoldContext(env, []string{"financial"}, DataClassificationConfidential)
+	out, err := FoldContext(env, []string{"financial"}, DataClassificationConfidential)
+	if err != nil {
+		t.Fatalf("fold context: %v", err)
+	}
 
 	if !reflect.DeepEqual(out.Labels, []string{"financial", "pii"}) {
 		t.Fatalf("labels = %#v, want financial+pii", out.Labels)
@@ -64,13 +87,54 @@ func TestFoldContextIsIdempotentAndNeverLowersSensitivity(t *testing.T) {
 		AggregateSensitivity: DataClassificationRestricted,
 	}
 
-	out := FoldContext(env, []string{"pii"}, DataClassificationPublic)
+	out, err := FoldContext(env, []string{"pii"}, DataClassificationPublic)
+	if err != nil {
+		t.Fatalf("fold context: %v", err)
+	}
 
 	if !reflect.DeepEqual(out.Labels, []string{"pii"}) {
 		t.Fatalf("labels = %#v, want pii only", out.Labels)
 	}
 	if out.AggregateSensitivity != DataClassificationRestricted {
 		t.Fatalf("aggregate sensitivity = %v, want restricted", out.AggregateSensitivity)
+	}
+}
+
+func TestFoldContextRejectsUndefinedClassifications(t *testing.T) {
+	tests := []struct {
+		name           string
+		envSensitivity DataClassification
+		newSensitivity DataClassification
+	}{
+		{
+			name:           "envelope",
+			envSensitivity: DataClassification(-1),
+			newSensitivity: DataClassificationPublic,
+		},
+		{
+			name:           "result",
+			envSensitivity: DataClassificationPublic,
+			newSensitivity: DataClassification(99),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			out, err := FoldContext(ContextEnvelope{
+				EnvelopeID:           "env-1",
+				WorkflowID:           "wf-1",
+				AggregateSensitivity: test.envSensitivity,
+			}, []string{"pii"}, test.newSensitivity)
+			if err == nil {
+				t.Fatal("fold context error = nil, want undefined-classification error")
+			}
+			if out.AggregateSensitivity != DataClassificationTopSecret {
+				t.Fatalf(
+					"fail-closed sensitivity = %v, want top_secret",
+					out.AggregateSensitivity,
+				)
+			}
+		})
 	}
 }
 
@@ -126,7 +190,10 @@ func TestEvaluateAggregationRuleAndBackstop(t *testing.T) {
 		AggregateSensitivity: DataClassificationInternal,
 	}
 
-	result := EvaluateAggregation(env, contextGovernanceRules, 99)
+	result, err := EvaluateAggregation(env, contextGovernanceRules, 99)
+	if err != nil {
+		t.Fatalf("evaluate aggregation: %v", err)
+	}
 
 	if result.AggregateSensitivity != DataClassificationRestricted {
 		t.Fatalf("aggregate sensitivity = %v, want restricted", result.AggregateSensitivity)
@@ -141,14 +208,80 @@ func TestEvaluateAggregationRuleAndBackstop(t *testing.T) {
 		t.Fatal("escalate = true, want false for governed combination")
 	}
 
-	unknown := EvaluateAggregation(ContextEnvelope{
+	unknown, err := EvaluateAggregation(ContextEnvelope{
 		EnvelopeID:           "env-2",
 		WorkflowID:           "wf-1",
 		Labels:               []string{"a", "b", "c"},
 		AggregateSensitivity: DataClassificationInternal,
 	}, contextGovernanceRules, 3)
+	if err != nil {
+		t.Fatalf("evaluate unknown aggregation: %v", err)
+	}
 	if !unknown.Escalate {
 		t.Fatal("escalate = false, want true for unknown combination at threshold")
+	}
+}
+
+func TestEvaluateAggregationRejectsInvalidClassificationsAndEmptyRules(t *testing.T) {
+	env := ContextEnvelope{
+		EnvelopeID:           "env-1",
+		WorkflowID:           "wf-1",
+		Labels:               []string{"a", "b", "c"},
+		AggregateSensitivity: DataClassificationInternal,
+	}
+	tests := []struct {
+		name    string
+		env     ContextEnvelope
+		ruleset AggregationRuleSet
+	}{
+		{
+			name: "undefined envelope classification",
+			env: ContextEnvelope{
+				EnvelopeID:           "env-invalid",
+				WorkflowID:           "wf-1",
+				AggregateSensitivity: DataClassification(-1),
+			},
+			ruleset: contextGovernanceRules,
+		},
+		{
+			name: "undefined rule classification",
+			env:  env,
+			ruleset: AggregationRuleSet{Rules: []AggregationRule{{
+				Name:            "invalid_classification",
+				AllLabels:       []string{"a"},
+				SetsSensitivity: DataClassification(99),
+			}}},
+		},
+		{
+			name: "empty rule labels",
+			env:  env,
+			ruleset: AggregationRuleSet{Rules: []AggregationRule{{
+				Name:            "matches_everything",
+				AllLabels:       []string{" "},
+				SetsSensitivity: DataClassificationRestricted,
+			}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := EvaluateAggregation(test.env, test.ruleset, 3)
+			if err == nil {
+				t.Fatal("evaluate aggregation error = nil, want validation error")
+			}
+			if result.AggregateSensitivity != DataClassificationTopSecret {
+				t.Fatalf(
+					"fail-closed sensitivity = %v, want top_secret",
+					result.AggregateSensitivity,
+				)
+			}
+			if !result.Escalate {
+				t.Fatal("fail-closed escalate = false, want true")
+			}
+			if len(result.RulesApplied) != 0 {
+				t.Fatalf("rules applied = %#v, want none", result.RulesApplied)
+			}
+		})
 	}
 }
 
@@ -160,7 +293,16 @@ func TestAccumulateContextFoldsAndAppliesAggregationRestrictions(t *testing.T) {
 		AggregateSensitivity: DataClassificationInternal,
 	}
 
-	out := AccumulateContext(env, []string{"financial"}, DataClassificationConfidential, contextGovernanceRules, 99)
+	out, err := AccumulateContext(
+		env,
+		[]string{"financial"},
+		DataClassificationConfidential,
+		contextGovernanceRules,
+		99,
+	)
+	if err != nil {
+		t.Fatalf("accumulate context: %v", err)
+	}
 
 	if !reflect.DeepEqual(out.Labels, []string{"financial", "pii"}) {
 		t.Fatalf("labels = %#v, want financial+pii", out.Labels)
@@ -177,14 +319,20 @@ func TestAccumulateContextFoldsAndAppliesAggregationRestrictions(t *testing.T) {
 }
 
 func TestDecideNextContextGatesRestrictedActions(t *testing.T) {
-	env := AccumulateContext(ContextEnvelope{
+	env, err := AccumulateContext(ContextEnvelope{
 		EnvelopeID:           "env-1",
 		WorkflowID:           "wf-1",
 		Labels:               []string{"pii"},
 		AggregateSensitivity: DataClassificationInternal,
 	}, []string{"financial"}, DataClassificationConfidential, contextGovernanceRules, 99)
+	if err != nil {
+		t.Fatalf("accumulate context: %v", err)
+	}
 
-	decision := DecideNextContext(env, "export", contextGovernanceRules, 99)
+	decision, err := DecideNextContext(env, "export", contextGovernanceRules, 99)
+	if err != nil {
+		t.Fatalf("decide next context: %v", err)
+	}
 
 	if decision.Outcome != ContextOutcomeConstrain {
 		t.Fatalf("outcome = %q, want constrain", decision.Outcome)
@@ -208,7 +356,10 @@ func TestDecideNextContextUsesAggregationDerivedRestrictions(t *testing.T) {
 		AggregateSensitivity: DataClassificationInternal,
 	}
 
-	decision := DecideNextContext(env, "export", contextGovernanceRules, 99)
+	decision, err := DecideNextContext(env, "export", contextGovernanceRules, 99)
+	if err != nil {
+		t.Fatalf("decide next context: %v", err)
+	}
 
 	if decision.Outcome != ContextOutcomeConstrain {
 		t.Fatalf("outcome = %q, want constrain", decision.Outcome)
@@ -231,7 +382,10 @@ func TestDecideNextContextExplicitRestrictionGatesBelowFloor(t *testing.T) {
 		Restrictions:         []string{"no_external_export"},
 	}
 
-	decision := DecideNextContext(env, "export", contextGovernanceRules, 99)
+	decision, err := DecideNextContext(env, "export", contextGovernanceRules, 99)
+	if err != nil {
+		t.Fatalf("decide next context: %v", err)
+	}
 	if decision.Outcome != ContextOutcomeConstrain {
 		t.Fatalf("outcome = %q, want constrain", decision.Outcome)
 	}
@@ -245,7 +399,10 @@ func TestDecideNextContextFloorGatesFlowActionWithoutExplicitRestriction(t *test
 		AggregateSensitivity: DataClassificationRestricted,
 	}
 
-	decision := DecideNextContext(env, "export", contextGovernanceRules, 99)
+	decision, err := DecideNextContext(env, "export", contextGovernanceRules, 99)
+	if err != nil {
+		t.Fatalf("decide next context: %v", err)
+	}
 	if decision.Outcome != ContextOutcomeConstrain {
 		t.Fatalf("outcome = %q, want constrain", decision.Outcome)
 	}
@@ -268,13 +425,48 @@ func TestDecideNextContextEscalatesUnknownCombinations(t *testing.T) {
 		AggregateSensitivity: DataClassificationInternal,
 	}
 
-	decision := DecideNextContext(env, "read", contextGovernanceRules, 3)
+	decision, err := DecideNextContext(env, "read", contextGovernanceRules, 3)
+	if err != nil {
+		t.Fatalf("decide next context: %v", err)
+	}
 
 	if decision.Outcome != ContextOutcomeEscalate {
 		t.Fatalf("outcome = %q, want escalate", decision.Outcome)
 	}
 	if decision.PolicyDecision(false) != Review {
 		t.Fatalf("policy decision = %q, want review", decision.PolicyDecision(false))
+	}
+}
+
+func TestDecideNextContextRejectsUndefinedRestrictedFloor(t *testing.T) {
+	decision, err := DecideNextContextWithFloor(
+		ContextEnvelope{
+			EnvelopeID:           "env-1",
+			WorkflowID:           "wf-1",
+			AggregateSensitivity: DataClassificationInternal,
+		},
+		"export",
+		contextGovernanceRules,
+		99,
+		DataClassification(-1),
+	)
+	if err == nil {
+		t.Fatal("decide next context error = nil, want invalid-floor error")
+	}
+	if decision.Outcome != ContextOutcomeDeny {
+		t.Fatalf("fail-closed outcome = %q, want deny", decision.Outcome)
+	}
+	if decision.AggregateSensitivity != DataClassificationTopSecret {
+		t.Fatalf(
+			"fail-closed sensitivity = %v, want top_secret",
+			decision.AggregateSensitivity,
+		)
+	}
+	if decision.PolicyDecision(true) != Deny {
+		t.Fatalf(
+			"fail-closed policy decision = %q, want deny",
+			decision.PolicyDecision(true),
+		)
 	}
 }
 

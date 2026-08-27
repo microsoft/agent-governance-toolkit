@@ -116,11 +116,11 @@ Workflow-scoped context envelopes for accumulated labels, aggregate sensitivity,
 | Type / Function | Description |
 |---|---|
 | `NewContextEnvelope(envelopeID, workflowID, createdAt)` | Create an empty workflow-scoped context envelope with a caller-supplied timestamp |
-| `FoldContext(env, labels, sensitivity)` | Return the next envelope version with labels folded and sensitivity raised |
+| `FoldContext(env, labels, sensitivity)` | Return the next envelope version with labels folded and sensitivity raised, or a validation error |
 | `ApplyContextRestrictions(env, restrictions)` | Return the next envelope version with grow-only restrictions applied |
-| `EvaluateAggregation(env, ruleset, threshold)` | Apply organization-authored aggregation rules and escalate unknown combinations |
-| `AccumulateContext(env, labels, sensitivity, ruleset, threshold)` | Fold post-execution result labels and apply aggregation-derived restrictions |
-| `DecideNextContext(env, action, ruleset, threshold)` | Gate export, delegation, and memory writes against accumulated state |
+| `EvaluateAggregation(env, ruleset, threshold)` | Validate and apply organization-authored aggregation rules, escalating unknown combinations |
+| `AccumulateContext(env, labels, sensitivity, ruleset, threshold)` | Fold post-execution result labels and apply aggregation-derived restrictions, or fail closed on invalid classifications or rules |
+| `DecideNextContext(env, action, ruleset, threshold)` | Gate export, delegation, and memory writes against accumulated state, or return a fail-closed decision with a validation error |
 | `(ContextDecision).PolicyDecision(hasObligationChannel)` | Collapse context outcomes onto the existing Go policy verdicts |
 | `MergeContextRestrictions(parent, childDeclared)` | Inherit parent restrictions across delegation boundaries |
 | `DelegateContext(parent, childID, childDeclared, createdAt)` | Construct a child envelope with inherited restrictions and a caller-supplied timestamp |
