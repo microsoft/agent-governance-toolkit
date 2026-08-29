@@ -8,7 +8,7 @@ Targets: trust/cards.py, identity/spiffe.py, identity/sponsor.py,
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch, PropertyMock
 from urllib.parse import urlparse
 import json
@@ -584,198 +584,244 @@ class TestSponsorRegistry:
 
 # ---------------------------------------------------------------------------
 # integrations/http_middleware.py
+#
+# End-to-end Flask/FastAPI coverage lives in tests/test_http_middleware.py
+# against real apps. These are unit-level checks of the verification contract.
+# They deliberately avoid mocking the signature primitives: an earlier revision
+# mocked ``verify_signature`` so that it *raised*, which hid the fact that the
+# real method returns ``bool`` and never raises — the authentication bypass.
 # ---------------------------------------------------------------------------
+import base64 as _b64
+import secrets as _secrets
+
+from agentmesh.identity.agent_id import IdentityRegistry
 from agentmesh.integrations.http_middleware import (
-    TrustMiddleware,
+    PeerCredential,
     TrustConfig,
+    TrustMiddleware,
     VerificationResult,
     flask_trust_required,
-    fastapi_trust_required,
+    install_fastapi_trust,
 )
+from agentmesh.integrations.request_auth import build_request_signature_payload
+
+_AUDIENCE = "coverage.agentmesh.example"
+
+
+def _mw(*identities, config=None, identity=None):
+    registry = IdentityRegistry()
+    for agent in identities:
+        registry.register(agent)
+    return TrustMiddleware.from_registry(
+        registry,
+        config or TrustConfig(audience=_AUDIENCE),
+        identity=identity,
+        allow_insecure_replay_cache=True,
+    )
+
+
+def _auth_headers(signer, *, target="/x", method="GET", body=b"", audience=_AUDIENCE):
+    stamp = datetime.now(UTC).isoformat()
+    nonce = _b64.urlsafe_b64encode(_secrets.token_bytes(16)).decode().rstrip("=")
+    payload = build_request_signature_payload(
+        agent_did=str(signer.did), audience=audience, timestamp=stamp, nonce=nonce,
+        method=method, request_target=target, target_mode="raw", body=body,
+        signed_headers={},
+    )
+    return {
+        "X-Agent-DID": str(signer.did),
+        "X-Agent-Signature": signer.sign(payload),
+        "X-Agent-Timestamp": stamp,
+        "X-Agent-Nonce": nonce,
+    }
+
+
+_CTX = {
+    "method": "GET",
+    "request_target": "/x",
+    "body": b"",
+}
 
 
 class TestTrustMiddleware:
     """Tests for TrustMiddleware."""
 
     def test_verify_request_permissive_no_headers(self):
-        cfg = TrustConfig(permissive_mode=True)
-        mw = TrustMiddleware(config=cfg)
-        result, err = mw.verify_request({})
+        mw = _mw(
+            config=TrustConfig(
+                audience=_AUDIENCE, permissive_mode=True, required_trust_score=0.0
+            )
+        )
+        result, err = mw.verify_request({}, **_CTX)
         assert result.verified is True
+        assert result.authenticated is False
         assert err is None
 
+    def test_permissive_mode_rejects_contradictory_gates(self):
+        """Permissive mode plus an authorization gate is refused, not silently ignored."""
+        with pytest.raises(ValueError, match="required_trust_score"):
+            TrustConfig(audience=_AUDIENCE, permissive_mode=True)
+        with pytest.raises(ValueError, match="required_capabilities"):
+            TrustConfig(
+                audience=_AUDIENCE,
+                permissive_mode=True,
+                required_trust_score=0.0,
+                required_capabilities=("admin",),
+            )
+
     def test_verify_request_default_strict_no_headers(self):
-        """V16: Default config is now strict (permissive_mode=False)."""
-        mw = TrustMiddleware()
-        result, err = mw.verify_request({})
+        """V16: Default config is strict (permissive_mode=False)."""
+        result, err = _mw().verify_request({}, **_CTX)
         assert result.verified is False
         assert err is not None
 
     def test_verify_request_strict_no_headers(self):
-        cfg = TrustConfig(permissive_mode=False)
-        mw = TrustMiddleware(config=cfg)
-        result, err = mw.verify_request({})
+        mw = _mw(config=TrustConfig(audience=_AUDIENCE, permissive_mode=False))
+        result, err = mw.verify_request({}, **_CTX)
         assert result.verified is False
-        assert err is not None
-        assert "Missing X-Agent-DID" in err["reason"]
+        assert "Missing X-Agent-DID" in result.reason
+        assert "reason" not in err
 
-    def test_verify_request_with_did_no_identity(self):
-        mw = TrustMiddleware()
-        headers = {"X-Agent-DID": "did:mesh:abc"}
-        result, err = mw.verify_request(headers)
+    def test_verify_request_unsigned_did_rejected(self):
+        """MSRC regression: a bare X-Agent-DID header authenticates nobody."""
+        result, err = _mw().verify_request({"X-Agent-DID": "did:mesh:abc"}, **_CTX)
+        assert result.verified is False
+        assert result.authenticated is False
+        assert result.trust_score == 0.0
+        assert err["status"] == 401
+
+    def test_verify_request_signed_and_registered_passes(self):
+        agent = _make_identity(capabilities=["read", "write"])
+        mw = _mw(agent)
+        result, err = mw.verify_request(_auth_headers(agent), **_CTX)
+        assert err is None
         assert result.verified is True
-        assert result.peer_did == "did:mesh:abc"
+        assert result.authenticated is True
+        assert result.peer_did == str(agent.did)
 
     def test_verify_request_missing_capabilities(self):
-        cfg = TrustConfig(required_capabilities=["admin"])
-        mw = TrustMiddleware(config=cfg)
-        headers = {"X-Agent-DID": "did:mesh:abc", "X-Agent-Capabilities": "read,write"}
-        result, err = mw.verify_request(headers)
+        agent = _make_identity(capabilities=["read", "write"])
+        mw = _mw(agent, config=TrustConfig(audience=_AUDIENCE,
+                                           required_capabilities=["admin"]))
+        result, err = mw.verify_request(_auth_headers(agent), **_CTX)
         assert result.verified is False
         assert "admin" in err["missing"]
 
     def test_verify_request_capabilities_present(self):
-        cfg = TrustConfig(required_capabilities=["read"])
-        mw = TrustMiddleware(config=cfg)
-        headers = {"X-Agent-DID": "did:mesh:abc", "X-Agent-Capabilities": "read,write"}
-        result, err = mw.verify_request(headers)
-        assert result.verified is True
+        agent = _make_identity(capabilities=["read", "write"])
+        mw = _mw(agent, config=TrustConfig(audience=_AUDIENCE,
+                                           required_capabilities=["read"]))
+        result, err = mw.verify_request(_auth_headers(agent), **_CTX)
+        assert result.verified is True, err
 
     def test_verify_request_low_trust_score(self):
-        identity = MagicMock()
-        identity.verify_signature = MagicMock(side_effect=Exception("bad sig"))
-        cfg = TrustConfig(required_trust_score=0.5)
-        mw = TrustMiddleware(identity=identity, config=cfg)
-        headers = {
-            "X-Agent-DID": "did:mesh:abc",
-            "X-Agent-Public-Key": "some-key",
-        }
-        result, err = mw.verify_request(headers)
+        """A resolver may cap trust; a low score fails the threshold."""
+        agent = _make_identity(capabilities=["read"])
+        mw = TrustMiddleware(
+            config=TrustConfig(audience=_AUDIENCE, required_trust_score=0.5),
+            peer_resolver=lambda did: PeerCredential(
+                public_key=agent.public_key, capabilities=("read",), trust_score=0.3
+            ),
+            allow_insecure_replay_cache=True,
+        )
+        result, err = mw.verify_request(_auth_headers(agent), **_CTX)
         assert result.verified is False
         assert result.trust_score == 0.3
+        assert err["status"] == 403
 
     def test_verify_request_config_override(self):
-        mw = TrustMiddleware()
-        override = TrustConfig(required_capabilities=["special"])
-        headers = {"X-Agent-DID": "did:mesh:abc"}
-        result, err = mw.verify_request(headers, config_override=override)
+        agent = _make_identity(capabilities=["read"])
+        mw = _mw(agent)
+        override = TrustConfig(audience=_AUDIENCE, required_capabilities=["special"])
+        result, err = mw.verify_request(
+            _auth_headers(agent), config_override=override, **_CTX
+        )
         assert result.verified is False
 
     def test_response_headers_no_identity(self):
-        mw = TrustMiddleware()
-        assert mw.response_headers() == {}
+        assert _mw().response_headers() == {}
 
     def test_response_headers_with_identity(self):
         identity = _make_identity(capabilities=["read"])
-        mw = TrustMiddleware(identity=identity)
-        headers = mw.response_headers()
+        headers = _mw(identity, identity=identity).response_headers()
         assert headers["X-Agent-DID"] == str(identity.did)
         assert headers["X-Agent-Public-Key"] == identity.public_key
         assert headers["X-Agent-Capabilities"] == "read"
 
+    def test_verification_result_defaults_untrusted(self):
+        result = VerificationResult(verified=False)
+        assert result.authenticated is False
+        assert result.trust_score == 0.0
+
 
 class TestFlaskTrustRequired:
-    """Tests for flask_trust_required decorator."""
+    """Tests for flask_trust_required against a real Flask app."""
+
+    def _app(self, mw):
+        flask = pytest.importorskip("flask")
+
+        app = flask.Flask(__name__)
+
+        @app.route("/x")
+        @flask_trust_required(mw)
+        def view():
+            return flask.jsonify({"ok": True})
+
+        return app
 
     def test_flask_decorator_success(self):
-        # Mock Flask imports
-        mock_request = MagicMock()
-        mock_request.headers = {"X-Agent-DID": "did:mesh:abc"}
-        mock_g = MagicMock()
-        mock_jsonify = MagicMock(side_effect=lambda x: x)
-
-        mw = TrustMiddleware()
-
-        with patch.dict("sys.modules", {
-            "flask": MagicMock(request=mock_request, g=mock_g, jsonify=mock_jsonify),
-        }):
-            import sys
-            flask_mod = sys.modules["flask"]
-            flask_mod.request = mock_request
-            flask_mod.g = mock_g
-            flask_mod.jsonify = mock_jsonify
-
-            decorator = flask_trust_required(mw)
-
-            @decorator
-            def my_view():
-                return "ok"
-
-            result = my_view()
-            assert result == "ok"
+        agent = _make_identity(capabilities=["read"])
+        app = self._app(_mw(agent))
+        with app.test_client() as client:
+            resp = client.get("/x", headers=_auth_headers(agent))
+            assert resp.status_code == 200, resp.get_json()
 
     def test_flask_decorator_failure(self):
-        mock_request = MagicMock()
-        mock_request.headers = {}
-        mock_g = MagicMock()
-        mock_jsonify = MagicMock(side_effect=lambda x: x)
+        app = self._app(_mw())
+        with app.test_client() as client:
+            assert client.get("/x").status_code == 401
 
-        cfg = TrustConfig(permissive_mode=False)
-        mw = TrustMiddleware(config=cfg)
-
-        with patch.dict("sys.modules", {
-            "flask": MagicMock(request=mock_request, g=mock_g, jsonify=mock_jsonify),
-        }):
-            import sys
-            flask_mod = sys.modules["flask"]
-            flask_mod.request = mock_request
-            flask_mod.g = mock_g
-            flask_mod.jsonify = mock_jsonify
-
-            decorator = flask_trust_required(mw)
-
-            @decorator
-            def my_view():
-                return "ok"
-
-            result = my_view()
-            # Returns (error_body, status_code)
-            assert isinstance(result, tuple)
+    def test_flask_decorator_rejects_spoofed_did(self):
+        agent = _make_identity(capabilities=["read"])
+        app = self._app(_mw(agent))
+        with app.test_client() as client:
+            resp = client.get("/x", headers={"X-Agent-DID": str(agent.did)})
+            assert resp.status_code == 401
 
 
 class TestFastapiTrustRequired:
-    """Tests for fastapi_trust_required."""
+    """Tests for the FastAPI dependency against a real ASGI request."""
 
-    @pytest.mark.asyncio
-    async def test_fastapi_dependency_success(self):
-        mock_request = MagicMock()
-        mock_request.headers = {"X-Agent-DID": "did:mesh:abc"}
+    def _client(self, mw):
+        pytest.importorskip("fastapi")
+        pytest.importorskip("httpx")
+        from fastapi import Depends, FastAPI
+        from starlette.testclient import TestClient
 
-        mw = TrustMiddleware()
+        app = FastAPI()
+        dep = install_fastapi_trust(app, mw)
 
-        with patch.dict("sys.modules", {
-            "fastapi": MagicMock(),
-            "fastapi.responses": MagicMock(),
-        }):
-            dep = fastapi_trust_required(mw)
-            result = await dep(mock_request)
-            assert result.verified is True
+        @app.get("/x")
+        async def view(result=Depends(dep)):
+            return {"ok": True, "peer_did": result.peer_did}
 
-    @pytest.mark.asyncio
-    async def test_fastapi_dependency_failure(self):
-        mock_request = MagicMock()
-        mock_request.headers = {}
+        return TestClient(app)
 
-        cfg = TrustConfig(permissive_mode=False)
-        mw = TrustMiddleware(config=cfg)
+    def test_fastapi_dependency_success(self):
+        agent = _make_identity(capabilities=["read"])
+        resp = self._client(_mw(agent)).get("/x", headers=_auth_headers(agent))
+        assert resp.status_code == 200, resp.json()
+        assert resp.json()["peer_did"] == str(agent.did)
 
-        # Mock HTTPException
-        class FakeHTTPException(Exception):
-            def __init__(self, status_code, detail):
-                self.status_code = status_code
-                self.detail = detail
+    def test_fastapi_dependency_failure(self):
+        assert self._client(_mw()).get("/x").status_code == 401
 
-        mock_fastapi = MagicMock()
-        mock_fastapi.HTTPException = FakeHTTPException
-        mock_fastapi.Request = MagicMock
-
-        with patch.dict("sys.modules", {
-            "fastapi": mock_fastapi,
-            "fastapi.responses": MagicMock(),
-        }):
-            dep = fastapi_trust_required(mw)
-            with pytest.raises(FakeHTTPException):
-                await dep(mock_request)
+    def test_fastapi_dependency_rejects_spoofed_did(self):
+        agent = _make_identity(capabilities=["read"])
+        resp = self._client(_mw(agent)).get(
+            "/x", headers={"X-Agent-DID": str(agent.did)}
+        )
+        assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
