@@ -2,12 +2,30 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+
+test("hooks manifest invokes Node directly in exec form", async () => {
+  const hooksPath = fileURLToPath(new URL("../hooks/hooks.json", import.meta.url));
+  const manifest = JSON.parse(await readFile(hooksPath, "utf8"));
+  const hookScripts = {
+    PreToolUse: "pre-tool-use.mjs",
+    SessionStart: "session-start.mjs",
+    UserPromptSubmit: "user-prompt-submit.mjs",
+  };
+
+  for (const [event, script] of Object.entries(hookScripts)) {
+    const [matcher] = manifest.hooks[event];
+    const [hook] = matcher.hooks;
+
+    assert.equal(hook.command, "node");
+    assert.deepEqual(hook.args, ["${CLAUDE_PLUGIN_ROOT}/hooks/" + script]);
+  }
+});
 
 test("pre-tool-use hook emits a deny decision for dangerous shell bootstraps", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-claude-hook-"));
