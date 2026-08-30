@@ -180,8 +180,8 @@ def _lint_governance_conditions(
                     diagnosis = "condition never matches, so this rule can never apply"
                 else:
                     diagnosis = (
-                        "condition matches every resolved field value; "
-                        f"it does not constrain when the '{action}' action applies"
+                        "condition is vacuously true for every resolved field value, "
+                        f"so '{action}' applies unconditionally"
                     )
                 result.messages.append(
                     LintMessage(
@@ -338,7 +338,7 @@ def lint_file(path: str | Path) -> LintResult:
     if _is_governance_policy(data):
         result.messages.append(
             LintMessage(
-                "warning",
+                "error",
                 "Governance policy is missing agent_control_specification_version",
                 str(manifest_path),
                 1,

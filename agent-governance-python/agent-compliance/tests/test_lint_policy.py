@@ -75,8 +75,8 @@ def test_json_manifest_passes(tmp_path: Path) -> None:
     assert lint_file(path).passed
 
 
-def test_governance_policy_without_acs_version_warns(tmp_path: Path) -> None:
-    """A legacy governance document keeps its missing-version diagnostic."""
+def test_governance_policy_without_acs_version_is_error(tmp_path: Path) -> None:
+    """A governance document missing agent_control_specification_version is rejected."""
     path = _write_governance_policy(
         tmp_path / "policy.yaml",
         "version: '1.0'\nname: old\nrules: []\n",
@@ -84,10 +84,10 @@ def test_governance_policy_without_acs_version_warns(tmp_path: Path) -> None:
 
     result = lint_file(path)
 
-    assert result.passed
+    assert not result.passed
     assert any(
-        "agent_control_specification_version" in warning.message
-        for warning in result.warnings
+        "agent_control_specification_version" in error.message
+        for error in result.errors
     )
 
 
@@ -164,12 +164,13 @@ def test_governance_in_empty_value_is_error(tmp_path: Path) -> None:
     result = lint_file(path)
 
     assert not result.passed
-    errors = result.errors
-    assert len(errors) == 1
-    assert "block" in errors[0].message
-    assert "in" in errors[0].message
-    assert "empty" in errors[0].message
-    assert "rule can never apply" in errors[0].message
+    condition_errors = [
+        e for e in result.errors if "empty value list" in e.message
+    ]
+    assert len(condition_errors) == 1
+    assert "block" in condition_errors[0].message
+    assert "in" in condition_errors[0].message
+    assert "rule can never apply" in condition_errors[0].message
 
 
 def test_governance_not_in_empty_value_is_error(tmp_path: Path) -> None:
@@ -191,8 +192,8 @@ def test_governance_not_in_empty_value_is_error(tmp_path: Path) -> None:
     assert any(
         "not_in" in error.message
         and "empty" in error.message
-        and "condition matches every resolved field value" in error.message
-        and "does not constrain when the 'deny' action applies" in error.message
+        and "vacuously true" in error.message
+        and "'deny' applies unconditionally" in error.message
         for error in result.errors
     )
 
@@ -221,8 +222,8 @@ def test_governance_null_membership_value_is_not_an_empty_list_error(
     assert all("empty value list" not in message.message for message in result.messages)
 
 
-def test_governance_in_nonempty_value_passes(tmp_path: Path) -> None:
-    """An 'in' operator with a non-empty value list is satisfiable — no error."""
+def test_governance_in_nonempty_value_has_no_condition_error(tmp_path: Path) -> None:
+    """An 'in' operator with a non-empty value list is satisfiable — no condition error."""
     path = _write_governance_policy(
         tmp_path / "policy.yaml",
         "version: '1.0'\nname: t\nrules:\n"
@@ -237,7 +238,7 @@ def test_governance_in_nonempty_value_passes(tmp_path: Path) -> None:
 
     result = lint_file(path)
 
-    assert result.passed
+    assert not any("empty value list" in e.message for e in result.errors)
 
 
 def test_governance_conditions_list_empty_in_is_error(tmp_path: Path) -> None:
@@ -280,12 +281,12 @@ def test_governance_conditions_list_empty_not_in_is_composition_neutral(
     result = lint_file(path)
 
     assert any(
-        "does not constrain when the 'allow' action applies" in error.message
+        "'allow' applies unconditionally" in error.message
         for error in result.errors
     )
 
 
-def test_governance_non_membership_operator_empty_value_passes(tmp_path: Path) -> None:
+def test_governance_non_membership_operator_no_condition_error(tmp_path: Path) -> None:
     """Non-membership operators are not subject to the empty-value check."""
     path = _write_governance_policy(
         tmp_path / "policy.yaml",
@@ -300,7 +301,7 @@ def test_governance_non_membership_operator_empty_value_passes(tmp_path: Path) -
 
     result = lint_file(path)
 
-    assert result.passed
+    assert not any("empty value list" in e.message for e in result.errors)
 
 
 def test_governance_unknown_operator_is_error(tmp_path: Path) -> None:
@@ -347,8 +348,11 @@ def test_governance_multiple_rules_independent_errors(tmp_path: Path) -> None:
     result = lint_file(path)
 
     assert not result.passed
-    assert len(result.errors) == 2
-    messages = {m.message for m in result.errors}
+    condition_errors = [
+        e for e in result.errors if "empty value list" in e.message
+    ]
+    assert len(condition_errors) == 2
+    messages = {m.message for m in condition_errors}
     assert any("rule-a" in m for m in messages)
     assert any("rule-b" in m for m in messages)
 
