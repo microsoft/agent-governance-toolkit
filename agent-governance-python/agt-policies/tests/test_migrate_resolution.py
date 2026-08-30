@@ -1158,3 +1158,36 @@ def test_resolve_renders_array_path_accessor_for_nested_ne(tmp_path: Path) -> No
         'object.get(input.snapshot, ["tool_call", "args", "region"], null)' in rego
     )
     assert "object.get(object.get" not in rego
+
+
+@pytest.mark.parametrize(
+    ("operator", "value"),
+    [
+        ("eq", "us-east-1"),
+        ("ne", "eu-west-1"),
+        ("in", ["us-east-1", "us-west-2"]),
+        ("not_in", ["eu-west-1"]),
+        ("contains", "us"),
+        ("startswith", "us"),
+        ("endswith", "1"),
+        ("matches", "us-.*"),
+    ],
+)
+def test_allow_missing_field_never_matches(operator: str, value: object) -> None:
+    """An allow condition must not fire when the referenced field is absent.
+
+    Requested by reviewer: covers the allow + missing-field case for every
+    scalar operator, asserting the allow does NOT fire — complementing the
+    existing deny-flavored Rego shape tests.
+    """
+    sample_with_field = {"tool_call": {"args": {"region": "us-east-1"}}}
+    sample_without_field = {"tool_call": {"args": {}}}
+
+    cond = {"field": "tool_call.args.region", "operator": operator, "value": value}
+
+    assert _condition_matches(cond, sample_with_field), (
+        f"sanity: {operator} should match when field is present"
+    )
+    assert not _condition_matches(cond, sample_without_field), (
+        f"{operator}: allow must not fire when the field is absent"
+    )
