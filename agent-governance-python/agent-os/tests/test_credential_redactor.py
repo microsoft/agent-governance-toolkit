@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Tests for credential redaction helpers."""
 
+# cspell:ignore AKIAIOSFODNN Nlcjpw
+
 from __future__ import annotations
 
 import time
@@ -19,6 +21,12 @@ def _fake_github_token(prefix: str) -> str:
 # appears in source (avoids secret-scanner false positives on a test value).
 _FAKE_GOOGLE_KEY = "AIza" + "SyD1234567890abcdefghijklmnopqrstuv"
 
+# AWS's own documentation example access key ID — deterministic and clearly fake.
+_FAKE_AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
+
+# base64("user:pass123"), used only as a Basic auth credential value fixture.
+_FAKE_BASIC_AUTH_VALUE = "dXNlcjpwYXNzMTIz"
+
 
 def _fake_pem_block(label: str) -> str:
     return (
@@ -34,7 +42,7 @@ def _fake_pem_block(label: str) -> str:
     [
         ("key=sk-test_abcdefghijklmnopqrstuvwxyz", "OpenAI API key"),
         ("token=ghp_FAKEFORTESTING000000000000000000", "GitHub token"),
-        ("aws=AKIAIOSFODNN7EXAMPLE", "AWS access key"),
+        (f"aws={_FAKE_AWS_ACCESS_KEY}", "AWS access key"),
         ("AccountKey=abc123def456ghi789jkl012mno345pqr678stu901vw==", "Azure key"),
         (
             "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature",
@@ -151,7 +159,6 @@ def test_redacts_supported_github_token_prefixes(token: str):
     "text",
     [
         f"x{_fake_github_token('ghp')}",
-        f"{_fake_github_token('ghs')}_",
         "gho_short",
         "github_pat_short",
         "notgithub_pat_FAKE_FOR_TESTING_0000000000000000000000",
@@ -184,6 +191,25 @@ def test_private_key_pattern_handles_adversarial_input_quickly():
     elapsed = time.perf_counter() - start
 
     assert redacted == text
+    assert elapsed < 1.0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "AKIA" + "A" * 100_000,
+        "gh" + "p_" + "a" * 100_000,
+        "AIza" + "A" * 100_000,
+        "sk_live_" + "a" * 100_000,
+    ],
+)
+def test_trailing_lookahead_patterns_handle_adversarial_input_quickly(text: str):
+    # The new trailing lookahead is a single fixed-width check, not a repeated
+    # class, so it does not change the linear-time behavior of these patterns.
+    start = time.perf_counter()
+    CredentialRedactor.redact(text)
+    elapsed = time.perf_counter() - start
+
     assert elapsed < 1.0
 
 
@@ -317,13 +343,68 @@ def test_detection_and_redaction_agree_on_adjacent_anchored_secrets():
         "svc_" + _FAKE_GOOGLE_KEY,
         "env_sk_live_FakeTestKey0000",
         "db_password=Hunter2xyz",
+        f"auth_Basic {_FAKE_BASIC_AUTH_VALUE}",
+        "url_https://user:pass123@example.com/resource",
     ],
 )
 def test_detects_secret_glued_to_preceding_word_character(text: str):
     # Regression: a leading \b treats "_" as a word character, so a secret glued
     # directly after "_" was missed. The (?<![A-Za-z0-9]) anchor detects it.
+    # The Basic auth secret pattern kept a plain \b on its left edge after
+    # every other prefix-anchored pattern had already moved to the lookbehind,
+    # so both of its branches were still missing this case until now.
     assert CredentialRedactor.contains_credentials(text) is True
     assert REDACTED_PLACEHOLDER in CredentialRedactor.redact(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_type"),
+    [
+        (f"{_FAKE_AWS_ACCESS_KEY}_old", "AWS access key"),
+        (f"{_fake_github_token('ghp')}_old", "GitHub token"),
+        (f"{_fake_github_token('ghs')}_deprecated", "GitHub token"),
+        (f"{_fake_github_token('gho')}_backup", "GitHub token"),
+        (f"{_fake_github_token('ghu')}_rotated", "GitHub token"),
+        (f"{_fake_github_token('ghr')}_v2", "GitHub token"),
+        (f"{_FAKE_GOOGLE_KEY}_old", "Google API key"),
+        ("stripe=sk_live_FakeTestKey0000_rotated", "Stripe secret key"),
+        (f"Basic {_FAKE_BASIC_AUTH_VALUE}_old", "Basic auth secret"),
+    ],
+)
+def test_redacts_secret_glued_to_a_following_word_character(text: str, expected_type: str):
+    # Regression: AWS access key, GitHub token, Google API key and Stripe secret
+    # key either have a fixed length or a value class that excludes "_". A
+    # trailing \b (or, for GitHub, a lookahead that still excluded "_") after
+    # one of those finds no shorter match to back off to when the secret is
+    # followed by an annotation like "_old", so the entire pattern failed and
+    # the complete, valid secret passed through unredacted. Basic auth secret
+    # had the same right-edge gap once its left edge was anchored correctly.
+    redacted = CredentialRedactor.redact(text)
+
+    assert REDACTED_PLACEHOLDER in redacted
+    assert expected_type in CredentialRedactor.detect_credential_types(text)
+    assert CredentialRedactor.contains_credentials(text) is True
+    # The suffix is annotation, not part of the secret, and must survive.
+    assert text.rsplit("_", 1)[-1] in redacted
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"{_FAKE_AWS_ACCESS_KEY}X",
+        f"{_FAKE_GOOGLE_KEY}9",
+        "sk_live_short",
+        f"Basic {_FAKE_BASIC_AUTH_VALUE[:6]}",
+        "https://example.com/resource",
+    ],
+)
+def test_trailing_anchor_does_not_widen_the_match(text: str):
+    # The mirror assertion on the right edge is exactly as strict about what
+    # may follow as the fixed length or value class already was: one more
+    # alphanumeric character after a fixed-length key is a longer, different
+    # token, not the same key with an annotation, and must stay unmatched.
+    assert CredentialRedactor.redact(text) == text
+    assert CredentialRedactor.contains_credentials(text) is False
 
 
 @pytest.mark.parametrize(
