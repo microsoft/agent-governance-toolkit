@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from agent_os.credential_redactor import CredentialRedactor, REDACTED_PLACEHOLDER
+from agent_os.credential_redactor import REDACTED_PLACEHOLDER, CredentialRedactor
 
 
 def _fake_github_token(prefix: str) -> str:
@@ -324,6 +324,73 @@ def test_detects_secret_glued_to_preceding_word_character(text: str):
     # directly after "_" was missed. The (?<![A-Za-z0-9]) anchor detects it.
     assert CredentialRedactor.contains_credentials(text) is True
     assert REDACTED_PLACEHOLDER in CredentialRedactor.redact(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_redacted", "expected_type"),
+    [
+        ("AKIAIOSFODNN7EXAMPLE_old", "[REDACTED]_old", "AWS access key"),
+        (
+            "AWS_ACCESS_KEY_ID_OLD=AKIAIOSFODNN7EXAMPLE_deprecated",
+            "AWS_ACCESS_KEY_ID_OLD=[REDACTED]_deprecated",
+            "AWS access key",
+        ),
+        (
+            '{"AKIAIOSFODNN7EXAMPLE_backup": "unused"}',
+            '{"[REDACTED]_backup": "unused"}',
+            "AWS access key",
+        ),
+        (
+            f"rotate {_FAKE_GOOGLE_KEY}_v2 today",
+            "rotate [REDACTED]_v2 today",
+            "Google API key",
+        ),
+        (
+            "stripe=sk_live_FakeTestKey0000_rotated",
+            "stripe=[REDACTED]_rotated",
+            "Stripe secret key",
+        ),
+        (
+            "auth_Basic YWxhZGRpbjpvcGVuc2VzYW1l",
+            "auth_[REDACTED]",
+            "Basic auth secret",
+        ),
+        (
+            "url_https://alice:password@example.com/resource",
+            "url_[REDACTED]example.com/resource",
+            "Basic auth secret",
+        ),
+    ],
+)
+def test_redacts_complete_secret_before_glued_suffix(
+    text: str, expected_redacted: str, expected_type: str
+):
+    assert CredentialRedactor.redact(text) == expected_redacted
+    assert expected_type in CredentialRedactor.detect_credential_types(text)
+    assert CredentialRedactor.contains_credentials(text) is True
+
+
+def test_redacts_basic_auth_padding_completely():
+    text = "auth_Basic YWJjZGVmZ2hpaw=="
+
+    assert CredentialRedactor.redact(text) == "auth_[REDACTED]"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "xAKIAIOSFODNN7EXAMPLE_old",
+        "AKIAIOSFODNN7EXAMPLEX",
+        f"x{_FAKE_GOOGLE_KEY}",
+        f"{_FAKE_GOOGLE_KEY}X",
+        "sk_live_short",
+        "auth_Basic short",
+        "url_https://example.com/path",
+    ],
+)
+def test_secret_suffix_anchors_reject_alphanumeric_overruns_and_incomplete_values(text: str):
+    assert CredentialRedactor.contains_credentials(text) is False
+    assert CredentialRedactor.redact(text) == text
 
 
 @pytest.mark.parametrize(
