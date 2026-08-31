@@ -402,6 +402,24 @@ def test_governance_directory_with_impossible_condition(tmp_path: Path) -> None:
     assert any("never-fires" in m.message for m in result.errors)
 
 
+def test_undecodable_source_is_skipped_not_raised(tmp_path: Path) -> None:
+    """A source that is not valid UTF-8 must not break the whole module.
+
+    The vocabulary is derived in a module-scope comprehension, so an exception
+    escaping ``_operators_from_source`` is not a degraded lookup -- it makes
+    ``import agent_compliance.lint_policy`` raise.  ``UnicodeDecodeError``
+    subclasses ``ValueError``, so it slips past an ``(OSError, SyntaxError)``
+    guard that looks exhaustive.
+    """
+    from agent_compliance.lint_policy import _operators_from_source
+
+    undecodable = tmp_path / "evaluator.py"
+    # 0xff is not a valid UTF-8 start byte; reading it raises UnicodeDecodeError.
+    undecodable.write_bytes(b'operator == "eq"\n\xff\xfe invalid utf-8\n')
+
+    assert _operators_from_source(undecodable) == set()
+
+
 def test_known_operators_are_derived_from_every_evaluator_source() -> None:
     """The operator vocabulary must keep tracking the evaluators it protects.
 

@@ -63,7 +63,13 @@ def _string_values(node: ast.AST) -> set[str]:
 def _operators_from_source(path: Path) -> set[str]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError):
+    except (OSError, SyntaxError, ValueError):
+        # ``UnicodeDecodeError`` subclasses ``ValueError``, not ``OSError``, so a
+        # source file that is not valid UTF-8 escapes the first two arms. This
+        # derivation runs at module scope, so an uncaught error here does not
+        # degrade one source -- it makes ``lint_policy`` itself unimportable.
+        # Skip the undecodable source the same way an unreadable one is skipped;
+        # a derivation that ends up empty is caught by the vocabulary guard test.
         return set()
 
     operators: set[str] = set()
