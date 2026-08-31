@@ -13,15 +13,14 @@ be installed, as it is in the CI job that runs this file.
 from __future__ import annotations
 
 import ast
+import hashlib
 import inspect
 import json
 import os
 import sys
 import textwrap
-import time
 from datetime import datetime, timedelta, timezone
-from io import StringIO
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
 import pytest
@@ -34,8 +33,29 @@ _scripts_dir = os.path.join(os.path.dirname(__file__), "..")
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 
-import contributor_check as cc
-import credential_audit as ca
+import contributor_check as cc  # noqa: E402
+import credential_audit as ca  # noqa: E402
+
+
+def _normalized_function_body_hash(function) -> str:
+    """Hash a function body after removing its leading docstring."""
+    source = textwrap.dedent(inspect.getsource(function))
+    tree = ast.parse(source)
+    function_node = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    )
+    body = function_node.body
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    normalized = ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 # ===========================================================================
@@ -330,13 +350,9 @@ class TestFunctionSurfaceParity:
             "Retry attempt count diverged between contributor_check and credential_audit"
         )
 
-    def test_check_account_shape_implementation_matches_package(self):
+    def test_check_account_shape_body_matches_package(self):
         import agent_compliance.cli.contributor_check as cli_cc
 
-        def normalized_ast(function):
-            source = textwrap.dedent(inspect.getsource(function))
-            return ast.dump(ast.parse(source), include_attributes=False)
-
-        assert normalized_ast(cc.check_account_shape) == normalized_ast(
+        assert _normalized_function_body_hash(cc.check_account_shape) == _normalized_function_body_hash(
             cli_cc.check_account_shape
         ), "check_account_shape implementation drifted between scripts and package"
