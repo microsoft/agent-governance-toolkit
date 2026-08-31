@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using AgentGovernance.Extensions.ModelContextProtocol;
+using AgentGovernance.Mcp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
@@ -157,6 +158,35 @@ public sealed class McpGovernanceExtensionsTests
 
         var exception = Assert.Throws<InvalidOperationException>(() => _ = options.Value);
         Assert.Contains("Unsafe MCP tool definition", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithGovernance_ResolvesDefaultResponseSanitizer()
+    {
+        var services = new ServiceCollection();
+        services.AddMcpServer().WithGovernance();
+
+        using var serviceProvider = services.BuildServiceProvider();
+
+        Assert.IsType<McpResponseSanitizer>(serviceProvider.GetRequiredService<IResponseSanitizer>());
+    }
+
+    [Fact]
+    public void WithGovernance_AllowsCustomResponseSanitizer()
+    {
+        var services = new ServiceCollection();
+        // Registered before WithGovernance; TryAdd must not overwrite it.
+        services.AddSingleton<IResponseSanitizer, CustomResponseSanitizer>();
+        services.AddMcpServer().WithGovernance();
+
+        using var serviceProvider = services.BuildServiceProvider();
+
+        Assert.IsType<CustomResponseSanitizer>(serviceProvider.GetRequiredService<IResponseSanitizer>());
+    }
+
+    private sealed class CustomResponseSanitizer : IResponseSanitizer
+    {
+        public McpSanitizedResponse ScanText(string text) => new McpResponseSanitizer().ScanText(text);
     }
 
     [Fact]
