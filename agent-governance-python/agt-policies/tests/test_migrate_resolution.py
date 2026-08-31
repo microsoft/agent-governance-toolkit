@@ -1048,7 +1048,7 @@ def test_rego_field_accessor_uses_array_path_for_nested_fields() -> None:
 
 @pytest.mark.parametrize(
     ("operator", "value"),
-    [("ne", "eu"), ("not_in", ["eu", "us"])],
+    [("eq", None), ("ne", "eu"), ("not_in", ["eu", "us"])],
 )
 def test_allow_operator_keeps_missing_field_guard(
     operator: str, value: object

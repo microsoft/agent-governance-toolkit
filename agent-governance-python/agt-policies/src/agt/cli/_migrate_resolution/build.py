@@ -346,7 +346,15 @@ def _rego_op_clause(
     literal = json.dumps(value)
     indent = "    "
     if operator == "eq":
-        return f"{indent}{accessor} == {literal}"
+        # The array-path accessor resolves a missing path to null, so an
+        # unguarded ``eq: null`` matches every input that omits the field --
+        # absence on both sides of the comparison reads as agreement. On the
+        # allow side that is fail-open: a rule written to allow an explicit
+        # null also allows anything missing the field, preempting a later
+        # deny. Guard allow the same way ``ne`` and ``not_in`` are guarded;
+        # deny keeps the unguarded form so a missing path still trips it.
+        null_guard = "" if action == "deny" else f"\n{indent}_v != null"
+        return f"{indent}_v := {accessor}{null_guard}\n{indent}_v == {literal}"
     if operator == "ne":
         # Missing paths resolve to null via the array-path accessor. Keep
         # ``null != value`` as a match so deny-side ``ne`` fails closed when
