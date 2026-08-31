@@ -326,6 +326,7 @@ def test_detects_secret_glued_to_preceding_word_character(text: str):
     assert REDACTED_PLACEHOLDER in CredentialRedactor.redact(text)
 
 
+# cspell:ignore AKIAIOSFODNN Rpbjpvc hpaw EXAMPLEX
 @pytest.mark.parametrize(
     ("text", "expected_redacted", "expected_type"),
     [
