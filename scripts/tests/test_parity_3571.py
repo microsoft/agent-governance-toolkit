@@ -42,10 +42,23 @@ def _normalized_function_body_hash(function) -> str:
     source = textwrap.dedent(inspect.getsource(function))
     tree = ast.parse(source)
     function_node = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        (
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ),
+        None,
     )
+    # A bare next() would raise StopIteration here and surface as an opaque
+    # traceback rather than a parity failure naming the function at fault.
+    # Raise rather than assert: this is a helper, and `python -O` strips
+    # asserts, which would let `None` propagate into the attribute access below.
+    if function_node is None:
+        raise ValueError(
+            "no function definition found in the source of "
+            f"{getattr(function, '__qualname__', function)!r}; "
+            "the parity hash cannot be computed"
+        )
     body = function_node.body
     if (
         body
