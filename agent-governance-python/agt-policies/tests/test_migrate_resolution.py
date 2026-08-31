@@ -1068,7 +1068,7 @@ def test_allow_operator_keeps_missing_field_guard(
 
 @pytest.mark.parametrize(
     ("operator", "value"),
-    [("ne", "eu"), ("not_in", ["eu", "us"])],
+    [("eq", None), ("ne", "eu"), ("not_in", ["eu", "us"])],
 )
 def test_allow_missing_field_does_not_preempt_later_deny(
     tmp_path: Path, operator: str, value: object
