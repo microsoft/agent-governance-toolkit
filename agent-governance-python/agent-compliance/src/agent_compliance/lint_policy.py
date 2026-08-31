@@ -17,6 +17,8 @@ Handles two file kinds:
 
 from __future__ import annotations
 
+import ast
+import importlib.util
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -26,23 +28,79 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 _MEMBERSHIP_OPERATORS: frozenset[str] = frozenset({"in", "not_in"})
+
+_CONDITION_OPERATOR_MODULES = (
+    "agent_control_plane.policy_engine",
+    "agentmesh.governance.trust_policy",
+    "agt.cli._migrate_resolution.build",
+)
+_CONDITION_OPERATOR_SOURCE_PATHS = (
+    Path("agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/policy_engine.py"),
+    Path("agent-governance-python/agent-mesh/src/agentmesh/governance/trust_policy.py"),
+    Path("agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/build.py"),
+)
+
+
+def _operator_expression(node: ast.AST) -> bool:
+    """Return whether an AST expression refers to a condition operator."""
+    if isinstance(node, ast.Name):
+        return node.id == "operator"
+    return isinstance(node, ast.Attribute) and node.attr == "operator"
+
+
+def _string_values(node: ast.AST) -> set[str]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return {node.value}
+    if isinstance(node, (ast.Set, ast.Tuple, ast.List)):
+        return {
+            value
+            for item in node.elts
+            for value in _string_values(item)
+        }
+    return set()
+
+
+def _operators_from_source(path: Path) -> set[str]:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return set()
+
+    operators: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "ConditionOperator":
+            for member in node.body:
+                if isinstance(member, (ast.Assign, ast.AnnAssign)) and member.value:
+                    operators.update(_string_values(member.value))
+        elif isinstance(node, ast.Compare) and _operator_expression(node.left):
+            for comparator in node.comparators:
+                operators.update(_string_values(comparator))
+    return operators
+
+
+def _condition_operator_sources() -> tuple[Path, ...]:
+    roots = []
+    for start in (Path(__file__).resolve(), Path.cwd()):
+        roots.extend((start, *start.parents))
+    sources = [
+        root / relative_path
+        for root in dict.fromkeys(roots)
+        for relative_path in _CONDITION_OPERATOR_SOURCE_PATHS
+    ]
+    for module_name in _CONDITION_OPERATOR_MODULES:
+        try:
+            spec = importlib.util.find_spec(module_name)
+        except (ImportError, ModuleNotFoundError, ValueError):
+            spec = None
+        if spec and spec.origin and spec.origin not in {"built-in", "frozen"}:
+            sources.append(Path(spec.origin))
+    return tuple(dict.fromkeys(source for source in sources if source.is_file()))
+
+
 _KNOWN_CONDITION_OPERATORS: frozenset[str] = frozenset(
-    {
-        "contains",
-        "endswith",
-        "eq",
-        "exists",
-        "gt",
-        "gte",
-        "in",
-        "lt",
-        "lte",
-        "matches",
-        "ne",
-        "not_in",
-        "regex",
-        "startswith",
-    }
+    operator
+    for source in _condition_operator_sources()
+    for operator in _operators_from_source(source)
 )
 
 
@@ -151,7 +209,7 @@ def _lint_governance_conditions(
             continue
 
         rule_name = rule.get("name", f"rule[{idx}]")
-        action = rule.get("action", "configured")
+        action = str(rule.get("action", "configured")).lower()
 
         for cond in _conditions_from_rule(rule):
             operator = cond.get("operator", "")
@@ -177,11 +235,15 @@ def _lint_governance_conditions(
                 field_hint = cond.get("field", "")
                 field_clause = f" on field '{field_hint}'" if field_hint else ""
                 if operator == "in":
-                    diagnosis = "condition never matches, so this rule can never apply"
+                    diagnosis = "condition can never match, so this rule can never apply"
                 else:
+                    consequence = {
+                        "allow": "allows everything",
+                        "deny": "denies everything",
+                    }.get(action, f"always applies the '{action}' action")
                     diagnosis = (
-                        "condition is vacuously true for every resolved field value, "
-                        f"so '{action}' applies unconditionally"
+                        "condition always matches, so this rule always fires and "
+                        f"{consequence}"
                     )
                 result.messages.append(
                     LintMessage(

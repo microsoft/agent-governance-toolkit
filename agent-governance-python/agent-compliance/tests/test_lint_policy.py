@@ -170,6 +170,7 @@ def test_governance_in_empty_value_is_error(tmp_path: Path) -> None:
     assert len(condition_errors) == 1
     assert "block" in condition_errors[0].message
     assert "in" in condition_errors[0].message
+    assert "condition can never match" in condition_errors[0].message
     assert "rule can never apply" in condition_errors[0].message
 
 
@@ -192,8 +193,32 @@ def test_governance_not_in_empty_value_is_error(tmp_path: Path) -> None:
     assert any(
         "not_in" in error.message
         and "empty" in error.message
-        and "vacuously true" in error.message
-        and "'deny' applies unconditionally" in error.message
+        and "condition always matches" in error.message
+        and "denies everything" in error.message
+        for error in result.errors
+    )
+
+
+def test_governance_not_in_empty_value_under_allow_is_diagnosed_as_allowing_everything(
+    tmp_path: Path,
+) -> None:
+    """An empty 'not_in' list under allow is diagnosed as allowing everything."""
+    path = _write_governance_policy(
+        tmp_path / "policy.yaml",
+        "version: '1.0'\nname: t\nrules:\n"
+        "  - name: permit-all\n"
+        "    action: allow\n"
+        "    condition:\n"
+        "      field: tool_name\n"
+        "      operator: not_in\n"
+        "      value: []\n",
+    )
+
+    result = lint_file(path)
+
+    assert any(
+        "condition always matches" in error.message
+        and "allows everything" in error.message
         for error in result.errors
     )
 
@@ -281,7 +306,8 @@ def test_governance_conditions_list_empty_not_in_is_composition_neutral(
     result = lint_file(path)
 
     assert any(
-        "'allow' applies unconditionally" in error.message
+        "condition always matches" in error.message
+        and "allows everything" in error.message
         for error in result.errors
     )
 
