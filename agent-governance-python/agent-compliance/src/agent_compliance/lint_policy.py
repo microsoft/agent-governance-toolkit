@@ -84,10 +84,25 @@ def _operators_from_source(path: Path) -> set[str]:
     return operators
 
 
+def _repository_roots() -> list[Path]:
+    """Return the checkout roots to resolve evaluator sources against.
+
+    Climbing every parent up to ``/`` would let a directory tree outside the
+    checkout satisfy one of the relative source paths, deriving the operator
+    vocabulary -- a guard list -- from a file this repository does not own.
+    Stop at the first ancestor that looks like this checkout instead.
+    """
+    roots: list[Path] = []
+    for start in (Path(__file__).resolve(), Path.cwd().resolve()):
+        for candidate in (start, *start.parents):
+            roots.append(candidate)
+            if (candidate / "agent-governance-python").is_dir():
+                break
+    return list(dict.fromkeys(roots))
+
+
 def _condition_operator_sources() -> tuple[Path, ...]:
-    roots = []
-    for start in (Path(__file__).resolve(), Path.cwd()):
-        roots.extend((start, *start.parents))
+    roots = _repository_roots()
     sources = [
         root / relative_path
         for root in dict.fromkeys(roots)
@@ -210,6 +225,18 @@ def _lint_governance_conditions(
     if not isinstance(rules, list):
         return
 
+    if not _KNOWN_CONDITION_OPERATORS:
+        result.messages.append(
+            LintMessage(
+                "warning",
+                "Operator vocabulary could not be derived from any evaluator "
+                "source; operator names in this document were not checked. "
+                "Run the linter from a full checkout to enable that check.",
+                filepath,
+                1,
+            )
+        )
+
     for idx, rule in enumerate(rules):
         if not isinstance(rule, dict):
             continue
@@ -219,10 +246,25 @@ def _lint_governance_conditions(
 
         for cond in _conditions_from_rule(rule):
             operator = cond.get("operator", "")
-            if (
-                not isinstance(operator, str)
-                or operator not in _KNOWN_CONDITION_OPERATORS
-            ):
+            if not isinstance(operator, str):
+                result.messages.append(
+                    LintMessage(
+                        "error",
+                        f"Rule '{rule_name}': unknown operator {operator!r}",
+                        filepath,
+                        1,
+                    )
+                )
+                continue
+
+            # An empty vocabulary means the evaluator sources could not be read
+            # (an installed wheel, a partial checkout), not that every operator
+            # in the document is unknown. Reporting one per condition would be a
+            # verdict derived from no evidence, and the ``continue`` below it
+            # would skip the empty-membership check for the whole document --
+            # silently disabling the check this linter exists to run. Report the
+            # broken derivation once, then keep checking what is still checkable.
+            if _KNOWN_CONDITION_OPERATORS and operator not in _KNOWN_CONDITION_OPERATORS:
                 result.messages.append(
                     LintMessage(
                         "error",

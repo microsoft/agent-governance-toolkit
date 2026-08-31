@@ -402,6 +402,45 @@ def test_governance_directory_with_impossible_condition(tmp_path: Path) -> None:
     assert any("never-fires" in m.message for m in result.errors)
 
 
+def test_empty_vocabulary_warns_once_and_keeps_checking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An underivable vocabulary must not fabricate per-operator verdicts.
+
+    When no evaluator source can be read the vocabulary is empty.  Testing
+    ``operator not in <empty set>`` is vacuously true, so every condition would
+    be reported as an unknown operator -- a verdict from no evidence -- and the
+    ``continue`` that follows would skip the empty-membership check for the
+    whole document, disabling the check this linter exists to run.
+    """
+    from agent_compliance import lint_policy
+
+    monkeypatch.setattr(lint_policy, "_KNOWN_CONDITION_OPERATORS", frozenset())
+
+    policy = tmp_path / "policy.yaml"
+    policy.write_text(
+        "rules:\n"
+        "  - name: never-fires\n"
+        "    action: allow\n"
+        "    conditions:\n"
+        "      - field: region\n"
+        "        operator: in\n"
+        "        value: []\n",
+        encoding="utf-8",
+    )
+
+    result = lint_policy.lint_path(tmp_path)
+
+    unknown = [m for m in result.messages if "unknown operator" in m.message]
+    assert not unknown, f"fabricated verdicts from an empty vocabulary: {unknown}"
+
+    warnings = [m for m in result.messages if "vocabulary could not be derived" in m.message]
+    assert len(warnings) == 1, f"expected exactly one derivation warning, got {warnings}"
+
+    # The real check must still run.
+    assert any("never-fires" in m.message for m in result.errors), result.messages
+
+
 def test_undecodable_source_is_skipped_not_raised(tmp_path: Path) -> None:
     """A source that is not valid UTF-8 must not break the whole module.
 
