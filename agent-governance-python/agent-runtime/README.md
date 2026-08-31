@@ -48,8 +48,9 @@ from hypervisor import Hypervisor, SessionConfig, ConsistencyMode
 hv = Hypervisor()
 
 # Create a governed session
-session = await hv.create_session(
-    config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL)
+session = hv.create_session(
+    config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL),
+    creator_did="did:mesh:admin",
 )
 
 # Execute with privilege enforcement

@@ -10,6 +10,7 @@ Sequential step execution with reverse-order compensation on failure.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -119,13 +120,18 @@ class SagaOrchestrator:
 
         last_error: Exception | None = None
         attempts = 1 + step.max_retries
+        execution = executor()
+        self._ensure_awaitable(execution, "executor")
 
         for attempt in range(attempts):
+            if attempt > 0:
+                execution = executor()
+                self._ensure_awaitable(execution, "executor")
             step.retry_count = attempt
             step.transition(StepState.EXECUTING)
             try:
                 result = await asyncio.wait_for(
-                    executor(),
+                    execution,
                     timeout=step.timeout_seconds,
                 )
                 step.execute_result = result
@@ -189,9 +195,11 @@ class SagaOrchestrator:
                 continue
 
             step.transition(StepState.COMPENSATING)
+            compensation = compensator(step)
+            self._ensure_awaitable(compensation, "compensator")
             try:
                 result = await asyncio.wait_for(
-                    compensator(step),
+                    compensation,
                     timeout=step.timeout_seconds,
                 )
                 step.compensation_result = result
@@ -228,6 +236,10 @@ class SagaOrchestrator:
             for s in self._sagas.values()
             if s.state in (SagaState.RUNNING, SagaState.COMPENSATING)
         ]
+
+    def _ensure_awaitable(self, result: Any, name: str) -> None:
+        if not inspect.isawaitable(result):
+            raise TypeError(f"{name} must return an awaitable")
 
     def _get_saga(self, saga_id: str) -> Saga:
         saga = self._sagas.get(saga_id)
