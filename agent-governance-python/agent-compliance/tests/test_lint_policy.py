@@ -400,3 +400,62 @@ def test_governance_directory_with_impossible_condition(tmp_path: Path) -> None:
 
     assert not result.passed
     assert any("never-fires" in m.message for m in result.errors)
+
+
+def test_known_operators_are_derived_from_every_evaluator_source() -> None:
+    """The operator vocabulary must keep tracking the evaluators it protects.
+
+    ``_KNOWN_CONDITION_OPERATORS`` is built by reading the evaluator modules
+    rather than from a hand-written list, so a new operator cannot reach an
+    evaluator without the linter learning it.  That derivation fails silently:
+    if a module moves or the extraction stops matching, the set empties and
+    every governance document reports ``unknown operator`` instead.  Assert the
+    sources still resolve and the vocabulary still covers the operators this
+    module itself branches on.
+    """
+    from agent_compliance.lint_policy import (
+        _KNOWN_CONDITION_OPERATORS,
+        _MEMBERSHIP_OPERATORS,
+        _condition_operator_sources,
+    )
+
+    source_names = {path.name for path in _condition_operator_sources()}
+    assert {"policy_engine.py", "trust_policy.py"} <= source_names, source_names
+
+    assert _KNOWN_CONDITION_OPERATORS, (
+        "operator derivation produced an empty set; every document would "
+        "now fail with 'unknown operator'"
+    )
+    missing = _MEMBERSHIP_OPERATORS - _KNOWN_CONDITION_OPERATORS
+    assert not missing, f"membership operators absent from vocabulary: {missing}"
+
+
+def test_operator_known_to_an_evaluator_is_not_reported_unknown(
+    tmp_path: Path,
+) -> None:
+    """Every derived operator must lint clean, or the guard is a false positive."""
+    from agent_compliance.lint_policy import _KNOWN_CONDITION_OPERATORS
+
+    # An empty vocabulary would make the loop below assert nothing at all --
+    # the same vacuous pass that ``in []`` produces in a governance rule.
+    assert _KNOWN_CONDITION_OPERATORS, "nothing to check; derivation is empty"
+
+    for operator in sorted(_KNOWN_CONDITION_OPERATORS):
+        policy = tmp_path / f"policy_{operator}.yaml"
+        _write_governance_policy(
+            policy,
+            "version: '1.0'\nname: t\nrules:\n"
+            "  - name: r\n"
+            "    action: deny\n"
+            "    condition:\n"
+            "      field: tool_name\n"
+            f"      operator: {operator}\n"
+            "      value: 'x'\n",
+        )
+
+        result = lint_file(policy)
+
+        assert not any("unknown operator" in m.message for m in result.errors), (
+            f"{operator!r} is implemented by an evaluator but the linter "
+            f"rejects it: {[m.message for m in result.errors]}"
+        )
