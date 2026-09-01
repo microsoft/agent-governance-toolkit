@@ -52,7 +52,7 @@
     "@types/node": "26.1.2",
     "@typescript-eslint/eslint-plugin": "8.67.0",
     "@typescript-eslint/parser": "8.67.0",
-    "eslint": "10.8.0",
+    "eslint": "10.9.1",
     "jest": "30.4.2",
     "ts-jest": "29.4.12",
     "ts-node": "10.9.2",
