@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "uuid": "14.0.1",
+    "uuid": "14.0.2",
     "winston": "3.19.0",
     "yaml": "2.9.0",
     "zod": "4.4.3"
