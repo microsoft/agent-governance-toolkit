@@ -1820,9 +1820,14 @@ class TestTrustHandshake:
     @pytest.mark.asyncio
     async def test_get_cached_result_expired(self):
         th = TrustHandshake(agent_did="did:mesh:me", cache_ttl_seconds=0)
-        th._verified_peers["did:mesh:peer"] = (MagicMock(), datetime.now(timezone.utc) - timedelta(seconds=1))
+        cache_key = th._cache_key(
+            "did:mesh:peer",
+            require_attestation=False,
+            require_tee_bound_key=False,
+        )
+        th._verified_peers[cache_key] = (MagicMock(), datetime.now(timezone.utc) - timedelta(seconds=1))
         assert await th._get_cached_result("did:mesh:peer") is None
-        assert "did:mesh:peer" not in th._verified_peers
+        assert cache_key not in th._verified_peers
 
 
 # ---------------------------------------------------------------------------
