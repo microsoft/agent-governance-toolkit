@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **BREAKING: `acs-generator` is CLI-only in `0.4.0b0`.** Removed top-level library re-exports such as `GenerationEngine` and `FakeLanguageModel`. Reusable manifest and Rego validation now lives under `agent_control_specification.validation`; the Python SDK moves to `0.3.1b1`.
 
+## [5.0.1] - 2026-09-01
+
+### Security
+- **Django trust middleware replay protection** - `AgentTrustMiddleware` now requires a timestamp, a unique nonce, an explicit audience, and an Ed25519 signature over a canonical envelope that binds the request method, path and query, content type, and body digest. Verified nonces are claimed atomically in a shared cache and retained through the signature-validity window. This prevents a captured signed request from being replayed or altered ([#3782](https://github.com/microsoft/agent-governance-toolkit/pull/3782)).
+- **Intentional fail-closed protocol change** - clients that sign only the agent DID are rejected. Django deployments must configure `AGENTMESH_AUDIENCE`, `AGENTMESH_REPLAY_CACHE_ALIAS`, and a shared Redis or memcached backend before enabling the middleware.
+
 ## [5.0.0] - 2026-06-25
 
 ### Changed

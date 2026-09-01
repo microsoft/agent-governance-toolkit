@@ -92,10 +92,9 @@ Out of scope:
 
 | Version | Supported          |
 |---------|--------------------|
-| 3.4.x   | :white_check_mark: |
-| 3.3.x   | :white_check_mark: |
-| 3.2.x   | :white_check_mark: |
-| < 3.2   | :x:                |
+| >= 5.0.1 | :white_check_mark: |
+| 4.0.0 - 5.0.0 | :x:          |
+| < 4.0.0 | :x:                |
 
 ## Disclosure Policy
 
@@ -110,6 +109,29 @@ If a fix requires more than 90 days, we will negotiate an extended timeline with
 the reporter before any public disclosure.
 
 ## Security Advisories
+
+### Django Trust Middleware Replay Protection (Fixed in v5.0.1)
+
+**Affected package:** `agent-governance-toolkit-core`
+**Affected versions:** 4.0.0 through 5.0.0
+**Fixed in:** 5.0.1
+
+The Django `AgentTrustMiddleware` authenticated an agent signature over only the
+agent DID. It did not bind the signature to request contents or enforce request
+freshness and uniqueness. An attacker able to obtain a valid signed request
+could replay it against a middleware-protected endpoint or alter unsigned
+request components while reusing the signature.
+
+The fixed middleware requires a signed, versioned request envelope containing
+the audience, timestamp, nonce, HTTP method, path and query, content type, and
+body digest. It atomically claims verified nonces in a shared cache and fails
+closed on invalid configuration or cache errors.
+
+**Recommendation:** Upgrade `agent-governance-toolkit-core` to 5.0.1 or later.
+Update clients to use `build_request_signature_payload`; signatures over only
+the DID are no longer accepted. See the
+[Django middleware guide](agent-governance-python/agent-mesh/docs/integrations/django-middleware.md)
+for required server and client configuration.
 
 ### CostGuard Organization Kill Switch Bypass (Fixed in v2.1.0)
 

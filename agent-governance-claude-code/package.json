@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agent-governance-claude-code",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Public Preview — Claude Code governance plugin for Agent Governance Toolkit developer protection policies",
   "type": "module",
   "files": [
