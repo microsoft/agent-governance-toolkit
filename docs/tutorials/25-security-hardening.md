@@ -95,10 +95,10 @@ jobs:
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -233,16 +233,17 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
     strategy:
       matrix:
-        language: [python, javascript]
+        language: [python, javascript-typescript]
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
         with:
           languages: ${{ matrix.language }}
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
 ```
 
 ### Custom Queries
@@ -303,11 +304,11 @@ jobs:
   fuzz:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           language: python
-      - uses: google/clusterfuzzlite/actions/run_fuzzers@v1
+      - uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           fuzz-seconds: 300
           mode: code-change
@@ -354,15 +355,16 @@ jobs:
   scorecard:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: ossf/scorecard-action@v2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
         with:
           results_file: scorecard-results.sarif
           publish_results: true
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
         with:
           sarif_file: scorecard-results.sarif
 ```
@@ -391,22 +393,22 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       # Generate SPDX SBOM
-      - uses: anchore/sbom-action@v0
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           output-file: sbom.spdx.json
           format: spdx-json
 
       # Generate CycloneDX SBOM
-      - uses: anchore/sbom-action@v0
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           output-file: sbom.cdx.json
           format: cyclonedx-json
 
       # Attest SBOM to the release
-      - uses: actions/attest-sbom@v2
+      - uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
         with:
           subject-path: sbom.spdx.json
 ```
