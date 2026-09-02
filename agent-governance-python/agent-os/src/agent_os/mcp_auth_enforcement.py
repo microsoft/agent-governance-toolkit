@@ -152,21 +152,30 @@ class McpAuthPolicy:
                 # all bypassed the require_tls gate because none of
                 # them start with "http://" — only `https://` and
                 # `wss://` represent actual TLS-secured transports.
-                if entry.require_tls and url:
-                    try:
-                        scheme = urlparse(url).scheme.lower()
-                    except (ValueError, AttributeError):
-                        scheme = ""
-                    if scheme not in {"https", "wss"}:
-                        return AuthCheckResult(
-                            allowed=False,
-                            server_name=server_name,
-                            auth_method=auth_method,
-                            reason=(
-                                f"Server '{server_name}' requires TLS but URL scheme "
-                                f"{scheme!r} is not in the TLS allowlist (https, wss)"
-                            ),
-                        )
+                #
+                # Fall back to the configured entry.url when the caller
+                # does not supply a URL — otherwise the TLS gate is
+                # silently skipped even when the entry has a known URL.
+                # Only truly empty (no caller URL *and* no configured
+                # URL) is allowed through; this preserves spec S10.12
+                # which permits add_server() with default url="".
+                if entry.require_tls:
+                    effective_url = url or entry.url
+                    if effective_url:
+                        try:
+                            scheme = urlparse(effective_url).scheme.lower()
+                        except (ValueError, AttributeError):
+                            scheme = ""
+                        if scheme not in {"https", "wss"}:
+                            return AuthCheckResult(
+                                allowed=False,
+                                server_name=server_name,
+                                auth_method=auth_method,
+                                reason=(
+                                    f"Server '{server_name}' requires TLS but URL scheme "
+                                    f"{scheme!r} is not in the TLS allowlist (https, wss)"
+                                ),
+                            )
                 return AuthCheckResult(
                     allowed=True,
                     server_name=server_name,
