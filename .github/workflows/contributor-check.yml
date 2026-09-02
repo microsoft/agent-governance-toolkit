@@ -83,6 +83,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts
+            agent-governance-python/agent-compliance/src/agent_compliance
             .github/actions/contributor-check
 
       - name: Run contributor reputation check
