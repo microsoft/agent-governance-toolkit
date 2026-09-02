@@ -220,6 +220,84 @@ var auditEvent = ContextEvent.Create(
 
 In this example, accumulation raises the envelope to `Restricted`, adds `no_external_export`, and increments the version twice. The export decision is `Constrain`; a caller without an obligation channel should fail closed and deny the action. Unknown combinations produce `Escalate` and should enter the existing stop-and-review flow. Envelope and audit timestamps are never read from the wall clock by this API.
 
+### Action-Bound Approval Chains
+
+`require_approval` decisions can be routed through the ADR-0030 approval protocol. The protocol binds approval to the exact agent, subject, operation, target, parameters, policy version, and chain version. It persists pending requests, records hash-linked entries, fails closed on timeout or malformed responses, and revalidates and consumes a terminal allow immediately before execution. The entry chain uses plain SHA-256 without a secret key for tamper evidence inside a trusted store boundary. It is not a MAC or signature, so a writer with direct store access can recompute the chain.
+
+```csharp
+using AgentGovernance.Approvals;
+
+var store = new InMemoryApprovalStore();
+var audit = new InMemoryApprovalAuditSink();
+var chain = new ApprovalChain
+{
+    ChainId = "production-writes",
+    Version = "3",
+    Stages = new[]
+    {
+        new ApprovalStage
+        {
+            StageIndex = 0,
+            AllowedIdentities = new[] { "did:web:example.com:users:alice" }
+        }
+    }
+};
+var coordinator = new ApprovalCoordinator(
+    chain,
+    store,
+    new ApprovalCoordinatorOptions
+    {
+        PolicyRuleId = "production-db-writes",
+        PolicyVersion = "2026.07.17",
+        RequestTtl = TimeSpan.FromMinutes(10),
+        AuditSink = audit
+    });
+
+var binding = new ActionBinding
+{
+    Operation = "tool.invoke",
+    AgentId = "did:agent:123",
+    SubjectId = "user-456",
+    Target = new ActionTarget
+    {
+        ToolName = "sql_execute",
+        ToolSchemaVersion = "2",
+        Resource = "prod-db"
+    },
+    Parameters = new Dictionary<string, object?>
+    {
+        ["statement"] = "UPDATE accounts SET status = ? WHERE id = ?",
+        ["values"] = new object[] { "closed", 42 }
+    }
+};
+
+var opened = coordinator.OpenRequest(binding);
+
+// Call SubmitEntry only after the caller has authenticated this principal.
+coordinator.SubmitEntry(
+    opened.Request.ApprovalRequestId,
+    stageIndex: 0,
+    new ApprovalVote
+    {
+        ApproverKind = ApproverKind.Human,
+        ApproverIdentity = "did:web:example.com:users:alice",
+        IdentityAssurance = "oidc",
+        Decision = ApprovalEntryDecision.Allow,
+        ReasonCode = "reviewed-production-change"
+    });
+
+var execution = coordinator.ValidateForExecution(
+    opened.Request.ApprovalRequestId,
+    binding);
+
+if (!execution.Allowed)
+{
+    throw new InvalidOperationException(execution.ReasonCode);
+}
+```
+
+For remote workflows, attach a `WebhookApprover` to an `ApprovalStage`. Its versioned payload carries the request and action digests, policy and chain versions, and expiry. Approve responses are accepted only when a supplied `WebhookResponseVerifier` returns an identity established through authenticated transport or a verified assertion. The default HTTP client rejects redirects and pins each connection to request-time DNS results after rejecting loopback, link-local, private, and reserved addresses. A caller-supplied `HttpClient` receives the same request-time address check, but its handler remains responsible for pinning the validated destination when it connects. LLM entries are optional advisory stages and cannot authorize or deny execution. A chain with no required non-advisory stage fails closed with `no_required_approval_stage`; this intentionally avoids the vacuous-allow behavior in the current Python implementation and matches the safer Go parity behavior. `ResolveAsync` consumes an allowed approval before returning, so callers should use its `Execution` result rather than validating the same request again.
+
 ### Rate Limiting
 
 Sliding window rate limiter integrated into the policy engine:
