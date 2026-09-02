@@ -1279,7 +1279,7 @@ export async function evaluateOpenCodeTool(state, input = {}) {
 
 /**
  * Inspect tool output after execution for OpenCode (tool.execute.after).
- * Records an audit entry and (in enforce mode) returns a redaction directive
+ * Records an audit entry and returns a redaction directive in every mode
  * when the output appears to contain a known secret pattern.
  *
  * @param {object} state Loaded policy state from {@link loadPolicy}.
@@ -1299,10 +1299,10 @@ export async function evaluateOpenCodeToolOutput(state, input = {}) {
     sessionId: input.sessionId,
   });
 
-  if (!findings.length || state.policy.mode === "advisory") {
+  if (!findings.length) {
     return {
       redact: false,
-      reason: findings.length ? `AGT advisory: ${describeSecretFindings(findings)}` : "",
+      reason: "",
     };
   }
 
@@ -1360,4 +1360,3 @@ function redactSecretLikeContent(text, _findings) {
 function describeSecretFindings(findings) {
   return `matched ${findings.length} secret pattern(s): ${findings.join(", ")}`;
 }
-
