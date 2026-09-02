@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -16,7 +16,7 @@ const injectionFixture = Buffer.from(
   "base64",
 ).toString("utf8");
 
-async function loadPlugin(directory) {
+async function loadPlugin(directory, { client, policyPath } = {}) {
   // Force the plugin to read its policy from an isolated path so tests do
   // not collide with the user's real ~/.config/opencode/agt config. We do
   // this by setting AGT_OPENCODE_AUDIT_PATH and AGT_OPENCODE_POLICY_PATH
@@ -24,13 +24,17 @@ async function loadPlugin(directory) {
   const previousAudit = process.env.AGT_OPENCODE_AUDIT_PATH;
   const previousPolicy = process.env.AGT_OPENCODE_POLICY_PATH;
   process.env.AGT_OPENCODE_AUDIT_PATH = join(directory, "audit.json");
-  delete process.env.AGT_OPENCODE_POLICY_PATH;
+  if (policyPath) {
+    process.env.AGT_OPENCODE_POLICY_PATH = policyPath;
+  } else {
+    delete process.env.AGT_OPENCODE_POLICY_PATH;
+  }
 
   try {
     const plugin = await AgtGovernance({
       directory,
       worktree: directory,
-      client: { app: { log: async () => {} } },
+      client: client ?? { app: { log: async () => {} } },
     });
     return plugin;
   } finally {
@@ -39,7 +43,9 @@ async function loadPlugin(directory) {
     } else {
       process.env.AGT_OPENCODE_AUDIT_PATH = previousAudit;
     }
-    if (previousPolicy !== undefined) {
+    if (previousPolicy === undefined) {
+      delete process.env.AGT_OPENCODE_POLICY_PATH;
+    } else {
       process.env.AGT_OPENCODE_POLICY_PATH = previousPolicy;
     }
   }
@@ -56,6 +62,29 @@ test("plugin exports the expected OpenCode contract surface", async () => {
     assert.equal(typeof plugin["tool.execute.after"], "function");
     assert.equal(typeof plugin.tool.agt_policy_status.execute, "function");
     assert.equal(typeof plugin.tool.agt_policy_check_text.execute, "function");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("plugin initialization fails loudly for an invalid configured policy", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-policy-error-"));
+  try {
+    const policyPath = join(root, "invalid-policy.json");
+    await writeFile(policyPath, "{invalid json}\n", "utf8");
+
+    await assert.rejects(loadPlugin(root, { policyPath }), /policy could not be loaded|JSON/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("plugin initialization fails loudly for a missing configured policy", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-policy-missing-"));
+  try {
+    const policyPath = join(root, "missing-policy.json");
+
+    await assert.rejects(loadPlugin(root, { policyPath }), /policy could not be loaded|not found/i);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -133,6 +162,40 @@ test("event hook blocks prompt-injection messages", async () => {
       }),
       /prompt injection|poisoning|inject|reveal/i,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("event hook surfaces prompt denials before failing closed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-event-visible-"));
+  const toasts = [];
+  const logs = [];
+  try {
+    const plugin = await loadPlugin(root, {
+      client: {
+        app: { log: async (entry) => logs.push(entry) },
+        tui: { showToast: async (toast) => toasts.push(toast) },
+      },
+    });
+
+    await assert.rejects(
+      plugin.event({
+        event: {
+          type: "message.part.updated",
+          properties: {
+            sessionID: "visible-denial-session",
+            part: { type: "text", text: injectionFixture },
+          },
+        },
+      }),
+      /prompt injection|poisoning|inject|reveal/i,
+    );
+
+    assert.equal(toasts.length, 1);
+    assert.equal(toasts[0].body.variant, "error");
+    assert.match(toasts[0].body.message, /prompt injection|poisoning|inject|reveal/i);
+    assert.ok(logs.some((entry) => entry.body.level === "warn"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

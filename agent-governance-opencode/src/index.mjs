@@ -53,6 +53,12 @@ export const AgtGovernance = async (ctx) => {
     }
   }
 
+  const initialState = await getState();
+  const initializationError = getPolicyInitializationError(initialState);
+  if (initializationError && initialState.policy.denyOnPolicyError) {
+    throw new Error(initializationError);
+  }
+
   return {
     "session.created": async () => {
       try {
@@ -89,8 +95,9 @@ export const AgtGovernance = async (ctx) => {
       });
 
       if (result.effect === "deny") {
-        // throwing here silently breaks the OpenCode session. Exception message is never displayed to the user, this is not the way to go...       
-        throw new Error(result.reason || "AGT governance blocked the submitted prompt.");
+        const reason = result.reason || "AGT governance blocked the submitted prompt.";
+        await surfaceGovernanceDenial(ctx, reason);
+        throw new Error(reason);
       }
     },
     "tool.execute.before": async (input, output) => {
@@ -163,6 +170,43 @@ export const AgtGovernance = async (ctx) => {
     },
   };
 };
+
+function getPolicyInitializationError(state) {
+  if (state.configuredPolicyError) {
+    return `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`;
+  }
+  if (state.bundledDefaultError) {
+    return `AGT bundled default policy could not be loaded from ${state.path}: ${state.bundledDefaultError.message}`;
+  }
+  return "";
+}
+
+async function surfaceGovernanceDenial(ctx, reason) {
+  const notifications = [];
+  if (typeof ctx?.client?.tui?.showToast === "function") {
+    notifications.push(
+      ctx.client.tui.showToast({
+        body: {
+          title: "AGT governance blocked the prompt",
+          message: reason,
+          variant: "error",
+        },
+      }),
+    );
+  }
+  if (typeof ctx?.client?.app?.log === "function") {
+    notifications.push(
+      ctx.client.app.log({
+        body: {
+          service: "agt-governance",
+          level: "warn",
+          message: `[AGT] Prompt denied: ${reason}`,
+        },
+      }),
+    );
+  }
+  await Promise.allSettled(notifications);
+}
 
 export default AgtGovernance;
 
