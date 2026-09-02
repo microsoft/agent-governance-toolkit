@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "mode": "enforce",
+  "denyOnPolicyError": true,
+  "minimumPromptDefenseGrade": "B",
+  "toolPolicies": {
+    "allowedTools": [
+      "bash",
+      "webfetch"
+    ],
+    "blockedTools": [],
+    "reviewTools": [],
+    "defaultEffect": "allow",
+    "commandDefaultEffect": "deny",
+    "allowedCommandPatterns": [
+      {
+        "source": "^git[ \\t]+(?:status|diff)$",
+        "flags": "i"
+      },
+      {
+        "source": "^npm[ \\t]+(?:test|run[ \\t]+(?:test|lint|check))$",
+        "flags": "i"
+      }
+    ]
+  },
+  "blockedToolCalls": [],
+  "directResourcePolicies": {
+    "pathRules": [],
+    "urlRules": [],
+    "urlDefaultEffect": "deny",
+    "allowedDomains": [
+      "api.github.com",
+      "*.example.com",
+      "internal.example.net:8443"
+    ],
+    "allowedUrlPatterns": [
+      {
+        "source": "^https://status\\.example\\.net/health(?:\\?|$)",
+        "flags": "i"
+      }
+    ]
+  },
+  "additionalContext": [],
+  "poisoningPatterns": []
+}

@@ -4,7 +4,7 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import { checkArbitraryText, getPolicyStatus, loadPolicy } from "../lib/policy.mjs";
+import { checkArbitraryText, getPolicyStatus, loadPolicy } from "../lib/opencode-policy.mjs";
 
 const VERSION = "3.6.0";
 const PROTOCOL_VERSION = "2024-11-05";
