@@ -420,6 +420,7 @@ exfiltrat
 exfiltrated
 exfiltration
 expanduser
+exponentials
 fastapi
 fastembed
 fastmcp
@@ -505,7 +506,9 @@ isalnum
 isascii
 isatty
 isawaitable
+isclose
 iscoroutine
+iscoroutinefunction
 isdigit
 isdisjoint
 isfile
@@ -551,6 +554,7 @@ levelname
 liamcrumm
 libagent
 libc
+lifecycles
 linkcheck
 linkified
 linkpkg
@@ -562,6 +566,9 @@ lockdown
 lockfile
 lockfiles
 logdir
+logit
+logits
+logprob
 logprobs
 loopback
 lotl
@@ -639,6 +646,7 @@ newurl
 nfiu
 nmap
 nonconformant
+nonfinite
 nonimport
 nonlocal
 nono
@@ -711,6 +719,7 @@ popitem
 popleft
 posixpath
 posonlyargs
+preauthorize
 preimage
 prependpath
 pretool
@@ -847,6 +856,7 @@ slugification
 smol
 snupkg
 socat
+softmax
 spacy
 spanid
 specversion
