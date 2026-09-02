@@ -22,8 +22,21 @@ describe('KillSwitch', () => {
     });
 
     expect(events).toEqual(['handler', 'compensation']);
+    expect(result.terminated).toBe(true);
     expect(result.callbacksExecuted).toBe(1);
     expect(result.compensationsExecuted).toBe(1);
+  });
+
+  it('reports unsuccessful termination when no handler is registered', async () => {
+    const killSwitch = new KillSwitch();
+
+    const result = await killSwitch.kill('agent-unwired', {
+      reason: 'manual stop',
+    });
+
+    expect(result.terminated).toBe(false);
+    expect(result.callbacksExecuted).toBe(0);
+    expect(killSwitch.getHistory()[0]?.terminated).toBe(false);
   });
 
   it('records substitute handoff targets', async () => {
