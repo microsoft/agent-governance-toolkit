@@ -26,6 +26,7 @@ from .discover import discover_policies
 from .errors import ResolutionError
 from .merge import merge_documents, merge_top_level_section
 from .scope import filter_by_scope
+from .._migrate_re2 import validate_re2
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +244,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         message = str(rule.get("message", ""))
 
         accessor = _rego_field_accessor(field)
-        op_clause = _rego_op_clause(operator, accessor, value) if accessor is not None else None
+        op_clause = _rego_op_clause(operator, accessor, value, action=action) if accessor is not None else None
         if op_clause is None:
             # Unsupported operators or invalid field paths MUST fail
             # closed. Render an always-matching deny rule so evaluation
@@ -312,36 +313,82 @@ def _rego_field_accessor(field: str) -> str | None:
             ``envelope.budgets.tool_call_count``.
 
     Returns:
-        Rego source like ``input.snapshot.tool_call.args.amount_usd``.
-        Each segment is checked with ``object.get`` so missing fields
-        evaluate to undefined (matches §5.2 of the ACS spec on missing
-        fields).
+        Rego source using OPA's array-path ``object.get`` so that a
+        missing segment at *any* depth (leaf or intermediate) resolves
+        to the ``null`` sentinel rather than ``undefined``. This is
+        critical for fail-closed semantics: an undefined binding makes a
+        ``_match_i`` rule silently not fire, falling through to
+        ``default verdict := allow``. With the array-path form OPA
+        returns ``null`` whenever any segment is absent, which the
+        polarity-aware ``_rego_op_clause`` can then test explicitly.
     """
     parts = [p for p in field.split(".") if p]
     if not parts:
         return "input.snapshot"
-    # Use chained object.get with a sentinel undefined value so each
-    # level fails closed when the field is absent.
-    expr = "input.snapshot"
+    # Validate every segment before embedding; reject anything that is
+    # not a plain identifier to prevent Rego injection from policy authors.
     for part in parts:
-        # Validate the part is a simple identifier; reject anything
-        # weird to avoid Rego injection from policy authors.
         if not part.replace("_", "").isalnum():
             return None
-        expr = f"object.get({expr}, {json.dumps(part)}, null)"
-    return expr
+    return f"object.get(input.snapshot, {json.dumps(parts)}, null)"
 
 
-def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
-    """Render the body of a `_match[i]` rule for a given operator.
+def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "allow") -> Optional[str]:
+    """Render the body of a ``_match[i]`` rule for a given operator.
 
-    Returns None for unsupported operators; the caller turns the rule into a fail-closed deny.
+    The ``action`` parameter controls polarity for negative operators
+    (``ne``, ``not_in``). An absent field (null sentinel from the
+    array-path accessor) is genuinely "not equal to" a pinned value and
+    genuinely "not in" an allowlist, so a ``deny`` rule with a negative
+    operator MUST fire when the field is absent. The ``_v != null``
+    guard is therefore dropped for deny rules using these operators.
+
+    Keeping the guard for ``allow`` rules is equally important: an allow
+    rule that fires on a missing field is itself fail-open and can
+    preempt a later deny in the first-match-wins chain.
+
+    Args:
+        operator: Comparison operator string (``"eq"``, ``"ne"``,
+            ``"gt"``, ``"lt"``, ``"gte"``, ``"lte"``, ``"in"``,
+            ``"not_in"``, ``"exists"``, ``"contains"``,
+            ``"startswith"``, ``"endswith"``, ``"matches"``/``"regex"``).
+        accessor: Rego expression for the field value, produced by
+            ``_rego_field_accessor``.
+        value: The comparison value from the rule condition.
+        action: The rule action string, passed through from the rule as-is.
+            Only ``"deny"`` drops the ``_v != null`` guard for ``ne`` and
+            ``not_in``; every other action value (``"allow"``, ``"warn"``,
+            etc.) keeps the guard. All other operators are unaffected.
+
+    Returns:
+        Indented Rego body lines for a ``_match_i`` rule, or ``None``
+        for unsupported operators. The caller emits a fail-closed deny
+        in place of any rule that returns ``None``.
     """
     literal = json.dumps(value)
     indent = "    "
     if operator == "eq":
+        if value is None and action != "deny":
+            # allow/warn ``eq null`` must NOT fire on an ABSENT field. The
+            # array-path accessor returns the null default for both an absent
+            # field and a genuinely present null, collapsing the two, so a
+            # bare ``== null`` is fail-open (it can preempt a lower-priority
+            # deny in the first-match chain). Rebuild the accessor with an
+            # object sentinel default so an absent field yields a non-null
+            # object; ``== null`` is then true only for a present null. deny
+            # keeps the null default so an absent field still fires (fail closed).
+            sentinel_accessor = accessor
+            if accessor.endswith(", null)"):
+                sentinel_accessor = (
+                    accessor[: -len(", null)")]
+                    + f", {json.dumps({'__agt_absent__': True})})"
+                )
+            return f"{indent}{sentinel_accessor} == {literal}"
         return f"{indent}{accessor} == {literal}"
     if operator == "ne":
+        if action == "deny":
+            # Drop the null guard: absent field != pinned value, so deny must fire.
+            return f"{indent}_v := {accessor}\n{indent}_v != {literal}"
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
@@ -354,6 +401,9 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "in":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
     if operator == "not_in":
+        if action == "deny":
+            # Drop the null guard: absent field is not in the allowlist, so deny must fire.
+            return f"{indent}_v := {accessor}\n{indent}not _v in {literal}"
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not _v in {literal}"
     if operator == "exists":
         return f"{indent}{accessor} != null"
@@ -361,24 +411,38 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}contains(_v, {literal})"
         )
     if operator == "startswith":
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}startswith(_v, {literal})"
         )
     if operator == "endswith":
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}endswith(_v, {literal})"
         )
     if operator in {"matches", "regex"}:
+        # Validate the pattern at build time via the repo's authoritative RE2
+        # checker. A non-string or uncompilable pattern would make regex.match
+        # raise at eval time, leaving a silently dead deny (fail open). Return
+        # None instead so the caller emits a fail-closed always-matching deny.
+        if not isinstance(value, str):
+            return None
+        try:
+            validate_re2(value)
+        except Exception:
+            return None
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}regex.match({literal}, _v)"
         )
     return None
