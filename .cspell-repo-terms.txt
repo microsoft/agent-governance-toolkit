@@ -484,12 +484,14 @@ hkdf
 htek
 httponly
 httpx
+httptest
 hypercall
 hyperlightjs
 héllo
 h├⌐llo
 iban
 idna
+IMDS
 idweb
 importorskip
 imran
