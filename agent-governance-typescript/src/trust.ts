@@ -167,7 +167,7 @@ export class TrustManager {
       .update(peerIdentity.publicKey)
       .digest('hex')
       .slice(0, 16);
-    if (didFingerprint !== expectedFingerprint) {
+    if (didFingerprint.toLowerCase() !== expectedFingerprint) {
       return 'Peer identity DID fingerprint does not match the public key';
     }
 
