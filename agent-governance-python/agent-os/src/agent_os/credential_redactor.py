@@ -46,6 +46,12 @@ class CredentialRedactor:
     callers. The class operates on plain strings as well as nested dictionaries,
     lists, and tuples, replacing detected secret values with a stable
     placeholder.
+
+    .. note::
+        Redaction covers secret-like material only (the ``PATTERNS`` set).
+        PII/CRI (email, phone, SSN, credit card, IP address) is detected by
+        :meth:`find_pii_matches` / :meth:`contains_pii` but is not removed by
+        :meth:`redact`.
     """
 
     # Python's stdlib ``re`` does not support per-pattern timeouts. These
@@ -249,6 +255,10 @@ class CredentialRedactor:
         pattern consume the anchor keyword of a later one, which would remove
         less than detection reported and leave a secret in place.
 
+        This method is secrets-only: it redacts the ``PATTERNS`` set, not
+        ``PII_PATTERNS``. Use :meth:`find_pii_matches` / :meth:`contains_pii`
+        when PII (email, phone, SSN, credit card, IP address) must be detected.
+
         Args:
             value: String content that may contain credential-like material.
 
@@ -340,6 +350,9 @@ class CredentialRedactor:
     @classmethod
     def redact_data_structure(cls, value: Any) -> Any:
         """Recursively redact nested strings in dicts, lists, and tuples.
+
+        Like :meth:`redact`, this covers secret-like patterns only; PII is
+        detected but not removed.
 
         Args:
             value: Any Python value that may contain nested strings.
