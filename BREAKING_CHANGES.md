@@ -228,11 +228,12 @@ keeps its own `PolicyDecision` enum, `agent_os` re-exports a `PolicyRule` from
 system that was never part of the v4 language.
 
 Framework integrations lose their local policy surfaces: `GovernancePolicy`,
-`GovernancePolicyChecker`, `GovernanceComponent`, `GovernanceSkill`,
-`GovernanceToolset`, `PolicyGuardrailConfig`, `PatternType`,
-`ShellPolicyViolation`, `load_policy_yaml`, `governed_shell`,
-`policy_input_guardrail`, and `content_output_guardrail`. Each took a local
-policy object; each now takes an `AgentControl`.
+`GovernancePolicyChecker`, `GovernanceComponent`, `GovernanceToolset`,
+`PolicyGuardrailConfig`, `PatternType`, `load_policy_yaml`,
+`policy_input_guardrail`, and `content_output_guardrail`. The OpenShell adapter
+retains `GovernanceSkill`, `ShellPolicyViolation`, and `governed_shell` as
+host-interception helpers, but `GovernanceSkill` now takes an `AgentControl`
+instead of interpreting a local policy object.
 
 The `cedarling-agentmesh` backend and `CedarlingBackend` are removed with the
 consolidated package extra that pulled them in. The backend implemented the
