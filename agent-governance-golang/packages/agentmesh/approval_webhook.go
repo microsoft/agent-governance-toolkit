@@ -19,10 +19,14 @@ import (
 // WebhookResponseVerifier verifies the authenticated approver identity in a webhook response.
 type WebhookResponseVerifier func(body map[string]interface{}, request ApprovalRequest) (string, bool)
 
+type approvalWebhookLookupIP func(context.Context, string) ([]net.IPAddr, error)
+type approvalWebhookDial func(context.Context, string, string) (net.Conn, error)
+
 // WebhookApproverOption configures a webhook approval transport.
 type WebhookApproverOption func(*WebhookApprover)
 
-// WithWebhookHTTPClient sets the HTTP client used by a webhook approver.
+// WithWebhookHTTPClient sets a caller-managed HTTP client used by a webhook approver.
+// Callers are responsible for applying equivalent destination validation.
 func WithWebhookHTTPClient(client *http.Client) WebhookApproverOption {
 	return func(a *WebhookApprover) {
 		if client != nil {
@@ -62,19 +66,100 @@ func NewWebhookApprover(rawURL string, opts ...WebhookApproverOption) (*WebhookA
 		return nil, err
 	}
 	a := &WebhookApprover{
-		url: rawURL,
-		client: &http.Client{
-			Timeout: 5 * time.Minute,
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		},
+		url:     rawURL,
+		client:  newApprovalWebhookHTTPClient(nil),
 		headers: make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(a)
 	}
 	return a, nil
+}
+
+func newApprovalWebhookHTTPClient(lookup approvalWebhookLookupIP) *http.Client {
+	if lookup == nil {
+		lookup = net.DefaultResolver.LookupIPAddr
+	}
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = newApprovalWebhookDialContext(lookup, dialer.DialContext)
+	return &http.Client{
+		Transport: transport,
+		Timeout:   5 * time.Minute,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+func newApprovalWebhookDialContext(lookup approvalWebhookLookupIP, dial approvalWebhookDial) approvalWebhookDial {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("invalid approval webhook address %q: %w", address, err)
+		}
+		resolved, err := resolveApprovalWebhookIPs(ctx, host, lookup)
+		if err != nil {
+			return nil, err
+		}
+		if len(resolved) == 0 {
+			return nil, fmt.Errorf("approval webhook host %q resolved to no addresses", host)
+		}
+		for _, address := range resolved {
+			if blockedApprovalWebhookIP(address.IP) {
+				return nil, fmt.Errorf("approval webhook host %q resolved to blocked address %q", host, address.String())
+			}
+		}
+
+		var dialErrors []error
+		for _, address := range resolved {
+			resolvedHost := address.IP.String()
+			if address.Zone != "" {
+				resolvedHost += "%" + address.Zone
+			}
+			pinnedAddress := net.JoinHostPort(resolvedHost, port)
+			connection, err := dial(ctx, network, pinnedAddress)
+			if err == nil {
+				return connection, nil
+			}
+			dialErrors = append(dialErrors, fmt.Errorf("%s: %w", pinnedAddress, err))
+		}
+		return nil, fmt.Errorf("dialing approval webhook host %q: %w", host, errors.Join(dialErrors...))
+	}
+}
+
+func resolveApprovalWebhookIPs(ctx context.Context, host string, lookup approvalWebhookLookupIP) ([]net.IPAddr, error) {
+	ipHost := host
+	zone := ""
+	if zoneIndex := strings.LastIndex(ipHost, "%"); zoneIndex >= 0 {
+		zone = ipHost[zoneIndex+1:]
+		ipHost = ipHost[:zoneIndex]
+	}
+	if ip := net.ParseIP(ipHost); ip != nil {
+		return []net.IPAddr{{IP: ip, Zone: zone}}, nil
+	}
+	resolved, err := lookup(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("resolving approval webhook host %q: %w", host, err)
+	}
+	return resolved, nil
+}
+
+func blockedApprovalWebhookIP(ip net.IP) bool {
+	if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsUnspecified() || ip.IsMulticast() {
+		return true
+	}
+	for _, rawIP := range []string{"168.63.129.16", "100.100.100.200"} {
+		if ip.Equal(net.ParseIP(rawIP)) {
+			return true
+		}
+	}
+	return false
 }
 
 // RequestApproval sends the approval request and validates the binding echo.
@@ -298,8 +383,7 @@ func validateApprovalWebhookURL(rawURL string) error {
 	if zone := strings.LastIndex(ipHost, "%"); zone >= 0 {
 		ipHost = ipHost[:zone]
 	}
-	if ip := net.ParseIP(ipHost); ip != nil &&
-		(ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
+	if ip := net.ParseIP(ipHost); ip != nil && blockedApprovalWebhookIP(ip) {
 		return fmt.Errorf("approval webhook URL host %q is blocked", host)
 	}
 	return nil

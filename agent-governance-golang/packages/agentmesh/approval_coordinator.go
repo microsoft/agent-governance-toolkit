@@ -8,19 +8,27 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 )
 
 // ApprovalCoordinator resolves require_approval decisions through an ordered chain.
 type ApprovalCoordinator struct {
-	chain         ApprovalChain
-	policyRuleID  string
-	policyVersion string
-	ttl           time.Duration
-	timeout       time.Duration
-	clock         func() time.Time
-	audit         *AuditLogger
-	store         ApprovalStore
+	chain          ApprovalChain
+	policyRuleID   string
+	policyVersion  string
+	ttl            time.Duration
+	timeout        time.Duration
+	clock          func() time.Time
+	audit          *AuditLogger
+	store          ApprovalStore
+	requestLocks   map[string]*approvalRequestLock
+	requestLocksMu sync.Mutex
+}
+
+type approvalRequestLock struct {
+	mu   sync.Mutex
+	refs int
 }
 
 // ApprovalCoordinatorOption configures an ApprovalCoordinator.
@@ -89,6 +97,7 @@ func NewApprovalCoordinator(chain ApprovalChain, opts ...ApprovalCoordinatorOpti
 		timeout:       5 * time.Minute,
 		clock:         func() time.Time { return time.Now().UTC() },
 		store:         NewInMemoryApprovalStore(),
+		requestLocks:  make(map[string]*approvalRequestLock),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -168,6 +177,12 @@ func (c *ApprovalCoordinator) SubmitEntry(approvalRequestID string, stageIndex i
 	if c.store == nil {
 		c.store = NewInMemoryApprovalStore()
 	}
+	unlock := c.lockRequest(approvalRequestID)
+	defer unlock()
+	return c.submitEntryLocked(approvalRequestID, stageIndex, vote)
+}
+
+func (c *ApprovalCoordinator) submitEntryLocked(approvalRequestID string, stageIndex int, vote ApprovalVote) (*ApprovalResult, error) {
 	policy, request, ok := c.store.GetRequest(approvalRequestID)
 	if !ok {
 		return nil, ErrApprovalRequestNotFound
@@ -185,7 +200,7 @@ func (c *ApprovalCoordinator) SubmitEntry(approvalRequestID string, stageIndex i
 		return result, fmt.Errorf("approval request %s is %s", approvalRequestID, request.Status)
 	}
 	if !c.clock().UTC().Before(request.ExpiresAt) {
-		return c.resolveRequest(approvalRequestID, ApprovalOutcomeExpired, "approval_expired")
+		return c.resolveRequestLocked(approvalRequestID, ApprovalOutcomeExpired, "approval_expired")
 	}
 
 	stage, ok := c.stageByIndex(stageIndex)
@@ -193,7 +208,7 @@ func (c *ApprovalCoordinator) SubmitEntry(approvalRequestID string, stageIndex i
 		return result, fmt.Errorf("approval stage %d not found", stageIndex)
 	}
 	if vote.Decision != ApprovalEntryAllow && vote.Decision != ApprovalEntryDeny {
-		return c.appendSystemDenyAndResolve(approvalRequestID, stage, "malformed_approval_decision")
+		return c.appendSystemDenyAndResolveLocked(approvalRequestID, stage, "malformed_approval_decision")
 	}
 
 	if !stage.isAdvisory() && vote.ApproverKind == ApproverLLMAdvisory {
@@ -218,10 +233,10 @@ func (c *ApprovalCoordinator) SubmitEntry(approvalRequestID string, stageIndex i
 		return c.resultFromStore(policy, request), nil
 	}
 	if entry.Decision == ApprovalEntryDeny {
-		return c.resolveRequest(approvalRequestID, ApprovalOutcomeDeny, entry.ReasonCode)
+		return c.resolveRequestLocked(approvalRequestID, ApprovalOutcomeDeny, entry.ReasonCode)
 	}
 	if c.requiredNonAdvisorySatisfied(entries) {
-		return c.resolveRequest(approvalRequestID, ApprovalOutcomeAllow, "approved")
+		return c.resolveRequestLocked(approvalRequestID, ApprovalOutcomeAllow, "approved")
 	}
 	return c.resultFromStore(policy, request), nil
 }
@@ -303,6 +318,8 @@ func (c *ApprovalCoordinator) validateForExecution(approvalRequestID string, bin
 	if c == nil || c.store == nil {
 		return deniedExecution(approvalRequestID, "approval_coordinator_missing")
 	}
+	unlock := c.lockRequest(approvalRequestID)
+	defer unlock()
 	if err := binding.Validate(); err != nil {
 		return deniedExecution(approvalRequestID, "invalid_action_binding")
 	}
@@ -379,9 +396,21 @@ func (c *ApprovalCoordinator) finalizeExecution(result *ApprovalResult, binding 
 }
 
 func (c *ApprovalCoordinator) appendSystemDenyAndResolve(approvalRequestID string, stage ApprovalStage, reason string) (*ApprovalResult, error) {
+	if c == nil {
+		return nil, errors.New("approval coordinator is nil")
+	}
+	unlock := c.lockRequest(approvalRequestID)
+	defer unlock()
+	return c.appendSystemDenyAndResolveLocked(approvalRequestID, stage, reason)
+}
+
+func (c *ApprovalCoordinator) appendSystemDenyAndResolveLocked(approvalRequestID string, stage ApprovalStage, reason string) (*ApprovalResult, error) {
 	policy, request, ok := c.store.GetRequest(approvalRequestID)
 	if !ok {
 		return nil, ErrApprovalRequestNotFound
+	}
+	if request.Status != ApprovalPending {
+		return c.resultFromStore(policy, request), fmt.Errorf("approval request %s is %s", approvalRequestID, request.Status)
 	}
 	entries, _ := c.store.ListEntries(approvalRequestID)
 	vote := ApprovalVote{
@@ -399,7 +428,7 @@ func (c *ApprovalCoordinator) appendSystemDenyAndResolve(approvalRequestID strin
 		return c.resultFromStore(policy, request), err
 	}
 	c.log(request.AgentID, "approval_chain_entry:"+request.Operation, Deny)
-	return c.resolveRequest(approvalRequestID, ApprovalOutcomeDeny, reason)
+	return c.resolveRequestLocked(approvalRequestID, ApprovalOutcomeDeny, reason)
 }
 
 func (c *ApprovalCoordinator) entryFromVote(request ApprovalRequest, entries []ApprovalChainEntry, stage ApprovalStage, vote ApprovalVote) (ApprovalChainEntry, error) {
@@ -449,6 +478,15 @@ func (c *ApprovalCoordinator) entryFromVote(request ApprovalRequest, entries []A
 }
 
 func (c *ApprovalCoordinator) resolveRequest(approvalRequestID string, outcome ApprovalOutcome, reason string) (*ApprovalResult, error) {
+	if c == nil {
+		return nil, errors.New("approval coordinator is nil")
+	}
+	unlock := c.lockRequest(approvalRequestID)
+	defer unlock()
+	return c.resolveRequestLocked(approvalRequestID, outcome, reason)
+}
+
+func (c *ApprovalCoordinator) resolveRequestLocked(approvalRequestID string, outcome ApprovalOutcome, reason string) (*ApprovalResult, error) {
 	policy, request, ok := c.store.GetRequest(approvalRequestID)
 	if !ok {
 		return nil, ErrApprovalRequestNotFound
@@ -564,6 +602,32 @@ func (c *ApprovalCoordinator) deniedResult(binding ActionBinding, reason string)
 		Resolution:     resolution,
 		Decision:       Deny,
 		Allowed:        false,
+	}
+}
+
+func (c *ApprovalCoordinator) lockRequest(approvalRequestID string) func() {
+	c.requestLocksMu.Lock()
+	if c.requestLocks == nil {
+		c.requestLocks = make(map[string]*approvalRequestLock)
+	}
+	requestLock := c.requestLocks[approvalRequestID]
+	if requestLock == nil {
+		requestLock = &approvalRequestLock{}
+		c.requestLocks[approvalRequestID] = requestLock
+	}
+	requestLock.refs++
+	c.requestLocksMu.Unlock()
+
+	requestLock.mu.Lock()
+	return func() {
+		requestLock.mu.Unlock()
+
+		c.requestLocksMu.Lock()
+		requestLock.refs--
+		if requestLock.refs == 0 && c.requestLocks[approvalRequestID] == requestLock {
+			delete(c.requestLocks, approvalRequestID)
+		}
+		c.requestLocksMu.Unlock()
 	}
 }
 

@@ -7,9 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -433,6 +436,137 @@ func TestApprovalCoordinatorSubmitEntryIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestApprovalCoordinatorSerializesConcurrentSubmissions(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "concurrent-submissions",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverLLMAdvisory},
+			{StageIndex: 1, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+
+	const advisorySubmissions = 128
+	start := make(chan struct{})
+	errorsBySubmission := make(chan error, advisorySubmissions)
+	var submissions sync.WaitGroup
+	for range advisorySubmissions {
+		submissions.Add(1)
+		go func() {
+			defer submissions.Done()
+			<-start
+			_, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+				ApproverKind:     ApproverLLMAdvisory,
+				ApproverIdentity: "llm:reviewer",
+				Decision:         ApprovalEntryAllow,
+				ChainEntryID:     newApprovalID("ace"),
+			})
+			errorsBySubmission <- err
+		}()
+	}
+	close(start)
+	submissions.Wait()
+	close(errorsBySubmission)
+	for err := range errorsBySubmission {
+		if err != nil {
+			t.Fatalf("concurrent SubmitEntry: %v", err)
+		}
+	}
+
+	resolved, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 1, ApprovalVote{
+		ApproverKind:     ApproverHuman,
+		ApproverIdentity: "did:web:example.com:alice",
+		Decision:         ApprovalEntryAllow,
+		ChainEntryID:     "ace-final-human",
+	})
+	if err != nil {
+		t.Fatalf("SubmitEntry final stage: %v", err)
+	}
+	if len(resolved.Entries) != advisorySubmissions+1 {
+		t.Fatalf("entries = %d, want %d", len(resolved.Entries), advisorySubmissions+1)
+	}
+	previousDigest := ""
+	for index, entry := range resolved.Entries {
+		if entry.PreviousEntryDigest != previousDigest {
+			t.Fatalf("entry %d previous digest = %q, want %q", index, entry.PreviousEntryDigest, previousDigest)
+		}
+		previousDigest = entry.EntryDigest
+	}
+	if resolved.Resolution.FinalEntryDigest != previousDigest {
+		t.Fatalf("resolution final digest = %q, want %q", resolved.Resolution.FinalEntryDigest, previousDigest)
+	}
+	decision := coordinator.CheckApprovalForExecution(opened.Request.ApprovalRequestID, productionBinding())
+	if !decision.Allowed || decision.ReasonCode != "approved" {
+		t.Fatalf("execution decision = %#v, want approved", decision)
+	}
+}
+
+func TestApprovalCoordinatorSerializesConcurrentResolution(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "concurrent-resolution",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+
+	const attempts = 64
+	start := make(chan struct{})
+	errorsBySubmission := make(chan error, attempts)
+	var submissions sync.WaitGroup
+	for range attempts {
+		submissions.Add(1)
+		go func() {
+			defer submissions.Done()
+			<-start
+			_, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+				ApproverKind:     ApproverHuman,
+				ApproverIdentity: "did:web:example.com:alice",
+				Decision:         ApprovalEntryAllow,
+				ChainEntryID:     newApprovalID("ace"),
+			})
+			errorsBySubmission <- err
+		}()
+	}
+	close(start)
+	submissions.Wait()
+	close(errorsBySubmission)
+
+	successes := 0
+	for err := range errorsBySubmission {
+		if err == nil {
+			successes++
+			continue
+		}
+		if !strings.Contains(err.Error(), "is allowed") {
+			t.Fatalf("concurrent SubmitEntry error = %v, want terminal request error", err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successful submissions = %d, want 1", successes)
+	}
+	entries, ok := coordinator.store.ListEntries(opened.Request.ApprovalRequestID)
+	if !ok || len(entries) != 1 {
+		t.Fatalf("entries = %#v, want one terminal entry", entries)
+	}
+	resolution, ok := coordinator.store.GetResolution(opened.Request.ApprovalRequestID)
+	if !ok || resolution.Outcome != ApprovalOutcomeAllow || resolution.FinalEntryDigest != entries[0].EntryDigest {
+		t.Fatalf("resolution = %#v, want one digest-linked allow", resolution)
+	}
+	decision := coordinator.CheckApprovalForExecution(opened.Request.ApprovalRequestID, productionBinding())
+	if !decision.Allowed || decision.ReasonCode != "approved" {
+		t.Fatalf("execution decision = %#v, want approved", decision)
+	}
+}
+
 func TestApprovalCoordinatorSubmitEntryRejectsUnauthorizedApprover(t *testing.T) {
 	for _, decision := range []ApprovalEntryDecision{ApprovalEntryAllow, ApprovalEntryDeny} {
 		t.Run(string(decision), func(t *testing.T) {
@@ -723,6 +857,73 @@ func TestApprovalWebhookDefaultClientDoesNotFollowRedirects(t *testing.T) {
 	}
 	if err := approver.client.CheckRedirect(nil, nil); err != http.ErrUseLastResponse {
 		t.Fatalf("redirect policy error = %v, want %v", err, http.ErrUseLastResponse)
+	}
+}
+
+func TestApprovalWebhookClientBlocksDNSRebinding(t *testing.T) {
+	var called atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
+	if err != nil {
+		t.Fatalf("SplitHostPort: %v", err)
+	}
+	approver, err := NewWebhookApprover("http://127.0.0.1.nip.io:" + port + "/approve")
+	if err != nil {
+		t.Fatalf("NewWebhookApprover: %v", err)
+	}
+	approver.client = newApprovalWebhookHTTPClient(func(_ context.Context, _ string) ([]net.IPAddr, error) {
+		return []net.IPAddr{
+			{IP: net.ParseIP("203.0.113.10")},
+			{IP: net.ParseIP("127.0.0.1")},
+		}, nil
+	})
+
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "dns-rebinding",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := approver.RequestApproval(ctx, opened.Request); err == nil || !strings.Contains(err.Error(), "blocked address") {
+		t.Fatalf("RequestApproval error = %v, want blocked DNS address", err)
+	}
+	if called.Load() {
+		t.Fatal("approval webhook request reached a loopback address")
+	}
+}
+
+func TestApprovalWebhookDialerPinsResolvedAddress(t *testing.T) {
+	clientConnection, serverConnection := net.Pipe()
+	defer serverConnection.Close()
+	var dialedAddress string
+	dial := newApprovalWebhookDialContext(
+		func(_ context.Context, _ string) ([]net.IPAddr, error) {
+			return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
+		},
+		func(_ context.Context, _ string, address string) (net.Conn, error) {
+			dialedAddress = address
+			return clientConnection, nil
+		},
+	)
+	connection, err := dial(context.Background(), "tcp", "approvals.example.com:443")
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer connection.Close()
+	if dialedAddress != "203.0.113.10:443" {
+		t.Fatalf("dialed address = %q, want resolved IP", dialedAddress)
 	}
 }
 
