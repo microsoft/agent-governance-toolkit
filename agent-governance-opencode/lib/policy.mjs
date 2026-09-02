@@ -334,15 +334,21 @@ export async function getPolicyStatus(state) {
     bundledDefaultError: state.bundledDefaultError?.message,
     configuredPolicyError: state.configuredPolicyError?.message,
     configuredPolicyPath: state.configuredPolicyPath,
+    configuredPromptDefenseCoverage: state.configuredPromptDefenseReport.coverage,
+    configuredPromptDefenseGrade: state.configuredPromptDefenseReport.grade,
+    configuredPromptDefenseMissing: state.configuredPromptDefenseReport.missing,
+    configuredPromptDefenseScope: "operator-additional-context",
     denyOnPolicyError: state.policy.denyOnPolicyError,
     minimumPromptDefenseGrade: state.policy.minimumPromptDefenseGrade,
     mode: state.policy.mode,
     path: state.path,
     promptDefenseCoverage: state.promptDefenseReport.coverage,
     promptDefenseGrade: state.promptDefenseReport.grade,
+    promptDefenseScope: "effective-context",
     promptDefenseBlocking: state.promptDefenseReport.isBlocking(
       state.policy.minimumPromptDefenseGrade,
     ),
+    promptDefenseBlockingScope: "effective-context",
     promptDefenseMissing: state.promptDefenseReport.missing,
     schemaVersion: state.policy.schemaVersion,
     sdkPath: state.sdkPath,
@@ -355,6 +361,9 @@ export async function getPolicyStatus(state) {
 function createGovernanceRuntime(policy) {
   const promptDefenseEvaluator = new PromptDefenseEvaluator();
   const promptDefenseReport = promptDefenseEvaluator.evaluate(policy.additionalContext.join("\n"));
+  const configuredPromptDefenseReport = promptDefenseEvaluator.evaluate(
+    toStringArray(policy.raw?.additionalContext).join("\n"),
+  );
   const mcpScanner = new McpSecurityScanner();
   const policyEngine = new PolicyEngine(buildLegacyRules(policy));
 
@@ -368,6 +377,7 @@ function createGovernanceRuntime(policy) {
   policyEngine.registerBackend(createMcpInvocationBackend(policy, mcpScanner));
 
   return {
+    configuredPromptDefenseReport,
     mcpScanner,
     policyEngine,
     promptDefenseReport,
@@ -1360,4 +1370,3 @@ function redactSecretLikeContent(text, _findings) {
 function describeSecretFindings(findings) {
   return `matched ${findings.length} secret pattern(s): ${findings.join(", ")}`;
 }
-
