@@ -1,0 +1,8 @@
+risk:
+  note: "The built-in score is a deterministic prioritization heuristic, not a universal risk standard."
+evaluation:
+  fail_on_unknown: false
+integrity:
+  algorithm: SHA-256
+redaction:
+  enabled: true

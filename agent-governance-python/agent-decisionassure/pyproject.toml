@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=78.1.1,<85.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-decisionassure"
+version = "0.1.0"
+description = "Deterministic counterfactual governance replay and change-impact analysis"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "DecisionAssure Impact contributors"}]
+dependencies = [
+    "pydantic>=2.5,<3",
+    "PyYAML>=6,<7",
+    "click>=8.0.0,<9",
+    "python-dotenv>=1,<2",
+    "packaging>=23,<26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "pytest-cov>=5,<7"]
+
+[project.scripts]
+decisionassure = "agent_decisionassure.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["agent_decisionassure"]
