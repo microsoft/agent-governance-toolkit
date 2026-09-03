@@ -1,0 +1,9 @@
+version: v5
+rules:
+  - condition: "context.get('risk_score', 100) < 30"
+    effect: ALLOW
+    priority: 10
+  - condition: "action.name == 'refund' and action.parameters.get('amount', 0) <= 40000"
+    effect: ALLOW
+    priority: 5
+default_effect: DENY

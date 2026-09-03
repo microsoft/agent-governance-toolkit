@@ -1,0 +1,7 @@
+delegations:
+  - id: refund-delegation
+    grantor: finance_admin
+    grantee: refund_agent
+    permissions: [refund]
+    valid_from: "2026-01-01T00:00:00Z"
+    valid_until: "2026-12-31T23:59:59Z"
