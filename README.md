@@ -127,7 +127,7 @@ Or use the full `AgentControl` API for programmatic control:
 ```python
 from agent_control_specification import AgentControl
 
-runtime = AgentControl.from_path(str("manifest.yaml"))
+runtime = AgentControl.from_path("manifest.yaml")
 result = runtime.evaluate(
     "input",
     {
@@ -137,6 +137,30 @@ result = runtime.evaluate(
 )
 print(result.verdict)
 runtime.close()
+```
+
+```yaml
+# manifest.yaml (minimal, illustrative shape — matches the schema used in
+# examples/acs-email-tool/manifest.yaml). Running this requires a matching
+# policy adapter; see the linked example below for the full working version.
+agent_control_specification_version: "0.3.0-alpha-agt"
+metadata:
+  name: example-agent
+  version: "0.1.0"
+extends: []
+policies:
+  example_policy:
+    type: custom
+    adapter: example_policy
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy_target_kind: input_body
+    policy:
+      id: example_policy
+tools:
+  web_search:
+    clearance: internal
 ```
 
 [Run the complete ACS email-tool example](examples/acs-email-tool).
@@ -226,7 +250,6 @@ Agent ──► Policy Engine ──► Identity ──► Audit Log
                                                         ▼
                                                  Decision Record
 ```
-
 Every layer is optional. Start with `govern()` and add layers as your risk profile grows. Most teams run policy enforcement + audit logging and never need the full stack.
 
 ---
