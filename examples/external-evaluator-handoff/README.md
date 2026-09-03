@@ -1,5 +1,7 @@
 # External Evaluator Handoff
 
+<!-- cspell:ignore SAEE -->
+
 > Status: experimental, community-driven example
 
 This example converts one or more AGT Decision BOMs into a deterministic,
@@ -90,9 +92,10 @@ and the permanent authority boundary.
 - `source_completeness` describes Decision BOM reconstruction coverage. It does
   not prove that an event was correct, authorized, or complete in the real
   world.
-- A content hash identifies the canonical payload bytes before `request_id` is
-  added, so the identifier itself is excluded from its hash input. The hash is
-  not a signature, attestation, or proof of truth.
+- A content hash generated through AGT's public `sha256_jcs` SDK helper
+  identifies the canonical payload bytes before `request_id` is added, so the
+  identifier itself is excluded from its hash input. The hash is not a
+  signature, attestation, or proof of truth.
 
 ## Prior art and interoperability intent
 

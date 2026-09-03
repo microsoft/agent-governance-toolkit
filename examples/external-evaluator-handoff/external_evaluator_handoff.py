@@ -9,15 +9,16 @@ governance decision.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Collection, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
+from agentmesh.governance.approval_protocol import sha256_jcs
 from agentmesh.governance.decision_bom import BOMField, BOMFieldCategory, DecisionBOM
 
 
+# cspell:ignore utcoffset
 SCHEMA_VERSION = "0.1"
 
 
@@ -40,9 +41,7 @@ def _export_field(field: BOMField) -> dict[str, Any]:
         )
         exported_value = json.loads(serialized_value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"field {field.name!r} is not strict-JSON serializable"
-        ) from exc
+        raise ValueError(f"field {field.name!r} is not strict-JSON serializable") from exc
 
     return {
         "name": field.name,
@@ -87,9 +86,7 @@ def build_external_evaluation_request(
     observations: list[dict[str, Any]] = []
 
     for decision in decisions:
-        fields = [
-            _export_field(field) for field in decision.fields if field.name in allowlist
-        ]
+        fields = [_export_field(field) for field in decision.fields if field.name in allowlist]
         observations.append(
             {
                 "decision_id": decision.decision_id,
@@ -122,14 +119,8 @@ def build_external_evaluation_request(
         },
     }
 
-    canonical = json.dumps(
-        request,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    request["request_id"] = f"eval_{hashlib.sha256(canonical).hexdigest()}"
+    digest = sha256_jcs(request)
+    request["request_id"] = f"eval_{digest.removeprefix('sha256:')}"
     return request
 
 

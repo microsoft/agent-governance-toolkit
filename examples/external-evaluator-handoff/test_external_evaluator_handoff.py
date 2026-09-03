@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from agentmesh.governance.approval_protocol import sha256_jcs
 from agentmesh.governance.decision_bom import BOMField, BOMFieldCategory, DecisionBOM
 
 
@@ -84,6 +85,20 @@ def test_handoff_is_deterministic_allowlisted_and_read_only() -> None:
         "policy_decision_overridden": False,
         "evaluation_result_is_governance_decision": False,
     }
+
+
+def test_request_id_uses_the_public_sdk_digest() -> None:
+    request = MODULE.build_external_evaluation_request(
+        [_decision()],
+        generated_at=datetime(2026, 7, 22, 12, 1, tzinfo=timezone.utc),
+        allowed_field_names={"latency_ms"},
+    )
+
+    payload = copy.deepcopy(request)
+    request_id = payload.pop("request_id")
+    expected_digest = sha256_jcs(payload).removeprefix("sha256:")
+
+    assert request_id == f"eval_{expected_digest}"
 
 
 def test_handoff_exports_no_optional_fields_by_default() -> None:
