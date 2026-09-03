@@ -6,11 +6,12 @@ owner: agt-maintainers
 
 # Agent Governance Toolkit v2.2.0
 
-> [!IMPORTANT]
-> **Community Preview Release** — All packages published from this repository (PyPI, npm, NuGet)
-> are **community preview releases** for testing and evaluation purposes only. They are **not**
-> official Microsoft-signed releases. Official Microsoft-signed packages published via ESRP
-> Release will be available in a future release.
+!!! important
+
+    **Community Preview Release** — All packages published from this repository (PyPI, npm, NuGet)
+    are **community preview releases** for testing and evaluation purposes only. They are **not**
+    official Microsoft-signed releases. Official Microsoft-signed packages published via ESRP
+    Release will be available in a future release.
 
 ## What's New
 

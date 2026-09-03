@@ -22,16 +22,17 @@ owner: agt-maintainers
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
 
-> [!IMPORTANT]
-> **公開預覽版** — 此儲存庫中發布的所有套件均為 **經 Microsoft 簽署的公開預覽版**。它們達到
-> 正式版的品質，但在正式發布 (GA) 之前可能存在重大變更。如有任何意見回饋，請在 [GitHub 上提交 Issue](https://github.com/microsoft/agent-governance-toolkit/issues)。
->
-> **這個工具包是什麼：** 執行期治理基礎架構 — 位於您的代理框架與代理執行操作之間的確定性
-> 策略執行、零信任身份驗證、執行沙箱，以及可靠性工程。
->
-> **這個工具包不是什麼：** 這不是一個用於模型安全或提示詞防護的工具。它不會過濾大型語言模型
-> (LLM) 的輸入/輸出，也不執行內容審核。它是在應用層對 *代理的行為* (工具呼叫、資源存取、
-> 代理間通訊) 進行治理。對於模型層面的安全，請參閱 [Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/)。
+!!! important
+
+    **公開預覽版** — 此儲存庫中發布的所有套件均為 **經 Microsoft 簽署的公開預覽版**。它們達到
+    正式版的品質，但在正式發布 (GA) 之前可能存在重大變更。如有任何意見回饋，請在 [GitHub 上提交 Issue](https://github.com/microsoft/agent-governance-toolkit/issues)。
+
+    **這個工具包是什麼：** 執行期治理基礎架構 — 位於您的代理框架與代理執行操作之間的確定性
+    策略執行、零信任身份驗證、執行沙箱，以及可靠性工程。
+
+    **這個工具包不是什麼：** 這不是一個用於模型安全或提示詞防護的工具。它不會過濾大型語言模型
+    (LLM) 的輸入/輸出，也不執行內容審核。它是在應用層對 *代理的行為* (工具呼叫、資源存取、
+    代理間通訊) 進行治理。對於模型層面的安全，請參閱 [Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/)。
 
 面向 AI 代理的執行期治理 — 唯一一個涵蓋全部 **10 項 OWASP Agentic 風險** 並提供 **13,000+ 測試** 的工具包。它治理的是代理 *做什麼*，而不僅僅是說什麼 — 包括確定性策略執行、零信任身份認證、執行沙箱，以及網站可靠性工程 (SRE) — 支援 **Python · TypeScript · .NET · Rust · Go**
 
@@ -56,7 +57,7 @@ npm install @microsoft/agent-governance-sdk
 dotnet add package Microsoft.AgentGovernance
 ```
 
-<details>
+<details markdown>
 <summary>安裝單獨的 Python 套件</summary>
 
 ```bash
