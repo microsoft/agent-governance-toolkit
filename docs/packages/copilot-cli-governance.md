@@ -1,6 +1,6 @@
 ---
 title: "@microsoft/agent-governance-copilot-cli — Copilot CLI governance package"
-last_reviewed: 2026-06-08
+last_reviewed: 2026-09-03
 owner: agt-maintainers
 ---
 
@@ -25,7 +25,7 @@ install, update, uninstall, and diagnostics.
 
 - not a `postinstall` package that silently writes into the user home directory
 - not a replacement for organization-wide governance controls
-- not the tutorial story; the runnable walkthrough remains in `examples/copilot-cli-agt`
+- not the tutorial itself; the guarded walkthrough remains in `examples/copilot-cli-agt`
 
 ## Install
 
@@ -111,9 +111,10 @@ The packaged default policy:
 - scans fetched-content tools for poisoning and exfiltration cues
 - inspects `bash` and `powershell` output in advisory mode so suspicious shell output is flagged without suppressing routine build and test logs
 
-This PR keeps that behavior as the shipped **strict** baseline. For reviewer discussion and local
-experimentation, example `strict`, `balanced`, and `advisory` profiles are included under
-`examples/copilot-cli-agt/config/profiles/`.
+The package ships that behavior as the **strict** baseline. The `strict`, `balanced`, and
+`advisory` profiles live under
+`agent-governance-copilot-cli/assets/extensions/agt-global-policy/config/profiles/` and can be
+applied with `agt-copilot policy apply --profile <name>`.
 
 The installed extension still carries its own bundled default policy so it can fall back safely if
 the user policy file is missing or invalid.

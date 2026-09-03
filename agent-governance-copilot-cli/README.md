@@ -17,10 +17,10 @@ It uses `@microsoft/agent-governance-sdk` as the runtime dependency for the inst
 
 ## Why this package exists
 
-The repo also contains `examples/copilot-cli-agt`, which remains the tutorial and scenario-driven
-reference implementation. This package exists so production installs do **not** depend on:
+The repo also contains `examples/copilot-cli-agt`, which provides the scenario-driven tutorial.
+This package owns the extension source, policy profiles, installer, and tests so production
+installs do **not** depend on:
 
-- example-local scripts
 - repo-local SDK builds
 - `npm install` side effects that mutate `~/.copilot`
 
@@ -43,7 +43,7 @@ From the repo during development:
 
 ```powershell
 cd agent-governance-copilot-cli
-npm install
+npm ci
 node .\bin\agt-copilot.mjs install
 node .\bin\agt-copilot.mjs update --force-policy
 ```
@@ -140,10 +140,12 @@ The packaged default policy is a developer-protection baseline that:
 - scans fetched-content tools for poisoning and exfiltration cues
 - inspects `bash` and `powershell` output in advisory mode so suspicious output is surfaced without being silently dropped
 
-For this PR, the package keeps that strict baseline as the shipped default. Example profile
-starting points for `strict`, `balanced`, and `advisory` live under:
+The package ships that strict baseline as the default. The `strict`, `balanced`, and `advisory`
+profiles live under:
 
-- `examples/copilot-cli-agt/config/profiles/`
+- `assets/extensions/agt-global-policy/config/profiles/`
+
+Apply a bundled profile with `agt-copilot policy apply --profile <name>`.
 
 ## Notes
 
@@ -158,5 +160,11 @@ starting points for `strict`, `balanced`, and `advisory` live under:
 
 For a concrete walkthrough and test prompts, see:
 
-- `examples/copilot-cli-agt`
-- `examples/copilot-cli-agt/scenarios/guarded-repo-triage`
+- [`examples/copilot-cli-agt`](../examples/copilot-cli-agt/README.md)
+- [the guarded repo-triage scenario](../examples/copilot-cli-agt/scenarios/guarded-repo-triage/README.md)
+
+## Design references
+
+The extension packaging and user experience were informed by
+[`DamianEdwards/copilot-cli-cost`](https://github.com/DamianEdwards/copilot-cli-cost) and the
+[`htek.dev` Copilot CLI extensions guide](https://htek.dev/articles/github-copilot-cli-extensions-complete-guide).
