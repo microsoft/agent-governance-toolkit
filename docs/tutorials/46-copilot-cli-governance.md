@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 46 — Copilot CLI governance installer"
-last_reviewed: 2026-05-15
+last_reviewed: 2026-09-03
 owner: agt-maintainers
 ---
 
@@ -122,28 +122,27 @@ Doctor validates:
 If doctor reports an invalid policy, remove `~/.copilot/agt/policy.json` or set
 `AGT_COPILOT_POLICY_PATH` to a valid replacement before reloading Copilot CLI.
 
-### Try an example policy profile
+### Try a bundled policy profile
 
-The example repo path includes ready-to-copy policy profiles:
+The installer package includes these policy profiles:
 
-- `examples/copilot-cli-agt/config/profiles/strict.json`
-- `examples/copilot-cli-agt/config/profiles/balanced.json`
-- `examples/copilot-cli-agt/config/profiles/advisory.json`
+- `strict`
+- `balanced`
+- `advisory`
 
-For example:
+Apply one through the installer CLI:
 
-```powershell
-Copy-Item .\examples\copilot-cli-agt\config\profiles\balanced.json $HOME\.copilot\agt\policy.json -Force
+```bash
+agt-copilot policy apply --profile balanced
 ```
 
 Then reload Copilot CLI with `/clear` and inspect the result with `/agt status`.
 
-You can also manage policy files directly with the installer CLI:
+Other policy-management commands include:
 
 ```bash
 agt-copilot policy path
 agt-copilot policy validate
-agt-copilot policy apply --profile balanced
 ```
 
 ### Node is missing
