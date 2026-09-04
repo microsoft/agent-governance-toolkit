@@ -1,6 +1,6 @@
 ---
 title: EU AI Act Compliance Checklist
-last_reviewed: 2026-06-10
+last_reviewed: 2026-09-03
 owner: agt-maintainers
 ---
 
@@ -12,7 +12,7 @@ owner: agt-maintainers
 
 > **Regulation**: [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng) -- Harmonised Rules on Artificial Intelligence
 > **Applicability**: Phased -- Art. 5 (prohibited practices) and Art. 4 (AI literacy) from 2 February 2025; GPAI obligations from 2 August 2025; **high-risk system obligations from 2 August 2026**
-> **Prepared**: 2026-04-03; **Last reviewed**: 2026-06-10
+> **Prepared**: 2026-04-03; **Last reviewed**: 2026-09-03
 > **Methodology**: 4-wave multi-agent investigation -- parallel discovery, adversarial conformity testing, citation validation, and strategic review. Article 11 was revalidated against the shipped Annex IV exporter and evidence pipeline.
 
 ---

@@ -1053,5 +1053,4 @@ OCSP
 SPKI
 
 # --- EU AI Act regulatory role terms ---
-deployer
 deployers
