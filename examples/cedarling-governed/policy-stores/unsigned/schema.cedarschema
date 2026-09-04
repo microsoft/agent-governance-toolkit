@@ -1,0 +1,27 @@
+namespace AGT {
+	entity Agent = {
+		role: String
+	};
+	entity Tool = {};
+	entity PolicyTarget = {};
+	action "input" appliesTo {
+	  principal: [Agent],
+	  resource: [PolicyTarget],
+	  context: {}
+	};
+	action "output" appliesTo {
+	  principal: [Agent],
+	  resource: [PolicyTarget],
+	  context: {}
+	};
+	action "pre_tool_call" appliesTo {
+	  principal: [Agent],
+	  resource: [Tool],
+	  context: {}
+	};
+	action "post_tool_call" appliesTo {
+	  principal: [Agent],
+	  resource: [Tool],
+	  context: {}
+	};
+}

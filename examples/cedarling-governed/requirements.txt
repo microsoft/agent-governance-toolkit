@@ -1,0 +1,3 @@
+# Cedarling dispatcher for the ACS v5 runtime, plus the native engine.
+agent-governance-toolkit-integrations[cedarling]>=5.0.0,<6.0
+cedarling-python>=2.3,<3.0

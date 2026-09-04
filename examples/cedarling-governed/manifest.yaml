@@ -1,0 +1,31 @@
+agent_control_specification_version: 0.3.0-alpha-agt
+metadata:
+  name: cedarling_governed
+extends: []
+
+# Bind a custom policy to the Cedarling dispatcher. The `adapter` name is a label
+# for the host-supplied dispatcher; the host passes the dispatcher instance via
+# `policy_dispatcher=` when constructing the runtime. Passing no dispatcher would
+# fall back to the bundled `cedar` dispatcher instead.
+policies:
+  cedarling:
+    type: custom
+    adapter: cedarling
+
+# Govern the tool-call boundary. `tool_name_from` names the snapshot path that
+# carries the tool name; the dispatcher projects it as the Cedar resource.
+intervention_points:
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: cedarling
+
+tools:
+  read_config:
+    clearance: public
+  write_config:
+    clearance: restricted
+  delete_file:
+    clearance: restricted
