@@ -323,9 +323,22 @@ class GuardrailsKernel:
                 if isinstance(result, ValidationOutcome):
                     outcomes.append(result)
                 else:
-                    # Duck-type: expect .outcome / .validated_output / .error_message
-                    passed = getattr(result, "outcome", "pass") == "pass"
+                    # Duck-type: expect .outcome / .validated_output / .error_message.
+                    # A result whose `outcome` is missing or None does not satisfy
+                    # ValidatorProtocol, so it carries no usable verdict. Fail
+                    # closed, matching the handler below that records an unusable
+                    # validator as a failure.
+                    outcome = getattr(result, "outcome", None)
                     error_msg = getattr(result, "error_message", "")
+                    if outcome is None:
+                        passed = False
+                        error_msg = error_msg or (
+                            "Validator result has no usable 'outcome' "
+                            f"(missing or None on {type(result).__name__}); "
+                            "see ValidatorProtocol"
+                        )
+                    else:
+                        passed = outcome == "pass"
                     fixed = getattr(result, "validated_output", None)
                     outcomes.append(
                         ValidationOutcome(
