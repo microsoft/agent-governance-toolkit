@@ -16,7 +16,9 @@ jobs:
       contents: read
       pull-requests: read    # amannn/action-semantic-pull-request reads the PR title/body
     steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+      - name: Validate contributor title
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -38,3 +40,22 @@ jobs:
           subjectPatternError: |
             The PR title subject "{subject}" must not start with an uppercase letter.
             Use lowercase: "feat: add foo" not "feat: Add foo".
+
+      # Dependabot controls the generated subject and currently emits "Bump"
+      # or "Update" even when commit-message.prefix is conventional. Keep the
+      # same semantic type/scope validation while accepting only those two
+      # bot-generated forms; human-authored PRs remain subject to the lowercase
+      # rule above.
+      - name: Validate Dependabot title
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            chore
+          requireScope: true
+          subjectPattern: ^(?:[bB]ump|[uU]pdate) .+$
+          subjectPatternError: |
+            Dependabot titles must use "chore(deps): Bump ...",
+            "chore(deps-dev): Update ...", or their lowercase equivalents.

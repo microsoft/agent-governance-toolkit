@@ -1,10 +1,8 @@
 version: 2
-# Every ecosystem sets commit-message.prefix so dependabot emits titles in the
-# repo's conventional-commit style ("chore(deps): bump X ..."). Without it,
-# some ecosystems generate "Bump X ..." with a capitalized subject, which fails
-# the pr-title check (subjectPattern ^(?![A-Z]).+$). This was previously set on
-# nuget only; extending it to all ecosystems keeps their auto-generated titles
-# passing the same gate.
+# Every ecosystem sets commit-message.prefix so Dependabot emits titles in the
+# repo's conventional-commit shape. Dependabot still controls the generated
+# "Bump"/"Update" subject, so pr-title-check.yml validates that bot-authored
+# form separately while preserving the lowercase rule for contributor PRs.
 updates:
   # All Python packages under agent-governance-python/, covered by a single
   # multi-directory entry. A separate per-directory entry for any of these
@@ -50,84 +48,47 @@ updates:
           - "structlog"
           - "ruff"
 
-  # npm packages
+  # npm packages share one multi-directory entry so the PR limit applies to the
+  # JavaScript workspace as a whole instead of multiplying across six entries.
+  # Related development tools move together, while other compatible patch and
+  # minor updates are grouped by dependency name across directories.
   - package-ecosystem: "npm"
-    directory: "/agent-governance-python/agent-os/extensions/mcp-server"
+    directories:
+      - "/agent-governance-python/agent-os/extensions/mcp-server"
+      - "/agent-governance-python/agent-os/extensions/copilot"
+      - "/agent-governance-copilot-cli"
+      - "/agent-governance-claude-code"
+      - "/agent-governance-typescript"
+      - "/agent-governance-antigravity-cli"
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 7
+      default-days: 14
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
-
-  - package-ecosystem: "npm"
-    directory: "/agent-governance-python/agent-os/extensions/copilot"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-    commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
-
-  - package-ecosystem: "npm"
-    directory: "/agent-governance-copilot-cli"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-    commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
-
-  - package-ecosystem: "npm"
-    directory: "/agent-governance-claude-code"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-    commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
-
-  - package-ecosystem: "npm"
-    directory: "/agent-governance-typescript"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-    commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
-
-  - package-ecosystem: "npm"
-    directory: "/agent-governance-antigravity-cli"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-    commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
+    groups:
+      javascript-dev-tooling:
+        dependency-type: "development"
+        patterns:
+          - "eslint"
+          - "@typescript-eslint/*"
+          - "typescript"
+          - "@types/node"
+          - "vitest"
+          - "@vitest/*"
+          - "browserslist"
+        update-types:
+          - "minor"
+          - "patch"
+      shared-npm-dependencies:
+        group-by: "dependency-name"
+        update-types:
+          - "minor"
+          - "patch"
 
   # .NET
   - package-ecosystem: "nuget"
