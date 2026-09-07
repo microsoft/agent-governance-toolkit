@@ -1280,6 +1280,121 @@ jobs:
   # jobs report "skipped" which doesn't satisfy required status checks.
   # This gate job always runs, checks that no jobs FAILED, and reports
   # success. Configure this as the single required status check.
+  # -- Windows visibility (reports only, never gates) --------------------
+  test-windows:
+    needs: changes
+    # The Python suite has never run on Windows: every one of the 98 test jobs
+    # in .github/workflows is a Linux runner, and the only Windows runner in
+    # the repository builds the win_amd64 wheel in publish.yml without testing
+    # it. The package documents Python 3.9+ "on any platform", ships
+    # scripts/quickstart.ps1 as the Windows install path, and publishes that
+    # wheel, so the gap is invisible to a Windows operator until something
+    # silently does not fire (#3831).
+    #
+    # This job exists to measure the gap, not to enforce it. It is absent from
+    # ci-complete's needs list and carries continue-on-error, so a failure here
+    # reports and does not block a merge. Promote it once the failures it finds
+    # are triaged. See #3884.
+    continue-on-error: true
+    runs-on: windows-latest
+    defaults:
+      run:
+        # windows-latest ships Git Bash, so the gate and install steps below are
+        # the same shell as the Linux job rather than a second PowerShell copy
+        # that would drift from it.
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        # The packages that need neither OPA nor the native ACS Rust SDK. The
+        # five ACS-backed packages (agent-os, agt-policies, agent-compliance,
+        # agent-marketplace, agent-sandbox) need a Windows OPA binary and a
+        # maturin build on Windows; both are their own piece of work and would
+        # bury the pure-Python signal this job is for.
+        package:
+          [
+            agent-mesh,
+            agent-hypervisor,
+            agent-sre,
+            agent-runtime,
+            agent-lightning,
+            agent-primitives,
+            agent-mcp-governance,
+            agent-discovery,
+            agent-rag-governance,
+          ]
+        # One version rather than the Linux job's four: this is a smoke signal,
+        # and the cost of a Windows runner is roughly twice a Linux one.
+        python-version: [ "3.13" ]
+    steps:
+      - name: Determine if package changed
+        id: gate
+        env:
+          CHANGED: ${{ needs.changes.outputs.changed-py-pkgs }}
+          PKG: ${{ matrix.package }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$CHANGED" | grep -q "\"$PKG\""; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Package $PKG unchanged on this PR - skipping Windows tests."
+          fi
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        if: steps.gate.outputs.run == 'true'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install local sibling dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-core
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-integrations
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-cli
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-protocols
+          pip install --no-cache-dir "pydantic>=2.5.0,<3.0" "pyyaml>=6.0,<7.0"
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agt-policies
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-hypervisor
+      - name: Install ${{ matrix.package }}
+        if: steps.gate.outputs.run == 'true'
+        working-directory: agent-governance-python/${{ matrix.package }}
+        env:
+          PKG: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          case "$PKG" in
+            agent-runtime|agent-mcp-governance)
+              pip install --no-cache-dir -e .
+              ;;
+            agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-discovery|agent-rag-governance)
+              pip install --no-cache-dir -e ".[dev]"
+              ;;
+            *)
+              echo "::error::Unknown package '$PKG' - update the install case in the Windows job" >&2
+              exit 1
+              ;;
+          esac
+          CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          if [ -f "$CI_TEST_REQS" ]; then
+            pip install --no-cache-dir --require-hashes -r "$CI_TEST_REQS"
+          else
+            echo "::warning::ci-test.txt not found at $CI_TEST_REQS - skipping shared test deps"
+          fi
+      - name: Test ${{ matrix.package }} on Windows
+        if: steps.gate.outputs.run == 'true'
+        working-directory: agent-governance-python/${{ matrix.package }}
+        run: |
+          if [ -d tests ]; then
+            pytest tests/ -q --tb=short
+          else
+            echo "No tests/ directory - skipping package tests"
+          fi
+
   ci-complete:
     if: always()
     needs:
