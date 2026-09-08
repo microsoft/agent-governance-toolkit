@@ -286,6 +286,7 @@ bluebubbles
 bmod
 bubblewrap
 buildkit
+buildx
 bursty
 bypassable
 bytearray
