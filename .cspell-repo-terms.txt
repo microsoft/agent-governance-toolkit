@@ -159,6 +159,7 @@ Println
 Pydantic
 REALPKG
 RUBYOPT
+RUSTFLAGS
 RUSTUP
 Ravande
 Redocly
@@ -333,6 +334,7 @@ clientid
 clippy
 cloudevent
 cloudevents
+clusterfuzzlite
 cmdshell
 cmpl
 codepoint
