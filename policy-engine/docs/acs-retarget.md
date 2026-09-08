@@ -27,6 +27,12 @@ the feature-dependent upstream default factory. Enabling in-process Rego
 elsewhere in a consumer's Cargo graph therefore cannot silently change these
 APIs' executable selection, bundle handling or policy behavior.
 
+Alpha.3 has a compile-time feature-gating defect when neither `opa` nor `rego`
+is enabled. The core shim and telemetry crate therefore enable the lightweight
+OPA feature even in isolated, data-only builds. This does not pull in Regorus
+or require an OPA executable for telemetry. CI checks these
+crates independently so sibling workspace features cannot hide the defect.
+
 Direct users of ACS's `AcsInterceptor` and `ActivatedPolicy` follow ACS's own
 feature selection. Switching the legacy host's default backend is a separate
 behavior change, not a side effect of upgrading its dependency.
@@ -98,10 +104,11 @@ Two breaking changes, both already applied across this repository.
    and rejects the old root as `unknown path root`. Note that agent-hooks does accept
    `$policy_target` as a deprecated alias on *transform* paths, so the two layers differ.
 
-`SUPPORTED_MANIFEST_VERSIONS` in `core/src/manifest_yaml.rs` now re-exports the
-engine's public `SUPPORTED_VERSIONS`. URL-loader scaffolding uses that same
-list. Package version alpha.3 does not imply manifest version alpha.3; the
-accepted grammar remains alpha.1.
+`core/src/manifest_yaml.rs` re-exports the engine's public `SUPPORTED_VERSIONS`.
+Its legacy `SUPPORTED_MANIFEST_VERSIONS` array is derived from that list, with
+a compile-time cardinality check to prevent drift while preserving its type.
+URL-loader scaffolding uses the upstream list directly. Package version alpha.3
+does not imply manifest version alpha.3; the accepted grammar remains alpha.1.
 
 ## Gaps in the pinned upstream release
 

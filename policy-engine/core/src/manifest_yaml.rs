@@ -19,7 +19,14 @@ use std::fmt;
 const MAX_MANIFEST_PARSE_NODES: usize = 100_000;
 
 /// Manifest grammar versions accepted by the upstream engine.
-pub use agent_control_spec::SUPPORTED_VERSIONS as SUPPORTED_MANIFEST_VERSIONS;
+pub use agent_control_spec::SUPPORTED_VERSIONS;
+
+/// Legacy array form, derived from the upstream grammar rather than copied.
+pub const SUPPORTED_MANIFEST_VERSIONS: [&str; 1] = [SUPPORTED_VERSIONS[0]];
+const _: () = assert!(
+    SUPPORTED_VERSIONS.len() == 1,
+    "review the legacy array API when upstream accepts multiple manifest versions"
+);
 
 /// The overlay-safe subset of manifest validation.
 ///
@@ -36,10 +43,10 @@ pub fn validate_overlay(manifest: &Manifest) -> Result<(), RuntimeError> {
             "agent_control_specification_version is required".to_string(),
         ));
     }
-    if !SUPPORTED_MANIFEST_VERSIONS.contains(&version) {
+    if !SUPPORTED_VERSIONS.contains(&version) {
         return Err(RuntimeError::ManifestInvalid(format!(
             "unsupported agent_control_specification_version '{version}'; supported versions are {}",
-            SUPPORTED_MANIFEST_VERSIONS.join(", ")
+            SUPPORTED_VERSIONS.join(", ")
         )));
     }
     for extends in &manifest.extends {

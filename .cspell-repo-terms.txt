@@ -164,6 +164,7 @@ RUSTUP
 Ravande
 Redocly
 Rego
+Regorus
 Rekor
 Repoint
 Rootfs

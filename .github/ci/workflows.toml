@@ -56,6 +56,12 @@ run = "cargo fmt --all -- --check"
 name = "Clippy"
 run = "cargo clippy --workspace --all-targets -- -D warnings"
 [[workflow.job.step]]
+name = "Isolated compatibility crates"
+run = """
+cargo check --locked -p agent_control_specification_core --no-default-features --lib
+cargo check --locked -p agent_control_specification_otel --lib
+"""
+[[workflow.job.step]]
 name = "Test"
 run = "cargo test --workspace"
 [[workflow.job.step]]

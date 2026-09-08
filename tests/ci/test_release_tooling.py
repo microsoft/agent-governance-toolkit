@@ -176,6 +176,8 @@ def test_acs_registry_pair_and_backend_features_are_consistent() -> None:
         dependency = manifest["dependencies"]["agent-control-spec"]
         assert dependency["version"] == "=0.4.0-alpha.3", path
         assert not dependency["default-features"], path
+        if path in ["policy-engine/core/Cargo.toml", "policy-engine/integrations/otel/Cargo.toml"]:
+            assert "opa" in dependency["features"], path
     sdk = tomllib.loads(
         (REPO_ROOT / "policy-engine/sdk/rust/Cargo.toml").read_text(encoding="utf-8")
     )

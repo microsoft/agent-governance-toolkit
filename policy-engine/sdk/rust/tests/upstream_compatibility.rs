@@ -25,8 +25,9 @@ intervention_points:
 
 #[test]
 fn engine_release_and_manifest_grammar_have_distinct_versions() {
+    const LEGACY_ARRAY: [&str; 1] = SUPPORTED_MANIFEST_VERSIONS;
     assert_eq!(
-        SUPPORTED_MANIFEST_VERSIONS,
+        LEGACY_ARRAY.as_slice(),
         agent_control_spec::SUPPORTED_VERSIONS
     );
     validate_manifest_yaml(MANIFEST).unwrap();
