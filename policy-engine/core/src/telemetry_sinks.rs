@@ -12,8 +12,10 @@
 //! `force_flush`, so `StdoutJsonTelemetrySink` keeps it as an inherent
 //! method and `MultiSink` no longer fans a flush out through
 //! `dyn TelemetrySink`. Nothing in AGT called it through the trait.
-//! `TelemetryEvent` no longer carries `to_json`, so the JSON projection
-//! lives here as [`TelemetryEventExt`].
+//! The alpha.3 `wire::telemetry_event_json` helper lowercases Rust debug
+//! names rather than preserving the agent-hooks wire names for points and
+//! evaluate-only mode. Keep this compatibility projection until those
+//! representations agree.
 
 use agent_control_spec::telemetry::{TelemetryEvent, TelemetrySink};
 use agent_control_spec::EnforcementMode;

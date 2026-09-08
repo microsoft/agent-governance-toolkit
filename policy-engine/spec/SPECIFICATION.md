@@ -1,6 +1,6 @@
 # Agent Control Specification
 
-This document specifies the runtime semantics AGT hosts against. The engine is the `agent-control-spec` crate, pinned at 0.4.0-alpha.1, which is the only manifest `agent_control_specification_version` it accepts. Its status is Draft.
+This document specifies the runtime semantics AGT hosts against. The engine is the `agent-control-spec` crate, pinned at 0.4.0-alpha.3. Its accepted manifest `agent_control_specification_version` remains 0.4.0-alpha.1. Its status is Draft.
 
 The machine readable manifest contract is `schema/manifest.schema.json` in artifact kits and `spec/schema/manifest.schema.json` in this repository. That schema governs manifest syntax. This document governs runtime semantics, which are the evaluation order, the policy input shape, verdict handling, transform application, and fail closed behavior.
 

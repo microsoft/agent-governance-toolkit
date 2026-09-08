@@ -165,6 +165,35 @@ def test_python_manifest_producers_require_the_retargeted_sdk() -> None:
     assert Version("5.0.0") not in policy_requirement.specifier
 
 
+def test_acs_registry_pair_and_backend_features_are_consistent() -> None:
+    for path in [
+        "policy-engine/core/Cargo.toml",
+        "policy-engine/sdk/rust/Cargo.toml",
+        "policy-engine/integrations/annotators/Cargo.toml",
+        "policy-engine/integrations/otel/Cargo.toml",
+    ]:
+        manifest = tomllib.loads((REPO_ROOT / path).read_text(encoding="utf-8"))
+        dependency = manifest["dependencies"]["agent-control-spec"]
+        assert dependency["version"] == "=0.4.0-alpha.3", path
+        assert not dependency["default-features"], path
+    sdk = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/rust/Cargo.toml").read_text(encoding="utf-8")
+    )
+    assert sdk["dependencies"]["agent-hooks-sdk"] == "=0.1.0-alpha.5"
+    assert "opa" in sdk["dependencies"]["agent-control-spec"]["features"]
+    for path in [
+        "policy-engine/Cargo.lock",
+        "agent-governance-rust/Cargo.lock",
+        "policy-engine/examples/coding_agent/app/Cargo.lock",
+    ]:
+        packages = tomllib.loads((REPO_ROOT / path).read_text(encoding="utf-8"))["package"]
+        for name, version in [
+            ("agent-control-spec", "0.4.0-alpha.3"),
+            ("agent-hooks-sdk", "0.1.0-alpha.5"),
+        ]:
+            assert {p["version"] for p in packages if p["name"] == name} == {version}, path
+
+
 def test_python_ci_resolves_unpublished_policy_dependencies_locally() -> None:
     import yaml
 

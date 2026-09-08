@@ -1,10 +1,33 @@
 ---
 title: Policy engine retargets onto the published agent-control-spec crate
-last_reviewed: 2026-07-31
+last_reviewed: 2026-09-08
 owner: liamcrumm
 ---
 
 # Policy engine retargets onto the published agent-control-spec crate
+
+## September 8 upstream alignment
+
+The current PR uses `agent-control-spec =0.4.0-alpha.3` and
+`agent-hooks-sdk =0.1.0-alpha.5`. Both are outside the cooling-off window.
+The ACS artifact has a GitHub trusted-publishing record for
+`4c47b57033b98c0d2ccf1b94624f058815db0a9c`; its registry checksum is
+`92f7c1a0b2f6579980a6b30b78d7ee765b9fc185612b649c5b693e7464ab60e0`.
+Organization/team co-ownership remains the outstanding publishing condition.
+
+The three consumer lockfiles use `ureq` 3.4.0 and `ureq-proto` 0.6.1, released
+August 8, rather than their September 6 successors. Other newly selected
+production dependencies also predate the cooling-off cutoff.
+
+Upstream default features are disabled explicitly. AGT's compatibility host
+constructs the OPA dispatcher directly, including when another consumer enables
+in-process Rego. The public supported-version list and runtime getters replace
+their former copies. See
+[`acs-retarget.md`](../../policy-engine/docs/acs-retarget.md) for retained
+compatibility surfaces, current limitations and release sequencing.
+
+The original audit below is historical. It predates the completed .NET retarget
+and the alpha.3 upgrade described above.
 
 ## Which Dependencies Changed And Why
 

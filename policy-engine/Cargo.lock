@@ -10,20 +10,20 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agent-control-spec"
-version = "0.4.0-alpha.1"
+version = "0.4.0-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "958de0c70bbaddd1ecf5df232d09dddbc663ca61c6e0e12081230604fdc72656"
+checksum = "92f7c1a0b2f6579980a6b30b78d7ee765b9fc185612b649c5b693e7464ab60e0"
 dependencies = [
  "agent-hooks-sdk",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "cedar-policy",
  "regex",
  "serde",
  "serde_json",
  "serde_yaml",
- "sha2 0.10.9",
- "ureq",
+ "sha2 0.11.0",
+ "ureq 3.4.0",
  "url",
 ]
 
@@ -42,9 +42,9 @@ dependencies = [
 
 [[package]]
 name = "agent-hooks-sdk"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e492033bf77b197f1cd7278cc90d50b765995ab45c1a8ea9924b52ee9fe8f8d8"
+checksum = "d4b0b9e8954768431c15125a6218ea0e45d8a057b782cab7e358477cc5c243f0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -76,7 +76,7 @@ dependencies = [
  "agent-control-spec",
  "agent_control_specification",
  "serde_json",
- "ureq",
+ "ureq 2.12.1",
 ]
 
 [[package]]
@@ -303,6 +303,12 @@ name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bit-set"
@@ -3501,6 +3507,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "ureq"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "972d7902c8735f2695410b8aed7df6ed12a47394aa1c8d7af49f0497b731a94d"
+dependencies = [
+ "base64 0.23.1",
+ "flate2",
+ "log",
+ "percent-encoding",
+ "rustls",
+ "rustls-pki-types",
+ "ureq-proto",
+ "utf8-zero",
+ "webpki-roots 1.0.7",
+]
+
+[[package]]
+name = "ureq-proto"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da5f78b09e6941e1a0f2e30e695e4b120377b54d5e0aec11b594bb57b3971613"
+dependencies = [
+ "base64 0.23.1",
+ "http",
+ "httparse",
+ "log",
+]
+
+[[package]]
 name = "url"
 version = "2.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3517,6 +3552,12 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
+
+[[package]]
+name = "utf8-zero"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8c0a043c9540bae7c578c88f91dda8bd82e59ae27c21baca69c8b191aaf5a6e"
 
 [[package]]
 name = "utf8_iter"

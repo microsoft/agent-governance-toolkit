@@ -18,9 +18,8 @@ use std::fmt;
 /// expansion blowing up memory before the manifest is ever validated.
 const MAX_MANIFEST_PARSE_NODES: usize = 100_000;
 
-/// Manifest grammar versions this toolkit accepts. Mirrors the private
-/// list in `agent_control_spec`, which does not export it.
-pub const SUPPORTED_MANIFEST_VERSIONS: [&str; 1] = ["0.4.0-alpha.1"];
+/// Manifest grammar versions accepted by the upstream engine.
+pub use agent_control_spec::SUPPORTED_VERSIONS as SUPPORTED_MANIFEST_VERSIONS;
 
 /// The overlay-safe subset of manifest validation.
 ///
@@ -134,7 +133,7 @@ pub fn validate_manifest_yaml(input: &str) -> Result<(), RuntimeError> {
 ///
 /// AGT's embedded engine had `Manifest::validate_overlay`, a relaxed check
 /// for fragments that only become whole after `extends` resolution.
-/// `agent_control_spec` 0.4.0-alpha.1 exposes only the strict
+/// `agent_control_spec` 0.4.0-alpha.3 still exposes only the strict
 /// `Manifest::validate`, which over rejects fragments because it requires
 /// at least one intervention point and resolves policy references. Until
 /// ACS grows an overlay entry point this deserializes the fragment, which

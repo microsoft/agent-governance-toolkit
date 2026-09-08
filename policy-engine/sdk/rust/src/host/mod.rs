@@ -81,11 +81,25 @@ pub fn default_host_annotator_dispatcher(
     }
 }
 
-/// Select the bundled OPA policy dispatcher.
+/// Select AGT's OPA policy dispatcher independently of Cargo feature unification.
 pub fn default_host_policy_dispatcher(
     manifest: &Manifest,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
-    agent_control_spec::dispatchers::default_policy_dispatcher(manifest)
+    for (name, policy) in &manifest.policies {
+        let engine = policy.engine_type();
+        if engine != "rego" {
+            return Err(RuntimeError::PolicyInvocationFailed(format!(
+                "default policy dispatcher supports only Rego policies; policy '{name}' uses engine '{engine}'"
+            )));
+        }
+    }
+    // ACS prefers in-process Rego when any consumer enables that feature.
+    // AGT's existing API promises OPA executable selection and bundle behavior.
+    Ok(Arc::new(
+        agent_control_spec::OpaPolicyDispatcher::with_runner(
+            agent_control_spec::OpaRegoRunner::from_environment(),
+        ),
+    ))
 }
 
 /// Load a top-level manifest URL through ACS's URL `extends` resolver.
@@ -106,7 +120,7 @@ pub fn default_host_policy_dispatcher(
 /// guard through `[::ffff:169.254.169.254]`.
 ///
 /// Ported from the engine AGT vendored before the retarget;
-/// `agent-control-spec` 0.4.0-alpha.1 validates only scheme, credentials and
+/// `agent-control-spec` 0.4.0-alpha.3 validates only scheme, credentials and
 /// fragment. Filed upstream as agent-control-spec#20.
 fn is_blocked_fetch_ip(ip: std::net::IpAddr) -> bool {
     fn blocked_v4(v4: std::net::Ipv4Addr) -> bool {
@@ -181,8 +195,15 @@ pub fn manifest_from_url(
             ))
         })?;
     let path = temp_dir.path().join("manifest.yaml");
+    let version = agent_control_spec::SUPPORTED_VERSIONS
+        .first()
+        .ok_or_else(|| {
+            RuntimeError::ManifestInvalid(
+                "engine exports no supported manifest versions".to_string(),
+            )
+        })?;
     let mut synthetic = format!(
-        "agent_control_specification_version: 0.4.0-alpha.1\nextends:\n  - url: {}\n",
+        "agent_control_specification_version: {version}\nextends:\n  - url: {}\n",
         serde_json::to_string(url).map_err(|error| {
             RuntimeError::ManifestInvalid(format!("failed to encode manifest URL: {error}"))
         })?
@@ -233,12 +254,10 @@ pub struct AgentControl {
     parts: Option<RuntimeParts>,
 }
 
-/// The inputs a `Runtime` is built from.
+/// Construction inputs that the upstream runtime does not expose.
 #[derive(Clone)]
 struct RuntimeParts {
-    manifest: Manifest,
     annotations: Arc<dyn AnnotatorDispatcher>,
-    policy: Arc<dyn PolicyDispatcher>,
     /// Retained so rebuilding for telemetry keeps the caller's budget.
     /// Dropping it would silently restore `Limits::default()`, widening
     /// limits the caller deliberately tightened.
@@ -320,7 +339,7 @@ impl AgentControl {
     /// `extends` URL fetch performed at load time.
     ///
     /// It does **not** bound a dispatch time fetch. `agent-control-spec`
-    /// 0.4.0-alpha.1 constructs the bundled dispatchers without limits, so a
+    /// 0.4.0-alpha.3 constructs the bundled dispatchers without limits, so a
     /// `system_prompt_url` or `bundle_url` fetched by an annotator uses that
     /// crate's own defaults regardless of what is set here. Do not rely on
     /// this to cap outbound requests from a dispatcher.
@@ -354,7 +373,7 @@ impl AgentControl {
         };
         let policy = match policy {
             Some(policy) => policy,
-            None => agent_control_spec::dispatchers::default_policy_dispatcher(&manifest)?,
+            None => default_host_policy_dispatcher(&manifest)?,
         };
         // `Limits` carries the engine resource budget (snapshot size,
         // policy input size, annotators per point), so it must reach the
@@ -369,9 +388,7 @@ impl AgentControl {
         )?;
         let mut control = Self::new(runtime);
         control.parts = Some(RuntimeParts {
-            manifest,
             annotations,
-            policy,
             limits,
         });
         Ok(control)
@@ -402,18 +419,18 @@ impl AgentControl {
     /// `OtelTelemetrySink` from the `agent_control_specification_otel` crate
     /// (added as a dependency) for OpenTelemetry metrics.
     /// Requires an `AgentControl` built from a manifest. `agent_control_spec`
-    /// takes the sink at `Runtime` construction and exposes no setter and no
-    /// accessors, so a control built through [`AgentControl::new`] from a
-    /// pre-built `Runtime` has nothing to rebuild from and keeps the sink the
-    /// runtime was constructed with. Tracked in docs/acs-retarget.md.
+    /// takes the sink at `Runtime` construction and exposes no setter or
+    /// annotator/limit accessors, so a control built through
+    /// [`AgentControl::new`] keeps the sink the runtime was constructed with.
+    /// Tracked in docs/acs-retarget.md.
     pub fn with_telemetry(mut self, telemetry: Arc<dyn crate::TelemetrySink>) -> Self {
         if let Some(parts) = self.parts.clone() {
             if let Ok(runtime) = Runtime::with_telemetry_perf_and_limits(
-                parts.manifest,
+                self.runtime.manifest().clone(),
                 parts.annotations,
-                parts.policy,
+                Arc::clone(self.runtime.policy_dispatcher()),
                 telemetry,
-                crate::PerfTelemetry::default(),
+                self.runtime.perf_telemetry(),
                 parts.limits,
             ) {
                 self.runtime = runtime;

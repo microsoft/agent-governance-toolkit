@@ -64,9 +64,6 @@ pub struct AcsBuilder {
 
 pub struct AcsRuntime {
     runtime: Runtime,
-    /// Retained because `policy_labels` is derived from the manifest now that
-    /// the engine no longer exposes it.
-    manifest: Manifest,
 }
 
 pub type AcsFreeResultCallback = unsafe extern "C" fn(ptr: *mut c_char, user_data: *mut c_void);
@@ -608,7 +605,7 @@ fn resolve_default_policy_dispatcher(
     #[cfg(all(feature = "bundled-dispatchers", feature = "opa"))]
     {
         let _ = builder;
-        agent_control_spec::dispatchers::default_policy_dispatcher(manifest)
+        crate::default_host_policy_dispatcher(manifest)
             .map(Some)
             .map_err(|error| error.to_string())
     }
@@ -672,13 +669,8 @@ pub unsafe extern "C" fn acs_builder_build(
                 }
             },
         };
-        match Runtime::with_perf_telemetry(
-            manifest.clone(),
-            annotations,
-            policy,
-            builder.perf_telemetry,
-        ) {
-            Ok(runtime) => Box::into_raw(Box::new(AcsRuntime { runtime, manifest })),
+        match Runtime::with_perf_telemetry(manifest, annotations, policy, builder.perf_telemetry) {
+            Ok(runtime) => Box::into_raw(Box::new(AcsRuntime { runtime })),
             Err(error) => {
                 unsafe { write_err(err, &format!("build failed: {error}")) };
                 std::ptr::null_mut()
@@ -833,7 +825,7 @@ pub unsafe extern "C" fn acs_runtime_policy_labels(
             unsafe { write_err(err, "null runtime") };
             return std::ptr::null_mut();
         };
-        json_to_c(&crate::policy_labels(&runtime.manifest))
+        json_to_c(&crate::policy_labels(runtime.runtime.manifest()))
     })
 }
 

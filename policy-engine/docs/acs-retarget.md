@@ -5,11 +5,10 @@ AGT's policy decision runtime is no longer vendored here. It ships from the regi
 control contract. This note records what changed, what is still open, and what a
 contributor needs to know before touching the policy plane.
 
-Pinned versions: `agent-control-spec = "=0.4.0-alpha.1"` and
-`agent-hooks-sdk = "=0.1.0-alpha.3"`. These remain the versions selected and
-reviewed for this migration. Their cooling-off windows have elapsed. Updating
-to newer upstream releases is a separate dependency change, not a prerequisite
-for repairing this host implementation.
+Pinned versions are `agent-control-spec = "=0.4.0-alpha.3"` and
+`agent-hooks-sdk = "=0.1.0-alpha.5"`, the latest published releases verified on
+September 8, 2026. The same pair is resolved in the policy workspace, the
+standalone Rust consumer and the coding-agent example.
 
 As of September 8, 2026, ACS 0.4.0-alpha.3 and agent-hooks 0.1.0-alpha.5 are
 published. ACS's newer bindings provide manifest and artifact tooling, host
@@ -18,6 +17,23 @@ Those releases invalidate the original assumption that bindings expose only
 `AcsInterceptor`, but do not make them drop-in replacements for AGT's
 `AgentControl` and `HostSession` APIs. This PR retains AGT's native bindings
 over the pinned Rust engine.
+
+### Backend compatibility
+
+AGT's legacy `AgentControl`, Python/Node bindings and .NET ABI explicitly use
+the OPA dispatcher. All direct ACS dependencies disable upstream default
+features, and the host constructs `OpaPolicyDispatcher` rather than calling
+the feature-dependent upstream default factory. Enabling in-process Rego
+elsewhere in a consumer's Cargo graph therefore cannot silently change these
+APIs' executable selection, bundle handling or policy behavior.
+
+Direct users of ACS's `AcsInterceptor` and `ActivatedPolicy` follow ACS's own
+feature selection. Switching the legacy host's default backend is a separate
+behavior change, not a side effect of upgrading its dependency.
+
+The committed lockfiles retain `ureq` 3.4.0 and `ureq-proto` 0.6.1, both
+published August 8. Their September 6 successors are inside the seven-day
+cooling-off window and are not used in these builds.
 
 ## What moved
 
@@ -68,6 +84,10 @@ This check runs in both enforcement and evaluate-only mode. Validating only
 the replacement target would omit ambient state and permit oversized actions.
 The shared helper serves Rust, Python, Node and the .NET C ABI.
 
+The compatibility identity fields retain AGT's historical policy-input
+digests. They are not a claim to implement agent-hooks' default context
+identity profile.
+
 ## Manifests
 
 Two breaking changes, both already applied across this repository.
@@ -78,13 +98,16 @@ Two breaking changes, both already applied across this repository.
    and rejects the old root as `unknown path root`. Note that agent-hooks does accept
    `$policy_target` as a deprecated alias on *transform* paths, so the two layers differ.
 
-`SUPPORTED_MANIFEST_VERSIONS` in `core/src/manifest_yaml.rs` mirrors the private list in
-`agent-control-spec`. Keep it in step when the upstream pin moves.
+`SUPPORTED_MANIFEST_VERSIONS` in `core/src/manifest_yaml.rs` now re-exports the
+engine's public `SUPPORTED_VERSIONS`. URL-loader scaffolding uses that same
+list. Package version alpha.3 does not imply manifest version alpha.3; the
+accepted grammar remains alpha.1.
 
 ## Gaps in the pinned upstream release
 
-The compatibility code and limitations below describe 0.4.0-alpha.1, not every
-later release. Recheck both source and published artifacts before updating a pin.
+These limitations were rechecked against the published alpha.3 crate. New
+upstream APIs replace compatibility code only when their behavior and wire
+shapes match the legacy consumer contract.
 
 | Gap | Issue |
 | --- | --- |
@@ -102,6 +125,7 @@ to withhold host environment credentials from a manifest fetched over the networ
 three places in the old `dispatchers/llm.rs`. The crate still supports URL sourced
 `extends` through `ManifestUrlExtends`, so the capability that creates the risk survived
 while the mitigation did not.
+The alpha.3 dispatchers still do not carry that provenance gate.
 
 The credential-reading path is the bundled *annotator* dispatcher, which resolves
 `api_key_env` against the host environment. `sdk/rust` therefore installs it only under
@@ -168,12 +192,22 @@ that loading one over the network is a first class API.
   verification rather than adding an HTTP client here; `policy_labels` reads
   `manifest.intervention_points`.
 - `Manifest::validate_overlay` is not exported. `core/src/manifest_yaml.rs` reimplements
-  the overlay safe subset over the public manifest surface.
+  the overlay safe subset over the public manifest surface. The bounded YAML
+  parser also remains because upstream parsing does not provide AGT's expanded
+  node and byte limits.
 - `TelemetrySink` has no `force_flush`, and `TelemetryEvent` has no `to_json`.
-  `core/src/telemetry_sinks.rs` carries both.
-- `Runtime` takes its telemetry sink at construction, has private fields, and exposes no
-  accessors or setter. `AgentControl::with_telemetry` therefore rebuilds the runtime from
-  retained construction inputs, which only works for manifest based constructors.
+  Alpha.3 provides `wire::telemetry_event_json`, but it lowercases Rust debug
+  names, losing underscores in interception points and evaluate-only mode.
+  `core/src/telemetry_sinks.rs` therefore retains the canonical legacy wire
+  projection and its flush methods.
+- `Runtime` now exposes its manifest, policy dispatcher and performance
+  telemetry. The host uses those getters rather than retaining duplicate
+  construction state. Annotator and limit accessors and a telemetry setter are
+  still absent, so `with_telemetry` retains those inputs and still requires a
+  manifest-based constructor.
+- Upstream artifact diagnostics use the in-process backend and a different
+  shape. AGT retains its bounded, source-located OPA lint diagnostics and
+  explicit executable selection rather than silently changing that API.
 - `Limits` does not reach the bundled dispatchers, so a tightened URL fetch budget does
   not apply to a dispatch time fetch; their own defaults govern it. The engine resource
   budget it also carries (snapshot size, policy input size, annotators per point) does
@@ -203,10 +237,11 @@ the obvious case and not as a boundary.
 
 The review required trusted publishing, repository metadata and an organization
 or team co-owner for `agent-control-spec`. Registry APIs checked on September 8,
-2026 show repository metadata and trusted publication for alpha.2 and alpha.3,
-but still one individual owner. The pinned alpha.1 artifact has no trusted
-publication record. The historical source comparison does not waive the
-reviewer's ownership condition. Upstream
+2026 show repository metadata and trusted publication for the selected alpha.3
+artifact, bound to upstream commit `4c47b57033b98c0d2ccf1b94624f058815db0a9c`.
+Its downloaded crate checksum was verified against the registry. The registry
+still lists one individual owner, so the reviewer's ownership condition is
+not waived. Upstream
 [#24](https://github.com/responsibleai/agent-control-spec/issues/24) remains open.
 Merge still requires that condition to be satisfied or an explicit maintainer
 decision changing it.

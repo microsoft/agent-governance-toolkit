@@ -40,7 +40,7 @@
 //!
 //! AGT gated host environment credential reads on manifest provenance, so
 //! a manifest fetched over the network could not reach host credentials.
-//! `agent-control-spec` 0.4.0-alpha.1 does not carry that gate while it
+//! `agent-control-spec` 0.4.0-alpha.3 does not carry that gate while it
 //! still supports URL sourced `extends`. Do not enable the bundled
 //! dispatcher features until that is restored upstream. See
 //! `docs/acs-retarget.md`.
