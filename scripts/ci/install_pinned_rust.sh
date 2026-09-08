@@ -77,7 +77,8 @@ PY
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 INSTALLER="$TEMP_DIR/$RUSTUP_FILE"
-curl --proto '=https' --tlsv1.2 --retry 5 --retry-all-errors --retry-delay 5 \
+# The pinned fuzz builder uses curl older than --retry-all-errors.
+curl --proto '=https' --tlsv1.2 --retry 5 --retry-delay 5 \
   --connect-timeout 20 -fSLo "$INSTALLER" \
   "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_TARGET}/${RUSTUP_FILE}"
 ACTUAL_SHA256="$(compute_sha256 "$INSTALLER")"

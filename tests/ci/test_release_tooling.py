@@ -481,7 +481,7 @@ def test_pinned_rust_installer_covers_release_hosts() -> None:
     assert "f547d77c32d50d82b8228899b936bf2b3c72ce0a70fb3b364e7fba8891eba781" in text
     assert "760b18611021deee1a859c345d17200e0087d47f68dfe58278c57abe3a0d3dd0" in text
     assert "193d6c727e18734edbf7303180657e96e9d5a08432002b4e6c5bbe77c60cb3e8" in text
-    assert "--retry 5 --retry-all-errors --retry-delay 5" in text
+    assert "curl --proto '=https' --tlsv1.2 --retry 5 --retry-delay 5" in text
     assert 'if [[ "$ACTUAL_SHA256" != "$RUSTUP_SHA256" ]]' in text
     windows_text = PINNED_WINDOWS_RUST_INSTALLER.read_text(encoding="utf-8")
     assert '[ValidateSet("x86_64-pc-windows-msvc")]' in windows_text
@@ -490,6 +490,29 @@ def test_pinned_rust_installer_covers_release_hosts() -> None:
         in windows_text
     )
     assert "Get-FileHash" in windows_text
+
+
+def test_pinned_rust_installer_supports_legacy_curl_and_propagates_download_failure(tmp_path: Path) -> None:
+    curl = tmp_path / "curl"
+    curl.write_text(
+        "#!/bin/sh\n"
+        "for arg in \"$@\"; do\n"
+        "  if [ \"$arg\" = '--retry-all-errors' ]; then exit 2; fi\n"
+        "done\n"
+        "echo 'download unavailable' >&2\n"
+        "exit 7\n",
+        encoding="utf-8",
+    )
+    curl.chmod(0o755)
+    result = subprocess.run(
+        ["bash", str(PINNED_RUST_INSTALLER)],
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 7, result.stderr
+    assert "download unavailable" in result.stderr
 
 
 def test_acs_python_distribution_verifier_rejects_extra_artifact(
