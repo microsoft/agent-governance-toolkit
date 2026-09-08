@@ -13,11 +13,13 @@ at instantiation time instead.
 from __future__ import annotations
 
 try:
+    from .decorators import trust_exempt, trust_required
     from .middleware import AgentTrustMiddleware
-    from .decorators import trust_required, trust_exempt
+    from .request_auth import build_request_signature_payload
 
     __all__ = [
         "AgentTrustMiddleware",
+        "build_request_signature_payload",
         "trust_required",
         "trust_exempt",
     ]

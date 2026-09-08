@@ -1,6 +1,12 @@
-🌍 [English](/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [한국어](./README.ko.md)
+---
+title: "Agent Governance Toolkit"
+last_reviewed: 2026-07-15
+owner: agt-maintainers
+---
 
-![Agent Governance Toolkit](../../docs/assets/readme-banner.svg)
+🌍 [English](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [한국어](./README.ko.md)
+
+![Agent Governance Toolkit](../assets/readme-banner.svg)
 
 # Agent Governance Toolkit
 
@@ -23,13 +29,13 @@
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![Discord](https://dcbadge.limes.pink/api/server/TxMRqY3pFr?style=flat)](https://discord.gg/TxMRqY3pFr)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
 [![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance?label=NuGet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/compliance/owasp-agentic-top10-architecture.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../compliance/owasp-agentic-top10-architecture.md)
 
 > [!IMPORTANT]
 > **공개 프리뷰(Public Preview)** — 프로덕션 품질의 Microsoft 서명 릴리즈입니다. GA 이전에 주요 변경이 발생할 수 있습니다.
@@ -53,6 +59,8 @@
 AGT는 프롬프트 내부에서 이 싸움을 이기려 하지 않습니다. 모든 도구 호출, 메시지 전송, 위임 작업은 모델의 의도가 실행되기 전에 결정론적 애플리케이션 코드에서 **가로채어집니다**. AGT 커널이 거부한 동작은 "가능성이 낮은" 것이 아닙니다. **구조적으로 불가능합니다**. 이것이 에이전트에게 올바르게 행동하도록 요청하는 것과 잘못된 행동 자체를 불가능하게 만드는 것의 차이입니다.
 
 ---
+
+<a id="빠른-시작"></a>
 
 ## 빠른 시작
 
@@ -191,8 +199,8 @@ agt red-team scan ./prompts/ --min-grade B         # 프롬프트 인젝션 감�
 agt lint-policy policies/                          # 정책 파일 검증
 ```
 
-전체 과정: [quickstart.md](../../docs/i18n/quickstart.ko.md) — 5분 만에 거버넌스가 적용된 에이전트 완성.
-🌍 다음 언어로도 제공됩니다: [日本語](./quickstart.ja.md) | [简体中文](./quickstart.zh-CN.md) | [English](../../docs/quickstart.md)
+전체 과정: [quickstart.md](./quickstart.ko.md) — 5분 만에 거버넌스가 적용된 에이전트 완성.
+🌍 다음 언어로도 제공됩니다: [日本語](./quickstart.ja.md) | [简体中文](./quickstart.zh-CN.md) | [English](../quickstart.md)
 
 ---
 
@@ -216,24 +224,24 @@ Agent ──► Policy Engine ──► Identity ──► Audit Log
 
 | 패키지 | 설명 |
 |---------|-------------|
-| [**Agent OS**](../../agent-governance-python/agent-os/) | 정책 엔진, 에이전트 라이프사이클, 거버넌스 게이트 |
-| [**Agent Mesh**](../../agent-governance-python/agent-mesh/) | 에이전트 검색, 라우팅, 신뢰 메시 |
-| [**Agent Runtime**](../../agent-governance-python/agent-runtime/) | 4단계 권한 격리 링을 통한 실행 샌드박싱 |
-| [**Agent SRE**](../../agent-governance-python/agent-sre/) | 킬 스위치, SLO 모니터링, 카오스 테스트 |
-| [**Agent Compliance**](../../agent-governance-python/agent-compliance/) | OWASP 검증, 정책 린팅, 무결성 체크 |
-| [**Agent Marketplace**](../../agent-governance-python/agent-marketplace/) | 플러그인 거버넌스 및 신뢰 점수화 |
-| [**Agent Lightning**](../../agent-governance-python/agent-lightning/) | 위반 패널티가 적용된 강화학습(RL) 훈련 거버넌스 |
-| [**Agent Hypervisor**](../../agent-governance-python/agent-hypervisor/) | 실행 감사, 델타 엔진, 커밋먼트 앵커링 |
+| [**Agent OS**](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os) | 정책 엔진, 에이전트 라이프사이클, 거버넌스 게이트 |
+| [**Agent Mesh**](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh) | 에이전트 검색, 라우팅, 신뢰 메시 |
+| [**Agent Runtime**](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-runtime) | 4단계 권한 격리 링을 통한 실행 샌드박싱 |
+| [**Agent SRE**](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-sre) | 킬 스위치, SLO 모니터링, 카오스 테스트 |
+| [**Agent Compliance**](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-compliance) | OWASP 검증, 정책 린팅, 무결성 체크 |
+| [**Agent Marketplace**](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-marketplace) | 플러그인 거버넌스 및 신뢰 점수화 |
+| [**Agent Lightning**](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-lightning) | 위반 패널티가 적용된 강화학습(RL) 훈련 거버넌스 |
+| [**Agent Hypervisor**](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-hypervisor) | 실행 감사, 델타 엔진, 커밋먼트 앵커링 |
 
 ### 추가 기능
 
 | 기능 | 설명 |
 |---|---|
-| **MCP Security Gateway** | 도구 오염(tool poisoning) 탐지, 드리프트 모니터링, 유사 도구명 공격(typosquatting), 숨겨진 지시문 스캔 ([명세](../../docs/specs/MCP-SECURITY-GATEWAY-1.0.md)) |
-| **Shadow AI Discovery** | 프로세스, 환경 설정, 리포지터리에서 미등록 에이전트 감지 ([Discovery](../../agent-governance-python/agent-discovery/)) |
-| **Governance Dashboard** | 상태, 신뢰, 컴플라이언스에 대한 실시간 에이전트 현황 ([Dashboard](../../examples/demos/governance-dashboard/)) |
-| **PromptDefense Evaluator** | 12-vector 프롬프트 인젝션 감사 ([Evaluator](../../agent-governance-python/agent-compliance/src/agent_compliance/prompt_defense.py)) |
-| **Contributor Reputation** | 사회공학 공격에 대한 PR/이슈 등록자 검증. 재사용 가능한 GitHub Action ([Action](../../.github/actions/contributor-check/)) |
+| **MCP Security Gateway** | 도구 오염(tool poisoning) 탐지, 드리프트 모니터링, 유사 도구명 공격(typosquatting), 숨겨진 지시문 스캔 ([명세](../specs/MCP-SECURITY-GATEWAY-1.0.md)) |
+| **Shadow AI Discovery** | 프로세스, 환경 설정, 리포지터리에서 미등록 에이전트 감지 ([Discovery](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-discovery)) |
+| **Governance Dashboard** | 상태, 신뢰, 컴플라이언스에 대한 실시간 에이전트 현황 ([Dashboard](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/demos/governance-dashboard)) |
+| **PromptDefense Evaluator** | 12-vector 프롬프트 인젝션 감사 ([Evaluator](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-compliance/src/agent_compliance/prompt_defense.py)) |
+| **Contributor Reputation** | 사회공학 공격에 대한 PR/이슈 등록자 검증. 재사용 가능한 GitHub Action ([Action](https://github.com/microsoft/agent-governance-toolkit/tree/main/.github/actions/contributor-check)) |
 
 ---
 
@@ -242,17 +250,17 @@ Agent ──► Policy Engine ──► Identity ──► Audit Log
 | 언어 | 패키지 | 명령어 |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | [`@microsoft/agent-governance-sdk`](../../agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
-| **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](../../agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
-| **Claude Code** | [`@microsoft/agent-governance-claude-code`](../../agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
-| **OpenCode** | [`@microsoft/agent-governance-opencode`](../../agent-governance-opencode/) | `npm install @microsoft/agent-governance-opencode` |
+| **TypeScript** | [`@microsoft/agent-governance-sdk`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript) | `npm install @microsoft/agent-governance-sdk` |
+| **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-copilot-cli) | `npx @microsoft/agent-governance-copilot-cli install` |
+| **Claude Code** | [`@microsoft/agent-governance-claude-code`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-claude-code) | `claude --plugin-dir ./agent-governance-claude-code` |
+| **OpenCode** | [`@microsoft/agent-governance-opencode`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-opencode) | `npm install @microsoft/agent-governance-opencode` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
 | **Rust** | [`agent-governance`](https://crates.io/crates/agent-governance) | `cargo add agent-governance` |
-| **Go** | [`agent-governance-toolkit`](../../agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
+| **Go** | [`agent-governance-toolkit`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-golang) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 5개 언어 SDK 모두 핵심 거버넌스(정책, 신원, 신뢰, 감사)를 구현합니다. Python은 풀 스택을 지원합니다. Copilot CLI와 Claude Code는 TypeScript SDK 위에 구축된 1st-party 개발자 인터페이스입니다.
-**[언어 패키지 매트릭스](../../docs/PACKAGE-FEATURE-MATRIX.md)**에서 언어별 상세 지원 현황을 확인하세요.
+**[언어 패키지 매트릭스](../PACKAGE-FEATURE-MATRIX.md)**에서 언어별 상세 지원 현황을 확인하세요.
 
 <details>
 <summary><b>Python 배포판 (v4.1.0 — 통합)</b></summary>
@@ -301,7 +309,7 @@ v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습�
 | [Azure AI Foundry](https://learn.microsoft.com/azure/ai-studio/) | 배포 가이드 |
 | GitHub Copilot CLI | 거버넌스 인스톨러 |
 
-전체 목록: [프레임워크 연동](../../agent-governance-python/agentmesh-integrations/) · [Quickstart 예제](../../examples/quickstart/)
+전체 목록: [프레임워크 연동](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations) · [Quickstart 예제](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/quickstart)
 
 ---
 
@@ -309,14 +317,16 @@ v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습�
 
 | 예제 | 프레임워크 | 시연 내용 |
 |---------|-----------|----------------------|
-| [openai-agents-governed](../../examples/openai-agents-governed) | OpenAI Agents SDK | 신뢰 티어를 통한 정책 게이트 도구 호출 |
-| [crewai-governed](../../examples/crewai-governed) | CrewAI | 역할 기반 정책을 통한 다중 에이전트 거버넌스 |
-| [smolagents-governed](../../examples/smolagents-governed) | HuggingFace smolagents | 경량 에이전트 거버넌스 |
-| [maf-integration](../../examples/maf-integration) | MAF | Microsoft Agent Framework 연동 |
-| [mcp-trust-verified-server](../../examples/mcp-trust-verified-server) | MCP | 신뢰 검증된 MCP 서버 구현 |
-| [governance-dashboard](../../examples/demos/governance-dashboard) | Streamlit | 실시간 에이전트 현황 대시보드 |
+| [openai-agents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/openai-agents-governed) | OpenAI Agents SDK | 신뢰 티어를 통한 정책 게이트 도구 호출 |
+| [crewai-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/crewai-governed) | CrewAI | 역할 기반 정책을 통한 다중 에이전트 거버넌스 |
+| [smolagents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/smolagents-governed) | HuggingFace smolagents | 경량 에이전트 거버넌스 |
+| [maf-integration](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/maf-integration) | MAF | Microsoft Agent Framework 연동 |
+| [mcp-trust-verified-server](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/mcp-trust-verified-server) | MCP | 신뢰 검증된 MCP 서버 구현 |
+| [governance-dashboard](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/demos/governance-dashboard) | Streamlit | 실시간 에이전트 현황 대시보드 |
 
 ---
+
+<a id="명세-specifications"></a>
 
 ## 명세 (Specifications)
 
@@ -325,17 +335,17 @@ v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습�
 | 명세 | 범위 | 테스트 수 |
 |---|---|---|
 | Agent OS Policy Engine | 정책 평가, 규칙 병합, fail-closed 시맨틱 | 68 |
-| [AgentMesh Identity and Trust](../../docs/specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | 자격증명, 신뢰 점수화, 위임 체인 | 135 |
-| [Agent Hypervisor Execution Control](../../docs/specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | 권한 격리 링, 사가 오케스트레이션, 킬 스위치 | 80 |
-| [AgentMesh Trust and Coordination](../../docs/specs/AGENTMESH-TRUST-COORDINATION-1.0.md) | 피어 신뢰 협상, 메시 전체 정책 | 62 |
-| [Agent SRE Governance](../../docs/specs/AGENT-SRE-GOVERNANCE-1.0.md) | SLO, 에러 버짓, 카오스, 서킷 브레이커 | 111 |
-| [MCP Security Gateway](../../docs/specs/MCP-SECURITY-GATEWAY-1.0.md) | 도구 오염, 드리프트 탐지, 숨겨진 지시문 | 127 |
-| [Agent Lightning Fast-Path](../../docs/specs/AGENT-LIGHTNING-FAST-PATH-1.0.md) | 강화학습 훈련 거버넌스, 위반 패널티 | 100 |
+| [AgentMesh Identity and Trust](../specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | 자격증명, 신뢰 점수화, 위임 체인 | 135 |
+| [Agent Hypervisor Execution Control](../specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | 권한 격리 링, 사가 오케스트레이션, 킬 스위치 | 80 |
+| [AgentMesh Trust and Coordination](../specs/AGENTMESH-TRUST-COORDINATION-1.0.md) | 피어 신뢰 협상, 메시 전체 정책 | 62 |
+| [Agent SRE Governance](../specs/AGENT-SRE-GOVERNANCE-1.0.md) | SLO, 에러 버짓, 카오스, 서킷 브레이커 | 111 |
+| [MCP Security Gateway](../specs/MCP-SECURITY-GATEWAY-1.0.md) | 도구 오염, 드리프트 탐지, 숨겨진 지시문 | 127 |
+| [Agent Lightning Fast-Path](../specs/AGENT-LIGHTNING-FAST-PATH-1.0.md) | 강화학습 훈련 거버넌스, 위반 패널티 | 100 |
 | Framework Adapter Contract | 10개 어댑터 연동, 인터셉터 체인 | 152 |
-| [Audit and Compliance](../../docs/specs/AUDIT-COMPLIANCE-1.0.md) | Merkle 감사, 컴플라이언스 매핑, Decision BOM | 157 |
-| [AgentMesh Wire Protocol](../../docs/specs/AGENTMESH-WIRE-1.0.md) | 메시지 형식, 라우팅, 직렬화 | -- |
+| [Audit and Compliance](../specs/AUDIT-COMPLIANCE-1.0.md) | Merkle 감사, 컴플라이언스 매핑, Decision BOM | 157 |
+| [AgentMesh Wire Protocol](../specs/AGENTMESH-WIRE-1.0.md) | 메시지 형식, 라우팅, 직렬화 | -- |
 
-**992개의 적합성 테스트**로 코드와 명세의 일치를 보장합니다. [25개 아키텍처 결정 기록](../../docs/adr/)이 그 이유를 문서화합니다.
+**992개의 적합성 테스트**로 코드와 명세의 일치를 보장합니다. [25개 아키텍처 결정 기록](../adr/index.md)이 그 이유를 문서화합니다.
 
 ---
 
@@ -343,10 +353,10 @@ v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습�
 
 | 표준 | 커버리지 |
 |----------|----------|
-| [OWASP Agentic AI Top 10](../../docs/compliance/owasp-agentic-top10-architecture.md) | 결정론적 통제와 함께 모든 ASI 리스크 카테고리 매핑 |
-| [NIST AI RMF 1.0](../../docs/compliance/nist-ai-rmf-alignment.md) | GOVERN, MAP, MEASURE, MANAGE 전체 정렬 |
-| [EU AI Act](../../docs/compliance/) | 자동화된 증거를 통한 컴플라이언스 매핑 |
-| [SOC 2](../../docs/compliance/soc2-mapping.md) | 감사 추적 내보내기를 통한 통제 매핑 |
+| [OWASP Agentic AI Top 10](../compliance/owasp-agentic-top10-architecture.md) | 결정론적 통제와 함께 모든 ASI 리스크 카테고리 매핑 |
+| [NIST AI RMF 1.0](../compliance/nist-ai-rmf-alignment.md) | GOVERN, MAP, MEASURE, MANAGE 전체 정렬 |
+| [EU AI Act](../compliance/index.md) | 자동화된 증거를 통한 컴플라이언스 매핑 |
+| [SOC 2](../compliance/soc2-mapping.md) | 감사 추적 내보내기를 통한 통제 매핑 |
 
 ---
 
@@ -354,7 +364,7 @@ v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습�
 
 AGT는 OS 커널 레벨이 아닌 애플리케이션 미들웨어 레이어에서 거버넌스를 적용합니다. 정책 엔진과 에이전트는 동일한 프로세스 경계를 공유합니다.
 
-**운영 환경 권장 사항:** OS 레벨 격리를 위해 각 에이전트를 별도 컨테이너에서 실행하세요. [아키텍처: 보안 경계](../../docs/ARCHITECTURE.md)를 참고하세요.
+**운영 환경 권장 사항:** OS 레벨 격리를 위해 각 에이전트를 별도 컨테이너에서 실행하세요. [아키텍처: 보안 경계](../ARCHITECTURE.md)를 참고하세요.
 
 | 도구 | 점검 범위 |
 |------|----------|
@@ -364,7 +374,7 @@ AGT는 OS 커널 레벨이 아닌 애플리케이션 미들웨어 레이어에�
 | Dependabot | 13개 생태계 |
 | OpenSSF Scorecard | 주간 점수 산출 + SARIF 업로드 |
 
-정직한 설계 경계와 권장 계층 방어에 대해서는 [알려진 제약 사항](../../docs/LIMITATIONS.md)을 참고하세요.
+정직한 설계 경계와 권장 계층 방어에 대해서는 [알려진 제약 사항](../LIMITATIONS.md)을 참고하세요.
 
 ---
 
@@ -372,33 +382,33 @@ AGT는 OS 커널 레벨이 아닌 애플리케이션 미들웨어 레이어에�
 
 | 카테고리 | 링크 |
 |----------|-------|
-| **시작하기** | [Quick Start](../../docs/i18n/quickstart.ko.md) · [Tutorials](../../docs/tutorials/) (60+) · [FAQ](../../docs/FAQ.md) |
-| **아키텍처** | [시스템 설계](../../docs/ARCHITECTURE.md) · [위협 모델](../../docs/security/threat-model.md) · [ADR](../../docs/adr/) (25) |
-| **명세** | [전체 명세](../../docs/specs/) (공식 명세 10개, 적합성 테스트 992개) |
-| **API 레퍼런스** | [Agent OS](../../agent-governance-python/agent-os/README.md) · [AgentMesh](../../agent-governance-python/agent-mesh/README.md) · [Agent SRE](../../agent-governance-python/agent-sre/README.md) |
-| **컴플라이언스** | [OWASP](../../docs/compliance/owasp-agentic-top10-architecture.md) · [EU AI Act](../../docs/compliance/) · [NIST AI RMF](../../docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](../../docs/compliance/soc2-mapping.md) |
-| **배포** | [Azure](../../docs/deployment/README.md) · [AWS](../../docs/deployment/README.md) · [GCP](../../docs/deployment/README.md) · [Docker Compose](../../docs/deployment/README.md) |
-| **확장** | [VS Code](../../agent-governance-typescript/agent-os-vscode/) · [프레임워크 연동](../../agent-governance-python/agentmesh-integrations/) |
+| **시작하기** | [Quick Start](./quickstart.ko.md) · [Tutorials](../tutorials/index.md) (60+) · [FAQ](../FAQ.md) |
+| **아키텍처** | [시스템 설계](../ARCHITECTURE.md) · [위협 모델](../security/threat-model.md) · [ADR](../adr/index.md) (25) |
+| **명세** | [전체 명세](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/specs) (공식 명세 10개, 적합성 테스트 992개) |
+| **API 레퍼런스** | [Agent OS](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/README.md) · [AgentMesh](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/README.md) · [Agent SRE](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/README.md) |
+| **컴플라이언스** | [OWASP](../compliance/owasp-agentic-top10-architecture.md) · [EU AI Act](../compliance/index.md) · [NIST AI RMF](../compliance/nist-ai-rmf-alignment.md) · [SOC 2](../compliance/soc2-mapping.md) |
+| **배포** | [Azure](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) · [AWS](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) · [GCP](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) · [Docker Compose](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) |
+| **확장** | [VS Code](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript/agent-os-vscode) · [프레임워크 연동](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations) |
 
 ---
 
 ## 기여하기 (Contributing)
 
-[기여 가이드](../../CONTRIBUTING.md) · [커뮤니티](../../docs/COMMUNITY.md) · [Discord](https://discord.gg/TxMRqY3pFr) · [보안 정책](../../SECURITY.md) · [변경 이력](../../CHANGELOG.md)
+[기여 가이드](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) · [커뮤니티](../COMMUNITY.md) · [Discord](https://discord.gg/TxMRqY3pFr) · [보안 정책](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) · [변경 이력](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md)
 
-**AGT를 사용 중이신가요?** [ADOPTERS.md](../../docs/ADOPTERS.md)에 귀하의 조직을 추가해 주세요.
+**AGT를 사용 중이신가요?** [ADOPTERS.md](../ADOPTERS.md)에 귀하의 조직을 추가해 주세요.
 
 ## 거버넌스 (Governance)
 
 | 문서 | 목적 |
 |----------|---------|
-| [GOVERNANCE.md](../../GOVERNANCE.md) | 의사결정, 역할, 기여자 사다리 |
-| [CHARTER.md](../../docs/CHARTER.md) | 기술 헌장 (LF Projects 형식) |
-| [MAINTAINERS.md](../../MAINTAINERS.md) | 메인테이너 및 조직 |
-| [SECURITY.md](../../SECURITY.md) | 취약점 신고 및 대응 SLA |
-| [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) | Microsoft 오픈소스 행동 강령 |
-| [ANTITRUST.md](../../ANTITRUST.md) | 참여자를 위한 경쟁법 가이드라인 |
-| [TRADEMARKS.md](../../TRADEMARKS.md) | 상표 사용 정책 |
+| [GOVERNANCE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/GOVERNANCE.md) | 의사결정, 역할, 기여자 사다리 |
+| [CHARTER.md](../CHARTER.md) | 기술 헌장 (LF Projects 형식) |
+| [MAINTAINERS.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/MAINTAINERS.md) | 메인테이너 및 조직 |
+| [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) | 취약점 신고 및 대응 SLA |
+| [CODE_OF_CONDUCT.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CODE_OF_CONDUCT.md) | Microsoft 오픈소스 행동 강령 |
+| [ANTITRUST.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/ANTITRUST.md) | 참여자를 위한 경쟁법 가이드라인 |
+| [TRADEMARKS.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/TRADEMARKS.md) | 상표 사용 정책 |
 
 ## 중요 고지 사항
 
@@ -417,11 +427,11 @@ Agent Governance Toolkit의 공식 소스는 다음과 같습니다:
 | **NuGet 패키지** | [nuget.org](https://www.nuget.org/)의 `Microsoft.AgentGovernance.*` |
 | **Rust 크레이트** | [crates.io](https://crates.io/)의 `agent-governance`, `agent-governance-mcp` |
 
-프로젝트 팀은 공식임을 주장하는 제3자 웹사이트, 패키지, 또는 문서 사이트를 유지 관리하거나 보증하지 않습니다. Agent Governance Toolkit 이름을 사용하는 의심스러운 사이트나 패키지를 발견하면 [SECURITY.md](../../SECURITY.md)에 설명된 채널을 통해 신고해 주세요.
+프로젝트 팀은 공식임을 주장하는 제3자 웹사이트, 패키지, 또는 문서 사이트를 유지 관리하거나 보증하지 않습니다. Agent Governance Toolkit 이름을 사용하는 의심스러운 사이트나 패키지를 발견하면 [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md)에 설명된 채널을 통해 신고해 주세요.
 
 ## 라이선스 (License)
 
-이 프로젝트는 [MIT 라이선스](../../LICENSE)에 따라 라이선스가 부여됩니다.
+이 프로젝트는 [MIT 라이선스](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)에 따라 라이선스가 부여됩니다.
 
 ## 상표 (Trademarks)
 

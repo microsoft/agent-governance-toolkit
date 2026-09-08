@@ -9,4 +9,4 @@ owner: docs-team
 Version manifests and bundles together. Use integrity-pinned HTTPS references
 for remote composition and review every behavior change as a policy release.
 
-See the [manifest schema](../../../policy-engine/spec/schema/manifest.schema.json).
+See the [manifest schema](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/schema/manifest.schema.json).

@@ -1,3 +1,9 @@
+---
+title: "Advisory-to-Blocking Graduation Checklist"
+last_reviewed: 2026-06-24
+owner: agt-maintainers
+---
+
 # Advisory-to-Blocking Graduation Checklist
 
 > Use this checklist when graduating a repository from **advisory** governance

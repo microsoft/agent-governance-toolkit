@@ -1,3 +1,9 @@
+---
+title: "ADR 0009: RFC 9334 (RATS) Architecture Alignment"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # ADR 0009: RFC 9334 (RATS) Architecture Alignment
 
 - Status: accepted

@@ -1,3 +1,9 @@
+---
+title: "Trust Score Calibration Guide"
+last_reviewed: 2026-04-12
+owner: agt-maintainers
+---
+
 # Trust Score Calibration Guide
 
 > How to interpret, calibrate, and operationalize AgentMesh's 0–1000 trust scoring system.

@@ -1,3 +1,9 @@
+---
+title: "2026-06-09 — Dynamic Policy Conditions"
+last_reviewed: 2026-06-09
+owner: agt-maintainers
+---
+
 # 2026-06-09 — Dynamic Policy Conditions
 
 PR: [microsoft/agent-governance-toolkit#2870](https://github.com/microsoft/agent-governance-toolkit/pull/2870)

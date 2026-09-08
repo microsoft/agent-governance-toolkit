@@ -1,3 +1,9 @@
+---
+title: "AGT Audit and Compliance Specification"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 <!-- Status: DRAFT | Version: 1.0 | Last updated: 2025-05-17 -->
 

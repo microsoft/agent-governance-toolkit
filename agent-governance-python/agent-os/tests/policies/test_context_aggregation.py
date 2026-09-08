@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Behavioral tests for aggregation evaluation and the monotone backstop."""
 
+import pytest
+
 from agent_os.policies.context_aggregation import (
     AggregationRule,
     AggregationRuleSet,
@@ -54,3 +56,12 @@ def test_monotone_backstop_floor():
 def test_backstop_escalates_on_n_distinct_categories():
     res = evaluate_aggregation(_env({"a", "b", "c"}, sens=DC.INTERNAL), RULESET, n_category_threshold=3)
     assert res.escalate is True
+
+
+def test_empty_all_labels_rejected():
+    with pytest.raises(ValueError, match="non-empty"):
+        AggregationRule(
+            name="empty_rule",
+            all_labels=frozenset(),
+            sets_sensitivity=DC.TOP_SECRET,
+        )

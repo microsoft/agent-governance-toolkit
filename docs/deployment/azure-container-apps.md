@@ -1,8 +1,14 @@
+---
+title: "Azure Container Apps Deployment"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Azure Container Apps Deployment
 
 Deploy the Agent Governance Toolkit on Azure Container Apps for serverless, scale-to-zero agent governance.
 
-> **See also:** [Deployment Overview](README.md) | [AKS Deployment](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) | [Foundry Integration](azure-foundry-agent-service.md)
+> **See also:** [Deployment Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) | [AKS Deployment](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/deployment/azure.md) | [Foundry Integration](azure-foundry-agent-service.md)
 
 ---
 
@@ -317,13 +323,13 @@ Container Apps scales both the agent and governance sidecar together. Key scalin
 | Multi-agent mesh | Basic | ✅ Full AgentMesh with IATP |
 | Best for | Single agents, prototyping | Production multi-agent systems |
 
-For production multi-agent systems with full AgentMesh identity and IATP, we recommend [AKS deployment](../../agent-governance-python/agent-mesh/docs/deployment/azure.md).
+For production multi-agent systems with full AgentMesh identity and IATP, we recommend [AKS deployment](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/deployment/azure.md).
 
 ---
 
 ## Next Steps
 
-- [Configure governance policies](../../agent-governance-python/agent-os/docs/policy-schema.md)
-- [Set up AgentMesh identity](../../agent-governance-python/agent-mesh/README.md)
-- [Enable SLO monitoring](../../agent-governance-python/agent-sre/README.md)
-- [AKS deployment](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) for production multi-agent scenarios
+- [Configure governance policies](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/policy-schema.md)
+- [Set up AgentMesh identity](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/README.md)
+- [Enable SLO monitoring](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/README.md)
+- [AKS deployment](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/deployment/azure.md) for production multi-agent scenarios

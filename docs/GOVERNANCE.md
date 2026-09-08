@@ -1,3 +1,9 @@
+---
+title: "Governance"
+last_reviewed: 2026-05-08
+owner: agt-maintainers
+---
+
 # Governance
 
 This document describes the governance model for the Agent Governance Toolkit (AGT).
@@ -25,7 +31,7 @@ for the current list.
 ### Contributors
 
 Anyone who submits a pull request, files an issue, or participates in discussions.
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for guidelines.
 
 ### Community Extension Authors
 
@@ -62,7 +68,7 @@ own README, tests, and license notice.
 
 - **Technical decisions** are made by maintainers via GitHub Issues and ADRs
   (Architecture Decision Records) in `docs/adr/`.
-- **Security decisions** follow the [SECURITY.md](SECURITY.md) process and coordinate
+- **Security decisions** follow the [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) process and coordinate
   with MSRC when applicable.
 - **Roadmap priorities** are set by the maintainer team with community input via
   GitHub Discussions and Issues.
@@ -77,11 +83,11 @@ own README, tests, and license notice.
 
 ## Code of Conduct
 
-This project follows the [Microsoft Open Source Code of Conduct](CODE_OF_CONDUCT.md).
+This project follows the [Microsoft Open Source Code of Conduct](https://github.com/microsoft/agent-governance-toolkit/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT License. See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE).
 
 ## Amendments
 

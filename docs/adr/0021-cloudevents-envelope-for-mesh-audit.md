@@ -1,3 +1,9 @@
+---
+title: "ADR-0021: CloudEvents Envelope for Mesh Audit"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR-0021: CloudEvents Envelope for Mesh Audit
 
 ## Status

@@ -1,3 +1,9 @@
+---
+title: "Tutorial 48: Intent-Based Authorization"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 # Tutorial 48: Intent-Based Authorization
 
 > **Package:** `agent-os-kernel` · **Time:** 20 minutes · **Level:** Advanced

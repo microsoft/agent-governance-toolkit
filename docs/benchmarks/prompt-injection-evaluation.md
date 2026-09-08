@@ -1,6 +1,12 @@
+---
+title: "Prompt-Injection Evaluation Fixture"
+last_reviewed: 2026-06-12
+owner: agt-maintainers
+---
+
 # Prompt-Injection Evaluation Fixture
 
-AGT now includes a standalone prompt-injection evaluation fixture under [`benchmarks/prompt-injection/`](../../benchmarks/prompt-injection/).
+AGT now includes a standalone prompt-injection evaluation fixture under [`benchmarks/prompt-injection/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/benchmarks/prompt-injection).
 
 This fixture is not a runtime feature and does not change enforcement behavior. It provides a reproducible corpus and harness for inspecting the current Rust prompt-injection detector on labelled synthetic examples.
 

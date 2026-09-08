@@ -1,3 +1,9 @@
+---
+title: "Tutorial 52 — Antigravity CLI governance installer"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 # Tutorial 52 — Antigravity CLI governance installer
 
 > **Package:** `@microsoft/agent-governance-antigravity-cli` · **Time:** 15 minutes ·

@@ -1,3 +1,9 @@
+---
+title: "Anthropic — Governance Integrations"
+last_reviewed: 2026-03-15
+owner: agt-maintainers
+---
+
 # Anthropic — Governance Integrations
 
 **Submissions:**

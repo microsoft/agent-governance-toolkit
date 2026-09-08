@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit v3.7.0"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit v3.7.0
 
 **Release Date:** 2026-05-18

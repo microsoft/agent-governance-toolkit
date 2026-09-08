@@ -1,3 +1,9 @@
+---
+title: "Testing Guide — How to Use the Agent Governance Toolkit"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Testing Guide — How to Use the Agent Governance Toolkit
 
 > This guide walks you through using the Agent Governance Toolkit as an external

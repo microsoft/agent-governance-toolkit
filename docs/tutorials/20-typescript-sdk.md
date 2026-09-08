@@ -1,3 +1,9 @@
+---
+title: "Tutorial 20 — TypeScript package (@microsoft/agent-governance-sdk)"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # Tutorial 20 — TypeScript package (@microsoft/agent-governance-sdk)
 
 > **Package:** `@microsoft/agent-governance-sdk` · **Time:** 30 minutes · **Prerequisites:** Node.js 18+

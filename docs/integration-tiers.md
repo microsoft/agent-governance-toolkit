@@ -1,3 +1,9 @@
+---
+title: "Integration Tiers: What You Get at Each Depth"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # Integration Tiers: What You Get at Each Depth
 
 This document explains what governance capabilities are available at each

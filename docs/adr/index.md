@@ -9,7 +9,7 @@ owner: agt-maintainers
 Key architectural decisions and their rationale. Each ADR follows the standard format: Context, Decision, Consequences.
 
 !!! note "ADR process"
-    New ADRs use the [template](0000-template.md). Status values: `accepted` (implemented), `proposed` (under review), `deprecated`, `superseded`.
+    New ADRs use the [repository template](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/adr/0000-template.md). Status values: `accepted` (implemented), `proposed` (under review), `deprecated`, `superseded`.
 
 ## Accepted
 

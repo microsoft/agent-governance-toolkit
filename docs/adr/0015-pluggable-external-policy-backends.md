@@ -1,3 +1,9 @@
+---
+title: "ADR 0015: Pluggable external policy backends via protocol interface"
+last_reviewed: 2026-05-16
+owner: agt-maintainers
+---
+
 # ADR 0015: Pluggable external policy backends via protocol interface
 
 - Status: accepted

@@ -1,3 +1,9 @@
+---
+title: "Security Audit: TEE Keystore Abstraction"
+last_reviewed: 2026-06-01
+owner: agt-maintainers
+---
+
 # Security Audit: TEE Keystore Abstraction
 
 **Date:** 2026-06-01

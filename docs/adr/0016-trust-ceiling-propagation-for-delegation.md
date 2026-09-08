@@ -1,3 +1,9 @@
+---
+title: "ADR 0016: Trust ceiling propagation for delegated agents"
+last_reviewed: 2026-05-16
+owner: agt-maintainers
+---
+
 # ADR 0016: Trust ceiling propagation for delegated agents
 
 - Status: accepted

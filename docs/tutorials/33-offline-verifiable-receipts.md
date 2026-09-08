@@ -1,3 +1,9 @@
+---
+title: "Tutorial 33 — Offline-Verifiable Decision Receipts"
+last_reviewed: 2026-04-27
+owner: agt-maintainers
+---
+
 # Tutorial 33 — Offline-Verifiable Decision Receipts
 
 > **Package:** `mcp-receipt-governed` · **Time:** 20 minutes · **Prerequisites:** Python 3.11+

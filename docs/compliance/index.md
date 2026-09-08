@@ -56,8 +56,8 @@ tests. They are documented here so the framework matrix is complete.
 
 | Framework | Page |
 |-----------|------|
-| South Korea AI Framework Act | [`agent-governance-python/agent-compliance/docs/compliance/south-korea-ai-framework-act.md`](../../agent-governance-python/agent-compliance/docs/compliance/south-korea-ai-framework-act.md) |
-| Singapore Model AI Governance Framework (MGF) | [`agent-governance-python/agent-compliance/docs/compliance/singapore-mgf-agentic-ai.md`](../../agent-governance-python/agent-compliance/docs/compliance/singapore-mgf-agentic-ai.md) |
+| South Korea AI Framework Act | [`agent-governance-python/agent-compliance/docs/compliance/south-korea-ai-framework-act.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-compliance/docs/compliance/south-korea-ai-framework-act.md) |
+| Singapore Model AI Governance Framework (MGF) | [`agent-governance-python/agent-compliance/docs/compliance/singapore-mgf-agentic-ai.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-compliance/docs/compliance/singapore-mgf-agentic-ai.md) |
 
 ## Out of scope
 

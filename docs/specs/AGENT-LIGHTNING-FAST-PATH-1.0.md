@@ -1,3 +1,9 @@
+---
+title: "Agent Lightning Fast-Path -- Version 1.0"
+last_reviewed: 2026-05-17
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Agent Lightning Fast-Path -- Version 1.0

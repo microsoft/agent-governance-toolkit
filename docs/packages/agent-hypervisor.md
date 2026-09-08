@@ -1,3 +1,9 @@
+---
+title: "Agent Hypervisor Public Preview"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # Agent Hypervisor Public Preview
@@ -7,7 +13,7 @@
 *Just as an OS supervisor isolates processes, Agent Hypervisor isolates AI agent sessions and enforces governance boundaries with execution rings, a kill switch, and blast-radius containment.*
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-available-blue)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-hypervisor/benchmarks)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
@@ -575,7 +581,7 @@ The Saga Orchestrator triggers reverse-order compensation for all committed step
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](../../CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for details.
 
 - :bug: [Report a Bug](https://github.com/microsoft/agent-governance-toolkit/issues/new?labels=bug)
 - :bulb: [Request a Feature](https://github.com/microsoft/agent-governance-toolkit/issues/new?labels=enhancement)
@@ -584,7 +590,7 @@ We welcome contributions! Please see our [Contributing Guide](../../CONTRIBUTING
 
 ## License
 
-MIT, see [LICENSE](../../LICENSE).
+MIT, see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE).
 
 ---
 

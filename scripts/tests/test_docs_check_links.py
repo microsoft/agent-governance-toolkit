@@ -2,6 +2,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """Tests for scripts/docs/check_links.py."""
+
 from __future__ import annotations
 
 import os
@@ -48,7 +49,9 @@ def test_external_links_are_skipped(tmp_path):
 
 def test_anchor_in_same_file_validates(tmp_path):
     docs = tmp_path / "docs"
-    _write(docs / "a.md", "# Heading One\n\nText\n\n[here](#heading-one)\n[bad](#nope)\n")
+    _write(
+        docs / "a.md", "# Heading One\n\nText\n\n[here](#heading-one)\n[bad](#nope)\n"
+    )
     report = check_links.check(tmp_path)
     assert len(report.findings) == 1
     assert "#nope" in report.findings[0].reason
@@ -61,6 +64,30 @@ def test_anchor_in_other_file_validates(tmp_path):
     report = check_links.check(tmp_path)
     assert len(report.findings) == 1
     assert "missing" in report.findings[0].reason
+
+
+def test_heading_anchor_preserves_identifier_underscores(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        "## Approach 1: `max_tool_calls` in YAML\n\n"
+        "[jump](#approach-1-max_tool_calls-in-yaml)\n",
+    )
+    report = check_links.check(tmp_path)
+    assert report.ok
+
+
+def test_heading_anchor_collapses_removed_punctuation(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        "## Security & Red-Team Benchmarks\n\n"
+        "## Step 1 — Create a policy\n\n"
+        "[security](#security-red-team-benchmarks)\n"
+        "[step](#step-1-create-a-policy)\n",
+    )
+    report = check_links.check(tmp_path)
+    assert report.ok
 
 
 def test_reference_style_links(tmp_path):
@@ -85,6 +112,48 @@ def test_code_fences_are_ignored(tmp_path):
     _write(docs / "b.md", "ok")
     report = check_links.check(tmp_path)
     assert report.ok, [f.format(tmp_path) for f in report.findings]
+
+
+def test_inline_code_spans_are_ignored(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        "`^[a-z]([a-z]*)?$` and ``[not](a-link.md)`` are code, not links.\n",
+    )
+    report = check_links.check(tmp_path)
+    assert report.ok
+    assert report.links_checked == 0
+
+
+def test_escaped_backticks_do_not_hide_links(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        r"\` [visible](missing.md) \`" + "\n",
+    )
+    report = check_links.check(tmp_path)
+    assert not report.ok
+    assert report.links_checked == 1
+    assert report.findings[0].target == "missing.md"
+
+
+def test_backslash_does_not_escape_code_span_closer(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        r"`[hidden](hidden.md)\` [visible](missing.md) `" + "\n",
+    )
+    report = check_links.check(tmp_path)
+    assert report.links_checked == 1
+    assert report.findings[0].target == "missing.md"
+
+
+def test_longer_backtick_run_does_not_close_shorter_code_span(tmp_path):
+    docs = tmp_path / "docs"
+    _write(docs / "a.md", "``[visible](missing.md)```\n")
+    report = check_links.check(tmp_path)
+    assert report.links_checked == 1
+    assert report.findings[0].target == "missing.md"
 
 
 def test_images_are_not_treated_as_links(tmp_path):
@@ -170,7 +239,7 @@ def test_root_relative_leading_slash(tmp_path):
 
 def test_html_anchor_id_recognised(tmp_path):
     docs = tmp_path / "docs"
-    _write(docs / "a.md", "<a id=\"target\"></a>\n\n[x](#target)")
+    _write(docs / "a.md", '<a id="target"></a>\n\n[x](#target)')
     report = check_links.check(tmp_path)
     assert report.ok
 
@@ -186,6 +255,7 @@ def test_main_exits_nonzero_on_findings(tmp_path, capsys):
 
 def test_main_json_output(tmp_path, capsys):
     import json
+
     docs = tmp_path / "docs"
     _write(docs / "a.md", "[x](missing.md)")
     rc = check_links.main(["--root", str(tmp_path), "--json"])
@@ -209,11 +279,15 @@ def test_update_baseline_writes_file_and_exits_zero(tmp_path, capsys):
     docs = tmp_path / "docs"
     _write(docs / "a.md", "[x](missing.md)")
     baseline_path = tmp_path / "baseline.txt"
-    rc = check_links.main([
-        "--root", str(tmp_path),
-        "--baseline", str(baseline_path),
-        "--update-baseline",
-    ])
+    rc = check_links.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--baseline",
+            str(baseline_path),
+            "--update-baseline",
+        ]
+    )
     assert rc == 0
     contents = baseline_path.read_text(encoding="utf-8")
     assert "docs/a.md\tmissing.md" in contents
@@ -224,10 +298,14 @@ def test_baseline_loaded_from_file(tmp_path):
     _write(docs / "a.md", "[x](missing.md)")
     baseline_path = tmp_path / "b.txt"
     baseline_path.write_text("# header\ndocs/a.md\tmissing.md\n", encoding="utf-8")
-    rc = check_links.main([
-        "--root", str(tmp_path),
-        "--baseline", str(baseline_path),
-    ])
+    rc = check_links.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--baseline",
+            str(baseline_path),
+        ]
+    )
     assert rc == 0
 
 
@@ -248,6 +326,7 @@ def test_inline_link_regex_no_catastrophic_backtracking():
     # backslash. With the disambiguated class the scan completes in
     # linear time.
     import time
+
     pathological = "[" + "\\" * 2000
     start = time.perf_counter()
     list(check_links._INLINE_LINK_RE.finditer(pathological))
@@ -268,3 +347,16 @@ def test_target_escaping_repo_root_is_rejected(tmp_path):
         assert "outside the repository root" in report.findings[0].reason
     finally:
         outside.unlink(missing_ok=True)
+
+
+def test_non_site_docs_are_excluded_but_translations_are_checked(tmp_path):
+    _write(tmp_path / "docs" / "AGENTS.md", "[bad](missing.md)\n")
+    _write(tmp_path / "docs" / "dependency-audits" / "audit.md", "[bad](missing.md)\n")
+    translated = _write(
+        tmp_path / "docs" / "i18n" / "README.es.md", "[bad](missing.md)\n"
+    )
+
+    report = check_links.check(tmp_path)
+
+    assert report.files_scanned == 1
+    assert report.findings[0].source == translated.resolve()

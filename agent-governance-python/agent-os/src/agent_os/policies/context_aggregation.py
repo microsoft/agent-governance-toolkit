@@ -27,12 +27,23 @@ class AggregationRule:
     When every label in ``all_labels`` is present in an envelope, the rule
     raises sensitivity to at least ``sets_sensitivity`` and adds
     ``adds_restrictions``.
+
+    Raises:
+        ValueError: If ``all_labels`` is empty, because an empty label set
+            matches every envelope and silently defeats the escalation backstop.
     """
 
     name: str
     all_labels: frozenset[str]
     sets_sensitivity: DataClassification
     adds_restrictions: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        if not self.all_labels:
+            raise ValueError(
+                f"AggregationRule {self.name!r} must have "
+                f"a non-empty all_labels set"
+            )
 
 
 @dataclass(frozen=True)

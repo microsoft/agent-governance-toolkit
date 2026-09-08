@@ -1,3 +1,9 @@
+---
+title: "ADR 0001: Use Ed25519 for agent identity"
+last_reviewed: 2026-04-22
+owner: agt-maintainers
+---
+
 # ADR 0001: Use Ed25519 for agent identity
 
 - Status: accepted

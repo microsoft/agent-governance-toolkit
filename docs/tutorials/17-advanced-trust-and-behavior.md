@@ -1,3 +1,9 @@
+---
+title: "Tutorial 17 — Advanced Trust & Behavior Monitoring"
+last_reviewed: 2026-04-11
+owner: agt-maintainers
+---
+
 # Tutorial 17 — Advanced Trust & Behavior Monitoring
 
 > **Package:** `agentmesh-platform` · **Time:** 35 minutes · **Prerequisites:** Python 3.11+

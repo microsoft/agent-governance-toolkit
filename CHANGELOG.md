@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generators. Framework adapters require `AgentControl`; sandbox providers use
   `runtime=` plus explicit `SandboxConfig`.
 
+### Fixed
+- **Spell check no longer reports the base branch's own history as a
+  contributor's changes** — `scripts/ci/changed_lines.py` diffed from the tip of
+  the base branch, so on a branch behind `main` every line `main` had since
+  rewritten counted as newly added. A branch 34 commits behind reported 160,102
+  added lines instead of 142, and the spell-check job scoped to them checked
+  repository-wide vocabulary. The base is now resolved to its merge base, and
+  the depth-limited base fetch in `spell-check.yml` is gone because it truncated
+  the history that resolution needs.
+
 ## [5.0.0] - 2026-06-25
 
 ### Changed

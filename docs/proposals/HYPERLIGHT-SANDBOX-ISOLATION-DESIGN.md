@@ -32,5 +32,5 @@ does not replace the native governance session or host configuration.
 
 ## Related implementation
 
-- [`HyperLightSandboxProvider`](../../agent-governance-python/agent-sandbox/src/agent_sandbox/hyperlight_provider/provider.py)
-- [Agent Sandbox README](../../agent-governance-python/agent-sandbox/README.md)
+- [`HyperLightSandboxProvider`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/src/agent_sandbox/hyperlight_provider/provider.py)
+- [Agent Sandbox README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/README.md)

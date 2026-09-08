@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit v2.1.0"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit v2.1.0
 
 > [!IMPORTANT]
@@ -53,7 +59,7 @@ Plus existing integrations: Microsoft Agent Framework, LangChain, LangGraph, Cre
 | Kernel enforcement | 0.091 ms | 9.3K ops/sec |
 | Concurrent throughput (50 agents) | — | 35,481 ops/sec |
 
-Full methodology: [BENCHMARKS.md](BENCHMARKS.md)
+Full methodology: [BENCHMARKS.md](../BENCHMARKS.md)
 
 ## Key Changes Since v1.1.0
 
@@ -117,8 +123,8 @@ decision = engine.evaluate(agent_id="researcher-1", action="tool_call", tool="we
 
 ## Full Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes.
+See [CHANGELOG.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md) for the complete list of changes.
 
 ## License
 
-[MIT](LICENSE) — © Microsoft Corporation
+[MIT](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) — © Microsoft Corporation

@@ -1,5 +1,23 @@
-## Description
-<!-- Briefly describe the changes in this PR -->
+## Related Issue
+<!-- Link the issue this PR resolves, e.g. Fixes #123 or Closes #456. -->
+
+> **If no related issue is linked above, you must complete "Problem & Solution", "Impact on Your Work", and "Alternatives Considered" below.**
+
+## Problem & Solution
+<!-- Required if no related issue is linked above. Provide both: -->
+<!-- Problem: what is broken, missing, or needed today? -->
+<!-- Solution: what does this PR change to address it? -->
+
+## Impact on Your Work
+<!-- Required if no related issue is linked above. -->
+<!-- How does this change impact your work and what are you trying to achieve? What pain point or blocker prompted it? -->
+
+## Timeline
+<!-- If this is time-sensitive, when do you need it merged by? Write "None" if there's no specific deadline. -->
+
+## Alternatives Considered
+<!-- Required if no related issue is linked above. -->
+<!-- What other approaches did you evaluate, and why did you choose this one? Write "None" if this was the only viable approach. -->
 
 ## Type of Change
 - [ ] Bug fix (non-breaking change that fixes an issue)
@@ -10,14 +28,53 @@
 - [ ] Security fix
 
 ## Package(s) Affected
-- [ ] agent-os-kernel
+**Core & runtime:**
+- [ ] agent-governance-toolkit-core
+- [ ] agent-primitives
+- [ ] agent-os
 - [ ] agent-mesh
 - [ ] agent-runtime
 - [ ] agent-sre
-- [ ] agent-governance
+- [ ] agent-compliance
+
+**Governance & security:**
+- [ ] agent-mcp-governance
+- [ ] agent-rag-governance
+- [ ] agent-sandbox
+- [ ] agent-discovery
+- [ ] agt-policies
+- [ ] policy-engine
+
+**Platform & tooling:**
+- [ ] agent-hypervisor
+- [ ] agent-lightning
+- [ ] agent-marketplace
+- [ ] agent-governance-toolkit-cli
+- [ ] agent-governance-toolkit-integrations
+- [ ] agent-governance-toolkit-protocols
+- [ ] agentmesh-integrations (framework integrations)
+
+**CLI plugins:**
+- [ ] agent-governance CLI plugins (copilot-cli / claude-code / opencode / antigravity-cli)
+
+**Shared / other:**
+- [ ] schemas
+- [ ] action (GitHub Action)
+- [ ] examples
 - [ ] docs / root
 
+## Testing
+<!-- Describe how you verified this change. -->
+
+### Unit Testing
+<!-- What unit tests did you add or update, and what do they cover? -->
+
+### Manual Testing
+<!-- What did you run by hand to verify this change (commands, environment, results)? -->
+<!-- Write "N/A" if manual testing does not apply. -->
+
 ## Checklist
+- [ ] I have linked a related issue above, or completed "Problem & Solution", "Impact on Your Work", and "Alternatives Considered"
 - [ ] My code follows the project style guidelines (ruff check)
 - [ ] I have added tests that prove my fix/feature works
 - [ ] All new and existing tests pass (pytest)
@@ -49,6 +106,3 @@ If AI tools materially shaped this change, briefly note what was used:
 - [ ] This contribution does not implement patent-pending or patent-encumbered techniques
 - [ ] This contribution does not require an NDA or licensing agreement to understand or use
 - [ ] Any AI tools used have terms compatible with the MIT License
-
-## Related Issues
-<!-- Link related issues: Fixes #123, Closes #456 -->

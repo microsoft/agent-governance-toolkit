@@ -1,4 +1,6 @@
 ---
+last_reviewed: 2026-05-29
+owner: agt-maintainers
 title: Govern an OpenCode CLI session with AGT
 description: Step-by-step walkthrough for installing and configuring the AGT OpenCode plugin to enforce developer-protection policy on prompts, tools, and tool output.
 ---
@@ -150,4 +152,4 @@ Both surfaces share the same policy and audit log.
 - [OpenCode CLI governance package reference](../packages/opencode-governance.md)
 - [Antigravity CLI Governance tutorial](52-antigravity-cli-governance.md) — the
   closest sibling package
-- [`examples/opencode-agt`](../../examples/opencode-agt/README.md) — runnable scenario
+- [`examples/opencode-agt`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/opencode-agt/README.md) — runnable scenario

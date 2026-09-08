@@ -1,3 +1,9 @@
+---
+title: "2026-07-02 — Agent-OS Credential Detection and Redaction"
+last_reviewed: 2026-07-07
+owner: agt-maintainers
+---
+
 # 2026-07-02 — Agent-OS Credential Detection and Redaction
 
 PR: [microsoft/agent-governance-toolkit#3248](https://github.com/microsoft/agent-governance-toolkit/pull/3248)

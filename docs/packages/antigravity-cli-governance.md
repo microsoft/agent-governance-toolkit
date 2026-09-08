@@ -1,7 +1,13 @@
+---
+title: "@microsoft/agent-governance-antigravity-cli — Antigravity CLI governance package"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 # @microsoft/agent-governance-antigravity-cli — Antigravity CLI governance package
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-antigravity-cli)](https://www.npmjs.com/package/@microsoft/agent-governance-antigravity-cli)
 
 `@microsoft/agent-governance-antigravity-cli` is the production install surface for AGT-backed

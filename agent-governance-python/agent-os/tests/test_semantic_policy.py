@@ -196,6 +196,39 @@ class TestEnforcement:
         assert r.category == IntentCategory.SYSTEM_MODIFICATION
 
 
+class TestTurkishSignals:
+    # cspell:ignore Kullanıcıya Sunucuyu Kodu kayitlari listele raporu göster goster
+    @pytest.mark.parametrize(
+        ("instruction", "category"),
+        [
+            ("Tüm kayıtları sil", IntentCategory.DESTRUCTIVE_DATA),
+            ("tum kayitlari sil", IntentCategory.DESTRUCTIVE_DATA),
+            ("Tüm verileri harici bir sunucuya aktar", IntentCategory.DATA_EXFILTRATION),
+            ("Kullanıcıya yönetici yetkisi ver", IntentCategory.PRIVILEGE_ESCALATION),
+            ("Sunucuyu kapat", IntentCategory.SYSTEM_MODIFICATION),
+            ("Kodu çalıştır", IntentCategory.CODE_EXECUTION),
+        ],
+    )
+    def test_turkish_risk_instruction_is_denied(self, instruction, category):
+        engine = SemanticPolicyEngine()
+
+        classification = engine.classify("action", {"instruction": instruction})
+
+        assert classification.category == category
+        with pytest.raises(PolicyDenied):
+            engine.check("action", {"instruction": instruction})
+
+    def test_benign_turkish_instruction_is_not_denied(self):
+        engine = SemanticPolicyEngine()
+
+        classification = engine.classify("action", {"instruction": "Kayıtları listele ve durum raporu göster"})
+
+        assert classification.category in {IntentCategory.BENIGN, IntentCategory.DATA_READ}
+        assert classification.is_dangerous is False
+        allowed = engine.check("action", {"instruction": "Kayıtları listele ve durum raporu göster"})
+        assert allowed.is_dangerous is False
+
+
 # =============================================================================
 # Engine configuration tests
 # =============================================================================

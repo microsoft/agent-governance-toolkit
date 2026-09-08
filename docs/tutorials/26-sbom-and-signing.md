@@ -1,3 +1,9 @@
+---
+title: "Tutorial 26 — SBOM Generation and Artifact Signing"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 26 — SBOM Generation and Artifact Signing

@@ -1,3 +1,9 @@
+---
+title: "2026-06-25 - Capability scope tightening (qualifier and resourceid)"
+last_reviewed: 2026-06-25
+owner: agt-maintainers
+---
+
 # 2026-06-25 - Capability scope tightening (qualifier and resource_id)
 
 PR: microsoft/agent-governance-toolkit#3176

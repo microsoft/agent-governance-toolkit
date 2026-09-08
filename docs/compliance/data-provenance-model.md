@@ -1,3 +1,9 @@
+---
+title: "Data Provenance Model for AI Agents"
+last_reviewed: 2026-04-25
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Data Provenance Model for AI Agents

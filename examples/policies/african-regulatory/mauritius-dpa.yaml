@@ -1,0 +1,22 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: mauritius-dpa
+  version: "1.0"
+extends: []
+policies:
+  mauritius_dpa:
+    type: rego
+    bundle: rego
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: mauritius_dpa
+      query: data.agt_policies_africa.mauritius_dpa.acs_input_result
+  output:
+    policy_target: $.output.content
+    policy:
+      id: mauritius_dpa
+      query: data.agt_policies_africa.mauritius_dpa.acs_output_result

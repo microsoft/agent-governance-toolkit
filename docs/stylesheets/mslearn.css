@@ -493,6 +493,11 @@ body,
   color: var(--mslearn-text);
   border-bottom: 1px solid var(--mslearn-border);
   box-shadow: none;
+  scrollbar-width: none;
+}
+
+.md-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 /* Tabs list spacing is set above (centered + 1rem horizontal gutter)
@@ -540,6 +545,12 @@ body,
 
 .md-main__inner {
   margin-top: 1.25rem;
+}
+
+/* Full-bleed landing-page elements may extend to viewport units without
+   creating a horizontal scrollbar. */
+.md-main:has(.agt-hero) {
+  overflow-x: clip;
 }
 
 /* Left & right rails: subtle background + rounded scroll container, no harsh border */
@@ -1339,7 +1350,7 @@ label.md-nav__link > .md-nav__icon::after {
 
 .agt-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1rem;
   margin: 1.5rem 0;
 }
@@ -1407,6 +1418,7 @@ label.md-nav__link > .md-nav__icon::after {
 .agt-card[data-pkg="marketplace"] { border-left: 3px solid #bf3989; } /* sponsors.pink */
 .agt-card[data-pkg="lightning"]   { border-left: 3px solid #9a6700; } /* attention.yellow */
 .agt-card[data-pkg="hypervisor"]  { border-left: 3px solid #c4432b; } /* scale.coral.5 */
+.agt-card[data-pkg="acs"]         { border-left: 3px solid #8250df; } /* done.purple */
 
 .agt-card[data-pkg="os"]:hover          { border-color: #0969da; }
 .agt-card[data-pkg="mesh"]:hover        { border-color: #8250df; }
@@ -1416,6 +1428,7 @@ label.md-nav__link > .md-nav__icon::after {
 .agt-card[data-pkg="marketplace"]:hover { border-color: #bf3989; }
 .agt-card[data-pkg="lightning"]:hover   { border-color: #9a6700; }
 .agt-card[data-pkg="hypervisor"]:hover  { border-color: #c4432b; }
+.agt-card[data-pkg="acs"]:hover         { border-color: #8250df; }
 
 .agt-card[data-pkg="os"]          .agt-card-title { color: #0969da; }
 .agt-card[data-pkg="mesh"]        .agt-card-title { color: #8250df; }
@@ -1425,6 +1438,7 @@ label.md-nav__link > .md-nav__icon::after {
 .agt-card[data-pkg="marketplace"] .agt-card-title { color: #bf3989; }
 .agt-card[data-pkg="lightning"]   .agt-card-title { color: #9a6700; }
 .agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #c4432b; }
+.agt-card[data-pkg="acs"]         .agt-card-title { color: #8250df; }
 
 /* Dark scheme: shift to the scale.*.4 step for adequate contrast on dark bg */
 [data-md-color-scheme="slate"] .agt-card[data-pkg="os"]          .agt-card-title { color: #4493f8; }
@@ -1435,6 +1449,7 @@ label.md-nav__link > .md-nav__icon::after {
 [data-md-color-scheme="slate"] .agt-card[data-pkg="marketplace"] .agt-card-title { color: #db61a2; }
 [data-md-color-scheme="slate"] .agt-card[data-pkg="lightning"]   .agt-card-title { color: #d29922; }
 [data-md-color-scheme="slate"] .agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #f78166; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="acs"]         .agt-card-title { color: #a371f7; }
 
 [data-md-color-scheme="slate"] .agt-card[data-pkg="os"]          { border-left-color: #4493f8; }
 [data-md-color-scheme="slate"] .agt-card[data-pkg="mesh"]        { border-left-color: #a371f7; }
@@ -1444,6 +1459,7 @@ label.md-nav__link > .md-nav__icon::after {
 [data-md-color-scheme="slate"] .agt-card[data-pkg="marketplace"] { border-left-color: #db61a2; }
 [data-md-color-scheme="slate"] .agt-card[data-pkg="lightning"]   { border-left-color: #d29922; }
 [data-md-color-scheme="slate"] .agt-card[data-pkg="hypervisor"]  { border-left-color: #f78166; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="acs"]         { border-left-color: #a371f7; }
 
 
 /* ==========================================================================
@@ -1451,7 +1467,7 @@ label.md-nav__link > .md-nav__icon::after {
    ==========================================================================
    Clean Primer canvas with a tiled SVG dot pattern (inspired by
    magicui.design DotPattern). The dot grid sits behind the content and is
-   masked with a radial gradient so it fades softly to the edges. Text and
+   faded vertically so the decoration remains visible across the width. Text and
    buttons use default Primer color tokens — no inverted dark surface.
    ========================================================================== */
 
@@ -1459,23 +1475,30 @@ label.md-nav__link > .md-nav__icon::after {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  margin: -1.2rem -1.2rem 2.5rem;
+  width: 100vw;
+  margin: -1.2rem calc(50% - 50vw) 2.5rem;
   padding: 5rem 2rem 4rem;
   border-radius: 0;
   text-align: center;
   color: var(--mslearn-text);
-  background-color: var(--mslearn-bg, #FFFFFF);
+  background:
+    radial-gradient(circle at 18% 12%, rgba(91, 210, 190, 0.10), transparent 32%),
+    radial-gradient(circle at 82% 8%, rgba(198, 97, 247, 0.10), transparent 30%),
+    linear-gradient(180deg, #f6f8fa 0%, #ffffff 100%);
 }
 
 [data-md-color-scheme="slate"] .agt-hero {
   color: var(--mslearn-text);
-  background-color: var(--mslearn-bg, #0d1117);
+  background:
+    radial-gradient(circle at 18% 12%, rgba(91, 210, 190, 0.12), transparent 34%),
+    radial-gradient(circle at 82% 8%, rgba(198, 97, 247, 0.16), transparent 32%),
+    linear-gradient(180deg, #151b23 0%, #0d1117 100%);
 }
 
 /* Dot pattern
    ----------------------------------------------------------------------
    Drawn as an inline SVG <pattern> via background-image. The gradient
-   mask fades dots toward the edges (Primer canvas-subtle feel). */
+   mask fades dots toward the bottom while keeping the full width visible. */
 .agt-hero::before {
   content: "";
   position: absolute;
@@ -1485,8 +1508,8 @@ label.md-nav__link > .md-nav__icon::after {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><circle cx='1' cy='1' r='1' fill='%23afb8c1' opacity='0.55'/></svg>");
   background-size: 20px 20px;
   background-position: 0 0;
-  -webkit-mask-image: radial-gradient(ellipse 65% 60% at 50% 45%, #000 35%, transparent 80%);
-          mask-image: radial-gradient(ellipse 65% 60% at 50% 45%, #000 35%, transparent 80%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 68%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 68%, transparent 100%);
 }
 
 [data-md-color-scheme="slate"] .agt-hero::before {
@@ -1498,6 +1521,33 @@ label.md-nav__link > .md-nav__icon::after {
   z-index: 1;
   max-width: 960px;
   margin: 0 auto;
+}
+
+.agt-hero-kicker {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0 auto 1rem;
+  color: var(--mslearn-text-muted);
+  font-size: var(--agt-text-body-small);
+  font-weight: var(--agt-fw-medium);
+  letter-spacing: 0.02em;
+}
+
+.agt-hero-kicker span:first-child {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid rgba(130, 81, 238, 0.35);
+  border-radius: 999px;
+  color: var(--md-typeset-a-color);
+  background: rgba(130, 81, 238, 0.08);
+  font-weight: var(--agt-fw-semibold);
+}
+
+[data-md-color-scheme="slate"] .agt-hero-kicker span:first-child {
+  border-color: rgba(163, 113, 247, 0.45);
+  background: rgba(130, 81, 238, 0.14);
 }
 
 .agt-hero h1,
@@ -1514,7 +1564,15 @@ label.md-nav__link > .md-nav__icon::after {
   line-height: 1.1;
   letter-spacing: -0.02em;
   margin: 0 auto 1rem;
-  max-width: 18ch;
+  max-width: 22ch;
+}
+
+[data-md-color-scheme="slate"] .agt-hero h1 {
+  color: #f0f6fc;
+  background: linear-gradient(110deg, #f0f6fc 18%, #c9b8ff 58%, #7ee6d3 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* Hide the toc-plugin pilcrow anchor (¶) on the hero headline. */
@@ -1756,37 +1814,47 @@ label.md-nav__link > .md-nav__icon::after {
   outline-offset: 2px;
 }
 
-/* Stats row */
-.agt-stats {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 2.5rem 3rem;
+/* Stable capability strip. Avoid hard-coded popularity and test counters,
+   which decay between documentation releases. */
+.agt-capabilities {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  max-width: 860px;
   margin: 0 auto;
 }
 
-.agt-stat {
-  text-align: center;
-  min-width: 5rem;
+.agt-capability {
+  min-width: 0;
+  padding: 0.95rem 1rem;
+  text-align: left;
+  border: 1px solid var(--mslearn-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 1px 0 rgba(31, 35, 40, 0.03);
 }
 
-.agt-stat-value {
-  display: block;
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  font-weight: var(--agt-fw-light);
-  line-height: 1.05;
-  color: var(--mslearn-text);
-  letter-spacing: -0.01em;
+[data-md-color-scheme="slate"] .agt-capability {
+  border-color: rgba(240, 246, 252, 0.12);
+  background: rgba(177, 186, 196, 0.06);
+  box-shadow: none;
 }
 
-.agt-stat-label {
+.agt-capability-name {
   display: block;
-  margin-top: 0.35rem;
   font-size: var(--agt-text-body-medium);
+  font-weight: var(--agt-fw-semibold);
+  line-height: 1.3;
+  color: var(--mslearn-text);
+}
+
+.agt-capability-detail {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: var(--agt-text-body-small);
   font-weight: var(--agt-fw-normal);
   color: var(--mslearn-text-muted);
-  letter-spacing: 0;
-  text-transform: none;
+  line-height: 1.45;
 }
 
 /* Section spacing */
@@ -2241,12 +2309,8 @@ label.md-nav__link > .md-nav__icon::after {
     font-size: var(--agt-text-body-large);
   }
 
-  .agt-stats {
-    gap: 1.25rem 2rem;
-  }
-
-  .agt-stat-value {
-    font-size: 1.5rem;
+  .agt-capabilities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .agt-hero-actions {
@@ -2254,6 +2318,12 @@ label.md-nav__link > .md-nav__icon::after {
   }
 
   .agt-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .agt-capabilities {
     grid-template-columns: 1fr;
   }
 }

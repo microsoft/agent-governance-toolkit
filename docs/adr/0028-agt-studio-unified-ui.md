@@ -1,3 +1,9 @@
+---
+title: "ADR 0028: AGT Studio, a single unified UI for governance"
+last_reviewed: 2026-06-01
+owner: agt-maintainers
+---
+
 # ADR 0028: AGT Studio, a single unified UI for governance
 
 - Status: proposed

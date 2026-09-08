@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit Technical Charter"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 ## Technical Charter (the "Charter") for Agent Governance Toolkit, a Series of LF Projects, LLC
 
 This Charter sets forth the responsibilities and procedures for technical contribution to, and

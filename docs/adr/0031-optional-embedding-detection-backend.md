@@ -1,3 +1,9 @@
+---
+title: "ADR 0031: Optional embedding evidence backend for prompt-injection detection"
+last_reviewed: 2026-06-15
+owner: agt-maintainers
+---
+
 # ADR 0031: Optional embedding evidence backend for prompt-injection detection
 
 - Status: proposed

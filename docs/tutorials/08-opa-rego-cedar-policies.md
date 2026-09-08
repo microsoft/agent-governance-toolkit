@@ -12,5 +12,5 @@ Rego policies reference a bundle and query. Cedar policies use the native
 inline policy set or file fields defined by the manifest schema. Bind the
 policy identifier at one or more intervention points.
 
-See the [manifest schema](../../policy-engine/spec/schema/manifest.schema.json)
-and [ACS specification](../../policy-engine/spec/SPECIFICATION.md).
+See the [manifest schema](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/schema/manifest.schema.json)
+and [ACS specification](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/SPECIFICATION.md).

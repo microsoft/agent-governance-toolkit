@@ -1,3 +1,9 @@
+---
+title: "Community"
+last_reviewed: 2026-06-01
+owner: agt-maintainers
+---
+
 # Community
 
 Welcome to the Agent Governance Toolkit community. This page covers how to get
@@ -45,13 +51,13 @@ Community-written content about agent governance, security, and the toolkit.
 
 - ⭐ **Star** the repository to get notified of new releases
 - 👁️ **Watch** for all activity or just releases
-- 📰 Check the [Changelog](../CHANGELOG.md) for release notes
+- 📰 Check the [Changelog](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md) for release notes
 
 ## Contributing
 
 We welcome contributions of all kinds — code, documentation, bug reports, and feature ideas.
 
-- Read our [Contributing Guide](../CONTRIBUTING.md) to get started
+- Read our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) to get started
 - Look for issues labeled [`good first issue`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) if you're new to the project
 - Check [`help wanted`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) for issues where we'd especially appreciate contributions
 
@@ -59,8 +65,8 @@ We welcome contributions of all kinds — code, documentation, bug reports, and 
 
 | Article | Author | Topic |
 |---------|--------|-------|
-| [From Chatbot to Autonomous Agent: A Governance Maturity Model](../agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
-| [Comparing Agent Governance Approaches](../agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
+| [From Chatbot to Autonomous Agent: A Governance Maturity Model](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
+| [Comparing Agent Governance Approaches](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
 
 ## Standards Alignment
 
@@ -68,7 +74,7 @@ AGT maps to established security and compliance frameworks:
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic Top 10](../docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories covered |
+| [OWASP Agentic Top 10](./compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories covered |
 | [NIST AI RMF](https://www.nist.gov/artificial-intelligence) | Govern, Map, Measure, Manage functions |
 | [EU AI Act](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | High-risk system compliance controls |
 | [OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085) | 100% passing |

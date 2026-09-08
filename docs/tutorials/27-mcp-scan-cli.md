@@ -1,3 +1,9 @@
+---
+title: "Tutorial 27 — MCP Scan CLI"
+last_reviewed: 2026-05-28
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 27 — MCP Scan CLI

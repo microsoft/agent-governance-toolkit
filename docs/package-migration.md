@@ -1,3 +1,9 @@
+---
+title: "Package identity and migration map"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 # Package identity and migration map
 
 AGT is proposed for AAIF hosting in `aaif/project-proposals#19`. This map records

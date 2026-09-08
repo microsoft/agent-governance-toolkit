@@ -1,3 +1,9 @@
+---
+title: "OWASP ASI Policy Mapping"
+last_reviewed: 2026-06-18
+owner: agt-maintainers
+---
+
 # OWASP ASI Policy Mapping
 
 <!-- Copyright (c) Microsoft Corporation. -->

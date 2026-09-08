@@ -1,3 +1,9 @@
+---
+title: "ADR-0025: Structural Typing for Sink and Source Protocols"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR-0025: Structural Typing for Sink and Source Protocols
 
 ## Status

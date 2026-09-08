@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit v2.3.0"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit v2.3.0
 
 > [!IMPORTANT]
@@ -261,10 +267,10 @@ Two PyPI packages have been renamed to avoid namespace collisions:
 
 ## Full Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes.
+See [CHANGELOG.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md) for the complete list of changes.
 
 **Full Changelog:** https://github.com/microsoft/agent-governance-toolkit/compare/v2.2.0...v2.3.0
 
 ## License
 
-[MIT](LICENSE) — © Microsoft Corporation
+[MIT](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) — © Microsoft Corporation

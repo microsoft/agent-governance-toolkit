@@ -1,3 +1,9 @@
+---
+title: "Tutorial 46 — Copilot CLI governance installer"
+last_reviewed: 2026-05-15
+owner: agt-maintainers
+---
+
 # Tutorial 46 — Copilot CLI governance installer
 
 > **Package:** `@microsoft/agent-governance-copilot-cli` · **Time:** 15 minutes ·
@@ -62,7 +68,7 @@ At this point `/agt status` should report:
 
 Open the scenario from the repo:
 
-- [`examples/copilot-cli-agt/scenarios/guarded-repo-triage`](../../examples/copilot-cli-agt/scenarios/guarded-repo-triage/README.md)
+- [`examples/copilot-cli-agt/scenarios/guarded-repo-triage`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/copilot-cli-agt/scenarios/guarded-repo-triage/README.md)
 
 Then run the scenario in order:
 
@@ -73,8 +79,8 @@ Then run the scenario in order:
 
 For a proof-oriented threat matrix and evidence checklist, also see:
 
-- [`proof-package.md`](../../examples/copilot-cli-agt/scenarios/guarded-repo-triage/proof-package.md)
-- [`proof-corpus.json`](../../examples/copilot-cli-agt/scenarios/guarded-repo-triage/proof-corpus.json)
+- [`proof-package.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/copilot-cli-agt/scenarios/guarded-repo-triage/proof-package.md)
+- [`proof-corpus.json`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/copilot-cli-agt/scenarios/guarded-repo-triage/proof-corpus.json)
 
 ## Example install from source
 

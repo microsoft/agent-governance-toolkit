@@ -1,3 +1,9 @@
+---
+title: "ADR 0006: Constitutional constraint layer as a community extension"
+last_reviewed: 2026-04-20
+owner: agt-maintainers
+---
+
 # ADR 0006: Constitutional constraint layer as a community extension
 
 - Status: proposed

@@ -1,3 +1,9 @@
+---
+title: "AgentMesh Wire Protocol — Version 1.0"
+last_reviewed: 2026-06-24
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # AgentMesh Wire Protocol — Version 1.0
@@ -11,7 +17,7 @@
 > [!IMPORTANT]
 > **Independent Design Statement.** This specification is an independent,
 > clean-room design built entirely from published, freely-licensed standards
-> (see [Section 3](#3-standards-foundation) and [Appendix A](#appendix-a--intellectual-property-and-prior-art)).
+> (see [Section 3](#3-standards-foundation) and [Appendix A](#appendix-a-intellectual-property-and-prior-art)).
 > No proprietary protocols, third-party source code, or patented algorithms
 > were used. Every cryptographic operation references an IETF RFC or a
 > CC0-licensed specification. Implementers should follow this spec and the
@@ -40,9 +46,9 @@
 16. [Security Considerations](#16-security-considerations)
 17. [Test Vectors](#17-test-vectors)
 18. [References](#18-references)
-- [Appendix A — Intellectual Property and Prior Art](#appendix-a--intellectual-property-and-prior-art)
-- [Appendix B — Recommended Cryptographic Libraries](#appendix-b--recommended-cryptographic-libraries)
-- [Appendix C — Tutorial and Demo Roadmap](#appendix-c--tutorial-and-demo-roadmap)
+- [Appendix A — Intellectual Property and Prior Art](#appendix-a-intellectual-property-and-prior-art)
+- [Appendix B — Recommended Cryptographic Libraries](#appendix-b-recommended-cryptographic-libraries)
+- [Appendix C — Tutorial and Demo Roadmap](#appendix-c-tutorial-and-demo-roadmap)
 
 ---
 
@@ -907,6 +913,8 @@ Canonical JSON serialization of each frame type will be provided at
 
 ---
 
+<a id="appendix-a-intellectual-property-and-prior-art"></a>
+
 ## Appendix A — Intellectual Property and Prior Art
 
 ### A.1 Clean-Room Design Statement
@@ -975,6 +983,8 @@ To maintain clean-room integrity:
 
 ---
 
+<a id="appendix-b-recommended-cryptographic-libraries"></a>
+
 ## Appendix B — Recommended Cryptographic Libraries
 
 Implementations MUST use audited, well-known cryptographic libraries.
@@ -1017,6 +1027,8 @@ Custom crypto implementations are prohibited.
 | X25519, Ed25519, HKDF, ChaCha20-Poly1305 | [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | BSD-3-Clause | Go standard extended library |
 
 ---
+
+<a id="appendix-c-tutorial-and-demo-roadmap"></a>
 
 ## Appendix C — Tutorial and Demo Roadmap
 

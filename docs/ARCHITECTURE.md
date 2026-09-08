@@ -1,10 +1,16 @@
+---
+title: "Architecture"
+last_reviewed: 2026-07-08
+owner: agt-maintainers
+---
+
 # Architecture
 
 ## Overview
 
 The Agent Governance Toolkit provides **deterministic application-layer interception**: every agent action is evaluated against policy **before execution**, at sub-millisecond latency. For high-security environments, composes with container/VM isolation for defense-in-depth.
 
-Each major component has a formal RFC 2119 specification with conformance tests. See [Specifications](specs/) for the full list.
+Each major component has a formal RFC 2119 specification with conformance tests. See [Specifications](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/specs) for the full list.
 
 ## Video Walkthrough Series
 
@@ -83,7 +89,7 @@ Community video series covering the toolkit architecture:
 | Audit and Compliance | [AUDIT-COMPLIANCE-1.0](specs/AUDIT-COMPLIANCE-1.0.md) |
 | AgentMesh Wire Protocol | [AGENTMESH-WIRE-1.0](specs/AGENTMESH-WIRE-1.0.md) |
 
-Design rationale is documented in [25 Architecture Decision Records](adr/).
+Design rationale is documented in [25 Architecture Decision Records](./adr/index.md).
 
 ## Security Model & Boundaries
 
@@ -112,10 +118,10 @@ AgentMesh assigns trust scores on a 0-1000 scale with the following tiers:
 | 300-499 | Probationary | Limited privileges, under observation |
 | 0-299 | Untrusted | Restricted to read-only or blocked |
 
-Default score for new agents: **500** (Standard tier). Score changes are driven by policy compliance history, successful task completions, and trust boundary violations. Full algorithm documentation is in [`agent-governance-python/agent-mesh/docs/trust-scoring-api.md`](../agent-governance-python/agent-mesh/docs/trust-scoring-api.md).
+Default score for new agents: **500** (Standard tier). Score changes are driven by policy compliance history, successful task completions, and trust boundary violations. Full algorithm documentation is in [`agent-governance-python/agent-mesh/docs/trust-scoring-api.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/trust-scoring-api.md).
 
 ## Benchmark Methodology
 
-Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`agent-governance-python/agent-os/modules/control-plane/benchmarks/`](../agent-governance-python/agent-os/modules/control-plane/benchmarks/) for methodology, datasets, and reproduction instructions.
+Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`agent-governance-python/agent-os/modules/control-plane/benchmarks/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/control-plane/benchmarks) for methodology, datasets, and reproduction instructions.
 
 Full benchmark results: **[BENCHMARKS.md](BENCHMARKS.md)**

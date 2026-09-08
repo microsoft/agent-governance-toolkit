@@ -1,3 +1,9 @@
+---
+title: "Prompt-Injection Fixture — Corpus Methodology"
+last_reviewed: 2026-06-12
+owner: agt-maintainers
+---
+
 # Prompt-Injection Fixture — Corpus Methodology
 
 This document makes the corpus-generation methodology behind
@@ -8,9 +14,9 @@ generated, split, de-duplicated, and baselined in a reproducible, non-overfit
 way *before* a detector path that consumes it is considered.
 
 Everything below is checkable against the merged generator
-[`benchmarks/prompt-injection/harness/generate-corpus.py`](../../benchmarks/prompt-injection/harness/generate-corpus.py)
+[`benchmarks/prompt-injection/harness/generate-corpus.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/benchmarks/prompt-injection/harness/generate-corpus.py)
 and the baseline harness
-[`benchmarks/prompt-injection/harness/agt-rules-baseline/`](../../benchmarks/prompt-injection/harness/agt-rules-baseline/).
+[`benchmarks/prompt-injection/harness/agt-rules-baseline/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/benchmarks/prompt-injection/harness/agt-rules-baseline).
 No runtime behavior is described or changed here — this is documentation only.
 
 > Scope honesty: the corpus is **synthetic** research data for controlled,

@@ -1,3 +1,9 @@
+---
+title: "Proposal: Oracle Agent Spec Governance Controls Mapping"
+last_reviewed: 2026-03-26
+owner: agt-maintainers
+---
+
 # Proposal: Oracle Agent Spec Governance Controls Mapping
 
 **Status:** 🔄 Active — Oracle team reviewing, discussion ongoing  

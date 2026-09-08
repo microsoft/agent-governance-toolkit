@@ -1,3 +1,9 @@
+---
+title: "2026-07-27 — Removing the v4 policy language"
+last_reviewed: 2026-07-29
+owner: agt-maintainers
+---
+
 # 2026-07-27 — Removing the v4 policy language
 
 PR: [microsoft/agent-governance-toolkit#3444](https://github.com/microsoft/agent-governance-toolkit/pull/3444)

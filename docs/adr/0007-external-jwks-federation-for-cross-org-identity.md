@@ -1,3 +1,9 @@
+---
+title: "ADR 0007: External JWKS federation for cross-org agent identity"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR 0007: External JWKS federation for cross-org agent identity
 
 - Status: proposed

@@ -788,7 +788,7 @@ The MCP client can then invoke the six trust tools directly:
 
 ### Working Example
 
-- [Trust-Verified MCP Server](../../examples/mcp-trust-verified-server/) -- Runnable FastMCP server with trust proxy authorization, security scanning, and audit logging
+- [Trust-Verified MCP Server](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/mcp-trust-verified-server) -- Runnable FastMCP server with trust proxy authorization, security scanning, and audit logging
 
 ### Related Tutorials
 

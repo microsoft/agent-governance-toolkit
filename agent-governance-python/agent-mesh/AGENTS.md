@@ -60,7 +60,8 @@ black --check .
 - All data models use Pydantic `BaseModel`
 - Identity: `AgentIdentity` with `.sign(data: bytes) -> str` (base64 Ed25519 signatures)
 - Trust scores: 5 dimensions — competence, integrity, availability, predictability, transparency
-- DID format: `did:mesh:{hex}` — derived from public key
+- DID format: `did:mesh:{hex}` — see the proof-of-possession note under Boundaries: `registry/app.py`
+  derives DIDs from the public key, while `AgentDID.generate` mints a random identifier
 - Private keys stored as `_private_key` (never serialized)
 - AICard: `from_identity()` creates signed cards; `from_trusted_agent_card()` bridges existing formats
 - Tests in `tests/` directory
@@ -70,7 +71,8 @@ black --check .
 - **Never serialize** private keys in JSON/YAML output
 - **Never commit** secrets, API keys, or credentials
 - **Never weaken** trust thresholds — only tighten
-- **Never accept public keys without proof-of-possession** — any HTTP endpoint that accepts a `public_key` or `verification_key` MUST verify the caller controls the corresponding private key via Ed25519 signature over `(key || timestamp)`. DIDs MUST be derived from `SHA-256(public_key)`, never client-supplied. See `registry/app.py` for the reference implementation. CI enforces this via `scripts/ci/no-unauthed-registration.sh`.
+- **Never accept public keys without proof-of-possession** — any HTTP endpoint that accepts a `public_key` or `verification_key` MUST verify the caller controls the corresponding private key via Ed25519 signature over `(key || timestamp)`. DIDs issued by the registry MUST be derived from `SHA-256(public_key)`, never client-supplied. See `registry/app.py` for the reference implementation. CI enforces this via `scripts/ci/no-unauthed-registration.sh`.
+- **A `did:mesh` identifier is not self-certifying** — `AgentDID.generate` mints a random identifier (`secrets.token_hex(16)`, `identity/agent_id.py`), so it is *not* derived from the key and carries no cryptographic binding to one. Only registry-issued DIDs are key-derived. Consequently, request authentication MUST resolve the DID's key through a trusted registry and MUST NOT trust a caller-supplied public key, even when it "matches" the DID. See `integrations/request_auth.py`.
 - Keep backward compatibility with existing protocol messages
 - the repo root are standalone — changes there need their own test suite
 

@@ -1,3 +1,9 @@
+---
+title: "Tutorial 29 — Agent Discovery: Finding Shadow AI in Your Organization"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # Tutorial 29 — Agent Discovery: Finding Shadow AI in Your Organization
 
 > **Package:** `agent-discovery` · **Time:** 20 minutes · **Prerequisites:** Python 3.11+
@@ -303,6 +309,6 @@ jobs:
 
 ## Related
 
-- [Agent Discovery README](../../agent-governance-python/agent-discovery/README.md) — Full API reference
+- [Agent Discovery README](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-discovery/README.md) — Full API reference
 - [Trust & Identity](02-trust-and-identity.md) — Register agents with AgentMesh
 - [Compliance Verification](18-compliance-verification.md) — Prove governance coverage
