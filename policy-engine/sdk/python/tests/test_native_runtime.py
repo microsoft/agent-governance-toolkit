@@ -7,6 +7,7 @@ from pathlib import Path
 from agent_control_specification import (
     AgentControl,
     Decision,
+    EnforcementMode,
     InterventionPoint,
     PerfTelemetry,
     parse_manifest,
@@ -75,6 +76,29 @@ class MockPolicy:
 
 @unittest.skipUnless(_NATIVE_AVAILABLE, "agent_control_specification._native extension is not built")
 class NativeRuntimeTests(unittest.TestCase):
+    def test_transform_budget_includes_ambient_snapshot_in_both_modes(self):
+        class GrowingPolicy:
+            def evaluate(self, invocation):
+                return {
+                    "decision": "transform",
+                    "transform": {"path": "$target.text", "value": "b" * 40_000},
+                }
+
+        async def run(mode):
+            control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), GrowingPolicy())
+            return await control.evaluate_intervention_point(
+                InterventionPoint.INPUT,
+                {"input": {"text": "x"}, "ambient": "a" * 1_020_000},
+                mode,
+            )
+
+        for mode in [EnforcementMode.ENFORCE, EnforcementMode.EVALUATE_ONLY]:
+            with self.subTest(mode=mode):
+                result = asyncio.run(run(mode))
+                self.assertEqual(result.verdict.decision, Decision.DENY)
+                self.assertEqual(result.verdict.reason, "host_error:transform_invalid")
+                self.assertIsNone(result.transformed_policy_target)
+
     def test_parse_manifest_uses_native_yaml_semantics(self):
         parsed = parse_manifest(
             """agent_control_specification_version: 0.4.0-alpha.1

@@ -293,14 +293,36 @@ catch (AgentControlBlockedException)
 
 Assert(!denyConsulted, "deny should not consult the resolver.");
 
-var noResolverControl = new AgentControl(escalateInputRuntime);
-try
+var liftableDenyRuntime = new DelegateRuntime(request =>
+    request.InterventionPoint == InterventionPoint.Input
+        ? Result(Decision.Deny) with
+        {
+            Verdict = new Verdict(
+                Decision.Deny,
+                Approval: JsonSerializer.SerializeToElement(new { channel = "review" })),
+        }
+        : Result(Decision.Allow));
+foreach (var unresolvedRuntime in new[] { escalateInputRuntime, liftableDenyRuntime })
 {
-    await noResolverControl.RunAsync<string, string>("hi", (input, _) => ValueTask.FromResult(input));
-    throw new InvalidOperationException("escalate without a resolver should block.");
-}
-catch (AgentControlBlockedException)
-{
+    var noResolverControl = new AgentControl(unresolvedRuntime);
+    var unresolvedExecuted = false;
+    try
+    {
+        await noResolverControl.RunAsync<string, string>("hi", (input, _) =>
+        {
+            unresolvedExecuted = true;
+            return ValueTask.FromResult(input);
+        });
+        throw new InvalidOperationException("approval without a resolver should block.");
+    }
+    catch (AgentControlBlockedException exception)
+    {
+        AssertEqual("host_error:approval_unresolved", exception.Result.Verdict.Reason,
+            "missing approval infrastructure should report a host error.");
+        Assert(exception.Result.PolicyInput.HasValue, "the blocked result preserves policy input.");
+        Assert(!string.IsNullOrEmpty(exception.Result.ActionIdentity), "the blocked result preserves identity.");
+    }
+    Assert(!unresolvedExecuted, "an unresolved approval must block before execution.");
 }
 
 // AGT D1: per §13.1 an escalate carries no transform. After approval the

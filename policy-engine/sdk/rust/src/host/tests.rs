@@ -87,6 +87,48 @@ intervention_points:
 }
 
 #[test]
+fn oversized_transformed_snapshot_is_blocked_before_execution() {
+    let policy = Arc::new(QueuePolicy::with_responses([json!({
+        "decision": "transform",
+        "transform": {"path": "$target", "value": "b".repeat(100)}
+    })]));
+    let control = AgentControl::from_manifest_with_dispatchers_and_limits(
+        Manifest::from_yaml_str(run_manifest()).unwrap(),
+        Some(Arc::new(NoopAnnotator)),
+        Some(policy),
+        crate::Limits {
+            max_snapshot_bytes: 256,
+            ..crate::Limits::default()
+        },
+    )
+    .unwrap();
+    let mut executed = false;
+    let error = control
+        .run_with_options(
+            json!("x"),
+            RunOptions::default().with_ambient_snapshot(
+                json!({"ambient": "a".repeat(180)})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+            |input| {
+                executed = true;
+                input
+            },
+        )
+        .unwrap_err();
+    assert!(!executed);
+    let AgentControlInterruption::Blocked(blocked) = error else {
+        panic!("oversized transforms must not be liftable");
+    };
+    assert_eq!(
+        blocked.intervention_point_result.verdict.reason.as_deref(),
+        Some("host_error:transform_invalid"),
+    );
+}
+
+#[test]
 fn policy_labels_expose_policy_ids_and_sorted_annotators() {
     let manifest = Manifest::from_yaml_str(
         r#"agent_control_specification_version: 0.4.0-alpha.1

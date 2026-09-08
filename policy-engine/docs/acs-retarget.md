@@ -6,12 +6,18 @@ control contract. This note records what changed, what is still open, and what a
 contributor needs to know before touching the policy plane.
 
 Pinned versions: `agent-control-spec = "=0.4.0-alpha.1"` and
-`agent-hooks-sdk = "=0.1.0-alpha.3"`. `agent-hooks-sdk` sits one alpha behind the
-newest release on purpose. `agent-control-spec` asks only for `^0.1.0-alpha.3`, and
-the seven day cooling off rule in `scripts/check_release_age.py` rejects a crate
-published two days ago, so the older release is both sufficient and the more
-conservative choice. Move the pin when the newer alpha ages past the threshold and
-something in this tree needs it.
+`agent-hooks-sdk = "=0.1.0-alpha.3"`. These remain the versions selected and
+reviewed for this migration. Their cooling-off windows have elapsed. Updating
+to newer upstream releases is a separate dependency change, not a prerequisite
+for repairing this host implementation.
+
+As of September 8, 2026, ACS 0.4.0-alpha.3 and agent-hooks 0.1.0-alpha.5 are
+published. ACS's newer bindings provide manifest and artifact tooling, host
+dispatchers and streaming APIs, and its default Rego backend runs in process.
+Those releases invalidate the original assumption that bindings expose only
+`AcsInterceptor`, but do not make them drop-in replacements for AGT's
+`AgentControl` and `HostSession` APIs. This PR retains AGT's native bindings
+over the pinned Rust engine.
 
 ## What moved
 
@@ -28,8 +34,10 @@ something in this tree needs it.
 
 `policy-engine/core` survives as a deprecation shim for one release cycle. Rust ignores
 `#[deprecated]` on a `pub use` re-export, so the shim declares deprecated type aliases and
-wrapper functions instead, which do warn at the call site. Traits cannot be aliased on
-stable Rust, so trait re-exports carry the notice in documentation only.
+wrapper functions instead, which do warn at the call site. Preserving a name
+does not preserve its old signatures, manifest grammar or verdict semantics.
+Traits cannot be aliased on stable Rust, so trait re-exports carry the notice
+in documentation only.
 
 ## Verdicts are three, not five
 
@@ -43,8 +51,8 @@ stable Rust, so trait re-exports carry the notice in documentation only.
 Reason namespaces are split. The engine emits `runtime_error:*`. The `host_error:*`
 namespace is reserved for hosts and an interceptor must never emit it. AGT's host SDK is a
 host, so it does synthesize `host_error:*` for approval resolver failure, approval identity
-mismatch, and streaming refusal. Those three names come verbatim from the agent-hooks
-reserved set.
+mismatch, unresolved approval, and streaming refusal. These names come from the
+agent-hooks reserved set.
 
 ## Host obligations
 
@@ -53,6 +61,12 @@ host applies transforms, honours `evaluate_only`, resolves approvals, and comput
 identity. In this tree that is `sdk/rust/src/host/evaluation.rs`, which turns an
 `EvaluationResult` into a `HostEvaluation` carrying `transformed_policy_target` and the
 identity trio. Never push that logic back into the policy plane.
+
+Before returning a transform, the host reconstructs the complete effective
+snapshot using `policy_target.path` and validates its byte and depth limits.
+This check runs in both enforcement and evaluate-only mode. Validating only
+the replacement target would omit ambient state and permit oversized actions.
+The shared helper serves Rust, Python, Node and the .NET C ABI.
 
 ## Manifests
 
@@ -67,10 +81,10 @@ Two breaking changes, both already applied across this repository.
 `SUPPORTED_MANIFEST_VERSIONS` in `core/src/manifest_yaml.rs` mirrors the private list in
 `agent-control-spec`. Keep it in step when the upstream pin moves.
 
-## Gaps upstream
+## Gaps in the pinned upstream release
 
-Things `agent-control-spec` or agent-hooks must close. None can be fixed from here
-without forking contract semantics, so each is filed against that repository:
+The compatibility code and limitations below describe 0.4.0-alpha.1, not every
+later release. Recheck both source and published artifacts before updating a pin.
 
 | Gap | Issue |
 | --- | --- |
@@ -78,8 +92,8 @@ without forking contract semantics, so each is filed against that repository:
 | `Limits` do not reach the bundled dispatchers | [#21](https://github.com/responsibleai/agent-control-spec/issues/21) |
 | Telemetry sink cannot be set after `Runtime` construction | [#22](https://github.com/responsibleai/agent-control-spec/issues/22) |
 | `from_url`, `policy_labels`, `validate_overlay` have no equivalent | [#23](https://github.com/responsibleai/agent-control-spec/issues/23) |
-| Bindings expose only `AcsInterceptor` | [#14](https://github.com/responsibleai/agent-control-spec/issues/14) |
-| No trusted publishing, repository metadata or org owner on crates.io | [#24](https://github.com/responsibleai/agent-control-spec/issues/24) |
+| Original binding validation gap, resolved upstream after alpha.1 | [#14](https://github.com/responsibleai/agent-control-spec/issues/14) |
+| Publisher provenance and organization ownership review condition | [#24](https://github.com/responsibleai/agent-control-spec/issues/24) |
 
 ### Security, unresolved
 
@@ -94,9 +108,14 @@ The credential-reading path is the bundled *annotator* dispatcher, which resolve
 the off-by-default `bundled-dispatchers` feature; without that feature a manifest that
 declares annotators fails closed with a message naming the feature, and a manifest that
 declares none gets a fail-closed no-op. The bundled *policy* dispatcher stays on by
-default so the zero-config Rego path keeps working. Do not enable `bundled-dispatchers`,
-nor the annotator features it pulls in (`aacs`, `openai_moderation`, `perspective`,
-`llama_guard`, `lakera_guard`, `auto`), until the provenance gate is restored upstream.
+default so the zero-config Rego path keeps working.
+
+The production Python wheel and default Rust SDK leave bundled annotators
+disabled. The .NET native build and Node test build explicitly enable
+`bundled-dispatchers` for their existing zero-config integrations. These builds
+require trusted manifests and trusted transitive configuration. The feature
+switch is not a substitute for the missing provenance gate. Do not enable it
+for manifests supplied by an untrusted party.
 
 Leaving the policy dispatcher on is a narrower guarantee than "the policy plane is safe".
 `agent-control-spec` spawns `opa` without clearing the environment, and Rego reads the
@@ -137,11 +156,11 @@ that loading one over the network is a first class API.
 
 ### Capability gaps
 
-- The published Python, Node and .NET ACS packages expose only `AcsInterceptor`, with no
-  `evaluate` or artifact validation surface. That blocks a future adapter that would
-  consume them directly; it does not affect `sdk/python` and `sdk/node`, which are pyo3
-  and napi bindings over the Rust core in this repository and are retargeted with it.
-  Filed upstream as agent-control-spec issue #14 with a PR at #15.
+- The alpha.1 Python, Node and .NET ACS packages exposed only `AcsInterceptor`.
+  Manifest validation landed upstream in #15, closing #14, and later releases
+  added further tooling. AGT's PyO3 and napi bindings instead consume its Rust
+  host SDK, preserving the richer legacy host API. Replacing those bindings
+  with the standalone packages requires a separate consumer migration.
 - `Manifest::from_url` and `Runtime::policy_labels` are gone. `sdk/rust` reimplements
   both over the public surface: `manifest_from_url` writes a synthetic one-entry
   `extends` manifest to a temp dir and loads it with `Manifest::from_path_with_limits`,
@@ -182,32 +201,48 @@ the obvious case and not as a boundary.
 
 ### Before this merges
 
-`agent-control-spec` on crates.io carries no repository metadata, uses no trusted
-publishing, and has one individual owner, and 0.4.0-alpha.1 was published from a
-personal API key. `agent-hooks-sdk` publishes from GitHub Actions through trusted
-publishing and records the repository, the workflow run and the commit. The
-0.4.0-alpha.1 artifact matches `responsibleai/agent-control-spec` at that tag
-today, so the question is what a later publish could carry rather than what this
-one does. Since the crate ships an enforcement engine, a divergent publish would
-change what a governance decision means. Filed upstream as
-[#24](https://github.com/responsibleai/agent-control-spec/issues/24), and worth
-holding the merge for.
+The review required trusted publishing, repository metadata and an organization
+or team co-owner for `agent-control-spec`. Registry APIs checked on September 8,
+2026 show repository metadata and trusted publication for alpha.2 and alpha.3,
+but still one individual owner. The pinned alpha.1 artifact has no trusted
+publication record. The historical source comparison does not waive the
+reviewer's ownership condition. Upstream
+[#24](https://github.com/responsibleai/agent-control-spec/issues/24) remains open.
+Merge still requires that condition to be satisfied or an explicit maintainer
+decision changing it.
 
-The Rust crates carrying the break moved to 0.4.0-beta.0, matching `sdk/rust`.
-The npm package did not. Its `optionalDependencies` pin the per-platform native
-packages, and the supply-chain audit resolves those against the live registry, so
-a version that is not published yet fails the gate. That bump belongs to the
-release, not to this change.
+### Release and upgrade order
 
-Nothing else here is knowingly outstanding. What remains is upstream, in the
-table above.
+The Python SDK and generator are versioned 0.4.0b0, and `agt-policies` 5.1.0
+requires `agent-control-specification>=0.4.0b0,<0.5.0`. The old 0.3.1b1 wheel
+cannot satisfy this requirement. Publish the new SDK distribution before
+publishing its generator and migration-tool consumers. The consolidated core
+requires `agt-policies>=5.1.0,<6.0`, so its CLI cannot pull in the old engine
+through the previous migration-tool release. Release that core change with the
+next repository-wide version bump, after publishing the policy dependencies.
+CI builds these dependencies from this checkout rather than requiring an
+unpublished release from PyPI.
+
+The .NET package family moves to 0.4.0-beta.0. ESRP builds
+`agent_control_specification` with `opa,bundled-dispatchers` for all five RIDs,
+matching the local MSBuild target. Package the complete native asset matrix
+before publishing the managed SDK and adapters.
+
+Rust's core shim and npm's package family still need coordinated release
+preparation. Do not publish their modified code under existing 0.3.1 versions.
+Publish a newly versioned core shim, then update the SDK's exact registry
+requirement and publish dependent Rust crates. For npm, publish newly versioned
+native and OPA platform packages, then update and publish the wrapper with
+matching exact optional dependencies. The supply-chain checks must accept those
+versions before the dependency updates merge. Do not bypass them or confuse a
+successful workspace build with a registry-install test.
 
 ## The .NET SDK
 
-`sdk/dotnet` reaches the engine through a C ABI rather than the published NuGet
-package, because that package exposes only `AcsInterceptor`: no `evaluate`, no
-manifest or artifact validation, so AGT's `AgentControl` surface cannot be rebuilt
-on it. The gap is filed upstream as agent-control-spec issue #14 with PR #15.
+`sdk/dotnet` retains AGT's C ABI and `AgentControl` host API. The original
+alpha.1 NuGet package did not expose its needed policy-plane functions. Newer
+NuGet releases add APIs and native assets, but migrating the legacy host API
+to them is outside this pinned-engine retarget.
 
 The ABI lives in `sdk/rust/src/ffi.rs` and ships as
 `libagent_control_specification.so`. It belongs in the SDK rather than the core
@@ -222,6 +257,10 @@ and `Approval`, and enforcement routes on a deny that holds an approval block.
 `Decision.Warn` and `Decision.Escalate` remain declared and keep their documented
 meanings, so a caller still holding one gets the behaviour it expects rather than
 a refusal.
+
+A liftable deny without an approval resolver returns
+`host_error:approval_unresolved` before execution. The blocked result preserves
+the original policy input and identity for host-side records.
 
 ## Rebuild the Python wheel after retargeting
 

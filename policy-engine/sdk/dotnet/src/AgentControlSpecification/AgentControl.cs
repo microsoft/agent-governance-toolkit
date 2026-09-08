@@ -660,7 +660,15 @@ public sealed class AgentControl
         var resolver = approvalResolver ?? this.approvalResolver;
         if (resolver is null)
         {
-            throw new AgentControlBlockedException(interventionPoint, result);
+            throw new AgentControlBlockedException(
+                interventionPoint,
+                result with
+                {
+                    Verdict = new Verdict(
+                        Decision.Deny,
+                        Reason: "host_error:approval_unresolved",
+                        Message: "Approval requires a configured resolver."),
+                });
         }
 
         var originalIdentity = result.ActionIdentity;

@@ -52,6 +52,27 @@ annotators:
   prompt_classifier:
     type: classifier`;
 
+test("transform budget includes the full snapshot in enforce and evaluate-only", async () => {
+  const control = AgentControl.fromNative(baseManifest, undefined, {
+    async evaluate() {
+      return {
+        decision: Decision.Transform,
+        transform: { path: "$target", value: "b".repeat(40_000) },
+      };
+    },
+  });
+  for (const mode of [EnforcementMode.Enforce, EnforcementMode.EvaluateOnly]) {
+    const result = await control.evaluateInterventionPoint(
+      InterventionPoint.Input,
+      { input: "x", ambient: "a".repeat(1_020_000) },
+      mode,
+    );
+    assert.equal(result.verdict.decision, Decision.Deny);
+    assert.equal(result.verdict.reason, "host_error:transform_invalid");
+    assert.equal(result.transformedPolicyTarget, undefined);
+  }
+});
+
 function policyForAccountNumber(invocation) {
   assert.equal(invocation.type, "custom");
   const containsAccountNumber =

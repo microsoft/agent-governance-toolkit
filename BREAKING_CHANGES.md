@@ -35,8 +35,8 @@ The engine also stopped mutating anything. Applying a transform, honouring
 `evaluate_only`, resolving an approval, and deriving the identity trio are host
 obligations now, discharged by `HostEvaluation`.
 
-`policy-engine/core` keeps every symbol it exported, re-exported with a
-deprecation, for one release cycle.
+`policy-engine/core` retains compatibility aliases for one release cycle.
+These retain names, not the old signatures or behavior.
 
 **How to update**
 
@@ -49,6 +49,12 @@ deprecation, for one release cycle.
 
 A host that tested `decision == "warn"` should read `warnings` instead. A host
 that tested for `escalate` should test for the `approval` block on a `deny`.
+
+Python consumers need `agent-control-specification>=0.4.0b0,<0.5.0`.
+`agt-policies` 5.1.0 and the generator declare that requirement so an installed
+0.3.1b1 wheel cannot satisfy it. Publish the new SDK before these consumers.
+The .NET SDK and adapters move together to 0.4.0-beta.0, and their native
+library is now `agent_control_specification`, without the `_core` suffix.
 
 `policy-engine/docs/acs-retarget.md` carries the full symbol mapping and the
 list of gaps filed upstream.

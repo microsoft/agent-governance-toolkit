@@ -12,8 +12,8 @@ Read `docs/acs-retarget.md` before changing anything here.
 | --- | --- |
 | `core/` | Deprecation shim over `agent-control-spec`, plus the surface that crate does not carry. That surface is artifact validation, the bounded manifest YAML parser, the richer telemetry sinks, and the policy input digest. |
 | `sdk/rust/` | AGT's host SDK. Owns the host obligations under AGENT-HOOKS-0.1 sections 8 to 10, which are transform application, `evaluate_only`, approval resolution, and identity. |
-| `sdk/python/` | Python SDK. Not yet retargeted. The published `agent-control-spec` Python package exposes only `AcsInterceptor`, so the manifest and artifact validation this SDK is built on has no published equivalent. |
-| `sdk/node/` | Node SDK. Same blocker as the Python SDK. |
+| `sdk/python/` | Retargeted PyO3 binding over AGT's Rust host SDK, preserving the legacy Python host API. |
+| `sdk/node/` | Retargeted napi binding over AGT's Rust host SDK, preserving the legacy Node host API. |
 | `sdk/dotnet/` | .NET SDK over the native core plus framework adapter shapes and tests. |
 | `integrations/` | Reference annotators, OpenTelemetry, and Rig integration crates. |
 | `generator/` | ACS policy artifact generator. |

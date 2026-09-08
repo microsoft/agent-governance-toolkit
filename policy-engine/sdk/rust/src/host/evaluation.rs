@@ -11,7 +11,8 @@
 //! rebuilds the richer result the SDK surfaces to callers.
 
 use agent_control_spec::{
-    Decision, EnforcementMode, EvaluationResult, InterceptionPoint, JsonValue, Limits,
+    Decision, EnforcementMode, EvaluationResult, InterceptionPoint, JsonPath, JsonValue, Limits,
+    PathRoot, PathSegment,
 };
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
@@ -53,11 +54,11 @@ impl HostEvaluation {
     }
 
     /// As [`from_engine`](Self::from_engine), but revalidates the transformed
-    /// policy target against `limits`.
+    /// complete effective snapshot against `limits` in both modes.
     ///
     /// The engine checks the snapshot it was given, before the transform
     /// existed. Applying one is host work, so a transform that grows the
-    /// target past `max_snapshot_bytes` would otherwise leave the host
+    /// snapshot past `max_snapshot_bytes` would otherwise leave the host
     /// carrying a value the engine would have refused.
     pub fn from_engine_with_limits(
         point: InterceptionPoint,
@@ -122,13 +123,17 @@ impl HostEvaluation {
                         ),
                     ),
                 })?;
+                let input = policy_input.as_ref().ok_or_else(|| {
+                    invalid_transform("transform result is missing its policy input")
+                })?;
+                let snapshot = snapshot_with_transformed_target(input, &applied)?;
+                limits.validate_snapshot(&snapshot).map_err(|error| {
+                    (
+                        agent_hooks::HostError::TransformInvalid,
+                        format!("transform result exceeds the configured limits: {error}"),
+                    )
+                })?;
                 if mode == EnforcementMode::Enforce {
-                    limits.validate_snapshot(&applied).map_err(|error| {
-                        (
-                            agent_hooks::HostError::TransformInvalid,
-                            format!("transform result exceeds the configured limits: {error}"),
-                        )
-                    })?;
                     Some(applied)
                 } else {
                     None
@@ -153,6 +158,44 @@ impl HostEvaluation {
             enforced_identity,
         })
     }
+}
+
+fn invalid_transform(detail: &str) -> (agent_hooks::HostError, String) {
+    (agent_hooks::HostError::TransformInvalid, detail.to_string())
+}
+
+fn snapshot_with_transformed_target(
+    input: &JsonValue,
+    transformed: &JsonValue,
+) -> Result<JsonValue, (agent_hooks::HostError, String)> {
+    let path = input
+        .get("policy_target")
+        .and_then(|target| target.get("path"))
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| invalid_transform("transform result is missing its policy target path"))?;
+    let path = JsonPath::parse_with_snapshot_alias(path)
+        .map_err(|_| invalid_transform("transform result has an invalid policy target path"))?;
+    if path.root() != PathRoot::Snap {
+        return Err(invalid_transform(
+            "policy target must be rooted in the snapshot",
+        ));
+    }
+    let mut snapshot = input
+        .get("snapshot")
+        .cloned()
+        .ok_or_else(|| invalid_transform("transform result is missing its snapshot"))?;
+    let mut target = &mut snapshot;
+    for segment in path.segments() {
+        target = match segment {
+            PathSegment::Field(name) => target.as_object_mut().and_then(|map| map.get_mut(name)),
+            PathSegment::Index(index) => target
+                .as_array_mut()
+                .and_then(|items| items.get_mut(*index)),
+        }
+        .ok_or_else(|| invalid_transform("policy target does not resolve in the snapshot"))?;
+    }
+    *target = transformed.clone();
+    Ok(snapshot)
 }
 
 /// Rebuild a policy input with the transformed policy target substituted.
@@ -200,7 +243,10 @@ mod tests {
                 evidence: None,
                 result_labels: Vec::new(),
             },
-            policy_input: Some(json!({"policy_target": {"value": {"text": "secret"}}})),
+            policy_input: Some(json!({
+                "policy_target": {"path": "$.input", "value": {"text": "secret"}},
+                "snapshot": {"input": {"text": "secret"}}
+            })),
         }
     }
 
@@ -357,5 +403,97 @@ mod tests {
             host.transformed_policy_target,
             Some(json!({"text": "[REDACTED]"}))
         );
+    }
+
+    #[test]
+    fn transform_budget_covers_the_whole_snapshot_in_both_modes() {
+        for mode in [EnforcementMode::Enforce, EnforcementMode::EvaluateOnly] {
+            for target_bytes in [51, 52] {
+                let mut result = engine_result(
+                    Decision::Transform,
+                    Some(agent_hooks::Transform {
+                        path: "$target".to_string(),
+                        value: json!("b".repeat(target_bytes)),
+                    }),
+                );
+                result.policy_input = Some(json!({
+                    "policy_target": {"path": "$.input", "value": "x"},
+                    "snapshot": {"input": "x", "ambient": "a".repeat(180)}
+                }));
+                let limits = Limits {
+                    max_snapshot_bytes: 256,
+                    ..Limits::default()
+                };
+                let host = HostEvaluation::from_engine_with_limits(
+                    InterceptionPoint::Input,
+                    result,
+                    mode,
+                    limits,
+                );
+                if target_bytes == 51 {
+                    assert!(host.is_ok(), "a 256-byte snapshot must fit: {host:?}");
+                } else {
+                    assert!(matches!(
+                        host.unwrap_err().0,
+                        agent_hooks::HostError::TransformInvalid
+                    ));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn transform_budget_resolves_nested_and_root_targets() {
+        for (path, snapshot) in [
+            (
+                "$snap.items[0][\"a/b\"]",
+                json!({"items": [{"a/b": "secret"}]}),
+            ),
+            ("$", json!("secret")),
+        ] {
+            let mut result = engine_result(
+                Decision::Transform,
+                Some(agent_hooks::Transform {
+                    path: "$target".to_string(),
+                    value: json!("public"),
+                }),
+            );
+            result.policy_input = Some(json!({
+                "policy_target": {"path": path, "value": "secret"},
+                "snapshot": snapshot
+            }));
+            let host = HostEvaluation::from_engine(
+                InterceptionPoint::Input,
+                result,
+                EnforcementMode::Enforce,
+            )
+            .unwrap();
+            assert_eq!(host.transformed_policy_target, Some(json!("public")));
+        }
+    }
+
+    #[test]
+    fn transform_without_a_resolvable_snapshot_target_fails_closed() {
+        for input in [
+            json!({"policy_target": {"value": "secret"}}),
+            json!({"policy_target": {"path": "$.missing", "value": "secret"}, "snapshot": {}}),
+            json!({"policy_target": {"path": "$pi.input", "value": "secret"}, "snapshot": {}}),
+        ] {
+            let mut result = engine_result(
+                Decision::Transform,
+                Some(agent_hooks::Transform {
+                    path: "$target".to_string(),
+                    value: json!("public"),
+                }),
+            );
+            result.policy_input = Some(input);
+            let error = HostEvaluation::from_engine(
+                InterceptionPoint::Input,
+                result,
+                EnforcementMode::Enforce,
+            )
+            .unwrap_err();
+            assert_eq!(error.0, agent_hooks::HostError::TransformInvalid);
+        }
     }
 }

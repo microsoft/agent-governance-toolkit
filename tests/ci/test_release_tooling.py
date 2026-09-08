@@ -9,6 +9,11 @@ import subprocess
 import json
 from pathlib import Path
 import sys
+import tomllib
+import xml.etree.ElementTree as ET
+
+from packaging.requirements import Requirement
+from packaging.version import Version
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PUBLISH = REPO_ROOT / ".github" / "workflows" / "publish.yml"
@@ -96,6 +101,101 @@ def test_esrp_pipeline_builds_complete_acs_python_distribution() -> None:
     assert "CARGO_NET_OFFLINE=true python -m pip wheel" in text
     assert "grep -Fq 'path = \"../../core\"'" in text
     assert "artifact: 'pypi-agent-control-specification'" in text
+
+
+def test_esrp_native_assets_match_the_host_sdk_cdylib() -> None:
+    import yaml
+
+    pipeline = yaml.safe_load(ESRP_PIPELINE.read_text(encoding="utf-8"))
+    assets = next(
+        parameter["default"]
+        for parameter in pipeline["parameters"]
+        if parameter["name"] == "acsDotnetNativeAssets"
+    )
+    native_targets = REPO_ROOT / (
+        "policy-engine/sdk/dotnet/src/AgentControlSpecification/"
+        "AgentControlSpecification.NativeLibrary.targets"
+    )
+    xml = ET.parse(native_targets)
+    expected = {
+        node.attrib["Include"].removeprefix("$(MSBuildThisFileDirectory)runtimes/")
+        for node in xml.iter("_AcsRequiredPackageNativeAsset")
+    }
+    assert {f"{asset['rid']}/native/{asset['nativeLib']}" for asset in assets} == expected
+    cargo = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/rust/Cargo.toml").read_text(encoding="utf-8")
+    )
+    assert "cdylib" in cargo["lib"]["crate-type"]
+    native_jobs = ESRP_PIPELINE.read_text(encoding="utf-8").split(
+        "- job: Build_ACS_Native_", 1
+    )[1].split("- job: BuildAndPack_ACS", 1)[0]
+    assert f"-p {cargo['package']['name']} \\" in native_jobs
+    assert "--features opa,bundled-dispatchers" in native_jobs
+    assert "AllowIncompleteNativePack" not in native_jobs
+
+
+def test_python_manifest_producers_require_the_retargeted_sdk() -> None:
+    sdk = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/python/pyproject.toml").read_text(encoding="utf-8")
+    )
+    sdk_version = Version(sdk["project"]["version"])
+    assert sdk_version >= Version("0.4.0b0")
+    for producer in ["agent-governance-python/agt-policies", "policy-engine/generator"]:
+        project = tomllib.loads(
+            (REPO_ROOT / producer / "pyproject.toml").read_text(encoding="utf-8")
+        )["project"]
+        dependency = next(
+            Requirement(value)
+            for value in project["dependencies"]
+            if Requirement(value).name == "agent-control-specification"
+        )
+        assert sdk_version in dependency.specifier, producer
+        assert Version("0.3.1b1") not in dependency.specifier, producer
+    core = tomllib.loads(
+        (REPO_ROOT / "agent-governance-python/agent-governance-toolkit-core/pyproject.toml")
+        .read_text(encoding="utf-8")
+    )["project"]
+    policy_requirement = next(
+        Requirement(value)
+        for value in core["dependencies"]
+        if Requirement(value).name == "agt-policies"
+    )
+    assert Version("5.1.0") in policy_requirement.specifier
+    assert Version("5.0.0") not in policy_requirement.specifier
+
+
+def test_python_ci_resolves_unpublished_policy_dependencies_locally() -> None:
+    import yaml
+
+    jobs = yaml.safe_load(
+        (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    )["jobs"]
+    coherence_steps = jobs["install-coherence"]["steps"]
+    build_step = next(step for step in coherence_steps if step.get("name") == "Build consolidation wheels")
+    assert "./policy-engine/sdk/python --wheel-dir dist-coherence" in build_step["run"]
+    assert "agt-policies agent-governance-toolkit-core" in build_step["run"]
+    installs = [
+        step["run"] for step in coherence_steps
+        if step.get("name", "").startswith("Clean-venv import")
+    ]
+    assert len(installs) == 4
+    assert all("--find-links dist-coherence" in command for command in installs)
+    assert any(
+        step.get("name") == "Install local policy dependencies"
+        for step in jobs["security"]["steps"]
+    )
+
+
+def test_dotnet_host_packages_share_the_breaking_release_version() -> None:
+    sdk = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/rust/Cargo.toml").read_text(encoding="utf-8")
+    )
+    versions = [
+        ET.parse(project).findtext(".//Version")
+        for project in (REPO_ROOT / "policy-engine/sdk/dotnet/src").glob("*/*.csproj")
+    ]
+    assert len(versions) == 5
+    assert set(versions) == {sdk["package"]["version"]}
 
 
 def test_publish_workflow_has_no_embedded_esrp_credentials_or_tasks() -> None:
@@ -336,7 +436,9 @@ def test_pinned_rust_installer_covers_release_hosts() -> None:
 def test_acs_python_distribution_verifier_rejects_extra_artifact(
     tmp_path: Path,
 ) -> None:
-    version = "0.3.1b1"
+    version = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/python/pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
     names = [
         f"agent_control_specification-{version}-cp311-abi3-manylinux_2_28_x86_64.whl",
         f"agent_control_specification-{version}-cp311-abi3-manylinux_2_28_aarch64.whl",

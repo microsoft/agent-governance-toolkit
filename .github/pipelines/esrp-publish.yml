@@ -198,26 +198,26 @@ parameters:
     displayName: 'ACS .NET native runtime assets'
     default:
       - rid: linux-x64
-        nativeLib: libagent_control_specification_core.so
+        nativeLib: libagent_control_specification.so
         rustTarget: x86_64-unknown-linux-gnu
         vmImage: ubuntu-latest
       - rid: linux-arm64
-        nativeLib: libagent_control_specification_core.so
+        nativeLib: libagent_control_specification.so
         rustTarget: aarch64-unknown-linux-gnu
         vmImage: ubuntu-latest
         aptPackages: gcc-aarch64-linux-gnu
         linkerEnv: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER
         linker: aarch64-linux-gnu-gcc
       - rid: osx-x64
-        nativeLib: libagent_control_specification_core.dylib
+        nativeLib: libagent_control_specification.dylib
         rustTarget: x86_64-apple-darwin
         vmImage: macOS-latest
       - rid: osx-arm64
-        nativeLib: libagent_control_specification_core.dylib
+        nativeLib: libagent_control_specification.dylib
         rustTarget: aarch64-apple-darwin
         vmImage: macOS-latest
       - rid: win-x64
-        nativeLib: agent_control_specification_core.dll
+        nativeLib: agent_control_specification.dll
         rustTarget: x86_64-pc-windows-msvc
         vmImage: windows-latest
 
@@ -1004,8 +1004,8 @@ stages:
                   export ${{ native.linkerEnv }}="${{ native.linker }}"
                 fi
                 cargo build --release \
-                  -p agent_control_specification_core \
-                  --features default-dispatchers,aacs,openai_moderation,perspective,llama_guard,lakera_guard,auto \
+                  -p agent_control_specification \
+                  --features opa,bundled-dispatchers \
                   --target ${{ native.rustTarget }} \
                   --manifest-path policy-engine/Cargo.toml
                 mkdir -p "$(Pipeline.Workspace)/acs-dotnet-native/${{ native.rid }}/native"

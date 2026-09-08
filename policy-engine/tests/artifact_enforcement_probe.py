@@ -86,10 +86,10 @@ def take(ptr):
     return out
 
 
-def build_runtime(tmp: Path):
+def build_runtime(tmp: Path, rego=REGO):
     bundle = tmp / "bundle"
     bundle.mkdir(parents=True, exist_ok=True)
-    (bundle / "probe.rego").write_text(REGO)
+    (bundle / "probe.rego").write_text(rego, encoding="utf-8")
     subprocess.run(
         [str(OPA), "build", "-t", "wasm", "-o", str(tmp / "b.tar.gz"), str(bundle)],
         capture_output=True,
@@ -107,12 +107,15 @@ def build_runtime(tmp: Path):
     return runtime
 
 
-def evaluate(runtime, text, mode="enforce"):
+def evaluate(runtime, text, mode="enforce", *, ambient=None):
+    snapshot = {"input": {"text": text}}
+    if ambient is not None:
+        snapshot["ambient"] = ambient
     request = json.dumps(
         {
             "intervention_point": "input",
             "mode": mode,
-            "snapshot": {"input": {"text": text}},
+            "snapshot": snapshot,
         }
     )
     err = ctypes.c_char_p()
@@ -177,6 +180,24 @@ def main():
         )
         if not ok:
             failures.append(f"evaluate_only wrong: {shadow}")
+
+        growth_rego = REGO.replace('"[REDACTED]"', json.dumps("b" * 40_000))
+        growth_runtime = build_runtime(Path(td) / "growth", growth_rego)
+        try:
+            for mode in ("enforce", "evaluate_only"):
+                result = evaluate(
+                    growth_runtime, "secret", mode, ambient="a" * 1_020_000
+                )
+                ok = (
+                    result["verdict"]["decision"] == "deny"
+                    and result["verdict"].get("reason") == "host_error:transform_invalid"
+                    and result.get("transformed_policy_target") is None
+                )
+                print(f"  {'PASS' if ok else 'FAIL'}  full snapshot budget ({mode})")
+                if not ok:
+                    failures.append(f"full snapshot budget not enforced in {mode}")
+        finally:
+            lib.acs_runtime_free(growth_runtime)
 
         # A malformed envelope must fail closed in the host namespace.
         err = ctypes.c_char_p()
