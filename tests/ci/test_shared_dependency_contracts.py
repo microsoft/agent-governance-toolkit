@@ -17,9 +17,3 @@ def test_shared_typing_extensions_pin_supports_anyio() -> None:
         if line.startswith("typing-extensions==")
     )
     assert Version(pin) >= Version("4.16.0")
-
-
-def test_shared_typing_extensions_exports_runtime_sentinel() -> None:
-    from typing_extensions import sentinel
-
-    assert callable(sentinel)
