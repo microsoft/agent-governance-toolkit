@@ -40,18 +40,18 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "uuid": "14.0.1",
+    "uuid": "14.0.2",
     "winston": "3.19.0",
     "yaml": "2.9.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@types/node": "26.1.2",
+    "@types/node": "26.2.0",
     "@types/uuid": "11.0.0",
-    "@typescript-eslint/eslint-plugin": "8.62.0",
-    "@typescript-eslint/parser": "8.63.0",
+    "@typescript-eslint/eslint-plugin": "8.67.0",
+    "@typescript-eslint/parser": "8.67.0",
     "@vitest/coverage-v8": "4.1.10",
-    "eslint": "10.8.0",
+    "eslint": "10.9.1",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   },

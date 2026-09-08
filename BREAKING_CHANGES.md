@@ -5,6 +5,64 @@ entries appear first.
 
 ---
 
+## `TrustMiddleware` requires signed requests and an explicit trust anchor
+
+**Date:** TBD
+
+**Affected**
+
+- `agentmesh.integrations.TrustMiddleware` and the Flask/FastAPI decorators
+  `flask_trust_required` / `fastapi_trust_required`
+- any client that authenticated by sending only an `X-Agent-DID` header
+
+**What changed**
+
+`TrustMiddleware` treated a caller-supplied `X-Agent-DID` header as proof of
+identity: `verify_request` started from a trust score of `1.0` and only lowered
+it inside an `except` branch that could never run, because
+`AgentIdentity.verify_signature` returns a `bool` and never raises. Any caller
+who set the header was verified with full trust, and `X-Agent-Capabilities` was
+honoured as self-asserted authorization.
+
+Callers now prove possession of a registered Ed25519 key over a canonical
+envelope binding DID, audience, timestamp, nonce, method, undecoded request
+target, target mode, covered request headers, and body digest, with single-use
+nonce replay protection. Verification keys and capabilities come only from a
+peer resolver, never from headers — `did:mesh` identifiers are random rather
+than key-derived, so a DID is not self-certifying and a presented public key can
+never authenticate anyone.
+
+**How to update**
+
+Servers:
+
+| Before | After |
+|--------|-------|
+| `TrustMiddleware(identity)` | `TrustMiddleware.from_registry(registry, TrustConfig(audience=...))`; `audience`, `peer_resolver` and `replay_cache` are required and raise `ValueError` when missing |
+| `verify_request(headers)` | Pass `method`, `request_target` and `body`; omitting them fails closed with `500` |
+| `TrustConfig(permissive_mode=True)` | Also set `required_trust_score=0.0` and remove `required_capabilities` |
+| Anonymous callers reached `*_trust_required` | Use `flask_trust_optional` / `fastapi_trust_optional` and branch on `result.authenticated` |
+| `err["reason"]` on a `401` | Removed from the client-visible body; read `result.reason` server-side |
+| `VerificationResult` was mutable | Now frozen, and gained `authenticated` |
+| `TrustConfig` was mutable | Now frozen; assigning a field after construction raises `FrozenInstanceError` |
+| `TrustConfig(required_capabilities="admin")` | Rejected with `ValueError`; pass a sequence such as `("admin",)`. A bare string was silently expanded into five single-character capabilities |
+| A raising `peer_resolver` yielded `401` | Now `503`. A registry outage is a server fault, not a credential failure |
+| Custom `replay_cache` returned `False` when full | Must now raise `ReplayCacheFull`, which yields `503`. `False` still means "nonce already used" and yields `401` |
+| FastAPI body limit | Build the dependency with `install_fastapi_trust(app, middleware)`, which installs the pre-routing `SignedBodyLimitMiddleware` guard and binds the dependency to it. The dependency alone runs after FastAPI has buffered the body, and now fails closed with `500` if the guard is absent |
+| The signed target was the percent-decoded path | It is now the undecoded target, read from `RAW_URI`/`REQUEST_URI`/`scope["raw_path"]`. Servers that publish none of these fail with `500` until you set `request_target_mode="decoded"` (or `AGENTMESH_REQUEST_TARGET_MODE`). Django's `runserver` and `RequestFactory` are in this group; gunicorn, uWSGI and mod_wsgi are not |
+| `build_request_signature_payload(..., content_type=...)` | Pass `target_mode=` and `signed_headers=` instead. Covered headers are chosen by the server via `TrustConfig.signed_header_names` (default `("content-type",)`), and an absent header is omitted rather than signed as `""` |
+| Verification had no time bound | `TrustConfig.io_timeout_seconds` (default `5.0`) budgets the whole verification. Resolvers and replay caches that declare a `timeout_seconds` parameter receive the remaining budget; exhaustion denies with `503` before the nonce is consumed |
+| Django exempt views saw `request.agent_did` | Exempt views and exempt path prefixes verify nothing and now set `agent_did=None`, `agent_trust_score=None`, `agent_authenticated=False`. Check `request.agent_authenticated` first |
+
+Clients must sign each request; `build_request_signature_payload` in
+`agent-governance-python/agent-mesh/src/agentmesh/integrations/request_auth.py`
+builds the canonical envelope and is the authority on its contents.
+
+Both sides must be upgraded together: an unpatched client cannot authenticate
+against a patched server, by design.
+
+---
+
 ## `HostSession.post_tool_call` and `pre_model_call` emit the adapter snapshot shape
 
 **Date:** TBD

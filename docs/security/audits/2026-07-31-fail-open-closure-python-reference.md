@@ -1,3 +1,9 @@
+---
+title: "Security Audit: Fail-open closure in the Python accumulated-context reference (agent-os)"
+last_reviewed: 2026-07-31
+owner: agt-maintainers
+---
+
 # 2026-07-31 - Fail-open closure in the Python accumulated-context reference (agent-os)
 
 PR: microsoft/agent-governance-toolkit#3524

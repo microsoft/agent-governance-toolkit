@@ -22,7 +22,7 @@ pydantic==2.10.3
 # aiocache>=0.12.0
 
 # Cryptography
-cryptography==48.0.1  # CVE fix: subgroup attack on SECT curves
+cryptography==50.0.0  # PKCS7/DER hardening; see docs/dependency-audits/2026-08-07-cryptography-50-cloud-board.md
 pynacl==1.6.2
 
 # Observability
