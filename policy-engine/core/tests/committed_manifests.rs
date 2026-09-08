@@ -61,9 +61,13 @@ fn collect_manifests(dir: &Path, found: &mut Vec<PathBuf>) {
 
 #[test]
 fn every_committed_manifest_parses() {
-    let root = policy_engine_root();
+    let engine_root = policy_engine_root();
+    let root = engine_root
+        .parent()
+        .expect("policy-engine lives at the repository root");
     let mut manifests = Vec::new();
-    collect_manifests(&root, &mut manifests);
+    collect_manifests(&engine_root, &mut manifests);
+    collect_manifests(&root.join("examples"), &mut manifests);
     manifests.sort();
 
     assert!(
@@ -76,7 +80,7 @@ fn every_committed_manifest_parses() {
     for path in &manifests {
         let source = fs::read_to_string(path).expect("manifest readable");
         if let Err(error) = validate_manifest_overlay_yaml(&source) {
-            let shown = path.strip_prefix(&root).unwrap_or(path);
+            let shown = path.strip_prefix(root).unwrap_or(path);
             failures.push(format!("{}: {error}", shown.display()));
         }
     }

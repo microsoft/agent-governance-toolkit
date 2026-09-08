@@ -651,7 +651,7 @@ stages:
               publishLocation: 'pipeline'
             displayName: 'Publish complete ACS Python distribution'
 
-  # All PyPI packages publish in parallel after build completes.
+  # Publish prerequisites before consumers; unrelated packages stay parallel.
   - stage: Publish_PyPI
     displayName: 'Publish All Packages to PyPI'
     dependsOn: Build_PyPI
@@ -660,6 +660,16 @@ stages:
       - ${{ each pkg in parameters.pypiPackages }}:
         - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
           displayName: 'Publish ${{ pkg.name }} to PyPI'
+          dependsOn:
+            - ${{ each prerequisite in parameters.pypiPackages }}:
+              - ${{ if and(eq(prerequisite.name, 'agent-control-specification'), or(eq(pkg.name, 'agt-policies'), eq(pkg.name, 'acs-generator'))) }}:
+                - Publish_PyPI_${{ replace(prerequisite.name, '-', '_') }}
+              - ${{ if and(eq(prerequisite.name, 'agt-policies'), eq(pkg.name, 'agent-governance-toolkit-core')) }}:
+                - Publish_PyPI_${{ replace(prerequisite.name, '-', '_') }}
+              - ${{ if and(eq(prerequisite.name, 'agent-governance-toolkit-core'), or(eq(pkg.name, 'agent-governance-toolkit-cli'), eq(pkg.name, 'agent-governance-toolkit-integrations'), eq(pkg.name, 'agent-governance-toolkit-protocols'))) }}:
+                - Publish_PyPI_${{ replace(prerequisite.name, '-', '_') }}
+              - ${{ if and(eq(prerequisite.name, 'agent-governance-toolkit-cli'), eq(pkg.name, 'agt-sandbox')) }}:
+                - Publish_PyPI_${{ replace(prerequisite.name, '-', '_') }}
           steps:
             - task: DownloadPipelineArtifact@2
               inputs:

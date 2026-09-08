@@ -2,6 +2,10 @@
 
 cd $SRC/agent-governance-toolkit
 
+pip3 install maturin==1.8.7  # Scorecard: version-pinned
+pip3 install --no-build-isolation ./policy-engine/sdk/python
+pip3 install ./agent-governance-python/agt-policies
+
 # Install the governance packages (paths updated after mono-repo reorg).
 # Fail loudly if any install fails — silently building fuzzers without
 # their target packages produces fuzzers that exercise none of the code

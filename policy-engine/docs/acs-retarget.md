@@ -223,6 +223,12 @@ next repository-wide version bump, after publishing the policy dependencies.
 CI builds these dependencies from this checkout rather than requiring an
 unpublished release from PyPI.
 
+ESRP's PyPI jobs wait for prerequisites selected in the same run before
+publishing consumers. If a prerequisite is omitted, it must already be
+published. GitHub publication accepts one Python package per manual publish
+run, in the same dependency order. Bulk GitHub dry-runs still build all
+artifacts, but actual bulk PyPI publication must use the ordered ESRP pipeline.
+
 The .NET package family moves to 0.4.0-beta.0. ESRP builds
 `agent_control_specification` with `opa,bundled-dispatchers` for all five RIDs,
 matching the local MSBuild target. Package the complete native asset matrix

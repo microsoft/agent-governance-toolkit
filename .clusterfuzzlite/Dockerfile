@@ -3,4 +3,7 @@ FROM gcr.io/oss-fuzz-base/base-builder-python@sha256:9e7e09e8e63d9cc9646306d8642
 COPY . $SRC/agent-governance-toolkit
 WORKDIR $SRC/agent-governance-toolkit
 
+RUN bash scripts/ci/install_pinned_rust.sh
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 COPY .clusterfuzzlite/build.sh $SRC/build.sh

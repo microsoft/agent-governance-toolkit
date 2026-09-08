@@ -811,13 +811,10 @@ jobs:
           # the latest published wheels.
           pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-core"
           pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-integrations"
+          pip install --no-cache-dir -e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"
           # All agentmesh-integrations packages declare a [dev] extra (audited
           # 2026-05). Deterministic install — no error-swallowing fallback.
           pip install --no-cache-dir -e ".[dev]"
-          # `.[dev]` resolves agt-policies from PyPI. Reinstall the local
-          # checkout afterwards so the integrations test against this commit's
-          # ACS policy API rather than the last published wheel.
-          pip install --no-cache-dir --no-deps --force-reinstall -e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"
           CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
           if [ -f "$CI_TEST_REQS" ]; then
             # Hash-pinned shared test deps. Previously swallowed errors with

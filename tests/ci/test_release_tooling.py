@@ -9,6 +9,7 @@ import subprocess
 import json
 from pathlib import Path
 import sys
+import os
 import tomllib
 import xml.etree.ElementTree as ET
 
@@ -184,6 +185,64 @@ def test_python_ci_resolves_unpublished_policy_dependencies_locally() -> None:
         step.get("name") == "Install local policy dependencies"
         for step in jobs["security"]["steps"]
     )
+    integration_install = next(
+        step["run"] for step in jobs["test-integrations"]["steps"]
+        if step.get("name") == "Install ${{ matrix.package }}"
+    )
+    assert integration_install.index(
+        '-e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"'
+    ) < integration_install.index('-e ".[dev]"')
+
+
+def test_esrp_pypi_publication_waits_for_policy_prerequisites() -> None:
+    import yaml
+
+    pipeline = yaml.safe_load(ESRP_PIPELINE.read_text(encoding="utf-8"))
+    stage = next(stage for stage in pipeline["stages"] if stage["stage"] == "Publish_PyPI")
+    job = next(iter(stage["jobs"][0].values()))[0]
+    prerequisites = next(iter(job["dependsOn"][0].values()))
+    conditions = "\n".join(next(iter(condition)) for condition in prerequisites)
+    assert "eq(prerequisite.name, 'agent-control-specification')" in conditions
+    assert "eq(pkg.name, 'agt-policies')" in conditions
+    assert "eq(pkg.name, 'acs-generator')" in conditions
+    assert "and(eq(prerequisite.name, 'agt-policies'), eq(pkg.name, 'agent-governance-toolkit-core'))" in conditions
+    assert all(
+        next(iter(condition.values())) == [
+            "Publish_PyPI_${{ replace(prerequisite.name, '-', '_') }}"
+        ]
+        for condition in prerequisites
+    )
+    assert "waitforreleasecompletion: true" in ESRP_PIPELINE.read_text(encoding="utf-8")
+
+
+def test_github_publish_keeps_bulk_dry_runs_but_rejects_parallel_uploads(tmp_path: Path) -> None:
+    import yaml
+
+    workflow = yaml.safe_load(PUBLISH.read_text(encoding="utf-8"))
+    step = workflow["jobs"]["resolve-python-matrix"]["steps"][0]
+    assert step["env"]["DRY_RUN"] == "${{ github.event.inputs.dry_run }}"
+    script = step["run"]
+    for package, dry_run, expected in [
+        ("all-python", "true", 0),
+        ("all-python", "false", 1),
+        ("agt-policies", "false", 0),
+    ]:
+        result = subprocess.run(
+            ["bash", "-e", "-c", script],
+            env={
+                **os.environ,
+                "INPUT": package,
+                "EVENT_NAME": "workflow_dispatch",
+                "DRY_RUN": dry_run,
+                "GITHUB_OUTPUT": str(tmp_path / "output"),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == expected, result.stderr
+        if expected:
+            assert "ordered ESRP pipeline" in result.stdout
 
 
 def test_dotnet_host_packages_share_the_breaking_release_version() -> None:
