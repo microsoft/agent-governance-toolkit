@@ -3,7 +3,10 @@
 cd $SRC/agent-governance-toolkit
 
 pip3 install maturin==1.8.7  # Scorecard: version-pinned
-pip3 install --no-build-isolation ./policy-engine/sdk/python
+# Python fuzzing uses x86_64. An explicit target keeps sanitizer flags off
+# host procedural macros while instrumenting the native SDK.
+CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu \
+    pip3 install --no-build-isolation ./policy-engine/sdk/python
 pip3 install ./agent-governance-python/agt-policies
 
 # Install the governance packages (paths updated after mono-repo reorg).

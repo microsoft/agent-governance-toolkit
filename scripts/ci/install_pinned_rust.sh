@@ -5,8 +5,16 @@
 set -euo pipefail
 
 RUSTUP_VERSION="1.27.1"
-RUST_TOOLCHAIN="1.89.0"
+RUST_TOOLCHAIN="${2:-1.89.0}"
 RUST_TARGET="${1:-}"
+
+case "$RUST_TOOLCHAIN" in
+  1.89.0 | nightly-2025-08-07) ;;
+  *)
+    echo "unsupported pinned Rust toolchain: $RUST_TOOLCHAIN" >&2
+    exit 2
+    ;;
+esac
 
 case "$RUST_TARGET" in
   "" | x86_64-unknown-linux-gnu | x86_64-apple-darwin | aarch64-apple-darwin | x86_64-pc-windows-msvc) ;;

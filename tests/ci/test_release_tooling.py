@@ -476,7 +476,8 @@ def test_acs_python_wheel_smoke_rejects_non_wheel(tmp_path: Path) -> None:
 def test_pinned_rust_installer_covers_release_hosts() -> None:
     text = PINNED_RUST_INSTALLER.read_text(encoding="utf-8")
     assert 'RUSTUP_VERSION="1.27.1"' in text
-    assert 'RUST_TOOLCHAIN="1.89.0"' in text
+    assert 'RUST_TOOLCHAIN="${2:-1.89.0}"' in text
+    assert "1.89.0 | nightly-2025-08-07" in text
     assert "6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d" in text
     assert "f547d77c32d50d82b8228899b936bf2b3c72ce0a70fb3b364e7fba8891eba781" in text
     assert "760b18611021deee1a859c345d17200e0087d47f68dfe58278c57abe3a0d3dd0" in text
@@ -504,15 +505,35 @@ def test_pinned_rust_installer_supports_legacy_curl_and_propagates_download_fail
         encoding="utf-8",
     )
     curl.chmod(0o755)
-    result = subprocess.run(
-        ["bash", str(PINNED_RUST_INSTALLER)],
-        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 7, result.stderr
-    assert "download unavailable" in result.stderr
+    for toolchain, expected in [
+        (None, 7), ("nightly-2025-08-07", 7), ("nightly", 2), ("stable", 2),
+    ]:
+        command = ["bash", str(PINNED_RUST_INSTALLER)]
+        if toolchain is not None:
+            command.extend(["", toolchain])
+        result = subprocess.run(
+            command,
+            env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == expected, result.stderr
+        if expected == 7:
+            assert "download unavailable" in result.stderr
+        else:
+            assert "unsupported pinned Rust toolchain" in result.stderr
+
+
+def test_fuzz_builder_preserves_sanitizer_and_coverage_tooling() -> None:
+    dockerfile = (REPO_ROOT / ".clusterfuzzlite/Dockerfile").read_text(encoding="utf-8")
+    assert 'install_pinned_rust.sh "" nightly-2025-08-07' in dockerfile
+    assert "ln -s /root/.cargo/bin/cargo /rust/bin/cargo" in dockerfile
+    assert 'ENV PATH="${PATH}:/root/.cargo/bin"' in dockerfile
+    build_script = (REPO_ROOT / ".clusterfuzzlite/build.sh").read_text(encoding="utf-8")
+    assert "CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu" in build_script
+    assert "unset RUSTFLAGS" not in build_script
+    assert 'RUSTFLAGS=""' not in build_script
 
 
 def test_acs_python_distribution_verifier_rejects_extra_artifact(
