@@ -37,16 +37,16 @@ dev = [
     "pytest-asyncio>=1.4.0,<2.0",
     "pytest-cov>=7.1.0,<8.0",
     "mypy>=2.3.0,<3.0",
-    "ruff>=0.16.1,<1.0",
+    "ruff>=0.16.2,<1.0",
     "import-linter>=2.0,<3.0",
     "pyyaml>=6.0.3,<7.0",
     "typer>=0.9.0,<1.0",
     "rich>=15.0.0,<16.0",
-    "numpy>=1.20.0,<3.0",
+    "numpy>=2.4.6,<3.0",
     "httpx>=0.28.1,<1.0",
     "fastapi>=0.141.1,<1.0",
     "uvicorn>=0.52.1,<1.0",
-    "anyio>=4.12.1,<5.0",
+    "anyio>=4.14.2,<5.0",
     "aiohttp>=3.13.4,<4.0",
     "structlog>=26.1.0,<27.0",
     "redis>=4.0.0,<8.0",
@@ -59,7 +59,7 @@ dev = [
 # `agent_os.prompt_injection_embedding`. Never required: the module is inert
 # unless explicitly enabled, and an embedder can be injected instead.
 embedding = [
-    "fastembed>=0.3.0,<1.0",
+    "fastembed>=0.8.0,<1.0",
 ]
 
 [project.urls]

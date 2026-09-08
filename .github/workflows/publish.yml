@@ -62,6 +62,8 @@ jobs:
     outputs:
       matrix: ${{ steps.resolve.outputs.matrix }}
       any: ${{ steps.resolve.outputs.any }}
+      build_any: ${{ steps.resolve.outputs.build_any }}
+      acs: ${{ steps.resolve.outputs.acs }}
     steps:
       - name: Resolve Python package matrix
         id: resolve
@@ -118,33 +120,235 @@ jobs:
           # into the program text, so quote characters in the input
           # cannot break out of the string and execute attacker-
           # controlled jq.
+          SELECTED='[]'
           if [ "$EVENT_NAME" = "release" ] || [ "$INPUT" = "all" ] || [ "$INPUT" = "all-python" ]; then
-            echo "matrix={\"include\":$ALL}" >> "$GITHUB_OUTPUT"
-            echo "any=true" >> "$GITHUB_OUTPUT"
+            SELECTED="$ALL"
           elif [ -n "$INPUT" ] && [ "$INPUT" != "agent-governance-dotnet" ]; then
             FILTERED=$(echo "$ALL" | jq -c --arg name "$INPUT" '[.[] | select(.name == $name)]')
             if [ "$FILTERED" = "[]" ]; then
               if echo "$NPM_INPUTS" | jq -e --arg name "$INPUT" 'index($name)' >/dev/null; then
-                echo "any=false" >> "$GITHUB_OUTPUT"
+                :
               else
                 echo "::error::Unknown package '$INPUT'. Run with 'all' to see available packages."
-                echo "any=false" >> "$GITHUB_OUTPUT"
               fi
             else
-              echo "matrix={\"include\":$FILTERED}" >> "$GITHUB_OUTPUT"
-              echo "any=true" >> "$GITHUB_OUTPUT"
+              SELECTED="$FILTERED"
             fi
-          else
-            echo "any=false" >> "$GITHUB_OUTPUT"
           fi
 
-  build-python:
+          GENERIC=$(echo "$SELECTED" | jq -c '[.[] | select(.name != "agent-control-specification")]')
+          SELECTED_COUNT=$(echo "$SELECTED" | jq 'length')
+          GENERIC_COUNT=$(echo "$GENERIC" | jq 'length')
+          ACS_COUNT=$(echo "$SELECTED" | jq '[.[] | select(.name == "agent-control-specification")] | length')
+          any=$([ "$SELECTED_COUNT" -gt 0 ] && echo true || echo false)
+          build_any=$([ "$GENERIC_COUNT" -gt 0 ] && echo true || echo false)
+          acs=$([ "$ACS_COUNT" -eq 1 ] && echo true || echo false)
+          echo "matrix={\"include\":$GENERIC}" >> "$GITHUB_OUTPUT"
+          echo "any=$any" >> "$GITHUB_OUTPUT"
+          echo "build_any=$build_any" >> "$GITHUB_OUTPUT"
+          echo "acs=$acs" >> "$GITHUB_OUTPUT"
+
+  acs-python-wheels:
     needs: resolve-python-matrix
-    if: needs.resolve-python-matrix.outputs.any == 'true'
+    if: needs.resolve-python-matrix.outputs.acs == 'true'
+    name: ACS Python wheel (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, platform: linux-x86_64, target: x86_64-unknown-linux-gnu, builder: manylinux, wheel: "*manylinux_2_28_x86_64.whl", macos_target: "" }
+          - { os: ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-gnu, builder: manylinux, wheel: "*manylinux_2_28_aarch64.whl", macos_target: "" }
+          - { os: macos-15-intel, platform: macos-x86_64, target: x86_64-apple-darwin, builder: native, wheel: "*macosx_10_12_x86_64.whl", macos_target: "10.12" }
+          - { os: macos-15, platform: macos-arm64, target: aarch64-apple-darwin, builder: native, wheel: "*macosx_11_0_arm64.whl", macos_target: "11.0" }
+          - { os: windows-2022, platform: windows-x86_64, target: x86_64-pc-windows-msvc, builder: native, wheel: "*win_amd64.whl", macos_target: "" }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install pinned Rust toolchain
+        if: matrix.builder == 'native'
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.89.0"
+      - name: Install hashed build tools
+        if: matrix.builder == 'native'
+        shell: bash
+        run: |
+          python -m pip install --no-cache-dir --disable-pip-version-check \
+            --require-hashes --no-deps \
+            -r .github/release-tools/release-tools.txt
+      - name: Build manylinux wheel
+        if: matrix.builder == 'manylinux'
+        shell: bash
+        run: bash scripts/ci/build_acs_python_wheel.sh "$GITHUB_WORKSPACE" "${{ matrix.platform }}" false
+      - name: Build native wheel
+        if: matrix.builder == 'native'
+        shell: bash
+        working-directory: policy-engine/sdk/python
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos_target }}
+        run: |
+          rm -rf dist
+          python -m maturin build \
+            --release \
+            --locked \
+            --target "${{ matrix.target }}" \
+            --out dist \
+            --manifest-path Cargo.toml
+      - name: Verify wheel tag and load native extension
+        shell: bash
+        env:
+          EXPECTED_WHEEL: ${{ matrix.wheel }}
+        run: |
+          shopt -s nullglob
+          wheels=(policy-engine/sdk/python/dist/*.whl)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            echo "::error::expected one ACS wheel, found ${#wheels[@]}"
+            exit 1
+          fi
+          # EXPECTED_WHEEL is a deliberate glob (e.g. *macosx_10_12_x86_64.whl).
+          # shellcheck disable=SC2254
+          case "$(basename "${wheels[0]}")" in
+            $EXPECTED_WHEEL) ;;
+            *) echo "::error::unexpected ACS wheel tag: $(basename "${wheels[0]}")"; exit 1 ;;
+          esac
+          python scripts/ci/smoke_acs_python_wheel.py "${wheels[0]}"
+      - name: Attest wheel build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: policy-engine/sdk/python/dist/*.whl
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acs-python-wheel-${{ matrix.platform }}
+          path: policy-engine/sdk/python/dist/*.whl
+          if-no-files-found: error
+          retention-days: 30
+
+  acs-python-sdist:
+    needs: resolve-python-matrix
+    if: needs.resolve-python-matrix.outputs.acs == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.89.0"
+      - name: Install hashed build tools
+        run: |
+          python -m pip install --no-cache-dir --disable-pip-version-check \
+            --require-hashes --no-deps \
+            -r .github/release-tools/release-tools.txt
+      - name: Build source distribution
+        working-directory: policy-engine/sdk/python
+        run: |
+          rm -rf dist
+          cargo fetch --locked --manifest-path Cargo.toml
+          python -m maturin sdist --out dist --manifest-path Cargo.toml
+      - name: Build and smoke test a wheel from the source distribution
+        shell: bash
+        working-directory: policy-engine/sdk/python
+        run: |
+          shopt -s nullglob
+          sdists=(dist/*.tar.gz)
+          if [ "${#sdists[@]}" -ne 1 ]; then
+            echo "::error::expected one ACS source distribution, found ${#sdists[@]}"
+            exit 1
+          fi
+          sdist_listing="$(tar -tzf "${sdists[0]}")"
+          grep -Eq '/core/src/lib.rs$' <<<"$sdist_listing"
+          sdist_cargo_toml="$(tar --wildcards -xOf "${sdists[0]}" '*/sdk/python/Cargo.toml')"
+          grep -Fq 'path = "../../core"' <<<"$sdist_cargo_toml"
+          rm -rf sdist-wheel
+          CARGO_NET_OFFLINE=true python -m pip wheel \
+            --disable-pip-version-check \
+            --no-deps \
+            --no-build-isolation \
+            --wheel-dir sdist-wheel \
+            "${sdists[0]}"
+          wheels=(sdist-wheel/*.whl)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            echo "::error::expected one wheel from the ACS sdist, found ${#wheels[@]}"
+            exit 1
+          fi
+          python "$GITHUB_WORKSPACE/scripts/ci/smoke_acs_python_wheel.py" "${wheels[0]}"
+      - name: Attest source distribution build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: policy-engine/sdk/python/dist/*.tar.gz
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acs-python-sdist
+          path: policy-engine/sdk/python/dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-acs-python:
+    needs: [resolve-python-matrix, acs-python-wheels, acs-python-sdist]
+    if: needs.resolve-python-matrix.outputs.acs == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      contents: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: acs-python-*
+          path: dist
+          merge-multiple: true
+      - name: Verify complete ACS Python distribution
+        run: |
+          python scripts/ci/verify_acs_python_dist.py dist \
+            --pyproject policy-engine/sdk/python/pyproject.toml
+      - name: Sign release artifacts with sigstore
+        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
+        with:
+          inputs: dist/*
+          release-signing-artifacts: false
+      - name: Prepare PyPI upload artifacts
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'
+        run: |
+          rm -rf pypi-upload
+          mkdir -p pypi-upload
+          cp dist/*.whl dist/*.tar.gz pypi-upload/
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pypi-agent-control-specification
+          path: dist/
+          retention-days: 30
+      - name: Publish to PyPI
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: pypi-upload/
+          skip-existing: true
+
+  build-python:
+    needs: resolve-python-matrix
+    if: needs.resolve-python-matrix.outputs.build_any == 'true'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
       id-token: write
       attestations: write
     strategy:
@@ -174,9 +378,7 @@ jobs:
         env:
           BUILD_NO_ISOLATION: ${{ matrix.noBuildIsolation || 'false' }}
         run: |
-          if [[ "${{ matrix.name }}" == "agent-control-specification" ]]; then
-            bash "$GITHUB_WORKSPACE/scripts/ci/build_acs_python_wheel.sh" "$GITHUB_WORKSPACE"
-          elif [[ "$BUILD_NO_ISOLATION" == "true" ]]; then
+          if [[ "$BUILD_NO_ISOLATION" == "true" ]]; then
             python -m build --no-isolation
           elif [[ "${{ matrix.name }}" == agent-governance-toolkit-* ]]; then
             python -m build --wheel
@@ -202,7 +404,7 @@ jobs:
           release-signing-artifacts: false
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ matrix.path }}/dist/*
 
@@ -325,7 +527,7 @@ jobs:
           ls -la tgz-output/
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ matrix.path }}/tgz-output/*.tgz
 
@@ -405,12 +607,12 @@ jobs:
           done
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: agent-governance-dotnet/nupkg/*.nupkg
 
       - name: Attest symbol package provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: agent-governance-dotnet/nupkg/*.snupkg
         continue-on-error: true

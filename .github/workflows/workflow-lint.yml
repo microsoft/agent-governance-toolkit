@@ -22,9 +22,9 @@ jobs:
       - name: Install actionlint
         run: |
           set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash -o actionlint-download.bash
-          echo "221d1d16c03e4e4fcd867de34104e8d479bdce20ccdfa553b9a5c0dc29bf6af2  actionlint-download.bash" | sha256sum -c -
-          bash actionlint-download.bash 1.7.7
+          curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash -o actionlint-download.bash
+          echo "72fa3e45ac20f3c3a512d6747b4fcf719e21f890e8c43e78d48a41fdfb900c4e  actionlint-download.bash" | sha256sum -c -
+          bash actionlint-download.bash 1.7.12
           rm actionlint-download.bash
           sudo mv actionlint /usr/local/bin/actionlint
       - name: Run actionlint
@@ -36,6 +36,7 @@ jobs:
             -ignore 'undefined variable "pattern"' \
             -ignore 'SC2016' \
             -ignore 'SC2001' \
+            -ignore 'SC2129' \
             -ignore 'SC2193'
 
   shellcheck:

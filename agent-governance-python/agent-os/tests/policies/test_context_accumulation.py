@@ -90,7 +90,7 @@ def test_floor_gated_decision_reports_newly_triggered_restrictions():
 
 
 def test_obligations_keep_envelope_restrictions_and_add_new_ones():
-    # evaluate_aggregation seeds from env.restrictions before unioning rule
+    # evaluate_aggregation seeds from env.restrictions before combining rule
     # restrictions, so reading obligations off the aggregation result is a
     # superset -- an existing restriction is never dropped.
     e = _env({"pii", "financial"}, sens=DC.CONFIDENTIAL, restrictions=frozenset({"no_print"}))
