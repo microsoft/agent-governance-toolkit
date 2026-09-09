@@ -1,6 +1,7 @@
-"""Counterfactual impact engine."""
 import logging
 import uuid
+import ast
+import operator
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
@@ -10,10 +11,107 @@ from .models.impact import ImpactReport, TransitionCounts, BlastRadius
 
 logger = logging.getLogger(__name__)
 
+# Safe operators for policy evaluation
+SAFE_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.Lt: operator.lt,
+    ast.LtE: operator.le,
+    ast.Gt: operator.gt,
+    ast.GtE: operator.ge,
+    ast.Eq: operator.eq,
+    ast.NotEq: operator.ne,
+    ast.And: operator.and_,
+    ast.Or: operator.or_,
+    ast.Not: operator.not_,
+    ast.USub: operator.neg,
+    ast.In: lambda x, y: x in y,
+    ast.NotIn: lambda x, y: x not in y,
+    ast.Is: lambda x, y: x is y,
+    ast.IsNot: lambda x, y: x is not y,
+}
+
+
+class SafeEvaluator:
+    """Safe evaluation of policy conditions without using eval()."""
+
+    def __init__(self, namespace: Dict[str, Any]):
+        self.namespace = namespace
+
+    def evaluate(self, expr: str) -> bool:
+        """Safely evaluate a condition expression."""
+        try:
+            tree = ast.parse(expr, mode='eval')
+            return self._visit(tree.body)
+        except Exception as e:
+            logger.warning(f"Failed to evaluate condition '{expr}': {e}")
+            return False
+
+    def _visit(self, node):
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.Name):
+            if node.id in self.namespace:
+                return self.namespace[node.id]
+            raise NameError(f"Name '{node.id}' not found")
+        elif isinstance(node, ast.Attribute):
+            obj = self._visit(node.value)
+            return getattr(obj, node.attr)
+        elif isinstance(node, ast.Subscript):
+            obj = self._visit(node.value)
+            idx = self._visit(node.slice)
+            return obj[idx]
+        elif isinstance(node, ast.Call):
+            func = self._visit(node.func)
+            args = [self._visit(arg) for arg in node.args]
+            kwargs = {kw.arg: self._visit(kw.value) for kw in node.keywords}
+            return func(*args, **kwargs)
+        elif isinstance(node, ast.BinOp):
+            left = self._visit(node.left)
+            right = self._visit(node.right)
+            op_type = type(node.op)
+            if op_type in SAFE_OPERATORS:
+                return SAFE_OPERATORS[op_type](left, right)
+            raise TypeError(f"Unsupported operator: {op_type}")
+        elif isinstance(node, ast.Compare):
+            left = self._visit(node.left)
+            for op, comp in zip(node.ops, node.comparators):
+                right = self._visit(comp)
+                op_type = type(op)
+                if op_type in SAFE_OPERATORS:
+                    result = SAFE_OPERATORS[op_type](left, right)
+                    if not result:
+                        return False
+                    left = right
+                else:
+                    raise TypeError(f"Unsupported operator: {op_type}")
+            return True
+        elif isinstance(node, ast.BoolOp):
+            values = [self._visit(v) for v in node.values]
+            if isinstance(node.op, ast.And):
+                return all(values)
+            elif isinstance(node.op, ast.Or):
+                return any(values)
+        elif isinstance(node, ast.UnaryOp):
+            operand = self._visit(node.operand)
+            if isinstance(node.op, ast.Not):
+                return not operand
+            elif isinstance(node.op, ast.USub):
+                return -operand
+            raise TypeError(f"Unsupported unary operator: {type(node.op)}")
+        elif isinstance(node, ast.Lambda):
+            def lambda_func(*args):
+                return self._visit(node.body)
+            return lambda_func
+        raise TypeError(f"Unsupported AST node type: {type(node)}")
+
 
 class ImpactEngine:
-    """Replays historical traces against proposed governance changes."""
-
     def __init__(self, traces: List[TraceBatch]):
         self.traces = traces
 
@@ -24,52 +122,61 @@ class ImpactEngine:
         authority: Dict[str, Any],
         context: Dict[str, Any],
     ) -> GovernanceState:
-        """Evaluate a single decision against a governance state."""
-        # Extract model_version from context or decision field
         model_version = decision.context.get("model_version", "") or decision.model_version or ""
+
+        # Fail closed: missing model data is NOT approved
         if not model_version:
-            logger.warning(f"Decision {decision.action.id} has empty model_version; treating as approved.")
+            logger.warning(f"Decision {decision.action.id} has empty model_version; marking inadmissible.")
+            model_approved = False
+        else:
+            model_approved = (
+                model_version.startswith("approved_")
+                or model_version in ("v1", "v2")
+            )
+
+        # Evidence freshness: fail if stale
+        max_age = context.get("max_evidence_age_hours", 1.0)  # default 1 hour
+        evidence_fresh = decision.evidence_age_hours <= max_age
 
         state = GovernanceState(
             policy_version=policy.get("version", "unknown"),
             policy_valid=True,
             authority_valid=True,
             authority_chain=decision.authority_chain,
-            evidence_fresh=decision.evidence_age_hours <= context.get("max_evidence_age_hours", 24),
+            evidence_fresh=evidence_fresh,
             evidence_age_hours=decision.evidence_age_hours,
             capability_authorized=True,
             tool_permissions=decision.tool_permissions_at_time,
-            model_approved=(
-                model_version.startswith("approved_")
-                or model_version in ("v1", "v2")
-                or not model_version
-            ),
+            model_approved=model_approved,
             model_version=model_version,
             context_valid=True,
             is_admissible=True,
         )
 
-        # 1. Policy check
+        # Fail closed on stale evidence
+        if not evidence_fresh:
+            state.mark_inadmissible(f"Evidence is stale ({decision.evidence_age_hours:.1f}h > {max_age:.1f}h threshold)")
+
+        # Policy check
         if not self._evaluate_policy(policy, decision):
             state.mark_inadmissible(f"Policy {state.policy_version} denies this action")
 
-        # 2. Authority check
-        if not self._check_authority(authority, decision.authority_chain, decision.action.name):
+        # Authority check
+        if not self._check_authority(authority, decision.authority_chain, decision.action.name, decision.timestamp):
             state.mark_inadmissible("Authority chain invalid or expired")
 
-        # 3. Capability check
+        # Capability check
         if not self._check_capability(authority, decision.action.tool, decision.tool_permissions_at_time):
             state.mark_inadmissible(
                 f"Tool {decision.action.tool} permissions exceed authorized capabilities"
             )
 
-        # 4. Model approval
-        if not state.model_approved:
-            state.mark_inadmissible(f"Model version {model_version} not approved")
+        # Model check (already computed)
+        if not model_approved:
+            state.mark_inadmissible(f"Model version '{model_version}' not approved")
 
         logger.debug(
-            f"Decision {decision.action.id}: model_version='{model_version}', "
-            f"approved={state.model_approved}, admissible={state.is_admissible}, reason={state.reason}"
+            f"Decision {decision.action.id}: admissible={state.is_admissible}, reason={state.reason}"
         )
         return state
 
@@ -77,47 +184,45 @@ class ImpactEngine:
         rules = policy.get("rules", [])
         default_effect = policy.get("default_effect", "DENY")
 
-        if not hasattr(self, "_policy_logged"):
-            logger.info(f"Policy rules: {rules}")
-            logger.info(f"Default effect: {default_effect}")
-            self._policy_logged = True
+        # Build safe namespace
+        namespace = {
+            "context": decision.context,
+            "action": decision.action,
+            "agent_id": str(decision.agent_id),
+            "timestamp": decision.timestamp,
+            "str": str,
+            "int": int,
+            "float": float,
+            "bool": bool,
+            "len": len,
+            "list": list,
+            "dict": dict,
+        }
 
         for rule in sorted(rules, key=lambda r: r.get("priority", 0), reverse=True):
             condition = rule.get("condition", "")
             effect = rule.get("effect", "DENY")
-            if self._evaluate_condition(condition, decision):
-                logger.debug(f"Rule matched: {condition} -> {effect}")
-                return effect == "ALLOW"
+            if condition:
+                evaluator = SafeEvaluator(namespace)
+                if evaluator.evaluate(condition):
+                    logger.debug(f"Rule matched: {condition} -> {effect}")
+                    return effect == "ALLOW"
 
         logger.debug(f"No rule matched, default: {default_effect}")
         return default_effect == "ALLOW"
 
-    def _evaluate_condition(self, condition: str, decision: DecisionTrace) -> bool:
-        if not condition:
-            return True
-        try:
-            namespace = {
-                "action": decision.action,
-                "context": decision.context,
-                "agent_id": str(decision.agent_id),
-                "timestamp": decision.timestamp,
-            }
-            builtins = {"True": True, "False": False, "None": None}
-            result = bool(eval(condition, {"__builtins__": builtins}, namespace))
-            logger.debug(f"Condition '{condition}' evaluated to {result}")
-            return result
-        except Exception as e:
-            logger.warning(f"Condition evaluation failed: {condition} -> {e}")
-            return False
-
-    def _check_authority(self, authority: Dict[str, Any], chain: List[str], action_name: str) -> bool:
+    def _check_authority(self, authority: Dict[str, Any], chain: List[str], action_name: str, timestamp: datetime) -> bool:
         delegations = authority.get("delegations", [])
-        now = datetime.now(timezone.utc)
+        now = timestamp
         for del_id in chain:
             for d in delegations:
                 if d.get("id", "") == del_id and action_name in d.get("permissions", []):
                     valid_from = d.get("valid_from", now)
                     valid_until = d.get("valid_until", now)
+                    if isinstance(valid_from, str):
+                        valid_from = datetime.fromisoformat(valid_from.replace('Z', '+00:00'))
+                    if isinstance(valid_until, str):
+                        valid_until = datetime.fromisoformat(valid_until.replace('Z', '+00:00'))
                     if valid_from <= now <= valid_until:
                         return True
         return False

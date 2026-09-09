@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-"""CLI for DecisionAssure Impact."""
 import sys
 import json
 import logging
@@ -44,6 +42,11 @@ def cli():
     help="Path to proposed policy YAML.",
 )
 @click.option(
+    "--authority",
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to authority YAML (optional).",
+)
+@click.option(
     "--output-json",
     type=click.Path(dir_okay=False),
     help="Export report to JSON file.",
@@ -53,41 +56,61 @@ def cli():
     is_flag=True,
     help="Enable verbose logging.",
 )
-def impact(traces, policy_current, policy_proposed, output_json, verbose):
+def impact(traces, policy_current, policy_proposed, authority, output_json, verbose):
     """Run counterfactual impact analysis."""
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
 
-    click.echo(f"Loading traces from {traces}...")
-    trace_list = load_traces(traces)
-    click.echo(f"Loaded {len(trace_list)} traces.")
+    # Fail closed: validate inputs
+    try:
+        click.echo(f"Loading traces from {traces}...")
+        trace_list = load_traces(traces)
+        if not trace_list:
+            click.echo("❌ No traces loaded. Failing closed.", err=True)
+            sys.exit(2)
 
-    with open(policy_current, "r") as f:
-        curr_policy = yaml.safe_load(f)
-    with open(policy_proposed, "r") as f:
-        prop_policy = yaml.safe_load(f)
+        click.echo(f"Loaded {len(trace_list)} traces.")
+    except Exception as e:
+        click.echo(f"❌ Failed to load traces: {e}", err=True)
+        sys.exit(2)
 
-    # ========== FIX: Add valid delegation ==========
-    now = datetime.now(timezone.utc)
-    authority = {
-        "delegations": [
-            {
-                "id": "delegation_123",
-                "grantor": "admin",
-                "grantee": "agent",
-                "permissions": ["refund", "payment", "credit_decision", "aml_check"],
-                "valid_from": now - timedelta(days=1),
-                "valid_until": now + timedelta(days=365),
-            }
-        ],
-        "global_tool_capabilities": {"payment-api": ["read", "write"]},
-    }
-    # ==============================================
+    try:
+        with open(policy_current, "r") as f:
+            curr_policy = yaml.safe_load(f)
+        with open(policy_proposed, "r") as f:
+            prop_policy = yaml.safe_load(f)
+    except Exception as e:
+        click.echo(f"❌ Failed to load policy: {e}", err=True)
+        sys.exit(2)
+
+    # Load authority from file or use default
+    if authority:
+        try:
+            with open(authority, "r") as f:
+                authority_data = yaml.safe_load(f)
+        except Exception as e:
+            click.echo(f"❌ Failed to load authority: {e}", err=True)
+            sys.exit(2)
+    else:
+        now = datetime.now(timezone.utc)
+        authority_data = {
+            "delegations": [
+                {
+                    "id": "delegation_123",
+                    "grantor": "admin",
+                    "grantee": "agent",
+                    "permissions": ["refund", "payment", "credit_decision", "aml_check"],
+                    "valid_from": (now - timedelta(days=1)).isoformat(),
+                    "valid_until": (now + timedelta(days=365)).isoformat(),
+                }
+            ],
+            "global_tool_capabilities": {"payment-api": ["read", "write"]},
+        }
 
     engine = ImpactEngine(trace_list)
-    report = engine.analyze_impact(curr_policy, authority, prop_policy, authority)
+    report = engine.analyze_impact(curr_policy, authority_data, prop_policy, authority_data)
 
     print_report(report)
 
@@ -143,7 +166,6 @@ def detect_drift(traces, policy_current, drift_threshold):
 
 
 def load_traces(filepath: str) -> List[TraceBatch]:
-    """Load traces from JSONL file."""
     traces = []
     with open(filepath, "r") as f:
         for line in f:
@@ -163,7 +185,6 @@ def load_traces(filepath: str) -> List[TraceBatch]:
                         version=action_data.get("version", ""),
                         transaction_amount=action_data.get("transaction_amount"),
                     )
-                    # Extract model_version from context or decision-level field
                     model_version = d.get("context", {}).get("model_version", "") or d.get("model_version", "")
                     decision = DecisionTrace(
                         action=action,
@@ -194,7 +215,6 @@ def load_traces(filepath: str) -> List[TraceBatch]:
 
 
 def print_report(report: ImpactReport):
-    """Pretty-print the impact report."""
     print("\n" + "=" * 80)
     print("  DECISIONASSURE IMPACT REPORT")
     print("=" * 80)
