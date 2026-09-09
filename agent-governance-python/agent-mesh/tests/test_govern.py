@@ -3,6 +3,7 @@
 """Tests for the govern() high-level wrapper."""
 
 import os
+import secrets
 import pytest
 from agentmesh.governance.govern import (
     govern,
@@ -10,6 +11,7 @@ from agentmesh.governance.govern import (
     GovernanceConfig,
     GovernanceDenied,
 )
+from agentmesh.governance.audit_backends import FileAuditSink
 from agentmesh.governance.policy import Policy
 
 
@@ -400,3 +402,84 @@ rules:
         assert _infer_resource_type("write_file") == ResourceType.FILESYSTEM
         assert _infer_resource_type("read_only_query") == ResourceType.TOOL_EXECUTION
 
+
+# ── govern() + audit_file (file-based audit persistence) ────────────
+
+
+class TestGovernWithAuditFile:
+    """govern(..., audit_file=) - audit_file was a documented
+    GovernanceConfig field ("Path for file-based audit log. None =
+    in-memory only.") that GovernedCallable.__init__ never actually read:
+    it always built AuditLog() with no sink, so entries never left memory
+    no matter what the caller configured, and the top-level govern()
+    factory did not even expose the parameter to pass through."""
+
+    def test_default_is_in_memory_only(self):
+        """Unaffected default behaviour: no audit_file, no file written."""
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY)
+        safe(action="read")
+        assert safe.audit_log is not None
+        assert len(safe.audit_log.get_entries_by_type("policy_evaluation")) == 1
+
+    def test_audit_file_persists_entries(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        safe(action="read")
+        safe(action="write")
+
+        assert path.exists()
+        sink = FileAuditSink(path, secret_key=b"irrelevant-for-reading")
+        entries = sink.read_entries()
+        assert len(entries) == 2
+        assert entries[0].action == "read"
+        assert entries[1].action == "write"
+        assert entries[1].outcome == "allow"
+
+    def test_audit_file_chain_and_signature_verify(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        for _ in range(3):
+            safe(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_audit_file_appends_across_instances(self, tmp_path):
+        """The whole point of file-based persistence: a second govern()
+        instance pointed at the same path resumes the chain instead of
+        overwriting it."""
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        second(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_auto_generated_key_still_produces_a_readable_file(self, tmp_path):
+        """No audit_secret_key supplied: entries are still written and
+        readable, even though a caller who needs signatures to verify
+        across restarts must supply their own persistent key."""
+        path = tmp_path / "audit.jsonl"
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        safe(action="read")
+
+        sink = FileAuditSink(path, secret_key=b"a-different-key-than-was-used")
+        assert len(sink.read_entries()) == 1
+        # Signatures won't verify against a key that wasn't the one used to
+        # sign them - expected, not a bug in this test.
+        is_valid, _ = sink.verify_integrity()
+        assert not is_valid

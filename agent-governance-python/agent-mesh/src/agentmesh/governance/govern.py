@@ -22,12 +22,14 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from .policy import Policy, PolicyDecision, PolicyEngine
 from .audit import AuditLog
+from .audit_backends import FileAuditSink
 from .trace_sink import TraceConfig, TRACEAuditSink
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .advisory import AdvisoryCheck, AdvisoryDecision
@@ -103,6 +105,13 @@ class GovernanceConfig:
         agent_id: Agent identifier for policy evaluation. Defaults to "*".
         audit: Whether to enable audit logging. Defaults to True.
         audit_file: Path for file-based audit log. None = in-memory only.
+            Entries are hash-chained and HMAC-signed (see FileAuditSink).
+        audit_secret_key: HMAC signing key for audit_file. Auto-generated
+            per instance when audit_file is set and this is left None -
+            set it explicitly if entry signatures need to stay verifiable
+            across process restarts (a fresh random key can still append
+            to and read an existing chain, it just won't verify old
+            signatures against the new key).
         on_deny: Callback when a policy denies an action. Default: raise.
         conflict_strategy: Policy conflict resolution strategy.
         ring: Optional execution ring for the agent. When set, ring-level
@@ -116,6 +125,7 @@ class GovernanceConfig:
     agent_id: str = "*"
     audit: bool = True
     audit_file: Optional[str] = None
+    audit_secret_key: Optional[bytes] = None
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None
     approval_handler: Optional[ApprovalHandler] = None
     advisory: Optional[AdvisoryCheck] = None
@@ -159,7 +169,19 @@ class GovernedCallable:
         self._fn = fn
         self._config = config
         self._engine = PolicyEngine(conflict_strategy=config.conflict_strategy)
-        self._audit = AuditLog() if config.audit else None
+        # audit_file was previously a documented no-op: this constructor
+        # always built a bare AuditLog() with no sink, so entries never
+        # left memory regardless of what the caller configured. A missing
+        # secret_key is generated per instance rather than left for
+        # FileAuditSink to reject, since audit_file's whole point is
+        # persistence and a caller who only wants that (not cross-restart
+        # signature verification) shouldn't have to also manage a key.
+        audit_sink = None
+        if config.audit and config.audit_file:
+            audit_sink = FileAuditSink(
+                config.audit_file, config.audit_secret_key or secrets.token_bytes(32)
+            )
+        self._audit = AuditLog(sink=audit_sink) if config.audit else None
 
         # Load policy
         policy = config.policy
@@ -667,6 +689,8 @@ def govern(
     policy: Union[str, Policy],
     agent_id: str = "*",
     audit: bool = True,
+    audit_file: Optional[str] = None,
+    audit_secret_key: Optional[bytes] = None,
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None,
     approval_handler: Optional[ApprovalHandler] = None,
     advisory: Optional[AdvisoryCheck] = None,
@@ -687,6 +711,13 @@ def govern(
             string, or a ``Policy`` object.
         agent_id: Agent identifier for policy evaluation. Default ``"*"``.
         audit: Enable audit logging. Default ``True``.
+        audit_file: Optional path to also persist audit entries as a
+            hash-chained, HMAC-signed JSON-lines file (see
+            ``FileAuditSink``). ``None`` (default) keeps entries in
+            memory only, lost on process exit.
+        audit_secret_key: HMAC key for ``audit_file``. Auto-generated per
+            instance when omitted; set explicitly if signatures need to
+            verify across process restarts.
         on_deny: Optional callback on denial. Default: raise
             ``GovernanceDenied``.
         conflict_strategy: Conflict resolution strategy. Default
@@ -709,6 +740,8 @@ def govern(
         policy=policy,
         agent_id=agent_id,
         audit=audit,
+        audit_file=audit_file,
+        audit_secret_key=audit_secret_key,
         on_deny=on_deny,
         approval_handler=approval_handler,
         advisory=advisory,
