@@ -928,6 +928,7 @@ An auth check result MUST contain:
 | --- | --- | --- |
 | `default_allowed_methods` | `["oauth2", "mtls", "bearer"]` | Must be subset of VALID_AUTH_METHODS |
 | `deny_none` | `true` | When true, `none` is always rejected |
+| `default_require_tls` | `true` | Applies the same TLS-scheme gate as a registered `McpServerEntry` to servers with no allowlist entry; set `false` to keep the pre-fix behavior for a deployment that depends on it |
 
 **[Default Implementation]**
 
@@ -946,7 +947,10 @@ The `check(server_name, auth_method, url="")` method MUST evaluate:
 5. **TLS version check:** If the URL uses TLS, verify the minimum
    TLS version requirement is met.
 6. **Default check:** If no per-server entry exists, check against
-   `default_allowed_methods`.
+   `default_allowed_methods`. If `default_require_tls` is true and a
+   URL is supplied, apply the same TLS-scheme gate as step 4 before
+   allowing; an omitted/empty URL is not gated, matching step 4's
+   behavior for that case.
 
 **[Pure Specification]**
 
@@ -962,6 +966,7 @@ mcp_auth_policy:
     - oauth2
     - mtls
     - bearer
+  default_require_tls: true  # set false only for a deployment that needs the pre-fix behavior
   servers:
     - name: "example-server"
       url: "https://mcp.example.com"

@@ -148,3 +148,20 @@ mcp_auth_policy:
     def test_empty_yaml(self):
         policy = McpAuthPolicy.from_yaml("")
         assert policy.check("s", auth_method="oauth2").allowed
+
+    def test_yaml_default_require_tls_defaults_true(self):
+        policy = McpAuthPolicy.from_yaml("""
+mcp_auth_policy:
+  default_allowed_methods: [oauth2]
+""")
+        result = policy.check("unregistered", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert not result.allowed
+
+    def test_yaml_default_require_tls_false_disables_the_floor(self):
+        policy = McpAuthPolicy.from_yaml("""
+mcp_auth_policy:
+  default_allowed_methods: [oauth2]
+  default_require_tls: false
+""")
+        result = policy.check("legacy-server", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert result.allowed
