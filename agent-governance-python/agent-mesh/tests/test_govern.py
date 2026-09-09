@@ -400,3 +400,99 @@ rules:
         assert _infer_resource_type("write_file") == ResourceType.FILESYSTEM
         assert _infer_resource_type("read_only_query") == ResourceType.TOOL_EXECUTION
 
+
+
+# ── govern() + Rego (rego_path/rego_content) ────────────────────────
+
+import shutil
+
+requires_opa = pytest.mark.skipif(
+    not shutil.which("opa"), reason="opa CLI not installed"
+)
+
+# A relational rule ("does the caller's attribute match the resource's
+# attribute") the YAML DSL's regex matcher cannot express - see the
+# rego_path/rego_content docstring on govern(). Rego handles it natively.
+RELATIONAL_REGO = """
+package agentmesh
+
+default allow = false
+
+allow {
+    input.caller_role.value == "auditor"
+}
+
+allow {
+    input.caller_mission.value == input.doc_mission.value
+}
+"""
+
+# default_action must be deny so the YAML engine's "no rule matched" result
+# (which is what happens for a relational condition it can't parse) falls
+# through to Rego, rather than silently allowing everything itself.
+DENY_ALL_YAML = """
+apiVersion: governance.toolkit/v1
+name: deny-all-defer-to-rego
+default_action: deny
+rules: []
+"""
+
+
+def read_doc(doc_id: str, doc_mission: str, caller_mission: str, caller_role: str):
+    """Stand-in for a resource-scoped tool: real access control depends on
+    matching the caller's attribute against the resource's own attribute,
+    not a value the caller supplies about itself in isolation."""
+    return {"doc_id": doc_id, "mission": doc_mission}
+
+
+@requires_opa
+class TestGovernWithRego:
+    """govern(..., rego_path=/rego_content=) - see #3911: BackendRegistry/
+    OPAPolicyBackend exist but govern() never consults them, so there was
+    no way to combine YAML with Rego through the public govern() API even
+    though PolicyEngine.load_rego() already supports it internally."""
+
+    def test_relational_rule_allows_matching_mission(self):
+        safe = govern(read_doc, policy=DENY_ALL_YAML, rego_content=RELATIONAL_REGO)
+        result = safe(doc_id="COMP-042", doc_mission="ARIEL", caller_mission="ARIEL", caller_role="engineer")
+        assert result["doc_id"] == "COMP-042"
+
+    def test_relational_rule_denies_mismatched_mission(self):
+        """The exact case a literal-only YAML policy gets wrong: nothing
+        stops a caller from claiming any mission for itself, so a
+        same-mission check needs to compare against the resource's own
+        attribute - which only the Rego path can express."""
+        safe = govern(read_doc, policy=DENY_ALL_YAML, rego_content=RELATIONAL_REGO)
+        with pytest.raises(GovernanceDenied):
+            safe(doc_id="COMP-099", doc_mission="JUICE", caller_mission="ARIEL", caller_role="engineer")
+
+    def test_relational_rule_role_override(self):
+        safe = govern(read_doc, policy=DENY_ALL_YAML, rego_content=RELATIONAL_REGO)
+        result = safe(doc_id="COMP-099", doc_mission="JUICE", caller_mission="ARIEL", caller_role="auditor")
+        assert result["doc_id"] == "COMP-099"
+
+    def test_yaml_rule_still_takes_precedence_over_rego(self):
+        """A matching YAML rule should still win - Rego is a fallback, not
+        a replacement (matches PolicyEngine.load_rego's documented
+        semantics, exercised end-to-end here through govern() itself)."""
+        yaml_denies_engineer = """
+apiVersion: governance.toolkit/v1
+name: block-engineer
+default_action: allow
+rules:
+  - name: block-engineer-role
+    condition: "caller_role.value == 'engineer'"
+    action: deny
+"""
+        safe = govern(read_doc, policy=yaml_denies_engineer, rego_content=RELATIONAL_REGO)
+        # Rego alone would allow this (same mission), but the YAML rule
+        # denies any "engineer" caller outright and is checked first.
+        with pytest.raises(GovernanceDenied):
+            safe(doc_id="COMP-042", doc_mission="ARIEL", caller_mission="ARIEL", caller_role="engineer")
+
+    def test_no_rego_configured_is_unaffected(self):
+        """Governing without rego_path/rego_content behaves exactly as
+        before - this is an additive, opt-in parameter."""
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY)
+        result = safe(action="read")
+        assert result["status"] == "executed"

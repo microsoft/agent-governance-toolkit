@@ -136,6 +136,18 @@ class GovernanceConfig:
     # expiry) instead of the legacy handler. Requires a coordinator + chain.
     approval_transport: Optional[ApprovalTransport] = None
     trace: Optional[TraceConfig] = None
+    # Optional Rego policy loaded alongside the YAML/JSON one (see
+    # PolicyEngine.load_rego): YAML rules are checked first, and if none
+    # matches, the Rego policy is consulted. Needed for conditions the YAML
+    # DSL's regex-based matcher cannot express - it supports only
+    # field-vs-literal comparisons (==, !=, in [...], numeric >/</>=/<=,
+    # bare boolean truthiness), not field-vs-field ones, so a rule like
+    # "does the caller's attribute match the resource's attribute" silently
+    # never matches under the YAML engine (falls through to default_action)
+    # rather than raising a load-time error.
+    rego_path: Optional[str] = None
+    rego_content: Optional[str] = None
+    rego_package: str = "agentmesh"
 
 
 class GovernanceDenied(Exception):
@@ -181,6 +193,9 @@ class GovernedCallable:
                 f"policy must be a file path, YAML string, or Policy object, "
                 f"got {type(policy).__name__}"
             )
+
+        if config.rego_path or config.rego_content:
+            self._engine.load_rego(config.rego_path, config.rego_content, config.rego_package)
 
         # Hash of policy bundle bytes at load time — consumed by TRACEAuditSink (ADR-0032).
         self._policy_bundle_hash: str = (
@@ -678,6 +693,9 @@ def govern(
     approval_ttl_seconds: float = 300.0,
     approval_transport: Optional[ApprovalTransport] = None,
     trace: Optional[TraceConfig] = None,
+    rego_path: Optional[str] = None,
+    rego_content: Optional[str] = None,
+    rego_package: str = "agentmesh",
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
 
@@ -691,6 +709,21 @@ def govern(
             ``GovernanceDenied``.
         conflict_strategy: Conflict resolution strategy. Default
             ``"deny_overrides"`` (any deny wins).
+        rego_path: Optional path to a ``.rego`` policy file, loaded
+            alongside ``policy`` (see ``PolicyEngine.load_rego``). YAML
+            rules are checked first; if none matches, Rego is consulted.
+            Use this for conditions the YAML DSL can't express - it's a
+            regex-based matcher limited to field-vs-literal comparisons
+            (``==``, ``!=``, ``in [...]``, numeric ``>``/``<``/``>=``/``<=``,
+            bare boolean truthiness); it has no field-vs-field comparison,
+            so a rule like "does the caller's attribute match the
+            resource's attribute" silently never matches (falls through to
+            ``default_action``) rather than raising an error. Requires the
+            ``opa`` CLI on PATH for local evaluation.
+        rego_content: Inline Rego policy string, alternative to
+            ``rego_path``.
+        rego_package: Rego package name used to build the query path.
+            Default ``"agentmesh"``, matching ``PolicyEngine.load_rego``.
 
     Returns:
         A ``GovernedCallable`` that enforces policy before execution.
@@ -704,6 +737,16 @@ def govern(
 
         safe_send = govern(send_email, policy="email-policy.yaml")
         safe_send(to="user@example.com", body="Hello")  # policy-checked
+
+    Example with a relational rule the YAML DSL can't express::
+
+        # policy.rego:
+        #   package agentmesh
+        #   default allow := false
+        #   allow if input.caller_mission == input.doc_mission
+        safe_read = govern(
+            read_doc, policy="allow-all.yaml", rego_path="policy.rego",
+        )
     """
     config = GovernanceConfig(
         policy=policy,
@@ -720,5 +763,8 @@ def govern(
         approval_ttl_seconds=approval_ttl_seconds,
         approval_transport=approval_transport,
         trace=trace,
+        rego_path=rego_path,
+        rego_content=rego_content,
+        rego_package=rego_package,
     )
     return GovernedCallable(fn, config)
