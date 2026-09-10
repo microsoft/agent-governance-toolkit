@@ -118,8 +118,8 @@ class TestKillSwitch:
         assert len(history) == 1
         assert history is not ks._kill_history
 
-    def test_total_handoffs_always_zero(self):
-        """Public preview: handoffs not supported."""
+    def test_total_handoffs_zero_without_substitute(self):
+        """total_handoffs stays zero when no substitute is available."""
         ks = KillSwitch()
         ks.kill("a1", "s1", KillReason.MANUAL, in_flight_steps=[{"step_id": "s", "saga_id": "x"}])
         assert ks.total_handoffs == 0
