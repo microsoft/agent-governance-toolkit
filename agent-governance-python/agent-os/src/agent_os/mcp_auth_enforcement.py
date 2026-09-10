@@ -118,7 +118,8 @@ class McpAuthPolicy:
         Args:
             server_name: Name of the MCP server.
             auth_method: Authentication method being used.
-            url: Server URL (for logging/audit).
+            url: Server URL used for TLS enforcement. When omitted, the
+                configured server entry URL is used.
 
         Returns:
             AuthCheckResult indicating whether the connection is allowed.
@@ -152,9 +153,12 @@ class McpAuthPolicy:
                 # all bypassed the require_tls gate because none of
                 # them start with "http://" — only `https://` and
                 # `wss://` represent actual TLS-secured transports.
-                if entry.require_tls and url:
+                # The caller URL describes the connection being checked and
+                # therefore takes precedence over the configured fallback.
+                effective_url = url or entry.url
+                if entry.require_tls and effective_url:
                     try:
-                        scheme = urlparse(url).scheme.lower()
+                        scheme = urlparse(effective_url).scheme.lower()
                     except (ValueError, AttributeError):
                         scheme = ""
                     if scheme not in {"https", "wss"}:
