@@ -47,6 +47,7 @@ _TRUST_REQUIRED_ATTR = "_agentmesh_min_trust_score"
 #: Score awarded to a caller whose Ed25519 signature verified over the full
 #: envelope. Unauthenticated callers never reach a score comparison at all.
 _VERIFIED_TRUST_SCORE = 750
+_MEMCACHED_EXPIRY_ALLOWANCE_SECONDS = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,20 +146,21 @@ class AgentTrustMiddleware:
             raise ImproperlyConfigured(
                 "AGENTMESH_REPLAY_CACHE_ALIAS must name a shared Django cache backend"
             )
+        self._replay_cache_alias = cache_alias
         try:
-            self._replay_cache = caches[cache_alias]
+            replay_cache = self._replay_cache_for_request()
         except InvalidCacheBackendError as exc:
             raise ImproperlyConfigured(
                 f"AGENTMESH_REPLAY_CACHE_ALIAS references an invalid cache: {cache_alias}"
             ) from exc
-        if isinstance(self._replay_cache, LocMemCache):
+        if isinstance(replay_cache, LocMemCache):
             if _get_setting("AGENTMESH_ALLOW_LOCAL_REPLAY_CACHE", False) is not True:
                 raise ImproperlyConfigured(
                     "The local-memory cache cannot prevent replay across workers; configure a "
                     "shared AGENTMESH_REPLAY_CACHE_ALIAS or explicitly set "
                     "AGENTMESH_ALLOW_LOCAL_REPLAY_CACHE=True for development"
                 )
-        elif not isinstance(self._replay_cache, (RedisCache, BaseMemcachedCache)):
+        elif not isinstance(replay_cache, (RedisCache, BaseMemcachedCache)):
             raise ImproperlyConfigured(
                 "AGENTMESH_REPLAY_CACHE_ALIAS must use Django's RedisCache or a shared memcached "
                 "backend with atomic add() semantics"
@@ -191,6 +193,9 @@ class AgentTrustMiddleware:
     @staticmethod
     def _replay_window_seconds() -> int:
         return int(_get_setting("AGENTMESH_REPLAY_WINDOW_SECONDS", 300))
+
+    def _replay_cache_for_request(self) -> Any:
+        return caches[self._replay_cache_alias]
 
     @staticmethod
     def _max_signed_body_bytes() -> int:
@@ -469,7 +474,10 @@ class AgentTrustMiddleware:
 
         replay_cache_key = replay_key(agent_did, audience, nonce_bytes)
         try:
-            if not self._replay_cache.add(replay_cache_key, True, timeout=replay_timeout):
+            replay_cache = self._replay_cache_for_request()
+            if isinstance(replay_cache, BaseMemcachedCache):
+                replay_timeout += _MEMCACHED_EXPIRY_ALLOWANCE_SECONDS
+            if not replay_cache.add(replay_cache_key, True, timeout=replay_timeout):
                 logger.warning("Replay detected for agent %s", agent_did)
                 return TrustEvaluation.denied("Replayed or expired request")
         except Exception:
