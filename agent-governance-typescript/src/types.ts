@@ -260,6 +260,12 @@ export interface KillSwitchResult {
   action?: string;
   reason: string;
   killedAt: string;
+  /**
+   * True when at least one termination handler was registered and every handler
+   * completed. This does not independently confirm that an execution process stopped.
+   * A rejecting handler makes kill() reject; a handler that never settles prevents
+   * kill() from returning because handler timeouts are not implemented.
+   */
   terminated: boolean;
   callbacksExecuted: number;
   compensationsExecuted: number;
