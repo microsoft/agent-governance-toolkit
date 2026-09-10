@@ -81,6 +81,43 @@ test("evaluatePreToolUse denies dangerous bootstrap and reviews persistence writ
   await rm(root, { recursive: true, force: true });
 });
 
+test("evaluatePreToolUse denies recursive deletes but allows safe cleanup targets", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-claude-rm-"));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({
+    auditPath,
+    policyPath: join(root, "no-user-policy.json"),
+  });
+
+  const denyResult = await evaluatePreToolUse(state, {
+    tool_name: "Bash",
+    tool_input: {
+      command: "rm -rf src",
+    },
+    session_id: "rm-deny-session",
+    cwd: root,
+  });
+
+  assert.equal(denyResult.hookSpecificOutput.permissionDecision, "deny");
+  assert.match(
+    denyResult.hookSpecificOutput.permissionDecisionReason,
+    /recursive delete/i,
+  );
+
+  const cleanupResult = await evaluatePreToolUse(state, {
+    tool_name: "Bash",
+    tool_input: {
+      command: "rm -rf node_modules",
+    },
+    session_id: "rm-cleanup-session",
+    cwd: root,
+  });
+
+  assert.notEqual(cleanupResult.hookSpecificOutput.permissionDecision, "deny");
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("evaluatePreToolUse denies Windows-style secret reads", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-claude-windows-secret-"));
   const auditPath = join(root, "audit.json");
