@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 """Tests for OPA/Rego policy adapter and PolicyEngine integration."""
 
+import os
 import shutil
 
 import pytest
@@ -303,3 +304,116 @@ class TestEdgeCases:
         result = evaluator.evaluate("data.agentmesh.allow", {"agent": {"role": "admin"}})
         assert result.allowed is False
         assert result.error is not None
+
+
+# ── OPAEvaluator: rego_content materialization (no opa needed) ──────
+#
+# Pure file-handling behaviour, independent of whether opa itself is
+# installed: rego_content used to be rewritten to a fresh
+# NamedTemporaryFile(delete=False) on every evaluate() call and never
+# cleaned up, leaking one 0600 file per governed call for the life of the
+# process.
+
+
+class TestRegoContentMaterialization:
+    def test_same_path_reused_across_calls(self):
+        evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
+        first = evaluator._rego_file_for_cli()
+        second = evaluator._rego_file_for_cli()
+        assert first == second
+        assert os.path.isfile(first)
+        evaluator.close()
+
+    def test_close_removes_the_temp_file(self):
+        evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
+        path = evaluator._rego_file_for_cli()
+        assert os.path.isfile(path)
+        evaluator.close()
+        assert not os.path.exists(path)
+
+    def test_rego_path_is_used_directly_no_temp_file_created(self, tmp_path):
+        rego_file = tmp_path / "policy.rego"
+        rego_file.write_text(BASIC_REGO)
+        evaluator = OPAEvaluator(mode="local", rego_path=str(rego_file))
+        assert evaluator._rego_file_for_cli() == str(rego_file)
+        evaluator.close()
+        assert rego_file.exists()  # close() must not remove a caller-owned file
+
+
+# ── PolicyEngine.load_rego(): fail fast at construction ──────────────
+#
+# These don't need opa installed: a missing rego_path and a declared
+# package that doesn't match `package=` are caught before OPAEvaluator
+# (and therefore the opa CLI) ever enters the picture.
+
+
+class TestLoadRegoValidation:
+    def test_missing_source_raises(self):
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="rego_path or rego_content"):
+            engine.load_rego()
+
+    def test_missing_path_raises(self):
+        engine = PolicyEngine()
+        with pytest.raises(FileNotFoundError):
+            engine.load_rego(rego_path="/nonexistent/policy.rego")
+
+    def test_package_mismatch_raises(self):
+        """BASIC_REGO declares `package agentmesh`; asking for a different
+        package means data.<package>.allow could never resolve against it —
+        the exact silent-misconfiguration the review flagged."""
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="declares package 'agentmesh'"):
+            engine.load_rego(rego_content=BASIC_REGO, package="wrong_package")
+
+    def test_missing_opa_raises(self, monkeypatch):
+        """Deterministic regardless of whether opa happens to be installed
+        on the machine running this test."""
+        monkeypatch.setattr(shutil, "which", lambda _name: None)
+        engine = PolicyEngine()
+        with pytest.raises(RuntimeError, match="opa CLI not found"):
+            engine.load_rego(rego_content=BASIC_REGO, package="agentmesh")
+
+    @requires_opa
+    def test_matching_package_succeeds(self):
+        engine = PolicyEngine()
+        evaluator = engine.load_rego(rego_content=BASIC_REGO, package="agentmesh")
+        assert isinstance(evaluator, OPAEvaluator)
+
+    @requires_opa
+    def test_bad_syntax_raises_at_load_not_at_first_call(self):
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="failed to compile"):
+            engine.load_rego(rego_content="package agentmesh\n\nallow { {{{ not rego", package="agentmesh")
+
+
+# ── PolicyEngine.evaluate(): a Rego evaluator error must deny ───────
+#
+# A stub evaluator lets this run without opa: it exercises PolicyEngine's
+# own branch (opa_result.error is not None -> deny), not OPAEvaluator's
+# subprocess plumbing.
+
+
+class _ErroringEvaluator:
+    def evaluate(self, query, input_data):
+        return OPADecision(allowed=True, query=query, source="local", error="opa eval timed out")
+
+
+class TestRegoErrorFailsClosed:
+    def test_evaluator_error_denies_rather_than_falling_through_to_default_allow(self):
+        engine = PolicyEngine()
+        allow_all_yaml = """
+apiVersion: governance.toolkit/v1
+name: allow-all
+default_action: allow
+rules: []
+"""
+        engine.load_yaml(allow_all_yaml)
+        engine._rego_evaluators.append(("agentmesh", _ErroringEvaluator()))
+
+        decision = engine.evaluate("did:mesh:any", {"action": {"type": "read"}})
+
+        # Before the fix this fell through past the broken evaluator to the
+        # allow-all YAML default and executed with no record of the error.
+        assert decision.allowed is False
+        assert "opa eval timed out" in decision.reason

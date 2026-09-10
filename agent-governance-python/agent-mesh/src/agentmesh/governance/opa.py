@@ -35,8 +35,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import shutil
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -105,6 +107,51 @@ class OPAEvaluator:
 
         # Check if opa CLI is available for local mode
         self._opa_available = shutil.which("opa") is not None
+        # rego_content has no filesystem path of its own but `opa eval` only
+        # reads files; materialized lazily, once, and reused for the life of
+        # this evaluator instead of once per evaluate() call.
+        self._materialized_rego_path: Optional[str] = None
+
+    @property
+    def opa_available(self) -> bool:
+        """Whether the ``opa`` CLI was found on PATH at construction time."""
+        return self._opa_available
+
+    def _rego_file_for_cli(self) -> Optional[str]:
+        """Return the file `opa eval` should read the rego source from.
+
+        rego_path is returned as-is. rego_content is written to a private
+        temp file the first time it is needed and reused after that: the
+        previous implementation wrote a fresh ``NamedTemporaryFile(delete=
+        False)`` on every evaluate() call and never removed it, leaking one
+        0600 file per governed call for the life of the process.
+        """
+        if self.rego_path:
+            return self.rego_path
+        if self.rego_content is None:
+            return None
+        if self._materialized_rego_path is None:
+            fd, path = tempfile.mkstemp(suffix=".rego")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write(self.rego_content)
+            except Exception:
+                os.close(fd)
+                raise
+            self._materialized_rego_path = path
+        return self._materialized_rego_path
+
+    def close(self) -> None:
+        """Remove the temp file backing rego_content, if one was created."""
+        if self._materialized_rego_path is not None:
+            try:
+                os.remove(self._materialized_rego_path)
+            except OSError:
+                pass
+            self._materialized_rego_path = None
+
+    def __del__(self) -> None:
+        self.close()
 
     def evaluate(self, query: str, input_data: dict) -> OPADecision:
         """
@@ -223,16 +270,7 @@ class OPAEvaluator:
         input_json = json.dumps(input_data)
 
         cmd = ["opa", "eval", "--format", "json", "--v0-compatible", "--input", "/dev/stdin", "--data"]
-
-        if self.rego_path:
-            cmd.append(self.rego_path)
-        else:
-            # Write rego content to temp file
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".rego", delete=False) as f:
-                f.write(self.rego_content)
-                cmd.append(f.name)
-
+        cmd.append(self._rego_file_for_cli())
         cmd.append(query)
 
         try:
@@ -253,8 +291,14 @@ class OPAEvaluator:
                 )
 
             result = json.loads(proc.stdout)
-            # OPA eval output: {"result": [{"expressions": [{"value": true}]}]}
-            expressions = result.get("result", [{}])[0].get("expressions", [{}])
+            # OPA eval output: {"result": [{"expressions": [{"value": true}]}]}.
+            # An empty "result" list means the query resolved to no value —
+            # e.g. the query package doesn't match this file's `package`
+            # declaration — which is undefined, not a Rego error: opa eval
+            # still exits 0. Treat it as a definite deny rather than
+            # indexing into the empty list.
+            results = result.get("result") or []
+            expressions = results[0].get("expressions", [{}]) if results else []
             value = expressions[0].get("value", False) if expressions else False
             allowed = bool(value) if isinstance(value, (bool, int)) else value is not None
 
