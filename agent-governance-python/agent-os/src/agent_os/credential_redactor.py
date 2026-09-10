@@ -57,6 +57,9 @@ class CredentialRedactor:
     # word character, so ``_sk-`` has no boundary and the secret would be missed;
     # ``(?<![A-Za-z0-9])`` treats ``_`` (and ``-``, ``/``, ``.``, whitespace) as a
     # valid left edge while still not matching inside an alphanumeric word.
+    # Matching patterns use the mirrored ``(?![A-Za-z0-9])`` assertion at their
+    # right edge when a value class excludes ``_``. This preserves suffixes such
+    # as ``_old`` without rejecting the complete secret before them.
     PATTERNS: tuple[CredentialPattern, ...] = (
         CredentialPattern(
             name="OpenAI API key",
@@ -70,7 +73,7 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="AWS access key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             # The 40-char base64 secret value has no distinctive prefix, so it is
@@ -120,7 +123,8 @@ class CredentialRedactor:
         CredentialPattern(
             name="Basic auth secret",
             pattern=re.compile(
-                r"(?i)(?:\bBasic\s+[A-Za-z0-9+/=]{8,}\b|\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@)"
+                r"(?i)(?:(?<![A-Za-z0-9])Basic\s+[A-Za-z0-9+/=]{8,}(?![A-Za-z0-9+/=])|"
+                r"(?<![A-Za-z0-9])[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@)"
             ),
         ),
         CredentialPattern(
@@ -139,11 +143,13 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="Google API key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             name="Stripe secret key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}\b"),
+            pattern=re.compile(
+                r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}(?![A-Za-z0-9])"
+            ),
         ),
         CredentialPattern(
             name="Generic API secret",
