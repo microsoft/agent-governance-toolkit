@@ -1,0 +1,36 @@
+apiVersion: governance.toolkit/v1
+name: agent-sandbox-command-policy
+description: >
+  Governs commands dispatched from an agent's driving script to a
+  kubernetes-sigs/agent-sandbox pod's execution API. Evaluated in the
+  agent's own process, before the command ever reaches the pod — this
+  complements (does not replace) the sandbox's NetworkPolicy/pod
+  isolation, which is the last line of defense if a command does get
+  through.
+# Fail closed: any action.type not explicitly allowed below is denied,
+# including types _classify_command() doesn't yet know how to detect.
+default_action: deny
+
+rules:
+  - name: block-destructive-commands
+    condition: "action.type == 'destructive'"
+    action: deny
+    description: >
+      Commands classified as destructive (rm -rf, mkfs, dd, disk wipes,
+      fork bombs, pipe-to-shell installers) are blocked before dispatch.
+
+  - name: block-credential-exfil
+    condition: "action.type == 'credential_exfil'"
+    action: deny
+    description: >
+      Commands that read AWS/K8s credential material and forward it
+      externally (curl/wget/nc combined with env var expansion of
+      AWS_* or KUBECONFIG) are blocked before dispatch.
+
+  - name: allow-shell-exec
+    condition: "action.type == 'shell_exec'"
+    action: allow
+    description: >
+      Commands that didn't match any higher-risk classification are
+      explicitly allowed. This is the only allow rule — anything else
+      falls through to default_action: deny.
