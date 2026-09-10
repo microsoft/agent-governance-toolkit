@@ -137,6 +137,35 @@ test("evaluateOpenCodeToolOutput redacts known secret patterns in enforce mode",
   await rm(root, { recursive: true, force: true });
 });
 
+test("evaluateOpenCodeToolOutput redacts known secret patterns in advisory mode", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-advisory-redact-"));
+  const policyPath = join(root, "policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      version: 1,
+      mode: "advisory",
+      toolPolicies: { allowedTools: ["*"] },
+    }),
+    "utf8",
+  );
+  const state = await loadPolicy({ policyPath, auditPath: join(root, "audit.json") });
+
+  const token = "ghp_" + "c".repeat(40);
+  const result = await evaluateOpenCodeToolOutput(state, {
+    tool: "bash",
+    output: `Here is your token: ${token}`,
+    sessionId: "advisory-redact-session",
+  });
+
+  assert.equal(result.redact, true);
+  assert.match(result.redactedOutput, /AGT_REDACTED:github-token/);
+  assert.doesNotMatch(result.redactedOutput, /ghp_c{40}/);
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("evaluateOpenCodeToolOutput is a no-op for clean output", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-clean-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });
