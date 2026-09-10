@@ -414,6 +414,14 @@ class TestGovernWithAuditFile:
     no matter what the caller configured, and the top-level govern()
     factory did not even expose the parameter to pass through."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_registry(self):
+        from agentmesh.governance.govern import _reset_shared_audit_sinks
+
+        _reset_shared_audit_sinks()
+        yield
+        _reset_shared_audit_sinks()
+
     def test_default_is_in_memory_only(self):
         """Unaffected default behaviour: no audit_file, no file written."""
         safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY)
@@ -421,9 +429,31 @@ class TestGovernWithAuditFile:
         assert safe.audit_log is not None
         assert len(safe.audit_log.get_entries_by_type("policy_evaluation")) == 1
 
+    def test_audit_file_without_key_or_env_var_raises(self, tmp_path):
+        """No audit_secret_key and no AGT_AUDIT_SECRET_KEY: refuse rather
+        than mint a random key nothing could ever verify against."""
+        path = tmp_path / "audit.jsonl"
+        with pytest.raises(ValueError, match="audit_secret_key"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+
+    def test_audit_file_key_from_env_var(self, tmp_path, monkeypatch):
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", key.hex())
+
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        safe(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
     def test_audit_file_persists_entries(self, tmp_path):
         path = tmp_path / "audit.jsonl"
-        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=secrets.token_bytes(32),
+        )
         safe(action="read")
         safe(action="write")
 
@@ -469,17 +499,97 @@ class TestGovernWithAuditFile:
         is_valid, error = sink.verify_integrity()
         assert is_valid, error
 
-    def test_auto_generated_key_still_produces_a_readable_file(self, tmp_path):
-        """No audit_secret_key supplied: entries are still written and
-        readable, even though a caller who needs signatures to verify
-        across restarts must supply their own persistent key."""
+    def test_second_instance_omitting_key_reuses_first_instances_sink(self, tmp_path):
+        """A second govern() call on the same path with no key of its own
+        shares the first call's sink rather than failing or minting a
+        fresh key that would desync the chain."""
         path = tmp_path / "audit.jsonl"
-        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        second = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        second(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_second_instance_with_mismatched_key_raises(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        first_key = secrets.token_bytes(32)
+        govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=first_key,
+        )
+
+        with pytest.raises(ValueError, match="already open with a different"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+                audit_secret_key=secrets.token_bytes(32),
+            )
+
+    def test_two_instances_same_path_different_relative_spelling_share_one_sink(
+        self, tmp_path, monkeypatch,
+    ):
+        """The registry key is the resolved path, not the string a caller
+        happened to pass — "./audit.jsonl" and its absolute form must
+        still land on the same sink."""
+        monkeypatch.chdir(tmp_path)
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file="audit.jsonl",
+            audit_secret_key=key,
+        )
+        first(action="read")
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY,
+            audit_file=str((tmp_path / "audit.jsonl").resolve()),
+            audit_secret_key=key,
+        )
+        second(action="read")
+
+        sink = FileAuditSink(tmp_path / "audit.jsonl", secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
+    def test_audit_file_created_with_restrictive_permissions(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=secrets.token_bytes(32),
+        )
         safe(action="read")
 
-        sink = FileAuditSink(path, secret_key=b"a-different-key-than-was-used")
-        assert len(sink.read_entries()) == 1
-        # Signatures won't verify against a key that wasn't the one used to
-        # sign them - expected, not a bug in this test.
-        is_valid, _ = sink.verify_integrity()
-        assert not is_valid
+        assert (path.stat().st_mode & 0o777) == 0o600
+
+    def test_corrupt_trailing_line_does_not_block_future_appends(self, tmp_path):
+        """A crash mid-write leaves a corrupt last line. Resuming the
+        chain must skip it, not raise and permanently block the file."""
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write('{"entry_id": "truncated", "content_hash": "abc\n')
+
+        from agentmesh.governance.govern import _reset_shared_audit_sinks
+        _reset_shared_audit_sinks()
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        second(action="write")
+
+        lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        assert len(lines) == 3
+        assert lines[1].startswith('{"entry_id": "truncated"')

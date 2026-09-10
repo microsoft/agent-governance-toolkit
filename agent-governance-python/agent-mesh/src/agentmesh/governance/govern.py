@@ -22,9 +22,10 @@ import json
 import logging
 import os
 import re
-import secrets
+import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from .policy import Policy, PolicyDecision, PolicyEngine
@@ -62,6 +63,67 @@ def _get_shared_breach_detector(agent_id: str, session_id: str) -> Any:
 def _reset_shared_breach_detectors() -> None:
     """Test-only helper to clear the shared detector registry."""
     _SHARED_BREACH_DETECTORS.clear()
+
+
+# Module-level shared audit sink, keyed by resolved audit_file path. Each
+# FileAuditSink tracks its own in-memory previous_hash; two sinks opened
+# independently on the same file would interleave their appends and
+# verify_integrity() would report a chain break that never happened from
+# any single writer's point of view. Sharing one sink per path is the fix.
+_AUDIT_SINK_REGISTRY_LOCK = threading.Lock()
+_AUDIT_SINK_REGISTRY: dict[Path, FileAuditSink] = {}
+
+# Env var read when audit_file is set but audit_secret_key is not.
+AUDIT_SECRET_KEY_ENV_VAR = "AGT_AUDIT_SECRET_KEY"
+
+
+def _resolve_audit_secret_key(explicit_key: Optional[bytes]) -> bytes:
+    """Resolve the HMAC key for a FileAuditSink, never by generating one.
+
+    A randomly generated per-instance key can never verify against a past
+    run, and if two govern() calls point at the same audit_file each
+    minting its own random key would make the chain unverifiable even
+    within one process, before a restart ever enters into it. So the key
+    must come from the caller, one way or another.
+    """
+    if explicit_key is not None:
+        return explicit_key
+    env_value = os.environ.get(AUDIT_SECRET_KEY_ENV_VAR)
+    if env_value:
+        try:
+            return bytes.fromhex(env_value)
+        except ValueError as exc:
+            raise ValueError(
+                f"{AUDIT_SECRET_KEY_ENV_VAR} must be a hex-encoded key"
+            ) from exc
+    raise ValueError(
+        "audit_file is set but no audit_secret_key was given and "
+        f"{AUDIT_SECRET_KEY_ENV_VAR} is not set. Pass audit_secret_key "
+        "explicitly, or set the environment variable, so the audit chain "
+        "is verifiable — a silently auto-generated key would not be."
+    )
+
+
+def _get_shared_audit_sink(path: str, secret_key: Optional[bytes]) -> FileAuditSink:
+    """Return the process-wide FileAuditSink for *path*, creating it once."""
+    resolved = Path(path).expanduser().resolve()
+    with _AUDIT_SINK_REGISTRY_LOCK:
+        sink = _AUDIT_SINK_REGISTRY.get(resolved)
+        if sink is None:
+            sink = FileAuditSink(resolved, _resolve_audit_secret_key(secret_key))
+            _AUDIT_SINK_REGISTRY[resolved] = sink
+        elif secret_key is not None and not sink.matches_key(secret_key):
+            raise ValueError(
+                f"audit_file {resolved} is already open with a different "
+                "audit_secret_key (from an earlier govern() call in this "
+                "process) — pass the same key, or omit it to reuse theirs."
+            )
+        return sink
+
+
+def _reset_shared_audit_sinks() -> None:
+    """Test-only helper to clear the shared audit sink registry."""
+    _AUDIT_SINK_REGISTRY.clear()
 
 
 # Resource-type inference uses exact-token match on action strings split by
@@ -106,12 +168,13 @@ class GovernanceConfig:
         audit: Whether to enable audit logging. Defaults to True.
         audit_file: Path for file-based audit log. None = in-memory only.
             Entries are hash-chained and HMAC-signed (see FileAuditSink).
-        audit_secret_key: HMAC signing key for audit_file. Auto-generated
-            per instance when audit_file is set and this is left None -
-            set it explicitly if entry signatures need to stay verifiable
-            across process restarts (a fresh random key can still append
-            to and read an existing chain, it just won't verify old
-            signatures against the new key).
+        audit_secret_key: HMAC signing key for audit_file. Required
+            whenever audit_file is set: pass it explicitly, or set the
+            AGT_AUDIT_SECRET_KEY environment variable (hex-encoded). Not
+            auto-generated — a random per-instance key could never verify
+            across a restart, and would make even two govern() calls
+            sharing one audit_file within the same process unverifiable
+            against each other.
         on_deny: Callback when a policy denies an action. Default: raise.
         conflict_strategy: Policy conflict resolution strategy.
         ring: Optional execution ring for the agent. When set, ring-level
@@ -171,16 +234,12 @@ class GovernedCallable:
         self._engine = PolicyEngine(conflict_strategy=config.conflict_strategy)
         # audit_file was previously a documented no-op: this constructor
         # always built a bare AuditLog() with no sink, so entries never
-        # left memory regardless of what the caller configured. A missing
-        # secret_key is generated per instance rather than left for
-        # FileAuditSink to reject, since audit_file's whole point is
-        # persistence and a caller who only wants that (not cross-restart
-        # signature verification) shouldn't have to also manage a key.
+        # left memory regardless of what the caller configured. The sink
+        # is shared per resolved path (see _get_shared_audit_sink) so two
+        # govern() calls writing the same file share one hash chain.
         audit_sink = None
         if config.audit and config.audit_file:
-            audit_sink = FileAuditSink(
-                config.audit_file, config.audit_secret_key or secrets.token_bytes(32)
-            )
+            audit_sink = _get_shared_audit_sink(config.audit_file, config.audit_secret_key)
         self._audit = AuditLog(sink=audit_sink) if config.audit else None
 
         # Load policy
@@ -715,9 +774,10 @@ def govern(
             hash-chained, HMAC-signed JSON-lines file (see
             ``FileAuditSink``). ``None`` (default) keeps entries in
             memory only, lost on process exit.
-        audit_secret_key: HMAC key for ``audit_file``. Auto-generated per
-            instance when omitted; set explicitly if signatures need to
-            verify across process restarts.
+        audit_secret_key: HMAC key for ``audit_file``. Required (directly
+            or via the ``AGT_AUDIT_SECRET_KEY`` env var, hex-encoded)
+            whenever ``audit_file`` is set — see
+            ``GovernanceConfig.audit_secret_key``.
         on_deny: Optional callback on denial. Default: raise
             ``GovernanceDenied``.
         conflict_strategy: Conflict resolution strategy. Default
