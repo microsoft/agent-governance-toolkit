@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from agentmesh.governance.policy import PolicyDecision, PolicyEngine
@@ -37,6 +38,54 @@ _engine: PolicyEngine = PolicyEngine()
 _trust_policies: list[TrustPolicy] = []
 _trust_evaluator: PolicyEvaluator | None = None
 _loaded_count: int = 0
+_load_warnings: list[str] = []
+
+
+# Override the base app's /readyz endpoint so the policy-server reports
+# readiness based on loaded policies. Kubernetes uses /readyz for probes;
+# when zero policies are loaded the engine denies by default so the
+# readiness probe should fail (HTTP 503) to surface the condition.
+# Remove any existing /readyz route registered by create_base_app and
+# register a new one that includes the policy count and load warnings.
+def _override_readyz() -> None:
+    # Remove any previously-registered /readyz route
+    try:
+        app.router.routes = [r for r in app.router.routes if getattr(r, "path", None) != "/readyz"]
+    except Exception:
+        # If router shape is unexpected, skip removal and register ours anyway
+        logger.debug("Could not prune existing /readyz route; registering override")
+
+
+@app.get("/readyz", tags=["health"], response_model=None)
+async def readyz() -> JSONResponse | dict[str, object]:
+    payload = {
+        "status": "ready" if _loaded_count > 0 else "not-ready",
+        "component": "policy-server",
+        "total_loaded": _loaded_count,
+        "policy_dir": POLICY_DIR,
+        "load_warnings": list(_load_warnings),
+    }
+    if _loaded_count == 0:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
+
+
+# Ensure override is applied at import time
+_override_readyz()
+
+
+def _validate_load_warnings() -> None:
+    """Record startup warnings for empty policy state."""
+    global _load_warnings
+
+    _load_warnings = []
+    if _loaded_count == 0:
+        warning = (
+            f"Startup validation: no policies loaded from {POLICY_DIR}; "
+            "all evaluations will be denied by default until policies are loaded."
+        )
+        logger.warning(warning)
+        _load_warnings.append(warning)
 
 
 def _load_policies() -> None:
@@ -46,10 +95,15 @@ def _load_policies() -> None:
     policy_path = Path(POLICY_DIR)
     if not policy_path.exists():
         logger.warning("Policy directory %s does not exist", POLICY_DIR)
+        if _loaded_count == 0:
+            _validate_load_warnings()
         return
 
     _engine = PolicyEngine()
     _trust_policies = []
+    _trust_evaluator = None
+    _loaded_count = 0
+
     governance_count = 0
 
     for f in sorted(policy_path.glob("*.yaml")):
@@ -81,6 +135,7 @@ def _load_policies() -> None:
         governance_count,
         len(_trust_policies),
     )
+    _validate_load_warnings()
 
 
 @app.on_event("startup")
@@ -172,6 +227,7 @@ async def list_policies() -> dict[str, Any]:
         "total_loaded": _loaded_count,
         "trust_policies": len(_trust_policies),
         "policy_dir": POLICY_DIR,
+        "load_warnings": list(_load_warnings),
     }
 
 
@@ -183,6 +239,7 @@ async def reload_policies() -> dict[str, Any]:
         "status": "reloaded",
         "total_loaded": _loaded_count,
         "trust_policies": len(_trust_policies),
+        "load_warnings": list(_load_warnings),
     }
 
 
