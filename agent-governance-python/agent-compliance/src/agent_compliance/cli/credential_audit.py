@@ -145,9 +145,29 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
     return None
 
 
+# GitHub's search endpoints cap results at 1000 total (the "Search API"
+# result-window limit, documented at
+# https://docs.github.com/en/rest/search#about-search). A single request
+# only ever returns one page of up to `per_page` items, so a subject with
+# more issues/PRs than fit on the first page silently loses coverage on
+# exactly the pages most likely to contain the later, farther-out citations
+# a real credential spray would produce. Page through the full result
+# window instead of trusting the first response alone.
+_SEARCH_RESULT_WINDOW = 1000
+
+
 def _search(endpoint: str, query: str, per_page: int = 100) -> list[dict]:
-    data = _api(f"/search/{endpoint}", {"q": query, "per_page": str(per_page)})
-    return data.get("items", []) if data else []
+    items: list[dict] = []
+    max_pages = max(1, _SEARCH_RESULT_WINDOW // per_page)
+    for page in range(1, max_pages + 1):
+        data = _api(f"/search/{endpoint}", {"q": query, "per_page": str(per_page), "page": str(page)})
+        page_items = data.get("items", []) if data else []
+        if not page_items:
+            break
+        items.extend(page_items)
+        if len(page_items) < per_page:
+            break
+    return items
 
 
 # ---------------------------------------------------------------------------
