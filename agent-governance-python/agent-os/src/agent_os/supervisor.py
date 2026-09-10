@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from agent_os._supervisor_constants import MAX_SUPERVISOR_LEVEL
 from agent_os.trust_root import TrustDecision, TrustRoot
 
 
@@ -50,7 +51,20 @@ class SupervisorHierarchy:
             name: Unique supervisor name.
             level: Hierarchy level (0 = root, higher = closer to workers).
             is_agent: Whether this supervisor is an LLM-based agent.
+
+        Raises:
+            ValueError: If *level* exceeds ``MAX_SUPERVISOR_LEVEL``.  Python
+                ints are unbounded, so without a check a pathologically large
+                level (e.g. ``10**100``) makes ``validate_hierarchy`` hang —
+                even after the gap scan itself is safe, the sorted set of
+                levels is meaningless when the level is not a realistic
+                hierarchy position.
         """
+        if level > MAX_SUPERVISOR_LEVEL:
+            raise ValueError(
+                f"Supervisor '{name}' has level {level}, which exceeds the "
+                f"maximum allowed level ({MAX_SUPERVISOR_LEVEL})"
+            )
         self._supervisors.append(_Supervisor(name=name, level=level, is_agent=is_agent))
 
     # ------------------------------------------------------------------
@@ -92,11 +106,24 @@ class SupervisorHierarchy:
                         f"Level 0 supervisor '{s.name}' must be deterministic, not an LLM agent"
                     )
 
-        # Ensure no gaps in levels (every level between 0 and max has a supervisor)
+        # Ensure no gaps in levels (every level between 0 and max has a supervisor).
+        #
+        # The previous implementation iterated ``range(1, max_level + 1)``, which is
+        # O(max_level) — proportional to the *numeric value* of the highest level, not
+        # to the number of supervisors. A pathologically large level (e.g. ``10**100``,
+        # legal since Python ints are unbounded) made this loop hang. The sorted-set
+        # approach below is O(n log n) in the number of registered supervisors: it
+        # sorts the unique non-negative levels and walks adjacent pairs to find gaps,
+        # regardless of how large the numeric values are.
         if self._supervisors:
-            max_level = max(s.level for s in self._supervisors)
-            for lvl in range(1, max_level + 1):
-                if not any(s.level == lvl for s in self._supervisors):
+            occupied = sorted({s.level for s in self._supervisors if s.level >= 0})
+            # Anchor at 0 so gaps below the minimum occupied level are reported
+            # (e.g. levels=[3] must report 1 and 2 missing, not nothing).
+            anchored = [0, *occupied] if occupied and occupied[0] != 0 else occupied
+            for i in range(1, len(anchored)):
+                gap_start = anchored[i - 1] + 1
+                gap_end = anchored[i]
+                for lvl in range(gap_start, gap_end):
                     violations.append(f"Level {lvl} has no registered supervisor")
 
         return violations
