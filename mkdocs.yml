@@ -148,6 +148,7 @@ nav:
     - Standalone packages:
       - Agent Marketplace: packages/agent-marketplace.md
       - Agent Lightning: packages/agent-lightning.md
+      - Agent Learning Governance: packages/agent-learning.md
     - SDKs and developer tools:
       - .NET package: packages/dotnet-sdk.md
       - VS Code Extension: packages/agent-os-vscode.md
@@ -234,6 +235,7 @@ nav:
       - Policy Versioning: tutorials/policy-as-code/07-policy-versioning.md
       - MCP Governance Policies: tutorials/policy-as-code/mcp-governance.md
     - Integration Guides:
+      - Agent Learning Governance: integrations/agent-learning-governance.md
       - Citadel: integrations/citadel-integration.md
       - External Operation Accountability: integrations/external-operation-accountability-profiles.md
       - MCP Trust: integrations/mcp-trust-guide.md
@@ -326,6 +328,7 @@ nav:
     - "ADR-0030: Action-Bound Approval Protocol": adr/0030-action-bound-approval-protocol.md
     - "ADR-0031: Optional Embedding Detection": adr/0031-optional-embedding-detection-backend.md
     - "ADR-0032: Trace v0.1 Trust Records": adr/0032-agt-emits-trace-v01-trust-records.md
+    - "ADR-0033: Agent Learning Governance": adr/0033-agent-learning-governance-integration.md
     - Proposals: proposals/README.md
   - Reference:
     - Project:

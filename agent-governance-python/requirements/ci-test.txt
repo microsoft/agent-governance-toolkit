@@ -16,9 +16,9 @@ colorama==0.4.6 \
 pygments==2.20.0 \
     --hash=sha256:6757cd03768053ff99f3039c1a36d6c0aa0b263438fcab17520b30a303a82b5f \
     --hash=sha256:81a9e26dd42fd28a23a2d169d86d7ac03b46e2f8b59ed4698fb4785f946d0176
-# pytest-asyncio transitive dependencies (needed on Python <3.13)
-typing-extensions==4.15.0 \
-    --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548
+# Shared async test dependencies (AnyIO requires 4.16.0 on Python <3.15)
+typing-extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
 # PyYAML — imported by tests/ci/test_regression_a2_toolkit_regex.py
 # (introduced in PR #2654). Workflow-lint job runs `pytest tests/ci/ -v`
 # after installing only this requirements file. Without PyYAML pinned
