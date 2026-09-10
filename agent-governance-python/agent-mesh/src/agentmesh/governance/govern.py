@@ -77,14 +77,18 @@ _AUDIT_SINK_REGISTRY: dict[Path, FileAuditSink] = {}
 AUDIT_SECRET_KEY_ENV_VAR = "AGT_AUDIT_SECRET_KEY"
 
 
-def _resolve_audit_secret_key(explicit_key: Optional[bytes]) -> bytes:
+def _resolve_audit_secret_key(
+    explicit_key: Optional[bytes], *, required: bool = True
+) -> Optional[bytes]:
     """Resolve the HMAC key for a FileAuditSink, never by generating one.
 
     A randomly generated per-instance key can never verify against a past
     run, and if two govern() calls point at the same audit_file each
     minting its own random key would make the chain unverifiable even
     within one process, before a restart ever enters into it. So the key
-    must come from the caller, one way or another.
+    must come from the caller, one way or another - except when *required*
+    is False (checking an *existing* sink for a mismatch): there, having no
+    key to compare isn't an error, it just means nothing to check against.
     """
     if explicit_key is not None:
         return explicit_key
@@ -96,6 +100,8 @@ def _resolve_audit_secret_key(explicit_key: Optional[bytes]) -> bytes:
             raise ValueError(
                 f"{AUDIT_SECRET_KEY_ENV_VAR} must be a hex-encoded key"
             ) from exc
+    if not required:
+        return None
     raise ValueError(
         "audit_file is set but no audit_secret_key was given and "
         f"{AUDIT_SECRET_KEY_ENV_VAR} is not set. Pass audit_secret_key "
@@ -105,19 +111,39 @@ def _resolve_audit_secret_key(explicit_key: Optional[bytes]) -> bytes:
 
 
 def _get_shared_audit_sink(path: str, secret_key: Optional[bytes]) -> FileAuditSink:
-    """Return the process-wide FileAuditSink for *path*, creating it once."""
-    resolved = Path(path).expanduser().resolve()
+    """Return the process-wide FileAuditSink for *path*, creating it once.
+
+    The symlink check happens here, before resolve(), not inside
+    FileAuditSink: Path.resolve() follows symlinks, so by the time a sink
+    would see a resolved path there is no longer a symlink component left
+    for its own O_NOFOLLOW open() to refuse — the check would already have
+    been silently defeated. lstat (Path.is_symlink()) is what actually
+    inspects *path* itself; the realpath is still what keys the registry,
+    so unrelated spellings of one non-symlinked file share one sink.
+    """
+    raw = Path(path).expanduser()
+    if raw.is_symlink():
+        raise ValueError(f"audit_file must not be a symlink: {raw}")
+    resolved = raw.resolve()
     with _AUDIT_SINK_REGISTRY_LOCK:
         sink = _AUDIT_SINK_REGISTRY.get(resolved)
         if sink is None:
             sink = FileAuditSink(resolved, _resolve_audit_secret_key(secret_key))
             _AUDIT_SINK_REGISTRY[resolved] = sink
-        elif secret_key is not None and not sink.matches_key(secret_key):
-            raise ValueError(
-                f"audit_file {resolved} is already open with a different "
-                "audit_secret_key (from an earlier govern() call in this "
-                "process) — pass the same key, or omit it to reuse theirs."
-            )
+        else:
+            # required=False: omitting secret_key with no env var set is
+            # still a valid "just reuse whatever's already open" call, not
+            # an error. But when a key *is* resolvable - explicit, or via
+            # AGT_AUDIT_SECRET_KEY - it must match the sink actually in use,
+            # checked here even when this call didn't pass the key
+            # explicitly, so a changed env var doesn't go unnoticed.
+            effective_key = _resolve_audit_secret_key(secret_key, required=False)
+            if effective_key is not None and not sink.matches_key(effective_key):
+                raise ValueError(
+                    f"audit_file {resolved} is already open with a different "
+                    "audit_secret_key (from an earlier govern() call in this "
+                    "process) — pass the same key, or omit it to reuse theirs."
+                )
         return sink
 
 

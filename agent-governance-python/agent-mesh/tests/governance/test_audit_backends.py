@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -216,6 +217,71 @@ class TestFileAuditSink:
         sink = FileAuditSink(path, SECRET_KEY)
 
         assert isinstance(sink, AuditSink)
+
+
+class TestFileAuditSinkConstructionValidation:
+    """A bad path used to construct fine and fail lazily on the first
+    write() (FileNotFoundError / IsADirectoryError / ELOOP for a symlink) -
+    now checked eagerly, at construction, like the secret key already is."""
+
+    def test_path_is_a_directory_raises(self, tmp_path: Path):
+        with pytest.raises(IsADirectoryError):
+            FileAuditSink(tmp_path, SECRET_KEY)
+
+    def test_parent_directory_missing_raises(self, tmp_path: Path):
+        with pytest.raises(FileNotFoundError):
+            FileAuditSink(tmp_path / "no-such-dir" / "audit.jsonl", SECRET_KEY)
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX symlinks only")
+    def test_path_is_a_symlink_raises(self, tmp_path: Path):
+        target = tmp_path / "real.jsonl"
+        target.write_text("")
+        link = tmp_path / "audit.jsonl"
+        link.symlink_to(target)
+        with pytest.raises(ValueError, match="symlink"):
+            FileAuditSink(link, SECRET_KEY)
+
+
+class TestFileAuditSinkExternalRotation:
+    """logrotate-style external rotation (rename the file away, a fresh one
+    appears at the same path) used to leave a long-lived sink's in-memory
+    previous_hash pointing at a chain that no longer exists at that path -
+    verify_integrity() on the replacement file then broke at entry 0."""
+
+    def test_write_after_external_rename_starts_a_fresh_chain(self, tmp_path: Path):
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="before-rotation"))
+
+        # Simulate an external log rotator: move the file away, nothing
+        # left at `path` until the sink's next write recreates it.
+        (path).rename(tmp_path / "audit.jsonl.1")
+
+        sink.write(_make_entry(entry_id="after-rotation"))
+
+        is_valid, error = sink.verify_integrity()
+        assert is_valid is True, f"Integrity check failed: {error}"
+        assert len(sink.read_entries()) == 1
+
+    def test_write_after_external_replace_resyncs_to_new_file(self, tmp_path: Path):
+        """Covers replacement by a *different* sink/process (not just a
+        rename-away): the file at `path` changes identity even though a
+        file exists there the whole time."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="original"))
+
+        other_key = b"a-completely-different-key-32by"
+        other = FileAuditSink(tmp_path / "other.jsonl", other_key)
+        other.write(_make_entry(entry_id="unrelated"))
+        (tmp_path / "other.jsonl").replace(path)
+
+        sink.write(_make_entry(entry_id="after-replace"))
+
+        entries = sink.read_entries()
+        assert len(entries) == 2
+        assert entries[0].entry_id == "unrelated"
+        assert entries[1].entry_id == "after-replace"
 
 
 # ---------------------------------------------------------------------------
