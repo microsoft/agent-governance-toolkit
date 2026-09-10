@@ -593,3 +593,38 @@ class TestGovernWithAuditFile:
         lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
         assert len(lines) == 3
         assert lines[1].startswith('{"entry_id": "truncated"')
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX symlinks only")
+    def test_symlinked_audit_file_raises(self, tmp_path):
+        """Path.resolve() (used to key the shared-sink registry) follows
+        symlinks, so by the time a sink would see the resolved path there's
+        no symlink component left for its own O_NOFOLLOW open() to refuse -
+        the FileAuditSink-level check alone would be silently bypassed for
+        exactly this path. Caught here instead, before resolve()."""
+        target = tmp_path / "real.jsonl"
+        target.write_text("")
+        link = tmp_path / "audit.jsonl"
+        link.symlink_to(target)
+
+        with pytest.raises(ValueError, match="symlink"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(link),
+                audit_secret_key=secrets.token_bytes(32),
+            )
+
+    def test_second_instance_env_var_key_mismatch_raises(self, tmp_path, monkeypatch):
+        """The first instance's key came from an explicit argument; the
+        second omits secret_key but AGT_AUDIT_SECRET_KEY now holds a
+        *different* key. Previously only checked when secret_key was
+        passed explicitly, so a changed env var went unnoticed and the
+        second instance silently kept signing with the first key."""
+        path = tmp_path / "audit.jsonl"
+        first_key = secrets.token_bytes(32)
+        govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=first_key,
+        )
+
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", secrets.token_bytes(32).hex())
+        with pytest.raises(ValueError, match="already open with a different"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))

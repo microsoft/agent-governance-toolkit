@@ -244,6 +244,22 @@ class FileAuditSink:
         max_file_size: int = 0,
     ) -> None:
         self._path = Path(path)
+        # Validated here rather than left for the first write() to hit
+        # FileNotFoundError/IsADirectoryError/ELOOP by accident: a caller
+        # going through govern() already gets a construction-time error for
+        # a bad key, and a bad path deserves the same rather than a lazily
+        # discovered one. A symlinked path specifically would otherwise
+        # still open successfully (following it) for every operation except
+        # _append_line's O_NOFOLLOW, which only raises ELOOP once the first
+        # entry is actually written.
+        if self._path.is_symlink():
+            raise ValueError(f"audit sink path must not be a symlink: {self._path}")
+        if self._path.is_dir():
+            raise IsADirectoryError(f"audit sink path is a directory: {self._path}")
+        if not self._path.parent.is_dir():
+            raise FileNotFoundError(
+                f"audit sink parent directory does not exist: {self._path.parent}"
+            )
         self._secret_key = secret_key
         self._max_file_size = max_file_size
         self._lock = threading.Lock()
@@ -253,6 +269,11 @@ class FileAuditSink:
         # Resume chain if the file already has entries.
         if self._path.exists() and self._path.stat().st_size > 0:
             self._previous_hash = self._read_last_hash()
+        # (st_dev, st_ino) of the file backing previous_hash above, so a
+        # write() can tell whether *path* still names that same file or an
+        # external rotation (logrotate-style rename) replaced it - see
+        # _resync_if_rotated.
+        self._file_id = self._current_file_id()
 
     # ------------------------------------------------------------------
     # AuditSink interface
@@ -262,6 +283,7 @@ class FileAuditSink:
         """Write a single entry, rotating the file if necessary."""
         with self._lock:
             self._maybe_rotate()
+            self._resync_if_rotated()
             signed = SignedAuditEntry.from_entry(
                 entry,
                 previous_hash=self._previous_hash,
@@ -269,10 +291,12 @@ class FileAuditSink:
             )
             self._append_line(signed)
             self._previous_hash = signed.content_hash
+            self._file_id = self._current_file_id()
 
     def write_batch(self, entries: list[AuditEntry]) -> None:
         """Write a batch of entries atomically (under lock)."""
         with self._lock:
+            self._resync_if_rotated()
             for entry in entries:
                 self._maybe_rotate()
                 signed = SignedAuditEntry.from_entry(
@@ -282,6 +306,7 @@ class FileAuditSink:
                 )
                 self._append_line(signed)
                 self._previous_hash = signed.content_hash
+            self._file_id = self._current_file_id()
 
     def verify_integrity(self) -> tuple[bool, str | None]:
         """Read back the file and verify hash chain + HMAC signatures."""
@@ -334,6 +359,32 @@ class FileAuditSink:
             os.replace(self._path, rotated)
             # Reset chain for the new file
             self._previous_hash = ""
+
+    def _current_file_id(self) -> tuple[int, int] | None:
+        """(st_dev, st_ino) of the file at self._path, or None if absent."""
+        try:
+            st = self._path.stat()
+        except OSError:
+            return None
+        return (st.st_dev, st.st_ino)
+
+    def _resync_if_rotated(self) -> None:
+        """Re-derive previous_hash if *path* no longer names the file this
+        sink last wrote to.
+
+        _maybe_rotate() is this sink's own, self-triggered rotation and
+        already resets previous_hash directly. This instead covers a file
+        replaced out from under a *shared* sink by something external
+        (logrotate-style rename, another process, a caller removing the
+        file by hand): without it, the cached previous_hash keeps chaining
+        onto a hash from a file that's gone, and verify_integrity() on the
+        replacement breaks at its first entry. Caller must hold self._lock.
+        """
+        current_id = self._current_file_id()
+        if current_id == self._file_id:
+            return
+        self._previous_hash = self._read_last_hash() if current_id is not None else ""
+        self._file_id = current_id
 
     def _read_last_hash(self) -> str:
         """Read the content_hash of the last entry in the file.
