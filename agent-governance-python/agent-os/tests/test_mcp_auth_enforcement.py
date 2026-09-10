@@ -106,6 +106,24 @@ class TestMcpAuthPolicy:
         assert result.allowed
         assert len(result.reason) > 0
 
+    def test_unregistered_server_with_url_still_requires_tls(self):
+        # Regression for #3814: a server name absent from the allowlist used
+        # to skip the TLS gate entirely, even with a plain-http URL.
+        policy = McpAuthPolicy()
+        result = policy.check("typo-d-server", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert not result.allowed
+        assert "tls" in result.reason.lower()
+
+    def test_unregistered_server_with_https_url_is_allowed(self):
+        policy = McpAuthPolicy()
+        result = policy.check("new-server", auth_method="oauth2", url="https://mcp.internal/tools")
+        assert result.allowed
+
+    def test_unregistered_server_default_tls_floor_can_be_disabled(self):
+        policy = McpAuthPolicy(default_require_tls=False)
+        result = policy.check("legacy-server", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert result.allowed
+
 
 class TestFromYaml:
     def test_parse_yaml(self):
@@ -130,3 +148,20 @@ mcp_auth_policy:
     def test_empty_yaml(self):
         policy = McpAuthPolicy.from_yaml("")
         assert policy.check("s", auth_method="oauth2").allowed
+
+    def test_yaml_default_require_tls_defaults_true(self):
+        policy = McpAuthPolicy.from_yaml("""
+mcp_auth_policy:
+  default_allowed_methods: [oauth2]
+""")
+        result = policy.check("unregistered", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert not result.allowed
+
+    def test_yaml_default_require_tls_false_disables_the_floor(self):
+        policy = McpAuthPolicy.from_yaml("""
+mcp_auth_policy:
+  default_allowed_methods: [oauth2]
+  default_require_tls: false
+""")
+        result = policy.check("legacy-server", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert result.allowed

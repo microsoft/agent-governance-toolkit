@@ -90,6 +90,11 @@ class McpAuthPolicy:
         deny_none: Whether to deny connections with auth_method="none".
             Default True (fail-closed).
         servers: Explicit per-server auth method allowlist.
+        default_require_tls: Whether the TLS floor applied to registered
+            entries also applies to servers not in the allowlist (the
+            fallback path below). Default True (fail-closed); an unregistered
+            server name should not get weaker transport guarantees than a
+            registered one.
     """
 
     def __init__(
@@ -97,9 +102,11 @@ class McpAuthPolicy:
         default_allowed_methods: list[str] | None = None,
         deny_none: bool = True,
         servers: list[McpServerEntry] | None = None,
+        default_require_tls: bool = True,
     ):
         self._default_methods = set(default_allowed_methods or ["oauth2", "mtls", "bearer"])
         self._deny_none = deny_none
+        self._default_require_tls = default_require_tls
         self._servers: dict[str, McpServerEntry] = {}
         for s in (servers or []):
             self._servers[s.name] = s
@@ -186,6 +193,26 @@ class McpAuthPolicy:
 
         # Fall back to default policy
         if auth_method in self._default_methods:
+            # TLS check: an unregistered server name should not get weaker
+            # transport guarantees than a registered one. Only enforced when
+            # a URL is actually supplied — an omitted/empty URL stays
+            # allowed here too, matching the registered-entry gate above.
+            if self._default_require_tls and url:
+                try:
+                    scheme = urlparse(url).scheme.lower()
+                except (ValueError, AttributeError):
+                    scheme = ""
+                if scheme not in {"https", "wss"}:
+                    return AuthCheckResult(
+                        allowed=False,
+                        server_name=server_name,
+                        auth_method=auth_method,
+                        reason=(
+                            f"Server '{server_name}' is not in the allowlist; the default "
+                            f"policy requires TLS but URL scheme {scheme!r} is not in the "
+                            f"TLS allowlist (https, wss)"
+                        ),
+                    )
             return AuthCheckResult(
                 allowed=True,
                 server_name=server_name,
@@ -237,4 +264,5 @@ class McpAuthPolicy:
             default_allowed_methods=policy_data.get("default_allowed_methods"),
             deny_none=policy_data.get("deny_none", True),
             servers=servers,
+            default_require_tls=policy_data.get("default_require_tls", True),
         )
