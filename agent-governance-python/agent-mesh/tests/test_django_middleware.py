@@ -57,8 +57,8 @@ from agentmesh.integrations.django_middleware import (  # noqa: E402
     trust_exempt,
     trust_required,
 )
-from agentmesh.integrations.request_auth import select_signed_headers  # noqa: E402
 from agentmesh.integrations.django_middleware import middleware as middleware_module  # noqa: E402
+from agentmesh.integrations.request_auth import select_signed_headers  # noqa: E402
 
 # ── Dummy views & URL configuration ─────────────────────────────────
 
@@ -347,13 +347,15 @@ class TestAgentTrustMiddleware:
             original = _signed_request(private_key, agent_did)
             requests = [_replay_of(original, "/api/data/") for _ in range(2)]
             barrier = Barrier(2)
-            original_add = mw._replay_cache.add
+            replay_cache = mw._replay_cache_for_request()
+            original_add = replay_cache.add
 
             def _simultaneous_add(*args, **kwargs):
                 barrier.wait(timeout=5)
                 return original_add(*args, **kwargs)
 
-            monkeypatch.setattr(mw._replay_cache, "add", _simultaneous_add)
+            monkeypatch.setattr(replay_cache, "add", _simultaneous_add)
+            monkeypatch.setattr(mw, "_replay_cache_for_request", lambda: replay_cache)
 
             with ThreadPoolExecutor(max_workers=2) as executor:
                 statuses = list(executor.map(lambda request: mw(request).status_code, requests))
@@ -372,7 +374,8 @@ class TestAgentTrustMiddleware:
         settings.AGENTMESH_AGENT_KEYS = {agent_did: private_key.public_key()}
         try:
             mw = _make_middleware()
-            original_add = mw._replay_cache.add
+            replay_cache = mw._replay_cache_for_request()
+            original_add = replay_cache.add
             observed_timeout = None
 
             def _recording_add(key, value, timeout=None, version=None):
@@ -381,11 +384,66 @@ class TestAgentTrustMiddleware:
                 return original_add(key, value, timeout=timeout, version=version)
 
             monkeypatch.setattr(middleware_module, "_utcnow", lambda: now)
-            monkeypatch.setattr(mw._replay_cache, "add", _recording_add)
+            monkeypatch.setattr(replay_cache, "add", _recording_add)
+            monkeypatch.setattr(mw, "_replay_cache_for_request", lambda: replay_cache)
 
             request = _signed_request(private_key, agent_did, timestamp=timestamp)
             assert mw(request).status_code == 200
             assert observed_timeout == 599
+        finally:
+            del settings.AGENTMESH_AGENT_KEYS
+
+    def test_replay_cache_is_resolved_for_each_request(self, monkeypatch):
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        agent_did = "did:mesh:per-request-cache"
+        settings.AGENTMESH_AGENT_KEYS = {agent_did: private_key.public_key()}
+        try:
+            mw = _make_middleware()
+            replay_cache = mw._replay_cache_for_request()
+            resolutions = 0
+
+            def _resolve_cache():
+                nonlocal resolutions
+                resolutions += 1
+                return replay_cache
+
+            monkeypatch.setattr(mw, "_replay_cache_for_request", _resolve_cache)
+
+            assert mw(_signed_request(private_key, agent_did)).status_code == 200
+            assert mw(_signed_request(private_key, agent_did)).status_code == 200
+            assert resolutions == 2
+        finally:
+            del settings.AGENTMESH_AGENT_KEYS
+
+    def test_memcached_timeout_includes_expiry_allowance(self, monkeypatch):
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+
+        now = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        agent_did = "did:mesh:memcached-expiry"
+        timestamp = (now + timedelta(seconds=299)).isoformat()
+        settings.AGENTMESH_AGENT_KEYS = {agent_did: private_key.public_key()}
+
+        class FakeMemcachedCache:
+            def __init__(self):
+                self.timeout = None
+
+            def add(self, key, value, timeout=None, version=None):
+                self.timeout = timeout
+                return True
+
+        try:
+            mw = _make_middleware()
+            replay_cache = FakeMemcachedCache()
+            monkeypatch.setattr(middleware_module, "BaseMemcachedCache", FakeMemcachedCache)
+            monkeypatch.setattr(middleware_module, "_utcnow", lambda: now)
+            monkeypatch.setattr(mw, "_replay_cache_for_request", lambda: replay_cache)
+
+            request = _signed_request(private_key, agent_did, timestamp=timestamp)
+            assert mw(request).status_code == 200
+            assert replay_cache.timeout == 600
         finally:
             del settings.AGENTMESH_AGENT_KEYS
 
@@ -429,7 +487,8 @@ class TestAgentTrustMiddleware:
         settings.AGENTMESH_AGENT_KEYS = {agent_did: private_key.public_key()}
         try:
             mw = _make_middleware()
-            original_add = mw._replay_cache.add
+            replay_cache = mw._replay_cache_for_request()
+            original_add = replay_cache.add
 
             def _delayed_add(*args, **kwargs):
                 nonlocal current_time
@@ -438,7 +497,8 @@ class TestAgentTrustMiddleware:
                 return result
 
             monkeypatch.setattr(middleware_module, "_utcnow", lambda: current_time)
-            monkeypatch.setattr(mw._replay_cache, "add", _delayed_add)
+            monkeypatch.setattr(replay_cache, "add", _delayed_add)
+            monkeypatch.setattr(mw, "_replay_cache_for_request", lambda: replay_cache)
             request = _signed_request(
                 private_key,
                 agent_did,
@@ -607,11 +667,13 @@ class TestAgentTrustMiddleware:
         settings.AGENTMESH_AGENT_KEYS = {agent_did: private_key.public_key()}
         try:
             mw = _make_middleware()
+            replay_cache = mw._replay_cache_for_request()
 
             def _cache_failure(*args, **kwargs):
                 raise RuntimeError("cache unavailable")
 
-            monkeypatch.setattr(mw._replay_cache, "add", _cache_failure)
+            monkeypatch.setattr(replay_cache, "add", _cache_failure)
+            monkeypatch.setattr(mw, "_replay_cache_for_request", lambda: replay_cache)
             request = _signed_request(private_key, agent_did)
             # 503, not 403: the caller's credentials were fine. Recording our
             # own cache outage as a rejected agent would corrupt the audit
