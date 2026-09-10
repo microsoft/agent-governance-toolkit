@@ -1,6 +1,6 @@
 ---
 title: "Fundamental Rights Impact Assessment (FRIA) Template"
-last_reviewed: 2026-04-25
+last_reviewed: 2026-08-14
 owner: agt-maintainers
 ---
 
@@ -12,7 +12,7 @@ owner: agt-maintainers
 > fundamental rights, as required by EU AI Act Article 27. Must be completed before
 > deploying high-risk AI systems that affect individuals in the EU.
 >
-> **Deadline**: EU AI Act high-risk provisions apply from **August 2, 2026**.
+> **Deadline**: EU AI Act high-risk obligations now phase in: Annex III / Art. 6(2) from **2 December 2027**; Annex I / Art. 6(1) from **2 August 2028**.
 >
 > **Who completes this**: Deployers of high-risk AI systems. This template helps
 > structure the assessment; organizations should engage legal counsel and rights

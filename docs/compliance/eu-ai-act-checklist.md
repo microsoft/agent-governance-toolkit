@@ -1,6 +1,6 @@
 ---
 title: EU AI Act Compliance Checklist
-last_reviewed: 2026-06-10
+last_reviewed: 2026-08-12
 owner: agt-maintainers
 ---
 
@@ -10,9 +10,9 @@ owner: agt-maintainers
 
 **How the Agent Governance Toolkit maps to the EU AI Act**
 
-> **Regulation**: [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng) -- Harmonised Rules on Artificial Intelligence
-> **Applicability**: Phased -- Art. 5 (prohibited practices) and Art. 4 (AI literacy) from 2 February 2025; GPAI obligations from 2 August 2025; **high-risk system obligations from 2 August 2026**
-> **Prepared**: 2026-04-03; **Last reviewed**: 2026-06-10
+> **Regulation**: [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng), as amended by Regulation (EU) 2026/1744 (Digital Omnibus on AI) -- Harmonised Rules on Artificial Intelligence
+> **Applicability**: Phased -- Art. 5 prohibited practices and Art. 4 AI literacy from 2 February 2025, except Art. 5(1) points (ba) and (bb), Art. 5(1a), and Art. 5(1b) from 2 December 2026; GPAI obligations from 2 August 2025; Art. 50 transparency from 2 August 2026; Art. 50(2) machine-readable marking from 2 December 2026 for generative systems already placed on the market before 2 August 2026; Annex III high-risk obligations / Art. 6(2) from 2 December 2027; Annex I high-risk obligations / Art. 6(1) from 2 August 2028
+> **Prepared**: 2026-04-03; **Last reviewed**: 2026-08-12
 > **Methodology**: 4-wave multi-agent investigation -- parallel discovery, adversarial conformity testing, citation validation, and strategic review. Article 11 was revalidated against the shipped Annex IV exporter and evidence pipeline.
 
 ---
@@ -58,11 +58,11 @@ The toolkit includes a risk classifier in `agent-governance-python/agent-mesh/ex
 
 ### Article 4: AI Literacy
 
-> *Providers and deployers shall ensure that their staff and other persons dealing with the operation and use of AI systems on their behalf are made AI literate.* -- Art. 4(1)
+> Providers and deployers must take measures to support the development of AI literacy of their staff and other persons dealing with the operation and use of AI systems on their behalf, taking relevant technical knowledge, experience, education, training, and use-context factors into account. -- Art. 4(1), paraphrased
 
 **Coverage**: Gap (out of scope)
 
-Article 4 is an organizational/HR obligation requiring training programs, competency assessments, and workforce readiness tracking. This is outside the scope of a runtime governance toolkit. No toolkit changes recommended.
+Article 4 is an organizational/HR obligation to support AI literacy for relevant staff and other persons who operate or use AI systems on behalf of a provider or deployer. It does not prescribe toolkit runtime controls or make the toolkit responsible for proving any individual's AI literacy level. Article 4 remains outside the runtime toolkit boundary. No toolkit changes recommended.
 
 **Deployer action required**: Implement AI literacy programs independently of the toolkit. Consider documenting completion in agent policy metadata (e.g., `operator_certified: true`).
 
@@ -538,6 +538,7 @@ Several "Partial" ratings rely on a **single mechanism with no fallback**:
 ## Sources
 
 - [EU AI Act Official Text (EUR-Lex)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng)
+- [Regulation (EU) 2026/1744 (Digital Omnibus on AI, EUR-Lex)](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202601744)
 - [EU AI Act Explorer](https://artificialintelligenceact.eu/)
 - [EU AI Act Service Desk -- Article 26](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26)
 - [EU AI Act Service Desk -- Article 50](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-50)
