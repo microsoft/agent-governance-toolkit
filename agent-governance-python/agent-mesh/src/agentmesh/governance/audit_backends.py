@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import os
 import sys
 import threading
@@ -22,6 +23,12 @@ from typing import Any, Optional, Protocol, runtime_checkable
 from pydantic import BaseModel, Field
 
 from .audit import AuditEntry
+
+logger = logging.getLogger(__name__)
+
+# Not defined on Windows; there a symlinked audit path is a smaller risk
+# (no unprivileged-user symlink-swap TOCTOU) so opening without it is fine.
+_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +291,10 @@ class FileAuditSink:
             return True, None
         return False, "; ".join(errors)
 
+    def matches_key(self, secret_key: bytes) -> bool:
+        """Whether *secret_key* is the key this sink signs entries with."""
+        return hmac.compare_digest(self._secret_key, secret_key)
+
     def close(self) -> None:
         """Mark the sink as closed."""
         self._closed = True
@@ -293,9 +304,21 @@ class FileAuditSink:
     # ------------------------------------------------------------------
 
     def _append_line(self, signed: SignedAuditEntry) -> None:
-        """Append a single JSON line to the file."""
+        """Append a single JSON line to the file.
+
+        Opens with O_CREAT|O_APPEND and mode 0600 rather than plain
+        open(path, "a"): entries can carry an agent's call arguments, so
+        the default 0644 a plain open() creates would make audit content
+        world-readable, and O_NOFOLLOW refuses to write through a symlink
+        planted at the configured path.
+        """
         line = json.dumps(signed.to_dict(), sort_keys=True, default=str)
-        with open(self._path, "a", encoding="utf-8") as fh:
+        fd = os.open(
+            self._path,
+            os.O_WRONLY | os.O_CREAT | os.O_APPEND | _O_NOFOLLOW,
+            0o600,
+        )
+        with os.fdopen(fd, "a", encoding="utf-8") as fh:
             fh.write(line + "\n")
 
     def _maybe_rotate(self) -> None:
@@ -313,17 +336,32 @@ class FileAuditSink:
             self._previous_hash = ""
 
     def _read_last_hash(self) -> str:
-        """Read the content_hash of the last entry in the file."""
-        last_line = ""
+        """Read the content_hash of the last entry in the file.
+
+        A write interrupted mid-line (crash, disk full) leaves a corrupt
+        trailing line. Crashing the constructor on that line would turn a
+        single bad append into a permanent block on every future one —
+        the file can never again produce a sink to append through. Instead
+        skip back to the last line that parses, logging the skip; the
+        corrupt line itself is left in place, untouched, for forensics.
+        """
+        lines: list[str] = []
         with open(self._path, "r", encoding="utf-8") as fh:
             for line in fh:
                 stripped = line.strip()
                 if stripped:
-                    last_line = stripped
-        if not last_line:
-            return ""
-        data = json.loads(last_line)
-        return data.get("content_hash", "")
+                    lines.append(stripped)
+        for stripped in reversed(lines):
+            try:
+                data = json.loads(stripped)
+            except json.JSONDecodeError:
+                logger.warning(
+                    "FileAuditSink(%s): skipping unparsable trailing line "
+                    "while resuming the hash chain", self._path,
+                )
+                continue
+            return data.get("content_hash", "")
+        return ""
 
     def read_entries(self) -> list[SignedAuditEntry]:
         """Read all signed entries from the file (for testing/querying)."""
