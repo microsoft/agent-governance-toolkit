@@ -51,6 +51,14 @@ source .venv/bin/activate        # Linux/macOS
 # (Required for all local development to ensure you test against local core changes)
 pip install --no-cache-dir --no-deps -e agent-governance-toolkit-core
 
+# Required before agent-mesh: its dev extra pins agent_hypervisor>=5.0.0, and
+# PyPI tops out at the pre-consolidation 3.7.0 wheel, so pip cannot resolve it.
+# Install the local dep-only stub first. Do not work around this by installing
+# agent-hypervisor from PyPI: 3.7.0 ships real code in the top-level
+# `hypervisor` package that collides with the copy -core force-includes, and
+# the resulting breakage shows up later at import time rather than here.
+pip install --no-cache-dir --no-deps -e agent-hypervisor
+
 # Install the package you are working on in editable mode
 pip install -e "agent-os[dev]"       # Policy engine
 pip install -e "agent-mesh[dev]"     # Identity/trust layer
@@ -300,6 +308,11 @@ cd agent-governance-toolkit
 # Install the core package from the local source to avoid dependency conflicts
 pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-governance-toolkit-core"
 
+# agent-hypervisor comes first: agent-mesh's dev extra pins
+# agent_hypervisor>=5.0.0 and PyPI tops out at 3.7.0, so installing agent-mesh
+# before it fails to resolve. See the note in the Python setup section above.
+pip install -e "agent-governance-python/agent-hypervisor[dev]"
+
 pip install -e "agent-governance-python/agent-primitives[dev]"
 pip install -e "agent-governance-python/agent-mcp-governance[dev]"
 pip install -e "agent-governance-python/agent-os[dev]"
@@ -309,7 +322,6 @@ pip install -e "agent-governance-python/agent-sre[dev]"
 pip install -e "agent-governance-python/agent-compliance[dev]"
 pip install -e "agent-governance-python/agent-marketplace[dev]"  # installs agentmesh-marketplace
 pip install -e "agent-governance-python/agent-lightning[dev]"
-pip install -e "agent-governance-python/agent-hypervisor[dev]"
 pip install -e "agent-governance-python/agentmesh-integrations[dev]"
 
 # Restore the standalone .NET SDK when working in that path
