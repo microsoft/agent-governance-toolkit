@@ -6,7 +6,7 @@
   "main": "src/index.mjs",
   "exports": {
     ".": "./src/index.mjs",
-    "./policy": "./lib/policy.mjs",
+    "./policy": "./lib/opencode-policy.mjs",
     "./mcp-server": "./server/agt-mcp.mjs"
   },
   "files": [
@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "build": "npm run check",
-    "check": "node --check ./src/index.mjs && node --check ./lib/audit.mjs && node --check ./lib/poisoning.mjs && node --check ./lib/policy.mjs && node --check ./server/agt-mcp.mjs && node --test ./test/*.test.mjs",
+    "check": "node --check ./src/index.mjs && node --check ./lib/audit.mjs && node --check ./lib/poisoning.mjs && node --check ./lib/policy.mjs && node --check ./lib/opencode-policy.mjs && node --check ./server/agt-mcp.mjs && node --test ./test/*.test.mjs",
     "test": "node --test ./test/*.test.mjs"
   },
   "keywords": [
