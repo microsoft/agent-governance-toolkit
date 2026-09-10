@@ -496,3 +496,19 @@ rules:
         safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY)
         result = safe(action="read")
         assert result["status"] == "executed"
+
+
+class TestGovernRegoEmptyStringWiring:
+    """rego_path="" / rego_content="" used to be indistinguishable from
+    "not configured" here: `if config.rego_path or config.rego_content`
+    is falsy for "" same as None, so govern() silently skipped Rego
+    instead of surfacing the caller's mistake. No opa needed - this
+    raises in load_rego() before OPAEvaluator is ever touched."""
+
+    def test_empty_rego_path_raises(self):
+        with pytest.raises(ValueError, match="rego_path must not be an empty string"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, rego_path="")
+
+    def test_empty_rego_content_raises(self):
+        with pytest.raises(ValueError, match="rego_content must not be an empty string"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, rego_content="")

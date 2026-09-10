@@ -756,13 +756,20 @@ class PolicyEngine:
 
         Raises:
             ValueError: neither rego_path nor rego_content given, both are
-                given, the declared package doesn't match `package`, or the
-                policy fails to compile.
+                given, either is an empty string, the declared package
+                doesn't match `package`, or the policy fails to compile.
             FileNotFoundError: rego_path does not exist.
             RuntimeError: the opa CLI is not on PATH.
         """
         from agentmesh.governance.opa import OPAEvaluator
 
+        # "" is falsy like None, but a caller who passed it explicitly meant
+        # *something* - collapsing it into "nothing configured" would skip
+        # Rego with no error rather than reject the mistake.
+        if rego_path == "":
+            raise ValueError("rego_path must not be an empty string")
+        if rego_content == "":
+            raise ValueError("rego_content must not be an empty string")
         if not rego_path and not rego_content:
             raise ValueError("load_rego requires rego_path or rego_content")
         if rego_path and rego_content:
@@ -772,20 +779,26 @@ class PolicyEngine:
                 "evaluation time (see OPAEvaluator._rego_file_for_cli) and "
                 "rego_content would be loaded but never actually queried"
             )
-        if rego_path and not os.path.isfile(rego_path):
+        if rego_path and not os.path.exists(rego_path):
             raise FileNotFoundError(f"rego_path does not exist: {rego_path}")
 
+        # A directory of .rego files is a valid `opa eval --data` target
+        # (and worked as rego_path before the existence check above was
+        # narrowed to files only). Only a single file's content can be
+        # checked here for a package mismatch; a directory skips that
+        # static check and relies on the compile probe below instead.
         source = rego_content
-        if source is None:
+        if source is None and rego_path and os.path.isfile(rego_path):
             with open(rego_path, "r", encoding="utf-8") as f:
                 source = f.read()
-        declared = re.search(r"^\s*package\s+([\w.]+)", source, re.MULTILINE)
-        if declared and declared.group(1) != package:
-            raise ValueError(
-                f"rego file declares package '{declared.group(1)}' but "
-                f"load_rego was called with package='{package}' — "
-                f"data.{package}.allow would never resolve against it"
-            )
+        if source is not None:
+            declared = re.search(r"^\s*package\s+([\w.]+)", source, re.MULTILINE)
+            if declared and declared.group(1) != package:
+                raise ValueError(
+                    f"rego file declares package '{declared.group(1)}' but "
+                    f"load_rego was called with package='{package}' — "
+                    f"data.{package}.allow would never resolve against it"
+                )
 
         evaluator = OPAEvaluator(mode="local", rego_path=rego_path, rego_content=rego_content)
         if not evaluator.opa_available:

@@ -283,11 +283,16 @@ class OPAEvaluator:
             )
 
             if proc.returncode != 0:
+                # Parse/compile errors print as JSON to stdout with stderr
+                # empty (exit 2); only runtime/usage errors go to stderr.
+                # Reporting stderr alone left compile errors with an empty
+                # reason.
+                detail = proc.stderr.strip() or proc.stdout.strip()
                 return OPADecision(
                     allowed=False,
                     query=query,
                     source="local",
-                    error=f"opa eval failed: {proc.stderr.strip()}",
+                    error=f"opa eval failed: {detail}",
                 )
 
             result = json.loads(proc.stdout)

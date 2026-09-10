@@ -194,7 +194,10 @@ class GovernedCallable:
                 f"got {type(policy).__name__}"
             )
 
-        if config.rego_path or config.rego_content:
+        # `is not None`, not truthiness: rego_path="" is a mistake worth
+        # load_rego() rejecting outright, not equivalent to "not configured"
+        # and silently skipped.
+        if config.rego_path is not None or config.rego_content is not None:
             self._engine.load_rego(config.rego_path, config.rego_content, config.rego_package)
 
         # Hash of policy bundle bytes at load time — consumed by TRACEAuditSink (ADR-0032).

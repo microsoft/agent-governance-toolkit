@@ -4,6 +4,8 @@
 
 import os
 import shutil
+import subprocess
+from unittest.mock import patch
 
 import pytest
 
@@ -384,6 +386,39 @@ class TestLoadRegoValidation:
         with pytest.raises(ValueError, match="both rego_path and rego_content"):
             engine.load_rego(rego_path=str(rego_file), rego_content=BASIC_REGO, package="agentmesh")
 
+    def test_empty_rego_path_raises(self):
+        """"" is falsy like None; without this check it silently skips
+        Rego (govern.py's `is not None` wiring still calls load_rego, but
+        used to collapse "" into the "nothing given" branch here too)."""
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="rego_path must not be an empty string"):
+            engine.load_rego(rego_path="", package="agentmesh")
+
+    def test_empty_rego_content_raises(self):
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="rego_content must not be an empty string"):
+            engine.load_rego(rego_content="", package="agentmesh")
+
+    def test_rego_path_directory_passes_existence_check(self, tmp_path, monkeypatch):
+        """A directory of .rego files is a valid `opa eval --data` target
+        and worked as rego_path on main; os.path.isfile briefly rejected it
+        outright. Deterministic regardless of whether opa is installed: with
+        it forced absent, a directory that passed the existence check must
+        fail on the *next* check (opa missing), not FileNotFoundError."""
+        monkeypatch.setattr(shutil, "which", lambda _name: None)
+        engine = PolicyEngine()
+        with pytest.raises(RuntimeError, match="opa CLI not found"):
+            engine.load_rego(rego_path=str(tmp_path), package="agentmesh")
+
+    @requires_opa
+    def test_rego_path_directory_loads_and_evaluates(self, tmp_path):
+        (tmp_path / "policy.rego").write_text(BASIC_REGO)
+        engine = PolicyEngine()
+        evaluator = engine.load_rego(rego_path=str(tmp_path), package="agentmesh")
+        assert isinstance(evaluator, OPAEvaluator)
+        decision = evaluator.evaluate("data.agentmesh.allow", {"agent": {"role": "admin"}})
+        assert decision.allowed is True
+
     @requires_opa
     def test_matching_package_succeeds(self):
         engine = PolicyEngine()
@@ -427,3 +462,42 @@ rules: []
         # allow-all YAML default and executed with no record of the error.
         assert decision.allowed is False
         assert "opa eval timed out" in decision.reason
+
+
+# ── OPAEvaluator: compile errors must not report an empty reason ────
+#
+# opa prints parse/compile errors as JSON to stdout with stderr empty
+# (exit 2); only runtime/usage errors go to stderr. Reporting stderr alone
+# left compile errors with an empty ("opa eval failed: ") reason. Mocking
+# subprocess.run makes this deterministic regardless of whether opa is
+# actually installed.
+
+
+class TestCompileErrorMessage:
+    def test_stdout_used_when_stderr_is_empty(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _name: "/usr/bin/opa")
+        evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
+
+        fake_proc = subprocess.CompletedProcess(
+            args=["opa"], returncode=2, stdout='{"errors": ["1 error occurred: policy.rego:3: rego_parse_error"]}', stderr="",
+        )
+        with patch("agentmesh.governance.opa.subprocess.run", return_value=fake_proc):
+            decision = evaluator.evaluate("true", {})
+
+        assert decision.error is not None
+        assert "rego_parse_error" in decision.error
+        evaluator.close()
+
+    def test_stderr_preferred_when_present(self, monkeypatch):
+        monkeypatch.setattr(shutil, "which", lambda _name: "/usr/bin/opa")
+        evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
+
+        fake_proc = subprocess.CompletedProcess(
+            args=["opa"], returncode=1, stdout="", stderr="usage: opa eval ...",
+        )
+        with patch("agentmesh.governance.opa.subprocess.run", return_value=fake_proc):
+            decision = evaluator.evaluate("true", {})
+
+        assert decision.error is not None
+        assert "usage: opa eval" in decision.error
+        evaluator.close()
