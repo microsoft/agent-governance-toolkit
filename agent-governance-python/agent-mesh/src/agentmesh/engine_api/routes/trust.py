@@ -12,7 +12,7 @@ the delegation and sponsorship relationships).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from agentmesh.engine_api.capabilities import capability_flags
 from agentmesh.engine_api.models import TrustGraph, TrustScoreListResponse
@@ -32,10 +32,12 @@ router = APIRouter()
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def get_trust_scores(
     request: Request,
+    response: Response,
     pagination: PaginationParams = Depends(),
     agent_did: str | None = Query(None, description="Filter by agent DID"),
 ) -> TrustScoreListResponse:
     """Return per-agent trust scores (empty until the trust backend ships)."""
+    response.headers["X-AGT-Backend-Status"] = "placeholder"
     items, page = paginate([], pagination)
     return TrustScoreListResponse(items=items, pagination=page)
 
@@ -47,6 +49,7 @@ async def get_trust_scores(
     response_model=TrustGraph,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
-async def get_trust_graph(request: Request) -> TrustGraph:
+async def get_trust_graph(request: Request, response: Response) -> TrustGraph:
     """Return the trust relationship graph (empty until the trust backend ships)."""
+    response.headers["X-AGT-Backend-Status"] = "placeholder"
     return TrustGraph(nodes=[], edges=[])
