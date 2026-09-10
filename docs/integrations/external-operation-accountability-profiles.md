@@ -1,8 +1,10 @@
 ---
 title: "External Operation-Accountability Profiles"
-last_reviewed: 2026-04-26
+last_reviewed: 2026-08-23
 owner: agt-maintainers
 ---
+
+<!-- cspell:words PALO -->
 
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
@@ -114,9 +116,18 @@ It is not part of the AGT runtime path.
 
 ## Example Reference Implementation
 
+- [PALO outcome-assurance interoperability with AGT ACS](https://github.com/sev7enITA/PALOframework/tree/2d6c91d6629ef1805b007af819a4dd94ca6644a7/examples/agentic-interface/integrations/microsoft-agt)
+  is a PALO-maintained, version-pinned community example that maps a
+  digest-bound PALO Action Claim to an ACS `pre_tool_call` evaluation and
+  correlates the returned verdict and evidence reference with a downstream
+  execution receipt and independent post-state verification. The adapter
+  remains outside the AGT runtime trust boundary and does not replace AGT
+  evidence verification. See
+  [Discussion #3647](https://github.com/microsoft/agent-governance-toolkit/discussions/3647).
 - Related issue: https://github.com/microsoft/agent-governance-toolkit/issues/1314
 
-No reference implementation is currently available. Community contributions welcome.
+This reference implementation is not maintained, certified, sponsored, or
+endorsed by Microsoft.
 
 ## Review Note
 
