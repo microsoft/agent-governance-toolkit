@@ -374,6 +374,16 @@ class TestLoadRegoValidation:
         with pytest.raises(RuntimeError, match="opa CLI not found"):
             engine.load_rego(rego_content=BASIC_REGO, package="agentmesh")
 
+    def test_both_path_and_content_raises(self, tmp_path):
+        """rego_path silently won over rego_content at evaluation time
+        (OPAEvaluator._rego_file_for_cli prefers rego_path) with no
+        indication rego_content was ignored - now a load-time error."""
+        rego_file = tmp_path / "policy.rego"
+        rego_file.write_text(BASIC_REGO)
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="both rego_path and rego_content"):
+            engine.load_rego(rego_path=str(rego_file), rego_content=BASIC_REGO, package="agentmesh")
+
     @requires_opa
     def test_matching_package_succeeds(self):
         engine = PolicyEngine()

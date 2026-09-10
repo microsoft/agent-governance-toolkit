@@ -755,9 +755,9 @@ class PolicyEngine:
             OPAEvaluator instance for direct use
 
         Raises:
-            ValueError: neither rego_path nor rego_content given, the
-                declared package doesn't match `package`, or the policy
-                fails to compile.
+            ValueError: neither rego_path nor rego_content given, both are
+                given, the declared package doesn't match `package`, or the
+                policy fails to compile.
             FileNotFoundError: rego_path does not exist.
             RuntimeError: the opa CLI is not on PATH.
         """
@@ -765,6 +765,13 @@ class PolicyEngine:
 
         if not rego_path and not rego_content:
             raise ValueError("load_rego requires rego_path or rego_content")
+        if rego_path and rego_content:
+            raise ValueError(
+                "load_rego received both rego_path and rego_content — pass "
+                "only one; rego_path would otherwise win silently at "
+                "evaluation time (see OPAEvaluator._rego_file_for_cli) and "
+                "rego_content would be loaded but never actually queried"
+            )
         if rego_path and not os.path.isfile(rego_path):
             raise FileNotFoundError(f"rego_path does not exist: {rego_path}")
 
