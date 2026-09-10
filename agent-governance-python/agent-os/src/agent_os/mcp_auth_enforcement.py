@@ -225,11 +225,19 @@ class McpAuthPolicy:
 
         servers = []
         for s in policy_data.get("servers", []):
+            url = s.get("url", "")
+            require_tls = s.get("require_tls", True)
+            if require_tls and (not isinstance(url, str) or not url.strip()):
+                logger.warning(
+                    "MCP server '%s' requires TLS but has no URL configured; "
+                    "TLS cannot be validated until a URL is supplied at check time",
+                    s.get("name", "<unnamed>"),
+                )
             servers.append(McpServerEntry(
                 name=s["name"],
-                url=s.get("url", ""),
+                url=url,
                 allowed_auth_methods=s.get("allowed_auth_methods", ["oauth2", "mtls", "bearer"]),
-                require_tls=s.get("require_tls", True),
+                require_tls=require_tls,
                 min_tls_version=s.get("min_tls_version", "1.2"),
             ))
 
