@@ -100,13 +100,62 @@ def test_run_check_high_passes_through():
 
 
 def test_run_check_crash_returns_unknown():
-    # A script that crashes must not silently score as LOW.
+    # A script that crashes on every attempt must not silently score as LOW,
+    # and must exhaust its retries before giving up. base_delay is tiny here
+    # only to keep the test fast; production uses the real default.
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "crasher.py")
         with open(path, "w") as f:
             f.write("raise RuntimeError('simulated failure')\n")
         out = os.path.join(tmp, "out.json")
-        assert _run_check(path, [], out) == "UNKNOWN"
+        assert _run_check(path, [], out, max_attempts=2, base_delay=0.01) == "UNKNOWN"
+
+
+# ---------------------------------------------------------------------------
+# _run_check retry with backoff (issue agentrust-io/.github#27)
+# ---------------------------------------------------------------------------
+
+def _make_flaky_script(fail_times: int, risk: str, tmp_dir: str) -> str:
+    """A script that fails the first `fail_times` invocations, then succeeds.
+
+    Uses a counter file on disk since each invocation is a fresh subprocess.
+    """
+    counter_path = os.path.join(tmp_dir, "counter.txt")
+    with open(counter_path, "w") as f:
+        f.write("0")
+    path = os.path.join(tmp_dir, "flaky.py")
+    with open(path, "w") as f:
+        f.write(textwrap.dedent(f"""\
+            import json
+            counter_path = {counter_path!r}
+            with open(counter_path) as fh:
+                n = int(fh.read().strip())
+            n += 1
+            with open(counter_path, "w") as fh:
+                fh.write(str(n))
+            if n <= {fail_times}:
+                raise RuntimeError("simulated transient failure")
+            print(json.dumps({{"risk": "{risk}"}}))
+        """))
+    return path
+
+
+def test_run_check_retries_transient_failure_then_succeeds():
+    # First attempt fails (e.g. a GitHub API blip inside the child script);
+    # the retry succeeds. The single failure must not surface as UNKNOWN.
+    with tempfile.TemporaryDirectory() as tmp:
+        script = _make_flaky_script(fail_times=1, risk="LOW", tmp_dir=tmp)
+        out = os.path.join(tmp, "out.json")
+        assert _run_check(script, [], out, max_attempts=3, base_delay=0.01) == "LOW"
+
+
+def test_run_check_exhausts_retries_before_returning_unknown():
+    # A script that never succeeds must still end in UNKNOWN, but only after
+    # max_attempts tries -- not on the first failure.
+    with tempfile.TemporaryDirectory() as tmp:
+        script = _make_flaky_script(fail_times=99, risk="LOW", tmp_dir=tmp)
+        out = os.path.join(tmp, "out.json")
+        assert _run_check(script, [], out, max_attempts=2, base_delay=0.01) == "UNKNOWN"
 
 
 def test_run_check_none_plus_low_aggregate_stays_low():

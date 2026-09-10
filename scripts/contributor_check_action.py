@@ -24,6 +24,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -60,25 +61,49 @@ def _api(token: str, method: str, path: str, data: dict | None = None) -> dict |
         raise
 
 
-def _run_check(script: str, args: list[str], out_path: str) -> str:
-    """Run a check script and return the risk level from its JSON output."""
-    try:
-        result = subprocess.run(
-            [sys.executable, script, *args, "--json"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        Path(out_path).write_text(result.stdout)
-        data = json.loads(result.stdout)
-        risk = data.get("risk", "UNKNOWN")
-        # credential_audit returns "NONE" when a user has no merged PRs in the
-        # target repo (nothing to launder = not applicable). Normalize to "LOW"
-        # so it aggregates correctly rather than being treated as UNKNOWN (which
-        # is reserved for checks that errored or could not be determined).
-        return "LOW" if risk == "NONE" else risk
-    except Exception:
-        return "UNKNOWN"
+def _run_check(
+    script: str,
+    args: list[str],
+    out_path: str,
+    *,
+    max_attempts: int = 3,
+    base_delay: float = 2.0,
+) -> str:
+    """Run a check script and return the risk level from its JSON output.
+
+    Retries the subprocess call with exponential backoff before giving up.
+    A single transient failure (a GitHub API blip inside the child script, a
+    momentary timeout) no longer collapses straight to UNKNOWN: UNKNOWN now
+    means "checked and could not determine", not "one call failed".
+    """
+    last_exc: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            result = subprocess.run(
+                [sys.executable, script, *args, "--json"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            Path(out_path).write_text(result.stdout)
+            data = json.loads(result.stdout)
+            risk = data.get("risk", "UNKNOWN")
+            # credential_audit returns "NONE" when a user has no merged PRs in the
+            # target repo (nothing to launder = not applicable). Normalize to "LOW"
+            # so it aggregates correctly rather than being treated as UNKNOWN (which
+            # is reserved for checks that errored or could not be determined).
+            return "LOW" if risk == "NONE" else risk
+        except Exception as exc:  # subprocess/parse failures are the retry target
+            last_exc = exc
+            if attempt < max_attempts - 1:
+                time.sleep(base_delay * (2**attempt))
+                continue
+
+    print(
+        f"  contributor-check subprocess failed after {max_attempts} attempts: {last_exc}",
+        file=sys.stderr,
+    )
+    return "UNKNOWN"
 
 
 def _aggregate_risk(*levels: str) -> str:
