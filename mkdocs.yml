@@ -148,6 +148,7 @@ nav:
     - Standalone packages:
       - Agent Marketplace: packages/agent-marketplace.md
       - Agent Lightning: packages/agent-lightning.md
+      - Agent Learning Governance: packages/agent-learning.md
     - SDKs and developer tools:
       - .NET package: packages/dotnet-sdk.md
       - VS Code Extension: packages/agent-os-vscode.md
@@ -182,6 +183,7 @@ nav:
     - Observability & Tracing: tutorials/13-observability-and-tracing.md
     - Kill Switch & Rate Limiting: tutorials/14-kill-switch-and-rate-limiting.md
     - RL Training Governance: tutorials/15-rl-training-governance.md
+    - Agent Learning Governance: tutorials/56-agent-learning-governance.md
     - Protocol Bridges: tutorials/16-protocol-bridges.md
     - Advanced Trust: tutorials/17-advanced-trust-and-behavior.md
     - Compliance Verification: tutorials/18-compliance-verification.md
@@ -234,6 +236,7 @@ nav:
       - Policy Versioning: tutorials/policy-as-code/07-policy-versioning.md
       - MCP Governance Policies: tutorials/policy-as-code/mcp-governance.md
     - Integration Guides:
+      - Agent Learning Governance: integrations/agent-learning-governance.md
       - Citadel: integrations/citadel-integration.md
       - External Operation Accountability: integrations/external-operation-accountability-profiles.md
       - MCP Trust: integrations/mcp-trust-guide.md
@@ -326,6 +329,7 @@ nav:
     - "ADR-0030: Action-Bound Approval Protocol": adr/0030-action-bound-approval-protocol.md
     - "ADR-0031: Optional Embedding Detection": adr/0031-optional-embedding-detection-backend.md
     - "ADR-0032: Trace v0.1 Trust Records": adr/0032-agt-emits-trace-v01-trust-records.md
+    - "ADR-0033: Agent Learning Governance": adr/0033-agent-learning-governance-integration.md
     - Proposals: proposals/README.md
   - Reference:
     - Project:
