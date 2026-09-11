@@ -42,10 +42,22 @@ jobs:
       # `git merge-base` fails and the diff falls back to the base tip -- which is
       # what made this job spell-check the whole repository on any branch a few
       # commits behind main.
+      # The refspec is explicit as hardening, not as a fix for an observed
+      # failure. `git fetch origin <branch>` is only guaranteed to write
+      # FETCH_HEAD; whether it also updates `refs/remotes/origin/<branch>`
+      # depends on the configured remote.origin.fetch. On this workflow today
+      # that wildcard is intact, so the tracking ref does get updated and the
+      # plain form works. Naming the destination ref makes the next step's
+      # `--base origin/<base>` correct regardless of how the remote is
+      # configured, which matters because a stale tracking ref would not fail
+      # loudly: `git merge-base` against one still succeeds, so the fallback
+      # warning below would not fire and the over-scan would look like a
+      # correctly scoped run.
       - name: Fetch PR base
         run: |
           set -e
-          git fetch origin "${{ github.base_ref }}"
+          git fetch --no-tags origin \
+            "+${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
 
       - name: Compute changed lines
         id: diff
