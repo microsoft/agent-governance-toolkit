@@ -46,6 +46,14 @@ class CredentialRedactor:
     callers. The class operates on plain strings as well as nested dictionaries,
     lists, and tuples, replacing detected secret values with a stable
     placeholder.
+
+    By default :meth:`redact` (and the structure/mapping helpers) scrub
+    *secrets only* — the material in :attr:`PATTERNS`. PII/CRI (email, phone,
+    SSN, credit card, IP) is *detected* by :meth:`find_pii_matches` but is not
+    removed unless the caller opts in with ``redact_pii=True``. This split is
+    deliberate: PII handling is often policy-driven (report vs. block vs.
+    scrub), so callers choose when to strip it rather than having it removed
+    silently.
     """
 
     # Python's stdlib ``re`` does not support per-pattern timeouts. These
@@ -239,7 +247,7 @@ class CredentialRedactor:
         return bool(cls.find_pii_matches(value))
 
     @classmethod
-    def redact(cls, value: str | None) -> str:
+    def redact(cls, value: str | None, *, redact_pii: bool = False) -> str:
         """Redact credential-like values from a string.
 
         Redaction is driven by the exact spans that :meth:`find_matches`
@@ -249,19 +257,33 @@ class CredentialRedactor:
         pattern consume the anchor keyword of a later one, which would remove
         less than detection reported and leave a secret in place.
 
+        By default this scrubs *secrets only* (:attr:`PATTERNS`); PII detected
+        by :meth:`find_pii_matches` (email, phone, SSN, credit card, IP) is
+        left in place. Pass ``redact_pii=True`` to also remove PII spans — for
+        example before returning tool output to a model or persisting an audit
+        payload where PII must not flow through. Overlapping secret/PII spans
+        are merged, so PII inside a secret (or vice versa) is redacted once.
+
         Args:
             value: String content that may contain credential-like material.
+            redact_pii: When ``True``, also redact PII/CRI spans in addition to
+                secrets. Defaults to ``False`` (secrets-only, backwards
+                compatible).
 
         Returns:
-            A string with each detected credential replaced by
-            ``REDACTED_PLACEHOLDER``. Empty input returns an empty string.
+            A string with each detected credential (and, when ``redact_pii`` is
+            set, each detected PII span) replaced by ``REDACTED_PLACEHOLDER``.
+            Empty input returns an empty string.
         """
         if not value:
             return ""
 
+        matches = cls.find_matches(value)
+        if redact_pii:
+            matches = matches + cls.find_pii_matches(value)
         spans = sorted(
             (match.start, match.end)
-            for match in cls.find_matches(value)
+            for match in matches
             if match.start >= 0 and match.end > match.start
         )
         if not spans:
@@ -310,12 +332,16 @@ class CredentialRedactor:
         return cls.redact(value), type_names
 
     @classmethod
-    def redact_mapping(cls, mapping: dict[str, Any] | None) -> dict[str, Any]:
+    def redact_mapping(
+        cls, mapping: dict[str, Any] | None, *, redact_pii: bool = False
+    ) -> dict[str, Any]:
         """Redact all nested values in a mapping.
 
         Args:
             mapping: A possibly nested mapping containing strings, lists,
                 tuples, or dictionaries.
+            redact_pii: When ``True``, also redact PII/CRI spans in nested
+                strings. Defaults to ``False`` (secrets-only).
 
         Returns:
             A new mapping with nested strings redacted recursively. Empty input
@@ -323,39 +349,51 @@ class CredentialRedactor:
         """
         if not mapping:
             return {}
-        return {key: cls.redact_data_structure(value) for key, value in mapping.items()}
+        return {
+            key: cls.redact_data_structure(value, redact_pii=redact_pii)
+            for key, value in mapping.items()
+        }
 
     @classmethod
-    def redact_dictionary(cls, mapping: dict[str, Any] | None) -> dict[str, Any]:
+    def redact_dictionary(
+        cls, mapping: dict[str, Any] | None, *, redact_pii: bool = False
+    ) -> dict[str, Any]:
         """Compatibility alias for dictionary redaction.
 
         Args:
             mapping: Dictionary-like content to redact.
+            redact_pii: When ``True``, also redact PII/CRI spans. Defaults to
+                ``False`` (secrets-only).
 
         Returns:
             The redacted mapping produced by :meth:`redact_mapping`.
         """
-        return cls.redact_mapping(mapping)
+        return cls.redact_mapping(mapping, redact_pii=redact_pii)
 
     @classmethod
-    def redact_data_structure(cls, value: Any) -> Any:
+    def redact_data_structure(cls, value: Any, *, redact_pii: bool = False) -> Any:
         """Recursively redact nested strings in dicts, lists, and tuples.
 
         Args:
             value: Any Python value that may contain nested strings.
+            redact_pii: When ``True``, also redact PII/CRI spans in nested
+                strings. Defaults to ``False`` (secrets-only).
 
         Returns:
             A value of the same general shape with strings redacted in place of
             their original secret-bearing content.
         """
         if isinstance(value, str):
-            return cls.redact(value)
+            return cls.redact(value, redact_pii=redact_pii)
         if isinstance(value, dict):
-            return {key: cls.redact_data_structure(item) for key, item in value.items()}
+            return {
+                key: cls.redact_data_structure(item, redact_pii=redact_pii)
+                for key, item in value.items()
+            }
         if isinstance(value, list):
-            return [cls.redact_data_structure(item) for item in value]
+            return [cls.redact_data_structure(item, redact_pii=redact_pii) for item in value]
         if isinstance(value, tuple):
-            return tuple(cls.redact_data_structure(item) for item in value)
+            return tuple(cls.redact_data_structure(item, redact_pii=redact_pii) for item in value)
         return value
 
     @classmethod

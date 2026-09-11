@@ -397,3 +397,80 @@ def test_ssn_pattern_rejects_bare_nine_digit_forms(text: str):
     assert not any(
         m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text)
     )
+
+
+# ---------------------------------------------------------------------------
+# Opt-in PII redaction (issue #3239): redact() is secrets-only by default, and
+# only strips PII/CRI when the caller passes redact_pii=True.
+# ---------------------------------------------------------------------------
+
+# Documentation/reserved-range values, so no real PII appears in source.
+_PII_SAMPLES = [
+    ("email", "user@example.com"),
+    ("ssn", "123-45-6789"),
+    ("phone", "+1 415-555-0100"),
+    ("credit_card", "4111 1111 1111 1111"),
+    ("ipv4", "192.0.2.1"),
+]
+
+
+@pytest.mark.parametrize("label, sample", _PII_SAMPLES, ids=[s[0] for s in _PII_SAMPLES])
+def test_redact_leaves_pii_untouched_by_default(label: str, sample: str):
+    # Sanity: each sample is detected as PII but is NOT a secret...
+    assert CredentialRedactor.contains_pii(sample) is True
+    assert CredentialRedactor.contains_credentials(sample) is False
+    # ...so the secrets-only default must pass it through unchanged.
+    assert CredentialRedactor.redact(sample) == sample
+
+
+@pytest.mark.parametrize("label, sample", _PII_SAMPLES, ids=[s[0] for s in _PII_SAMPLES])
+def test_redact_pii_opt_in_scrubs_pii(label: str, sample: str):
+    text = f"the value is {sample} today"
+    redacted = CredentialRedactor.redact(text, redact_pii=True)
+    assert sample not in redacted
+    assert REDACTED_PLACEHOLDER in redacted
+
+
+def test_redact_pii_opt_in_still_scrubs_secrets():
+    text = "contact user@example.com with api_key=super-secret-value"
+    redacted = CredentialRedactor.redact(text, redact_pii=True)
+    # Both the PII and the secret are removed.
+    assert "user@example.com" not in redacted
+    assert "super-secret-value" not in redacted
+
+    # With the default, the secret is still removed but the PII remains.
+    secrets_only = CredentialRedactor.redact(text)
+    assert "super-secret-value" not in secrets_only
+    assert "user@example.com" in secrets_only
+
+
+def test_redact_data_structure_pii_opt_in_is_recursive():
+    payload = {
+        "profile": {"email": "user@example.com"},
+        "notes": ["ssn 123-45-6789", "api_key=super-secret-value"],
+    }
+
+    # Default: secrets scrubbed, PII preserved.
+    default = CredentialRedactor.redact_data_structure(payload)
+    assert default["profile"]["email"] == "user@example.com"
+    assert "super-secret-value" not in default["notes"][1]
+
+    # Opt-in: PII scrubbed too, at every depth.
+    scrubbed = CredentialRedactor.redact_data_structure(payload, redact_pii=True)
+    assert "user@example.com" not in scrubbed["profile"]["email"]
+    assert "123-45-6789" not in scrubbed["notes"][0]
+    assert "super-secret-value" not in scrubbed["notes"][1]
+
+
+def test_redact_dictionary_and_mapping_accept_pii_flag():
+    payload = {"email": "user@example.com"}
+    assert CredentialRedactor.redact_dictionary(payload)["email"] == "user@example.com"
+    assert CredentialRedactor.redact_mapping(payload)["email"] == "user@example.com"
+    assert (
+        "user@example.com"
+        not in CredentialRedactor.redact_dictionary(payload, redact_pii=True)["email"]
+    )
+    assert (
+        "user@example.com"
+        not in CredentialRedactor.redact_mapping(payload, redact_pii=True)["email"]
+    )
