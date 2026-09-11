@@ -2,13 +2,19 @@
   "version": "0.2",
   "language": "en",
   "useGitignore": true,
-  "dictionaries": ["repo-terms"],
+  "dictionaries": [
+    "repo-terms"
+  ],
   "dictionaryDefinitions": [
     {
       "name": "repo-terms",
       "path": "./.cspell-repo-terms.txt",
       "addWords": true
     }
+  ],
+  "ignoreRegExpList": [
+    "/GHSA(-[0-9a-z]{4}){3}/g",
+    "/CVE-[0-9]{4}-[0-9]{4,}/g"
   ],
   "words": [
     "dorny",
