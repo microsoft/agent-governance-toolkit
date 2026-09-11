@@ -222,7 +222,16 @@ class OPAEvaluator:
         """Run `opa eval` subprocess."""
         input_json = json.dumps(input_data)
 
-        cmd = ["opa", "eval", "--format", "json", "--v0-compatible", "--input", "/dev/stdin", "--data"]
+        # `--stdin-input` (not `--input /dev/stdin`) reads the input document
+        # from the process's actual stdin. `/dev/stdin` is a real special file
+        # on Linux/macOS, where this previously worked by coincidence, but it
+        # doesn't exist on Windows: every call failed with "open /dev/stdin:
+        # The system cannot find the path specified.", and because that
+        # failure is caught below and turned into an ordinary
+        # OPADecision(allowed=False, ...) rather than raised, every policy
+        # check silently came back denied on Windows, including cases that
+        # should have been allowed.
+        cmd = ["opa", "eval", "--format", "json", "--v0-compatible", "--stdin-input", "--data"]
 
         if self.rego_path:
             cmd.append(self.rego_path)
