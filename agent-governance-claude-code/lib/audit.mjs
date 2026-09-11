@@ -89,6 +89,9 @@ export async function loadAuditFile(auditPath) {
       return { seamHash: null, entries: value };
     }
     if (value && typeof value === "object" && Array.isArray(value.entries)) {
+      // ponytail: a legacy array rewritten into this format with a matching seam
+      // is accepted by design; the unkeyed chain cannot authenticate the format
+      // or detect an attacker who recomputes its anchor and hashes.
       return {
         seamHash: typeof value.seamHash === "string" ? value.seamHash : null,
         entries: value.entries,

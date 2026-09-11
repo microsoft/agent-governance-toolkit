@@ -107,9 +107,14 @@ Override with `AGT_CLAUDE_AUDIT_PATH`.
 The audit log retains the newest 10,000 entries. Before the first rollover it
 uses the legacy JSON array format, whose chain is always anchored to the genesis
 hash. After rollover, it stores the retained entries with a `seamHash` object so
-the shortened hash chain stays verifiable while removing entries from the front
-of the log still fails verification. A log already front-truncated by an older
-version cannot be re-anchored and remains unverifiable by design.
+the shortened hash chain stays verifiable. Removing entries from the front still
+fails verification if the stored anchor and hashes are left unchanged (naive
+tampering). This is an unkeyed SHA-256 chain, not proof against an attacker who
+can rewrite the log: truncating and recomputing `seamHash`, or converting a legacy
+array into the seam format with a matching anchor, can pass verification. Such
+rewriting was already possible by recomputing the chain before this change.
+A log already front-truncated by an older version is not automatically
+re-anchored and remains unverifiable by design.
 
 ## Validation
 
