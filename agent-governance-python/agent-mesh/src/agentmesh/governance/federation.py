@@ -83,26 +83,35 @@ class OrgPolicyRule(BaseModel):
         """Evaluate rule condition against context.
 
         Uses the same simple expression evaluation as the core
-        ``PolicyRule``.  Supports ``==``, boolean attributes,
-        ``and``/``or`` compound conditions.
+        ``PolicyRule``.  Supports ``==``, ``!=``, ``in``, numeric
+        comparisons, ``contains``/``startswith``/``endswith``, boolean
+        attributes, and ``and``/``or`` compound conditions.
 
         Args:
             context: Runtime context dict.
 
         Returns:
-            ``True`` if enabled and the condition matches.
+            ``True`` if enabled and the condition matches, or if
+            evaluation raises (see below).
         """
         if not self.enabled:
             return False
         try:
-            return _eval_expression(self.condition, context)
+            return _eval_expression(self.condition, context, action=self.action)
         except Exception:
-            logger.debug(
-                "OrgPolicyRule evaluation failed for '%s'",
+            # Fail-closed (matches PolicyRule.evaluate's V27 pattern): an
+            # exception must not let a higher-priority deny rule silently
+            # fall through to a lower-priority or allow default_action.
+            # For an "allow" rule, matching on error would do the opposite
+            # (grant access), so only non-allow rules fail closed here.
+            match = self.action != "allow"
+            logger.warning(
+                "OrgPolicyRule evaluation error for '%s' — treating as %s (fail-closed)",
                 self.name,
+                "MATCH" if match else "NO-MATCH",
                 exc_info=True,
             )
-            return False
+            return match
 
 
 class DataClassification(str, Enum):
@@ -1003,26 +1012,56 @@ class FileFederationStore(InMemoryFederationStore):
 # ── Expression evaluator (reuses PolicyRule patterns) ──────────
 
 
-def _eval_expression(expr: str, context: dict) -> bool:
+# DoS guard, mirrors PolicyRule._MAX_EXPRESSION_DEPTH — federation
+# conditions can come from a partner org, a higher-privilege attack surface.
+_MAX_EXPRESSION_DEPTH = 20
+
+
+def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "deny") -> bool:
     """Evaluate a simple policy expression.
 
     Supports the same syntax as ``PolicyRule._eval_expression``:
     - ``field == 'value'``
+    - ``field != 'value'``
+    - ``field in ['a', 'b', 'c']``
+    - ``field > 10`` (also ``<``, ``>=``, ``<=``)
+    - ``field contains 'substring'``
+    - ``field startswith 'prefix'``
+    - ``field endswith 'suffix'``
     - ``field`` (boolean truthy)
     - ``expr1 and expr2``
     - ``expr1 or expr2``
     """
     import re
 
+    # Non-allow rules fail closed on a guard trip (matches the except-block
+    # semantics in OrgPolicyRule.evaluate); an allow rule failing open here
+    # would grant access instead of denying it, so it doesn't match.
+    if _depth > _MAX_EXPRESSION_DEPTH:
+        match = action != "allow"
+        logger.warning(
+            "OrgPolicyRule: expression exceeded max depth %d — treating as %s",
+            _MAX_EXPRESSION_DEPTH, "MATCH" if match else "NO-MATCH",
+        )
+        return match
+
+    if len(expr) > 2000:
+        match = action != "allow"
+        logger.warning(
+            "OrgPolicyRule: expression length %d exceeds 2000-char limit — treating as %s",
+            len(expr), "MATCH" if match else "NO-MATCH",
+        )
+        return match
+
     # OR
     if " or " in expr:
         parts = expr.split(" or ")
-        return any(_eval_expression(p.strip(), context) for p in parts)
+        return any(_eval_expression(p.strip(), context, _depth + 1, action) for p in parts)
 
     # AND
     if " and " in expr:
         parts = expr.split(" and ")
-        return all(_eval_expression(p.strip(), context) for p in parts)
+        return all(_eval_expression(p.strip(), context, _depth + 1, action) for p in parts)
 
     # Equality: field == 'value'
     eq_match = re.match(
@@ -1032,6 +1071,92 @@ def _eval_expression(expr: str, context: dict) -> bool:
         path, value = eq_match.groups()
         actual = _get_nested(context, path)
         return actual == value
+
+    # Inequality: field != 'value'
+    neq_match = re.match(
+        r"(\w+(?:\.\w+)*)\s*!=\s*['\"]([^'\"]+)['\"]", expr
+    )
+    if neq_match:
+        path, value = neq_match.groups()
+        actual = _get_nested(context, path)
+        return actual != value
+
+    # Membership: field in ['a', 'b', 'c']
+    in_match = re.match(
+        r"(\w+(?:\.\w+)*)\s+in\s+\[([^\]]*)\]", expr
+    )
+    if in_match:
+        path, items_str = in_match.groups()
+        actual = _get_nested(context, path)
+        items = [s.strip().strip("'\"") for s in items_str.split(",") if s.strip()]
+        return actual in items
+
+    # String containment: field contains 'substring'
+    contains_match = re.match(
+        r"(\w+(?:\.\w+)*)\s+contains\s+['\"]([^'\"]+)['\"]", expr
+    )
+    if contains_match:
+        path, needle = contains_match.groups()
+        actual = _get_nested(context, path)
+        if not isinstance(actual, str):
+            logger.warning(
+                "OrgPolicyRule: '%s' resolved to non-string %s, "
+                "'contains' cannot match — treating as %s",
+                path, type(actual).__name__, "MATCH" if action != "allow" else "NO-MATCH",
+            )
+            return action != "allow"
+        return needle in actual
+
+    # String prefix: field startswith 'prefix'
+    startswith_match = re.match(
+        r"(\w+(?:\.\w+)*)\s+startswith\s+['\"]([^'\"]+)['\"]", expr
+    )
+    if startswith_match:
+        path, prefix = startswith_match.groups()
+        actual = _get_nested(context, path)
+        if not isinstance(actual, str):
+            logger.warning(
+                "OrgPolicyRule: '%s' resolved to non-string %s, "
+                "'startswith' cannot match — treating as %s",
+                path, type(actual).__name__, "MATCH" if action != "allow" else "NO-MATCH",
+            )
+            return action != "allow"
+        return actual.startswith(prefix)
+
+    # String suffix: field endswith 'suffix'
+    endswith_match = re.match(
+        r"(\w+(?:\.\w+)*)\s+endswith\s+['\"]([^'\"]+)['\"]", expr
+    )
+    if endswith_match:
+        path, suffix = endswith_match.groups()
+        actual = _get_nested(context, path)
+        if not isinstance(actual, str):
+            logger.warning(
+                "OrgPolicyRule: '%s' resolved to non-string %s, "
+                "'endswith' cannot match — treating as %s",
+                path, type(actual).__name__, "MATCH" if action != "allow" else "NO-MATCH",
+            )
+            return action != "allow"
+        return actual.endswith(suffix)
+
+    # Comparison: field > number
+    cmp_match = re.match(r"(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(\d+(?:\.\d+)?)", expr)
+    if cmp_match:
+        path, op, num_str = cmp_match.groups()
+        actual = _get_nested(context, path)
+        try:
+            actual_num = float(actual) if actual is not None else 0
+            target = float(num_str)
+            if op == ">":
+                return actual_num > target
+            if op == "<":
+                return actual_num < target
+            if op == ">=":
+                return actual_num >= target
+            if op == "<=":
+                return actual_num <= target
+        except (TypeError, ValueError):
+            return False
 
     # Boolean
     bool_match = re.match(r"^(\w+(?:\.\w+)*)$", expr)

@@ -140,6 +140,9 @@ class PolicyRule(BaseModel):
         - ``action.type == 'export'``
         - ``data.contains_pii``
         - ``user.role in ['admin', 'operator']``
+        - ``action.path contains '..'``
+        - ``action.tool startswith 'delete_'``
+        - ``resource.name endswith '.pem'``
 
         Args:
             context: Dictionary of runtime values the condition is
@@ -160,24 +163,39 @@ class PolicyRule(BaseModel):
             # V27: Fail-closed — treat evaluation errors as a match so
             # the rule's action (typically "deny") takes effect. This
             # prevents attackers from crafting inputs that trigger
-            # exceptions to bypass policy rules.
+            # exceptions to bypass policy rules. An "allow" rule failing
+            # open here would grant access instead, so it doesn't match.
+            match = self.action != "allow"
             logger.warning(
-                "Policy rule evaluation error for '%s' — treating as MATCH (fail-closed)",
+                "Policy rule evaluation error for '%s' — treating as %s (fail-closed)",
                 self.name,
+                "MATCH" if match else "NO-MATCH",
                 exc_info=True,
             )
-            return True
+            return match
 
     # Maximum recursion depth for compound expressions to prevent DoS
     _MAX_EXPRESSION_DEPTH = 20
 
     def _eval_expression(self, expr: str, context: dict, _depth: int = 0) -> bool:
         """Evaluate a simple expression."""
+        # Non-allow rules fail closed on a guard trip; an allow rule
+        # failing open would grant access instead of denying it.
         if _depth > self._MAX_EXPRESSION_DEPTH:
-            return False  # fail-closed on excessive nesting
+            match = self.action != "allow"
+            logger.warning(
+                "Policy rule '%s': expression exceeded max depth %d — treating as %s",
+                self.name, self._MAX_EXPRESSION_DEPTH, "MATCH" if match else "NO-MATCH",
+            )
+            return match
 
         if len(expr) > 2000:
-            return False  # reject oversized expressions
+            match = self.action != "allow"
+            logger.warning(
+                "Policy rule '%s': expression length %d exceeds 2000-char limit — treating as %s",
+                self.name, len(expr), "MATCH" if match else "NO-MATCH",
+            )
+            return match
 
         # Handle compound conditions first (AND/OR)
         # This must be checked before individual conditions
@@ -217,6 +235,57 @@ class PolicyRule(BaseModel):
             actual = self._get_nested(context, path)
             items = [s.strip().strip("'\"") for s in items_str.split(",") if s.strip()]
             return actual in items
+
+        # String containment: field contains 'substring'
+        contains_match = re.match(
+            r"(\w+(?:\.\w+)*)\s+contains\s+['\"]([^'\"]+)['\"]", expr
+        )
+        if contains_match:
+            path, needle = contains_match.groups()
+            actual = self._get_nested(context, path)
+            if not isinstance(actual, str):
+                match = self.action != "allow"
+                logger.warning(
+                    "Policy rule '%s': '%s' resolved to non-string %s, "
+                    "'contains' cannot match — treating as %s",
+                    self.name, path, type(actual).__name__, "MATCH" if match else "NO-MATCH",
+                )
+                return match
+            return needle in actual
+
+        # String prefix: field startswith 'prefix'
+        startswith_match = re.match(
+            r"(\w+(?:\.\w+)*)\s+startswith\s+['\"]([^'\"]+)['\"]", expr
+        )
+        if startswith_match:
+            path, prefix = startswith_match.groups()
+            actual = self._get_nested(context, path)
+            if not isinstance(actual, str):
+                match = self.action != "allow"
+                logger.warning(
+                    "Policy rule '%s': '%s' resolved to non-string %s, "
+                    "'startswith' cannot match — treating as %s",
+                    self.name, path, type(actual).__name__, "MATCH" if match else "NO-MATCH",
+                )
+                return match
+            return actual.startswith(prefix)
+
+        # String suffix: field endswith 'suffix'
+        endswith_match = re.match(
+            r"(\w+(?:\.\w+)*)\s+endswith\s+['\"]([^'\"]+)['\"]", expr
+        )
+        if endswith_match:
+            path, suffix = endswith_match.groups()
+            actual = self._get_nested(context, path)
+            if not isinstance(actual, str):
+                match = self.action != "allow"
+                logger.warning(
+                    "Policy rule '%s': '%s' resolved to non-string %s, "
+                    "'endswith' cannot match — treating as %s",
+                    self.name, path, type(actual).__name__, "MATCH" if match else "NO-MATCH",
+                )
+                return match
+            return actual.endswith(suffix)
 
         # Comparison: field > number
         cmp_match = re.match(r"(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(\d+(?:\.\d+)?)", expr)
