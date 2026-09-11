@@ -1022,6 +1022,12 @@ zerofrom
 zerotrie
 zerovec
 zoneinfo
+contextmanager
+fsdecode
+fspath
+getcwd
+pathlike
+popenargs
 
 # --- Documentation site and ACS integration terms ---
 AgentRateLimiter
