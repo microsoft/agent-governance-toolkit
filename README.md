@@ -1,4 +1,4 @@
-🌍 [English](/README.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md) | [한국어](./docs/i18n/README.ko.md)
+🌍 [English](/README.md) | [Español](./docs/i18n/README.es.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md) | [한국어](./docs/i18n/README.ko.md)
 
 ![Agent Governance Toolkit](docs/assets/readme-banner.svg)
 
@@ -211,7 +211,7 @@ agt lint-policy policies/                          # validate policy files
 ```
 
 Full walkthrough: [quickstart.md](docs/quickstart.md) -- zero to governed agents in 5 minutes.
-🌍 Also in: [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md) | [한국어](docs/i18n/quickstart.ko.md)
+🌍 Also in: [Español](docs/i18n/quickstart.es.md) | [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md) | [한국어](docs/i18n/quickstart.ko.md)
 
 ---
 
