@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runtime=` plus explicit `SandboxConfig`.
 
 ### Fixed
+- **.NET numeric equality/inequality in policy-rule conditions** — `PolicyRule` conditions such as `count == 5` and `score != 3.14` now evaluate numeric literals (integers, decimals, and negatives) instead of failing to match, and numeric `!=` matches when the field is missing or non-numeric so deny rules fail closed. Numeric operands are parsed with the invariant culture so evaluation is deterministic across host locales (#3205).
 - **Spell check no longer reports the base branch's own history as a
   contributor's changes** — `scripts/ci/changed_lines.py` diffed from the tip of
   the base branch, so on a branch behind `main` every line `main` had since
