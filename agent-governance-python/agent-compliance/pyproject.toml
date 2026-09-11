@@ -81,3 +81,6 @@ agent-compliance = "agent_compliance.cli.main:main"
 agt = "agent_compliance.cli.agt:main"
 agt-contributor-check = "agent_compliance.cli.contributor_check:_entry"
 agt-credential-audit = "agent_compliance.cli.credential_audit:_entry"
+
+[tool.setuptools.package-data]
+agent_compliance = ["py.typed", "cli/*.json", "security/schemas/*.json"]
