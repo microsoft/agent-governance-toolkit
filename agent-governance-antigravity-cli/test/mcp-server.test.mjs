@@ -12,6 +12,13 @@ import { fileURLToPath } from "node:url";
 import { installPackage } from "../lib/cli.mjs";
 
 const PACKAGE_ROOT = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
+const STATELESS_META = {
+  clientInfo: {
+    name: "agt-parity-test",
+    version: "1.0.0",
+  },
+  capabilities: {},
+};
 
 test("bundled MCP server handles initialize, tools/list, and tools/call over stdio", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-antigravity-mcp-server-"));
@@ -86,6 +93,175 @@ test("bundled MCP server handles initialize, tools/list, and tools/call over std
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("server/discover matches legacy capability and tool declarations over stdio", async () => {
+  await withServer("agt-antigravity-mcp-discover-", async (child) => {
+    const initialize = await request(child, {
+      jsonrpc: "2.0",
+      id: 10,
+      method: "initialize",
+      params: { protocolVersion: "2024-11-05" },
+    });
+    const listTools = await request(child, {
+      jsonrpc: "2.0",
+      id: 11,
+      method: "tools/list",
+      params: {},
+    });
+    const discover = await request(child, {
+      jsonrpc: "2.0",
+      id: 12,
+      method: "server/discover",
+      params: {},
+      _meta: STATELESS_META,
+    });
+
+    assert.equal(initialize.result.protocolVersion, "2024-11-05");
+    assert.equal(discover.result.protocolVersion, "2026-07-28");
+    assert.deepEqual(discover.result.capabilities, initialize.result.capabilities);
+    assert.deepEqual(discover.result.serverInfo, initialize.result.serverInfo);
+    assert.deepEqual(discover.result.tools, listTools.result.tools);
+    assert.equal("sessionId" in discover.result, false);
+  });
+});
+
+test("stateless tools/list validates per-request _meta over stdio", async () => {
+  await withServer("agt-antigravity-mcp-meta-list-", async (child) => {
+    const accepted = await request(child, {
+      jsonrpc: "2.0",
+      id: 13,
+      method: "tools/list",
+      params: {},
+      _meta: STATELESS_META,
+    });
+    const rejected = await request(child, {
+      jsonrpc: "2.0",
+      id: 14,
+      method: "tools/list",
+      params: {},
+      _meta: { capabilities: {} },
+    });
+
+    assert.deepEqual(accepted.result.tools.map(({ name }) => name), [
+      "agt_policy_status",
+      "agt_policy_check_text",
+    ]);
+    assert.equal(rejected.error.code, -32001);
+  });
+});
+
+test("stateless tools/call rejects missing caller identity after discovery over stdio", async () => {
+  await withServer("agt-antigravity-mcp-meta-deny-", async (child) => {
+    const discover = await request(child, {
+      jsonrpc: "2.0",
+      id: 15,
+      method: "server/discover",
+      params: {},
+      _meta: STATELESS_META,
+    });
+    const rejected = await request(child, {
+      jsonrpc: "2.0",
+      id: 16,
+      method: "tools/call",
+      params: {
+        name: "agt_policy_status",
+        arguments: {},
+      },
+      _meta: { capabilities: {} },
+    });
+
+    assert.equal(discover.result.protocolVersion, "2026-07-28");
+    assert.equal(rejected.error.code, -32001);
+    assert.equal("result" in rejected, false);
+  });
+});
+
+test("stateless tools/call preserves caller context over stdio", async () => {
+  await withServer("agt-antigravity-mcp-meta-call-", async (child) => {
+    const response = await request(child, {
+      jsonrpc: "2.0",
+      id: 17,
+      method: "tools/call",
+      params: {
+        name: "agt_policy_status",
+        arguments: {},
+      },
+      _meta: STATELESS_META,
+    });
+
+    assert.deepEqual(response.result._meta, STATELESS_META);
+    assert.equal(response.result.isError, undefined);
+  });
+});
+
+test("legacy lifecycle remains compatible and terminal outcomes stay distinct over stdio", async () => {
+  await withServer("agt-antigravity-mcp-compat-", async (child) => {
+    const initialize = await request(child, {
+      jsonrpc: "2.0",
+      id: 18,
+      method: "initialize",
+      params: { protocolVersion: "2024-11-05" },
+    });
+    child.stdin.write(encodeMessage({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+      params: {},
+    }));
+    const compatibilityFallback = await request(child, {
+      jsonrpc: "2.0",
+      id: 19,
+      method: "tools/call",
+      params: {
+        name: "agt_policy_status",
+        arguments: {},
+      },
+    });
+    const allow = await request(child, {
+      jsonrpc: "2.0",
+      id: 20,
+      method: "tools/call",
+      params: {
+        name: "agt_policy_status",
+        arguments: {},
+      },
+      _meta: STATELESS_META,
+    });
+    const deny = await request(child, {
+      jsonrpc: "2.0",
+      id: 21,
+      method: "tools/call",
+      params: {
+        name: "agt_policy_status",
+        arguments: {},
+      },
+      _meta: { capabilities: {} },
+    });
+
+    assert.equal(initialize.result.protocolVersion, "2024-11-05");
+    assert.equal(compatibilityFallback.result.isError, undefined);
+    assert.notDeepEqual(allow.result, deny.error ?? deny.result);
+    assert.notDeepEqual(allow.result, compatibilityFallback.result);
+    assert.notDeepEqual(deny.error ?? deny.result, compatibilityFallback.result);
+  });
+});
+
+async function withServer(prefix, callback) {
+  const root = await mkdtemp(join(tmpdir(), prefix));
+  const antigravityHome = join(root, ".antigravity");
+
+  await installPackage({ antigravityHome, packageRoot: PACKAGE_ROOT });
+  const serverPath = join(antigravityHome, "extensions", "agt-global-policy", "mcp", "server.mjs");
+  const child = spawn(process.execPath, [serverPath], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  try {
+    await callback(child);
+  } finally {
+    child.kill();
+    await rm(root, { recursive: true, force: true });
+  }
+}
 
 function request(child, payload) {
   return new Promise((resolve, reject) => {
