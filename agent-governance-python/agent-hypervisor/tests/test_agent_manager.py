@@ -55,7 +55,7 @@ AGENT_2 = "did:mesh:agent-2"
 
 class TestManagedSession:
     async def test_managed_session_has_subsystems(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         assert managed.sso is not None
         assert managed.reversibility is not None
         assert managed.delta_engine is not None
@@ -69,18 +69,18 @@ class TestManagedSession:
 
 class TestCreateSession:
     async def test_creates_session(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         assert isinstance(managed, ManagedSession)
         assert managed.sso.state == SessionState.HANDSHAKING
         assert managed.sso.creator_did == CREATOR
 
     async def test_session_stored_internally(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         assert hypervisor.get_session(managed.sso.session_id) is managed
 
     async def test_create_multiple_sessions(self, hypervisor, config):
-        s1 = await hypervisor.create_session(config, creator_did=CREATOR)
-        s2 = await hypervisor.create_session(config, creator_did=CREATOR)
+        s1 = hypervisor.create_session(config, creator_did=CREATOR)
+        s2 = hypervisor.create_session(config, creator_did=CREATOR)
         assert s1.sso.session_id != s2.sso.session_id
         assert len(hypervisor._sessions) == 2
 
@@ -92,8 +92,8 @@ class TestCreateSession:
 
 class TestJoinSession:
     async def test_join_with_high_sigma(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        ring = await hypervisor.join_session(
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        ring = hypervisor.join_session(
             managed.sso.session_id,
             AGENT_1,
             sigma_raw=0.85,
@@ -102,8 +102,8 @@ class TestJoinSession:
         assert managed.sso.participant_count == 1
 
     async def test_join_with_low_sigma_gets_sandbox(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        ring = await hypervisor.join_session(
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        ring = hypervisor.join_session(
             managed.sso.session_id,
             AGENT_1,
             sigma_raw=0.30,
@@ -111,17 +111,17 @@ class TestJoinSession:
         assert ring == ExecutionRing.RING_3_SANDBOX
 
     async def test_join_multiple_agents(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_2, sigma_raw=0.70)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.join_session(managed.sso.session_id, AGENT_2, sigma_raw=0.70)
         assert managed.sso.participant_count == 2
 
     async def test_join_nonexistent_session_raises(self, hypervisor):
         with pytest.raises(ValueError, match="not found"):
-            await hypervisor.join_session("session:nonexistent", AGENT_1, sigma_raw=0.5)
+            hypervisor.join_session("session:nonexistent", AGENT_1, sigma_raw=0.5)
 
     async def test_join_with_non_reversible_actions_forces_strong(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         actions = [
             ActionDescriptor(
                 action_id="delete-db",
@@ -131,7 +131,7 @@ class TestJoinSession:
                 is_read_only=False,
             ),
         ]
-        await hypervisor.join_session(
+        hypervisor.join_session(
             managed.sso.session_id,
             AGENT_1,
             actions=actions,
@@ -140,7 +140,7 @@ class TestJoinSession:
         assert managed.sso.consistency_mode == ConsistencyMode.STRONG
 
     async def test_join_with_reversible_actions_keeps_eventual(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         actions = [
             ActionDescriptor(
                 action_id="update-rec",
@@ -150,7 +150,7 @@ class TestJoinSession:
                 reversibility=ReversibilityLevel.FULL,
             ),
         ]
-        await hypervisor.join_session(
+        hypervisor.join_session(
             managed.sso.session_id,
             AGENT_1,
             actions=actions,
@@ -160,8 +160,8 @@ class TestJoinSession:
 
     async def test_join_with_zero_sigma_no_nexus(self, hypervisor, config):
         """Zero sigma with no Nexus adapter → eff_score stays 0 → sandbox."""
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        ring = await hypervisor.join_session(
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        ring = hypervisor.join_session(
             managed.sso.session_id,
             AGENT_1,
             sigma_raw=0.0,
@@ -179,9 +179,9 @@ class TestJoinSessionWithAdapters:
         nexus = MagicMock()
         nexus.resolve_sigma.return_value = 0.90
         hv = Hypervisor(nexus=nexus)
-        managed = await hv.create_session(config, creator_did=CREATOR)
+        managed = hv.create_session(config, creator_did=CREATOR)
 
-        ring = await hv.join_session(
+        ring = hv.join_session(
             managed.sso.session_id,
             AGENT_1,
             sigma_raw=0.0,
@@ -194,9 +194,9 @@ class TestJoinSessionWithAdapters:
         nexus = MagicMock()
         nexus.resolve_sigma.return_value = 0.50  # lower than raw
         hv = Hypervisor(nexus=nexus)
-        managed = await hv.create_session(config, creator_did=CREATOR)
+        managed = hv.create_session(config, creator_did=CREATOR)
 
-        ring = await hv.join_session(
+        ring = hv.join_session(
             managed.sso.session_id,
             AGENT_1,
             sigma_raw=0.85,
@@ -220,8 +220,8 @@ class TestJoinSessionWithAdapters:
         iatp.analyze_manifest_dict.return_value = analysis
 
         hv = Hypervisor(iatp=iatp)
-        managed = await hv.create_session(config, creator_did=CREATOR)
-        ring = await hv.join_session(
+        managed = hv.create_session(config, creator_did=CREATOR)
+        ring = hv.join_session(
             managed.sso.session_id,
             AGENT_1,
             manifest={"cap": "test"},
@@ -240,8 +240,8 @@ class TestJoinSessionWithAdapters:
         manifest_obj = MagicMock()  # not a dict
 
         hv = Hypervisor(iatp=iatp)
-        managed = await hv.create_session(config, creator_did=CREATOR)
-        await hv.join_session(
+        managed = hv.create_session(config, creator_did=CREATOR)
+        hv.join_session(
             managed.sso.session_id,
             AGENT_1,
             manifest=manifest_obj,
@@ -257,19 +257,19 @@ class TestJoinSessionWithAdapters:
 
 class TestActivateSession:
     async def test_activate_after_join(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.activate_session(managed.sso.session_id)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.activate_session(managed.sso.session_id)
         assert managed.sso.state == SessionState.ACTIVE
 
     async def test_activate_nonexistent_raises(self, hypervisor):
         with pytest.raises(ValueError, match="not found"):
-            await hypervisor.activate_session("session:bogus")
+            hypervisor.activate_session("session:bogus")
 
     async def test_activate_without_participants_raises(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         with pytest.raises(Exception):
-            await hypervisor.activate_session(managed.sso.session_id)
+            hypervisor.activate_session(managed.sso.session_id)
 
 
 # ---------------------------------------------------------------------------
@@ -279,32 +279,32 @@ class TestActivateSession:
 
 class TestTerminateSession:
     async def _create_active_session(self, hv, cfg):
-        managed = await hv.create_session(cfg, creator_did=CREATOR)
-        await hv.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hv.activate_session(managed.sso.session_id)
+        managed = hv.create_session(cfg, creator_did=CREATOR)
+        hv.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hv.activate_session(managed.sso.session_id)
         return managed
 
     async def test_terminate_archives(self, hypervisor, config):
         managed = await self._create_active_session(hypervisor, config)
-        await hypervisor.terminate_session(managed.sso.session_id)
+        hypervisor.terminate_session(managed.sso.session_id)
         assert managed.sso.state == SessionState.ARCHIVED
 
     async def test_terminate_returns_hash_when_audit_enabled(self, hypervisor, config):
         managed = await self._create_active_session(hypervisor, config)
         # Record a delta so hash chain root is non-empty
         managed.delta_engine.capture(agent_did=AGENT_1, changes=[])
-        result = await hypervisor.terminate_session(managed.sso.session_id)
+        result = hypervisor.terminate_session(managed.sso.session_id)
         assert result is not None
         assert managed.sso.state == SessionState.ARCHIVED
 
     async def test_terminate_no_audit_returns_none(self, hypervisor, config_no_audit):
         managed = await self._create_active_session(hypervisor, config_no_audit)
-        result = await hypervisor.terminate_session(managed.sso.session_id)
+        result = hypervisor.terminate_session(managed.sso.session_id)
         assert result is None
 
     async def test_terminate_nonexistent_raises(self, hypervisor):
         with pytest.raises(ValueError, match="not found"):
-            await hypervisor.terminate_session("session:ghost")
+            hypervisor.terminate_session("session:ghost")
 
 # ---------------------------------------------------------------------------
 # get_session / _get_session
@@ -313,7 +313,7 @@ class TestTerminateSession:
 
 class TestGetSession:
     async def test_get_existing(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         assert hypervisor.get_session(managed.sso.session_id) is managed
 
     def test_get_nonexistent_returns_none(self, hypervisor):
@@ -334,23 +334,23 @@ class TestActiveSessions:
         assert hypervisor.active_sessions == []
 
     async def test_includes_handshaking(self, hypervisor, config):
-        await hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.create_session(config, creator_did=CREATOR)
         assert len(hypervisor.active_sessions) == 1
 
     async def test_excludes_archived(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.activate_session(managed.sso.session_id)
-        await hypervisor.terminate_session(managed.sso.session_id)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.activate_session(managed.sso.session_id)
+        hypervisor.terminate_session(managed.sso.session_id)
         assert len(hypervisor.active_sessions) == 0
 
     async def test_mixed_states(self, hypervisor, config):
-        s1 = await hypervisor.create_session(config, creator_did=CREATOR)
-        s2 = await hypervisor.create_session(config, creator_did=CREATOR)
+        s1 = hypervisor.create_session(config, creator_did=CREATOR)
+        s2 = hypervisor.create_session(config, creator_did=CREATOR)
         # Terminate s1
-        await hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.activate_session(s1.sso.session_id)
-        await hypervisor.terminate_session(s1.sso.session_id)
+        hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.activate_session(s1.sso.session_id)
+        hypervisor.terminate_session(s1.sso.session_id)
         # s2 still handshaking
         active = hypervisor.active_sessions
         assert len(active) == 1
@@ -374,11 +374,11 @@ class TestSessionsAccessor:
         assert hypervisor.sessions == []
 
     async def test_session_count_includes_terminated(self, hypervisor, config):
-        s1 = await hypervisor.create_session(config, creator_did=CREATOR)
-        s2 = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.activate_session(s1.sso.session_id)
-        await hypervisor.terminate_session(s1.sso.session_id)
+        s1 = hypervisor.create_session(config, creator_did=CREATOR)
+        s2 = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.activate_session(s1.sso.session_id)
+        hypervisor.terminate_session(s1.sso.session_id)
         # active_sessions drops s1; session_count keeps it.
         assert len(hypervisor.active_sessions) == 1
         assert hypervisor.session_count == 2
@@ -388,9 +388,9 @@ class TestSessionsAccessor:
         }
 
     async def test_sessions_returns_snapshot_not_live_view(self, hypervisor, config):
-        await hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.create_session(config, creator_did=CREATOR)
         snapshot = hypervisor.sessions
-        await hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.create_session(config, creator_did=CREATOR)
         # Snapshot taken before second create must not grow.
         assert len(snapshot) == 1
         assert hypervisor.session_count == 2
@@ -403,9 +403,9 @@ class TestSessionsAccessor:
 
 class TestVerifyBehavior:
     async def test_no_adapter_returns_none(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
-        result = await hypervisor.verify_behavior(
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        result = hypervisor.verify_behavior(
             managed.sso.session_id,
             AGENT_1,
             claimed_embedding=[1, 0],
@@ -421,11 +421,11 @@ class TestVerifyBehavior:
         policy_check.check_behavioral_drift.return_value = drift_result
 
         hv = Hypervisor(policy_check=policy_check)
-        managed = await hv.create_session(config, creator_did=CREATOR)
-        await hv.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hv.activate_session(managed.sso.session_id)
+        managed = hv.create_session(config, creator_did=CREATOR)
+        hv.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hv.activate_session(managed.sso.session_id)
 
-        result = await hv.verify_behavior(
+        result = hv.verify_behavior(
             managed.sso.session_id,
             AGENT_1,
             claimed_embedding=[1],
@@ -437,16 +437,16 @@ class TestVerifyBehavior:
 class TestEdgeCases:
     async def test_session_capacity_limit(self, hypervisor):
         cfg = SessionConfig(max_participants=1)
-        managed = await hypervisor.create_session(cfg, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        managed = hypervisor.create_session(cfg, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
         with pytest.raises(Exception):
-            await hypervisor.join_session(managed.sso.session_id, AGENT_2, sigma_raw=0.85)
+            hypervisor.join_session(managed.sso.session_id, AGENT_2, sigma_raw=0.85)
 
     async def test_duplicate_agent_join_raises(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
         with pytest.raises(Exception):
-            await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+            hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
 
     async def test_hypervisor_default_init(self):
         hv = Hypervisor()
@@ -457,16 +457,16 @@ class TestEdgeCases:
 
     async def test_full_lifecycle(self, hypervisor, config):
         """End-to-end: create → join → activate → terminate."""
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         assert managed.sso.state == SessionState.HANDSHAKING
 
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
         assert managed.sso.participant_count == 1
 
-        await hypervisor.activate_session(managed.sso.session_id)
+        hypervisor.activate_session(managed.sso.session_id)
         assert managed.sso.state == SessionState.ACTIVE
 
-        await hypervisor.terminate_session(managed.sso.session_id)
+        hypervisor.terminate_session(managed.sso.session_id)
         assert managed.sso.state == SessionState.ARCHIVED
 
 
@@ -477,22 +477,22 @@ class TestEdgeCases:
 
 class TestActiveIndex:
     async def test_active_ids_tracks_creation(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
         assert managed.sso.session_id in hypervisor._active_ids
 
     async def test_active_ids_removed_on_terminate(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.activate_session(managed.sso.session_id)
-        await hypervisor.terminate_session(managed.sso.session_id)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.activate_session(managed.sso.session_id)
+        hypervisor.terminate_session(managed.sso.session_id)
         assert managed.sso.session_id not in hypervisor._active_ids
 
     async def test_active_ids_consistent_with_active_sessions(self, hypervisor, config):
-        s1 = await hypervisor.create_session(config, creator_did=CREATOR)
-        s2 = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.activate_session(s1.sso.session_id)
-        await hypervisor.terminate_session(s1.sso.session_id)
+        s1 = hypervisor.create_session(config, creator_did=CREATOR)
+        s2 = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.activate_session(s1.sso.session_id)
+        hypervisor.terminate_session(s1.sso.session_id)
         active = hypervisor.active_sessions
         assert len(active) == 1
         assert active[0].sso.session_id == s2.sso.session_id
@@ -505,39 +505,39 @@ class TestActiveIndex:
 
 class TestMonitorSessions:
     async def test_monitor_empty(self, hypervisor):
-        issues = await hypervisor.monitor_sessions()
+        issues = hypervisor.monitor_sessions()
         assert issues == []
 
     async def test_monitor_healthy_agents(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.activate_session(managed.sso.session_id)
-        issues = await hypervisor.monitor_sessions(drift_threshold=0.5)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.activate_session(managed.sso.session_id)
+        issues = hypervisor.monitor_sessions(drift_threshold=0.5)
         assert issues == []
 
     async def test_monitor_flags_low_score(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.30)
-        await hypervisor.activate_session(managed.sso.session_id)
-        issues = await hypervisor.monitor_sessions(drift_threshold=0.5)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.30)
+        hypervisor.activate_session(managed.sso.session_id)
+        issues = hypervisor.monitor_sessions(drift_threshold=0.5)
         assert len(issues) == 1
         assert issues[0]["agent_did"] == AGENT_1
 
     async def test_monitor_skips_terminated(self, hypervisor, config):
-        managed = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.30)
-        await hypervisor.activate_session(managed.sso.session_id)
-        await hypervisor.terminate_session(managed.sso.session_id)
-        issues = await hypervisor.monitor_sessions(drift_threshold=0.5)
+        managed = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(managed.sso.session_id, AGENT_1, sigma_raw=0.30)
+        hypervisor.activate_session(managed.sso.session_id)
+        hypervisor.terminate_session(managed.sso.session_id)
+        issues = hypervisor.monitor_sessions(drift_threshold=0.5)
         assert issues == []
 
     async def test_monitor_multiple_sessions(self, hypervisor, config):
-        s1 = await hypervisor.create_session(config, creator_did=CREATOR)
-        s2 = await hypervisor.create_session(config, creator_did=CREATOR)
-        await hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
-        await hypervisor.join_session(s2.sso.session_id, AGENT_2, sigma_raw=0.30)
-        await hypervisor.activate_session(s1.sso.session_id)
-        await hypervisor.activate_session(s2.sso.session_id)
-        issues = await hypervisor.monitor_sessions(drift_threshold=0.5)
+        s1 = hypervisor.create_session(config, creator_did=CREATOR)
+        s2 = hypervisor.create_session(config, creator_did=CREATOR)
+        hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
+        hypervisor.join_session(s2.sso.session_id, AGENT_2, sigma_raw=0.30)
+        hypervisor.activate_session(s1.sso.session_id)
+        hypervisor.activate_session(s2.sso.session_id)
+        issues = hypervisor.monitor_sessions(drift_threshold=0.5)
         assert len(issues) == 1
         assert issues[0]["agent_did"] == AGENT_2

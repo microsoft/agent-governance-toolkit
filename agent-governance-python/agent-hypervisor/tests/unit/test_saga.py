@@ -134,6 +134,49 @@ class TestSagaOrchestrator:
         assert step.state == StepState.COMMITTED
 
     @pytest.mark.asyncio
+    async def test_execute_step_accepts_generic_awaitable(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
+
+        class AwaitableResult:
+            def __await__(self):
+                async def _run():
+                    return "ok"
+
+                return _run().__await__()
+
+        result = await self.orchestrator.execute_step(
+            saga.saga_id,
+            step.step_id,
+            executor=lambda: AwaitableResult(),
+        )
+
+        assert result == "ok"
+        assert step.state == StepState.COMMITTED
+
+    @pytest.mark.asyncio
+    async def test_sync_executor_contract_error_is_not_retried(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(
+            saga.saga_id,
+            "a1",
+            "did:a",
+            "/api/exec",
+            max_retries=2,
+        )
+        calls = 0
+
+        def executor():
+            nonlocal calls
+            calls += 1
+            return "not-awaitable"
+
+        with pytest.raises(TypeError, match="executor must return an awaitable"):
+            await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=executor)
+
+        assert calls == 1
+
+    @pytest.mark.asyncio
     async def test_execute_step_failure(self):
         saga = self.orchestrator.create_saga("session:1")
         step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")

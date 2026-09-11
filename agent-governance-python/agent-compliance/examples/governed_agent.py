@@ -57,7 +57,7 @@ async def main():
     # --- Layer 3: Agent Runtime ---
     if HAS_RUNTIME:
         runtime = AgentRuntime()
-        session = await runtime.create_session(
+        session = runtime.create_session(
             config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL),
             creator_did=identity.did,
         )

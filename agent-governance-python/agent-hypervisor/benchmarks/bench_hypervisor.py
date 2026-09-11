@@ -212,10 +212,10 @@ def bench_chain_verify():
 @benchmark_async("session_lifecycle", iterations=5000)
 async def bench_session_lifecycle():
     hv = Hypervisor()
-    s = await hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
-    await hv.join_session(s.sso.session_id, "did:mesh:a", sigma_raw=0.8)
-    await hv.activate_session(s.sso.session_id)
-    await hv.terminate_session(s.sso.session_id)
+    s = hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
+    hv.join_session(s.sso.session_id, "did:mesh:a", sigma_raw=0.8)
+    hv.activate_session(s.sso.session_id)
+    hv.terminate_session(s.sso.session_id)
 
 
 # ---------------------------------------------------------------------------
@@ -245,12 +245,12 @@ async def bench_saga_3_steps():
 @benchmark_async("full_governance_pipeline", iterations=2000)
 async def bench_full_pipeline():
     hv = Hypervisor()
-    s = await hv.create_session(
+    s = hv.create_session(
         config=SessionConfig(enable_audit=True), creator_did="did:mesh:admin"
     )
     sid = s.sso.session_id
-    await hv.join_session(sid, "did:mesh:a", sigma_raw=0.8)
-    await hv.activate_session(sid)
+    hv.join_session(sid, "did:mesh:a", sigma_raw=0.8)
+    hv.activate_session(sid)
 
     # Capture deltas
     for i in range(3):
@@ -264,7 +264,7 @@ async def bench_full_pipeline():
     step = s.saga.add_step(saga.saga_id, "action", "did:mesh:a", "/api/action")
     await s.saga.execute_step(saga.saga_id, step.step_id, executor=lambda: asyncio.sleep(0))
 
-    await hv.terminate_session(sid)
+    hv.terminate_session(sid)
 
 
 # ---------------------------------------------------------------------------
@@ -277,24 +277,24 @@ async def bench_monitor_sessions():
     hv = Hypervisor()
     # Create 50 sessions: 40 active (healthy), 10 terminated
     for i in range(50):
-        s = await hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
-        await hv.join_session(s.sso.session_id, f"did:mesh:a{i}", sigma_raw=0.8)
-        await hv.activate_session(s.sso.session_id)
+        s = hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
+        hv.join_session(s.sso.session_id, f"did:mesh:a{i}", sigma_raw=0.8)
+        hv.activate_session(s.sso.session_id)
         if i >= 40:
-            await hv.terminate_session(s.sso.session_id)
-    await hv.monitor_sessions()
+            hv.terminate_session(s.sso.session_id)
+    hv.monitor_sessions()
 
 
 @benchmark_async("active_sessions_100", iterations=5000)
 async def bench_active_sessions():
     hv = Hypervisor()
     for i in range(100):
-        s = await hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
-        await hv.join_session(s.sso.session_id, f"did:mesh:a{i}", sigma_raw=0.8)
-        await hv.activate_session(s.sso.session_id)
+        s = hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
+        hv.join_session(s.sso.session_id, f"did:mesh:a{i}", sigma_raw=0.8)
+        hv.activate_session(s.sso.session_id)
         # Terminate half
         if i % 2 == 0:
-            await hv.terminate_session(s.sso.session_id)
+            hv.terminate_session(s.sso.session_id)
     _ = hv.active_sessions
 
 
