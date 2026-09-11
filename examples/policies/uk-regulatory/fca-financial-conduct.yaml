@@ -1,0 +1,26 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# FCA Consumer Duty (PRIN 2A) + SM&CR — ACS manifest (Rego enforcement in rego/).
+# Enforcing authority: Financial Conduct Authority (FCA).
+# Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: fca-financial-conduct
+  version: "1.0"
+extends: []
+policies:
+  fca_financial_conduct:
+    type: rego
+    bundle: rego
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: fca_financial_conduct
+      query: data.agt_policies_uk.fca_conduct.acs_input_result
+  output:
+    policy_target: $.output.content
+    policy:
+      id: fca_financial_conduct
+      query: data.agt_policies_uk.fca_conduct.acs_output_result
