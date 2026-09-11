@@ -225,7 +225,7 @@ default output := {"decision": "allow"}
 output := {
   "decision": "transform",
   "reason": "ssn_redacted",
-  "transform": {"path": "$policy_target", "value": "Customer SSN is [REDACTED]"}
+  "transform": {"path": "$target", "value": "Customer SSN is [REDACTED]"}
 } if {
   input.intervention_point == "output"
   regex.match(`[0-9]{3}-[0-9]{2}-[0-9]{4}`, input.snapshot.response.content)
@@ -234,7 +234,7 @@ output := {
         encoding="utf-8",
     )
     manifest = {
-        "agent_control_specification_version": "0.3.0-alpha-agt",
+        "agent_control_specification_version": "0.4.0-alpha.1",
         "metadata": {"name": "agt-5-demo"},
         "policies": {
             "demo": {
@@ -310,19 +310,21 @@ def main() -> int:
         result = runtime.evaluate_intervention_point("pre_tool_call", snap)
         ok_deny = run("deny over limit", "deny", lambda: result.verdict)
 
-        # 3. escalate path: evaluate_only surfaces raw 'escalate'; enforce mode
-        #    runs the approval_resolver and rewrites to 'allow' on success.
+        # 3. escalate path: the Rego returns the `escalate` intent and the
+        #    engine normalizes it to a liftable deny, a `deny` carrying an
+        #    `approval` block. The computed verdict is the same in both modes;
+        #    what differs is that enforce mode routes it to the resolver.
         snap = pre_tool_call_snapshot(
             agent_id="demo-agent", tool_name="wire_transfer", args={"amount": 750}
         )
         raw = runtime.evaluate_intervention_point("pre_tool_call", snap, mode="evaluate_only")
         ok_escalate_raw = run(
-            "escalate raw (evaluate_only)", "escalate", lambda: raw.verdict
+            "escalate normalized to liftable deny (evaluate_only)", "deny", lambda: raw.verdict
         )
         enforced = runtime.evaluate_intervention_point("pre_tool_call", snap)
         ok_escalate_resolved = run(
-            "escalate resolved via approval (enforce)",
-            "allow",
+            "escalate stays a liftable deny (enforce)",
+            "deny",
             lambda: enforced.verdict,
         )
         ok_resolver_invoked = run(
@@ -380,7 +382,7 @@ if should_run core; then
 //! canonical paths: allow, deny, escalate, transform.
 
 use agent_control_specification::{
-    AgentControl, Decision, EnforcementMode, InterventionPoint,
+    AgentControl, Decision, EnforcementMode, InterceptionPoint,
 };
 use serde_json::json;
 use std::fs;
@@ -407,7 +409,7 @@ pre_tool_call := {"decision": "escalate", "reason": "needs_approval"} if {
 "#)?;
     let manifest_path = tmp.join("manifest.yaml");
     fs::write(&manifest_path, format!(r#"
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.4.0-alpha.1"
 policies:
   demo:
     type: rego
@@ -430,12 +432,13 @@ tools:
     let cases = [
         (100u64, Decision::Allow, "allow under limit"),
         (5000u64, Decision::Deny, "deny over limit"),
-        (750u64, Decision::Escalate, "escalate in mid-range"),
+        // An escalation is a liftable deny: `deny` plus an `approval` block.
+        (750u64, Decision::Deny, "escalate in mid-range"),
     ];
     let mut passed = 0;
     for (amount, expected, label) in cases {
         let result = control.evaluate_intervention_point(
-            InterventionPoint::PreToolCall,
+            InterceptionPoint::PreToolCall,
             json!({
                 "tool_call": {"name": "wire_transfer", "args": {"amount": amount}},
                 "envelope": {"agent": {"id": "demo"}, "intervention_point": "pre_tool_call"},
@@ -509,7 +512,7 @@ pre_tool_call := {"decision": "escalate", "reason": "needs_approval"} if {
 }
 `);
 writeFileSync(join(TMP, "manifest.yaml"), `
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.4.0-alpha.1"
 policies:
   demo:
     type: rego
@@ -528,13 +531,16 @@ tools:
 `);
 
 const control = await AgentControl.fromPath(join(TMP, "manifest.yaml"));
+// The Rego still returns the `escalate` intent. The engine normalizes it to
+// a liftable deny: `deny` carrying an `approval` block. `liftable` below says
+// whether that block must be present.
 const cases = [
-  [100,  "allow",    "allow under limit"],
-  [5000, "deny",     "deny over limit"],
-  [750,  "escalate", "escalate in mid-range"],
+  [100,  "allow", false, "allow under limit"],
+  [5000, "deny",  false, "deny over limit"],
+  [750,  "deny",  true,  "escalate in mid-range"],
 ];
 let passed = 0;
-for (const [amount, expected, label] of cases) {
+for (const [amount, expected, liftable, label] of cases) {
   const result = await control.evaluateInterventionPoint(
     InterventionPoint.PreToolCall,
     {
@@ -544,8 +550,9 @@ for (const [amount, expected, label] of cases) {
     EnforcementMode.Enforce,
   );
   const actual = result.verdict.decision;
-  const ok = actual === expected;
-  console.log(`  ${ok ? "✓" : "✗"} ${label}: got ${actual} (expected ${expected})`);
+  const hasApproval = result.verdict.approval !== undefined && result.verdict.approval !== null;
+  const ok = actual === expected && hasApproval === liftable;
+  console.log(`  ${ok ? "✓" : "✗"} ${label}: got ${actual}${hasApproval ? "+approval" : ""} (expected ${expected}${liftable ? " +approval" : ""})`);
   if (ok) passed++;
 }
 console.log(`\n  Node demo: ${passed}/${cases.length} paths green`);
@@ -628,7 +635,7 @@ default output := {""decision"": ""allow""}
 output := {
   ""decision"": ""transform"",
   ""reason"": ""ssn_redacted"",
-  ""transform"": {""path"": ""$policy_target"", ""value"": ""Customer SSN is [REDACTED]""}
+  ""transform"": {""path"": ""$target"", ""value"": ""Customer SSN is [REDACTED]""}
 } if {
   input.intervention_point == ""output""
   regex.match(`[0-9]{3}-[0-9]{2}-[0-9]{4}`, input.snapshot.output)
@@ -750,8 +757,8 @@ var transformedValue = transformResult.TransformedPolicyTarget?.GetString();
 Check(transformedValue == "Customer SSN is [REDACTED]",
       "transform value applied",
       $"transformed_policy_target = {transformedValue ?? "<null>"}");
-Check(transformResult.Verdict.Transform?.Path == "$policy_target",
-      "transform body carries $policy_target path",
+Check(transformResult.Verdict.Transform?.Path == "$target",
+      "transform body carries $target path",
       $"verdict.transform.path = {transformResult.Verdict.Transform?.Path ?? "<null>"}");
 Check(transformResult.InputIdentity != transformResult.EnforcedIdentity,
       "transform shifts enforced_identity",
@@ -797,7 +804,7 @@ class Policy:
 with tempfile.TemporaryDirectory(prefix="agt-demo-native-") as tmp:
     tmp = Path(tmp)
     manifest = {
-        "agent_control_specification_version": "0.3.1-beta",
+        "agent_control_specification_version": "0.4.0-alpha.1",
         "metadata": {"name": "native-demo"},
         "policies": {
             "wire": {"type": "custom", "adapter": "native-demo"},

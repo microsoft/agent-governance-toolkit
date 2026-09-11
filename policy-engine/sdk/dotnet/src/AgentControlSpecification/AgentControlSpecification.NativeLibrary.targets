@@ -1,8 +1,8 @@
 <Project>
   <PropertyGroup>
-    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('Linux'))">libagent_control_specification_core.so</_AcsNativeLibName>
-    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libagent_control_specification_core.dylib</_AcsNativeLibName>
-    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('Windows'))">agent_control_specification_core.dll</_AcsNativeLibName>
+    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('Linux'))">libagent_control_specification.so</_AcsNativeLibName>
+    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libagent_control_specification.dylib</_AcsNativeLibName>
+    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('Windows'))">agent_control_specification.dll</_AcsNativeLibName>
 
     <_AcsHostRid Condition="$([MSBuild]::IsOSPlatform('Linux')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">linux-x64</_AcsHostRid>
     <_AcsHostRid Condition="$([MSBuild]::IsOSPlatform('Linux')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">linux-arm64</_AcsHostRid>
@@ -42,7 +42,7 @@
     </Exec>
     <Error Condition="'$(_AcsCargoExitCode)' != '0'"
            Text="AgentControlSpecification requires cargo to build the native library, or set AgentControlSpecificationSkipNativeBuild=true and provide $(_AcsStagedPath)." />
-    <Exec Command="cargo build $(_AcsCargoReleaseFlag) -p agent_control_specification_core --features default-dispatchers,aacs,openai_moderation,perspective,llama_guard,lakera_guard,auto --manifest-path &quot;$(_AcsCargoManifestPath)&quot;"
+    <Exec Command="cargo build $(_AcsCargoReleaseFlag) -p agent_control_specification --features opa,bundled-dispatchers --manifest-path &quot;$(_AcsCargoManifestPath)&quot;"
           WorkingDirectory="$(_AcsWorkspaceDir)"
           ConsoleToMSBuild="true" />
     <Error Condition="!Exists('$(_AcsRustOutputPath)')"
@@ -90,11 +90,11 @@
   <Target Name="_AcsVerifyPackageNativeAssets"
           Condition="'$(AgentControlSpecificationAllowIncompleteNativePack)' != 'true'">
     <ItemGroup>
-      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/linux-x64/native/libagent_control_specification_core.so" />
-      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/linux-arm64/native/libagent_control_specification_core.so" />
-      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/osx-x64/native/libagent_control_specification_core.dylib" />
-      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/osx-arm64/native/libagent_control_specification_core.dylib" />
-      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/win-x64/native/agent_control_specification_core.dll" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/linux-x64/native/libagent_control_specification.so" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/linux-arm64/native/libagent_control_specification.so" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/osx-x64/native/libagent_control_specification.dylib" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/osx-arm64/native/libagent_control_specification.dylib" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/win-x64/native/agent_control_specification.dll" />
       <_AcsMissingPackageNativeAsset Include="@(_AcsRequiredPackageNativeAsset)" Condition="!Exists('%(Identity)')" />
     </ItemGroup>
     <Error Condition="'@(_AcsMissingPackageNativeAsset)' != ''"

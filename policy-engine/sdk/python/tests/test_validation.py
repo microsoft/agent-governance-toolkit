@@ -10,7 +10,7 @@ import pytest
 
 from agent_control_specification.validation import validate_acs_artifacts
 
-MANIFEST_HEADER = """agent_control_specification_version: "0.3.1-beta"
+MANIFEST_HEADER = """agent_control_specification_version: "0.4.0-alpha.1"
 """
 MINIMAL_POLICY = """policies:
   minimal:
@@ -43,7 +43,7 @@ def test_artifact_validation_matches_shared_parity_corpus() -> None:
 def test_string_validation_api_returns_json_ready_success() -> None:
     report = validate_acs_artifacts(
         """
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: validation-api
 policies:
@@ -125,8 +125,8 @@ helper(left, right) := left
 def test_string_validation_api_rejects_duplicate_manifest_keys() -> None:
     report = validate_acs_artifacts(
         """
-agent_control_specification_version: "0.3.0-alpha"
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata: {}
 """,
         {},
@@ -140,7 +140,7 @@ metadata: {}
 def test_string_validation_api_uses_yaml_12_boolean_keys() -> None:
     report = validate_acs_artifacts(
         """
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 policies:
   on:
     type: rego
@@ -282,7 +282,7 @@ def test_string_validation_api_bounds_diagnostics_and_snippets() -> None:
     manifest_report = validate_acs_artifacts(
         json.dumps(
             {
-                "agent_control_specification_version": "0.3.1-beta",
+                "agent_control_specification_version": "0.4.0-alpha.1",
                 "extends": [0] * 200,
             }
         ),
@@ -301,7 +301,7 @@ def test_string_validation_api_bounds_diagnostics_and_snippets() -> None:
 def test_string_validation_api_requires_modules_for_rego_manifest() -> None:
     report = validate_acs_artifacts(
         """
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 policies:
   guard:
     type: rego
@@ -409,7 +409,7 @@ def test_string_validation_api_rejects_malformed_inputs(
 def test_string_validation_api_resolves_embedded_approval_schema() -> None:
     report = validate_acs_artifacts(
         """
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: validation-api
 approval:
@@ -431,7 +431,7 @@ approval:
 def test_string_validation_api_accepts_partial_extends_manifest() -> None:
     report = validate_acs_artifacts(
         """
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 extends:
   - base.yaml
 """,

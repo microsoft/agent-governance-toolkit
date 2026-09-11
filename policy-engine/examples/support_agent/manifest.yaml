@@ -1,4 +1,4 @@
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: customer_support_guardrails
 extends: []
@@ -16,7 +16,7 @@ intervention_points:
       query: data.agent_control_specification.customer_support_guardrails.input_verdict
     annotations:
       input_risk:
-        from: $policy_target
+        from: $target
   pre_tool_call:
     policy_target: $.tool_call.args
     policy_target_kind: tool_args
@@ -26,9 +26,9 @@ intervention_points:
     tool_name_from: $.tool_call.name
     annotations:
       refund_risk:
-        from: $policy_target
+        from: $target
       recipient_scope:
-        from: $policy_target
+        from: $target
   post_tool_call:
     policy_target: $.tool_result
     policy_target_kind: tool_result
@@ -38,7 +38,7 @@ intervention_points:
     tool_name_from: $.tool_call.name
     annotations:
       pii_scan:
-        from: $policy_target
+        from: $target
   output:
     policy_target: $.output
     policy_target_kind: assistant_output
@@ -47,7 +47,7 @@ intervention_points:
       query: data.agent_control_specification.customer_support_guardrails.output_verdict
     annotations:
       pii_scan:
-        from: $policy_target
+        from: $target
 tools:
   issue_refund:
     type: Tool

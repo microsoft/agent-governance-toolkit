@@ -1,4 +1,4 @@
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: "openai-moderation"
 extends: []
@@ -13,7 +13,7 @@ intervention_points:
     policy_target_kind: user_input
     annotations:
       openai_mod:
-        from: "$policy_target.text"
+        from: "$target.text"
     policy:
       id: openai_moderation
       query: data.agent_control_specification.openai_moderation.input_verdict
@@ -22,7 +22,7 @@ intervention_points:
     policy_target_kind: assistant_output
     annotations:
       openai_mod:
-        from: "$policy_target.text"
+        from: "$target.text"
     policy:
       id: openai_moderation
       query: data.agent_control_specification.openai_moderation.output_verdict

@@ -29,7 +29,7 @@ pytest.importorskip('agent_control_specification')
 pytest.importorskip('agent_os')
 from agent_control_specification import InterventionPointResult
 from agent_control_specification import AgentControl, ApprovalResolution
-_MANIFEST = 'agent_control_specification_version: 0.3.0-alpha-agt\nmetadata:\n  name: pydantic_ai_adapter_scenarios\nextends: []\npolicies:\n  scenario_policy:\n    type: custom\n    adapter: pydantic_ai_adapter_scenarios_adapter\nintervention_points:\n  input:\n    policy_target: $.input.body\n    policy_target_kind: user_input\n    policy:\n      id: scenario_policy\n  pre_tool_call:\n    policy_target: $.tool_call.args\n    policy_target_kind: tool_args\n    tool_name_from: $.tool_call.name\n    policy:\n      id: scenario_policy\ntools:\n  search:\n    clearance: public\n'
+_MANIFEST = 'agent_control_specification_version: 0.4.0-alpha.1\nmetadata:\n  name: pydantic_ai_adapter_scenarios\nextends: []\npolicies:\n  scenario_policy:\n    type: custom\n    adapter: pydantic_ai_adapter_scenarios_adapter\nintervention_points:\n  input:\n    policy_target: $.input.body\n    policy_target_kind: user_input\n    policy:\n      id: scenario_policy\n  pre_tool_call:\n    policy_target: $.tool_call.args\n    policy_target_kind: tool_args\n    tool_name_from: $.tool_call.name\n    policy:\n      id: scenario_policy\ntools:\n  search:\n    clearance: public\n'
 
 class _ScriptedPolicy:
     """Tiny ACS PolicyDispatcher that returns a scripted verdict per call."""
@@ -77,7 +77,7 @@ def test_before_run_deny_path_raises_policy_violation(tmp_path: Path) -> None:
 def test_before_run_transform_path_rewrites_prompt(tmp_path: Path) -> None:
     """A ``transform`` verdict rewrites the outbound prompt."""
     from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
-    runtime, _policy = _build_runtime(tmp_path, [{'decision': 'transform', 'reason': 'pii_redaction', 'transform': {'path': '$policy_target', 'value': 'Customer SSN is [REDACTED]'}}])
+    runtime, _policy = _build_runtime(tmp_path, [{'decision': 'transform', 'reason': 'pii_redaction', 'transform': {'path': '$target', 'value': 'Customer SSN is [REDACTED]'}}])
     kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()
     rewritten = capability.before_run('Customer SSN is 123-45-6789')
@@ -112,7 +112,7 @@ def test_before_run_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
 def test_before_tool_execute_transform_rewrites_arguments(tmp_path: Path) -> None:
     """A ``transform`` verdict at pre_tool_call rewrites tool arguments."""
     from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
-    runtime, _policy = _build_runtime(tmp_path, [{'decision': 'transform', 'reason': 'query_sanitized', 'transform': {'path': '$policy_target', 'value': {'query': '[SANITIZED]'}}}])
+    runtime, _policy = _build_runtime(tmp_path, [{'decision': 'transform', 'reason': 'query_sanitized', 'transform': {'path': '$target', 'value': {'query': '[SANITIZED]'}}}])
     kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()
     rewritten = capability.before_tool_execute('search', {'query': 'drop table users;'})

@@ -42,8 +42,7 @@ function allowControl() {
 }
 
 function transformedControl(transformedPolicyTarget) {
-  // AGT D1: TRANSFORM is the only mutating decision; pre-AGT this used
-  // Decision.Warn which is now a non-mutating verdict under AGT.
+  // AGT D1: TRANSFORM is the only mutating decision.
   return new AgentControl(new StubRuntimeClient(({ interventionPoint }) => ({
     verdict: { decision: interventionPoint === "post_model_call" ? Decision.Transform : Decision.Allow },
     ...(interventionPoint === "post_model_call" ? { transformedPolicyTarget } : {}),
@@ -130,7 +129,7 @@ test("streaming preserves suspended escalation handles", async () => {
   const control = new AgentControl(
     new StubRuntimeClient(({ interventionPoint }) => interventionPoint === "post_model_call"
       ? {
-        verdict: { decision: Decision.Escalate, reason: "human_review" },
+        verdict: { decision: Decision.Deny, reason: "human_review", approval: {} },
         policyInput,
         actionIdentity: identity,
       }

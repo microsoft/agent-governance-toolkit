@@ -103,7 +103,7 @@ Run this script to confirm everything is working:
 python -c "
 from agent_control_specification import parse_manifest
 m = parse_manifest('''
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: workshop-check
 ''')

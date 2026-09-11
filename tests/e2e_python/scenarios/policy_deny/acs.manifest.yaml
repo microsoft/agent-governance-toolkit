@@ -2,7 +2,7 @@
 # Native Agent Control Specification manifest: the pre_tool_call intervention
 # point binds a host-owned custom policy that denies the live budget mutation.
 # This is the contract a customer would ship; no legacy policy language.
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: adtech-live-budget-guard
 policies:

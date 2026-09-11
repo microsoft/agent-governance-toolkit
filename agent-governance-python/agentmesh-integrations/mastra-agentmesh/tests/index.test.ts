@@ -200,7 +200,7 @@ describe("createGovernedTool", () => {
       reason: decision === "deny" ? "test_denied" : undefined,
       transform:
         decision === "transform"
-          ? { path: "$policy_target", value: transformedPolicyTarget }
+          ? { path: "$target", value: transformedPolicyTarget }
           : undefined,
     },
     transformedPolicyTarget,

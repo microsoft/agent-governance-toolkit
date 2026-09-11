@@ -163,10 +163,9 @@
           "enum": [
             "allow",
             "deny",
-            "warn",
-            "escalate",
             "transform"
-          ]
+          ],
+          "description": "The normalized verdict the host observes. Three, closed. A policy MAY still emit the intents warn and escalate in policy_response; the engine normalizes warn to allow with warnings[] and escalate to a deny carrying approval."
         },
         "reason": {
           "type": [
@@ -200,6 +199,20 @@
             "present",
             "absent"
           ]
+        },
+        "warnings": {
+          "enum": [
+            "present",
+            "absent"
+          ],
+          "description": "Assert whether the normalized verdict carries a warnings[] entry."
+        },
+        "approval": {
+          "enum": [
+            "present",
+            "absent"
+          ],
+          "description": "Assert whether the deny is liftable. A deny carrying approval routes to the host approval seam; a deny without it is final."
         }
       }
     },

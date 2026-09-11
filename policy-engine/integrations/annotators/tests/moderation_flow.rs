@@ -1,9 +1,9 @@
 #![cfg(feature = "aacs")]
 
 use agent_control_specification::{
-    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, JsonValue, Manifest, PolicyDispatcher, PreparedPolicyInvocation,
-    Runtime, RuntimeError,
+    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, HostEvaluation,
+    InterceptionPoint, JsonValue, Manifest, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
+    RuntimeError,
 };
 use agent_control_specification_annotators::{
     ClassifierAnnotator, EndpointAnnotator, LlmAnnotator, StubHttpTransport, TransportResponse,
@@ -74,7 +74,12 @@ impl PolicyDispatcher for ModerationPolicy {
             return Ok(json!({"decision": "deny", "reason": "moderation.violence"}));
         }
         if annotations["judge"]["label"].as_str() == Some("self_harm") {
-            return Ok(json!({"decision": "escalate", "reason": "moderation.escalate"}));
+            // agent-hooks has no `escalate`: an escalation is a
+            // liftable deny carrying an `approval` block, which the
+            // host resolves.
+            return Ok(
+                json!({"decision": "deny", "reason": "moderation.escalate", "approval": {}}),
+            );
         }
         let spans = annotations["pii"]["spans"].clone();
         if spans.as_array().is_some_and(|items| !items.is_empty()) {
@@ -109,7 +114,7 @@ impl PolicyDispatcher for ModerationPolicy {
             return Ok(json!({
                 "decision": "transform",
                 "reason": "moderation.redacted",
-                "transform": {"path": "$policy_target.text", "value": out}
+                "transform": {"path": "$target.text", "value": out}
             }));
         }
         Ok(json!({"decision": "allow"}))
@@ -118,7 +123,7 @@ impl PolicyDispatcher for ModerationPolicy {
 
 fn manifest() -> Manifest {
     Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   moderation:
     type: test
@@ -130,11 +135,11 @@ intervention_points:
     policy_target: $snap.output
     annotations:
       safety:
-        from: $policy_target.text
+        from: $target.text
       judge:
-        from: $policy_target.text
+        from: $target.text
       pii:
-        from: $policy_target.text
+        from: $target.text
 annotators:
   safety:
     type: classifier
@@ -165,12 +170,11 @@ fn runtime(safety_body: &'static str, judge_body: &'static str, pii_body: &'stat
     Runtime::new(manifest(), Arc::new(dispatcher), Arc::new(ModerationPolicy)).unwrap()
 }
 
-fn evaluate(runtime: &Runtime, text: &str) -> agent_control_specification::InterventionPointResult {
-    runtime.evaluate_intervention_point(InterventionPointRequest {
-        intervention_point: InterventionPoint::Output,
-        snapshot: json!({"output": {"text": text}}),
-        mode: EnforcementMode::Enforce,
-    })
+fn evaluate(runtime: &Runtime, text: &str) -> HostEvaluation {
+    let result =
+        runtime.evaluate_point(InterceptionPoint::Output, json!({"output": {"text": text}}));
+    HostEvaluation::from_engine(InterceptionPoint::Output, result, EnforcementMode::Enforce)
+        .expect("host evaluation")
 }
 
 #[test]
@@ -225,10 +229,20 @@ fn realistic_support_moderation_can_deny_and_escalate_from_annotations() {
         r#"{"spans":[]}"#,
     );
     let escalated = evaluate(&self_harm, "support escalation");
-    assert_eq!(escalated.verdict.decision, Decision::Escalate);
+    assert_eq!(escalated.verdict.decision, Decision::Deny);
     assert_eq!(
         escalated.verdict.reason.as_deref(),
         Some("moderation.escalate")
+    );
+    // What distinguishes an escalation from a plain deny is the
+    // approval block, not a separate decision.
+    assert!(
+        escalated.verdict.approval.is_some(),
+        "escalation must be a liftable deny"
+    );
+    assert!(
+        denied.verdict.approval.is_none(),
+        "a plain deny must not be liftable"
     );
 }
 
@@ -273,7 +287,7 @@ fn bundled_aacs_failures_fail_closed_with_diagnostics() {
             ),
             ("api_key_env", json!("ACS_AACS_FLOW_TEST_KEY")),
             ("category_thresholds", json!({"Violence": 0.5})),
-            ("from", json!("$policy_target.text")),
+            ("from", json!("$target.text")),
         ]);
 
         let error = ClassifierAnnotator::new()
@@ -290,10 +304,7 @@ fn bundled_aacs_failures_fail_closed_with_diagnostics() {
 
 #[test]
 fn bad_endpoint_config_reserved_reason_and_oversize_outputs_fail_closed() {
-    let missing_url = invocation(&[
-        ("type", json!("endpoint")),
-        ("from", json!("$policy_target.text")),
-    ]);
+    let missing_url = invocation(&[("type", json!("endpoint")), ("from", json!("$target.text"))]);
     let missing_url_error = EndpointAnnotator::new()
         .dispatch("pii", &missing_url, &input("hello"))
         .expect_err("missing URL should fail closed");
@@ -337,7 +348,7 @@ fn malformed_llm_judge_and_missing_aacs_config_fail_closed() {
     );
     let judge = invocation(&[
         ("type", json!("llm")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("endpoint", json!(malformed_url)),
         ("api_key_env", json!("ACS_LLM_FLOW_TEST_KEY")),
     ]);
@@ -352,7 +363,7 @@ fn malformed_llm_judge_and_missing_aacs_config_fail_closed() {
         ("type", json!("classifier")),
         ("provider", json!("aacs")),
         ("api_key_env", json!("ACS_AACS_FLOW_TEST_KEY")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
     ]);
     std::env::set_var("ACS_AACS_FLOW_TEST_KEY", "test-key");
     let config_error = ClassifierAnnotator::new()
@@ -390,7 +401,7 @@ fn concurrent_stubbed_classifier_dispatch_has_isolated_requests() {
                 ),
                 ("api_key_env", json!("ACS_AACS_FLOW_TEST_KEY")),
                 ("category_thresholds", json!({"Violence": 0.5})),
-                ("from", json!("$policy_target.text")),
+                ("from", json!("$target.text")),
             ]);
             let text = format!("message {index}");
             ClassifierAnnotator::new()

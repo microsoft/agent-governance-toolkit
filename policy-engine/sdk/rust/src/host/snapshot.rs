@@ -1,17 +1,16 @@
+use super::evaluation::{identity, with_transformed_target};
+use super::HostEvaluation;
 use super::{
     AgentControlBlocked, AgentControlInterruption, AgentControlSuspended, ApprovalOutcome,
     ApprovalResolver,
 };
-use crate::{
-    action_identity, Decision, EnforcementMode, InterventionPoint, InterventionPointResult,
-    JsonValue, RuntimeError, Verdict,
-};
+use crate::{Decision, EnforcementMode, InterceptionPoint, JsonValue, Verdict};
 use serde_json::Map;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 pub(super) fn enforce(
-    intervention_point: InterventionPoint,
-    intervention_point_result: &InterventionPointResult,
+    intervention_point: InterceptionPoint,
+    intervention_point_result: &HostEvaluation,
     mode: EnforcementMode,
     resolver: Option<&ApprovalResolver>,
 ) -> Result<(), AgentControlInterruption> {
@@ -19,14 +18,20 @@ pub(super) fn enforce(
         return Ok(());
     }
     match intervention_point_result.verdict.decision {
-        // AGT D1: transform permits the action; the runtime has already
-        // applied the transform to the policy target before reaching
-        // here. The host MUST use `transformed_policy_target` if present.
-        Decision::Allow | Decision::Warn | Decision::Transform => Ok(()),
-        Decision::Deny => Err(blocked(intervention_point, intervention_point_result)),
-        Decision::Escalate => {
+        // AGT D1: transform permits the action. The engine never applies
+        // a transform, so `HostEvaluation` applied it on the way here and
+        // the host MUST use `transformed_policy_target` when present.
+        // AGENT-HOOKS-0.1 section 5.1: `warn` folded into `allow` plus
+        // `warnings[]`, so a permit decision covers it. A liftable deny
+        // carries an `approval` block and routes to the approval seam.
+        Decision::Allow | Decision::Transform => Ok(()),
+        Decision::Deny if intervention_point_result.verdict.approval.is_none() => {
+            Err(blocked(intervention_point, intervention_point_result))
+        }
+        Decision::Deny => {
             let Some(resolver) = resolver else {
-                return Err(blocked(intervention_point, intervention_point_result));
+                let error_result = approval_unresolved_result();
+                return Err(blocked(intervention_point, &error_result));
             };
             // AGT D1.4: approval binding pins to `enforced_identity` so
             // the approver consents to the action that will execute, not
@@ -86,26 +91,15 @@ pub(super) fn enforce(
     }
 }
 
-fn current_enforced_identity(
-    intervention_point_result: &InterventionPointResult,
-) -> Option<String> {
+fn current_enforced_identity(intervention_point_result: &HostEvaluation) -> Option<String> {
     // AGT D1.4: recompute `enforced_identity` from the live policy input
     // and any transformed policy target so a late-arriving approval is
     // checked against what the host will actually execute. Falls back to
     // the input identity when no transform was emitted.
     let policy_input = intervention_point_result.policy_input.as_ref()?;
-    if let Some(transformed) = intervention_point_result.transformed_policy_target.as_ref() {
-        let mut enforced_input = policy_input.clone();
-        if let Some(value_slot) = enforced_input
-            .get_mut("policy_target")
-            .and_then(JsonValue::as_object_mut)
-            .and_then(|object| object.get_mut("value"))
-        {
-            *value_slot = transformed.clone();
-        }
-        action_identity(&enforced_input).ok()
-    } else {
-        action_identity(policy_input).ok()
+    match intervention_point_result.transformed_policy_target.as_ref() {
+        Some(transformed) => identity(&with_transformed_target(policy_input, transformed)).ok(),
+        None => identity(policy_input).ok(),
     }
 }
 
@@ -121,12 +115,23 @@ fn approved_identity_matches(
         && current_identity == approved_identity
 }
 
-fn approval_action_mismatch_result() -> InterventionPointResult {
-    let error = RuntimeError::ApprovalActionMismatch(
-        "approved action identity did not match the current action identity".to_string(),
-    );
-    InterventionPointResult {
-        verdict: Verdict::runtime_error(&error),
+fn approval_action_mismatch_result() -> HostEvaluation {
+    // AGENT-HOOKS-0.1 section 11: the approval seam is a host
+    // obligation, so an identity mismatch is a `host_error:*` the host
+    // synthesizes rather than a `runtime_error:*` from the engine.
+    HostEvaluation {
+        verdict: Verdict {
+            decision: Decision::Deny,
+            reason: Some("host_error:approval_identity_mismatch".to_string()),
+            message: Some(
+                "Approved action identity did not match the current action identity.".to_string(),
+            ),
+            warnings: Vec::new(),
+            approval: None,
+            transform: None,
+            evidence: None,
+            result_labels: Vec::new(),
+        },
         transformed_policy_target: None,
         policy_input: None,
         action_identity: None,
@@ -135,12 +140,40 @@ fn approval_action_mismatch_result() -> InterventionPointResult {
     }
 }
 
-fn approval_resolver_failed_result() -> InterventionPointResult {
-    InterventionPointResult {
+fn approval_unresolved_result() -> HostEvaluation {
+    // AGENT-HOOKS-0.1 section 11: a liftable deny that reaches no
+    // approval seam is distinct from a policy deny. Reporting it as the
+    // original verdict would hide a host misconfiguration behind what
+    // looks like a normal policy refusal.
+    HostEvaluation {
         verdict: Verdict {
             decision: Decision::Deny,
-            reason: Some("runtime_error:approval_resolver_failed".to_string()),
+            reason: Some("host_error:approval_unresolved".to_string()),
+            message: Some(
+                "Verdict requires approval but no approval resolver is configured.".to_string(),
+            ),
+            warnings: Vec::new(),
+            approval: None,
+            transform: None,
+            evidence: None,
+            result_labels: Vec::new(),
+        },
+        transformed_policy_target: None,
+        policy_input: None,
+        action_identity: None,
+        input_identity: None,
+        enforced_identity: None,
+    }
+}
+
+fn approval_resolver_failed_result() -> HostEvaluation {
+    HostEvaluation {
+        verdict: Verdict {
+            decision: Decision::Deny,
+            reason: Some("host_error:approval_resolver_failed".to_string()),
             message: Some("Approval resolver failed closed.".to_string()),
+            warnings: Vec::new(),
+            approval: None,
             transform: None,
             evidence: None,
             result_labels: Vec::new(),
@@ -154,8 +187,8 @@ fn approval_resolver_failed_result() -> InterventionPointResult {
 }
 
 fn blocked(
-    intervention_point: InterventionPoint,
-    intervention_point_result: &InterventionPointResult,
+    intervention_point: InterceptionPoint,
+    intervention_point_result: &HostEvaluation,
 ) -> AgentControlInterruption {
     AgentControlInterruption::Blocked(AgentControlBlocked::new(
         intervention_point,
@@ -165,7 +198,7 @@ fn blocked(
 
 pub(super) fn effective_policy_target(
     raw: JsonValue,
-    intervention_point_result: &InterventionPointResult,
+    intervention_point_result: &HostEvaluation,
     mode: EnforcementMode,
 ) -> JsonValue {
     // AGT D1 retires `applies_effects`; the only value-changing decision

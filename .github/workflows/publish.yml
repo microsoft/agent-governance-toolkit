@@ -70,6 +70,7 @@ jobs:
         env:
           INPUT: ${{ github.event.inputs.package }}
           EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           # Complete list of publishable Python packages.
           ALL='[
@@ -138,6 +139,10 @@ jobs:
 
           GENERIC=$(echo "$SELECTED" | jq -c '[.[] | select(.name != "agent-control-specification")]')
           SELECTED_COUNT=$(echo "$SELECTED" | jq 'length')
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN" = "false" ] && [ "$SELECTED_COUNT" -gt 1 ]; then
+            echo "::error::Bulk PyPI publication requires the ordered ESRP pipeline. Select one Python package per GitHub publish run, in dependency order; bulk dry-runs remain supported."
+            exit 1
+          fi
           GENERIC_COUNT=$(echo "$GENERIC" | jq 'length')
           ACS_COUNT=$(echo "$SELECTED" | jq '[.[] | select(.name == "agent-control-specification")] | length')
           any=$([ "$SELECTED_COUNT" -gt 0 ] && echo true || echo false)

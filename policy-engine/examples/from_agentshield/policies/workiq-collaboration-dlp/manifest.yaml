@@ -1,4 +1,4 @@
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: "workiq-collaboration-dlp"
 extends: []
@@ -20,7 +20,7 @@ intervention_points:
     tool_name_from: "$.tool_call.name"
     annotations:
       task_adherence:
-        from: "$policy_target"
+        from: "$target"
     policy:
       id: workiq_collaboration_dlp
       query: data.agent_control_specification.workiq_collaboration_dlp.pre_tool_call_verdict

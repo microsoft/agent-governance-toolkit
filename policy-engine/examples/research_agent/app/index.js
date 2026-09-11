@@ -111,7 +111,9 @@ function decisionLine(label, result) {
 }
 
 function effective(result, original) {
-  return [Decision.Allow, Decision.Warn].includes(result.verdict.decision) &&
+  // `transform` is the only value changing decision, so gating on allow
+  // here discarded every redaction and returned the original secret.
+  return result.verdict.decision === Decision.Transform &&
     result.transformedPolicyTarget !== undefined
     ? result.transformedPolicyTarget
     : original;

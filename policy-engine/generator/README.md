@@ -51,6 +51,6 @@ PATH="$PWD/node_modules/agent-control-specification-opa-linux-x64/bin:$PATH" \
 
 ## Fit with ACS
 
-The generated policy remains stateless. Every rule reads only the canonical policy input for the current intervention point. Tool escalation rules match the generated `input.tool.id` and fall back to `input.tool.name`, which is projected only for tool intervention points. Effects target `$policy_target`, so effect scope stays confined to the mediated value.
+The generated policy remains stateless. Every rule reads only the canonical policy input for the current intervention point. Tool escalation rules match the generated `input.tool.id` and fall back to `input.tool.name`, which is projected only for tool intervention points. Effects target `$target`, so effect scope stays confined to the mediated value.
 
 Information flow control policies that use `result_labels` and later `snapshot.ifc.source_labels` are host specific. Guided init emits a general baseline, then hosts add IFC rules in a child manifest or policy overlay. See `examples/ifc_agent` for the label propagation pattern.

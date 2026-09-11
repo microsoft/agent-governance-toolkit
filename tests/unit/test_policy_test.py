@@ -47,7 +47,7 @@ def _write_policy(tmp_path: Path, *, default_action: str = "deny") -> Path:
     policy.write_text(
         textwrap.dedent(
             """\
-            agent_control_specification_version: 0.3.1-beta
+            agent_control_specification_version: 0.4.0-alpha.1
             metadata:
               name: test-policy
               version: "1.0"

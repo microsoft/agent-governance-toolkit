@@ -1,29 +1,25 @@
 {
   "schema_version": 1,
   "source": [
-    "core/src/error.rs RuntimeError::reason",
-    "spec/SPECIFICATION.md section 15"
+    "agent-control-spec 0.4.0-alpha.1 runtime errors",
+    "agent-hooks reserved host errors"
   ],
   "runtime_errors": [
     {
-      "variant": "ManifestInvalid",
-      "reason": "runtime_error:manifest_invalid"
+      "variant": "ApprovalIdentityMismatch",
+      "reason": "host_error:approval_identity_mismatch"
     },
     {
-      "variant": "InterventionPointUnknown",
-      "reason": "runtime_error:intervention_point_unknown"
+      "variant": "ApprovalResolverFailed",
+      "reason": "host_error:approval_resolver_failed"
     },
     {
-      "variant": "PathMissing",
-      "reason": "runtime_error:path_missing"
+      "variant": "ApprovalUnresolved",
+      "reason": "host_error:approval_unresolved"
     },
     {
-      "variant": "PathTypeMismatch",
-      "reason": "runtime_error:path_type_mismatch"
-    },
-    {
-      "variant": "ToolUnknown",
-      "reason": "runtime_error:tool_unknown"
+      "variant": "HostTransformInvalid",
+      "reason": "host_error:transform_invalid"
     },
     {
       "variant": "AnnotationFailed",
@@ -32,6 +28,22 @@
     {
       "variant": "AnnotationTimeout",
       "reason": "runtime_error:annotation_timeout"
+    },
+    {
+      "variant": "InterventionPointUnknown",
+      "reason": "runtime_error:intervention_point_unknown"
+    },
+    {
+      "variant": "ManifestInvalid",
+      "reason": "runtime_error:manifest_invalid"
+    },
+    {
+      "variant": "PathMissing",
+      "reason": "runtime_error:path_missing"
+    },
+    {
+      "variant": "PathTypeMismatch",
+      "reason": "runtime_error:path_type_mismatch"
     },
     {
       "variant": "PolicyInvocationFailed",
@@ -46,20 +58,12 @@
       "reason": "runtime_error:resource_limit_exceeded"
     },
     {
-      "variant": "ApprovalActionMismatch",
-      "reason": "runtime_error:approval_action_mismatch"
+      "variant": "ToolUnknown",
+      "reason": "runtime_error:tool_unknown"
     },
     {
       "variant": "TransformTargetForbidden",
       "reason": "runtime_error:transform_target_forbidden"
-    },
-    {
-      "variant": "TransformInvalid",
-      "reason": "runtime_error:transform_invalid"
-    },
-    {
-      "variant": "ApprovalResolverMissing",
-      "reason": "runtime_error:approval_resolver_missing"
     }
   ]
 }

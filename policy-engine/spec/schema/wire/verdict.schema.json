@@ -25,7 +25,11 @@
         "null"
       ],
       "pattern": "^(?!runtime_error:).*",
-      "description": "Policy supplied reason. The runtime_error prefix is reserved for core failures."
+      "description": "Policy supplied reason. Both reserved namespaces, runtime_error: and host_error:, are forbidden here; the engine and the host own those.",
+      "not": {
+        "type": "string",
+        "pattern": "^(runtime_error|host_error):"
+      }
     },
     "message": {
       "type": [
@@ -39,7 +43,7 @@
     },
     "evidence": {
       "$ref": "#/$defs/evidence",
-      "description": "AGT D2: optional opaque evidence object carried by high-assurance dispatchers (SMT-verified gates, mechanised-proof PDPs, TEE-attested PDPs). The runtime treats it as opaque and propagates it to telemetry per AGT-EVIDENCE-1.0 §3."
+      "description": "AGT D2: optional opaque evidence object carried by high-assurance dispatchers (SMT-verified gates, mechanised-proof PDPs, TEE-attested PDPs). The runtime treats it as opaque and propagates it to telemetry per AGT-EVIDENCE-1.0 \u00a73."
     },
     "result_labels": {
       "type": [
@@ -49,16 +53,59 @@
       "items": {
         "type": "string"
       },
-      "description": "Policy supplied information-flow labels for the data produced at this sink. The core returns them verbatim; the host persists them with the produced data and re-supplies them as input.ifc.source_labels (AGT-SNAPSHOT §2.2) on later evaluations. The core stores and propagates nothing."
+      "description": "Policy supplied information-flow labels for the data produced at this sink. The core returns them verbatim; the host persists them with the produced data and re-supplies them as input.ifc.source_labels (AGT-SNAPSHOT \u00a72.2) on later evaluations. The core stores and propagates nothing."
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Warnings attached to an allow. Carries what the retired warn decision expressed.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "approval": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Present only on a deny, making it liftable. Resolution is a host obligation."
     }
   },
   "allOf": [
     {
       "description": "AGT D1.1: transform body is REQUIRED iff decision == transform.",
-      "if": { "properties": { "decision": { "const": "transform" } } },
-      "then": { "required": [ "transform" ] },
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "transform"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "transform"
+        ]
+      },
       "else": {
-        "not": { "required": [ "transform" ] },
+        "not": {
+          "required": [
+            "transform"
+          ]
+        },
         "description": "Transform body is FORBIDDEN on non-transform decisions."
       }
     },
@@ -66,7 +113,11 @@
       "description": "AGT D1: the legacy effects[] member on the verdict is REJECTED. Even an explicit null or empty array fails closed because the key MUST NOT appear.",
       "not": {
         "anyOf": [
-          { "required": [ "effects" ] }
+          {
+            "required": [
+              "effects"
+            ]
+          }
         ]
       }
     }
@@ -82,8 +133,8 @@
       "properties": {
         "path": {
           "type": "string",
-          "pattern": "^\\$policy_target(\\.|\\[|$)",
-          "description": "Path rooted at $policy_target. Other roots fail closed with runtime_error:transform_target_forbidden."
+          "pattern": "^\\$target(\\.|\\[|$)",
+          "description": "Path rooted at $target. Other roots fail closed with runtime_error:transform_target_forbidden."
         },
         "value": true
       }
@@ -93,7 +144,10 @@
       "additionalProperties": false,
       "properties": {
         "artefact": {
-          "type": [ "string", "null" ],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Content address or URI of an offline-verifiable proof. SHOULD be sha256:<lowercase-hex> or a URI."
         },
         "verification_pointers": {

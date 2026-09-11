@@ -123,7 +123,7 @@ redact_secret_out := transform_redact_from(output_text, "redact_secret_in_output
 redact_ssn_out := transform_redact_from(output_text, "redact_ssn_in_output", "Output contains an SSN-shaped value.", "[SSN-REDACTED]", `\b\d{3}-\d{2}-\d{4}\b`)
 
 # AGT-DELTA D1.1: rewrite every regex match through a Transform verdict
-# scoped to ``$policy_target.text``. The Rust core rejects any verdict
+# scoped to ``$target.text``. The Rust core rejects any verdict
 # carrying ``effects`` with ``runtime_error:policy_output_invalid``.
 #
 # ``regex.replace`` substitutes all matches in a single pass, mirroring the
@@ -135,7 +135,7 @@ transform_redact_from(text, reason, message, replacement, pattern) := {
 	"decision": "transform",
 	"reason": reason,
 	"message": message,
-	"transform": {"path": "$policy_target.text", "value": regex.replace(text, pattern, replacement)},
+	"transform": {"path": "$target.text", "value": regex.replace(text, pattern, replacement)},
 } if {
 	regex.match(pattern, text)
 }

@@ -1,8 +1,11 @@
-use agent_control_specification_core::{
-    validate_acs_artifacts, AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode,
-    InterventionPoint, InterventionPointRequest, InterventionPointResult, JsonValue, Manifest,
-    PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
+use agent_control_specification::{
+    default_host_annotator_dispatcher, default_host_policy_dispatcher, manifest_from_url,
+    policy_labels, runtime_error_verdict, AnnotatorDispatcher, AnnotatorInvocation,
+    EnforcementMode, HostError, HostEvaluation, InterceptionPoint, JsonValue, Limits, Manifest,
+    NoopTelemetrySink, PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
+    RuntimeError, Verdict,
 };
+use agent_control_specification_core::validate_acs_artifacts;
 use napi::bindgen_prelude::{Env, Error, JsFunction, Promise, Result};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use napi_derive::napi;
@@ -60,8 +63,8 @@ fn url_fetch_limits(
     max_bytes: Option<u32>,
     timeout_ms: Option<u32>,
     max_redirects: Option<u32>,
-) -> agent_control_specification_core::Limits {
-    let mut limits = agent_control_specification_core::Limits::default();
+) -> Limits {
+    let mut limits = Limits::default();
     if let Some(bytes) = max_bytes {
         limits.max_manifest_url_bytes = bytes as usize;
     }
@@ -142,7 +145,11 @@ impl PolicyDispatcher for JsPolicyDispatcher {
 }
 
 enum ParsedRequest {
-    Request(InterventionPointRequest),
+    Request {
+        point: InterceptionPoint,
+        snapshot: JsonValue,
+        mode: EnforcementMode,
+    },
     RuntimeError(RuntimeError),
     RequestInvalid,
 }
@@ -154,7 +161,7 @@ fn parse_request(request: Value) -> ParsedRequest {
     let Some(intervention_point) = object.get("intervention_point").and_then(Value::as_str) else {
         return ParsedRequest::RequestInvalid;
     };
-    let intervention_point = match InterventionPoint::from_str(intervention_point) {
+    let point = match InterceptionPoint::from_str(intervention_point) {
         Ok(value) => value,
         Err(_) => {
             return ParsedRequest::RuntimeError(RuntimeError::InterventionPointUnknown(
@@ -170,22 +177,38 @@ fn parse_request(request: Value) -> ParsedRequest {
     }
     let mode = match object.get("mode") {
         None => EnforcementMode::Enforce,
-        Some(Value::String(value)) => match EnforcementMode::from_str(value) {
-            Ok(mode) => mode,
-            Err(_) => return ParsedRequest::RequestInvalid,
+        Some(Value::String(value)) => match parse_enforcement_mode(value) {
+            Some(mode) => mode,
+            None => return ParsedRequest::RequestInvalid,
         },
         Some(_) => return ParsedRequest::RequestInvalid,
     };
-    ParsedRequest::Request(InterventionPointRequest {
-        intervention_point,
+    ParsedRequest::Request {
+        point,
         snapshot,
         mode,
-    })
+    }
 }
 
-fn result_to_value(
-    result: agent_control_specification_core::InterventionPointResult,
-) -> Result<Value> {
+fn parse_enforcement_mode(value: &str) -> Option<EnforcementMode> {
+    match value {
+        "enforce" => Some(EnforcementMode::Enforce),
+        "evaluate_only" => Some(EnforcementMode::EvaluateOnly),
+        _ => None,
+    }
+}
+
+fn evaluate_host(
+    runtime: &Runtime,
+    point: InterceptionPoint,
+    snapshot: JsonValue,
+    mode: EnforcementMode,
+) -> HostEvaluation {
+    let engine = runtime.evaluate_point(point, snapshot);
+    HostEvaluation::from_engine(point, engine, mode).unwrap_or_else(host_error_result)
+}
+
+fn result_to_value(result: HostEvaluation) -> Result<Value> {
     let verdict = serde_json::to_value(result.verdict)
         .map_err(|err| Error::from_reason(format!("serialize verdict: {err}")))?;
     // AGT D1.4: surface both `input_identity` and `enforced_identity`
@@ -206,37 +229,37 @@ fn result_to_value(
 }
 
 fn runtime_error_value(error: RuntimeError) -> Result<Value> {
-    result_to_value(InterventionPointResult {
-        verdict: Verdict::runtime_error(&error),
+    result_to_value(empty_host_result(runtime_error_verdict(&error)))
+}
+
+fn empty_host_result(verdict: Verdict) -> HostEvaluation {
+    HostEvaluation {
+        verdict,
         transformed_policy_target: None,
         policy_input: None,
         action_identity: None,
         input_identity: None,
         enforced_identity: None,
-    })
+    }
+}
+
+/// A failure out of `HostEvaluation::from_engine` is host work, not the
+/// engine's, so it carries a reserved `host_error:*` name.
+fn host_error_result((error, detail): (HostError, String)) -> HostEvaluation {
+    empty_host_result(Verdict::host_error(error, Some(detail)))
 }
 
 fn request_invalid_value() -> Result<Value> {
-    result_to_value(InterventionPointResult {
-        verdict: Verdict {
-            decision: Decision::Deny,
-            reason: Some("runtime_error:request_invalid".to_string()),
-            message: Some("Request blocked by Agent Control Specification.".to_string()),
-            transform: None,
-            evidence: None,
-            result_labels: Vec::new(),
-        },
-        transformed_policy_target: None,
-        policy_input: None,
-        action_identity: None,
-        input_identity: None,
-        enforced_identity: None,
-    })
+    result_to_value(empty_host_result(Verdict::host_error(
+        HostError::ContextInvalid,
+        Some("Request blocked by Agent Control Specification.".to_string()),
+    )))
 }
 
 #[napi]
 pub struct NativeRuntime {
     runtime: Runtime,
+    policy_labels: JsonValue,
 }
 
 #[napi]
@@ -257,7 +280,7 @@ impl NativeRuntime {
             annotator_callback,
             policy_callback,
             perf_telemetry,
-            agent_control_specification_core::Limits::default(),
+            Limits::default(),
         )
     }
 
@@ -277,7 +300,7 @@ impl NativeRuntime {
             annotator_callback,
             policy_callback,
             perf_telemetry,
-            agent_control_specification_core::Limits::default(),
+            Limits::default(),
         )
     }
 
@@ -294,9 +317,9 @@ impl NativeRuntime {
         url_timeout_ms: Option<u32>,
         max_url_redirects: Option<u32>,
     ) -> Result<Self> {
-        let manifest = Manifest::from_url(&url, sha256.as_deref())
-            .map_err(|err| Error::from_reason(err.to_string()))?;
         let limits = url_fetch_limits(max_url_bytes, url_timeout_ms, max_url_redirects);
+        let manifest = manifest_from_url(&url, sha256.as_deref(), limits)
+            .map_err(|err| Error::from_reason(err.to_string()))?;
         Self::from_manifest(
             env,
             manifest,
@@ -324,7 +347,7 @@ impl NativeRuntime {
             annotator_callback,
             policy_callback,
             perf_telemetry,
-            agent_control_specification_core::Limits::default(),
+            Limits::default(),
         )
     }
 
@@ -334,44 +357,53 @@ impl NativeRuntime {
         annotator_callback: Option<JsFunction>,
         policy_callback: Option<JsFunction>,
         perf_telemetry: Option<u8>,
-        limits: agent_control_specification_core::Limits,
+        limits: Limits,
     ) -> Result<Self> {
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_callback {
             Some(callback) => Arc::new(JsAnnotatorDispatcher(make_string_tsfn(&env, callback)?)),
-            None => {
-                agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
-                    &manifest, limits,
-                )
-            }
+            None => default_host_annotator_dispatcher(&manifest)
+                .map_err(|err| Error::from_reason(err.to_string()))?,
         };
         let policy: Arc<dyn PolicyDispatcher> = match policy_callback {
             Some(callback) => Arc::new(JsPolicyDispatcher(make_string_tsfn(&env, callback)?)),
-            None => {
-                agent_control_specification_core::dispatchers::default_policy_dispatcher_with_limits(
-                    &manifest, limits,
-                )
-                .map_err(|err| Error::from_reason(err.to_string()))?
-            }
+            None => default_host_policy_dispatcher(&manifest)
+                .map_err(|err| Error::from_reason(err.to_string()))?,
         };
         let perf_telemetry = PerfTelemetry::from_u8(perf_telemetry.unwrap_or(0))
             .ok_or_else(|| Error::from_reason("perf_telemetry must be 0, 1, or 2"))?;
-        let runtime = Runtime::with_perf_telemetry(manifest, annotations, policy, perf_telemetry)
-            .map_err(|err| Error::from_reason(err.to_string()))?;
-        Ok(Self { runtime })
+        let labels = policy_labels(&manifest);
+        let runtime = Runtime::with_telemetry_perf_and_limits(
+            manifest,
+            annotations,
+            policy,
+            Arc::new(NoopTelemetrySink),
+            perf_telemetry,
+            limits,
+        )
+        .map_err(|err| Error::from_reason(err.to_string()))?;
+        Ok(Self {
+            runtime,
+            policy_labels: labels,
+        })
     }
 
     #[napi]
     pub async fn evaluate(&self, request: Value) -> Result<Value> {
         let request = match parse_request(request) {
-            ParsedRequest::Request(request) => request,
+            ParsedRequest::Request {
+                point,
+                snapshot,
+                mode,
+            } => (point, snapshot, mode),
             ParsedRequest::RuntimeError(error) => return runtime_error_value(error),
             ParsedRequest::RequestInvalid => return request_invalid_value(),
         };
         let runtime = self.runtime.clone();
-        let result =
-            tokio::task::spawn_blocking(move || runtime.evaluate_intervention_point(request))
-                .await
-                .map_err(|err| Error::from_reason(format!("evaluate: join: {err}")))?;
+        let result = tokio::task::spawn_blocking(move || {
+            evaluate_host(&runtime, request.0, request.1, request.2)
+        })
+        .await
+        .map_err(|err| Error::from_reason(format!("evaluate: join: {err}")))?;
         result_to_value(result)
     }
 
@@ -381,6 +413,6 @@ impl NativeRuntime {
     /// including `fromUrl` and `fromManifestChain`.
     #[napi]
     pub fn policy_labels(&self) -> Value {
-        self.runtime.policy_labels()
+        self.policy_labels.clone()
     }
 }

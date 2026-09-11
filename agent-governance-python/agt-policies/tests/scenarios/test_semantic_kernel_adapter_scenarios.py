@@ -42,7 +42,7 @@ from agent_control_specification import (  # noqa: E402
 )
 
 
-_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: semantic_kernel_adapter_scenarios
 extends: []
@@ -187,7 +187,7 @@ def test_filter_transform_path_rewrites_arguments(tmp_path: Path) -> None:
                 "decision": "transform",
                 "reason": "query_sanitized",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"query": "[SANITIZED]"},
                 },
             },
@@ -286,7 +286,7 @@ def test_governed_invoke_output_transform_rewrites_result(tmp_path: Path) -> Non
                 "decision": "transform",
                 "reason": "output_redaction",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": "[REDACTED OUTPUT]",
                 },
             },

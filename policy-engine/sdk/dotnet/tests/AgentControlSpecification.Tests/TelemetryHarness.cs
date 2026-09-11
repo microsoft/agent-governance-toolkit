@@ -93,7 +93,7 @@ internal static class TelemetryHarness
             {
                 var decision = decisions.Dequeue();
                 var verdict = decision == Decision.Transform
-                    ? new Verdict(decision, Reason: decision.ToWireName(), Transform: new Transform("$policy_target", "safe"))
+                    ? new Verdict(decision, Reason: decision.ToWireName(), Transform: new Transform("$target", "safe"))
                     : new Verdict(decision, Reason: decision.ToWireName());
                 return WithIdentity(request, verdict);
             }),
@@ -229,7 +229,7 @@ internal static class TelemetryHarness
     {
         var manifest = """
             {
-              "agent_control_specification_version": "0.3.1-beta",
+              "agent_control_specification_version": "0.4.0-alpha.1",
               "policies": {
                 "content_policy": {
                   "type": "custom",
@@ -283,7 +283,7 @@ internal static class TelemetryHarness
         // and annotators were empty. Labels now come from the native merged
         // manifest via PolicyLabels on every constructor.
         var baseManifest = """
-            agent_control_specification_version: 0.3.1-beta
+            agent_control_specification_version: 0.4.0-alpha.1
             metadata:
               name: base
             policies:
@@ -300,10 +300,10 @@ internal static class TelemetryHarness
                   id: content_policy
                 annotations:
                   prompt_classifier:
-                    from: $policy_target.text
+                    from: $target.text
             """;
         var overlay = """
-            agent_control_specification_version: 0.3.1-beta
+            agent_control_specification_version: 0.4.0-alpha.1
             intervention_points:
               output:
                 policy_target: $.output

@@ -245,6 +245,11 @@ REGISTERED_CARGO_PACKAGES = {
     "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
     "opentelemetry", "regex", "regorus",
     "assert_cmd", "predicates",
+    # Upstream crates AGT depends on after the policy engine was extracted.
+    # Both are published; verified against the crates.io API:
+    #   agent-control-spec  max_version 0.4.0-alpha.1
+    #   agent-hooks-sdk     max_version 0.1.0-alpha.4
+    "agent-control-spec", "agent-hooks-sdk",
     # Vendored ACS policy-engine crate deps (all real crates.io crates)
     "url", "ureq", "jsonschema", "criterion", "tokio", "rmcp",
     "async-openai", "rig-core", "napi", "napi-derive", "napi-build",

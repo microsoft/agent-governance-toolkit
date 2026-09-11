@@ -81,7 +81,9 @@ export type EnforcementMode = (typeof EnforcementMode)[keyof typeof EnforcementM
 export const Decision = Object.freeze({
   Allow: "allow",
   Deny: "deny",
+  /** @deprecated The engine never produces this value. A warning is an allow carrying `warnings[]`. */
   Warn: "warn",
+  /** @deprecated The engine never produces this value. Escalation is a deny carrying an `approval` block. */
   Escalate: "escalate",
   Transform: "transform",
 } as const);
@@ -127,7 +129,7 @@ export type ApprovalResolver = (
 /**
  * AGT D1.1 single-target replacement payload that mirrors
  * `core/src/verdict.rs::Transform`. The runtime applies `value` at
- * `path` (rooted at `$policy_target`) before propagating the result.
+ * `path` (rooted at `$target`) before propagating the result.
  */
 export interface Transform {
   path: string;
@@ -149,10 +151,17 @@ export interface Evidence {
   verificationPointers?: Record<string, string>;
 }
 
+export interface Warning {
+  reason?: string;
+  message?: string;
+}
+
 export interface Verdict {
   decision: Decision;
   reason?: string | null;
   message?: string | null;
+  warnings?: Warning[];
+  approval?: Record<string, JsonValue>;
   /** AGT D1.1 single-target replacement payload. Present only when
    * `decision === 'transform'`; forbidden on every other decision. */
   transform?: Transform;
@@ -479,14 +488,17 @@ export class AgentControl {
   ): Promise<void> {
     if (mode !== EnforcementMode.Enforce) return;
     const decision = result.verdict.decision;
-    if (decision === Decision.Deny) {
+    if (decision === Decision.Allow || decision === Decision.Transform) return;
+    if (decision !== Decision.Deny) {
       throw new AgentControlBlockedError(interventionPoint, result);
     }
-    if (decision !== Decision.Escalate) return;
+    if (result.verdict.approval === undefined) {
+      throw new AgentControlBlockedError(interventionPoint, result);
+    }
 
     const resolver = approvalResolver ?? this.approvalResolver;
     if (resolver === undefined) {
-      throw new AgentControlBlockedError(interventionPoint, result);
+      throw new AgentControlBlockedError(interventionPoint, approvalUnresolvedResult());
     }
 
     const originalIdentity = result.actionIdentity;
@@ -681,7 +693,7 @@ function approvalResolverFailedResult(result: InterventionPointResult): Interven
   return {
     verdict: {
       decision: Decision.Deny,
-      reason: "runtime_error:approval_resolver_failed",
+      reason: "host_error:approval_resolver_failed",
       message: "Approval resolver failed closed.",
     },
     policyInput: result.policyInput,
@@ -706,8 +718,18 @@ function requireApprovedIdentity(
     return;
   }
   throw new AgentControlBlockedError(interventionPoint, {
-    verdict: { decision: Decision.Deny, reason: "runtime_error:approval_action_mismatch" },
+    verdict: { decision: Decision.Deny, reason: "host_error:approval_identity_mismatch" },
   });
+}
+
+function approvalUnresolvedResult(): InterventionPointResult {
+  return {
+    verdict: {
+      decision: Decision.Deny,
+      reason: "host_error:approval_unresolved",
+      message: "Verdict requires approval but no approval resolver is configured.",
+    },
+  };
 }
 
 export function actionIdentity(policyInput: JsonValue): string {
@@ -773,6 +795,20 @@ function mapVerdict(raw: JsonValue): Verdict {
   const decision = wire.decision as Decision;
   const reason = wire.reason === null ? undefined : (wire.reason as string | undefined);
   const message = wire.message === null ? undefined : (wire.message as string | undefined);
+  const rawWarnings = wire.warnings;
+  const warnings: Warning[] | undefined = Array.isArray(rawWarnings)
+    ? rawWarnings.map((warning) => {
+        const item = warning as Record<string, JsonValue>;
+        return {
+          reason: item.reason === null ? undefined : (item.reason as string | undefined),
+          message: item.message === null ? undefined : (item.message as string | undefined),
+        };
+      })
+    : undefined;
+  const approval =
+    wire.approval === null || wire.approval === undefined
+      ? undefined
+      : (wire.approval as Record<string, JsonValue>);
   const rawTransform = wire.transform as Record<string, JsonValue> | null | undefined;
   const transform: Transform | undefined = rawTransform
     ? { path: rawTransform.path as string, value: rawTransform.value }
@@ -803,6 +839,8 @@ function mapVerdict(raw: JsonValue): Verdict {
     decision,
     reason,
     message,
+    warnings,
+    approval,
     transform,
     evidence,
     // Preserve the documented snake_case key on the Verdict surface;

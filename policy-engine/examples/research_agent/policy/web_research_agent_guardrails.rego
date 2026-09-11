@@ -2,6 +2,8 @@ package agent_control_specification.web_research_agent_guardrails
 
 import rego.v1
 
+SECRET_PATTERN := "(API_KEY|TOKEN|SECRET)=[A-Za-z0-9_-]+"
+
 default verdict := {"decision": "allow"}
 default agent_startup_verdict := {"decision": "allow"}
 default input_verdict := {"decision": "allow"}
@@ -61,31 +63,33 @@ else := {
     input.tool.name == "post_webhook"
 }
 
+# Redaction is tried before the size warning. The other order lets a large
+# result carrying a secret take the warn branch, and warn does not change the
+# value, so the secret reaches the caller.
 post_tool_call_verdict := {
+    "decision": "transform",
+    "reason": "secret_redacted",
+    "message": "",
+    "transform": {
+        "path": "$target",
+        "value": redacted
+    }
+} if {
+    input.intervention_point == "post_tool_call"
+    input.annotations.secret_scan == "secret_present"
+    is_string(input.policy_target.value)
+    # regex.replace rewrites every match. Redacting only the first left any
+    # later secret in the same string untouched.
+    redacted := regex.replace(input.policy_target.value, SECRET_PATTERN, "[REDACTED_SECRET]")
+    redacted != input.policy_target.value
+}
+else := {
     "decision": "warn",
     "reason": "warn",
     "message": ""
 } if {
     input.intervention_point == "post_tool_call"
-    input.intervention_point == "post_tool_call"
     input.annotations.content_size == "very_large"
-}
-else := {
-    "decision": "transform",
-    "reason": "secret_redacted",
-    "message": "",
-    "transform": {
-        "path": "$policy_target",
-        "value": redacted
-    }
-} if {
-    input.intervention_point == "post_tool_call"
-    input.intervention_point == "post_tool_call"
-    input.annotations.secret_scan == "secret_present"
-    is_string(input.policy_target.value)
-    matches := regex.find_n("(API_KEY|TOKEN|SECRET)=[A-Za-z0-9_-]+", input.policy_target.value, 1)
-    count(matches) > 0
-    redacted := replace(input.policy_target.value, matches[0], "[REDACTED_SECRET]")
 }
 
 output_verdict := {
@@ -102,7 +106,7 @@ else := {
     "reason": "secret_redacted",
     "message": "",
     "transform": {
-        "path": "$policy_target",
+        "path": "$target",
         "value": redacted
     }
 } if {

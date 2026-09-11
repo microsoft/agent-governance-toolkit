@@ -95,7 +95,7 @@ rules that share a name.
 Output manifest:
 
 ```yaml
-agent_control_specification_version: "0.3.0-alpha-agt"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: agt_resolved
   resolved_from:

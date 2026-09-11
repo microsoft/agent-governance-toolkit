@@ -66,7 +66,17 @@ public enum Decision
 {
     Allow,
     Deny,
+
+    /// <summary>
+    /// Deprecated. The engine never returns this: a warning is an
+    /// <see cref="Allow"/> carrying <see cref="Verdict.Warnings"/>.
+    /// </summary>
     Warn,
+
+    /// <summary>
+    /// Deprecated. The engine never returns this: an escalation is a
+    /// <see cref="Deny"/> carrying <see cref="Verdict.Approval"/>.
+    /// </summary>
     Escalate,
     Transform,
 }
@@ -134,7 +144,7 @@ public static class DecisionExtensions
 /// AGT D1.1 single-target replacement payload. Present on a verdict only when
 /// <see cref="Verdict.Decision"/> is <see cref="Decision.Transform"/>. The
 /// runtime applies <see cref="Value"/> at <see cref="Path"/> rooted at
-/// <c>$policy_target</c> before the action proceeds.
+/// <c>$target</c> before the action proceeds.
 /// </summary>
 public sealed record Transform(string Path, object? Value);
 
@@ -154,7 +164,21 @@ public sealed record Verdict(
     string? Message = null,
     Transform? Transform = null,
     Evidence? Evidence = null,
-    IReadOnlyList<string>? ResultLabels = null);
+    IReadOnlyList<string>? ResultLabels = null,
+    /// <summary>
+    /// Warnings attached to an allow. Carries what the retired
+    /// <see cref="Decision.Warn"/> decision used to express.
+    /// </summary>
+    IReadOnlyList<Warning>? Warnings = null,
+    /// <summary>
+    /// Present only on a deny, making it liftable: the host routes it to an
+    /// approval seam. A deny without it is final. This replaces the retired
+    /// <see cref="Decision.Escalate"/> decision.
+    /// </summary>
+    JsonElement? Approval = null);
+
+/// <summary>A single warning carried alongside an allow.</summary>
+public sealed record Warning(string? Reason = null, string? Message = null);
 
 public sealed record InterventionPointRequest(
     InterventionPoint InterventionPoint,

@@ -1,4 +1,4 @@
-use agent_control_specification_core::{TelemetryEvent, TelemetryEventType, TelemetrySink};
+use agent_control_spec::{TelemetryEvent, TelemetryEventType, TelemetrySink};
 use opentelemetry::global;
 use opentelemetry::metrics::{Counter, Histogram};
 use opentelemetry::{InstrumentationScope, KeyValue};
@@ -6,11 +6,11 @@ use std::collections::HashMap;
 
 pub const DEFAULT_OTEL_METER_NAME: &str = "agent_control_specification";
 
-// AGT D1.1: `transform` is the fifth wire decision per
-// SPECIFICATION.md §13.1. OtelTelemetrySink builds one
-// counter per decision so the transform path is observable alongside
-// allow / deny / warn / escalate.
-const DECISION_WIRE_STRINGS: &[&str] = &["allow", "deny", "warn", "escalate", "transform"];
+// AGENT-HOOKS-0.1 section 5.1 closes the decision set at three.
+// OtelTelemetrySink builds one counter per decision. A former `warn` now
+// arrives as `allow` carrying `warnings[]`, and a former `escalate` as
+// `deny` carrying an `approval` block, so neither needs its own counter.
+const DECISION_WIRE_STRINGS: &[&str] = &["allow", "deny", "transform"];
 
 pub struct OtelTelemetrySink {
     meter_name: String,
@@ -103,7 +103,11 @@ pub fn metric_attributes(event: &TelemetryEvent) -> Vec<AttributePair> {
     if let Some(mode) = event.enforcement_mode {
         attributes.push(AttributePair {
             key: "enforcement_mode",
-            value: mode.as_str().to_string(),
+            value: match mode {
+                agent_control_spec::EnforcementMode::Enforce => "enforce",
+                agent_control_spec::EnforcementMode::EvaluateOnly => "evaluate_only",
+            }
+            .to_string(),
         });
     }
     if let Some(decision) = event.decision {
@@ -165,21 +169,19 @@ fn to_key_values(attributes: &[AttributePair]) -> Vec<KeyValue> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_control_specification_core::{
-        Decision, EnforcementMode, InterventionPoint, TelemetryEventType,
-    };
+    use agent_control_spec::{Decision, EnforcementMode, InterceptionPoint, TelemetryEventType};
 
     #[test]
     fn default_uses_canonical_meter_name() {
         let sink = OtelTelemetrySink::default();
         assert_eq!(sink.meter_name(), DEFAULT_OTEL_METER_NAME);
-        // AGT D1: five decisions (allow, deny, warn, escalate, transform).
-        assert_eq!(sink.decision_counter_count(), 5);
+        // AGENT-HOOKS-0.1: three decisions (allow, deny, transform).
+        assert_eq!(sink.decision_counter_count(), 3);
     }
 
     #[test]
     fn mapping_includes_structured_attributes() {
-        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterceptionPoint::Input)
             .with_enforcement_mode(EnforcementMode::Enforce)
             .with_decision(Decision::Deny)
             .with_reason_code("runtime_error:policy_invocation_failed")
@@ -216,7 +218,7 @@ mod tests {
 
     #[test]
     fn mapping_omits_action_identity() {
-        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterceptionPoint::Input)
             .with_decision(Decision::Allow)
             .with_action_identity("sha256:0123456789abcdef");
         let attributes = metric_attributes(&event);
@@ -228,7 +230,7 @@ mod tests {
     #[test]
     fn emit_is_panic_free_without_sdk_provider() {
         let sink = OtelTelemetrySink::new("acs_test");
-        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Output)
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterceptionPoint::Output)
             .with_decision(Decision::Allow)
             .with_duration_ms(1.0);
         sink.emit(event);
@@ -240,7 +242,7 @@ mod tests {
         // emit the evidence_artefact or evidence_verification_pointer_keys
         // attributes; their absence keeps the telemetry shape clean for
         // the common no-evidence path.
-        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterceptionPoint::Input)
             .with_decision(Decision::Allow);
         let attributes = metric_attributes(&event);
         assert!(
@@ -255,7 +257,7 @@ mod tests {
         // artefact and the sorted pointer keys. The URL values MUST NOT
         // appear in telemetry; auditors recover them from the audit
         // record per §4.
-        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterceptionPoint::Input)
             .with_decision(Decision::Allow)
             .with_evidence(
                 Some("sha256:proofblob"),
@@ -288,7 +290,7 @@ mod tests {
         let sink = OtelTelemetrySink::new("acs_transform_test");
         let event = TelemetryEvent::new(
             TelemetryEventType::InterventionPointTransformed,
-            InterventionPoint::Output,
+            InterceptionPoint::Output,
         )
         .with_decision(Decision::Transform)
         .with_enforcement_mode(EnforcementMode::Enforce)
@@ -323,7 +325,7 @@ mod tests {
         // Decision event records; the dual intervention_point.transformed event
         // and the perf evaluation_timing event do not, so a transform counts
         // once, matching the host SDK sinks.
-        let decision = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+        let decision = TelemetryEvent::new(TelemetryEventType::Decision, InterceptionPoint::Input)
             .with_decision(Decision::Transform);
         assert!(records_metrics(&decision));
         for event_type in [
@@ -334,7 +336,7 @@ mod tests {
             TelemetryEventType::AnnotatorFailed,
             TelemetryEventType::PolicyFailed,
         ] {
-            let event = TelemetryEvent::new(event_type, InterventionPoint::Input)
+            let event = TelemetryEvent::new(event_type, InterceptionPoint::Input)
                 .with_decision(Decision::Transform);
             assert!(
                 !records_metrics(&event),

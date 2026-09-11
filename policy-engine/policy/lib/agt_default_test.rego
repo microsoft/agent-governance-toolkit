@@ -83,7 +83,7 @@ test_redact_transforms if {
 	verdict := defaults.verdict with input as pi
 		with data.agt.defaults.config as {"redact": {"patterns": [patterns.pii_ssn]}}
 	verdict.decision == "transform"
-	verdict.transform.path == "$policy_target"
+	verdict.transform.path == "$target"
 	verdict.transform.value == "ssn [REDACTED]"
 }
 

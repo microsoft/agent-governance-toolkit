@@ -35,7 +35,11 @@ class EnforcementMode(str, Enum):
 class Decision(str, Enum):
     ALLOW = "allow"
     DENY = "deny"
+    # Deprecated compatibility member. The engine never produces this value;
+    # a warning is an allow carrying ``warnings[]``.
     WARN = "warn"
+    # Deprecated compatibility member. The engine never produces this value;
+    # escalation is a deny carrying an ``approval`` block.
     ESCALATE = "escalate"
     TRANSFORM = "transform"
 
@@ -43,9 +47,15 @@ class Decision(str, Enum):
     def permits(self) -> bool:
         """True for decisions whose execution side proceeds with the action.
 
-        Mirrors `core/src/verdict.rs::Decision::permits`: ``allow``, ``warn``,
-        and ``transform`` permit execution; ``deny`` and ``escalate`` halt it
-        until the host's approval path resolves an ``escalate``.
+        The engine produces only ``allow``, ``deny``, and ``transform``, of
+        which allow and transform permit execution.
+
+        ``WARN`` stays in the permitting set. It is a deprecated member the
+        engine never returns, but it means "allow, and record a warning", so a
+        caller still holding one expects the action to proceed. Dropping it
+        turns every retained warn into a block, which is a behaviour change
+        rather than a safety improvement. ``ESCALATE`` is a deny and does not
+        permit.
         """
         return self in {Decision.ALLOW, Decision.WARN, Decision.TRANSFORM}
 
@@ -92,7 +102,7 @@ class PerfTelemetry(IntEnum):
 class Transform:
     """AGT D1.1 single-target replacement payload.
 
-    The runtime applies ``value`` at ``path`` rooted at ``$policy_target``
+    The runtime applies ``value`` at ``path`` rooted at ``$target``
     before propagating the result. SDK consumers can persist this object to
     capture what the policy asked for, independent of the
     ``transformed_policy_target`` snapshot.
@@ -144,6 +154,24 @@ class Evidence:
 
 
 @dataclass(frozen=True)
+class Warning:
+    reason: str | None = None
+    message: str | None = None
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, JsonValue]) -> "Warning":
+        if not isinstance(value, Mapping):
+            raise ValueError("warning must be a mapping")
+        reason = value.get("reason")
+        message = value.get("message")
+        if reason is not None and not isinstance(reason, str):
+            raise ValueError("warning.reason must be a string when present")
+        if message is not None and not isinstance(message, str):
+            raise ValueError("warning.message must be a string when present")
+        return cls(reason=reason, message=message)
+
+
+@dataclass(frozen=True)
 class Verdict:
     decision: Decision
     reason: str | None = None
@@ -151,9 +179,21 @@ class Verdict:
     transform: Transform | None = None
     evidence: Evidence | None = None
     result_labels: Sequence[str] = field(default_factory=tuple)
+    warnings: Sequence[Warning] = field(default_factory=tuple)
+    approval: Mapping[str, JsonValue] | None = None
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, JsonValue]) -> "Verdict":
+        decision = Decision(value["decision"])
+        reason = value.get("reason")
+        message = value.get("message")
+        raw_warnings = value.get("warnings") or ()
+        if not isinstance(raw_warnings, Sequence) or isinstance(raw_warnings, (str, bytes)):
+            raise ValueError("verdict warnings must be a sequence")
+        parsed_warnings = tuple(Warning.from_mapping(item) for item in raw_warnings)
+        raw_approval = value.get("approval")
+        if raw_approval is not None and not isinstance(raw_approval, Mapping):
+            raise ValueError("verdict approval must be a mapping when present")
         raw_labels = value.get("result_labels") or ()
         if not isinstance(raw_labels, Sequence) or isinstance(raw_labels, (str, bytes)):
             raise ValueError("verdict result_labels must be a sequence")
@@ -170,12 +210,14 @@ class Verdict:
                 raise ValueError("verdict evidence must be a mapping when present")
             evidence = Evidence.from_mapping(raw_evidence)
         return cls(
-            decision=Decision(value["decision"]),
-            reason=value.get("reason"),
-            message=value.get("message"),
+            decision=decision,
+            reason=reason,
+            message=message,
             transform=transform,
             evidence=evidence,
             result_labels=tuple(raw_labels),
+            warnings=parsed_warnings,
+            approval=raw_approval,
         )
 
 

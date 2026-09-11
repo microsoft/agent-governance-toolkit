@@ -1,4 +1,4 @@
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: acs-atr-annotator
   version: "0.1.0"
@@ -17,7 +17,7 @@ intervention_points:
     policy_target: "$.input"
     annotations:
       atr_scanner:
-        from: "$policy_target.text"
+        from: "$target.text"
     policy:
       id: atr_policy
   pre_tool_call:
@@ -26,7 +26,7 @@ intervention_points:
     tool_name_from: "$.tool_call.name"
     annotations:
       atr_scanner:
-        from: "$policy_target"
+        from: "$target"
     policy:
       id: atr_policy
 annotators:

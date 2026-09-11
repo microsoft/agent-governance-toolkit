@@ -7,7 +7,7 @@
 // verdict per SPECIFICATION.md §14. Cedar annotations
 // are static strings, so this Cedar mirror cannot compute the replacement
 // from the snapshot. It only emits a fixed `transform` advice payload
-// that wholesale replaces `$policy_target.value` with the literal
+// that wholesale replaces `$target.value` with the literal
 // `"[REDACTED]"`.
 //
 // Cedar limit. The Cedar mirror is single target single value only and
@@ -28,7 +28,7 @@
 // permit, or it relies on Cedar's implicit deny when no PII annotation
 // is present.
 
-@advice("{\"verdict\":\"transform\",\"reason\":\"redaction_applied\",\"transform\":{\"path\":\"$policy_target.value\",\"value\":\"[REDACTED]\"}}")
+@advice("{\"verdict\":\"transform\",\"reason\":\"redaction_applied\",\"transform\":{\"path\":\"$target.value\",\"value\":\"[REDACTED]\"}}")
 @id("agt.redact.pii")
 permit (
   principal,

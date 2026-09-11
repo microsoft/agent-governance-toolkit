@@ -111,7 +111,7 @@ test("model wrappers fail closed for stream requests before upstream execution",
     (error) => {
       assert.ok(error instanceof AgentControlBlockedError);
       assert.equal(error.interventionPoint, InterventionPoint.PreModelCall);
-      assert.equal(error.result.verdict.reason, "runtime_error:streaming_unsupported");
+      assert.equal(error.result.verdict.reason, "host_error:streaming_unsupported");
       return true;
     },
   );
@@ -182,7 +182,7 @@ test("LangChain runnable adapter blocks unsupported batch and stream methods", a
       () => guarded[method]([{ q: "secret" }]),
       (error) => {
         assert.ok(error instanceof AgentControlBlockedError);
-        assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+        assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
         return true;
       },
     );
@@ -199,7 +199,7 @@ test("LangChain runnable adapter fails closed for unsupported shapes", () => {
     (error) => {
       assert.ok(error instanceof AgentControlBlockedError);
       assert.equal(error.interventionPoint, InterventionPoint.PreModelCall);
-      assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+      assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
       return true;
     },
   );
@@ -231,7 +231,7 @@ test("LangChain tool adapter blocks unsupported batch and stream methods", async
       (error) => {
         assert.ok(error instanceof AgentControlBlockedError);
         assert.equal(error.interventionPoint, InterventionPoint.PreToolCall);
-        assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+        assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
         return true;
       },
     );
@@ -292,7 +292,7 @@ test("OpenAI Agents runner adapter blocks unsupported runner methods", async () 
       (error) => {
         assert.ok(error instanceof AgentControlBlockedError);
         assert.equal(error.interventionPoint, InterventionPoint.Input);
-        assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+        assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
         return true;
       },
     );
@@ -353,7 +353,7 @@ test("Anthropic adapter fails closed for streaming requests before upstream exec
     (error) => {
       assert.ok(error instanceof AgentControlBlockedError);
       assert.equal(error.interventionPoint, InterventionPoint.PostModelCall);
-      assert.equal(error.result.verdict.reason, "runtime_error:streaming_unsupported");
+      assert.equal(error.result.verdict.reason, "host_error:streaming_unsupported");
       return true;
     },
   );
@@ -419,7 +419,7 @@ test("MCP tool-provider adapter blocks unsupported provider methods", async () =
       (error) => {
         assert.ok(error instanceof AgentControlBlockedError);
         assert.equal(error.interventionPoint, InterventionPoint.PreToolCall);
-        assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+        assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
         return true;
       },
     );
@@ -437,7 +437,7 @@ test("MCP tool-provider adapter fails closed for unsupported shapes", () => {
     (error) => {
       assert.ok(error instanceof AgentControlBlockedError);
       assert.equal(error.interventionPoint, InterventionPoint.PreToolCall);
-      assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+      assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
       return true;
     },
   );
@@ -446,7 +446,7 @@ test("MCP tool-provider adapter fails closed for unsupported shapes", () => {
     (error) => {
       assert.ok(error instanceof AgentControlBlockedError);
       assert.equal(error.interventionPoint, InterventionPoint.PreToolCall);
-      assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+      assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
       return true;
     },
   );
@@ -506,12 +506,12 @@ test("unsupported framework adapter fails loudly", () => {
   const unsupported = createUnsupportedFrameworkAdapter("ExampleAI");
   assert.throws(() => unsupported.guardAgent({}), (error) => {
     assert.ok(error instanceof AgentControlBlockedError);
-    assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+    assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
     return true;
   });
   assert.throws(() => unsupported.wrapModel({}), (error) => {
     assert.ok(error instanceof AgentControlBlockedError);
-    assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+    assert.equal(error.result.verdict.reason, "host_error:adapter_unsupported");
     return true;
   });
   assert.throws(() => createLangChainAdapter({}).guard({}), /control must expose/);

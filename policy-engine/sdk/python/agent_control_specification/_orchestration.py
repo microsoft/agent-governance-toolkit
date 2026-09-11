@@ -336,24 +336,26 @@ class AgentControl:
     ) -> None:
         """Apply enforcement for one intervention-point result.
 
-        In ``enforce`` mode a ``deny`` raises :class:`AgentControlBlocked`, and an
-        ``escalate`` is routed to the effective approval resolver (the per-call
-        resolver if given, otherwise the instance resolver). With no resolver an
-        ``escalate`` fails closed as a block. ``allow`` and ``warn`` proceed. In
-        ``evaluate_only`` mode nothing is enforced and the resolver is never called.
+        In ``enforce`` mode a final deny raises :class:`AgentControlBlocked`.
+        A liftable deny carrying an approval block routes to the effective
+        approval resolver. With no resolver it fails closed as a host error.
+        Allow and transform decisions proceed. In ``evaluate_only`` mode
+        nothing is enforced and the resolver is never called.
         """
 
         if mode != EnforcementMode.ENFORCE:
             return
         decision = result.verdict.decision
-        if decision == Decision.DENY:
-            raise AgentControlBlocked(intervention_point, result)
-        if decision != Decision.ESCALATE:
+        if decision in {Decision.ALLOW, Decision.TRANSFORM}:
             return
+        if decision != Decision.DENY:
+            raise AgentControlBlocked(intervention_point, result)
+        if result.verdict.approval is None:
+            raise AgentControlBlocked(intervention_point, result)
 
         resolver = approval_resolver if approval_resolver is not None else self._approval_resolver
         if resolver is None:
-            raise AgentControlBlocked(intervention_point, result)
+            raise AgentControlBlocked(intervention_point, _approval_unresolved_result())
 
         original_identity = result.action_identity
         try:
@@ -501,7 +503,7 @@ def _require_approved_identity(
 
 def _approval_action_mismatch_result() -> InterventionPointResult:
     return InterventionPointResult(
-        Verdict(Decision.DENY, reason="runtime_error:approval_action_mismatch"),
+        Verdict(Decision.DENY, reason="host_error:approval_identity_mismatch"),
     )
 
 
@@ -509,7 +511,7 @@ def _approval_resolver_failed_result(result: InterventionPointResult) -> Interve
     return InterventionPointResult(
         Verdict(
             Decision.DENY,
-            reason="runtime_error:approval_resolver_failed",
+            reason="host_error:approval_resolver_failed",
             message="Approval resolver failed closed.",
         ),
         policy_input=result.policy_input,
@@ -518,11 +520,21 @@ def _approval_resolver_failed_result(result: InterventionPointResult) -> Interve
     )
 
 
+def _approval_unresolved_result() -> InterventionPointResult:
+    return InterventionPointResult(
+        Verdict(
+            Decision.DENY,
+            reason="host_error:approval_unresolved",
+            message="Verdict requires approval but no approval resolver is configured.",
+        ),
+    )
+
+
 def _request_invalid_result() -> InterventionPointResult:
     return InterventionPointResult(
         Verdict(
             Decision.DENY,
-            reason="runtime_error:request_invalid",
+            reason="host_error:context_invalid",
             message="Request blocked by Agent Control Specification.",
         ),
     )

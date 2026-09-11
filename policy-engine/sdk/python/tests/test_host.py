@@ -237,7 +237,7 @@ def test_run_sync_returns_the_awaited_value() -> None:
 
 
 _ESCALATED = InterventionPointResult(
-    verdict=Verdict(decision=Decision.ESCALATE, reason="needs-approval")
+    verdict=Verdict(decision=Decision.DENY, reason="needs-approval", approval={})
 )
 
 
@@ -255,7 +255,11 @@ class _EscalatingControl:
 
     async def evaluate_intervention_point(self, intervention_point, snapshot, mode):
         return InterventionPointResult(
-            verdict=Verdict(decision=Decision.ESCALATE, reason="needs-approval")
+            verdict=Verdict(
+                decision=Decision.DENY,
+                reason="needs-approval",
+                approval={},
+            )
         )
 
     async def enforce(self, intervention_point, result, mode):
@@ -282,14 +286,17 @@ def test_escalation_blocked_becomes_deny() -> None:
     result = _escalating_session(AgentControlBlocked(InterventionPoint.INPUT, _ESCALATED)).input("x")
 
     assert result.verdict.decision is Decision.DENY
-    assert result.verdict.reason == "approval_denied"
+    # The blocking result's own reason survives rather than being replaced by
+    # a name outside the reserved set.
+    assert result.verdict.reason == _ESCALATED.verdict.reason
 
 
-def test_escalation_suspended_stays_escalated_for_later_resume() -> None:
-    """A suspended approval is left escalated so the host can resume it."""
+def test_escalation_suspended_stays_liftable_for_later_resume() -> None:
+    """A suspended approval retains its liftable deny for later resume."""
     result = _escalating_session(AgentControlSuspended(InterventionPoint.INPUT, _ESCALATED)).input("x")
 
-    assert result.verdict.decision is Decision.ESCALATE
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.approval == {}
     assert result.verdict.reason == "needs-approval"
 
 
@@ -298,7 +305,7 @@ def test_escalation_with_a_broken_resolver_fails_closed() -> None:
     result = _escalating_session(RuntimeError("resolver exploded")).input("x")
 
     assert result.verdict.decision is Decision.DENY
-    assert result.verdict.reason == "approval_failed"
+    assert result.verdict.reason == "host_error:approval_resolver_failed"
 
 
 def test_escalation_timeout_denies_by_default() -> None:
@@ -306,7 +313,7 @@ def test_escalation_timeout_denies_by_default() -> None:
     result = _escalating_session(TimeoutError()).input("x")
 
     assert result.verdict.decision is Decision.DENY
-    assert result.verdict.reason == "runtime_error:approval_timeout"
+    assert result.verdict.reason == "host_error:approval_unresolved"
 
 
 def test_escalation_timeout_allows_only_when_configured() -> None:
@@ -320,13 +327,14 @@ def test_escalation_timeout_allows_only_when_configured() -> None:
 
 
 def test_escalation_is_not_resolved_in_evaluate_only_mode() -> None:
-    """evaluate_only reports the escalation instead of running approval."""
+    """evaluate_only reports the liftable deny instead of running approval."""
     control = _EscalatingControl()
     session = HostSession(control, mode="evaluate_only")
 
     result = session.input("x")
 
-    assert result.verdict.decision is Decision.ESCALATE
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.approval == {}
     assert control.enforced == []
 
 
@@ -365,4 +373,4 @@ def test_a_hung_resolver_denies_rather_than_blocking() -> None:
 
     assert elapsed < 5
     assert result.verdict.decision is Decision.DENY
-    assert result.verdict.reason == "runtime_error:approval_timeout"
+    assert result.verdict.reason == "host_error:approval_unresolved"

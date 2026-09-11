@@ -1,4 +1,4 @@
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: web_research_agent_guardrails
 extends: []
@@ -13,7 +13,7 @@ intervention_points:
     policy_target_kind: user_input
     annotations:
       input_risk:
-        from: $policy_target
+        from: $target
     policy:
       id: web_research_agent_guardrails
       query: data.agent_control_specification.web_research_agent_guardrails.input_verdict
@@ -22,7 +22,7 @@ intervention_points:
     policy_target_kind: tool_args
     annotations:
       url_scope:
-        from: $policy_target
+        from: $target
     policy:
       id: web_research_agent_guardrails
       query: data.agent_control_specification.web_research_agent_guardrails.pre_tool_call_verdict
@@ -32,9 +32,9 @@ intervention_points:
     policy_target_kind: tool_result
     annotations:
       content_size:
-        from: $policy_target
+        from: $target
       secret_scan:
-        from: $policy_target
+        from: $target
     policy:
       id: web_research_agent_guardrails
       query: data.agent_control_specification.web_research_agent_guardrails.post_tool_call_verdict
@@ -44,9 +44,9 @@ intervention_points:
     policy_target_kind: assistant_output
     annotations:
       content_size:
-        from: $policy_target
+        from: $target
       secret_scan:
-        from: $policy_target
+        from: $target
     policy:
       id: web_research_agent_guardrails
       query: data.agent_control_specification.web_research_agent_guardrails.output_verdict

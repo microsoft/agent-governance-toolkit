@@ -29,7 +29,7 @@ from .scope import filter_by_scope
 
 logger = logging.getLogger(__name__)
 
-ACS_VERSION = "0.3.0-alpha-agt"
+ACS_VERSION = "0.4.0-alpha.1"
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:

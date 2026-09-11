@@ -15,7 +15,7 @@ const {
   wrapMcpToolProvider,
 } = require("../dist/index.js");
 
-const manifest = `agent_control_specification_version: 0.3.1-beta
+const manifest = `agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: coding-assistant-node-use-case
 policies:
@@ -30,7 +30,7 @@ intervention_points:
     policy_target: $.model_request
     annotations:
       prompt_normalizer:
-        from: $policy_target.prompt
+        from: $target.prompt
   post_model_call:
     policy_target_kind: model_response
     policy:
@@ -44,7 +44,7 @@ intervention_points:
     policy_target: $.tool_call.args
     annotations:
       command_normalizer:
-        from: $policy_target.command
+        from: $target.command
   post_tool_call:
     policy_target_kind: tool_result
     tool_name_from: $.tool_call.name
@@ -95,11 +95,11 @@ function decision(decisionValue, extra = {}) {
 
 // AGT D1.1: TRANSFORM with a single-target transform payload is the
 // canonical mutation path. The pre-AGT `effects: [{ type: 'replace',
-// path: '$policy_target', value }]` shape is rejected by the strict
+// path: '$target', value }]` shape is rejected by the strict
 // runtime per 1d8fcb64, so this helper now produces the transform
 // payload directly.
 function rootTransform(value) {
-  return { path: "$policy_target", value };
+  return { path: "$target", value };
 }
 
 function makeCodingControl({ approvalResolver, annotatorDelay = async () => {}, policyOverride } = {}) {
@@ -141,7 +141,10 @@ function makeCodingControl({ approvalResolver, annotatorDelay = async () => {}, 
         if (point === InterventionPoint.PostModelCall) {
           const content = contentOf(target);
           if (content.includes("needs human approval")) {
-            return decision(Decision.Escalate, { reason: "sensitive_model_action" });
+            return decision(Decision.Deny, {
+              reason: "sensitive_model_action",
+              approval: {},
+            });
           }
           if (content.includes("ghp_secret123")) {
             return decision(Decision.Transform, {
@@ -157,7 +160,10 @@ function makeCodingControl({ approvalResolver, annotatorDelay = async () => {}, 
             return decision(Decision.Deny, { reason: "dangerous_command" });
           }
           if (normalizedCommand === "cat sensitive.txt") {
-            return decision(Decision.Escalate, { reason: "sensitive_file_read" });
+            return decision(Decision.Deny, {
+              reason: "sensitive_file_read",
+              approval: {},
+            });
           }
           if (target.env?.TOKEN === "ghp_secret123") {
             return decision(Decision.Transform, {

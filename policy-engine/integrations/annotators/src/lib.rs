@@ -5,5 +5,5 @@
 //! re-export shim that preserves the historical
 //! `agent_control_specification_annotators` import surface.
 
-pub use agent_control_specification_core::dispatchers::bundled;
-pub use agent_control_specification_core::dispatchers::*;
+pub use agent_control_spec::dispatchers::bundled;
+pub use agent_control_spec::dispatchers::*;

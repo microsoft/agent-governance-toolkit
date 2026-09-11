@@ -27,6 +27,9 @@ DESTRUCTIVE_TOOLS = {
 MANIFEST_PATH = Path(__file__).resolve().parents[1] / "manifest.yaml"
 
 
+REDACTION_PLACEHOLDER = "[ACS redacted untrusted instruction]"
+
+
 def text_from_value(value: Any) -> str:
     if isinstance(value, str):
         return value
@@ -105,8 +108,9 @@ class AgentDojoPolicy:
         if stage == "post_tool_call":
             classifier = annotations.get("tool_result_classifier", {})
             if classifier.get("injection_like"):
-                return self._warn_with_redaction(
+                return self._redact(
                     "Tool result matched prompt injection patterns",
+                    policy_target_value(policy_input),
                     classifier.get("spans") or [],
                 )
             return self._allow()
@@ -122,25 +126,22 @@ class AgentDojoPolicy:
         return {"decision": "deny", "reason": reason}
 
     @staticmethod
-    def _warn_with_redaction(reason: str, spans: list[dict[str, int]]) -> dict[str, Any]:
-        redaction_spans = [
-            {
-                "start": span["start"],
-                "end": span["end"],
-                "replacement": "[ACS redacted untrusted instruction]",
-            }
-            for span in spans
-        ]
+    def _redact(reason: str, value: Any, spans: list[dict[str, int]]) -> dict[str, Any]:
+        """Replace every matched span and return a single transform.
+
+        The effects plane is gone and `transform` is the only value changing
+        decision, so the policy computes the redacted text itself rather than
+        handing the engine a span list to apply.
+        """
+        text = text_from_value(value)
+        ordered = sorted(spans, key=lambda span: span["start"], reverse=True)
+        for span in ordered:
+            start, end = span["start"], span["end"]
+            text = text[:start] + REDACTION_PLACEHOLDER + text[end:]
         return {
-            "decision": "warn",
+            "decision": "transform",
             "reason": reason,
-            "effects": [
-                {
-                    "type": "redact",
-                    "path": "$policy_target",
-                    "spans": redaction_spans,
-                }
-            ],
+            "transform": {"path": "$target", "value": text},
         }
 
 

@@ -813,7 +813,7 @@ class TestAuditCsvExport:
 
 def _native_manifest_text(name: str) -> str:
     return (
-        "agent_control_specification_version: 0.3.1-beta\n"
+        "agent_control_specification_version: 0.4.0-alpha.1\n"
         "metadata:\n"
         f"  name: {name}\n"
         '  version: "1.0"\n'
@@ -886,7 +886,7 @@ class TestCmdValidateExtended:
         from agent_os.cli import cmd_validate
         f = tmp_path / "policy.yaml"
         f.write_text(
-            "agent_control_specification_version: 0.3.1-beta\n"
+            "agent_control_specification_version: 0.4.0-alpha.1\n"
             "metadata:\n"
             "  name: test\n"
             '  version: "1.0"\n'

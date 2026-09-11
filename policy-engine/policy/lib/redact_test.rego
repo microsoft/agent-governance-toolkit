@@ -11,7 +11,7 @@ test_redact_text_returns_transform_verdict if {
 	verdict := redact.redact_text("ssn 111-22-3333 in plain text", [patterns.pii_ssn], "[REDACTED]")
 	verdict.decision == "transform"
 	verdict.reason == "redaction_applied"
-	verdict.transform.path == "$policy_target"
+	verdict.transform.path == "$target"
 	verdict.transform.value == "ssn [REDACTED] in plain text"
 }
 
@@ -33,7 +33,7 @@ test_redact_text_default_replacement if {
 
 test_redact_text_path_rooted_at_policy_target if {
 	verdict := redact.redact_text("email a@b.com here", [patterns.pii_email], "[X]")
-	startswith(verdict.transform.path, "$policy_target")
+	startswith(verdict.transform.path, "$target")
 }
 
 test_redact_text_handles_non_string_input if {

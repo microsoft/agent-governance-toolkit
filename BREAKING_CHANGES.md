@@ -5,6 +5,62 @@ entries appear first.
 
 ---
 
+## The policy engine moves to `agent-control-spec` and a three verdict contract
+
+**Date:** TBD
+
+**Affected**
+
+- every manifest, because `agent_control_specification_version` accepts exactly
+  one value and rejects the rest at parse time
+- manifests using the `$policy_target` path root
+- callers reading `warn` or `escalate` off a verdict
+- callers that relied on the engine applying a transform, honouring
+  `evaluate_only`, or resolving an approval
+- Rust, Python, Node and .NET code importing from `policy-engine`
+
+**What changed**
+
+AGT no longer carries its own policy engine. It depends on `agent-control-spec`,
+the same engine extracted from this tree and rebased onto the agent-hooks control
+contract.
+
+The verdict set closed to `allow`, `deny` and `transform`. A policy may still
+express `warn` and `escalate`, but the engine normalizes them. `warn` becomes an
+`allow` with an entry in `warnings[]`. `escalate` becomes a `deny` carrying an
+`approval` block, which the spec calls a liftable deny. A `deny` without that
+block is final.
+
+The engine also stopped mutating anything. Applying a transform, honouring
+`evaluate_only`, resolving an approval, and deriving the identity trio are host
+obligations now, discharged by `HostEvaluation`.
+
+`policy-engine/core` retains compatibility aliases for one release cycle.
+These retain names, not the old signatures or behavior.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `agent_control_specification_version: 0.3.1-beta` | `agent_control_specification_version: 0.4.0-alpha.1` |
+| `$policy_target` | `$target` |
+| `decision: warn` | `decision: allow` with `warnings[]` |
+| `decision: escalate` | `decision: deny` with `approval` |
+
+A host that tested `decision == "warn"` should read `warnings` instead. A host
+that tested for `escalate` should test for the `approval` block on a `deny`.
+
+Python consumers need `agent-control-specification>=0.4.0b0,<0.5.0`.
+`agt-policies` 5.1.0 and the generator declare that requirement so an installed
+0.3.1b1 wheel cannot satisfy it. Publish the new SDK before these consumers.
+The .NET SDK and adapters move together to 0.4.0-beta.0, and their native
+library is now `agent_control_specification`, without the `_core` suffix.
+
+`policy-engine/docs/acs-retarget.md` carries the full symbol mapping and the
+list of gaps filed upstream.
+
+---
+
 ## `TrustMiddleware` requires signed requests and an explicit trust anchor
 
 **Date:** TBD

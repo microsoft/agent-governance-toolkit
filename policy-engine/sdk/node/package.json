@@ -52,9 +52,10 @@
   "scripts": {
     "vendor:opa": "node scripts/fetch-opa.mjs",
     "build": "rm -rf dist && rm -f native.js native.d.ts *.node && napi build --platform --release --js native.js --dts native.d.ts && npm run build:dist-binary && tsc -p tsconfig.json && rm -f native.js native.d.ts *.node",
+    "build:test": "rm -rf dist && rm -f native.js native.d.ts *.node && napi build --platform --release --features bundled-dispatchers --js native.js --dts native.d.ts && npm run build:dist-binary && tsc -p tsconfig.json && rm -f native.js native.d.ts *.node",
     "build:debug": "rm -rf dist && rm -f native.js native.d.ts *.node && napi build --platform --js native.js --dts native.d.ts && npm run build:dist-binary && tsc -p tsconfig.json && rm -f native.js native.d.ts *.node",
     "build:dist-binary": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});for(const f of ['native.js','native.d.ts'])if(fs.existsSync(f))fs.copyFileSync(f,'dist/'+f);for(const f of fs.readdirSync('.').filter(n=>n.endsWith('.node')))fs.copyFileSync(f,'dist/'+f);\"",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "test": "npm run build:test && node --test test/*.test.mjs",
     "test:real-frameworks": "node test/standalone-real-frameworks.mjs && node --test test/real-framework-adapters.mjs"
   },
   "engines": {

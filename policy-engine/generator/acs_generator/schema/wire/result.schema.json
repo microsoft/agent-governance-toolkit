@@ -66,10 +66,9 @@
           "enum": [
             "allow",
             "deny",
-            "warn",
-            "escalate",
             "transform"
-          ]
+          ],
+          "description": "The normalized agent-hooks decision. Three, closed. A policy MAY still express the intents warn and escalate; the engine normalizes warn to allow with a warnings[] entry and escalate to a deny carrying an approval block, so neither reaches this envelope."
         },
         "reason": {
           "type": [
@@ -100,42 +99,55 @@
           "items": {
             "type": "string"
           }
+        },
+        "warnings": {
+          "type": "array",
+          "description": "Warnings attached to an allow. Carries what the retired warn decision used to express.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "approval": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Present only on a liftable deny, the shape that replaces the retired escalate decision. A deny without it is final. Resolution is a host obligation."
         }
       },
       "allOf": [
         {
-          "description": "AGT D1.1: transform body is REQUIRED iff decision == transform.",
           "if": {
             "properties": {
-              "decision": {
-                "const": "transform"
+              "approval": {
+                "type": "object"
               }
-            }
+            },
+            "required": [
+              "approval"
+            ]
           },
           "then": {
-            "required": [
-              "transform"
-            ]
-          },
-          "else": {
-            "not": {
-              "required": [
-                "transform"
-              ]
-            },
-            "description": "Transform body is FORBIDDEN on non-transform decisions."
-          }
-        },
-        {
-          "description": "AGT D1: the legacy effects[] member on the verdict is REJECTED.",
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "effects"
-                ]
+            "properties": {
+              "decision": {
+                "const": "deny"
               }
-            ]
+            }
           }
         }
       ]
@@ -144,16 +156,17 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "path",
-        "value"
+        "path"
       ],
       "properties": {
         "path": {
           "type": "string",
-          "pattern": "^\\$policy_target(\\.|\\[|$)",
-          "description": "Path rooted at $policy_target. Other roots fail closed with runtime_error:transform_target_forbidden."
+          "pattern": "^\\$(target|policy_target)(\\.|\\[|$)",
+          "description": "Path rooted at $target, or at the deprecated $policy_target alias which agent-hooks still parses. Any other root fails closed with runtime_error:transform_target_forbidden."
         },
-        "value": true
+        "value": {
+          "description": "New value to set at path. Any JSON value including null. Absent is equivalent to null: serialization drops a null value, so both forms appear on the wire and must be accepted."
+        }
       }
     },
     "evidence": {
