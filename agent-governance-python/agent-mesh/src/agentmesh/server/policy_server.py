@@ -37,49 +37,103 @@ _engine: PolicyEngine = PolicyEngine()
 _trust_policies: list[TrustPolicy] = []
 _trust_evaluator: PolicyEvaluator | None = None
 _loaded_count: int = 0
+_skipped_count: int = 0
+
+
+def _policy_strict() -> bool:
+    """Whether the directory loader fails closed on an unloadable policy file.
+
+    Defaults to on (issue #3538): a policy file that fails to load must not be
+    silently dropped, or a deny policy could vanish while a broader allow keeps
+    serving. Set ``AGENTMESH_POLICY_STRICT`` to ``0``/``false``/``no``/``off``
+    for best-effort loading instead. Any other value, including blank or
+    unrecognised, stays strict so a misconfigured toggle fails closed.
+    """
+    return os.getenv("AGENTMESH_POLICY_STRICT", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def _on_load_failure(name: str, exc: Exception, strict: bool) -> None:
+    """Fail closed (raise) or, in non-strict mode, log at error level."""
+    if strict:
+        raise RuntimeError(
+            f"Policy file {name!r} failed to load: {exc}. Refusing to start with a "
+            f"policy silently dropped; set AGENTMESH_POLICY_STRICT=0 for best-effort "
+            f"loading (issue #3538)."
+        ) from exc
+    logger.error("Skipped %s: %s", name, exc)
 
 
 def _load_policies() -> None:
-    """Load all YAML/JSON policy files from POLICY_DIR."""
-    global _engine, _trust_policies, _trust_evaluator, _loaded_count
+    """Load all YAML/JSON policy files from POLICY_DIR.
+
+    Fails closed by default (issue #3538): a file that parses as neither a
+    governance policy nor a trust policy raises rather than being silently
+    dropped. Set ``AGENTMESH_POLICY_STRICT=0`` for best-effort loading.
+    """
+    global _engine, _trust_policies, _trust_evaluator, _loaded_count, _skipped_count
 
     policy_path = Path(POLICY_DIR)
     if not policy_path.exists():
         logger.warning("Policy directory %s does not exist", POLICY_DIR)
         return
 
-    _engine = PolicyEngine()
-    _trust_policies = []
+    strict = _policy_strict()
+    # Build into local state and commit only once every file has loaded, so a
+    # strict-mode failure leaves the previously loaded policy set intact instead
+    # of swapping in a partially loaded (weaker) one on reload (issue #3538).
+    engine = PolicyEngine()
+    trust_policies: list[TrustPolicy] = []
     governance_count = 0
+    skipped = 0
 
     for f in sorted(policy_path.glob("*.yaml")):
         try:
-            _engine.load_yaml(f.read_text())
+            engine.load_yaml(f.read_text())
             governance_count += 1
             logger.info("Loaded governance policy: %s", f.name)
-        except Exception:
+        except Exception as gov_exc:
+            # Not a governance policy; try loading it as a trust policy.
+            # TrustPolicy.from_yaml takes a path, so pass the file, not its text.
             try:
-                tp = TrustPolicy.from_yaml(f.read_text())
-                _trust_policies.append(tp)
+                tp = TrustPolicy.from_yaml(f)
+                trust_policies.append(tp)
                 logger.info("Loaded trust policy: %s", f.name)
-            except Exception as exc:
-                logger.warning("Skipped %s: %s", f.name, exc)
+            except Exception as trust_exc:
+                # Both parsers rejected the file. Report each reason so the
+                # failure is not misattributed to only the trust parser when the
+                # file was meant to be a governance policy.
+                skipped += 1
+                _on_load_failure(
+                    f.name,
+                    RuntimeError(
+                        f"not a governance policy ({gov_exc}); "
+                        f"not a trust policy ({trust_exc})"
+                    ),
+                    strict,
+                )
 
     for f in sorted(policy_path.glob("*.json")):
         try:
-            _engine.load_json(f.read_text())
+            engine.load_json(f.read_text())
             governance_count += 1
         except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
+            skipped += 1
+            _on_load_failure(f.name, exc, strict)
 
-    if _trust_policies:
-        _trust_evaluator = PolicyEvaluator(_trust_policies)
-
-    _loaded_count = governance_count + len(_trust_policies)
+    _engine = engine
+    _trust_policies = trust_policies
+    _trust_evaluator = PolicyEvaluator(trust_policies) if trust_policies else None
+    _loaded_count = governance_count + len(trust_policies)
+    _skipped_count = skipped
     logger.info(
         "Loaded %d governance + %d trust policies",
         governance_count,
-        len(_trust_policies),
+        len(trust_policies),
     )
 
 
@@ -170,6 +224,7 @@ async def list_policies() -> dict[str, Any]:
     """List all loaded policies."""
     return {
         "total_loaded": _loaded_count,
+        "skipped": _skipped_count,
         "trust_policies": len(_trust_policies),
         "policy_dir": POLICY_DIR,
     }
@@ -177,8 +232,20 @@ async def list_policies() -> dict[str, Any]:
 
 @app.post("/api/v1/policy/reload", tags=["policy"])
 async def reload_policies() -> dict[str, Any]:
-    """Reload policies from disk."""
-    _load_policies()
+    """Reload policies from disk.
+
+    A strict-mode load failure keeps the previously loaded policy set (see
+    ``_load_policies``); this returns 409 rather than a bare 500 so the caller
+    can tell the reload was rejected and the prior policies still serve.
+    """
+    try:
+        _load_policies()
+    except RuntimeError as exc:
+        logger.error("Policy reload rejected, keeping previous set: %s", exc)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Policy reload rejected; previous policy set retained. {exc}",
+        ) from exc
     return {
         "status": "reloaded",
         "total_loaded": _loaded_count,
