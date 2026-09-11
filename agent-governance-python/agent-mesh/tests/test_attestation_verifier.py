@@ -158,6 +158,28 @@ async def test_mock_attestation_verifier_rejects_expired_evidence() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mock_attestation_verifier_rejects_expected_report_data_mismatch() -> None:
+    with pytest.raises(AttestationVerificationError, match="report data"):
+        await MockAttestationVerifier().verify(
+            _valid_evidence(),
+            ReferenceValues(),
+            expected_report_data_hash="0" * 64,
+        )
+
+
+@pytest.mark.asyncio
+async def test_mock_attestation_verifier_rejects_future_dated_evidence() -> None:
+    timestamp = datetime.now(UTC) + timedelta(minutes=1)
+    evidence = _valid_evidence(
+        timestamp=timestamp,
+        expires_at=timestamp + timedelta(minutes=5),
+    )
+
+    with pytest.raises(AttestationVerificationError, match="future"):
+        await MockAttestationVerifier().verify(evidence, ReferenceValues())
+
+
+@pytest.mark.asyncio
 async def test_mock_attestation_verifier_wraps_configured_error() -> None:
     verifier = MockAttestationVerifier(error=RuntimeError("MAA unavailable"))
 
@@ -178,4 +200,3 @@ def test_mock_attestation_verifier_rejects_invalid_configuration(
 ) -> None:
     with pytest.raises(ValueError):
         factory()
-

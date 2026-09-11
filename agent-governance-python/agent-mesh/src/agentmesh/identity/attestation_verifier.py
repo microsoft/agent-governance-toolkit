@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
@@ -17,6 +18,7 @@ from .attestation import (
     AttestationEvidence,
     ConfidentialLevel,
     ImageMatchPolicy,
+    KeyOrigin,
     ReferenceValues,
 )
 
@@ -32,8 +34,14 @@ class AttestationVerifier(ABC):
         self,
         evidence: AttestationEvidence,
         reference_values: ReferenceValues,
+        *,
+        expected_report_data_hash: str | None = None,
     ) -> AttestationClaims:
-        """Validate evidence against reference values. Raise on failure."""
+        """Validate evidence against reference values. Raise on failure.
+
+        Concrete provider verifiers must prove that provider-authenticated
+        report data matches ``expected_report_data_hash`` when it is supplied.
+        """
 
 
 class MockAttestationVerifier(AttestationVerifier):
@@ -48,6 +56,7 @@ class MockAttestationVerifier(AttestationVerifier):
         tcb_status: str = "up_to_date",
         runtime_measurements: Mapping[str, str] | None = None,
         claims: Mapping[str, str] | None = None,
+        key_origin: KeyOrigin = KeyOrigin.SKR,
         ttl_seconds: int = DEFAULT_EVIDENCE_TTL_SECONDS,
         latency_seconds: float = 0.0,
         error: Exception | None = None,
@@ -65,6 +74,7 @@ class MockAttestationVerifier(AttestationVerifier):
         self._tcb_status = tcb_status
         self._runtime_measurements = dict(runtime_measurements or {})
         self._claims = dict(claims or {})
+        self._key_origin = key_origin
         self._ttl_seconds = ttl_seconds
         self._latency_seconds = latency_seconds
         self._error = error
@@ -73,18 +83,36 @@ class MockAttestationVerifier(AttestationVerifier):
         self,
         evidence: AttestationEvidence,
         reference_values: ReferenceValues,
+        *,
+        expected_report_data_hash: str | None = None,
     ) -> AttestationClaims:
         """Validate synthetic evidence and return normalized attestation claims."""
         if self._latency_seconds:
             await asyncio.sleep(self._latency_seconds)
         if self._error is not None:
             raise AttestationVerificationError(str(self._error)) from self._error
-        if evidence.is_expired():
+        verified_at = datetime.now(UTC)
+        max_age_seconds = min(reference_values.max_evidence_age_seconds, self._ttl_seconds)
+        max_age = timedelta(seconds=max_age_seconds)
+        if evidence.timestamp > verified_at:
+            raise AttestationVerificationError("attestation evidence timestamp is in the future")
+        if evidence.is_expired(verified_at):
             raise AttestationVerificationError("attestation evidence is expired")
+        if verified_at - evidence.timestamp > max_age:
+            raise AttestationVerificationError(
+                "attestation evidence is older than the allowed maximum"
+            )
         if not self._platform_verified:
             raise AttestationVerificationError("attestation platform was not verified")
         if not self._report_data_match:
             raise AttestationVerificationError("attestation report data did not match")
+        if expected_report_data_hash is not None and not hmac.compare_digest(
+            evidence.report_data_hash,
+            expected_report_data_hash,
+        ):
+            raise AttestationVerificationError(
+                "attestation report data did not match the expected binding"
+            )
 
         runtime_measurements = {**evidence.runtime_measurements, **self._runtime_measurements}
         claims = dict(self._claims)
@@ -96,17 +124,20 @@ class MockAttestationVerifier(AttestationVerifier):
             claims=claims,
         )
 
-        verified_at = datetime.now(UTC)
+        # The returned claim lifetime is verifier-anchored. Evidence timestamps
+        # may be peer-provided on startup-binding paths and must not extend the
+        # verifier's accepted freshness window.
+        effective_expires_at = min(evidence.expires_at, verified_at + max_age)
         return AttestationClaims(
             platform=evidence.platform,
             confidential_level=self._confidential_level,
-            key_origin=evidence.key_origin,
+            key_origin=self._key_origin,
             platform_verified=True,
             report_data_match=True,
             tcb_status=self._tcb_status,
             runtime_measurements=runtime_measurements,
             verified_at=verified_at,
-            expires_at=verified_at + timedelta(seconds=self._ttl_seconds),
+            expires_at=effective_expires_at,
             claims=claims,
         )
 
@@ -159,13 +190,9 @@ class MockAttestationVerifier(AttestationVerifier):
         reference_values: ReferenceValues,
         claims: Mapping[str, str],
     ) -> None:
-        if not reference_values.allowed_image_signers:
-            return
-
         signer = next((claims.get(name) for name in IMAGE_SIGNER_CLAIMS if claims.get(name)), None)
         if signer not in reference_values.allowed_image_signers:
             raise AttestationVerificationError(
                 "attestation image signer mismatch: "
                 f"expected one of {reference_values.allowed_image_signers!r}, got {signer!r}"
             )
-

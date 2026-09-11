@@ -7,16 +7,17 @@ Direct passthrough bridge.
 Maintains the same API surface for compatibility.
 """
 
-from datetime import datetime, timezone
-from typing import Optional, Any
-from pydantic import BaseModel, Field
 import hashlib
 import hmac
 import logging
 import os
+from datetime import datetime, timezone
+from typing import Any, Optional
 
-from .handshake import TrustHandshake, HandshakeResult
-from .endorsement import EndorsementRegistry, Endorsement, EndorsementType
+from pydantic import BaseModel, Field
+
+from .endorsement import Endorsement, EndorsementRegistry, EndorsementType
+from .handshake import HandshakeResult, TrustHandshake
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,13 @@ class TrustBridge(BaseModel):
         identity = data.pop("identity", None)
         registry = data.pop("registry", None)
         endorsement_registry = data.pop("endorsement_registry", None)
+        attestation_verifier = data.pop("attestation_verifier", None)
+        attestation_reference_values = data.pop("attestation_reference_values", None)
+        tee_key_store = data.pop("tee_key_store", None)
+        tee_key_id = data.pop("tee_key_id", None)
+        attestation_evidence = data.pop("attestation_evidence", None)
+        require_attestation = data.pop("require_attestation", False)
+        require_tee_bound_key = data.pop("require_tee_bound_key", False)
         super().__init__(**data)
         self._identity = identity
         self._registry = registry
@@ -102,6 +110,13 @@ class TrustBridge(BaseModel):
             agent_did=self.agent_did,
             identity=identity,
             registry=registry,
+            attestation_verifier=attestation_verifier,
+            attestation_reference_values=attestation_reference_values,
+            tee_key_store=tee_key_store,
+            tee_key_id=tee_key_id,
+            attestation_evidence=attestation_evidence,
+            require_attestation=require_attestation,
+            require_tee_bound_key=require_tee_bound_key,
         )
         # P06: In-process integrity check on peer records.
         # NOTE: This is NOT a security primitive against an attacker
@@ -152,6 +167,8 @@ class TrustBridge(BaseModel):
         protocol: str = "iatp",
         required_trust_score: Optional[int] = None,
         required_capabilities: Optional[list[str]] = None,
+        require_attestation: Optional[bool] = None,
+        require_tee_bound_key: Optional[bool] = None,
     ) -> HandshakeResult:
         """
         Verify a peer before communication.
@@ -173,6 +190,8 @@ class TrustBridge(BaseModel):
             protocol=protocol,
             required_trust_score=threshold,
             required_capabilities=required_capabilities,
+            require_attestation=require_attestation,
+            require_tee_bound_key=require_tee_bound_key,
         )
 
         if result.verified:
