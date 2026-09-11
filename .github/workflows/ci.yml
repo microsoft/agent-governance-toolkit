@@ -730,7 +730,7 @@ jobs:
             --output binskim-results.sarif
       - name: Upload BinSkim SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
         with:
           sarif_file: agent-governance-dotnet/binskim-results.sarif
           category: binskim
@@ -1216,7 +1216,7 @@ jobs:
           docker buildx version
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:
           # Use the daemon's built-in BuildKit (docker driver) instead of the
           # default docker-container driver. The container driver boots a
