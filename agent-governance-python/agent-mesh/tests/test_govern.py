@@ -497,6 +497,46 @@ rules:
         result = safe(action="read")
         assert result["status"] == "executed"
 
+    def test_field_vs_literal_rule_needs_value_accessor(self):
+        """_build_context() wraps every scalar kwarg as {"value": ...}
+        before handing it to Rego as `input` (see GovernanceConfig.rego_path
+        and govern()'s docstring). RELATIONAL_REGO above only ever compares
+        two wrapped fields to each other, which works either way and hides
+        this entirely. A field-vs-literal rule needs the accessor, and gets
+        it wrong silently: no load-time or call-time error, just a rule
+        that never matches - this pins that failure down for both
+        spellings, for the same caller and the same rule intent."""
+        bare_role_check = """
+package agentmesh
+
+default allow = false
+
+allow {
+    input.caller_role == "auditor"
+}
+"""
+        wrapped_role_check = """
+package agentmesh
+
+default allow = false
+
+allow {
+    input.caller_role.value == "auditor"
+}
+"""
+        kwargs = dict(doc_id="COMP-042", doc_mission="ARIEL", caller_mission="ARIEL", caller_role="auditor")
+
+        # Without .value: compares {"value": "auditor"} to "auditor" - an
+        # object to a string, always false, nothing raised.
+        safe_bare = govern(read_doc, policy=DENY_ALL_YAML, rego_content=bare_role_check)
+        with pytest.raises(GovernanceDenied):
+            safe_bare(**kwargs)
+
+        # Same caller, same rule intent, with the accessor: actually matches.
+        safe_wrapped = govern(read_doc, policy=DENY_ALL_YAML, rego_content=wrapped_role_check)
+        result = safe_wrapped(**kwargs)
+        assert result["doc_id"] == "COMP-042"
+
 
 class TestGovernRegoEmptyStringWiring:
     """rego_path="" / rego_content="" used to be indistinguishable from
