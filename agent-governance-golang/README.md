@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/microsoft/agent-governance-toolkit/agent-governance-golang.svg)](https://pkg.go.dev/github.com/microsoft/agent-governance-toolkit/agent-governance-golang)
 
-Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, kill switches, agent lifecycle management, SLO tracking, shadow discovery, prompt defense, and native Go integrations.
+Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, context accumulation governance, tamper-evident audit logging, MCP security scanning, execution privilege rings, kill switches, agent lifecycle management, SLO tracking, shadow discovery, prompt defense, and native Go integrations.
 
 ## Install
 
@@ -108,6 +108,24 @@ OPA/Rego and Cedar support with fail-closed evaluation paths.
 | `NewCedarlingDecision(options)` | Create a Cedar backend with CLI or built-in modes |
 | `OPAOptions` | Configure OPA URL, package/query, timeout, and Rego content |
 | `CedarOptions` | Configure Cedar policy content, entities, schema, and timeout |
+
+### Context Accumulation Governance (`context_governance.go`, `context_audit.go`)
+
+Workflow-scoped context envelopes for accumulated labels, aggregate sensitivity, grow-only restrictions, unknown-combination escalation, delegation inheritance, and classified transition events. `DelegateContext` is a Go convenience for constructing a child envelope from the cross-language `MergeContextRestrictions` contract.
+
+| Type / Function | Description |
+|---|---|
+| `NewContextEnvelope(envelopeID, workflowID, createdAt)` | Create an empty workflow-scoped context envelope with a caller-supplied timestamp |
+| `FoldContext(env, labels, sensitivity)` | Return the next envelope version with labels folded and sensitivity raised, or a validation error |
+| `ApplyContextRestrictions(env, restrictions)` | Return the next envelope version with grow-only restrictions applied |
+| `EvaluateAggregation(env, ruleset, threshold)` | Validate and apply organization-authored aggregation rules, escalating unknown combinations |
+| `AccumulateContext(env, labels, sensitivity, ruleset, threshold)` | Fold post-execution result labels and apply aggregation-derived restrictions, or fail closed on invalid classifications or rules |
+| `DecideNextContext(env, action, ruleset, threshold)` | Gate export, delegation, and memory writes against accumulated state, or return a fail-closed decision with a validation error |
+| `(ContextDecision).PolicyDecision(hasObligationChannel)` | Collapse context outcomes onto the existing Go policy verdicts |
+| `MergeContextRestrictions(parent, childDeclared)` | Inherit parent restrictions across delegation boundaries |
+| `DelegateContext(parent, childID, childDeclared, createdAt)` | Construct a child envelope with inherited restrictions and a caller-supplied timestamp |
+| `ContextEnvelopeReference(env)` | Project an envelope to an opaque id plus coarse sensitivity |
+| `ContextEventFor(eventType, agentID, before, after, rulesApplied)` | Build a classified audit event for an envelope transition |
 
 ### Audit (`audit.go`)
 
