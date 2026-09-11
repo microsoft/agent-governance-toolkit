@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "agentmesh"
-version = "5.0.0"
+version = "5.0.1"
 dependencies = [
  "aes-gcm",
  "agentmesh-mcp",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "agentmesh-mcp"
-version = "5.0.0"
+version = "5.0.1"
 dependencies = [
  "base64",
  "hmac",

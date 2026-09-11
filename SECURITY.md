@@ -92,10 +92,9 @@ Out of scope:
 
 | Version | Supported          |
 |---------|--------------------|
-| 3.4.x   | :white_check_mark: |
-| 3.3.x   | :white_check_mark: |
-| 3.2.x   | :white_check_mark: |
-| < 3.2   | :x:                |
+| >= 5.0.1 | :white_check_mark: |
+| 4.0.0 - 5.0.0 | :x:          |
+| < 4.0.0 | :x:                |
 
 ## Disclosure Policy
 
@@ -110,6 +109,32 @@ If a fix requires more than 90 days, we will negotiate an extended timeline with
 the reporter before any public disclosure.
 
 ## Security Advisories
+
+### HTTP Trust Middleware Authentication and Replay Protection (Fixed in v5.0.1)
+
+**Affected packages:** `agent-governance-toolkit-core`, `agentmesh-platform`
+**Affected versions:** `agent-governance-toolkit-core` 4.0.0 through 5.0.0;
+`agentmesh-platform` through 5.0.0
+**Fixed in:** 5.0.1
+
+The HTTP trust middleware accepted caller-controlled identity data without
+binding authentication to the complete request. The Django middleware verified
+an agent signature over only the DID, allowing a captured request to be replayed
+or altered. The shared Flask and FastAPI path also treated a supplied DID as
+authenticated at full trust and honored caller-supplied capabilities.
+
+The fixed middleware requires a signed, versioned request envelope containing
+the audience, timestamp, nonce, HTTP method, undecoded request target, target
+mode, server-selected covered headers, and body digest. It resolves keys and
+capabilities from a trusted registry, atomically claims verified nonces in a
+shared cache, and fails closed on invalid configuration or dependency errors.
+
+**Recommendation:** Upgrade `agent-governance-toolkit-core` or the
+`agentmesh-platform` compatibility package to 5.0.1 or later. Update clients to
+use `build_request_signature_payload`; signatures over only the DID are no
+longer accepted. See the
+[Django middleware guide](agent-governance-python/agent-mesh/docs/integrations/django-middleware.md)
+for required server and client configuration.
 
 ### CostGuard Organization Kill Switch Bypass (Fixed in v2.1.0)
 

@@ -335,6 +335,7 @@ pip install -e .
 
 **Framework integrations:**
 - **[Claude Desktop](./docs/integrations/claude-desktop.md)** - Secure MCP tools with one command
+- [Django](./docs/integrations/django-middleware.md) - Replay-protected, request-bound Ed25519 authentication
 - [LangChain Integration](./examples/integrations/langchain.md) - Secure LangChain agents with policies
 - [CrewAI Integration](./examples/integrations/crewai.md) - Multi-agent crew governance
 - [LangGraph](./src/agentmesh/integrations/langgraph/) - Trust checkpoints for graph workflows (built-in)

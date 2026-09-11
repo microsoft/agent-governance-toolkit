@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-governance-toolkit-protocols"
-version = "5.0.0"
+version = "5.0.1"
 description = "Protocol implementations (MCP governance, trust protocol, A2A, MCP receipts) for the Agent Governance Toolkit"
 readme = "README.md"
 license = {text = "MIT"}

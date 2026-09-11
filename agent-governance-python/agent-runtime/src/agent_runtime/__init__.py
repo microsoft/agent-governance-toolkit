@@ -22,7 +22,7 @@ warnings.warn(
 )
 
 # Keep in sync with the ``version`` field in pyproject.toml.
-__version__ = "5.0.0"
+__version__ = "5.0.1"
 
 from hypervisor import (  # noqa: E402,F401
     # Core

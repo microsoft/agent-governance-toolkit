@@ -1,3 +1,9 @@
+---
+title: Architecture
+last_reviewed: 2026-09-10
+owner: agt-maintainers
+---
+
 # Architecture
 
 ## Overview
@@ -18,7 +24,7 @@ Community video series covering the toolkit architecture:
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════╗
-║                    AGENT GOVERNANCE TOOLKIT  v5.0.0                     ║
+║                    AGENT GOVERNANCE TOOLKIT  v5.0.1                     ║
 ║              pip install agent-governance-toolkit[full]                  ║
 ║                                                                         ║
 ║  Agent Action ──► POLICY CHECK ──► Allow / Deny    (< 0.1 ms)          ║
