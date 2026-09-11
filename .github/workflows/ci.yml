@@ -992,6 +992,31 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+      # `check-modified-files-only` runs `git diff --name-only <base-branch>`, a
+      # two-dot diff against the base *tip*. On a branch that has fallen behind,
+      # every commit that landed on the base since the branch point is reported
+      # as modified, so the job checks hundreds of files the PR never touched and
+      # fails on links that were already fixed upstream. Resolving the base to
+      # its merge base with HEAD restores the intended "files this PR changed"
+      # scope.
+      - name: Resolve merge base for changed-file scoping
+        id: linkbase
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -e
+          if [ -z "$BASE_REF" ]; then
+            # Not a pull request (schedule/push): keep the previous behaviour.
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags origin "$BASE_REF"
+          if BASE_SHA=$(git merge-base "origin/$BASE_REF" HEAD); then
+            echo "ref=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::cannot resolve merge base with $BASE_REF; using its tip"
+            echo "ref=origin/$BASE_REF" >> "$GITHUB_OUTPUT"
+          fi
       - name: Markdown link check
         uses: gaurav-nelson/github-action-markdown-link-check@5c5dfc0ac2e225883c0e5f03a85311ec2830d368 # v1
         with:
@@ -1001,7 +1026,7 @@ jobs:
           # Only check links in files changed by the PR/push to avoid
           # pre-existing broken links blocking unrelated work.
           check-modified-files-only: 'yes'
-          base-branch: main
+          base-branch: ${{ steps.linkbase.outputs.ref }}
 
   # ── Workflow security audit (only when workflows change) ─────────────
   workflow-security:
