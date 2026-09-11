@@ -384,6 +384,7 @@
         "provider": {
           "enum": [
             "openai",
+            "orcarouter",
             "openai_compatible",
             "azure_openai",
             "bedrock",

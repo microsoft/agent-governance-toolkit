@@ -39,6 +39,9 @@ pub const FIELD_AWS_DATE: &str = "aws_date";
 
 pub const DEFAULT_OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
 pub const DEFAULT_OPENAI_API_KEY_ENV: &str = "OPENAI_API_KEY";
+pub const DEFAULT_ORCAROUTER_CHAT_COMPLETIONS_URL: &str =
+    "https://api.orcarouter.ai/v1/chat/completions";
+pub const DEFAULT_ORCAROUTER_API_KEY_ENV: &str = "ORCAROUTER_API_KEY";
 pub const DEFAULT_AZURE_OPENAI_API_KEY_ENV: &str = "AZURE_OPENAI_API_KEY";
 pub const DEFAULT_GEMINI_API_KEY_ENV: &str = "GEMINI_API_KEY";
 pub const DEFAULT_OLLAMA_CHAT_URL: &str = "http://localhost:11434/api/chat";
