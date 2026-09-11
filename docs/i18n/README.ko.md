@@ -37,8 +37,9 @@ owner: agt-maintainers
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../compliance/owasp-agentic-top10-architecture.md)
 
-> [!IMPORTANT]
-> **공개 프리뷰(Public Preview)** — 프로덕션 품질의 Microsoft 서명 릴리즈입니다. GA 이전에 주요 변경이 발생할 수 있습니다.
+!!! important
+
+    **공개 프리뷰(Public Preview)** — 프로덕션 품질의 Microsoft 서명 릴리즈입니다. GA 이전에 주요 변경이 발생할 수 있습니다.
 
 자율형 AI 에이전트를 위한 정책 적용, 신원증명, 샌드박싱, SRE. `pip install` 하나로 어떤 프레임워크에서도 사용 가능합니다.
 
@@ -115,7 +116,7 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
 
 또는 프로그래밍 방식 제어를 위해 전체 `AgentControl` API를 사용하세요:
 
-<details>
+<details markdown>
 <summary><b>AgentControl 예제</b></summary>
 
 ```python
@@ -132,7 +133,7 @@ result = session.pre_tool_call(
 
 </details>
 
-<details>
+<details markdown>
 <summary><b>TypeScript / .NET / Rust / Go 예제</b></summary>
 
 **TypeScript**
@@ -262,7 +263,7 @@ Agent ──► Policy Engine ──► Identity ──► Audit Log
 5개 언어 SDK 모두 핵심 거버넌스(정책, 신원, 신뢰, 감사)를 구현합니다. Python은 풀 스택을 지원합니다. Copilot CLI와 Claude Code는 TypeScript SDK 위에 구축된 1st-party 개발자 인터페이스입니다.
 **[언어 패키지 매트릭스](../PACKAGE-FEATURE-MATRIX.md)**에서 언어별 상세 지원 현황을 확인하세요.
 
-<details>
+<details markdown>
 <summary><b>Python 배포판 (v4.1.0 — 통합)</b></summary>
 
 v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습니다:

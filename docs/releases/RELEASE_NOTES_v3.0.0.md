@@ -6,11 +6,12 @@ owner: agt-maintainers
 
 # Agent Governance Toolkit v3.0.0
 
-> [!IMPORTANT]
-> **Public Preview** — All packages published from this repository are
-> **Microsoft-signed public preview releases**. They are production-quality but
-> may have breaking changes before GA. For feedback, open an issue or contact
-> agentgovtoolkit@microsoft.com.
+!!! important
+
+    **Public Preview** — All packages published from this repository are
+    **Microsoft-signed public preview releases**. They are production-quality but
+    may have breaking changes before GA. For feedback, open an issue or contact
+    agentgovtoolkit@microsoft.com.
 
 ## What's New in v3.0.0
 

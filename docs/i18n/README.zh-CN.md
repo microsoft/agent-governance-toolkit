@@ -22,16 +22,17 @@ owner: agt-maintainers
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
 
-> [!IMPORTANT]
-> **公开预览版** — 此仓库中发布的所有软件包均为 **经 Microsoft 签名的公开预览版**。它们达到
-> 生产级别的质量，但在正式发布(GA)之前可能存在重大变更。如有任何反馈，请在[GitHub上提交issue](https://github.com/microsoft/agent-governance-toolkit/issues)。
->
-> **这个工具包是什么:** 运行时治理基础设施 — 位于你的代理框架与代理执行操作之间的确定性
-> 策略执行、零信任身份验证、执行沙箱，以及可靠性工程。
->
-> **这个工具包不是什么:** 这不是一个用于模型安全或提示词防护的工具。它不会过滤大语言模型
-> (LLM)的输入/输出，也不执行内容审核。它是在应用层对 *代理的行为* (工具调用、资源访问、
-> 代理间通信)进行治理。对于模型层面的安全，请参考[Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/)。
+!!! important
+
+    **公开预览版** — 此仓库中发布的所有软件包均为 **经 Microsoft 签名的公开预览版**。它们达到
+    生产级别的质量，但在正式发布(GA)之前可能存在重大变更。如有任何反馈，请在[GitHub上提交issue](https://github.com/microsoft/agent-governance-toolkit/issues)。
+
+    **这个工具包是什么:** 运行时治理基础设施 — 位于你的代理框架与代理执行操作之间的确定性
+    策略执行、零信任身份验证、执行沙箱，以及可靠性工程。
+
+    **这个工具包不是什么:** 这不是一个用于模型安全或提示词防护的工具。它不会过滤大语言模型
+    (LLM)的输入/输出，也不执行内容审核。它是在应用层对 *代理的行为* (工具调用、资源访问、
+    代理间通信)进行治理。对于模型层面的安全，请参考[Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/)。
 
 面向 AI 代理的运行时治理 — 唯一一个覆盖全部 **10 项 OWASP Agentic 风险** 并提供 **13,000+ 测试** 的工具包。 它治理的是代理 *做什么*, 而不仅仅是说什么 — 包括确定性策略执行、零信任身份认证、执行沙箱，以及站点可靠性工程(SRE) — 支持 **Python · TypeScript · .NET · Rust · Go**
 
@@ -56,7 +57,7 @@ npm install @microsoft/agent-governance-sdk
 dotnet add package Microsoft.AgentGovernance
 ```
 
-<details>
+<details markdown>
 <summary>安装单独的 Python 软件包</summary>
 
 ```bash

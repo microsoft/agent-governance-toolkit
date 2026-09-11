@@ -17,8 +17,9 @@ owner: agt-maintainers
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 
-> [!IMPORTANT]
-> **Public Preview** — The `agent-governance-toolkit` package on PyPI is a public preview release. APIs may change before GA.
+!!! important
+
+    **Public Preview** — The `agent-governance-toolkit` package on PyPI is a public preview release. APIs may change before GA.
 
 ```
 pip install agent-governance-toolkit[full]
@@ -143,14 +144,14 @@ pip install agent-governance-toolkit[sre]
 
 ### Star the ecosystem
 
-<p align="center">
+<div align="center" markdown>
 
 [![Agent OS Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20OS&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![AgentMesh Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=AgentMesh&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![Agent Runtime Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20Runtime&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![Agent SRE Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20SRE&style=social)](https://github.com/microsoft/agent-governance-toolkit)
 
-</p>
+</div>
 
 ---
 
@@ -271,7 +272,7 @@ MIT — see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob
 
 ---
 
-<div align="center">
+<div align="center" markdown>
 
 **[github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)** · **[Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)** · **[GitHub](https://github.com/microsoft/agent-governance-toolkit)**
 
