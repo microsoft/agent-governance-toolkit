@@ -258,6 +258,51 @@ def test_unreadable_file_is_recorded(generation_client, tmp_path):
     assert manifest["files"][0]["error_type"]
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Undecodable byte filenames require POSIX")
+def test_generation_handles_undecodable_filenames(generation_client, tmp_path, caplog):
+    content = b"name: unusual\nrules: []\n"
+    names = [b"bad\xff.yaml", b"bad\\udcff.yaml", "café.yaml".encode()]
+    for name in names:
+        with open(os.fsencode(tmp_path) + b"/" + name, "wb") as policy:
+            policy.write(content)
+
+    # Entering the client runs startup, including policy loading and JSON logging.
+    with caplog.at_level("INFO", logger="agentmesh.server.sidecar"), generation_client:
+        response = generation_client.get("/api/v1/policies")
+        assert response.status_code == 200
+        manifest = response.json()
+        assert manifest["policies_loaded"] == 3
+        assert {entry["name"] for entry in manifest["files"]} == {
+            "bad\\udcff.yaml",
+            "bad\\\\udcff.yaml",
+            "caf\\xe9.yaml",
+        }
+        assert all(
+            entry["content_sha256"] == hashlib.sha256(content).hexdigest()
+            for entry in manifest["files"]
+        )
+        reload = generation_client.post("/api/v1/policy/reload")
+        assert reload.status_code == 200
+        assert reload.json()["policy_set_id"] == manifest["policy_set_id"]
+        assert manifest["policy_set_id"] in caplog.text
+
+
+def test_serialization_failure_preserves_published_state(generation_client, tmp_path, monkeypatch):
+    from agentmesh.server import sidecar
+
+    previous = sidecar._policy_state
+    (tmp_path / "new.yaml").write_text("name: new\nrules: []\n", encoding="utf-8")
+
+    def fail_serialization(self, *args, **kwargs):
+        raise ValueError("manifest serialization failed")
+
+    monkeypatch.setattr(sidecar.PolicyLoadGeneration, "model_dump_json", fail_serialization)
+    with pytest.raises(ValueError, match="manifest serialization failed"):
+        generation_client.post("/api/v1/policy/reload")
+    assert sidecar._policy_state is previous
+    assert generation_client.get("/ready").json()["policy_set_id"] == previous[1].policy_set_id
+
+
 def test_evaluation_keeps_its_generation_when_reload_publishes(
     generation_client, tmp_path, monkeypatch
 ):

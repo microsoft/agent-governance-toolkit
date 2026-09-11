@@ -757,6 +757,8 @@ last-loaded-wins behavior.
 
 `GET /api/v1/policies` includes the current manifest's `files`: filename, raw-byte
 SHA-256 digest (or null if unreadable), load status, and exception class on failure.
+Filenames use Python `unicode_escape` text, escaping backslashes, non-ASCII
+characters, and undecodable filesystem bytes without conflating their names.
 Raw policy content and exception messages are omitted. `policy_set_id` is `sha256:`
 followed by the SHA-256 of UTF-8 encoded Python
 `json.dumps({"directory_status": ..., "files": ...}, sort_keys=True, separators=(",", ":"))`
@@ -774,8 +776,10 @@ an atomic filesystem snapshot of a concurrently changing directory.
 Each completed manifest is also emitted once per load at INFO as
 `Policy load generation: {...}`. Retain those deployment logs with decision records
 to resolve historical IDs after reload/restart; the API exposes only the current
-manifest. Filenames and digests may themselves be sensitive, so apply the same
-access and retention controls as other policy diagnostics.
+manifest. The sidecar does not authenticate `GET /api/v1/policies`; anyone who can
+reach it can read these filenames and digests. Restrict access through deployment
+network controls or an authenticated proxy, and protect retained logs as policy
+diagnostics because filenames and digests may themselves be sensitive.
 
 ## Contributing
 

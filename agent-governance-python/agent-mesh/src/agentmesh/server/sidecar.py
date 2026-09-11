@@ -253,7 +253,7 @@ def _load_policies() -> PolicyLoadGeneration:
                 logger.warning("Skipped policy %r: %s", f.name, error_type)
             files.append(
                 PolicyFileLoad(
-                    name=f.name,
+                    name=f.name.encode("unicode_escape").decode("ascii"),
                     content_sha256=digest,
                     status="failed" if error_type else "loaded",
                     error_type=error_type,
@@ -275,9 +275,10 @@ def _load_policies() -> PolicyLoadGeneration:
         directory_status=directory_status,
         files=tuple(files),
     )
+    serialized = generation.model_dump_json()
     _policy_state = (engine, generation)
     # ponytail: retain historical manifests through deployment logs, not an unbounded cache.
-    logger.info("Policy load generation: %s", generation.model_dump_json())
+    logger.info("Policy load generation: %s", serialized)
     return generation
 
 
