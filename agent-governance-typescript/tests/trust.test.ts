@@ -66,6 +66,14 @@ describe('TrustManager', () => {
   });
 
   describe('verifyPeer()', () => {
+    function withFingerprint(peer: AgentIdentity, fingerprint: string): AgentIdentity {
+      const exported = peer.exportJSON();
+      const did = exported.did;
+      const lastColon = did.lastIndexOf(':');
+      exported.did = `${did.slice(0, lastColon + 1)}${fingerprint}`;
+      return AgentIdentity.fromJSON(exported);
+    }
+
     it('verifies a valid peer identity', async () => {
       const peer = AgentIdentity.generate('peer-agent');
       const result = await tm.verifyPeer('peer-agent', peer);
@@ -79,6 +87,43 @@ describe('TrustManager', () => {
       tm.recordSuccess('peer-agent', 0.2);
       const result = await tm.verifyPeer('peer-agent', peer);
       expect(result.trustScore.overall).toBeGreaterThan(0.5);
+    });
+
+    it('verifies identity with lowercase DID fingerprint', async () => {
+      const peer = AgentIdentity.generate('peer-agent');
+      const fingerprint = peer.did.slice(peer.did.lastIndexOf(':') + 1).toLowerCase();
+      const lowercasePeer = withFingerprint(peer, fingerprint);
+
+      const result = await tm.verifyPeer('peer-agent', lowercasePeer);
+
+      expect(result.verified).toBe(true);
+      expect(result.reason).toBeUndefined();
+    });
+
+    it('verifies identity with uppercase DID fingerprint', async () => {
+      const peer = AgentIdentity.generate('peer-agent');
+      const fingerprint = peer.did.slice(peer.did.lastIndexOf(':') + 1).toUpperCase();
+      const uppercasePeer = withFingerprint(peer, fingerprint);
+
+      const result = await tm.verifyPeer('peer-agent', uppercasePeer);
+
+      expect(result.verified).toBe(true);
+      expect(result.reason).toBeUndefined();
+    });
+
+    it('verifies identity with mixed-case DID fingerprint', async () => {
+      const peer = AgentIdentity.generate('peer-agent');
+      const fingerprint = peer.did
+        .slice(peer.did.lastIndexOf(':') + 1)
+        .split('')
+        .map((ch, i) => (i % 2 === 0 ? ch.toUpperCase() : ch.toLowerCase()))
+        .join('');
+      const mixedCasePeer = withFingerprint(peer, fingerprint);
+
+      const result = await tm.verifyPeer('peer-agent', mixedCasePeer);
+
+      expect(result.verified).toBe(true);
+      expect(result.reason).toBeUndefined();
     });
 
     it('rejects an identity whose DID does not match the claimed peer ID', async () => {
@@ -99,6 +144,38 @@ describe('TrustManager', () => {
 
       expect(result.verified).toBe(false);
       expect(result.reason).toBe('Peer identity DID fingerprint does not match the public key');
+    });
+
+    it('rejects an identity with an incorrect (but well-formed) DID fingerprint', async () => {
+      const peer = AgentIdentity.generate('peer-agent');
+      const wrongPeer = withFingerprint(peer, 'ffffffffffffffff');
+
+      const result = await tm.verifyPeer('peer-agent', wrongPeer);
+
+      expect(result.verified).toBe(false);
+      expect(result.reason).toBe('Peer identity DID fingerprint does not match the public key');
+    });
+
+    it('rejects an identity with a modified DID fingerprint', async () => {
+      const peer = AgentIdentity.generate('peer-agent');
+      const original = peer.did.slice(peer.did.lastIndexOf(':') + 1);
+      const modified = `${original.slice(0, -1)}${original.endsWith('0') ? '1' : '0'}`;
+      const modifiedPeer = withFingerprint(peer, modified);
+
+      const result = await tm.verifyPeer('peer-agent', modifiedPeer);
+
+      expect(result.verified).toBe(false);
+      expect(result.reason).toBe('Peer identity DID fingerprint does not match the public key');
+    });
+
+    it('rejects an identity with malformed DID fingerprint unchanged', async () => {
+      const peer = AgentIdentity.generate('peer-agent');
+      const malformedPeer = withFingerprint(peer, 'nothex-fingerprint');
+
+      const result = await tm.verifyPeer('peer-agent', malformedPeer);
+
+      expect(result.verified).toBe(false);
+      expect(result.reason).toBe('Peer identity DID fingerprint is invalid');
     });
 
     it('rejects an inactive peer identity', async () => {
