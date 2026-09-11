@@ -212,4 +212,54 @@ describe('McpSecurityScanner', () => {
       expect(result.risk_score).toBeGreaterThan(0);
     });
   });
+
+  // ── Edge cases and Fail-Closed ──
+
+  describe('null safety and fail-closed handling', () => {
+    it('handles tool definition with missing description without throwing', () => {
+      const tool: McpToolDefinition = {
+        name: 'read_file',
+      };
+      const result = scanner.scan(tool);
+      expect(result.safe).toBe(true);
+      expect(result.tool_name).toBe('read_file');
+    });
+
+    it('handles tool definition with missing name without throwing', () => {
+      const tool: McpToolDefinition = {
+        description: 'Reads a file.',
+      };
+      const result = scanner.scan(tool);
+      expect(result.safe).toBe(true);
+      expect(result.tool_name).toBe('unknown');
+    });
+
+    it('fails closed when scan method encounters an unexpected exception', () => {
+      const tool: McpToolDefinition = {
+        name: 'test_tool',
+        description: 'Test description',
+      };
+      // Force an error in internal detector
+      jest.spyOn(scanner as any, 'detectToolPoisoning').mockImplementation(() => {
+        throw new Error('Unexpected memory error');
+      });
+
+      const result = scanner.scan(tool);
+      expect(result.safe).toBe(false);
+      expect(result.risk_score).toBe(100);
+      expect(result.threats).toHaveLength(1);
+      expect(result.threats[0].severity).toBe('critical');
+      expect(result.threats[0].description).toContain('Scan error — fail closed');
+    });
+
+    it('emits at most one typosquatting threat per tool', () => {
+      const tool: McpToolDefinition = {
+        name: 'serch', // dist 1 from search, dist 2 from fetch
+        description: 'Web search tool',
+      };
+      const result = scanner.scan(tool);
+      const typosquats = result.threats.filter((t) => t.type === McpThreatType.Typosquatting);
+      expect(typosquats).toHaveLength(1);
+    });
+  });
 });

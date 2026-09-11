@@ -31,8 +31,8 @@ export interface McpScanResult {
 
 /** Minimal MCP tool definition accepted by the scanner. */
 export interface McpToolDefinition {
-  name: string;
-  description: string;
+  name?: string;
+  description?: string;
   parameters?: Record<string, unknown>;
 }
 
@@ -148,24 +148,40 @@ const SEVERITY_WEIGHT: Record<McpThreat['severity'], number> = {
 export class McpSecurityScanner {
   /** Scan a single tool definition. */
   scan(toolDefinition: McpToolDefinition): McpScanResult {
-    const threats: McpThreat[] = [];
+    const toolName = toolDefinition?.name ?? 'unknown';
+    try {
+      const threats: McpThreat[] = [];
 
-    this.detectToolPoisoning(toolDefinition, threats);
-    this.detectTyposquatting(toolDefinition, threats);
-    this.detectHiddenInstructions(toolDefinition, threats);
-    this.detectRugPull(toolDefinition, threats);
+      this.detectToolPoisoning(toolDefinition, threats);
+      this.detectTyposquatting(toolDefinition, threats);
+      this.detectHiddenInstructions(toolDefinition, threats);
+      this.detectRugPull(toolDefinition, threats);
 
-    const risk_score = Math.min(
-      100,
-      threats.reduce((sum, t) => sum + SEVERITY_WEIGHT[t.severity], 0),
-    );
+      const risk_score = Math.min(
+        100,
+        threats.reduce((sum, t) => sum + SEVERITY_WEIGHT[t.severity], 0),
+      );
 
-    return {
-      tool_name: toolDefinition.name,
-      threats,
-      risk_score,
-      safe: threats.length === 0,
-    };
+      return {
+        tool_name: toolName,
+        threats,
+        risk_score,
+        safe: threats.length === 0,
+      };
+    } catch (err) {
+      return {
+        tool_name: toolName,
+        threats: [
+          {
+            type: McpThreatType.ToolPoisoning,
+            severity: 'critical',
+            description: `Scan error — fail closed: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+        risk_score: 100,
+        safe: false,
+      };
+    }
   }
 
   /** Scan multiple tool definitions. */
@@ -176,7 +192,7 @@ export class McpSecurityScanner {
   // ── Private detection methods ──
 
   private detectToolPoisoning(tool: McpToolDefinition, threats: McpThreat[]): void {
-    const text = tool.description;
+    const text = tool?.description ?? '';
     for (const pattern of POISONING_PATTERNS) {
       const match = pattern.exec(text);
       if (match) {
@@ -211,7 +227,9 @@ export class McpSecurityScanner {
   }
 
   private detectTyposquatting(tool: McpToolDefinition, threats: McpThreat[]): void {
-    const name = tool.name.toLowerCase();
+    const name = (tool?.name ?? '').toLowerCase();
+    if (!name) return;
+
     for (const known of KNOWN_TOOL_NAMES) {
       if (name === known) continue; // exact match is fine
       const dist = levenshtein(name, known);
@@ -222,12 +240,13 @@ export class McpSecurityScanner {
           description: `Tool name "${tool.name}" is suspiciously similar to known tool "${known}" (edit distance ${dist})`,
           evidence: known,
         });
+        break; // stop after first typosquatting match to prevent duplicate threat inflation
       }
     }
   }
 
   private detectHiddenInstructions(tool: McpToolDefinition, threats: McpThreat[]): void {
-    const text = tool.description;
+    const text = tool?.description ?? '';
 
     // Zero-width characters
     for (const zwc of ZERO_WIDTH_CHARS) {
@@ -257,7 +276,7 @@ export class McpSecurityScanner {
   }
 
   private detectRugPull(tool: McpToolDefinition, threats: McpThreat[]): void {
-    const text = tool.description;
+    const text = tool?.description ?? '';
     if (text.length <= RUG_PULL_DESCRIPTION_LENGTH) return;
 
     let instructionMatches = 0;
