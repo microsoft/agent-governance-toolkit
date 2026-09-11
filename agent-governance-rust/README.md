@@ -9,6 +9,9 @@
 
 Rust workspace for the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit).
 
+For source-backed status, limitations, evidence, and repository ownership, see
+the [Rust capability and ownership manifest](../docs/rust-capability-manifest.md).
+
 This top-level language home contains the Rust publishable crates:
 
 - [`agentmesh/`](./agentmesh/) — the full Rust governance crate
@@ -72,6 +75,14 @@ cargo install --path agentmesh --features cli
 
 The CLI is a thin consumer of the existing crate API; it adds no new library
 surface and never weakens the library's behavior.
+
+This is a partial operator surface. It provides `check`, `policy`, `audit`, and
+`trust`; it does not currently provide `doctor`, replay, offline audit-chain or
+control-record verification, compliance/OWASP verification, or dashboard
+workflows. The [capability manifest](../docs/rust-capability-manifest.md) tracks
+those gaps and distinguishes the current local-rule CLI from the conditional
+ACS and agent-hooks architecture proposed in
+[#3561](https://github.com/microsoft/agent-governance-toolkit/pull/3561).
 
 ### Exit codes
 
