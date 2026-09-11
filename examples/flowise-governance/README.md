@@ -4,16 +4,16 @@ Enforce AGT governance policies inside any Flowise flow. Because Flowise runs in
 
 ## Architecture
 
-The included `flowise-flow.json` is a 5-node sequential demo flow (Flowise 2.x / 3.x):
+The `flowise-flow.json` contains a 5-node Agentflow (built and validated for Flowise 3.1.4):
 
 ```
-[Chat Input]
+[Start]
      |
      v
-[Custom Function]  -- builds {"tool": "search_web", "content": <msg>, "agent_id": "flowise-agent"}
+[Custom JS Function]  -- builds {"tool": "search_web", "content": <msg>, "agent_id": "flowise-agent"}
      |
      v
-[HTTP Request]     -- POST http://localhost:8000/govern
+[HTTP]             -- POST http://localhost:8000/govern
      |
      v
 [AGT Governance Sidecar :8000]
@@ -22,10 +22,10 @@ The included `flowise-flow.json` is a 5-node sequential demo flow (Flowise 2.x /
      |-- audit log         (hash-chain tamper-evident JSONL)
      |
      v  {"allowed": true/false, "reason": "..."}
-[Custom Function]  -- formats response as "[ALLOWED] ..." or "[BLOCKED] ..."
+[Custom JS Function]  -- formats response as "[ALLOWED] ..." or "[BLOCKED] ..."
      |
      v
-[Chat Output]
+[Direct Reply]
 ```
 
 The demo flow returns the raw governance decision in the chat. To add a full LLM response for allowed requests, wire a ChatOpenAI node between the Format node and Chat Output, and add your OpenAI API key to it.
@@ -65,15 +65,16 @@ curl -s -X POST http://localhost:8000/govern \
 
 ### 2. Import the flow into Flowise
 
-1. Open your Flowise instance (2.x or 3.x).
-2. Go to **Chatflows** and click **Add New**.
-3. Click the **import** icon (top right toolbar) and select `flowise-flow.json` from this directory.
-4. The flow loads with five nodes already connected.
-5. Click **Save** and then **Deploy**.
+1. Open your Flowise 3.1.4 instance.
+2. Go to **Chatflows**.
+3. In the Flowise UI, create a new Agentflow and click **Settings (gear icon) > Load Chatflow** (or Import icon).
+4. Select the `flowise-flow.json` provided in this directory.
+5. The flow loads with five nodes already connected.
+6. Click **Save** and then **Deploy**.
 
-### 3. Test the full flow
+### 3. Test the full flow (Validated on Flowise 3.1.4)
 
-Send a message through the Flowise chat UI. The flow:
+Send a message through the Flowise chat UI.
 
 - Builds a governance payload from your message.
 - Calls the sidecar at `http://localhost:8000/govern`.
