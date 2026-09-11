@@ -73,12 +73,14 @@ export async function loadPolicy({
 
   let bundledDefaultError;
   let configuredPolicyError;
+  let configuredAdditionalContext = [];
   let compiledPolicy;
   let source = "bundled-default";
 
   if (existsSync(configuredPolicyPath)) {
     try {
       compiledPolicy = compilePolicy(await readJsonFile(configuredPolicyPath));
+      configuredAdditionalContext = toStringArray(compiledPolicy.raw?.additionalContext);
       source = process.env[USER_POLICY_ENV] ? "env" : "user";
     } catch (error) {
       configuredPolicyError = error;
@@ -96,7 +98,7 @@ export async function loadPolicy({
     }
   }
 
-  const runtime = createGovernanceRuntime(compiledPolicy);
+  const runtime = createGovernanceRuntime(compiledPolicy, configuredAdditionalContext);
   return {
     auditPath: resolvedAuditPath,
     bundledDefaultError,
@@ -336,15 +338,21 @@ export async function getPolicyStatus(state) {
     bundledDefaultError: state.bundledDefaultError?.message,
     configuredPolicyError: state.configuredPolicyError?.message,
     configuredPolicyPath: state.configuredPolicyPath,
+    configuredPromptDefenseCoverage: state.configuredPromptDefenseReport.coverage,
+    configuredPromptDefenseGrade: state.configuredPromptDefenseReport.grade,
+    configuredPromptDefenseMissing: state.configuredPromptDefenseReport.missing,
+    configuredPromptDefenseScope: "operator-additional-context",
     denyOnPolicyError: state.policy.denyOnPolicyError,
     minimumPromptDefenseGrade: state.policy.minimumPromptDefenseGrade,
     mode: state.policy.mode,
     path: state.path,
     promptDefenseCoverage: state.promptDefenseReport.coverage,
     promptDefenseGrade: state.promptDefenseReport.grade,
+    promptDefenseScope: "effective-context",
     promptDefenseBlocking: state.promptDefenseReport.isBlocking(
       state.policy.minimumPromptDefenseGrade,
     ),
+    promptDefenseBlockingScope: "effective-context",
     promptDefenseMissing: state.promptDefenseReport.missing,
     schemaVersion: state.policy.schemaVersion,
     sdkPath: state.sdkPath,
@@ -354,9 +362,12 @@ export async function getPolicyStatus(state) {
   };
 }
 
-function createGovernanceRuntime(policy) {
+function createGovernanceRuntime(policy, configuredAdditionalContext) {
   const promptDefenseEvaluator = new PromptDefenseEvaluator();
   const promptDefenseReport = promptDefenseEvaluator.evaluate(policy.additionalContext.join("\n"));
+  const configuredPromptDefenseReport = promptDefenseEvaluator.evaluate(
+    configuredAdditionalContext.join("\n"),
+  );
   const mcpScanner = new McpSecurityScanner();
   const policyEngine = new PolicyEngine(buildLegacyRules(policy));
 
@@ -370,6 +381,7 @@ function createGovernanceRuntime(policy) {
   policyEngine.registerBackend(createMcpInvocationBackend(policy, mcpScanner));
 
   return {
+    configuredPromptDefenseReport,
     mcpScanner,
     policyEngine,
     promptDefenseReport,
