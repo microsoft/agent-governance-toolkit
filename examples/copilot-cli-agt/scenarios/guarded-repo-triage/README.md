@@ -6,7 +6,8 @@ This scenario walks through a realistic Copilot CLI session where AGT guards:
 2. **tool invocation**
 3. **tool output reuse**
 
-It assumes you already installed the example extension from `examples/copilot-cli-agt`.
+It assumes you already installed `@microsoft/agent-governance-copilot-cli` by following the
+[example setup](../../README.md).
 
 ## Scenario goal
 
