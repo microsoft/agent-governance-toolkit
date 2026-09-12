@@ -19,6 +19,7 @@ _INSTRUCTION_TAG_PATTERNS: tuple[re.Pattern[str], ...] = (
     ),
     re.compile(r"\[(?:system|admin|instructions?)\]", re.IGNORECASE),
 )
+_MAX_INSTRUCTION_SANITIZE_PASSES = 8
 _IMPERATIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"ignore\s+(?:all\s+)?previous\s+(?:instructions?|context|rules?)", re.IGNORECASE),
     re.compile(
@@ -148,9 +149,9 @@ class MCPResponseScanner:
     ) -> tuple[str, list[MCPResponseThreat]]:
         """Strip instruction tags and redact credentials from tool output.
 
-        This makes the returned content safe from prompt-injection tags and
-        credential leakage in one pass, so a host does not have to stitch the
-        scanner and :class:`CredentialRedactor` together by hand.
+        Instruction tags are stripped to a bounded fixed point so removing one
+        tag cannot splice together a new live tag. Credentials are then
+        redacted from the converged output.
 
         Note: this removes instruction tags and *credentials* only. It does
         **not** remove PII (email, phone, SSN, credit card, IP); those are
@@ -164,9 +165,10 @@ class MCPResponseScanner:
         Returns:
             A tuple of ``(sanitized_content, removed_threats)`` where
             ``removed_threats`` lists the instruction tags stripped and the
-            credential types redacted (by type name, never the raw secret). On
-            failure the method returns an empty string and a fail-closed error
-            finding.
+            credential types redacted (by type name, never the raw secret). If
+            instruction-tag stripping does not converge within the bounded pass
+            count, or sanitization otherwise fails, the method returns an empty
+            string with a fail-closed error finding.
         """
         try:
             if not response_content:
@@ -174,16 +176,41 @@ class MCPResponseScanner:
 
             sanitized = response_content
             removed: list[MCPResponseThreat] = []
-            for pattern in _INSTRUCTION_TAG_PATTERNS:
-                for match in pattern.finditer(sanitized):
-                    removed.append(
+            for _ in range(_MAX_INSTRUCTION_SANITIZE_PASSES):
+                matched_any = False
+                for pattern in _INSTRUCTION_TAG_PATTERNS:
+                    matches = list(pattern.finditer(sanitized))
+                    if not matches:
+                        continue
+                    matched_any = True
+                    removed.extend(
                         MCPResponseThreat(
                             category="instruction_injection",
                             description="Instruction tag stripped from tool response.",
                             matched_pattern=match.group(0),
                         )
+                        for match in matches
                     )
-                sanitized = pattern.sub("", sanitized)
+                    sanitized = pattern.sub("", sanitized)
+
+                if not matched_any or not any(
+                    pattern.search(sanitized) for pattern in _INSTRUCTION_TAG_PATTERNS
+                ):
+                    break
+            else:
+                logger.error(
+                    "MCP response instruction-tag sanitization did not converge for tool %s",
+                    tool_name,
+                )
+                return "", removed + [
+                    MCPResponseThreat(
+                        category="error",
+                        description=(
+                            f"Response sanitization did not converge for tool '{tool_name}' "
+                            "(fail-closed)."
+                        ),
+                    )
+                ]
 
             credential_matches = self._deduplicate_credential_matches(
                 CredentialRedactor.find_matches(sanitized)
