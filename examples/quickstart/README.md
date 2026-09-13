@@ -5,8 +5,7 @@ Runnable examples showing AGT governance enforcement across major agent framewor
 ## Prerequisites
 
 - Python 3.10+
-- No API keys required for core demos (`govern_in_60_seconds.py`, `retrofit_governed.py`)
-- OpenAI API key (for LangChain, AutoGen, OpenAI Agents examples)
+- No API keys required for `govern_in_60_seconds.py`
 - Google ADK credentials (for ADK example)
 
 ```bash
@@ -19,27 +18,16 @@ pip install agent-governance-toolkit[full]
 # Govern in 60 seconds (no API key needed)
 python examples/quickstart/govern_in_60_seconds.py
 
-# Retrofit governance onto an existing agent (no API key needed)
-python examples/quickstart/retrofit_governed.py
-
 # MCP receipt signing (no API key needed)
 python examples/quickstart/mcp_receipts_in_60_seconds.py
 
-# LangChain
-python examples/quickstart/langchain_governed.py
-
-# CrewAI
-python examples/quickstart/crewai_governed.py
-
-# AutoGen
-python examples/quickstart/autogen_governed.py
-
 # Google ADK
 python examples/quickstart/google_adk_governed.py
-
-# OpenAI Agents
-python examples/quickstart/openai_agents_governed.py
 ```
+
+Native framework examples also live under `examples/crewai-governed/`,
+`examples/openai-agents-governed/`, `examples/smolagents-governed/`, and
+`examples/maf-integration/`.
 
 ## Expected Output
 

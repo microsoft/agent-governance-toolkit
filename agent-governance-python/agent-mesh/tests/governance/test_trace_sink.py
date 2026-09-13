@@ -72,7 +72,7 @@ class TestSessionToTrustRecord:
         record = session_to_trust_record(
             _AGENT_DID, log, _policy_hash(_POLICY_YAML), TraceConfig("./out/")
         )
-        assert record["eat_profile"] == "tag:agentrust.io,2026:trace-v0.1"
+        assert record["eat_profile"] == "tag:agentrust-io.com,2026:trace-v0.2"
 
     def test_subject_is_agent_did(self):
         log = _make_audit_log()
@@ -171,7 +171,7 @@ class TestTRACEAuditSinkEmit:
         sink = TRACEAuditSink(cfg, _AGENT_DID, _policy_hash(_POLICY_YAML))
         path = sink.emit(log)
         data = json.loads(Path(path).read_text())
-        assert data["eat_profile"] == "tag:agentrust.io,2026:trace-v0.1"
+        assert data["eat_profile"] == "tag:agentrust-io.com,2026:trace-v0.2"
         assert data["subject"] == _AGENT_DID
 
     def test_emit_returns_none_for_empty_log(self, tmp_path):
@@ -229,7 +229,7 @@ class TestGovernedCallableCloseSession:
         data = json.loads(Path(path).read_text())
         assert data["subject"] == _AGENT_DID
         assert data["policy"]["enforcement_mode"] == "enforce"
-        assert data["eat_profile"] == "tag:agentrust.io,2026:trace-v0.1"
+        assert data["eat_profile"] == "tag:agentrust-io.com,2026:trace-v0.2"
 
     def test_close_session_returns_none_for_empty_audit(self, tmp_path):
         # Audit is empty because the tool is never called

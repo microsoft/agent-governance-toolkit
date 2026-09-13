@@ -126,7 +126,7 @@ The emitted policies expect the AGT execution context to provide two discriminat
 | `principal_role` | both | Compared against the profile's `principal.role`. |
 | `resource_path` | both | Matched against allowed / denied scope patterns. Cedar uses `like`; Rego uses `startswith`. |
 
-In Cedar these fields appear under `context.<field>` (AGT's `CedarBackend._build_cedar_request` packs all non-standard keys into the Cedar `context` namespace). In Rego they appear under `input.<field>` directly.
+In Cedar these fields appear under `context.<field>` (AGT's `CedarlingDecision._build_cedar_request` packs all non-standard keys into the Cedar `context` namespace). In Rego they appear under `input.<field>` directly.
 
 ### Output sample (Cedar — research-agent-standard)
 
@@ -246,7 +246,7 @@ The emitted policies are designed for the *production* Cedar and OPA engines:
 * Cedar — [`cedarpy`](https://pypi.org/project/cedarpy/) Python bindings, or the `cedar` CLI.
 * Rego — the `opa` CLI (local mode) or a remote OPA server.
 
-The compiler uses idiomatic features — Cedar `when` clauses with `like` patterns, Rego `startswith` — that AGT's *built-in fallback* evaluators (`backends.py::CedarBackend._evaluate_builtin`, `OPABackend._evaluate_builtin`) do not parse. To exercise the emitted policies via AGT, install the production tooling per [AGT's policy backends documentation](../../docs/tutorials/08-opa-rego-cedar-policies.md) and the `CedarBackend` / `OPABackend` will pick them up automatically.
+The compiler uses idiomatic features — Cedar `when` clauses with `like` patterns, Rego `startswith` — that AGT's *built-in fallback* evaluators (`backends.py::CedarlingDecision._evaluate_builtin`, `OPABackend._evaluate_builtin`) do not parse. To exercise the emitted policies via AGT, install the production tooling per [AGT's policy backends documentation](../../docs/tutorials/08-opa-rego-cedar-policies.md) and the `CedarlingDecision` / `OPABackend` will pick them up automatically.
 
 ## Tests
 
@@ -283,7 +283,7 @@ The v1 schema covers actions, principal-role gating, and resource-scope rules. T
 | **Delegation rules** (`may_delegate_to`, `max_delegation_depth`) | Cedar entity relationships work cleanly only with a defined `entities.json` schema. Compiling correct delegation policy requires schema authoring beyond the example's scope; shipping a half-implementation would mislead. |
 | **Rate limits** (`max_operations_per_hour`) | Properly belongs to AGT's runtime concerns (`TokenBucket` in `agent_os.policies.rate_limiting`) rather than the authorization layer Cedar / Rego enforce. Including it would conflate authoring layers. |
 | **Temporal constraints** (business hours, timezone gating) | Both Cedar and Rego support time-based predicates, but cleanly compiling them requires a calendar / timezone model the example does not have. |
-| **Human-approval gating** (`require_human_approval_when`) | Belongs to AGT's policy decision pipeline, not the policy text itself. Cedar / Rego return allow / deny; "require approval" is a third decision class better expressed in AGT's `PolicyAction` taxonomy. |
+| **Human-approval gating** (`require_human_approval_when`) | Belongs to AGT's policy decision pipeline, not the policy text itself. Cedar / Rego return allow / deny; "require approval" is a third decision class better expressed in AGT's `PolicyEvaluation` taxonomy. |
 
 A future v2 could add any of these once the conventions for representing them in Cedar and Rego are settled. v1 prioritizes shipping a small, correct, fully-tested authoring surface over a large, partially-implemented one.
 

@@ -6,9 +6,8 @@ Sensitivity accumulates from the *actual* labels an action produced (its
 ``result_labels``), never from a projection of an output that has not run yet.
 After folding, the next action is gated against the accumulated envelope.
 
-The governance-level ``constrain`` outcome is realized as allow-with-obligations
-and collapses to a concrete ``PolicyAction`` via :func:`to_policy_action`, which
-fails closed on a path that cannot carry obligations.
+The governance-level ``constrain`` outcome carries explicit obligations for the
+host to enforce before the next action.
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ from .context_aggregation import AggregationRuleSet, evaluate_aggregation
 from .context_envelope import ContextEnvelope, apply_restrictions, fold
 from .data_classification import DataClassification
 from .obligations import Obligation, ObligationSet
-from .schema import PolicyAction
 
 # Action token -> the restriction that, when present, gates it.
 _RESTRICTED_ACTIONS: dict[str, str] = {
@@ -92,13 +90,26 @@ def decide_next(
     # regardless of the current aggregate sensitivity and must never be
     # suppressed below the floor. The floor is an additional, independent
     # trigger for flow-bearing actions once sensitivity is high.
-    restriction_present = gating is not None and gating in env.restrictions
+    #
+    # Both the gate and the obligations read the *evaluated* restriction set,
+    # not the envelope's. evaluate_aggregation seeds from env.restrictions, so
+    # this is a superset -- it can only ever gate more, never less. Reading the
+    # envelope here let a rule that adds a gating token without pushing
+    # sensitivity to the floor slip through: the token existed in agg but not
+    # yet in env, so neither trigger fired.
+    effective_restrictions = agg.restrictions
+    restriction_present = gating is not None and gating in effective_restrictions
     floor_triggered = gating is not None and agg.aggregate_sensitivity >= restricted_floor
     if restriction_present or floor_triggered:
+        # A CONSTRAIN carrying no obligations is a no-op for any host that
+        # enforces through them. When the floor fires on an envelope with no
+        # restrictions recorded, the gating token for the action is the
+        # constraint being applied, so name it.
+        obligation_keys = set(effective_restrictions)
+        if floor_triggered and gating is not None:
+            obligation_keys.add(gating)
         obligations = ObligationSet(
-            obligations=tuple(
-                Obligation(key=r, satisfied=False) for r in sorted(env.restrictions)
-            ),
+            obligations=tuple(Obligation(key=r, satisfied=False) for r in sorted(obligation_keys)),
             result_labels=env.labels,
         )
         reason = (
@@ -118,31 +129,3 @@ def decide_next(
         ObligationSet(result_labels=env.labels),
         agg.aggregate_sensitivity,
     )
-
-
-def to_policy_action(
-    decision: ContextDecision,
-    has_obligation_channel: bool,
-) -> PolicyAction:
-    """Collapse a ``ContextDecision`` onto the declarative ``PolicyAction`` enum.
-
-    ``PolicyAction`` has no ``constrain`` member and no obligation channel of
-    its own, so ``constrain`` maps to ``ALLOW`` only when the host can carry the
-    obligations (``has_obligation_channel``) or every obligation is already
-    satisfied; otherwise it FAILS CLOSED to ``DENY``. ``escalate`` maps to
-    ``BLOCK`` (the nearest stop-and-review action on this path).
-    """
-    if decision.outcome == ContextOutcome.ALLOW:
-        return PolicyAction.ALLOW
-    if decision.outcome == ContextOutcome.DENY:
-        return PolicyAction.DENY
-    if decision.outcome == ContextOutcome.ESCALATE:
-        return PolicyAction.BLOCK
-    # CONSTRAIN: allow only if the host can carry the obligations, or every
-    # obligation is already satisfied. An EMPTY obligation set does not grant
-    # allow on a channel-less path (vacuous all_satisfied must not fail open).
-    if has_obligation_channel:
-        return PolicyAction.ALLOW
-    if decision.obligations.obligations and decision.obligations.all_satisfied:
-        return PolicyAction.ALLOW
-    return PolicyAction.DENY

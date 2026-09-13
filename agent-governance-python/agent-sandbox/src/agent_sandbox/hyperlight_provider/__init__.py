@@ -16,7 +16,6 @@ when the provider is constructed and ``is_available()`` is queried.
 
 from agent_sandbox.hyperlight_provider.config import (
     HyperlightConfig,
-    hyperlight_config_from_policy,
 )
 from agent_sandbox.hyperlight_provider.provider import (
     HyperlightBackend,
@@ -29,5 +28,4 @@ __all__ = [
     "HyperlightConfig",
     "HyperLightSandboxProvider",
     "SnapshotHandle",
-    "hyperlight_config_from_policy",
 ]

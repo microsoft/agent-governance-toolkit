@@ -30,6 +30,7 @@ Peer dependencies: `@mastra/core >= 0.10.0`, `zod >= 3.22.0`
 ```typescript
 import { createTool } from "@mastra/core";
 import { createGovernedTool } from "@agentmesh/mastra";
+import { AgentControl } from "agent-control-specification";
 import { z } from "zod";
 
 const searchTool = createTool({
@@ -40,13 +41,11 @@ const searchTool = createTool({
   execute: async ({ query }) => ({ results: ["result1"] }),
 });
 
-// Add governance + trust + audit in one call
+const control = AgentControl.fromPath("./manifest.yaml");
+
+// Add ACS policy enforcement + trust + audit in one call
 const governedSearch = createGovernedTool(searchTool, {
-  governance: {
-    rateLimitPerMinute: 30,
-    blockedPatterns: ["(?i)ignore previous instructions"],
-    piiFields: ["ssn", "credit_card"],
-  },
+  control,
   trust: {
     minTrustScore: 500,
     getTrustScore: async (agentId) => {
@@ -64,22 +63,15 @@ const governedSearch = createGovernedTool(searchTool, {
 });
 ```
 
-### Use middleware layers individually
+The ACS manifest declares tool catalogs, intervention-point bindings, budgets,
+content filters, and transforms. `createGovernedTool` uses
+`AgentControl.runTool`, so deny, escalate, and transform behavior stays
+consistent with every other ACS host.
+
+### Use trust and audit individually
 
 ```typescript
-import { governanceMiddleware, trustGate, auditMiddleware } from "@agentmesh/mastra";
-
-// Governance only
-const gov = governanceMiddleware({
-  rateLimitPerMinute: 60,
-  blockedTools: ["shell_exec", "file_delete"],
-  maxInputLength: 10000,
-});
-
-const result = await gov.check(userInput, "tool-id", "agent-id");
-if (!result.allowed) {
-  console.log("Blocked:", result.violations);
-}
+import { trustGate, auditMiddleware } from "@agentmesh/mastra";
 
 // Trust only
 const trust = trustGate({
@@ -99,18 +91,6 @@ const { valid } = await audit.verifyChain(); // true if no tampering
 
 ## API
 
-### `governanceMiddleware(policy)`
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `rateLimitPerMinute` | `number` | Max tool calls per minute per agent |
-| `blockedPatterns` | `string[]` | Regex patterns to block in inputs |
-| `piiFields` | `string[]` | Field names to redact (e.g., `"ssn"`, `"email"`) |
-| `maxInputLength` | `number` | Maximum input size in characters |
-| `allowedTools` | `string[]` | Tool allowlist (empty = all allowed) |
-| `blockedTools` | `string[]` | Tool denylist |
-| `customCheck` | `function` | Custom async policy check |
-
 ### `trustGate(config)`
 
 | Option | Type | Description |
@@ -129,7 +109,15 @@ const { valid } = await audit.verifyChain(); // true if no tampering
 
 ### `createGovernedTool(tool, options)`
 
-Wraps a Mastra tool with all three layers. Options: `governance`, `trust`, `audit`, `agentId`.
+Wraps a Mastra tool with ACS policy enforcement, trust, and audit. `control` is
+required. Optional fields are `trust`, `audit`, `agentId`, and `snapshot`.
+
+## Migration from the removed local policy object
+
+The package no longer accepts its local policy object. Move every constraint
+into an ACS manifest and construct `AgentControl` from that manifest. Passing
+the removed object is a TypeScript compile error rather than a best-effort
+translation.
 
 ## Trust Score Tiers
 

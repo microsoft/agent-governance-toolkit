@@ -197,6 +197,17 @@ class TestGeography:
         decision = DataAccessEvaluator([policy]).evaluate("flex-agent", label)
         assert decision.allowed
 
+    def test_missing_geography_denied_when_required(self) -> None:
+        policy = ABACPolicy(
+            agent_id="geo-agent",
+            required_geography="US",
+            max_classification=DataClassification.CONFIDENTIAL,
+        )
+        label = DataLabel(classification=DataClassification.PUBLIC, geography="")
+        decision = DataAccessEvaluator([policy]).evaluate("geo-agent", label)
+        assert not decision.allowed
+        assert "geography" in decision.reason.lower()
+
 
 # ---------------------------------------------------------------------------
 # Default deny for unregistered agents

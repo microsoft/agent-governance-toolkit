@@ -1,3 +1,9 @@
+---
+title: "ADR 0029: Policy distribution and registries with verifiable trust"
+last_reviewed: 2026-06-01
+owner: agt-maintainers
+---
+
 # ADR 0029: Policy distribution and registries with verifiable trust
 
 - Status: proposed

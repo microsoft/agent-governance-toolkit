@@ -1,3 +1,9 @@
+---
+title: "Tutorial 36: 2-Line Governance with govern()"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Tutorial 36: 2-Line Governance with govern()
 
 > **Time**: 10 minutes · **Level**: Beginner · **Prerequisites**: `pip install agent-governance-toolkit[full]`

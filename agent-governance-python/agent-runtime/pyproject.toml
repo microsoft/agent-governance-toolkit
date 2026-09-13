@@ -11,11 +11,19 @@ requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-core>=4.1.0,<6.0"]
+dependencies = ["agent-governance-toolkit-core>=5.0.0,<6.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 "Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
+# Dep-only deprecation stub: the published wheel ships NO source, it only
+# redirects to agent-governance-toolkit-core (see [project].dependencies). The
+# `agent_runtime` top-level package is owned solely by -core, which force-includes
+# ../agent-runtime/src/agent_runtime. Shipping it here too would put the same
+# top-level import path in two distributions and cause an order/version-dependent
+# "Frankenstein" install. bypass-selection tells hatchling to build a wheel with
+# no package of its own. The src/ tree stays in-repo for CI (which imports it via
+# the editable -core install) and as the source of truth force-included by -core.
 [tool.hatch.build.targets.wheel]
-packages = ["src/agent_runtime"]
+bypass-selection = true

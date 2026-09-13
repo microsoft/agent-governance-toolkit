@@ -11,10 +11,9 @@ Pages without any frontmatter are reported as missing-frontmatter (one
 finding per page). Pages with a frontmatter block missing one or more
 required keys get one finding per missing key.
 
-By default the checker runs in **warn** mode and exits 0 even when
-findings exist — this lets the foundation PR land without forcing every
-existing page to be edited in the same change. Pass ``--strict`` to exit
-non-zero on findings (used by the final IA capstone PR).
+By default the checker runs in **warn** mode for local audits. Pass
+``--strict`` to exit non-zero on findings; the Docs Quality workflow uses
+strict mode for the published corpus.
 
 Usage::
 
@@ -32,6 +31,11 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
+
+try:
+    from .docs_scope import is_excluded_doc
+except ImportError:  # pragma: no cover - direct script execution
+    from docs_scope import is_excluded_doc
 
 DEFAULT_REQUIRED = ("title", "last_reviewed", "owner")
 
@@ -144,8 +148,6 @@ DEFAULT_EXCLUDES = (
     "__pycache__",
     "overrides",  # MkDocs theme overrides — not user-authored pages
     "stylesheets",
-    "assets",
-    "i18n",  # translated pages tracked separately
 )
 
 
@@ -159,6 +161,8 @@ def discover_docs(root: Path, extras: Iterable[Path]) -> list[Path]:
     out: list[Path] = []
     for p in docs_dir.rglob("*.md"):
         if any(part in DEFAULT_EXCLUDES for part in p.parts):
+            continue
+        if is_excluded_doc(p, docs_dir):
             continue
         out.append(p.resolve())
     return sorted(set(out))

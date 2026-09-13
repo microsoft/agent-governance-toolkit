@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""RE2 compatibility unit tests for :mod:`agt.policies._re2`.
+"""RE2 compatibility unit tests for :mod:`agt.cli._migrate_re2`.
 
 These guard the fail-open class the OPA-less runtime bridge path is exposed to:
 ``fnmatch.translate`` emits atomic groups ``(?>...)`` on CPython >= 3.12 that
@@ -13,7 +13,7 @@ import builtins
 
 import pytest
 
-from agt.policies import _re2
+from agt.cli import _migrate_re2 as _re2
 
 
 def _no_opa(monkeypatch: pytest.MonkeyPatch) -> None:

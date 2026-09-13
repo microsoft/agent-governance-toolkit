@@ -1,3 +1,9 @@
+---
+title: "Tutorial 43 — .NET MAF Hook Integration"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 # Tutorial 43 — .NET MAF Hook Integration
 
 > **Level:** Intermediate · **Prerequisites:** Tutorial 01 (Policy Engine), .NET 8.0+, an existing `Microsoft.Agents.AI` agent

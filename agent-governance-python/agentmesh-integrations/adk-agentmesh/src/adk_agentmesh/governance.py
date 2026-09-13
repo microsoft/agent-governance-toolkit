@@ -63,7 +63,7 @@ class GovernanceCallbacks:
 
         from adk_agentmesh import ADKPolicyEvaluator, GovernanceCallbacks
 
-        evaluator = ADKPolicyEvaluator.from_config("policies/adk-governance.yaml")
+        evaluator = ADKPolicyEvaluator.from_config("policies/adk-agt-manifest.yaml")
         callbacks = GovernanceCallbacks(evaluator)
 
         agent = LlmAgent(

@@ -1,16 +1,17 @@
 # langflow-agentmesh
 
-Governance components for [Langflow](https://github.com/langflow-ai/langflow) — policy enforcement, trust-based routing, audit logging, and compliance checking for visual AI flows.
+Governance components for [Langflow](https://github.com/langflow-ai/langflow): trust-based routing, audit logging, and compliance checking for visual AI flows.
 
 > Part of the [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) ecosystem.
 
 ## What This Does
 
-Adds governance guardrails to Langflow flows as custom components. Each component can be dropped into a flow to enforce policies, route by trust, log decisions, and validate compliance — **without writing code**.
+Adds governance guardrails to Langflow flows as custom components. Each one drops into a flow to route by trust, log decisions, and validate compliance without writing code.
+
+Policy enforcement now comes from the ACS runtime rather than a Langflow component. Build a manifest and evaluate it with `AgtRuntime`.
 
 | Component | Purpose | Key Feature |
 |-----------|---------|-------------|
-| **Governance Gate** | Policy enforcement | Tool allowlist/blocklist, content pattern scanning |
 | **Trust Router** | Trust-based routing | Three outputs: trusted / review / blocked |
 | **Audit Logger** | Tamper-evident logging | SHA-256 hash chain, JSONL export |
 | **Compliance Checker** | Framework validation | EU AI Act, SOC2, HIPAA |
@@ -28,25 +29,6 @@ pip install langflow-agentmesh[langflow]
 ```
 
 ## Quick Start
-
-### Governance Gate
-
-```python
-from langflow_agentmesh import GovernanceComponent
-
-gate = GovernanceComponent(
-    allowed_tools=["search", "read_file"],
-    blocked_patterns=[("rm -rf", "substring"), (r".*password.*=.*", "regex")],
-    max_calls=10,
-)
-
-result = gate.process(
-    action="search",
-    parameters={"query": "python tutorials"},
-    agent_id="agent-1",
-)
-print(result.allowed)  # True
-```
 
 ### Trust Router
 
@@ -107,37 +89,12 @@ for action in result.required_actions:
     print(f"  → {action}")
 ```
 
-### YAML Policy
-
-```yaml
-# governance-policy.yaml
-max_tool_calls_per_request: 10
-confidence_threshold: 0.8
-allowed_tools:
-  - search
-  - read_file
-blocked_tools:
-  - delete
-  - drop
-blocked_patterns:
-  - pattern: "rm -rf"
-    type: substring
-  - pattern: ".*password.*=.*"
-    type: regex
-```
-
-```python
-from langflow_agentmesh import GovernanceComponent
-
-gate = GovernanceComponent(policy_yaml=open("governance-policy.yaml").read())
-```
-
 ## Example Langflow Flow
 
 ```
-┌─────────────┐     ┌──────────────────┐     ┌──────────────┐
-│  LLM Agent  │────▶│ Governance Gate  │────▶│ Trust Router  │
-└─────────────┘     └──────────────────┘     └──┬───┬───┬───┘
+┌─────────────┐     ┌──────────────┐
+│  LLM Agent  │────▶│ Trust Router  │
+└─────────────┘     └──┬───┬───┬───┘
                                                  │   │   │
                           ┌──────────────────────┘   │   └──────────┐
                           ▼                          ▼              ▼

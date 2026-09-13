@@ -124,12 +124,12 @@ class GovServer:
         self._version = version or __version__
         self._detector = PromptInjectionDetector(DetectionConfig(sensitivity="balanced"))
         self._metrics = GovernanceMetrics()
-        # Health: the built-in policy_engine check is meaningful as-is. Override
-        # the generic audit_backend check (which looks for a write/flush audit
-        # sink this server does not use) with a probe bound to the server's real
-        # audit path — the injection detector's audit trail exposed at
-        # /api/v1/audit/injections — so /health reflects actual audit health.
-        self._health_checker = HealthChecker(version=self._version)
+        # This server does not own an ACS runtime. Probe the governance path it
+        # does own: the injection detector audit trail exposed by the API.
+        self._health_checker = HealthChecker(
+            version=self._version,
+            register_builtins=False,
+        )
         self._health_checker.register_check("audit_backend", self._check_audit_trail)
         self._execute_authenticator: MCPSessionAuthenticator | None = (
             execute_authenticator or _build_execute_authenticator_from_env()

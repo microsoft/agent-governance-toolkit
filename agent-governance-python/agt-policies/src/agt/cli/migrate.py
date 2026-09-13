@@ -9,8 +9,7 @@ project to the v5 shape (``--write``).
 The algorithm follows ``plan.md`` §5 / milestone M6.S1:
 
 1. Find legacy artifacts under the project root.
-2. For every governance.yaml chain, run
-   :func:`agt.manifest_resolution.resolve_manifest` and persist the
+2. For every governance.yaml chain, run the private migration resolver and persist the
    resulting flat ACS manifest + generated Rego bundle.
 3. For every ``GovernancePolicy(...)`` constructor call, accept only exact
    literals, translate them through the private one-way migrator, and refuse
@@ -23,9 +22,8 @@ The algorithm follows ``plan.md`` §5 / milestone M6.S1:
 7. Render a Markdown report (printed to stdout, optionally written
    via ``--write-report``).
 
-The CLI is deliberately stdlib + pyyaml only — the only third-party
-imports are the same ones the rest of agt-policies already depends on
-through ``manifest_resolution`` and ``policies.bridge``.
+The CLI is deliberately stdlib + pyyaml only. Its private resolver and
+translator use the same dependencies already declared by `agt-policies`.
 """
 
 from __future__ import annotations
@@ -46,10 +44,10 @@ from typing import Any
 
 import yaml
 
-from agt.manifest_resolution import ResolutionError, resolve_manifest
-from agt.policies.manifest import AgtManifest
+from agent_control_specification import validate_manifest
 
 from ._migrate_bridge import MigrationPolicyInput, build_migrated_manifest
+from ._migrate_resolution import ResolutionError, resolve_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +99,8 @@ class GovernancePolicyFinding:
     kwargs: dict[str, Any]
     migration_kwargs: dict[str, Any] = field(default_factory=dict)
     manual_review: list[str] = field(default_factory=list)
+    # Advisory only: recorded in the report but never blocks the migration.
+    notes: list[str] = field(default_factory=list)
     manifest_path: Path | None = None
     rewrite_snippet: str = ""
     applied: bool = False
@@ -219,7 +219,7 @@ def _find_governance_chains(root: Path) -> list[Path]:
 
     A "chain root" is the directory containing the **most-specific**
     governance file in a path — i.e. the directory we would pass as
-    ``action_path`` to :func:`agt.manifest_resolution.resolve_manifest`.
+    ``action_path`` to the private migration resolver.
     Directories that already have a v5 ``manifest.yaml`` sitting next to
     the governance file are still reported so the migration is idempotent
     (the run is a no-op when ``--write`` already happened).
@@ -495,7 +495,7 @@ class _LegacyVisitor(ast.NodeVisitor):
                             "Direct PolicyInterceptor subclasses are removed in "
                             "v5. Port the per-event logic to either an "
                             "intervention_point binding in your AGT manifest or a "
-                            "host-side wrapper around agt.policies.runtime."
+                            "host-side wrapper around agent_control_specification."
                         ),
                     )
                 )
@@ -626,6 +626,14 @@ def _migrate_governance_chain(
         return finding
 
     if write:
+        # Same portability rule the GovernancePolicy path follows: the manifest
+        # lands in chain_root next to its bundle, so record the bundle
+        # relatively or the project stops working once cloned or containerized.
+        policy = manifest.get("policies", {}).get("agt_legacy_rules")
+        if isinstance(policy, dict) and policy.get("bundle"):
+            policy["bundle"] = os.path.relpath(
+                Path(policy["bundle"]).resolve(), manifest_path.parent.resolve()
+            )
         with tempfile.TemporaryDirectory(
             prefix=".agt_chain_migration_", dir=chain_root
         ) as staging_dir:
@@ -723,6 +731,20 @@ def _migrate_governance_policy(
         )
         return
 
+    # The generated confidence rule reads ``input.annotations.confidence.score``,
+    # which only an annotator can populate. The migrator has no annotator to
+    # declare, so the rule is inert until the user wires one up. Say so instead
+    # of letting a v4 policy look like it still enforces a threshold it cannot.
+    if inputs.confidence_threshold > 0:
+        _add_note(
+            finding,
+            "confidence_threshold "
+            f"({inputs.confidence_threshold}) migrated to a Rego rule that reads "
+            "'input.annotations.confidence.score'. Nothing populates that field "
+            "until you declare an annotator that emits a confidence score, so "
+            "the threshold is not enforced until you do.",
+        )
+
     bundle_dir = policies_dir / f"{base_name}_bundle"
     if manifest_path.exists() or bundle_dir.exists():
         finding.manual_review.append(
@@ -753,10 +775,13 @@ def _migrate_governance_policy(
                 bundle_dir=staging_bundle,
                 policy_id=policy_id,
             )
-            manifest["policies"][policy_id]["bundle"] = str(
-                bundle_dir.resolve()
+            # Relative to the manifest so the migrated project stays portable:
+            # an absolute path breaks the moment the repo is cloned elsewhere or
+            # built into a container.
+            manifest["policies"][policy_id]["bundle"] = os.path.relpath(
+                bundle_dir.resolve(), manifest_path.parent.resolve()
             )
-            manifest = AgtManifest.from_document(manifest).to_document()
+            validate_manifest(yaml.safe_dump(manifest, sort_keys=False))
             staged_manifest = staging / "manifest.yaml"
             staged_manifest.write_text(
                 yaml.safe_dump(manifest, sort_keys=False),
@@ -787,6 +812,12 @@ def _migrate_governance_policy(
     finding.applied = True
 
 
+def _add_note(finding: GovernancePolicyFinding, note: str) -> None:
+    """Record an advisory note once; this runs again on the --write pass."""
+    if note not in finding.notes:
+        finding.notes.append(note)
+
+
 def _render_governance_rewrite_snippet(
     *,
     kwargs: dict[str, Any],
@@ -802,7 +833,7 @@ def _render_governance_rewrite_snippet(
 
     with::
 
-        runtime = AgtRuntime(Path("policies/<file>.manifest.yaml"))
+        control = AgentControl.from_path("policies/<file>.manifest.yaml")
         agent.attach_runtime(runtime)
 
     The snippet is purely informational — we never auto-rewrite Python
@@ -823,8 +854,8 @@ def _render_governance_rewrite_snippet(
         "#\n"
         "# v5 — replace the construction with:\n"
         "#     from pathlib import Path\n"
-        "#     from agt.policies.runtime import AgtRuntime\n"
-        f"#     runtime = AgtRuntime.from_manifest(Path({str(manifest_path)!r}))\n"
+        "#     from agent_control_specification import AgentControl\n"
+        f"#     control = AgentControl.from_path({str(manifest_path)!r})\n"
     )
 
 
@@ -929,6 +960,12 @@ def render_report(report: MigrationReport) -> str:
                 lines.append("")
                 for reason in gp.manual_review:
                     lines.append(f"- {_md_escape(reason)}")
+                lines.append("")
+            if gp.notes:
+                lines.append("**Notes:**")
+                lines.append("")
+                for note in gp.notes:
+                    lines.append(f"- {_md_escape(note)}")
                 lines.append("")
             lines.append("**Suggested code rewrite:**")
             lines.append("")

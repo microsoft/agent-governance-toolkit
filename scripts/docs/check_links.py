@@ -21,6 +21,7 @@ Exit codes:
     1 - broken links detected
     2 - usage / invocation error
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,6 +32,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import unquote, urlparse
+
+try:
+    from .docs_scope import is_excluded_doc
+except ImportError:  # pragma: no cover - direct script execution
+    from docs_scope import is_excluded_doc
 
 # ---------------------------------------------------------------------------
 # Markdown parsing
@@ -89,6 +95,53 @@ def _strip_code_blocks(text: str) -> str:
     return "\n".join(out)
 
 
+def _is_escaped(text: str, index: int) -> bool:
+    """Return whether the character at ``index`` has an odd backslash prefix."""
+    backslashes = 0
+    index -= 1
+    while index >= 0 and text[index] == "\\":
+        backslashes += 1
+        index -= 1
+    return backslashes % 2 == 1
+
+
+def _strip_inline_code_spans(text: str) -> str:
+    """Replace inline code spans with spaces while preserving line numbers."""
+    out: list[str] = []
+    for line in text.splitlines():
+        chars = list(line)
+        index = 0
+        while index < len(line):
+            if line[index] != "`" or _is_escaped(line, index):
+                index += 1
+                continue
+            end = index
+            while end < len(line) and line[end] == "`":
+                end += 1
+            marker = line[index:end]
+            close = _find_code_span_close(line, marker, end)
+            if close == -1:
+                index = end
+                continue
+            chars[index : close + len(marker)] = " " * (close + len(marker) - index)
+            index = close + len(marker)
+        out.append("".join(chars))
+    return "\n".join(out)
+
+
+def _find_code_span_close(line: str, marker: str, start: int) -> int:
+    """Find an exact-length closing backtick run for an inline code span."""
+    close = line.find(marker, start)
+    while close != -1:
+        before_is_backtick = close > 0 and line[close - 1] == "`"
+        after = close + len(marker)
+        after_is_backtick = after < len(line) and line[after] == "`"
+        if not before_is_backtick and not after_is_backtick:
+            return close
+        close = line.find(marker, close + 1)
+    return -1
+
+
 def _slugify_heading(text: str) -> str:
     """Approximate GitHub/MkDocs heading-to-anchor slugification.
 
@@ -96,13 +149,13 @@ def _slugify_heading(text: str) -> str:
     drops characters other than letters, digits, hyphen, underscore.
     """
     # Strip inline markdown emphasis/code markers
-    text = re.sub(r"[`*_~]", "", text)
+    text = re.sub(r"[`*~]", "", text)
     # Strip link wrappers but keep the link text
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     text = text.strip().lower()
     text = re.sub(r"\s+", "-", text)
     text = re.sub(r"[^\w\-]", "", text)
-    return text
+    return re.sub(r"-{2,}", "-", text).strip("-")
 
 
 def _extract_anchors(markdown: str) -> set[str]:
@@ -207,7 +260,7 @@ def write_baseline(path: Path, findings: Iterable[Finding], root: Path) -> int:
 
 def extract_links(path: Path, text: str) -> list[Link]:
     """Return all inline and reference-style relative links in ``text``."""
-    cleaned = _strip_code_blocks(text)
+    cleaned = _strip_inline_code_spans(_strip_code_blocks(text))
     links: list[Link] = []
 
     # Collect reference definitions (label -> target). Definitions are
@@ -226,7 +279,9 @@ def extract_links(path: Path, text: str) -> list[Link]:
         target = m.group("target").strip()
         if not target:
             continue
-        links.append(Link(source=path, line=_line_of(cleaned, m.start()), target=target))
+        links.append(
+            Link(source=path, line=_line_of(cleaned, m.start()), target=target)
+        )
 
     # Reference uses — resolve label to definition target
     for m in _REF_USE_RE.finditer(cleaned):
@@ -266,7 +321,9 @@ def validate_link(
             anchors = _get_anchors(link.source, anchor_cache)
             if anchor not in anchors:
                 return Finding(
-                    link.source, link.line, target,
+                    link.source,
+                    link.line,
+                    target,
                     f"anchor '#{anchor}' not found in source file",
                 )
         return None
@@ -298,7 +355,9 @@ def validate_link(
         candidate.relative_to(root)
     except ValueError:
         return Finding(
-            link.source, link.line, target,
+            link.source,
+            link.line,
+            target,
             "target resolves outside the repository root",
         )
 
@@ -311,7 +370,9 @@ def validate_link(
             candidate = index
         elif require_directory_index:
             return Finding(
-                link.source, link.line, target,
+                link.source,
+                link.line,
+                target,
                 f"directory has no index.md: {_safe_rel(candidate, root)}",
             )
         else:
@@ -319,7 +380,9 @@ def validate_link(
 
     if not candidate.exists():
         return Finding(
-            link.source, link.line, target,
+            link.source,
+            link.line,
+            target,
             f"file not found: {_safe_rel(candidate, root)}",
         )
 
@@ -327,7 +390,9 @@ def validate_link(
         anchors = _get_anchors(candidate, anchor_cache)
         if anchor not in anchors:
             return Finding(
-                link.source, link.line, target,
+                link.source,
+                link.line,
+                target,
                 f"anchor '#{anchor}' not found in {_safe_rel(candidate, root)}",
             )
     return None
@@ -373,13 +438,17 @@ def discover_markdown(root: Path, extra_paths: Iterable[Path] = ()) -> list[Path
     """
     extras = [p for p in extra_paths]
     if extras:
-        return [p.resolve() for p in extras if p.suffix.lower() == ".md" and p.is_file()]
+        return [
+            p.resolve() for p in extras if p.suffix.lower() == ".md" and p.is_file()
+        ]
 
     found: list[Path] = []
     docs_dir = root / "docs"
     if docs_dir.is_dir():
         for p in docs_dir.rglob("*.md"):
             if any(part in DEFAULT_EXCLUDES for part in p.parts):
+                continue
+            if is_excluded_doc(p, docs_dir):
                 continue
             found.append(p.resolve())
     for p in root.glob("*.md"):
@@ -433,10 +502,21 @@ def check(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("paths", nargs="*", type=Path, help="Specific markdown files to check (optional).")
-    p.add_argument("--root", type=Path, default=Path.cwd(), help="Repository root (default: cwd).")
-    p.add_argument("--json", action="store_true", help="Emit machine-readable JSON report.")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
+        help="Specific markdown files to check (optional).",
+    )
+    p.add_argument(
+        "--root", type=Path, default=Path.cwd(), help="Repository root (default: cwd)."
+    )
+    p.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON report."
+    )
     p.add_argument(
         "--require-directory-index",
         action="store_true",

@@ -8,6 +8,13 @@ from __future__ import annotations
 import subprocess
 import json
 from pathlib import Path
+import sys
+import os
+import tomllib
+import xml.etree.ElementTree as ET
+
+from packaging.requirements import Requirement
+from packaging.version import Version
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PUBLISH = REPO_ROOT / ".github" / "workflows" / "publish.yml"
@@ -16,6 +23,12 @@ ESRP_PIPELINE = REPO_ROOT / ".github" / "pipelines" / "esrp-publish.yml"
 LOCKFILE = REPO_ROOT / ".github" / "release-tools" / "release-tools.txt"
 SRC = REPO_ROOT / ".github" / "release-tools" / "release-tools.in"
 ACS_PYTHON_WHEEL_HELPER = REPO_ROOT / "scripts" / "ci" / "build_acs_python_wheel.sh"
+ACS_PYTHON_WHEEL_SMOKE = REPO_ROOT / "scripts" / "ci" / "smoke_acs_python_wheel.py"
+ACS_PYTHON_DIST_VERIFY = REPO_ROOT / "scripts" / "ci" / "verify_acs_python_dist.py"
+PINNED_RUST_INSTALLER = REPO_ROOT / "scripts" / "ci" / "install_pinned_rust.sh"
+PINNED_WINDOWS_RUST_INSTALLER = (
+    REPO_ROOT / "scripts" / "ci" / "install_pinned_rust_windows.ps1"
+)
 RELEASE_MANIFEST = REPO_ROOT / "scripts" / "ci" / "generate_release_manifest.py"
 
 
@@ -58,6 +71,223 @@ def test_esrp_pipeline_is_restored_as_temporary_registry_publish_path() -> None:
     assert ".github/pipelines/release-tools" not in text
 
 
+def test_esrp_pipeline_builds_complete_acs_python_distribution() -> None:
+    text = ESRP_PIPELINE.read_text(encoding="utf-8")
+    # Check the platform / buildPlatform tokens independently so the test stays
+    # stable against harmless YAML reindentation of the matrix entries.
+    expected_matrix_entries = [
+        ("platform: linux-x86_64", "buildPlatform: linux-x86_64"),
+        ("platform: linux-aarch64", "buildPlatform: linux-aarch64-cross"),
+        ("platform: macos-x86_64", "buildPlatform: macos-x86_64"),
+        ("platform: macos-arm64", "buildPlatform: macos-arm64"),
+        ("platform: windows-x86_64", "buildPlatform: windows-x86_64"),
+    ]
+    for platform, build_platform in expected_matrix_entries:
+        assert platform in text
+        assert build_platform in text
+
+    assert (
+        "condition: and(succeeded(), ne('${{ pkg.name }}', 'agent-control-specification'))"
+        in text
+    )
+    assert "python scripts/ci/smoke_acs_python_wheel.py" in text
+    assert "python -m maturin build" in text
+    assert "bash scripts/ci/install_pinned_rust.sh" in text
+    assert "install_pinned_rust_windows.ps1" in text
+    assert "pwsh:" in text
+    assert "job: Build_PyPI_ACS_sdist" in text
+    assert "job: Aggregate_PyPI_ACS" in text
+    assert "python scripts/ci/verify_acs_python_dist.py" in text
+    assert "Build and smoke test a wheel from the ACS source distribution" in text
+    assert "CARGO_NET_OFFLINE=true python -m pip wheel" in text
+    assert "grep -Fq 'path = \"../../core\"'" in text
+    assert "artifact: 'pypi-agent-control-specification'" in text
+
+
+def test_esrp_native_assets_match_the_host_sdk_cdylib() -> None:
+    import yaml
+
+    pipeline = yaml.safe_load(ESRP_PIPELINE.read_text(encoding="utf-8"))
+    assets = next(
+        parameter["default"]
+        for parameter in pipeline["parameters"]
+        if parameter["name"] == "acsDotnetNativeAssets"
+    )
+    native_targets = REPO_ROOT / (
+        "policy-engine/sdk/dotnet/src/AgentControlSpecification/"
+        "AgentControlSpecification.NativeLibrary.targets"
+    )
+    xml = ET.parse(native_targets)
+    expected = {
+        node.attrib["Include"].removeprefix("$(MSBuildThisFileDirectory)runtimes/")
+        for node in xml.iter("_AcsRequiredPackageNativeAsset")
+    }
+    assert {f"{asset['rid']}/native/{asset['nativeLib']}" for asset in assets} == expected
+    cargo = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/rust/Cargo.toml").read_text(encoding="utf-8")
+    )
+    assert "cdylib" in cargo["lib"]["crate-type"]
+    native_jobs = ESRP_PIPELINE.read_text(encoding="utf-8").split(
+        "- job: Build_ACS_Native_", 1
+    )[1].split("- job: BuildAndPack_ACS", 1)[0]
+    assert f"-p {cargo['package']['name']} \\" in native_jobs
+    assert "--features opa,bundled-dispatchers" in native_jobs
+    assert "AllowIncompleteNativePack" not in native_jobs
+
+
+def test_python_manifest_producers_require_the_retargeted_sdk() -> None:
+    sdk = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/python/pyproject.toml").read_text(encoding="utf-8")
+    )
+    sdk_version = Version(sdk["project"]["version"])
+    assert sdk_version >= Version("0.4.0b0")
+    for producer in ["agent-governance-python/agt-policies", "policy-engine/generator"]:
+        project = tomllib.loads(
+            (REPO_ROOT / producer / "pyproject.toml").read_text(encoding="utf-8")
+        )["project"]
+        dependency = next(
+            Requirement(value)
+            for value in project["dependencies"]
+            if Requirement(value).name == "agent-control-specification"
+        )
+        assert sdk_version in dependency.specifier, producer
+        assert Version("0.3.1b1") not in dependency.specifier, producer
+    core = tomllib.loads(
+        (REPO_ROOT / "agent-governance-python/agent-governance-toolkit-core/pyproject.toml")
+        .read_text(encoding="utf-8")
+    )["project"]
+    policy_requirement = next(
+        Requirement(value)
+        for value in core["dependencies"]
+        if Requirement(value).name == "agt-policies"
+    )
+    assert Version("5.1.0") in policy_requirement.specifier
+    assert Version("5.0.0") not in policy_requirement.specifier
+
+
+def test_acs_registry_pair_and_backend_features_are_consistent() -> None:
+    for path in [
+        "policy-engine/core/Cargo.toml",
+        "policy-engine/sdk/rust/Cargo.toml",
+        "policy-engine/integrations/annotators/Cargo.toml",
+        "policy-engine/integrations/otel/Cargo.toml",
+    ]:
+        manifest = tomllib.loads((REPO_ROOT / path).read_text(encoding="utf-8"))
+        dependency = manifest["dependencies"]["agent-control-spec"]
+        assert dependency["version"] == "=0.4.0-alpha.3", path
+        assert not dependency["default-features"], path
+        if path in ["policy-engine/core/Cargo.toml", "policy-engine/integrations/otel/Cargo.toml"]:
+            assert "opa" in dependency["features"], path
+    sdk = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/rust/Cargo.toml").read_text(encoding="utf-8")
+    )
+    assert sdk["dependencies"]["agent-hooks-sdk"] == "=0.1.0-alpha.5"
+    assert "opa" in sdk["dependencies"]["agent-control-spec"]["features"]
+    for path in [
+        "policy-engine/Cargo.lock",
+        "agent-governance-rust/Cargo.lock",
+        "policy-engine/examples/coding_agent/app/Cargo.lock",
+    ]:
+        packages = tomllib.loads((REPO_ROOT / path).read_text(encoding="utf-8"))["package"]
+        for name, version in [
+            ("agent-control-spec", "0.4.0-alpha.3"),
+            ("agent-hooks-sdk", "0.1.0-alpha.5"),
+        ]:
+            assert {p["version"] for p in packages if p["name"] == name} == {version}, path
+
+
+def test_python_ci_resolves_unpublished_policy_dependencies_locally() -> None:
+    import yaml
+
+    jobs = yaml.safe_load(
+        (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    )["jobs"]
+    coherence_steps = jobs["install-coherence"]["steps"]
+    build_step = next(step for step in coherence_steps if step.get("name") == "Build consolidation wheels")
+    assert "./policy-engine/sdk/python --wheel-dir dist-coherence" in build_step["run"]
+    assert "agt-policies agent-governance-toolkit-core" in build_step["run"]
+    installs = [
+        step["run"] for step in coherence_steps
+        if step.get("name", "").startswith("Clean-venv import")
+    ]
+    assert len(installs) == 4
+    assert all("--find-links dist-coherence" in command for command in installs)
+    assert any(
+        step.get("name") == "Install local policy dependencies"
+        for step in jobs["security"]["steps"]
+    )
+    integration_install = next(
+        step["run"] for step in jobs["test-integrations"]["steps"]
+        if step.get("name") == "Install ${{ matrix.package }}"
+    )
+    assert integration_install.index(
+        '-e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"'
+    ) < integration_install.index('-e ".[dev]"')
+
+
+def test_esrp_pypi_publication_waits_for_policy_prerequisites() -> None:
+    import yaml
+
+    pipeline = yaml.safe_load(ESRP_PIPELINE.read_text(encoding="utf-8"))
+    stage = next(stage for stage in pipeline["stages"] if stage["stage"] == "Publish_PyPI")
+    job = next(iter(stage["jobs"][0].values()))[0]
+    prerequisites = next(iter(job["dependsOn"][0].values()))
+    conditions = "\n".join(next(iter(condition)) for condition in prerequisites)
+    assert "eq(prerequisite.name, 'agent-control-specification')" in conditions
+    assert "eq(pkg.name, 'agt-policies')" in conditions
+    assert "eq(pkg.name, 'acs-generator')" in conditions
+    assert "and(eq(prerequisite.name, 'agt-policies'), eq(pkg.name, 'agent-governance-toolkit-core'))" in conditions
+    assert all(
+        next(iter(condition.values())) == [
+            "Publish_PyPI_${{ replace(prerequisite.name, '-', '_') }}"
+        ]
+        for condition in prerequisites
+    )
+    assert "waitforreleasecompletion: true" in ESRP_PIPELINE.read_text(encoding="utf-8")
+
+
+def test_github_publish_keeps_bulk_dry_runs_but_rejects_parallel_uploads(tmp_path: Path) -> None:
+    import yaml
+
+    workflow = yaml.safe_load(PUBLISH.read_text(encoding="utf-8"))
+    step = workflow["jobs"]["resolve-python-matrix"]["steps"][0]
+    assert step["env"]["DRY_RUN"] == "${{ github.event.inputs.dry_run }}"
+    script = step["run"]
+    for package, dry_run, expected in [
+        ("all-python", "true", 0),
+        ("all-python", "false", 1),
+        ("agt-policies", "false", 0),
+    ]:
+        result = subprocess.run(
+            ["bash", "-e", "-c", script],
+            env={
+                **os.environ,
+                "INPUT": package,
+                "EVENT_NAME": "workflow_dispatch",
+                "DRY_RUN": dry_run,
+                "GITHUB_OUTPUT": str(tmp_path / "output"),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == expected, result.stderr
+        if expected:
+            assert "ordered ESRP pipeline" in result.stdout
+
+
+def test_dotnet_host_packages_share_the_breaking_release_version() -> None:
+    sdk = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/rust/Cargo.toml").read_text(encoding="utf-8")
+    )
+    versions = [
+        ET.parse(project).findtext(".//Version")
+        for project in (REPO_ROOT / "policy-engine/sdk/dotnet/src").glob("*/*.csproj")
+    ]
+    assert len(versions) == 5
+    assert set(versions) == {sdk["package"]["version"]}
+
+
 def test_publish_workflow_has_no_embedded_esrp_credentials_or_tasks() -> None:
     text = PUBLISH.read_text(encoding="utf-8")
     forbidden = [
@@ -87,7 +317,7 @@ def test_publish_workflow_publishes_language_artifacts() -> None:
     assert "packages-dir: ${{ matrix.path }}/dist/" not in text
     assert 'registry-url: "https://registry.npmjs.org"' in text
     assert "NPM_TOKEN not set, skipping npm publish" in text
-    assert "npm view \"${PACKAGE_NAME}@${PACKAGE_VERSION}\" version" in text
+    assert 'npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version' in text
     assert "already exists on npm, skipping publish" in text
     assert "npm publish ./tgz-output/*.tgz --provenance --access public" in text
     assert "dotnet nuget push ./nupkg/*.nupkg" in text
@@ -96,14 +326,69 @@ def test_publish_workflow_publishes_language_artifacts() -> None:
 
 def test_pypi_prepare_and_publish_conditions_match() -> None:
     text = PUBLISH.read_text(encoding="utf-8")
-    prepare = text[text.index("- name: Prepare PyPI upload artifacts") :]
-    prepare = prepare[: prepare.index("- name: Upload build artifacts")]
-    publish = text[text.index("- name: Publish to PyPI") :]
-    publish = publish[: publish.index("uses: pypa/gh-action-pypi-publish")]
     condition = "if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'"
-    assert condition in prepare
-    assert condition in publish
-    assert "github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'" in text
+    python_jobs = [
+        text[text.index("publish-acs-python:") : text.index("build-python:")],
+        text[text.index("build-python:") : text.index("resolve-npm-matrix:")],
+    ]
+    for job in python_jobs:
+        prepare = job[job.index("- name: Prepare PyPI upload artifacts") :]
+        prepare = prepare[: prepare.index("- name: Upload build artifacts")]
+        publish = job[job.index("- name: Publish to PyPI") :]
+        publish = publish[: publish.index("uses: pypa/gh-action-pypi-publish")]
+        assert condition in prepare
+        assert condition in publish
+    assert (
+        "github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'"
+        in text
+    )
+
+
+def test_acs_python_release_builds_complete_platform_matrix() -> None:
+    text = PUBLISH.read_text(encoding="utf-8")
+    expected_matrix_entries = [
+        "ubuntu-24.04, platform: linux-x86_64, target: x86_64-unknown-linux-gnu",
+        "ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-gnu",
+        "macos-15-intel, platform: macos-x86_64, target: x86_64-apple-darwin",
+        "macos-15, platform: macos-arm64, target: aarch64-apple-darwin",
+        "windows-2022, platform: windows-x86_64, target: x86_64-pc-windows-msvc",
+    ]
+    for entry in expected_matrix_entries:
+        assert entry in text
+    assert 'wheel: "*macosx_10_12_x86_64.whl"' in text
+    assert 'wheel: "*macosx_11_0_arm64.whl"' in text
+
+    assert "build_any: ${{ steps.resolve.outputs.build_any }}" in text
+    assert "acs: ${{ steps.resolve.outputs.acs }}" in text
+    assert 'select(.name != "agent-control-specification")' in text
+    assert "if: needs.resolve-python-matrix.outputs.build_any == 'true'" in text
+    assert text.count("build_acs_python_wheel.sh") == 1
+    assert "Verify wheel tag and load native extension" in text
+    assert "python scripts/ci/smoke_acs_python_wheel.py" in text
+    assert "needs: [resolve-python-matrix, acs-python-wheels, acs-python-sdist]" in text
+    assert "Verify complete ACS Python distribution" in text
+    assert "python scripts/ci/verify_acs_python_dist.py" in text
+    assert "Attest wheel build provenance" in text
+    assert "Attest source distribution build provenance" in text
+    assert "Build and smoke test a wheel from the source distribution" in text
+    assert "CARGO_NET_OFFLINE=true python -m pip wheel" in text
+    assert "grep -Fq 'path = \"../../core\"'" in text
+    assert "name: pypi-agent-control-specification" in text
+    wheel_build = text[
+        text.index("acs-python-wheels:") : text.index("acs-python-sdist:")
+    ]
+    sdist_build = text[
+        text.index("acs-python-sdist:") : text.index("publish-acs-python:")
+    ]
+    acs_publish = text[text.index("publish-acs-python:") : text.index("build-python:")]
+    assert "attestations: write" in wheel_build
+    assert "attestations: write" in sdist_build
+    assert "contents: read" in acs_publish
+    assert "attestations: write" not in acs_publish
+    # skip-existing keeps re-runs idempotent after a partial upload (matches the sibling leg).
+    assert "skip-existing: true" in acs_publish
+    # Least-privilege: no publish job should request write access to repo contents.
+    assert "contents: write" not in text
 
 
 def test_release_manifest_generator_covers_artifact_families(tmp_path: Path) -> None:
@@ -134,7 +419,9 @@ def test_release_manifest_generator_covers_artifact_families(tmp_path: Path) -> 
     assert "agent-control-specification-native-packages" in names
     assert "AgentControlSpecification" in names
     assert "agentmesh" in names
-    assert "github.com/microsoft/agent-governance-toolkit/agent-governance-golang" in names
+    assert (
+        "github.com/microsoft/agent-governance-toolkit/agent-governance-golang" in names
+    )
     assert "governance-sidecar" in names
     automation = {artifact["automation"] for artifact in manifest["artifacts"]}
     assert automation <= set(manifest["automation_legend"])
@@ -161,7 +448,9 @@ fi
 cp "${artifacts[@]}" pypi-upload/
 """
     subprocess.run(["bash", "-c", script], cwd=tmp_path, check=True)
-    assert (upload / "demo-0.1.0-py3-none-any.whl").read_text(encoding="utf-8") == "wheel"
+    assert (upload / "demo-0.1.0-py3-none-any.whl").read_text(
+        encoding="utf-8"
+    ) == "wheel"
 
 
 def test_container_workflow_uses_owner_derived_registry() -> None:
@@ -171,19 +460,140 @@ def test_container_workflow_uses_owner_derived_registry() -> None:
     assert "dry_run:" in text
     assert 'default: "dry-run"' in text
     assert "Build images without pushing tags or attestations to GHCR" in text
-    assert "push: ${{ github.event_name == 'release' || github.event.inputs.dry_run == 'false' }}" in text
-    assert "github.event_name == 'release' || github.event.inputs.dry_run == 'false'" in text
+    assert (
+        "push: ${{ github.event_name == 'release' || github.event.inputs.dry_run == 'false' }}"
+        in text
+    )
+    assert (
+        "github.event_name == 'release' || github.event.inputs.dry_run == 'false'"
+        in text
+    )
 
 
 def test_acs_python_wheel_helper_uses_pinned_manylinux_build() -> None:
     text = ACS_PYTHON_WHEEL_HELPER.read_text(encoding="utf-8")
     assert "manylinux_2_28_x86_64@sha256:" in text
+    assert "manylinux_2_28_aarch64@sha256:" in text
+    assert "manylinux_2_28-cross:aarch64@sha256:" in text
     assert "https://static.rust-lang.org/rustup/archive/" in text
     assert "6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d" in text
+    assert "1cffbf51e63e634c746f741de50649bbbcbd9dbe1de363c9ecef64e278dba2b2" in text
     assert '-e "HOST_UID=$(id -u)"' in text
     assert '-e "HOST_GID=$(id -g)"' in text
     assert 'RUST_TOOLCHAIN="1.89.0"' in text
     assert '--default-toolchain "${RUST_TOOLCHAIN}"' in text
     assert "--require-hashes --no-deps" in text
+    assert "--locked" in text
     assert "--compatibility manylinux_2_28" in text
-    assert 'chown -R "${HOST_UID}:${HOST_GID}" /work/policy-engine/sdk/python/dist' in text
+    assert '--target "${RUST_TARGET}"' in text
+    assert (
+        'chown -R "${HOST_UID}:${HOST_GID}" /work/policy-engine/sdk/python/dist' in text
+    )
+
+
+def test_acs_python_wheel_smoke_rejects_non_wheel(tmp_path: Path) -> None:
+    not_a_wheel = tmp_path / "artifact.tar.gz"
+    not_a_wheel.write_bytes(b"not a wheel")
+    result = subprocess.run(
+        [sys.executable, str(ACS_PYTHON_WHEEL_SMOKE), str(not_a_wheel)],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "expected a wheel path" in result.stderr
+
+
+def test_pinned_rust_installer_covers_release_hosts() -> None:
+    text = PINNED_RUST_INSTALLER.read_text(encoding="utf-8")
+    assert 'RUSTUP_VERSION="1.27.1"' in text
+    assert 'RUST_TOOLCHAIN="${2:-1.89.0}"' in text
+    assert "1.89.0 | nightly-2025-08-07" in text
+    assert "6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d" in text
+    assert "f547d77c32d50d82b8228899b936bf2b3c72ce0a70fb3b364e7fba8891eba781" in text
+    assert "760b18611021deee1a859c345d17200e0087d47f68dfe58278c57abe3a0d3dd0" in text
+    assert "193d6c727e18734edbf7303180657e96e9d5a08432002b4e6c5bbe77c60cb3e8" in text
+    assert "curl --proto '=https' --tlsv1.2 --retry 5 --retry-delay 5" in text
+    assert 'if [[ "$ACTUAL_SHA256" != "$RUSTUP_SHA256" ]]' in text
+    windows_text = PINNED_WINDOWS_RUST_INSTALLER.read_text(encoding="utf-8")
+    assert '[ValidateSet("x86_64-pc-windows-msvc")]' in windows_text
+    assert (
+        "193d6c727e18734edbf7303180657e96e9d5a08432002b4e6c5bbe77c60cb3e8"
+        in windows_text
+    )
+    assert "Get-FileHash" in windows_text
+
+
+def test_pinned_rust_installer_supports_legacy_curl_and_propagates_download_failure(tmp_path: Path) -> None:
+    curl = tmp_path / "curl"
+    curl.write_text(
+        "#!/bin/sh\n"
+        "for arg in \"$@\"; do\n"
+        "  if [ \"$arg\" = '--retry-all-errors' ]; then exit 2; fi\n"
+        "done\n"
+        "echo 'download unavailable' >&2\n"
+        "exit 7\n",
+        encoding="utf-8",
+    )
+    curl.chmod(0o755)
+    for toolchain, expected in [
+        (None, 7), ("nightly-2025-08-07", 7), ("nightly", 2), ("stable", 2),
+    ]:
+        command = ["bash", str(PINNED_RUST_INSTALLER)]
+        if toolchain is not None:
+            command.extend(["", toolchain])
+        result = subprocess.run(
+            command,
+            env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == expected, result.stderr
+        if expected == 7:
+            assert "download unavailable" in result.stderr
+        else:
+            assert "unsupported pinned Rust toolchain" in result.stderr
+
+
+def test_fuzz_builder_preserves_sanitizer_and_coverage_tooling() -> None:
+    dockerfile = (REPO_ROOT / ".clusterfuzzlite/Dockerfile").read_text(encoding="utf-8")
+    assert 'install_pinned_rust.sh "" nightly-2025-08-07' in dockerfile
+    assert "ln -s /root/.cargo/bin/cargo /rust/bin/cargo" in dockerfile
+    assert 'ENV PATH="${PATH}:/root/.cargo/bin"' in dockerfile
+    build_script = (REPO_ROOT / ".clusterfuzzlite/build.sh").read_text(encoding="utf-8")
+    assert "CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu" in build_script
+    assert "unset RUSTFLAGS" not in build_script
+    assert 'RUSTFLAGS=""' not in build_script
+
+
+def test_acs_python_distribution_verifier_rejects_extra_artifact(
+    tmp_path: Path,
+) -> None:
+    version = tomllib.loads(
+        (REPO_ROOT / "policy-engine/sdk/python/pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+    names = [
+        f"agent_control_specification-{version}-cp311-abi3-manylinux_2_28_x86_64.whl",
+        f"agent_control_specification-{version}-cp311-abi3-manylinux_2_28_aarch64.whl",
+        f"agent_control_specification-{version}-cp311-abi3-macosx_10_12_x86_64.whl",
+        f"agent_control_specification-{version}-cp311-abi3-macosx_11_0_arm64.whl",
+        f"agent_control_specification-{version}-cp311-abi3-win_amd64.whl",
+        f"agent_control_specification-{version}.tar.gz",
+    ]
+    for name in names:
+        (tmp_path / name).write_bytes(b"artifact")
+    command = [
+        sys.executable,
+        str(ACS_PYTHON_DIST_VERIFY),
+        str(tmp_path),
+        "--pyproject",
+        str(REPO_ROOT / "policy-engine" / "sdk" / "python" / "pyproject.toml"),
+    ]
+    valid = subprocess.run(command, capture_output=True, check=False, text=True)
+    assert valid.returncode == 0, valid.stderr
+
+    (tmp_path / "unexpected.txt").write_text("extra", encoding="utf-8")
+    invalid = subprocess.run(command, capture_output=True, check=False, text=True)
+    assert invalid.returncode != 0
+    assert "expected exactly six ACS artifacts" in invalid.stderr

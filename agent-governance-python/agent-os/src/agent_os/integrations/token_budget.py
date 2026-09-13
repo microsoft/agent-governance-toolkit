@@ -1,17 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Token Budget Tracking with Warnings
-
-Tracks token usage per agent and fires warnings when approaching limits.
-Integrates with GovernancePolicy for budget configuration.
-"""
+"""Host-side token usage tracking with warning thresholds."""
 
 import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
-
-from .base import GovernancePolicy
 
 
 @dataclass(frozen=True)
@@ -37,9 +30,8 @@ class TokenBudgetTracker:
     """Thread-safe token budget tracker with configurable warning thresholds.
 
     Args:
-        max_tokens: Global default budget. Overridden per-agent by GovernancePolicy.
+        max_tokens: Global default budget.
         warning_threshold: Fraction of budget (0.0-1.0) at which ``is_warning`` activates.
-        policy: Optional GovernancePolicy whose ``max_tokens`` is used as the default limit.
         on_warning: Optional callback ``(agent_id, status)`` fired when a warning threshold is crossed.
     """
 
@@ -47,7 +39,6 @@ class TokenBudgetTracker:
         self,
         max_tokens: int = 4096,
         warning_threshold: float = 0.8,
-        policy: Optional[GovernancePolicy] = None,
         on_warning: Optional[Callable[[str, TokenBudgetStatus], None]] = None,
     ) -> None:
         if not 0.0 <= warning_threshold <= 1.0:
@@ -55,7 +46,7 @@ class TokenBudgetTracker:
         if max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
 
-        self._max_tokens = policy.max_tokens if policy is not None else max_tokens
+        self._max_tokens = max_tokens
         self._warning_threshold = warning_threshold
         self._on_warning = on_warning
         self._lock = threading.Lock()

@@ -25,9 +25,9 @@ pip install agent-governance-toolkit[full]
 |---|--------|--------------|------|
 | 1 | `demo-1-install-health-check.ps1` | `agt doctor` environment validation | ~30s |
 | 2 | `demo-2-owasp-verify.ps1` | OWASP ASI 2026 compliance checker | ~20s |
-| 3 | `demo-3-policy-enforcement.ps1` | YAML policy engine blocking destructive tools + PII | ~20s |
+| 3 | `demo-3-policy-enforcement.ps1` | Native ACS manifest and Rego enforcement | ~20s |
 | 4 | `demo-4-trust-scoring.ps1` | DID identity, cryptographic handshake, capability scoping, kill switch | ~25s |
-| 5 | `demo-5-framework-integration.ps1` | 3-line governance wrapper for any framework | ~15s |
+| 5 | `demo-5-framework-integration.ps1` | Framework adapter using a native ACS runtime | ~15s |
 | 6 | `demo-6-eu-ai-act.ps1` | EU AI Act risk classification and compliance reports | ~30s |
 
 ## Notes

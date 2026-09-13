@@ -1,41 +1,19 @@
-# OpenShell + AgentMesh Governance Skill
+# openshell-agentmesh
 
-**Public Preview** - Governance skill for NVIDIA OpenShell sandboxes.
-OpenShell = walls (Landlock, seccomp, OPA). This skill = brain (policy, trust, audit).
+This compatibility package is deprecated. The OpenShell governance skill
+(`GovernanceSkill`, `ShellPolicyViolation`, `governed_shell`) was removed in
+the v5 ACS migration and has no OpenShell-specific replacement: importing
+`openshell_agentmesh` now only emits a `DeprecationWarning`.
 
-## Install
-
-```bash
-pip install openshell-agentmesh
-```
-
-## Quick Start
+To govern an OpenShell-hosted agent, build an `AgentControl` from an ACS
+manifest and evaluate intervention points in the host:
 
 ```python
-import subprocess
+from agent_control_specification import AgentControl
 
-from openshell_agentmesh import GovernanceSkill, governed_shell
-
-skill = GovernanceSkill(policy_dir="./policies")
-decision = skill.check_policy("shell:python test.py")
-print(decision.allowed)  # True
-
-with governed_shell(skill):
-    subprocess.run(["python", "test.py"], check=True)
+control = AgentControl.from_path("policies/agt-manifest.yaml")
 ```
 
-`governed_shell()` is opt-in and scoped. While active, `subprocess.run`,
-`subprocess.Popen`, `os.system`, and `os.popen` are checked against policy before
-execution. Denied commands raise `ShellPolicyViolation` and are not executed.
-
-For persistent audit records, pass a JSONL path:
-
-```python
-skill = GovernanceSkill(policy_dir="./policies", audit_path="./audit/openshell.jsonl")
-```
-
-## Related
-
-- [OpenShell Integration Guide](../../../docs/integrations/openshell.md)
-- [Runnable Example](../../../examples/openshell-governed/)
-- [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell)
+See
+[BREAKING_CHANGES.md](../../../BREAKING_CHANGES.md)
+for the removed-symbols record and migration guidance.

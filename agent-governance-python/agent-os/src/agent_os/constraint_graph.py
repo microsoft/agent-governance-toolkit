@@ -16,7 +16,7 @@ Architecture:
 
 Integration:
     ``ConstraintGraphEnforcer`` implements the same ``intercept()`` protocol
-    as ``PolicyInterceptor`` so it can be composed via ``CompositeInterceptor``.
+    as ``ToolCallInterceptor`` so it can be composed via ``CompositeInterceptor``.
 """
 
 from __future__ import annotations
@@ -185,14 +185,14 @@ class ConstraintGraph:
 
 
 # ---------------------------------------------------------------------------
-# Enforcer (PolicyInterceptor-compatible)
+# Enforcer (ToolCallInterceptor-compatible)
 # ---------------------------------------------------------------------------
 
 class ConstraintGraphEnforcer:
     """Intercepts tool calls and enforces the constraint graph.
 
     Implements the same ``intercept(request) -> result`` protocol used by
-    ``PolicyInterceptor`` and ``CompositeInterceptor`` so it can be plugged
+    ``ToolCallInterceptor`` and ``CompositeInterceptor`` so it can be plugged
     into the existing governance pipeline.
     """
 

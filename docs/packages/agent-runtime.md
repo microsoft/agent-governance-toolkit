@@ -1,3 +1,9 @@
+---
+title: "AgentMesh Runtime"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # AgentMesh Runtime
@@ -7,7 +13,7 @@
 *Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)*
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agentmesh-runtime)](https://pypi.org/project/agentmesh-runtime/)
 
@@ -97,4 +103,4 @@ Agent Runtime is one of 7 packages in the Agent Governance Toolkit:
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE).
+MIT — see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE).

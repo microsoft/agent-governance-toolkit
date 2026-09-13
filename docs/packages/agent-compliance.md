@@ -1,3 +1,9 @@
+---
+title: "Agent Governance"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # Agent Governance
@@ -7,7 +13,7 @@
 *One install for the complete governance stack — kernel · trust mesh · runtime supervisor · reliability engineering*
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 
@@ -18,7 +24,7 @@
 pip install agent-governance-toolkit[full]
 ```
 
-[Architecture](#architecture) • [Quick Start](#quick-start) • [Components](#components) • [Why Unified?](#why-a-unified-governance-stack) • [Ecosystem](#the-agent-governance-ecosystem) • [OWASP Compliance](../../docs/compliance/owasp-agentic-top10-architecture.md) • [Traction](../../agent-governance-python/agent-compliance/docs/TRACTION.md)
+[Architecture](#architecture) • [Quick Start](#quick-start) • [Components](#components) • [Why Unified?](#why-a-unified-governance-stack) • [Ecosystem](#the-agent-governance-ecosystem) • [OWASP Compliance](../compliance/owasp-agentic-top10-architecture.md) • [Traction](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-compliance/docs/TRACTION.md)
 
 </div>
 
@@ -182,7 +188,7 @@ Each component works standalone, but they're designed to work together. The kern
 
 ## Examples
 
-See the [`examples/`](../../examples/) directory for runnable demos:
+See the [`examples/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples) directory for runnable demos:
 
 ```bash
 # Quick start — boot the governance stack in 30 lines
@@ -237,7 +243,7 @@ The agent governance stack covers **10 of 10** risks from the [OWASP Top 10 for 
 | Human-Agent Trust Exploitation | ✅ | Agent OS — Approval Workflows |
 | Rogue Agents | ✅ | Agent Runtime — Kill Switch |
 
-**[→ Full OWASP compliance mapping with code examples](../../docs/compliance/owasp-agentic-top10-architecture.md)**
+**[→ Full OWASP compliance mapping with code examples](../compliance/owasp-agentic-top10-architecture.md)**
 
 ---
 
@@ -245,13 +251,13 @@ The agent governance stack covers **10 of 10** risks from the [OWASP Top 10 for 
 
 The ecosystem is growing — **3,000+ views, 9,400+ clones, and 1,278 unique developers** in the last 14 days alone. Traffic from Medium, Reddit, LinkedIn, Google, and even ChatGPT.
 
-**[→ See full traction report](../../agent-governance-python/agent-compliance/docs/TRACTION.md)**
+**[→ See full traction report](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-compliance/docs/TRACTION.md)**
 
 ---
 
 ## Contributing
 
-We welcome contributions! See our [Contributing Guide](../../CONTRIBUTING.md) for details.
+We welcome contributions! See our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for details.
 
 For component-specific contributions, see:
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
@@ -261,7 +267,7 @@ For component-specific contributions, see:
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE) for details.
+MIT — see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) for details.
 
 ---
 

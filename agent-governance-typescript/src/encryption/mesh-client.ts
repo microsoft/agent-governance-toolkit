@@ -129,6 +129,21 @@ export interface MeshSession {
 type KnockResolver = { resolve: (accepted: boolean) => void; timer: ReturnType<typeof setTimeout> };
 
 /**
+ * WebSocket close code sent by the relay when another connection
+ * authenticates for the same DID and displaces this socket.
+ *
+ * Deliberately not 1000 (Normal Closure): 1000 is indistinguishable from the
+ * client closing its own socket, which made a mailbox takeover silent and
+ * unattributable. Clients receive this as a server-initiated close but must
+ * NOT auto-reconnect on it — reconnecting would displace the replacing socket
+ * and the two would evict each other in a loop.
+ *
+ * Must stay in sync with `WS_CLOSE_SESSION_REPLACED` in the relay
+ * (`agentmesh/relay/app.py`).
+ */
+export const WS_CLOSE_SESSION_REPLACED = 4006;
+
+/**
  * High-level mesh client for agent-to-agent communication.
  *
  * Manages WebSocket connection to the relay, session establishment
@@ -341,15 +356,36 @@ export class MeshClient {
           // Distinguish client-initiated disconnect (1000 Normal Closure) from server / network drops.
           const code = (event as CloseEvent | undefined)?.code;
           const isClientInitiated = code === 1000 || this.clientInitiatedClose;
+          // The relay sends WS_CLOSE_SESSION_REPLACED when another connection
+          // authenticated for this same DID and displaced this socket. It is
+          // genuinely server-initiated (so it is NOT reported as "client"),
+          // but it must not trigger auto-reconnect: reconnecting would displace
+          // the socket that just replaced us and the two would evict each other
+          // in a loop. Surface it through the error channel instead so the host
+          // can act — if this agent did not initiate a reconnect, then another
+          // party successfully authenticated as this DID.
+          const isSessionReplaced = code === WS_CLOSE_SESSION_REPLACED;
           const reason: "client" | "server" | "ws-error" = isClientInitiated ? "client" : "server";
           for (const h of this.disconnectHandlers) {
             try { h(reason, code); } catch { /* swallow handler errors */ }
+          }
+          if (isSessionReplaced) {
+            for (const h of this.errorHandlers) {
+              try {
+                h(
+                  "ws",
+                  this.activeDid,
+                  "session replaced: another connection authenticated for this DID; " +
+                    "not reconnecting to avoid an eviction loop",
+                );
+              } catch { /* swallow handler errors */ }
+            }
           }
           // Auto-reconnect on non-client closures (network drops, relay restart).
           // Mirrors vendored agentmesh-sdk patch #9: never give up by default,
           // exponential backoff capped at 60s. Caller can opt out via
           // autoReconnect: false in MeshClientOptions.
-          if (!isClientInitiated && this.autoReconnect) {
+          if (!isClientInitiated && !isSessionReplaced && this.autoReconnect) {
             this.scheduleReconnect();
           }
         }
@@ -789,12 +825,62 @@ export class MeshClient {
     let payload: unknown;
     let isPlaintext = false;
 
-    if (frame.plaintext || this.isPlaintextPeer(from)) {
-      // Legacy plaintext
+    // Security hardening: whether an inbound message is treated as legacy
+    // plaintext is decided solely from the receiver's own operator
+    // configuration (`plaintextPeers`, via isPlaintextPeer(from)). The wire
+    // frame also carries a `plaintext` boolean, but it is sender-controlled and
+    // must not select this branch — trusting it would let the sender skip
+    // X3DH / Double Ratchet / AEAD verification and be attributed an arbitrary
+    // `from` DID. Gate on isPlaintextPeer only; a peer that is not explicitly
+    // allow-listed for plaintext always takes the encrypted path below and is
+    // dropped if it cannot be cryptographically authenticated.
+    if (
+      this.isPlaintextPeer(from) &&
+      !this.sessions.get(from)?.channel &&
+      !this.e2eVerifiedSet.has(from)
+    ) {
+      // Legacy plaintext — taken ONLY for an operator-allow-listed peer that has
+      // no negotiated encrypted session AND has never been E2E-verified.
+      //
+      // The `e2eVerifiedSet` term is a one-way latch and is load-bearing. A live
+      // `session.channel` is NOT sufficient on its own, because several paths
+      // delete the session and would otherwise re-open this gate for a peer that
+      // had already been cryptographically verified:
+      //   * the Gap-G3 ratchet-desync handler below calls closeSession() after a
+      //     single decrypt failure — a malicious relay can force that with one
+      //     garbage-ciphertext frame and then downgrade with the next frame;
+      //   * handleKnockReject() calls closeSession() on an unauthenticated
+      //     `knock_reject` frame — a one-frame variant of the same attack;
+      //   * any future teardown path would silently inherit the same weakness.
+      // Latching on e2eVerifiedSet (which is only ever added to, never cleared)
+      // makes the guarantee teardown-path-agnostic: once a peer has produced a
+      // successfully decrypted frame, it can never again be handled as plaintext
+      // for the lifetime of this client.
+      //
+      // Once a live channel exists for the peer we deliberately fall through to
+      // the encrypted path instead of handling the frame as plaintext: a genuine
+      // encrypted frame is decrypted via the ratchet, while a plaintext /
+      // headerless downgrade frame fails closed on the missing-ratchet-header
+      // check below. This keeps downgrade protection while no longer
+      // black-holing legitimate encrypted traffic from a peer that is also
+      // allow-listed for plaintext.
       payload = JSON.parse(atob(frame.ciphertext as string));
       isPlaintext = true;
     } else {
       // Encrypted
+      const header = frame.header as Record<string, unknown> | undefined;
+      if (!header || typeof header.dh !== "string") {
+        // Security hardening: an encrypted `message` frame must carry a ratchet
+        // header. Validate this BEFORE the pre-KNOCK buffering path below so a
+        // malformed / headerless frame — which can never be decrypted — is
+        // dropped immediately, instead of occupying pre-KNOCK buffer capacity
+        // until TTL eviction and only failing closed when the buffer is drained.
+        for (const h of this.errorHandlers) {
+          try { h("decrypt", from, "encrypted message missing ratchet header — dropping"); } catch { /* swallow */ }
+        }
+        return;
+      }
+
       const session = this.sessions.get(from);
       if (!session?.channel) {
         // Gap-G4 (vendored agentmesh-sdk patch #16): pre-KNOCK message buffer.
@@ -813,7 +899,6 @@ export class MeshClient {
         return;
       }
 
-      const header = frame.header as Record<string, unknown>;
       const encrypted: EncryptedMessage = {
         header: {
           dhPublicKey: this.base64ToUint8(header.dh as string),
@@ -874,11 +959,36 @@ export class MeshClient {
    * Each message is dispatched through the standard handleMessage path.
    */
   private async handlePendingMessages(frame: Record<string, unknown>): Promise<void> {
-    const messages = frame.messages as Array<Record<string, unknown>> | undefined;
-    if (!messages || !Array.isArray(messages)) return;
+    // Typed as unknown[] rather than Record<string, unknown>[] because this is
+    // relay-supplied JSON: entries can legally be null or primitives, and the
+    // stricter type would be a lie that hides the validation below.
+    const messages = frame.messages;
+    if (!Array.isArray(messages)) return;
 
     for (const msg of messages) {
-      await this.handleMessage(msg);
+      const isFrameShaped = typeof msg === "object" && msg !== null && !Array.isArray(msg);
+      // Extract the peer *before* the try and without dereferencing a
+      // possibly-null entry. Doing it inside the catch would throw on a null
+      // entry, and that throw would be absorbed by the handler guard below,
+      // losing the drop report entirely.
+      const rawFrom = isFrameShaped ? (msg as Record<string, unknown>).from : undefined;
+      const peer = typeof rawFrom === "string" ? rawFrom : "";
+
+      // Isolate each queued message: the batch is relay-supplied, so a single
+      // malformed entry (e.g. ciphertext that fails JSON.parse) must not abort
+      // the loop and silently discard the remaining pending mail. Surface the
+      // failure and continue draining.
+      try {
+        if (!isFrameShaped) {
+          throw new Error(`expected a frame object, got ${msg === null ? "null" : typeof msg}`);
+        }
+        await this.handleMessage(msg as Record<string, unknown>);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        for (const h of this.errorHandlers) {
+          try { h("frame", peer, `pending message dropped: ${detail}`); } catch { /* swallow */ }
+        }
+      }
     }
   }
 

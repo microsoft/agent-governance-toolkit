@@ -1,3 +1,9 @@
+---
+title: "ADR 0002: Use four execution rings instead of RBAC for runtime privilege"
+last_reviewed: 2026-03-26
+owner: agt-maintainers
+---
+
 # ADR 0002: Use four execution rings instead of RBAC for runtime privilege
 
 - Status: accepted

@@ -1,3 +1,9 @@
+---
+title: "Package Consolidation Proposal"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 # Package Consolidation Proposal
 
 Tracks issue [#2482](https://github.com/microsoft/agent-governance-toolkit/issues/2482)

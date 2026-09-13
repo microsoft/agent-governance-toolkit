@@ -13,7 +13,7 @@ This example uses a **real Microsoft Agent Framework agent** with native
 ## Runtime model
 
 - `Program.cs` builds the helpdesk agent with `BuildAIAgent(...)` plus native `.Use(...)` middleware
-- `policies/helpdesk_governance.yaml` uses simple local rule expressions for prompt and tool checks
+- `policies/helpdesk_agt-manifest.yaml` uses simple local rule expressions for prompt and tool checks
 - Output is deterministic and requires no live LLM credentials
 
 ## Run it

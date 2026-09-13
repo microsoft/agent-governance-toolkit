@@ -1,8 +1,8 @@
 # African Regulatory Policy Pack
 
 Agent-OS governance policies for AI agents operating in Nigeria, Kenya, South
-Africa, Uganda, Tanzania, and Ethiopia — plus five universal agent safety
-controls aligned to the OWASP Agentic AI Top 10.
+Africa, Uganda, Tanzania, Ethiopia, Ghana, Rwanda, Egypt, and Mauritius — plus
+five universal agent safety controls aligned to the OWASP Agentic AI Top 10.
 
 Maintained by the [agt-policies-nigeria](https://github.com/kingztech2019/agt-policies-nigeria)
 open-source project. Contributions welcome.
@@ -25,6 +25,10 @@ open-source project. Contributions welcome.
 │  UG: uganda-dppa                                                    │
 │  TZ: tanzania-pdpa                                                  │
 │  ET: ethiopia-pdp                                                   │
+│  GH: ghana-dpa                                                      │
+│  RW: rwanda-dpa                                                     │
+│  EG: egypt-pdpl                                                     │
+│  MU: mauritius-dpa                                                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,22 +65,19 @@ are selected per jurisdiction.
 | `uganda-dppa.yaml` | Uganda Data Protection and Privacy Act 2019 | 🇺🇬 UG |
 | `tanzania-pdpa.yaml` | Tanzania Personal Data Protection Act 2022 | 🇹🇿 TZ |
 | `ethiopia-pdp.yaml` | Ethiopia Proclamation 958/2016 + draft PDPP *(draft)* | 🇪🇹 ET |
+| `ghana-dpa.yaml` | Ghana Data Protection Act 2012 (Act 843) | 🇬🇭 GH |
+| `rwanda-dpa.yaml` | Rwanda Law No. 058/2021 on Personal Data Protection | 🇷🇼 RW |
+| `egypt-pdpl.yaml` | Egypt Personal Data Protection Law No. 151/2020 | 🇪🇬 EG |
+| `mauritius-dpa.yaml` | Mauritius Data Protection Act 2017 (Act 20/2017) | 🇲🇺 MU |
 
 ---
 
-## Rego Reference Implementations
+## Native ACS and Rego
 
 The `rego/` subdirectory contains [OPA](https://www.openpolicyagent.org/) Rego
-implementations of all 15 policies, plus a jurisdiction router.
-
-> **⚠️ Important:** The `.rego` files are **reference implementations only**.
-> They are **not loaded by the Agent-OS Python runtime**, which uses the YAML
-> `PolicyDocument` format evaluated by the Python policy engine. The Rego files
-> are provided for:
->
-> - Teams running OPA as a standalone policy engine
-> - Side-by-side verification of YAML rule logic
-> - Integration with OPA-based CI pipelines
+implementations of all 15 policies, a jurisdiction router, and a shared ACS
+result adapter. Each YAML file is a native ACS manifest that binds input,
+tool-call, and output intervention points to its Rego package.
 
 To run the Rego policies with OPA:
 
@@ -85,7 +86,7 @@ To run the Rego policies with OPA:
 curl -L -o /tmp/opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
 chmod +x /tmp/opa
 
-# Run all tests (384 tests)
+# Run all tests (150 tests)
 /tmp/opa test rego/ -v
 
 # Evaluate a single policy
@@ -132,21 +133,13 @@ for:
 
 ---
 
-## Loading Policies in Agent-OS
+## Loading policies
 
 ```python
-from agent_os.policies.schema import PolicyDocument
+from agent_control_specification import AgentControl
 
-# Load a single pack
-policy = PolicyDocument.from_yaml("ndpa-data-residency.yaml")
-
-# Load all packs for a jurisdiction
-import os
-packs = [
-    PolicyDocument.from_yaml(f)
-    for f in os.listdir(".")
-    if f.endswith(".yaml")
-]
+runtime = AgentControl.from_path(str("ndpa-data-residency.yaml"))
+result = runtime.evaluate("pre_tool_call", snapshot)
 ```
 
 ---

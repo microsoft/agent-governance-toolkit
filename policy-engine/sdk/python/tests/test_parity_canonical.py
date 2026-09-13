@@ -47,8 +47,8 @@ class PythonCanonicalParityTests(unittest.TestCase):
         """Per AGT D1 the dispatch fixture replaced
         ``effects_applied_on_enforce`` with ``permits`` because effects[]
         was removed and only the new ``transform`` decision mutates. The
-        SDK MUST surface ``permits == applies_transform`` semantics
-        through ``Decision.permits`` (allow|warn|transform) and route
+        SDK MUST surface execution semantics through ``Decision.permits``
+        (allow|transform) and route
         through ``applies_transform`` only for the transform case.
         """
 
@@ -72,30 +72,21 @@ class PythonCanonicalParityTests(unittest.TestCase):
         self.assertIn(Decision.TRANSFORM, seen_decisions)
 
     def test_error_mapping_fixture_covers_sdk_approval_mismatch_reason(self):
-        """The error_mapping_canonical fixture grew from 13 to 18 rows in
-        1d8fcb64: it drops the legacy ``effect_*`` reasons and adds the
-        seven AGT D5/D6 reserved reasons. Verify the SDK accepts every
-        fixture reason without choking on the new ones.
-        """
+        """The fixture covers runtime reasons exposed through the SDK."""
 
         fixture = load_fixture("error_mapping_canonical.json")
         reasons = {row["reason"] for row in fixture["runtime_errors"]}
         fail_closed = json.loads((ROOT / "tests" / "conformance" / "fail_closed_error_parity.json").read_text())
         agt_extension_reasons = {
-            "runtime_error:approval_action_mismatch",
-            "runtime_error:resolution_path_traversal",
-            "runtime_error:resolution_cycle",
-            "runtime_error:resolution_invalid_governance",
-            "runtime_error:resolution_merge_conflict",
-            "runtime_error:approval_resolver_missing",
+            "host_error:approval_identity_mismatch",
+            "host_error:approval_resolver_failed",
+            "host_error:approval_unresolved",
         }
         expected = set(fail_closed["reserved_reasons"]) | agt_extension_reasons
         self.assertEqual(expected, reasons)
 
-        # AGT D6: the SDK MUST surface every fixture reason as a deny
-        # Verdict whose reason round-trips byte for byte, so audit
-        # consumers can dispatch on the reserved namespace without
-        # tripping on the new AGT-era reasons.
+        # The SDK MUST surface every fixture reason as a deny Verdict whose
+        # reason round-trips byte for byte.
         for reason in sorted(reasons):
             verdict = Verdict(Decision.DENY, reason=reason)
             self.assertEqual(verdict.reason, reason)
@@ -103,7 +94,7 @@ class PythonCanonicalParityTests(unittest.TestCase):
         policy_input = {"policy_target": {"value": "x"}}
         identity = action_identity(policy_input)
         result = InterventionPointResult(
-            Verdict(Decision.ESCALATE),
+            Verdict(Decision.DENY, approval={}),
             policy_input=policy_input,
             input_identity=identity,
             enforced_identity=identity,
@@ -118,15 +109,18 @@ class PythonCanonicalParityTests(unittest.TestCase):
                     approval_resolver=lambda _point, _result: ApprovalResolution.allow("sha256:wrong"),
                 )
             )
-        self.assertEqual(raised.exception.result.verdict.reason, "runtime_error:approval_action_mismatch")
+        self.assertEqual(
+            raised.exception.result.verdict.reason,
+            "host_error:approval_identity_mismatch",
+        )
 
     @unittest.skipUnless(_NATIVE_AVAILABLE, "agent_control_specification._native extension is not built")
     def test_native_runtime_uses_canonical_resource_limit_defaults(self):
         fixture = load_fixture("resource_limits_canonical.json")
         annotator_count = fixture["defaults"]["max_annotators_per_point"] + 1
-        annotations = "\n".join(f"      a{i}:\n        from: $policy_target" for i in range(annotator_count))
+        annotations = "\n".join(f"      a{i}:\n        from: $target" for i in range(annotator_count))
         annotators = "\n".join(f"  a{i}:\n    type: classifier" for i in range(annotator_count))
-        manifest = f"""agent_control_specification_version: 0.3.1-beta
+        manifest = f"""agent_control_specification_version: 0.4.0-alpha.1
 policies:
   p:
     type: test

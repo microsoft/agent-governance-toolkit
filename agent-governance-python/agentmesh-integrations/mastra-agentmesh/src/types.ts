@@ -4,36 +4,12 @@
  * Shared types for @agentmesh/mastra middleware.
  */
 
-/** Policy definition for governance middleware. */
-export interface GovernancePolicy {
-  /** Maximum tool calls per minute per agent. */
-  rateLimitPerMinute?: number;
-
-  /** Blocked input patterns (regex strings). */
-  blockedPatterns?: string[];
-
-  /** PII fields to redact from inputs/outputs. */
-  piiFields?: string[];
-
-  /** Maximum input length in characters. */
-  maxInputLength?: number;
-
-  /** Allowed tool IDs (allowlist). Empty = all allowed. */
-  allowedTools?: string[];
-
-  /** Blocked tool IDs (denylist). */
-  blockedTools?: string[];
-
-  /** Custom policy check function. */
-  customCheck?: (input: unknown, toolId: string) => Promise<GovernanceResult>;
-}
-
-/** Result of a governance policy check. */
-export interface GovernanceResult {
-  allowed: boolean;
+/** Redaction-safe ACS decision fields persisted with an audit entry. */
+export interface PolicyDecisionAudit {
+  verdict: string;
   reason?: string;
-  violations: string[];
-  redactedInput?: unknown;
+  inputIdentity?: string;
+  enforcedIdentity?: string;
 }
 
 /** Configuration for trust gate. */
@@ -79,7 +55,7 @@ export interface AuditEntry {
   input?: unknown;
   output?: unknown;
   duration_ms?: number;
-  governance?: GovernanceResult;
+  policy?: PolicyDecisionAudit;
   trust?: TrustVerification;
   hash: string;
   previousHash: string;

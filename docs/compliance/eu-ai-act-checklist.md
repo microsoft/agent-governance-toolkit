@@ -1,6 +1,6 @@
 ---
 title: EU AI Act Compliance Checklist
-last_reviewed: 2026-06-10
+last_reviewed: 2026-09-03
 owner: agt-maintainers
 ---
 
@@ -12,7 +12,7 @@ owner: agt-maintainers
 
 > **Regulation**: [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng) -- Harmonised Rules on Artificial Intelligence
 > **Applicability**: Phased -- Art. 5 (prohibited practices) and Art. 4 (AI literacy) from 2 February 2025; GPAI obligations from 2 August 2025; **high-risk system obligations from 2 August 2026**
-> **Prepared**: 2026-04-03; **Last reviewed**: 2026-06-10
+> **Prepared**: 2026-04-03; **Last reviewed**: 2026-09-03
 > **Methodology**: 4-wave multi-agent investigation -- parallel discovery, adversarial conformity testing, citation validation, and strategic review. Article 11 was revalidated against the shipped Annex IV exporter and evidence pipeline.
 
 ---
@@ -151,7 +151,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
 | Compliance reports | `agent-governance-python/agent-mesh/src/agentmesh/governance/compliance.py:121-168` | `ComplianceReport` model with framework, period, controls, scores, violations |
-| Policy documents | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:70-115` | Serializable YAML/JSON `PolicyDocument` with version, name, rules, defaults |
+| Policy documents | `policy-engine/sdk/python/agent_control_specification/validation.py` | Serializable YAML/JSON ACS manifest with version, name, and intervention points |
 | Compliance engine | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py:306-341` | Framework-scoped reports with requirement counts and pass rates |
 | Annex IV exporter | `agent-governance-python/agent-mesh/src/agentmesh/governance/annex_iv.py:35-514` | `TechnicalDocumentationExporter` assembles five structured sections from compliance reports, policies, audit entries, and SLO/SLI data; emits Markdown or JSON and marks deployer-required content |
 | Evidence pipeline | `agent-governance-python/agent-mesh/src/agentmesh/governance/evidence_pipeline.py:56-358` | Collects policy YAML, audit JSONL, compliance report JSON, and SLO/SLI JSON; emits an Annex IV Markdown draft, evidence-source manifest, and gap warnings |
@@ -188,7 +188,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 **Gaps**:
 
-- [ ] **No retention enforcement**: Art. 12(4) requires deployers to preserve logs for at least 6 months. The toolkit provides append-only logs but no retention enforcement, expiration management, or archival lifecycle.
+- [ ] **No retention enforcement**: Art. 19(1) requires providers, and Art. 26(6) deployers, to preserve logs for at least 6 months. The toolkit provides append-only logs but no retention enforcement, expiration management, or archival lifecycle.
 - [ ] **DeltaEngine chain verification is a stub**: `verify_chain()` at `delta.py:99` always returns `True` with comment "Public Preview: no chain verification." The hypervisor's audit trail has zero tamper evidence.
 - [ ] **FlightRecorder hash covers INSERT, not final state**: Hash is computed at insert time with `policy_verdict='pending'`, but the verdict is later updated to `'allowed'`/`'blocked'`. Tampering of the verdict field is not detectable by integrity verification.
 - [ ] **Anomaly detections not in tamper-evident chain**: `RogueAgentDetector` stores assessments in an in-memory list, not in the integrity-protected audit chain.
@@ -211,7 +211,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 |-----------|----------|-----------|
 | EUAI-ART13 control | `agent-governance-python/agent-mesh/src/agentmesh/governance/compliance.py:270-282` | Defines explainability, documentation, and user notification requirements |
 | Transparency check | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py:390-401` | Validates `provides_transparency_info` boolean in context |
-| Decision explanations | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:52-58` | `PolicyRule.message` field for human-readable explanation of each governance decision |
+| Decision explanations | `policy-engine/sdk/python/agent_control_specification/validation.py` | `PolicyRule.message` field for human-readable explanation of each governance decision |
 | CloudEvents export | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:90-128` | Serializes decisions to CloudEvents v1.0 with action, outcome, policy_decision, matched_rule |
 | OpenTelemetry tracing | `agent-governance-python/agent-mesh/src/agentmesh/observability/otel_governance.py:31` | `GovernanceTracer` for governance decision instrumentation |
 
@@ -221,7 +221,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 - [ ] **No AI disclosure injection**: No feature inserts an AI disclosure notice to end users at interaction time.
 - [ ] **Limited decision explainability**: Explanations are limited to policy rule `message` fields and audit `reason` strings -- no structured explanation framework for complex multi-factor decisions.
 
-**Extension point**: A `TransparencyInterceptor` in the `CompositeInterceptor` chain could inject AI disclosure metadata into tool call results. Policy rules with a `transparency_level` attribute could trigger different disclosure requirements by risk classification. Structured "instructions for use" could be exported from `PolicyDocument` + `ComplianceReport` data.
+**Extension point**: A `TransparencyInterceptor` in the `CompositeInterceptor` chain could inject AI disclosure metadata into tool call results. Policy rules with a `transparency_level` attribute could trigger different disclosure requirements by risk classification. Structured "instructions for use" could be exported from the ACS manifest plus `ComplianceReport` data.
 
 **Recommendation**: Add a `TransparencyInterceptor` and a `transparency_required` policy condition. Build an "instructions for use" template exporter alongside the Art. 11 documentation exporter.
 
@@ -322,7 +322,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Retention days schema | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json:215-218` | `retention_days` field with default 90, minimum 1 |
+| Retention days schema | `policy-engine/spec/schema/manifest.schema.json:215-218` | `retention_days` field with default 90, minimum 1 |
 | Human oversight | `agent-governance-python/agent-os/src/agent_os/integrations/escalation.py:120-583` | Full escalation system with approval backends |
 | Kill switch | `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py:64-136` | Emergency termination (see Art. 14 caveats) |
 | SRE monitoring | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py` | SLI/SLO framework for operational monitoring |
@@ -387,15 +387,15 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 | Art. 10 | Data governance (training data) | Gap | N/A | Out of scope |
 | Art. 11 | Technical documentation (Annex IV) | Partial | `annex_iv.py:35-514`, `evidence_pipeline.py:56-358` | Structured draft and evidence inventory shipped; incomplete coverage and provider-authored content remain |
 | Art. 12(1) | Automatic event logging | Partial | `audit.py:23-512`, `audit_logger.py:19-136`, `flight_recorder.py:33-79` | Multiple layers, but 3 of 4 have integrity defects |
-| Art. 12(4) | 6-month log retention | Gap | `policy_schema.json:215-218` (default 90, min 1) | **Violates minimum** |
+| Art. 19(1) | 6-month log retention (provider) | Gap | `policy_schema.json:215-218` (default 90, min 1) | **Violates minimum** |
 | Art. 13(1) | Output interpretability | Partial | `audit.py:90-128` (CloudEvents), `schema.py:52-58` (rule messages) | Basic; no structured explainability |
 | Art. 13(3) | Instructions for use | Gap | N/A | Not implemented |
 | Art. 14(1) | Effective human oversight | Partial | `escalation.py:48-583` | Escalation system with quorum and fatigue detection |
 | Art. 14(4)(d) | Decline/override/reverse | Partial | `escalation.py:120-213` (approve/deny) | Pre-execution only; no reversal |
 | Art. 14(4)(e) | Stop mechanism | Partial | `kill_switch.py:64-136` | Returns structured results; placeholder handoff, no process termination |
 | Art. 15(1) | Accuracy levels | Partial | `indicators.py:159-468` | SLIs exist; no formal declaration mechanism |
-| Art. 15(3) | Robustness | Partial | `engine.py:246`, `circuit_breaker.py:90` | Framework exists; no actual fault injection |
-| Art. 15(4) | Cybersecurity | Partial | `handshake.py:158-456`, `mcp_security.py:272+`, `audit_backends.py:61-87` | Ed25519, HMAC-SHA256 (symmetric key risk), MCP scanning (incomplete rules) |
+| Art. 15(4) | Robustness | Partial | `engine.py:246`, `circuit_breaker.py:90` | Framework exists; no actual fault injection |
+| Art. 15(5) | Cybersecurity | Partial | `handshake.py:158-456`, `mcp_security.py:272+`, `audit_backends.py:61-87` | Ed25519, HMAC-SHA256 (symmetric key risk), MCP scanning (incomplete rules) |
 | Art. 26(2) | Human oversight by competent persons | Partial | `escalation.py:120-583`, `kill_switch.py:64-136` | Mechanisms exist; no competency tracking |
 | Art. 26(6) | 6-month log retention | Gap | `policy_schema.json:218` (minimum: 1) | **Must-fix: default 90, minimum 1** |
 | Art. 50(1) | AI interaction disclosure | Gap | `compliance_checker.py:186-231` (example) | Config check only; no runtime delivery |
@@ -510,11 +510,11 @@ Fixing certain gaps yields improvements across multiple articles simultaneously:
 
 | Fix | Articles Improved | Leverage |
 |-----|-------------------|----------|
-| Retention enforcement (minimum 180 days + runtime) | Art. 12(4), Art. 26(6) | **Highest** -- single fix resolves two regulatory contradictions |
+| Retention enforcement (minimum 180 days + runtime) | Art. 19(1), Art. 26(6) | **Highest** -- single fix resolves two regulatory contradictions |
 | Promote example classifier to library code | Art. 6, Art. 9, Art. 50 | Risk tier drives classification, management, and transparency triggers |
 | Instructions-for-use exporter | Art. 11, Art. 13(3) | Both require structured system description artifacts |
 | KillSwitch actual termination | Art. 14(4)(e), Art. 26(2) | Stop mechanism and deployer oversight both depend on it |
-| Audit chain integrity (DeltaEngine, FlightRecorder hash) | Art. 12, Art. 15(4), Art. 26(6) | Tamper evidence underpins logging, cybersecurity, and retention |
+| Audit chain integrity (DeltaEngine, FlightRecorder hash) | Art. 12, Art. 15(5), Art. 26(6) | Tamper evidence underpins logging, cybersecurity, and retention |
 
 ## Defense-in-Depth Warnings
 
@@ -529,7 +529,7 @@ Several "Partial" ratings rely on a **single mechanism with no fallback**:
 
 ## Cross-References
 
-- **OWASP Agentic Top 10**: See [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md). Overlap with Art. 15 (cybersecurity) and Art. 14 (human oversight via ASI-09).
+- **OWASP Agentic Top 10**: See [`../../docs/compliance/owasp-agentic-top10-architecture.md`](./owasp-agentic-top10-architecture.md). Overlap with Art. 15 (cybersecurity) and Art. 14 (human oversight via ASI-09).
 - **NIST RFI (2026)**: See [`docs/compliance/nist-rfi-2026-00206.md`](nist-rfi-2026-00206.md). Overlap with Section 1 (security threats) and Section 3 (design/development practices).
 - **Awesome EU AI Act**: See [`GenAI-Gurus/awesome-eu-ai-act`](https://github.com/GenAI-Gurus/awesome-eu-ai-act) for a curated resource map covering official EU sources, implementation references, standards bodies, and compliance tooling.
 

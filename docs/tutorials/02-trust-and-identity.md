@@ -1,3 +1,9 @@
+---
+title: "Tutorial 02 — Trust and Identity"
+last_reviewed: 2026-04-11
+owner: agt-maintainers
+---
+
 # Tutorial 02 — Trust and Identity
 
 > **Package:** `agentmesh-platform` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+

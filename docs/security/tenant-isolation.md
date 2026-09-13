@@ -1,3 +1,9 @@
+---
+title: "Tenant Isolation Checklist"
+last_reviewed: 2026-04-20
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tenant Isolation Checklist

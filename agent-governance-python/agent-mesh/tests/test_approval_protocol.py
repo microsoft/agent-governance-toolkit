@@ -13,14 +13,15 @@ from agentmesh.governance.approval_protocol import (
     ApprovalCoordinator,
     ApprovalProtocolError,
     ApprovalStage,
+    ApprovalStatus,
     ApproverKind,
     EntryDecision,
     InMemoryApprovalStore,
+    Outcome,
     ReasonCode,
     canonicalize,
     sha256_jcs,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Test helpers
@@ -512,3 +513,52 @@ class TestChainIntegrity:
         )
         assert first is second
         assert len(coord.store.get_entries(request.approval_request_id)) == 1
+
+    def test_zero_required_stages_chain_resolves_deny(self):
+        """A non-advisory entry must trigger fail-closed resolution for a misconfigured chain."""
+        chain = ApprovalChain(
+            chain_id="zero-required",
+            version="1",
+            stages=(
+                ApprovalStage(
+                    0,
+                    allowed_identities=frozenset({ALICE}),
+                    required=False,
+                ),
+            ),
+        )
+        coord = make_coordinator(chain)
+        binding = make_binding()
+        _, request = coord.open_request(
+            binding,
+            policy_rule_id="r",
+            policy_version="v1",
+            chain_id=chain.chain_id,
+            ttl_seconds=600,
+        )
+        entry = coord.submit_entry(
+            request.approval_request_id,
+            stage_index=0,
+            approver_kind=ApproverKind.HUMAN,
+            approver_identity=ALICE,
+            identity_assurance="oidc",
+            decision=EntryDecision.ALLOW,
+        )
+
+        resolution = coord.store.get_resolution(request.approval_request_id)
+        assert resolution is not None
+        assert resolution.outcome == Outcome.DENY
+        assert resolution.final_entry_digest == entry.entry_digest
+
+        stored_request = coord.store.get_request(request.approval_request_id)
+        assert stored_request is not None
+        assert stored_request.status == ApprovalStatus.DENIED
+
+        verdict = coord.validate_for_execution(
+            request.approval_request_id,
+            current_action_digest=binding.digest(),
+            current_policy_version="v1",
+            current_chain_version=chain.version,
+        )
+        assert not verdict.allowed
+        assert verdict.reason_code == ReasonCode.NOT_TERMINAL_ALLOW

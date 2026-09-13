@@ -1,3 +1,9 @@
+---
+title: "CoSAI/OASIS WS4 — RFC: Kernel-Based Runtime Governance"
+last_reviewed: 2026-07-16
+owner: agt-maintainers
+---
+
 # CoSAI/OASIS WS4 — RFC: Kernel-Based Runtime Governance
 
 **Submission:** [cosai-oasis/ws4-secure-design-agentic-systems#42](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/issues/42)
@@ -105,5 +111,5 @@ sandbox.check("execute_shell")  # Not granted → blocked
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — reference implementation
 - [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) — inter-agent trust layer
 - [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) — execution isolation
-- [CoSAI MCP Security Analysis](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/blob/main/model-context-protocol-security.md) — complementary work
+- [CoSAI Secure MCP Tool Design](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/blob/main/practical-guides/mcp-secure-tool-design.md) — complementary work
 - OS kernel security model (Linux capabilities, SELinux mandatory access control) — inspiration for ring-based approach

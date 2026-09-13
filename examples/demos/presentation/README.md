@@ -19,16 +19,17 @@ The notebooks and the console are the primary demo path. The PowerShell scripts 
 pip install agent-governance-toolkit[full]
 ```
 
-The notebooks include a bootstrap cell that installs any missing AGT subsystem into your active Python interpreter on first run, so you can simply open a notebook and run all cells.
+Run the notebooks from the repository root environment so the local packages,
+OPA binary, manifests, and Rego bundles are available.
 
 ## Recommended demo flow (~10 min total)
 
 You tell the audience: *"Slides are done. Time for some demos."* Then:
 
 1. **Flip from slides to `console.html`** (fullscreen, dark room loves it). Walk the audience through the cards for ~60 seconds. Hover, let the animations run. This is the visual map of what AGT does.
-2. **Open VS Code with `agt-live-demo.ipynb`.** Run it top to bottom (~3 min). This is the "it actually works" moment: install, sign an action, evaluate a policy, write a tamper-evident audit entry.
+2. **Open VS Code with `agt-live-demo.ipynb`.** Run it top to bottom. It loads a native ACS manifest and shows an allowed input beside a denied prompt-injection attempt.
 3. **Flip back to `console.html`.** Say *"Now let's see it under attack."* Click the OWASP cards to walk through the threat story.
-4. **Open `owasp-contoso-bank.ipynb`.** Run cell by cell (~6 min). Each ASI scenario takes ~20 seconds and ends with a clear ALLOW or DENY verdict.
+4. **Open `owasp-contoso-bank.ipynb`.** Run it cell by cell to show the same native runtime applied to a banking scenario.
 5. **Flip back to `console.html`** one last time for the closing pitch.
 
 ## Pre-flight checklist (run 30 min before the talk)

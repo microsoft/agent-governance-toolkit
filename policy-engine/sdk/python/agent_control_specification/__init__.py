@@ -39,6 +39,12 @@ from ._client import (
     validate_manifest_overlay,
 )
 from ._orchestration import AgentControl
+from ._host import (
+    DEFAULT_APPROVAL_TIMEOUT_SECONDS,
+    HostSession,
+    SnapshotBuilder,
+    run_sync,
+)
 from ._telemetry import (
     DEFAULT_OTEL_METER_NAME,
     InMemoryTelemetrySink,
@@ -69,6 +75,7 @@ from ._types import (
     ToolRunResult,
     Transform,
     Verdict,
+    Warning,
     action_identity,
 )
 from .validation import (
@@ -79,6 +86,10 @@ from .validation import (
 )
 
 __all__ = [
+    "DEFAULT_APPROVAL_TIMEOUT_SECONDS",
+    "HostSession",
+    "SnapshotBuilder",
+    "run_sync",
     "AdapterUnsupportedError",
     "AgentControlLiteLLMGuardrail",
     "AgentControl",
@@ -124,6 +135,7 @@ __all__ = [
     "Transform",
     "UnsupportedFrameworkAdapter",
     "Verdict",
+    "Warning",
     "ValidationDiagnostic",
     "action_identity",
     "guard_agent_method",

@@ -48,6 +48,9 @@ useDefault = true
     '''tests/e2e_python/.*''',
   ]
   regexes = [
-    '''ghp_secret123''',
-    '''finalSecret42''',
+    '''^ghp_secret123$''',
+    '''^finalSecret42$''',
+
+    # Canary-token example in the .NET SDK tutorial (docs/tutorials/19-dotnet-sdk.md)
+    '''^SECRET-MARKER-xyz789$''',
   ]

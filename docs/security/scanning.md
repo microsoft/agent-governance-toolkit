@@ -1,3 +1,9 @@
+---
+title: "Security Scanning for Plugin Contributors"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 # Security Scanning for Plugin Contributors
 
 This document explains the security scanning process that runs automatically on all plugin pull requests.

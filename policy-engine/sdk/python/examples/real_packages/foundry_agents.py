@@ -6,6 +6,18 @@ it makes a real Azure OpenAI call: the ACS policy is backed by an LLM judge that
 classifies each tool argument before the tool is allowed to run. Nothing here is
 stubbed with canned JSON, so it doubles as a live smoke test.
 
+The governance contract lives in two committed artifacts next to this file, the
+way a production integration ships them, rather than in Python:
+
+* ``foundry_governance.acs.yaml`` is the ACS manifest. It declares the
+  intervention points, the live Azure OpenAI ``intent_judge`` annotator, and the
+  Rego policy that consumes the judge label.
+* ``policy/foundry_tool_guard.rego`` is the deterministic decision. It fails
+  closed, allowing a tool call only when the judge labels it ``safe``.
+
+``build_control`` loads the manifest and resolves the Rego bundle. The Rego
+policy runs through OPA, so ``opa`` must be on ``PATH`` (or ``ACS_OPA_PATH``).
+
 Run it with real credentials set (see ``_common.require_azure``)::
 
     export AZURE_OPENAI_ENDPOINT=...        # https://<resource>.openai.azure.com
@@ -13,6 +25,7 @@ Run it with real credentials set (see ``_common.require_azure``)::
     export AZURE_OPENAI_DEPLOYMENT=...       # e.g. gpt-4o / gpt-5.x
     export AZURE_OPENAI_API_VERSION=...      # e.g. 2025-04-01-preview
     pip install "agent-control-specification" azure-ai-agents
+    # opa must be on PATH for the Rego policy bundle
     python foundry_agents.py
 
 It demonstrates two integration styles for the *same* governed seam:
@@ -49,6 +62,9 @@ tool the agent decides to call is gated by ACS first.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+
+import yaml
 
 # The genuine Azure AI Foundry Agents SDK. We build real tool definitions from
 # the same callables we govern, so the Foundry wiring is not faked.
@@ -65,15 +81,12 @@ from agent_control_specification import (
 
 from _common import require_azure
 
-# The judge prompt. In production prefer a pinned remote prompt or a
-# manifest-relative file over inlining (both shown in `build_control` below).
-JUDGE_PROMPT = (
-    "You are a security classifier for database tool calls made by an AI agent. "
-    "Given the tool argument text, decide whether it is destructive (it drops, "
-    "deletes, truncates, or alters data or schema) or safe (it only reads). "
-    "Respond with ONLY compact JSON and no markdown, exactly one of "
-    '{"label": "destructive"} or {"label": "safe"}.'
-)
+# The committed governance artifacts that make this an actual integration rather
+# than a manifest assembled in Python: the ACS manifest and its Rego policy
+# bundle. A production integration ships and loads these the same way.
+MANIFEST_PATH = Path(__file__).resolve().parent / "foundry_governance.acs.yaml"
+POLICY_BUNDLE = Path(__file__).resolve().parent / "policy"
+
 
 # Verdict reasons that signal a transient judge/infrastructure failure (a timeout
 # or an upstream error), as opposed to a real policy decision. The host retries
@@ -96,103 +109,34 @@ TOOLS = {"search_records": search_records, "run_sql": run_sql}
 foundry_tools = FunctionTool(set(TOOLS.values()))
 
 
-class IntentJudgePolicy:
-    """Host-owned policy: allow only an explicit "safe" judge verdict.
-
-    ACS computes the annotation (the real Azure OpenAI judge call) and hands the
-    host the decision. Keeping enforcement host-side is the Foundry pattern: the
-    runtime stays stateless and the host owns the verdict.
-
-    This fails CLOSED: a tool call is allowed only when the judge is present and
-    labels it "safe". A "destructive" label, any unexpected label, or a missing
-    label denies, so a flaky or adversarial judge response can never wave a
-    destructive call through. The judge annotation is bound only on
-    PRE_TOOL_CALL, so POST_TOOL_CALL (no judge annotation) is allowed here; this
-    example governs tool input, not output.
-    """
-
-    def evaluate(self, invocation):
-        judged = invocation["input"]["annotations"].get("intent_judge")
-        if judged is None:
-            # Not judged (e.g. the post-tool seam). Output is not gated here.
-            return {"decision": "allow"}
-        label = judged.get("label")
-        if label == "safe":
-            return {"decision": "allow"}
-        reason = (
-            f"LLM judge labelled the tool argument {label!r}"
-            if label
-            else "LLM judge returned no usable label"
-        )
-        return {"decision": "deny", "reason": reason}
-
-
 def build_control() -> AgentControl:
-    """Build a stateless AgentControl bound to an LLM-judge policy.
+    """Load the committed ACS manifest and Rego bundle, then bind the runtime.
 
-    The manifest is assembled in-process so the Azure endpoint comes from the
-    environment and no secret is written to disk (the API key is referenced by
-    name via ``api_key_env``). A production deployment would instead load a
-    committed manifest with ``AgentControl.from_path("governance.acs.yaml")`` or
-    a pinned remote one with
-    ``AgentControl.from_url("https://policies.example/governance.acs.yaml")``.
+    The governance contract lives in two committed artifacts next to this file:
+
+    * ``foundry_governance.acs.yaml`` declares the intervention points, the live
+      Azure OpenAI ``intent_judge`` annotator, and the policy that consumes it.
+    * ``policy/foundry_tool_guard.rego`` is the deterministic decision. It fails
+      closed, allowing a tool call only when the judge labels it ``safe``.
+
+    A production integration ships these two files and loads them with
+    ``AgentControl.from_path("foundry_governance.acs.yaml")``. This example does
+    almost that. It reads the committed manifest and injects three
+    per-deployment Azure fields (endpoint, deployment, api_version) from the
+    environment, because an Azure resource endpoint is deployment configuration,
+    not a committed artifact. The API key stays out of the manifest entirely and
+    is referenced by name via ``api_key_env``. The Rego ``bundle`` is resolved to
+    an absolute path so the example runs from any working directory.
     """
     azure = require_azure()
-    manifest = {
-        "agent_control_specification_version": "0.3.1-beta",
-        "metadata": {"name": "foundry-governed-agent"},
-        "annotators": {
-            "intent_judge": {
-                "type": "llm",
-                "provider": "azure_openai",
-                "endpoint": azure["AZURE_OPENAI_ENDPOINT"],
-                "deployment": azure["AZURE_OPENAI_DEPLOYMENT"],
-                "api_version": azure["AZURE_OPENAI_API_VERSION"],
-                "api_key_env": "AZURE_OPENAI_API_KEY",
-                "system_prompt": JUDGE_PROMPT,
-                # Production alternatives for the judge prompt:
-                #   "system_prompt_file": "prompts/judge.txt"   # manifest-relative
-                #   "system_prompt_url": {                       # pinned + HTTPS
-                #       "url": "https://policies.example/judge.txt",
-                #       "sha256": "<64-hex digest of the bytes>",
-                #   }
-                "label_field": "label",
-                # Give a slow reasoning model room so the judge call does not time
-                # out, and make its reply strictly parseable.
-                "timeout_ms": 60000,
-                # provider_config is merged verbatim into the chat-completions
-                # request body. Azure JSON mode forces a valid JSON object and a
-                # generous completion budget keeps reasoning models from
-                # truncating it.
-                "provider_config": {
-                    "response_format": {"type": "json_object"},
-                    "max_completion_tokens": 2000,
-                },
-            }
-        },
-        "policies": {"tool_guard": {"type": "custom", "adapter": "foundry_host"}},
-        "intervention_points": {
-            "pre_tool_call": {
-                "policy_target_kind": "tool_args",
-                "policy_target": "$.tool_call.args",
-                "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "tool_guard"},
-                "annotations": {"intent_judge": {"from": "$.tool_call.args.query"}},
-            },
-            "post_tool_call": {
-                "policy_target_kind": "tool_result",
-                "policy_target": "$.tool_result",
-                "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "tool_guard"},
-            },
-        },
-        "tools": {
-            "search_records": {"type": "Tool", "id": "search_records"},
-            "run_sql": {"type": "Tool", "id": "run_sql"},
-        },
-    }
+    manifest = yaml.safe_load(MANIFEST_PATH.read_text(encoding="utf-8"))
+    judge = manifest["annotators"]["intent_judge"]
+    judge["endpoint"] = azure["AZURE_OPENAI_ENDPOINT"]
+    judge["deployment"] = azure["AZURE_OPENAI_DEPLOYMENT"]
+    judge["api_version"] = azure["AZURE_OPENAI_API_VERSION"]
+    manifest["policies"]["tool_guard"]["bundle"] = str(POLICY_BUNDLE)
     # ACS is stateless: one instance serves unbounded concurrent evaluations.
-    return AgentControl.from_native(manifest, policy_dispatcher=IntentJudgePolicy())
+    return AgentControl.from_native(manifest)
 
 
 async def govern(

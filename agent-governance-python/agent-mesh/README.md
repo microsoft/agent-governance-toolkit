@@ -71,7 +71,7 @@
 | **Microsoft Agent-Lightning** | 15K ⭐ | ✅ Merged | Governance kernel for RL training safety |
 | **LangGraph** | 24K ⭐ | 📦 PyPI | Trust-scored state transitions |
 | **OpenAI Agents SDK** | — | 📦 PyPI | Tool-level governance guardrails |
-| **Haystack** | 22K ⭐ | 🔄 In Review | GovernancePolicyChecker + TrustGate components |
+| **Haystack** | 22K ⭐ | 🔄 In Review | `TrustGateComponent` + `TrustAgentComponent` components (`agentmesh.integrations.haystack`) |
 
 > **AgentMesh is "SSL for AI Agents"** — the trust and identity layer that makes multi-agent systems enterprise-ready. Every agent gets a cryptographic identity. Every interaction is verified. Every action is audited.
 
@@ -335,6 +335,7 @@ pip install -e .
 
 **Framework integrations:**
 - **[Claude Desktop](./docs/integrations/claude-desktop.md)** - Secure MCP tools with one command
+- [Django](./docs/integrations/django-middleware.md) - Replay-protected, request-bound Ed25519 authentication
 - [LangChain Integration](./examples/integrations/langchain.md) - Secure LangChain agents with policies
 - [CrewAI Integration](./examples/integrations/crewai.md) - Multi-agent crew governance
 - [LangGraph](./src/agentmesh/integrations/langgraph/) - Trust checkpoints for graph workflows (built-in)

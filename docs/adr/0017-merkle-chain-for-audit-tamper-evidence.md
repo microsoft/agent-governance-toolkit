@@ -1,3 +1,9 @@
+---
+title: "ADR-0017: Merkle Chain for Audit Tamper Evidence"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR-0017: Merkle Chain for Audit Tamper Evidence
 
 ## Status

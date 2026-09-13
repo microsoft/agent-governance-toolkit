@@ -39,6 +39,28 @@ matches_any(text, patterns) if {
 	regex.match(pattern, text)
 }
 
+# ``indexof(text, "")`` is undefined in OPA, so a pattern whose leftmost match
+# is zero-length (``[0-9]*``, a bare ``*`` glob) would drop out of the scored
+# comprehension and leave first_match undefined. matches_any still reports a
+# match, so a caller that gates on matches_any and then reads a verdict from
+# first_match would fall through to allow.
+#
+# OPA's regex builtins return the matched text, never its position, so a
+# zero-length match has no recoverable offset: ``(?m)$`` matches at the end of
+# the subject, not at 0. Report 0 as a deterministic placeholder. The span is
+# diagnostic only -- it feeds the deny message and the earliest() tie-break,
+# and nothing outside this file reads it -- so the decision is unaffected, but
+# a deny whose only matching pattern is zero-width may name offset 0 and, where
+# a longer match also exists, may name the zero-width pattern instead.
+match_start(_, matched) := 0 if {
+	matched == ""
+}
+
+match_start(text, matched) := start if {
+	matched != ""
+	start := indexof(text, matched)
+}
+
 first_match(text, patterns) := match if {
 	is_string(text)
 	is_array(patterns)
@@ -46,7 +68,7 @@ first_match(text, patterns) := match if {
 		some idx, pattern in patterns
 		found := regex.find_n(pattern, text, 1)
 		count(found) > 0
-		span_start := indexof(text, found[0])
+		span_start := match_start(text, found[0])
 		span_start >= 0
 		hit := {
 			"pattern": pattern,

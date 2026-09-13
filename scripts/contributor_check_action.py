@@ -148,7 +148,7 @@ def _build_comment(username: str, overall: str, profile_risk: str,
         "*Automated check by "
         "[AGT Contributor Check]"
         "(https://github.com/microsoft/agent-governance-toolkit"
-        "/tree/main/scripts#contributor-reputation-tools).*"
+        "/blob/main/docs/tutorials/53-contributor-governance.md).*"
     )
     return "\n".join(lines)
 

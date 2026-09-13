@@ -47,10 +47,14 @@ python -m venv .venv
 source .venv/bin/activate        # Linux/macOS
 # .venv\Scripts\activate         # Windows
 
+# Install the core package from the local source to avoid dependency conflicts
+# (Required for all local development to ensure you test against local core changes)
+pip install --no-cache-dir --no-deps -e agent-governance-toolkit-core
+
 # Install the package you are working on in editable mode
-pip install -e agent-os/[dev]       # Policy engine
-pip install -e agent-mesh/[dev]     # Identity/trust layer
-pip install -e agent-compliance/[dev]  # Compliance tooling
+pip install -e "agent-os[dev]"       # Policy engine
+pip install -e "agent-mesh[dev]"     # Identity/trust layer
+pip install -e "agent-compliance[dev]"  # Compliance tooling
 
 # Run tests for that package
 cd agent-os && pytest
@@ -293,17 +297,20 @@ git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-governance-toolkit
 
 # Install in development mode
+# Install the core package from the local source to avoid dependency conflicts
+pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-governance-toolkit-core"
+
 pip install -e "agent-governance-python/agent-primitives[dev]"
 pip install -e "agent-governance-python/agent-mcp-governance[dev]"
-pip install -e "agent-os[dev]"
-pip install -e "agent-mesh[dev]"
-pip install -e "agent-runtime[dev]"
-pip install -e "agent-sre[dev]"
-pip install -e "agent-compliance[dev]"
-pip install -e "agent-marketplace[dev]"  # installs agentmesh-marketplace
-pip install -e "agent-lightning[dev]"
-pip install -e "agent-hypervisor[dev]"
-pip install -e "agentmesh-integrations[dev]"
+pip install -e "agent-governance-python/agent-os[dev]"
+pip install -e "agent-governance-python/agent-mesh[dev]"
+pip install -e "agent-governance-python/agent-runtime[dev]"
+pip install -e "agent-governance-python/agent-sre[dev]"
+pip install -e "agent-governance-python/agent-compliance[dev]"
+pip install -e "agent-governance-python/agent-marketplace[dev]"  # installs agentmesh-marketplace
+pip install -e "agent-governance-python/agent-lightning[dev]"
+pip install -e "agent-governance-python/agent-hypervisor[dev]"
+pip install -e "agent-governance-python/agentmesh-integrations[dev]"
 
 # Restore the standalone .NET SDK when working in that path
 dotnet restore agent-governance-dotnet/AgentGovernance.sln

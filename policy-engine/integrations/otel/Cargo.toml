@@ -1,6 +1,6 @@
 [package]
 name = "agent_control_specification_otel"
-version = "0.3.1-beta.0"
+version = "0.4.0-beta.0"
 edition = "2021"
 rust-version = "1.85"
 description = "OpenTelemetry bridge for Agent Control Specification telemetry"
@@ -8,7 +8,8 @@ license = "MIT"
 publish = true
 
 [dependencies]
-agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core" }
+# Alpha.3 cannot compile without opa or rego; opa adds no evaluator dependency.
+agent-control-spec = { version = "=0.4.0-alpha.3", default-features = false, features = ["opa"] }
 opentelemetry = { version = "0.31", features = ["metrics"] }
 
 [dev-dependencies]

@@ -1,3 +1,9 @@
+---
+title: "Proposal: Nexus Trust Exchange — The Visa Network for AI Agents"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Proposal: Nexus Trust Exchange — The Visa Network for AI Agents
 
 **Status:** ✅ Pre-Alpha — Core architecture implemented, placeholder crypto  
@@ -30,5 +36,4 @@ An "Agent Internet" where agents discover each other through signed Agent Cards,
 
 ## References
 
-- [Agent Internet Research Document](../../research/docs/2026-03-21-agent-internet-economy.md)
-- [Moltbook Integration](../../agent-governance-python/agentmesh-integrations/moltbook/)
+- [Nexus module](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/nexus)

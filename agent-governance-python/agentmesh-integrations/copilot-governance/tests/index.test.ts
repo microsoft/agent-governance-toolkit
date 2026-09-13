@@ -13,13 +13,14 @@ import { OWASP_AGENTIC_RISKS, getOwaspRisks, formatOwaspRisks, LEGACY_AT_TO_ASI 
 describe("reviewCode", () => {
   it("passes clean governed code", () => {
     const source = `
+      import { AgentControl } from "agent-control-specification";
       import { createGovernedTool, auditMiddleware } from "@agentmesh/mastra";
-      const gov = governanceMiddleware({
-        rateLimitPerMinute: 60,
-        blockedPatterns: ["(?i)ignore previous"],
-        piiFields: ["ssn"],
-        allowedTools: ["search"],
-      });
+      const manifest = {
+        tools: { search: { clearance: "public" } },
+        annotators: { pii_scan: { type: "endpoint" } },
+      };
+      const control = AgentControl.fromNative(manifest);
+      const safe = createGovernedTool(tool, { control });
       const audit = auditMiddleware({ captureData: true });
     `;
     const result = reviewCode(source);
@@ -79,8 +80,9 @@ describe("reviewCode", () => {
 
   it("detects missing tool allow-list when governance is present", () => {
     const source = `
+      const control = AgentControl.fromNative({ metadata: { name: "test" } });
       const governed = createGovernedTool(myTool, {
-        governance: { rateLimitPerMinute: 60 },
+        control,
         audit: { captureData: true },
       });
       const audit = auditMiddleware({ captureData: true });
@@ -91,7 +93,9 @@ describe("reviewCode", () => {
 
   it("detects missing prompt-injection guards when governance is present", () => {
     const source = `
-      const gov = governanceMiddleware({ allowedTools: ["search"], piiFields: ["ssn"] });
+      const manifest = { tools: { search: { clearance: "public" } } };
+      const control = AgentControl.fromNative(manifest);
+      const governed = createGovernedTool(tool, { control });
       const audit = auditMiddleware({ captureData: true });
     `;
     const result = reviewCode(source);

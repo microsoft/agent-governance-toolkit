@@ -1,3 +1,9 @@
+---
+title: "Release process"
+last_reviewed: 2026-06-10
+owner: agt-maintainers
+---
+
 # Release process
 
 This document describes the canonical AGT release process. AGT is proposed for

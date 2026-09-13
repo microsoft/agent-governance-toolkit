@@ -73,6 +73,9 @@ import _supply_chain_common as common
 
 DEFAULT_MAX_DEPS = 50
 DEFAULT_DEADLINE_SEC = 120
+# npm packuments for popular packages exceed the shared 5 MB fetch cap;
+# still bounded, just sized for real packuments (fail-closed above this).
+NPM_PACKUMENT_MAX_BYTES = 64 * 1024 * 1024
 MANIFEST_BASENAMES = [
     "package.json",
     "Cargo.toml",
@@ -160,6 +163,16 @@ def _resolve_cargo_deps(tree: dict | None) -> dict[str, str]:
                 raw = spec.get("version")
                 if isinstance(raw, str):
                     ver = raw.strip()
+            if not ver:
+                continue
+            # Cargo's explicit exact-pin operator: ``=1.2.3`` (optionally
+            # ``= 1.2.3``). Strip a single leading ``=`` so exact pins are
+            # resolved and age-checked like bare pins; without this the
+            # version fails SAFE_VERSION_RE below and the dep is silently
+            # skipped. A double ``==`` is not valid Cargo syntax and still
+            # fails the safe-version check after one strip.
+            if ver.startswith("="):
+                ver = ver[1:].strip()
             if not ver:
                 continue
             # Cargo allows ^1.0 as the implicit form; only treat as exact-pin
@@ -378,9 +391,13 @@ def fetch_release_time(ecosystem: str, package: str, version: str) -> datetime |
         stamp = data.get("time") if isinstance(data.get("time"), str) else None
         if stamp:
             return _parse_iso(stamp)
-        # Fall back: packument with bounded read.
+        # Fall back: packument with bounded read. Long-lived packages
+        # routinely exceed the default 5 MB cap (@typescript-eslint/*
+        # packuments are >10 MB), which made this fall-back report
+        # "could not verify" and hard-fail the check for legitimately
+        # cooled versions. Keep the read bounded, just with headroom.
         packument_url = f"https://registry.npmjs.org/{common.safe_url_path(package)}"
-        pack = common.fetch_json(packument_url)
+        pack = common.fetch_json(packument_url, max_bytes=NPM_PACKUMENT_MAX_BYTES)
         if pack is None:
             return None
         times = pack.get("time") or {}

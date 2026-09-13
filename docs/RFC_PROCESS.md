@@ -1,3 +1,9 @@
+---
+title: "Copyright (c) Microsoft Corporation. Licensed under the MIT License."
+last_reviewed: 2026-05-17
+owner: agt-maintainers
+---
+
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
 # RFC Process
@@ -52,7 +58,7 @@ Draft → Under Review → Accepted / Rejected → Implemented → Closed
 ## Relationship to ADRs
 
 RFCs capture the proposal and discussion. Once accepted, the decision is
-recorded as an [Architecture Decision Record](../adr/index.md) (ADR) for
+recorded as an [Architecture Decision Record](adr/index.md) (ADR) for
 long-term reference. The ADR links back to the RFC issue.
 
 ## Review expectations

@@ -8,13 +8,13 @@ evaluation feed, and agent-to-agent trust heatmap.
 > **Note:** This dashboard uses **simulated demo data** out of the box so you
 > can explore without deploying AGT infrastructure. For a dashboard wired to
 > the **live AgentMesh EventBus**, see
-> [`agent-governance-python/agent-mesh/examples/06-trust-score-dashboard/`](../../agent-governance-python/agent-mesh/examples/06-trust-score-dashboard/).
+> [`agent-governance-python/agent-mesh/examples/06-trust-score-dashboard/`](../../../agent-governance-python/agent-mesh/examples/06-trust-score-dashboard/).
 
 ## Which dashboard should I use?
 
 | Dashboard | Location | Data Source | Best For |
 |-----------|----------|-------------|----------|
-| **This one** (Fleet Governance) | `demo/governance-dashboard/` | Simulated | Quick demo, stakeholder presentations, evaluating AGT concepts |
+| **This one** (Fleet Governance) | `examples/demos/governance-dashboard/` | Simulated | Quick demo, stakeholder presentations, evaluating AGT concepts |
 | **Trust Score Dashboard** | `agent-governance-python/agent-mesh/examples/06-trust-score-dashboard/` | Simulated (pluggable to live) | Deep trust/credential/protocol monitoring, production starting point |
 | **DashboardAPI backend** | `agent-governance-python/agent-mesh/src/agentmesh/dashboard/` | Live EventBus | Building your own custom frontend against real AGT data |
 

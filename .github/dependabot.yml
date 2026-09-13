@@ -1,4 +1,10 @@
 version: 2
+# Every ecosystem sets commit-message.prefix so dependabot emits titles in the
+# repo's conventional-commit style ("chore(deps): bump X ..."). Without it,
+# some ecosystems generate "Bump X ..." with a capitalized subject, which fails
+# the pr-title check (subjectPattern ^(?![A-Z]).+$). This was previously set on
+# nuget only; extending it to all ecosystems keeps their auto-generated titles
+# passing the same gate.
 updates:
   # All Python packages under agent-governance-python/, covered by a single
   # multi-directory entry. A separate per-directory entry for any of these
@@ -28,9 +34,14 @@ updates:
       - "/agent-governance-python/agent-sandbox"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
     groups:
       python-dev-tooling:
         patterns:
@@ -44,55 +55,87 @@ updates:
     directory: "/agent-governance-python/agent-os/extensions/mcp-server"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   - package-ecosystem: "npm"
     directory: "/agent-governance-python/agent-os/extensions/copilot"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   - package-ecosystem: "npm"
     directory: "/agent-governance-copilot-cli"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   - package-ecosystem: "npm"
     directory: "/agent-governance-claude-code"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   - package-ecosystem: "npm"
     directory: "/agent-governance-typescript"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   - package-ecosystem: "npm"
     directory: "/agent-governance-antigravity-cli"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   # .NET
   - package-ecosystem: "nuget"
     directory: "/agent-governance-dotnet"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -108,27 +151,42 @@ updates:
     directory: "/agent-governance-rust"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   # Go
   - package-ecosystem: "gomod"
     directory: "/agent-governance-golang"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   # Docker
   - package-ecosystem: "docker"
     directory: "/agent-governance-python/agent-os"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -138,3 +196,17 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      # codeql-action's init, autobuild and analyze steps must run the same
+      # version: init writes a config stamped with its version and analyze
+      # refuses to load a config from a different one ("Loaded a configuration
+      # file for version X, but running version Y"). Bumping them in separate
+      # PRs leaves every one of them red, so they are grouped into a single PR.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
+    cooldown:
+      default-days: 7

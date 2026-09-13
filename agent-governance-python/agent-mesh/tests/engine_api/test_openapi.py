@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 fastapi = pytest.importorskip("fastapi")
-from fastapi import FastAPI  # noqa: E402
+from fastapi import APIRouter, FastAPI  # noqa: E402
 
 from agentmesh.engine_api import (  # noqa: E402
     CAPABILITY_EXTENSION_KEY,
@@ -22,23 +22,17 @@ def _build_studio_app() -> FastAPI:
     app = FastAPI(title="AGT Studio Engine API", version="1.0.0")
 
     @app.get("/api/v1/health", operation_id="getHealth")
-    @capability_flags(
-        runtime_mutating=False, user_intent_required=False, read_only_surface=True
-    )
+    @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
     async def get_health():
         return {"status": "ok"}
 
     @app.get("/api/v1/policies", operation_id="listPolicies")
-    @capability_flags(
-        runtime_mutating=False, user_intent_required=False, read_only_surface=True
-    )
+    @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
     async def list_policies():
         return []
 
     @app.post("/api/v1/policy/save", operation_id="policy_save")
-    @capability_flags(
-        runtime_mutating=True, user_intent_required=True, read_only_surface=False
-    )
+    @capability_flags(runtime_mutating=True, user_intent_required=True, read_only_surface=False)
     async def save_policy():
         return {"saved": True}
 
@@ -110,6 +104,29 @@ class TestInjectCapabilityExtension:
         inject_capability_extension(app)
         with pytest.raises(ValueError, match="missing capability flags"):
             app.openapi()
+
+    def test_emits_extension_for_included_router(self):
+        app = FastAPI(title="t", version="1.0.0")
+        router = APIRouter()
+
+        @router.get("/api/v1/included", operation_id="included")
+        @capability_flags(
+            runtime_mutating=False,
+            user_intent_required=False,
+            read_only_surface=True,
+        )
+        async def included():
+            return {}
+
+        app.include_router(router)
+        inject_capability_extension(app)
+
+        operation = app.openapi()["paths"]["/api/v1/included"]["get"]
+        assert operation[CAPABILITY_EXTENSION_KEY] == {
+            "runtime_mutating": False,
+            "user_intent_required": False,
+            "read_only_surface": True,
+        }
 
 
 class TestEndToEndAllowlist:

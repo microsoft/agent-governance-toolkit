@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit v3.1.0"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit v3.1.0
 
 > [!IMPORTANT]
@@ -93,4 +99,4 @@ after upgrading the `agentmesh-platform` package.
 
 ## Full Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes since v3.0.2.
+See [CHANGELOG.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md) for the complete list of changes since v3.0.2.

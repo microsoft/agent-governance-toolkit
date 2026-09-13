@@ -8,8 +8,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from agent_os.base_agent import AuditEntry
-from agent_os.policies.evaluator import PolicyDecision
+from agent_os.base_agent import AuditEntry, PolicyDecision
 
 
 def _sync_timer(func, iterations: int = 10_000) -> Dict[str, Any]:
@@ -31,9 +30,7 @@ def _sync_timer(func, iterations: int = 10_000) -> Dict[str, Any]:
     }
 
 
-_ALLOW_DECISION = PolicyDecision(
-    allowed=True, matched_rule="bench-rule", action="ALLOW", reason="benchmark"
-)
+_ALLOW_DECISION = PolicyDecision.ALLOW
 
 
 def _make_entry(agent_id: str = "bench-agent", action: str = "read_data",
@@ -89,7 +86,7 @@ def bench_audit_serialization(iterations: int = 10_000) -> Dict[str, Any]:
             "agent_id": entry.agent_id,
             "request_id": entry.request_id,
             "action": entry.action,
-            "decision_allowed": entry.decision.allowed,
+            "decision": entry.decision.value,
             "result_success": entry.result_success,
         }
 

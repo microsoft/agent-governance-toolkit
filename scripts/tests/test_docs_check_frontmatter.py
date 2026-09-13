@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from scripts.docs import check_frontmatter  # noqa: E402
+from scripts.docs.docs_scope import DOCS_EXCLUDE_PATTERNS  # noqa: E402
 
 
 def _write(p: Path, text: str) -> Path:
@@ -111,11 +112,31 @@ def test_severity_reflects_strict_flag(tmp_path):
 
 def test_excluded_directories_are_skipped(tmp_path):
     _write(tmp_path / "docs" / "overrides" / "skin.md", "no fm")
-    _write(tmp_path / "docs" / "i18n" / "es" / "a.md", "no fm")
+    _write(tmp_path / "docs" / "dependency-audits" / "audit.md", "no fm")
+    _write(tmp_path / "docs" / "AGENTS.md", "no fm")
     _write(tmp_path / "docs" / "real.md", VALID)
     report = check_frontmatter.check(tmp_path)
     assert report.files_scanned == 1
     assert report.findings == []
+
+
+def test_translated_pages_are_scanned(tmp_path):
+    translated = _write(tmp_path / "docs" / "i18n" / "README.es.md", "no fm")
+    report = check_frontmatter.check(tmp_path)
+    assert report.files_scanned == 1
+    assert report.findings[0].source == translated.resolve()
+
+
+def test_mkdocs_exclusions_match_checker_scope():
+    root = Path(__file__).resolve().parents[2]
+    lines = (root / "mkdocs.yml").read_text(encoding="utf-8").splitlines()
+    start = lines.index("exclude_docs: |") + 1
+    configured: list[str] = []
+    for line in lines[start:]:
+        if not line.startswith("  "):
+            break
+        configured.append(line.strip())
+    assert tuple(configured) == DOCS_EXCLUDE_PATTERNS
 
 
 def test_explicit_paths_take_priority(tmp_path):

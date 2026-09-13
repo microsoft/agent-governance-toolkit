@@ -1,6 +1,12 @@
+---
+title: "Language Package Matrix"
+last_reviewed: 2026-08-18
+owner: agt-maintainers
+---
+
 # Language Package Matrix
 
-> **Last updated:** April 2026
+> **Last updated:** August 2026
 
 The Agent Governance Toolkit ships language packages in **5 languages**. Python is the primary
 implementation; the other language packages now cover most core governance primitives needed to
@@ -20,12 +26,15 @@ build governed agents in each ecosystem.
 | **Kill Switch** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Lifecycle Management** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Framework Integrations** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Unified CLI** | ✅ | — | — | — | — |
+| **Unified CLI** | ✅ | — | — | [◑](rust-capability-manifest.md#rust-capability-inventory) | — |
 | **Governance Dashboard** | ✅ | — | — | — | — |
 | **Shadow AI Discovery** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Prompt Defense Evaluator** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Legend:** ✅ Implemented · ◑ Partial · — Not yet available
+
+For source-backed Rust status, limitations, evidence, and canonical ownership,
+see the [Rust capability and ownership manifest](rust-capability-manifest.md).
 
 > **Note:** .NET remains partial for cross-language identity parity because it now supports
 > stronger native asymmetric identity flows, while the other SDKs still center on Ed25519-based
@@ -45,28 +54,28 @@ to build governed agents in any language:
 
 | Primitive | What It Does | Python | TS | .NET | Rust | Go |
 |---|---|---|---|---|---|---|
-| Policy evaluation | Evaluate actions against rules before execution | `PolicyEvaluator` | `PolicyEngine` | `PolicyEngine` | `PolicyEngine` | `PolicyEngine` |
+| Policy evaluation | Evaluate actions against rules before execution | `AgentControl` | `PolicyEngine` | `PolicyEngine` | `AgentControl` | `PolicyEngine` |
 | Agent identity | Cryptographic credentials | `AgentIdentity` | `AgentIdentity` | `AgentIdentity` (.NET 8 compatibility signing, delegation, JWK/JWKS, DID docs) | `Identity` | `AgentIdentity` |
 | Trust scoring | 0–1000 score based on behavior | `TrustEngine` | `TrustEngine` | `TrustStore` | `TrustEngine` | `TrustManager` |
 | Audit logging | Append-only action log | `AuditLogger` | `AuditLogger` | `AuditLogger` | `AuditLogger` | `AuditLogger` |
 
-### Python-Only Capabilities
+### Python-Only and Python-Ahead Capabilities
 
-These capabilities are only available in Python today. They represent the full
-governance stack for enterprise deployments:
+Python remains ahead for the workflows below. Rust has a partial, feature-gated
+operator CLI, but does not yet provide the complete workflow set:
 
 | Capability | Package | Description |
 |---|---|---|
 | **Replay Debugging** | `agent-sre` | Deterministic replay of agent sessions |
 | **Governance Dashboard** | `demo/` | Real-time fleet visibility (Streamlit) |
-| **Unified CLI (`agt`)** | `agent-compliance` | `agt verify`, `agt doctor`, `agt lint-policy` |
+| **Unified CLI (`agt`)** | `agent-compliance` | Python provides `verify`, `doctor`, and `lint-policy`; Rust currently provides `check`, `policy`, `audit`, and `trust` |
 | **OWASP Verification** | `agent-compliance` | ASI 2026 compliance attestation |
 | **20+ Framework Adapters** | `agentmesh-integrations` | LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK, etc. |
 
 ### TypeScript package
 
 **Package:** [`@microsoft/agent-governance-sdk`](https://www.npmjs.com/package/@microsoft/agent-governance-sdk) ·
-**Source:** [`agent-governance-typescript/`](../agent-governance-typescript/)
+**Source:** [`agent-governance-typescript/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript)
 
 | Module | Features |
 |--------|----------|
@@ -87,7 +96,7 @@ governance stack for enterprise deployments:
 ### .NET package
 
 **Package:** [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) ·
-**Source:** [`agent-governance-dotnet/`](../agent-governance-dotnet/)
+**Source:** [`agent-governance-dotnet/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-dotnet)
 
 | Namespace | Features |
 |-----------|----------|
@@ -110,7 +119,7 @@ governance stack for enterprise deployments:
 
 **Crate:** [`agentmesh`](https://crates.io/crates/agentmesh) +
 [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) ·
-**Source:** [`agent-governance-rust/`](../agent-governance-rust/)
+**Source:** [`agent-governance-rust/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-rust)
 
 | Module | Features |
 |--------|----------|
@@ -132,7 +141,7 @@ full governance stack.
 ### Go module
 
 **Module:** `github.com/microsoft/agent-governance-toolkit/agent-governance-golang` ·
-**Source:** [`agent-governance-golang/`](../agent-governance-golang/)
+**Source:** [`agent-governance-golang/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-golang)
 
 | Python parity area | Go status |
 |---|---|
@@ -197,5 +206,7 @@ full governance stack.
 ## Contributing
 
 Want to add a feature to a non-Python SDK? We welcome contributions!
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines. The Python
-implementation serves as the reference — match its behavior and test patterns.
+See [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for guidelines.
+Specifications, schemas, official conformance vectors, and the canonical
+implementation take precedence for shared contracts. Use Python as a UX or
+workflow exemplar only when those sources are silent.

@@ -1,10 +1,16 @@
+---
+title: "Agent OS for VS Code"
+last_reviewed: 2026-05-08
+owner: agt-maintainers
+---
+
 # Agent OS for VS Code
 
 > **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 **Kernel-level safety for AI coding assistants.**
 
-![Agent OS Banner](images/banner.png)
+![Agent Governance Toolkit](../assets/agent-governance-toolkit.svg)
 
 ## The Problem
 
@@ -86,7 +92,7 @@ The Governance Server that powers the browser dashboard includes defense-in-dept
 - **Python path validation** -- Rejects shell metacharacters before subprocess spawn to prevent command injection.
 - **Dependency pinning** -- Production dependencies (axios, ws) pinned to exact versions for reproducible builds.
 
-For the full security model, threat analysis, and accepted risks, see [SECURITY.md](SECURITY.md).
+For the full security model, threat analysis, and accepted risks, see [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md).
 
 ### Live Governance Data
 The extension automatically detects and starts [agent-failsafe](https://pypi.org/project/agent-failsafe/) to populate dashboards with real governance data:
@@ -239,7 +245,7 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 - **No telemetry**: The Governance Server does not send data to external endpoints unless you explicitly configure an observability endpoint
 - **Open source**: Inspect the code yourself
 
-See [SECURITY.md](SECURITY.md) for the full server security model and threat analysis.
+See [SECURITY.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SECURITY.md) for the full server security model and threat analysis.
 
 ## Requirements
 
@@ -249,11 +255,11 @@ See [SECURITY.md](SECURITY.md) for the full server security model and threat ana
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](../../CONTRIBUTING.md).
+We welcome contributions! See [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE).
+MIT License - see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE).
 
 ---
 

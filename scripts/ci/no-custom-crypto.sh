@@ -17,7 +17,7 @@
 # Everything else should use the SDK's public API, not raw primitives.
 #
 # Per-file exemptions: credential_vault.py/.ts (sanctioned secret stores),
-# agt-policies/.../manifest_resolution/build.py (writes a non-security SHA-256
+# agt-policies/.../cli/_migrate_resolution/build.py (writes a non-security SHA-256
 # content checksum of a generated rego bundle, asserted by its tests), and
 # agent-os/.../event_sink.py (sanctioned audit-event HMAC signer that produces
 # tamper-evident signed CloudEvents; parallels the existing agent-os
@@ -73,7 +73,7 @@ ADDED=$(git diff "$BASE_REF"...HEAD --diff-filter=ACMR -U0 -- \
   ':!policy-engine/**' \
   ':!agent-governance-python/agent-os/src/agent_os/credential_vault.py' \
   ':!agent-governance-python/agent-os/src/agent_os/event_sink.py' \
-  ':!agent-governance-python/agt-policies/src/agt/manifest_resolution/build.py' \
+  ':!agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/build.py' \
   ':!agent-governance-typescript/src/credential-vault.ts' \
   ':!*test*' ':!*spec*' ':!ci/no-custom-crypto.sh' \
   | grep -E '^\+[^+]' || true)

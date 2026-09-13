@@ -1,6 +1,6 @@
 ---
 title: OWASP Agentic Security Initiative Reference Architecture
-last_reviewed: 2026-06-10
+last_reviewed: 2026-08-10
 owner: agt-maintainers
 ---
 
@@ -30,15 +30,15 @@ it is not an eleventh entry in the official OWASP list.
 
 | ASI ID | Risk Title | Coverage | Primary AGT Component |
 |--------|-----------|----------|----------------------|
-| ASI01 | Agent Goal Hijack | ✅ Full | `governanceMiddleware` — `blockedPatterns` |
-| ASI02 | Tool Misuse and Exploitation | ✅ Full | `createGovernedTool` — allow/deny-lists |
-| ASI03 | Identity and Privilege Abuse | ✅ Full | PII redaction, RBAC in policy YAML |
+| ASI01 | Agent Goal Hijack | ✅ Full | ACS input annotators and policy bindings |
+| ASI02 | Tool Misuse and Exploitation | ✅ Full | ACS tool catalog and `AgentControl.runTool` |
+| ASI03 | Identity and Privilege Abuse | ✅ Full | ACS labels, identity binding, and host RBAC |
 | ASI04 | Agentic Supply Chain | ⚠️ Partial | Policy YAML tool pinning; no SBOM |
 | ASI05 | Unexpected Code Execution | ✅ Full | Static reviewer detects pickle/eval |
-| ASI06 | Memory and Context Poisoning | ⚠️ Partial | Audit hash-chain; no memory sandbox |
+| ASI06 | Memory and Context Poisoning | ⚠️ Partial | `MemoryGuard` integrity and injection checks; integration is opt-in |
 | ASI07 | Insecure Inter-Agent Communication | ✅ Full | Trust-gate with DID verification |
 | ASI08 | Cascading Agent Failures | ✅ Full | Circuit breaker, rate limiter |
-| ASI09 | Human-Agent Trust Exploitation | ⚠️ Partial | Audit trail; no UI-level guardrails |
+| ASI09 | Human-Agent Trust Exploitation | ⚠️ Partial | Action-bound approval protocol and approval backends; no universal UI integration |
 | ASI10 | Rogue Agents | ✅ Full | `AgentBehaviorMonitor`, quarantine |
 | AGT extension | Agent Traceability | ✅ Full | Tamper-evident audit log (hash chain) |
 
@@ -77,13 +77,14 @@ flowchart TD
 
 **Risk:** Adversarial inputs override an agent's intended goal.
 
-**AGT Mitigation:** The `governanceMiddleware` applies `blockedPatterns` (regex)
-to every inbound message before it reaches the LLM. Patterns are loaded from
-the policy YAML at runtime — not hardcoded in source.
+**AGT Mitigation:** ACS evaluates the `input` intervention point before model
+execution. Manifests bind classifier, endpoint, or Rego policies and preserve
+the input and enforced identities for audit.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/governance/middleware.py` — `_check_blocked_patterns()`
-- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `no-prompt-injection-guards`
+- `policy-engine/spec/SPECIFICATION.md` input intervention-point contract
+- `policy-engine/sdk/node/src/index.ts` `AgentControl.evaluateInterventionPoint`
+- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` rule `no-prompt-injection-guards`
 
 **Coverage:** ✅ Full
 
@@ -93,13 +94,15 @@ the policy YAML at runtime — not hardcoded in source.
 
 **Risk:** An agent invokes tools in unintended or dangerous ways.
 
-**AGT Mitigation:** `createGovernedTool` wraps every tool with allow-list /
-deny-list enforcement and per-tool rate limits. The static reviewer flags
-unguarded `.execute()` calls.
+**AGT Mitigation:** `createGovernedTool` delegates every invocation to
+`AgentControl.runTool`. The ACS manifest tool catalog and bound policies
+mediate both pre-tool and post-tool intervention points. The static reviewer
+flags unguarded `.execute()` calls.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/governance/tool_wrapper.py`
-- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rules `unguarded-tool-execution`, `no-tool-allowlist`
+- `policy-engine/spec/schema/manifest.schema.json` tool catalog
+- `policy-engine/sdk/node/src/index.ts` `AgentControl.runTool`
+- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` rules `unguarded-tool-execution`, `no-tool-allowlist`
 
 **Coverage:** ✅ Full
 
@@ -109,12 +112,14 @@ unguarded `.execute()` calls.
 
 **Risk:** Agents acquire privileges beyond their role, exposing sensitive data.
 
-**AGT Mitigation:** PII redaction middleware strips sensitive fields before
-forwarding. Policy YAML supports field-level `pii_fields` configuration.
+**AGT Mitigation:** ACS annotators and policy bindings inspect sensitive
+content before execution. The runtime binds input and enforced identities so
+hosts can audit transforms and approval decisions.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/governance/middleware.py` — `_redact_pii()`
-- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-pii-redaction`
+- `policy-engine/spec/SPECIFICATION.md` identity and annotator contracts
+- `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py`
+- `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py`
 
 **Coverage:** ✅ Full
 
@@ -159,15 +164,21 @@ and `exec()` in agent code via lint rules.
 
 **Risk:** Persistent memory stores are manipulated to corrupt future decisions.
 
-**AGT Mitigation:** The audit hash-chain provides tamper detection for any
-persisted state. However, AGT does not yet sandbox agent memory stores or
-provide memory integrity checksums at the application layer.
+**AGT Mitigation:** `MemoryGuard` screens memory writes for prompt injection,
+dangerous code, tool-poisoning markup, and Unicode manipulation. It records a
+SHA-256 digest per entry, verifies integrity after reads, supports batch scans,
+and keeps a write audit trail. The general audit hash-chain provides additional
+tamper evidence for governance events.
 
-**Known Gap:** No dedicated memory-sandbox or context-integrity module.
-Consider adding a `ContextValidator` that hashes memory snapshots.
+**Known Gap:** `MemoryGuard` is an opt-in Agent OS component rather than a
+universal storage sandbox. Applications and framework adapters must place it on
+their actual memory read/write path; AGT cannot guarantee coverage for an
+arbitrary external memory provider that has not integrated the guard.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/audit/hash_chain.py`
+- `agent-governance-python/agent-os/src/agent_os/memory_guard.py`
+- `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py`
+- `docs/packages/agent-os.md` — MemoryGuard and ASI06 package coverage
 
 **Coverage:** ⚠️ Partial
 
@@ -197,8 +208,9 @@ verification in multi-agent orchestration code.
 failures, preventing cascade. Rate limiting caps per-minute tool invocations.
 
 **Evidence:**
-- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-circuit-breaker`
-- `agent-governance-python/agent-os/src/agent_os/governance/middleware.py` — `_rate_limit_check()`
+- `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` rule `missing-circuit-breaker`
+- `agent-governance-python/agent-os/src/agent_os/_circuit_breaker_impl.py`
+- `agent-governance-python/agent-os/src/agent_os/integrations/rate_limiter.py`
 
 **Coverage:** ✅ Full
 
@@ -208,14 +220,22 @@ failures, preventing cascade. Rate limiting caps per-minute tool invocations.
 
 **Risk:** Humans over-trust agent outputs and skip validation.
 
-**AGT Mitigation:** Tamper-evident audit logs let reviewers verify what the
-agent actually did. The static reviewer flags code with no audit logging.
+**AGT Mitigation:** The action-bound approval protocol defines
+`require_approval` as a suspended, fail-closed decision tied to the exact
+action digest. Agent OS also provides in-memory and webhook approval backends,
+quorum and expiration handling, and approval callbacks for MCP gateway actions.
+Tamper-evident audit logs let reviewers verify what the agent actually did,
+and the static reviewer flags code with no audit logging.
 
-**Known Gap:** No UI-level confirmation dialogs or "human-in-the-loop"
-approval workflows are built into AGT. Consider adding a `HumanApproval`
-middleware for high-risk actions.
+**Known Gap:** AGT supplies approval protocols and backends, not one universal
+operator UI. Teams must integrate an appropriate identity-aware approval
+experience and present action consequences; package availability alone does
+not prove that a particular agent surface enforces human review.
 
 **Evidence:**
+- `docs/adr/0030-action-bound-approval-protocol.md`
+- `agent-governance-python/agent-os/src/agent_os/integrations/escalation.py`
+- `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py`
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-audit-logging`
 
 **Coverage:** ⚠️ Partial
@@ -251,7 +271,7 @@ risks, especially ASI02, ASI08, ASI09, and ASI10. It is an AGT control
 objective, not an official `ASI11` entry in the 2026 OWASP Top 10.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/audit/hash_chain.py`
+- `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py`
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `missing-audit-logging`
 
 **Coverage:** ✅ Full
@@ -313,7 +333,7 @@ residual safety requirements are implemented and validated by the system owner.
 
 ### Shipped Evidence and Limits
 
-The [physical-attestation governed example](../../examples/physical-attestation-governed/)
+The [physical-attestation governed example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/physical-attestation-governed)
 demonstrates policy evaluation for simulated temperature, humidity, GPS, and
 shock readings, with hashes binding readings to policy decisions. It is useful
 evidence for ASI02, ASI06, and traceability controls.

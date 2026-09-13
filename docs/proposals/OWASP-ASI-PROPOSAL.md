@@ -1,3 +1,9 @@
+---
+title: "OWASP Agent Security Initiative — Code Samples Contribution"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # OWASP Agent Security Initiative — Code Samples Contribution
 
 **Submission:** [GenAI-Security-Project/GenAI-Agent-Security-Initiative#2](https://github.com/GenAI-Security-Project/GenAI-Agent-Security-Initiative/pull/2)

@@ -1,6 +1,6 @@
 ---
 title: Agent Control Specification
-last_reviewed: 2026-06-02
+last_reviewed: 2026-07-31
 owner: docs-team
 ---
 
@@ -8,7 +8,7 @@ owner: docs-team
 
 **Stateless, deterministic, fail-closed policy decisions for agent security**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Rust](https://img.shields.io/badge/core-Rust-orange.svg)](https://www.rust-lang.org/)
 
 !!! important "Public Preview"
@@ -17,13 +17,17 @@ owner: docs-team
 
 ## What ACS is
 
-Agent Control Specification, or ACS, is a stateless, deterministic, fail-closed policy decision runtime for agent security. A host submits a complete snapshot plus a policy manifest at each intervention point, and ACS returns a normalized verdict that the host enforces.
+Agent Control Specification, or ACS, is AGT's stateless, deterministic,
+fail-closed policy decision runtime. At each intervention point, a host sends a
+policy manifest and complete snapshot to ACS. ACS returns a normalized verdict;
+the host enforces it.
 
-The core is pure Rust and exposes native binding surfaces for C-ABI, PyO3, napi, and P-Invoke. AGT includes SDKs for Python, Node.js, .NET, and Rust.
+The Rust core exposes bindings through C-ABI, PyO3, napi, and P-Invoke. AGT
+includes SDKs for Python, Node.js, .NET, and Rust.
 
 ## Intervention-point model
 
-ACS mediates the agent loop by evaluating policy at eight intervention points across this flow.
+ACS evaluates policy at eight points in the agent loop:
 
 ```text
 Input -> Model -> Tool Call -> Tool Result -> Output
@@ -40,7 +44,8 @@ Input -> Model -> Tool Call -> Tool Result -> Output
 | `output` | Before final output is returned or published. |
 | `agent_shutdown` | Before the agent session is closed. |
 
-Each call includes the full snapshot for that point, so hosts can run ACS without relying on retained runtime state.
+Each request includes the full snapshot for that point. ACS does not depend on
+retained runtime state.
 
 ## Core properties
 
@@ -71,7 +76,9 @@ Verdicts may include optional evidence fields that propagate into telemetry.
 | `test` | Provides fixed test-double behavior for runtime and conformance tests. |
 | `custom` | Calls a host dispatcher identified by adapter configuration. |
 
-The AGT variant replaces upstream effects with the `transform` verdict, adds optional `evidence` fields on verdicts and telemetry, and adds a top-level `approval` section for escalation backends.
+The AGT variant uses the `transform` verdict instead of upstream effects,
+attaches optional `evidence` fields to verdicts and telemetry, and adds a
+top-level `approval` section for escalation backends.
 
 ## Manifest shape
 
@@ -94,21 +101,49 @@ The Rust core emits structured telemetry through a `TelemetrySink`. Telemetry is
 
 ## Where it lives in AGT
 
-ACS is vendored into [`policy-engine/`](../../policy-engine/) as the AGT 5.0 policy layer and is now AGT-owned source. It is the decision-runtime core that backs policy evaluation. Agent OS remains the kernel and host layer that calls into ACS and enforces the verdicts.
+AGT owns the vendored ACS source under
+[`policy-engine/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine).
+The language SDKs connect hosts and adapters to that runtime. Agent OS adapters
+preserve framework integration behavior while routing policy decisions through
+ACS.
+
+## How Python hosts call ACS
+
+`agent-control-specification` is the canonical Python SDK for ACS. It provides
+the host concerns that remain outside the stateless engine:
+
+- manifest loading through `AgentControl`
+- complete intervention-point snapshots through `SnapshotBuilder`
+- synchronous host callbacks through `HostSession`
+- native `InterventionPointResult` values for `allow`, `warn`, `deny`,
+  `escalate`, and `transform`
+
+```bash
+pip install agent-control-specification
+```
+
+`agt-policies` is a separate migration package. It converts AGT v4 projects to
+ACS manifests with `agt migrate v4-to-v5`.
 
 ## SDKs and specification
 
 | Surface | Path |
 | --- | --- |
-| Python SDK | [`policy-engine/sdk/python/`](../../policy-engine/sdk/python/) |
-| Node.js SDK | [`policy-engine/sdk/node/`](../../policy-engine/sdk/node/) |
-| .NET SDK | [`policy-engine/sdk/dotnet/`](../../policy-engine/sdk/dotnet/) |
-| Rust SDK | [`policy-engine/sdk/rust/`](../../policy-engine/sdk/rust/) |
-| Normative specification | [`policy-engine/spec/SPECIFICATION.md`](../../policy-engine/spec/SPECIFICATION.md) |
+| Python SDK | [`policy-engine/sdk/python/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/python) |
+| v4 migration tool | [`agent-governance-python/agt-policies/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agt-policies) |
+| Node.js SDK | [`policy-engine/sdk/node/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/node) |
+| .NET SDK | [`policy-engine/sdk/dotnet/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/dotnet) |
+| Rust SDK | [`policy-engine/sdk/rust/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/rust) |
+| Normative specification | [`policy-engine/spec/SPECIFICATION.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/SPECIFICATION.md) |
 
 The Python SDK distribution is named `agent-control-specification` in `policy-engine/sdk/python/pyproject.toml` and is built with maturin from the vendored source.
 
 ## Trusted by partners
+
+!!! note "Historical name"
+    The Bigspin quotation uses AgentShield, ACS's former name. This is separate
+    from the Microsoft Agent Shield integration exposed through
+    `agent_os.integrations.agentshield_adapter`.
 
 <!--
   Replace the placeholder logos, quotes, and attributions below with real,

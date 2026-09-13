@@ -19,9 +19,6 @@ See ``docs/proposals/MXC-SANDBOX-PROVIDER.md`` for the design rationale.
 from agent_sandbox.mxc_sandbox_provider.config import (
     MxcConfig,
     backend_requires_experimental,
-    mxc_config_from_policy,
-    policy_to_mxc_json,
-    policy_yaml_to_mxc_json,
 )
 from agent_sandbox.mxc_sandbox_provider.provider import MxcSandboxProvider
 
@@ -29,7 +26,4 @@ __all__ = [
     "MxcConfig",
     "MxcSandboxProvider",
     "backend_requires_experimental",
-    "mxc_config_from_policy",
-    "policy_to_mxc_json",
-    "policy_yaml_to_mxc_json",
 ]

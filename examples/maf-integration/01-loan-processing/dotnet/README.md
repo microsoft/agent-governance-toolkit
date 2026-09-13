@@ -13,7 +13,7 @@ This example shows a **real Microsoft Agent Framework agent** with native
 ## Runtime model
 
 - `Program.cs` builds a real MAF agent with `BuildAIAgent(...)` plus native `.Use(...)` middleware
-- `policies/loan_governance.yaml` uses simple local rule expressions for prompt and tool checks
+- `policies/loan_agt-manifest.yaml` uses simple local rule expressions for prompt and tool checks
 - Output is deterministic: the demo uses a local MAF chat client instead of external model credentials
 
 ## Run it
@@ -25,7 +25,7 @@ dotnet run
 ## Files
 
 - `Program.cs` — scenario walkthrough and domain tools
-- `policies/loan_governance.yaml` — local policy rules for the walkthrough prompts and tools
+- `policies/loan_agt-manifest.yaml` — local policy rules for the walkthrough prompts and tools
 - `LoanGovernance.csproj` — package references for `Microsoft.Agents.AI` and `YamlDotNet`
 
 ## Example policy rule

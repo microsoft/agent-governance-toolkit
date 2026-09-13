@@ -1,3 +1,9 @@
+---
+title: "Tutorial 14 — Kill Switch & Rate Limiting"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 # Tutorial 14 — Kill Switch & Rate Limiting
 
 > **Package:** `agentmesh-runtime` · **Time:** 20 minutes · **Prerequisites:** Python 3.11+
@@ -14,7 +20,7 @@
 
 **Emergency controls for autonomous agents — the "big red button", rate governors, and ring-breach detection.**
 
-See also: [Tutorial 05 — Agent Reliability](05-agent-reliability.md) | [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md) | [Deployment Guide](../deployment/README.md)
+See also: [Tutorial 05 — Agent Reliability](05-agent-reliability.md) | [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md) | [Deployment Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md)
 
 ---
 
@@ -22,13 +28,13 @@ See also: [Tutorial 05 — Agent Reliability](05-agent-reliability.md) | [Tutori
 
 1. [Introduction](#1-introduction)
 2. [Quick Start: Your First Kill Switch](#2-quick-start-your-first-kill-switch)
-3. [KillSwitch — Immediate Termination](#3-killswitch--immediate-termination)
-4. [AgentRateLimiter — Per-Ring Token Buckets](#4-agentratelimiter--per-ring-token-buckets)
-5. [RateLimiter (Agent Mesh) — HTTP Service Limits](#5-ratelimiter-agent-mesh--http-service-limits)
-6. [RateLimitMiddleware — HTTP Edge Enforcement](#6-ratelimitmiddleware--http-edge-enforcement)
-7. [RingElevationManager — Temporary Privilege Escalation](#7-ringelevationmanager--temporary-privilege-escalation)
-8. [RingBreachDetector — Anomaly Detection](#8-ringbreachdetector--anomaly-detection)
-9. [Combining Controls — Defense in Depth](#9-combining-controls--defense-in-depth)
+3. [KillSwitch — Immediate Termination](#3-killswitch-immediate-termination)
+4. [AgentRateLimiter — Per-Ring Token Buckets](#4-agentratelimiter-per-ring-token-buckets)
+5. [RateLimiter (Agent Mesh) — HTTP Service Limits](#5-ratelimiter-agent-mesh-http-service-limits)
+6. [RateLimitMiddleware — HTTP Edge Enforcement](#6-ratelimitmiddleware-http-edge-enforcement)
+7. [RingElevationManager — Temporary Privilege Escalation](#7-ringelevationmanager-temporary-privilege-escalation)
+8. [RingBreachDetector — Anomaly Detection](#8-ringbreachdetector-anomaly-detection)
+9. [Combining Controls — Defense in Depth](#9-combining-controls-defense-in-depth)
 10. [Next Steps](#10-next-steps)
 
 ---
@@ -108,6 +114,8 @@ That's it — the agent is terminated, and the kill is recorded in an auditable
 history. The rest of this tutorial covers every component in detail.
 
 ---
+
+<a id="3-killswitch-immediate-termination"></a>
 
 ## 3. KillSwitch — Immediate Termination
 
@@ -267,6 +275,8 @@ The `KillResult` dataclass is returned from every `kill()` call:
 | `details` | `str` | Free-text details about the kill |
 
 ---
+
+<a id="4-agentratelimiter-per-ring-token-buckets"></a>
 
 ## 4. AgentRateLimiter — Per-Ring Token Buckets
 
@@ -446,6 +456,8 @@ assert bucket.consume(1.0) is False
 ```
 
 ---
+
+<a id="5-ratelimiter-agent-mesh-http-service-limits"></a>
 
 ## 5. RateLimiter (Agent Mesh) — HTTP Service Limits
 
@@ -646,6 +658,8 @@ where multiple HTTP handler threads may be checking limits concurrently.
 
 ---
 
+<a id="6-ratelimitmiddleware-http-edge-enforcement"></a>
+
 ## 6. RateLimitMiddleware — HTTP Edge Enforcement
 
 **Source:** `agent-governance-python/agent-mesh/src/agentmesh/services/rate_limit_middleware.py`
@@ -765,6 +779,8 @@ assert response.status_code == 200
 | `X-Backpressure` | Response | `"true"` when nearing capacity |
 
 ---
+
+<a id="7-ringelevationmanager-temporary-privilege-escalation"></a>
 
 ## 7. RingElevationManager — Temporary Privilege Escalation
 
@@ -931,6 +947,8 @@ print(RingElevationManager.DEFAULT_TTL)          # 300 seconds
 ```
 
 ---
+
+<a id="8-ringbreachdetector-anomaly-detection"></a>
 
 ## 8. RingBreachDetector — Anomaly Detection
 
@@ -1194,6 +1212,8 @@ for _ in range(200):
 
 ---
 
+<a id="9-combining-controls-defense-in-depth"></a>
+
 ## 9. Combining Controls — Defense in Depth
 
 The real power of these components comes from wiring them together into a
@@ -1428,7 +1448,7 @@ print(f"HTTP: {http_status['agent_tokens']:.0f}/{http_status['agent_capacity']} 
   Wire kill switch and breach events into your observability pipeline.
 - **Tutorial 04 — [Audit & Compliance](04-audit-and-compliance.md):**
   Hash-chained audit trails for kill switch and rate-limit events.
-- **Deployment:** See the [Deployment Guide](../deployment/README.md) for
+- **Deployment:** See the [Deployment Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) for
   Kubernetes Helm values that configure ring-based rate limits in production.
 
 ---

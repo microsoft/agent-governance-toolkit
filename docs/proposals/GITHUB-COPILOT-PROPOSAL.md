@@ -1,3 +1,9 @@
+---
+title: "GitHub Copilot — Governance Contributions"
+last_reviewed: 2026-03-23
+owner: agt-maintainers
+---
+
 # GitHub Copilot — Governance Contributions
 
 **Submissions:**

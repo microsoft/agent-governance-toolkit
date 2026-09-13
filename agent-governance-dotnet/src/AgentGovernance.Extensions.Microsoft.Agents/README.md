@@ -59,7 +59,7 @@ using Microsoft.Agents.AI;
 
 var kernel = new GovernanceKernel(new GovernanceOptions
 {
-    PolicyPaths = new() { "policies/loan-governance.yaml" },
+    PolicyPaths = new() { "policies/loan-agt-manifest.yaml" },
     EnablePromptInjectionDetection = true,
 });
 

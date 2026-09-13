@@ -1,3 +1,9 @@
+---
+title: "Proposal: Independently Verifiable Compliance Receipts"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Proposal: Independently Verifiable Compliance Receipts
 
 **Author:** Arian Gogani (@arian-gogani)

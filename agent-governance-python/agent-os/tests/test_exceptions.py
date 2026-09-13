@@ -157,7 +157,6 @@ class TestNativePolicyViolation:
         assert "Tool blocked" not in str(err)
         assert err.details["message"] == "Tool blocked"
         assert err.evaluation_result is result
-        assert err.check_result is None
         assert err.details["schema"] == "agt.policy_evaluation.v1"
         assert err.details["reason_code"] == "policy:blocked_tool"
 

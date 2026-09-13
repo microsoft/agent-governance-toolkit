@@ -1,8 +1,14 @@
+---
+title: "Microsoft.AgentGovernance — .NET package"
+last_reviewed: 2026-07-16
+owner: agt-maintainers
+---
+
 # Microsoft.AgentGovernance — .NET package
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-8.0-blueviolet)](https://dotnet.microsoft.com/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
+![.NET](https://img.shields.io/badge/.NET-8.0-blueviolet)
 [![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 
 Runtime security governance for autonomous AI agents. Policy enforcement, execution rings, circuit breakers, prompt injection detection, SLO tracking, saga orchestration, rate limiting, zero-trust identity, OpenTelemetry metrics, and tamper-proof audit logging — all in a single .NET 8.0 package.
@@ -518,8 +524,8 @@ The .NET package addresses all 10 OWASP categories:
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md). The .NET package follows the same contribution process as the Python packages.
+See [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md). The .NET package follows the same contribution process as the Python packages.
 
 ## License
 
-[MIT](../../LICENSE) © Microsoft Corporation
+[MIT](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) © Microsoft Corporation

@@ -11,7 +11,6 @@
       }
     },
     "expected_verdict": "allow",
-    "expected_rule": "saas-allow-read-operations",
     "recorded_at": "2026-05-22T10:00:00Z"
   },
   {
@@ -26,7 +25,6 @@
       }
     },
     "expected_verdict": "deny",
-    "expected_rule": "asi02-block-shell-execution",
     "recorded_at": "2026-05-22T10:01:00Z"
   },
   {
@@ -40,7 +38,6 @@
       }
     },
     "expected_verdict": "deny",
-    "expected_rule": "asi03-block-credentials-in-output",
     "recorded_at": "2026-05-22T10:02:00Z"
   }
 ]

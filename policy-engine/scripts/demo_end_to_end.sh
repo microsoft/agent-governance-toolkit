@@ -169,9 +169,8 @@ if should_run python-sdk; then
   cat > "$DEMO_TMP/demo_python.py" <<'PY'
 """AGT 5.0 Python end-to-end demo.
 
-Builds an ACS manifest via agt.policies.bridge.governance_to_acs_manifest
-from a v4-style GovernancePolicy spec, runs it through AgtRuntime, and
-exercises the four canonical paths:
+Builds a native ACS manifest, runs it through AgtRuntime, and exercises
+the four canonical paths:
 
   - allow             (under the budget)
   - deny              (over the budget)
@@ -226,7 +225,7 @@ default output := {"decision": "allow"}
 output := {
   "decision": "transform",
   "reason": "ssn_redacted",
-  "transform": {"path": "$policy_target", "value": "Customer SSN is [REDACTED]"}
+  "transform": {"path": "$target", "value": "Customer SSN is [REDACTED]"}
 } if {
   input.intervention_point == "output"
   regex.match(`[0-9]{3}-[0-9]{2}-[0-9]{4}`, input.snapshot.response.content)
@@ -235,7 +234,7 @@ output := {
         encoding="utf-8",
     )
     manifest = {
-        "agent_control_specification_version": "0.3.0-alpha-agt",
+        "agent_control_specification_version": "0.4.0-alpha.1",
         "metadata": {"name": "agt-5-demo"},
         "policies": {
             "demo": {
@@ -311,19 +310,21 @@ def main() -> int:
         result = runtime.evaluate_intervention_point("pre_tool_call", snap)
         ok_deny = run("deny over limit", "deny", lambda: result.verdict)
 
-        # 3. escalate path: evaluate_only surfaces raw 'escalate'; enforce mode
-        #    runs the approval_resolver and rewrites to 'allow' on success.
+        # 3. escalate path: the Rego returns the `escalate` intent and the
+        #    engine normalizes it to a liftable deny, a `deny` carrying an
+        #    `approval` block. The computed verdict is the same in both modes;
+        #    what differs is that enforce mode routes it to the resolver.
         snap = pre_tool_call_snapshot(
             agent_id="demo-agent", tool_name="wire_transfer", args={"amount": 750}
         )
         raw = runtime.evaluate_intervention_point("pre_tool_call", snap, mode="evaluate_only")
         ok_escalate_raw = run(
-            "escalate raw (evaluate_only)", "escalate", lambda: raw.verdict
+            "escalate normalized to liftable deny (evaluate_only)", "deny", lambda: raw.verdict
         )
         enforced = runtime.evaluate_intervention_point("pre_tool_call", snap)
         ok_escalate_resolved = run(
-            "escalate resolved via approval (enforce)",
-            "allow",
+            "escalate stays a liftable deny (enforce)",
+            "deny",
             lambda: enforced.verdict,
         )
         ok_resolver_invoked = run(
@@ -381,7 +382,7 @@ if should_run core; then
 //! canonical paths: allow, deny, escalate, transform.
 
 use agent_control_specification::{
-    AgentControl, Decision, EnforcementMode, InterventionPoint,
+    AgentControl, Decision, EnforcementMode, InterceptionPoint,
 };
 use serde_json::json;
 use std::fs;
@@ -408,7 +409,7 @@ pre_tool_call := {"decision": "escalate", "reason": "needs_approval"} if {
 "#)?;
     let manifest_path = tmp.join("manifest.yaml");
     fs::write(&manifest_path, format!(r#"
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.4.0-alpha.1"
 policies:
   demo:
     type: rego
@@ -431,12 +432,13 @@ tools:
     let cases = [
         (100u64, Decision::Allow, "allow under limit"),
         (5000u64, Decision::Deny, "deny over limit"),
-        (750u64, Decision::Escalate, "escalate in mid-range"),
+        // An escalation is a liftable deny: `deny` plus an `approval` block.
+        (750u64, Decision::Deny, "escalate in mid-range"),
     ];
     let mut passed = 0;
     for (amount, expected, label) in cases {
         let result = control.evaluate_intervention_point(
-            InterventionPoint::PreToolCall,
+            InterceptionPoint::PreToolCall,
             json!({
                 "tool_call": {"name": "wire_transfer", "args": {"amount": amount}},
                 "envelope": {"agent": {"id": "demo"}, "intervention_point": "pre_tool_call"},
@@ -510,7 +512,7 @@ pre_tool_call := {"decision": "escalate", "reason": "needs_approval"} if {
 }
 `);
 writeFileSync(join(TMP, "manifest.yaml"), `
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.4.0-alpha.1"
 policies:
   demo:
     type: rego
@@ -529,13 +531,16 @@ tools:
 `);
 
 const control = await AgentControl.fromPath(join(TMP, "manifest.yaml"));
+// The Rego still returns the `escalate` intent. The engine normalizes it to
+// a liftable deny: `deny` carrying an `approval` block. `liftable` below says
+// whether that block must be present.
 const cases = [
-  [100,  "allow",    "allow under limit"],
-  [5000, "deny",     "deny over limit"],
-  [750,  "escalate", "escalate in mid-range"],
+  [100,  "allow", false, "allow under limit"],
+  [5000, "deny",  false, "deny over limit"],
+  [750,  "deny",  true,  "escalate in mid-range"],
 ];
 let passed = 0;
-for (const [amount, expected, label] of cases) {
+for (const [amount, expected, liftable, label] of cases) {
   const result = await control.evaluateInterventionPoint(
     InterventionPoint.PreToolCall,
     {
@@ -545,8 +550,9 @@ for (const [amount, expected, label] of cases) {
     EnforcementMode.Enforce,
   );
   const actual = result.verdict.decision;
-  const ok = actual === expected;
-  console.log(`  ${ok ? "✓" : "✗"} ${label}: got ${actual} (expected ${expected})`);
+  const hasApproval = result.verdict.approval !== undefined && result.verdict.approval !== null;
+  const ok = actual === expected && hasApproval === liftable;
+  console.log(`  ${ok ? "✓" : "✗"} ${label}: got ${actual}${hasApproval ? "+approval" : ""} (expected ${expected}${liftable ? " +approval" : ""})`);
   if (ok) passed++;
 }
 console.log(`\n  Node demo: ${passed}/${cases.length} paths green`);
@@ -629,7 +635,7 @@ default output := {""decision"": ""allow""}
 output := {
   ""decision"": ""transform"",
   ""reason"": ""ssn_redacted"",
-  ""transform"": {""path"": ""$policy_target"", ""value"": ""Customer SSN is [REDACTED]""}
+  ""transform"": {""path"": ""$target"", ""value"": ""Customer SSN is [REDACTED]""}
 } if {
   input.intervention_point == ""output""
   regex.match(`[0-9]{3}-[0-9]{2}-[0-9]{4}`, input.snapshot.output)
@@ -751,8 +757,8 @@ var transformedValue = transformResult.TransformedPolicyTarget?.GetString();
 Check(transformedValue == "Customer SSN is [REDACTED]",
       "transform value applied",
       $"transformed_policy_target = {transformedValue ?? "<null>"}");
-Check(transformResult.Verdict.Transform?.Path == "$policy_target",
-      "transform body carries $policy_target path",
+Check(transformResult.Verdict.Transform?.Path == "$target",
+      "transform body carries $target path",
       $"verdict.transform.path = {transformResult.Verdict.Transform?.Path ?? "<null>"}");
 Check(transformResult.InputIdentity != transformResult.EnforcedIdentity,
       "transform shifts enforced_identity",
@@ -774,72 +780,71 @@ CS
   ) && { ok ".NET demo green"; record "dotnet-demo" "ok"; } || { warn ".NET demo had issues; see above"; record "dotnet-demo" "warn"; }
 fi
 
-# ── 9. AGT-policies wrapper: end-to-end with manifest resolution ─
+# ── 9. AGT-policies wrapper: native manifest end-to-end ─
 
 if should_run agt-policies; then
-  banner "6. agt-policies wrapper: manifest resolution end-to-end"
+  banner "6. agt-policies wrapper: native manifest end-to-end"
   cat > "$DEMO_TMP/demo_agt_policies.py" <<'PY'
-"""Demonstrates the AGT-side manifest resolution layer.
-
-Drops two governance.yaml files in a workspace (root + child),
-runs agt.manifest_resolution.resolve_manifest, confirms the
-resulting flat ACS manifest binds the merged rules, then runs
-through AgtRuntime to verify the deny-immutability invariant.
-"""
+"""Demonstrates direct native manifest loading through AgtRuntime."""
 from __future__ import annotations
 import sys, tempfile
 from pathlib import Path
 import yaml
 
-from agt.manifest_resolution import resolve_manifest
 from agt.policies.runtime import AgtRuntime
 from agt.policies.snapshot import pre_tool_call_snapshot
 
-with tempfile.TemporaryDirectory(prefix="agt-demo-resolve-") as tmp:
+class Policy:
+    def evaluate(self, invocation):
+        args = dict(invocation)["input"]["policy_target"]["value"]
+        if args.get("amount", 0) > 100000:
+            return {"decision": "deny", "reason": "large_wire"}
+        return {"decision": "allow"}
+
+with tempfile.TemporaryDirectory(prefix="agt-demo-native-") as tmp:
     tmp = Path(tmp)
-    # Parent: deny wire_transfer over $100k
-    (tmp / "governance.yaml").write_text(yaml.safe_dump({
-        "rules": [{
-            "name": "block_large_wire",
-            "condition": {"field": "tool_call.args.amount", "operator": "gt", "value": 100000},
-            "action": "deny", "priority": 100,
-            "message": "Org-level deny",
-        }],
-        "tools": {"wire_transfer": {"clearance": "confidential"}},
+    manifest = {
+        "agent_control_specification_version": "0.4.0-alpha.1",
+        "metadata": {"name": "native-demo"},
+        "policies": {
+            "wire": {"type": "custom", "adapter": "native-demo"},
+        },
         "intervention_points": {
             "pre_tool_call": {
                 "policy_target": "$.tool_call.args",
                 "policy_target_kind": "tool_args",
                 "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "agt_legacy_rules"},
+                "policy": {"id": "wire"},
             }
         },
-    }))
-    # Child tries to override the parent deny with allow (must be DROPPED).
-    sub = tmp / "subdir"; sub.mkdir()
-    (sub / "governance.yaml").write_text(yaml.safe_dump({
-        "rules": [{
-            "name": "block_large_wire",
-            "condition": {"field": "tool_call.args.amount", "operator": "gt", "value": 100000},
-            "action": "allow", "priority": 200, "override": True,
-            "message": "Child tries to override",
-        }],
-    }))
-    bundle_dir = tmp / ".agt" / "resolved-bundle"
-    manifest = resolve_manifest(tmp, tmp, bundle_dir=bundle_dir)
-    manifest_path = tmp / "resolved.yaml"
+        "tools": {"wire_transfer": {"clearance": "confidential"}},
+    }
+    manifest_path = tmp / "manifest.yaml"
     manifest_path.write_text(yaml.safe_dump(manifest))
 
-    runtime = AgtRuntime(manifest_path)
+    runtime = AgtRuntime.from_manifest(manifest_path, policy_dispatcher=Policy())
     snap = pre_tool_call_snapshot(
         agent_id="demo", tool_name="wire_transfer", args={"amount": 999999},
     )
-    result = runtime.evaluate_intervention_point("pre_tool_call", snap)
-    if result.verdict == "deny":
-        print("  ✓ deny-immutability preserved across resolution chain")
-        sys.exit(0)
-    print(f"  ✗ expected deny (child override dropped), got {result.verdict}")
-    sys.exit(1)
+    result = runtime.evaluate("pre_tool_call", snap)
+    small_snap = pre_tool_call_snapshot(
+        agent_id="demo", tool_name="wire_transfer", args={"amount": 5},
+    )
+    small_result = runtime.evaluate("pre_tool_call", small_snap)
+    if result.verdict != "deny" or result.reason_code != "policy:large_wire":
+        print(
+            "  ✗ expected policy:large_wire deny, "
+            f"got {result.verdict}/{result.reason_code}"
+        )
+        sys.exit(1)
+    if small_result.verdict != "allow":
+        print(
+            "  ✗ expected small wire allow, "
+            f"got {small_result.verdict}/{small_result.reason_code}"
+        )
+        sys.exit(1)
+    print("  ✓ native manifest denied the large wire and allowed the small wire")
+    sys.exit(0)
 PY
   "$PY_VENV/bin/python3" "$DEMO_TMP/demo_agt_policies.py" || die "agt-policies demo failed"
   ok "agt-policies demo green"

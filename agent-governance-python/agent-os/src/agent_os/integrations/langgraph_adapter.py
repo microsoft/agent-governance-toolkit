@@ -1,57 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-LangGraph v1.0 Governance Adapter
-==================================
+"""LangGraph integration backed by a required native ACS runtime.
 
-Provides kernel-level governance for LangGraph stateful agent workflows
-via pre-compile node wrapping and checkpoint-level stale-auth detection.
-
-Usage::
-
-    from agent_os.integrations import LangGraphKernel
-    from agent_os.integrations.base import GovernancePolicy
-
-    kernel = LangGraphKernel(
-        policy=GovernancePolicy(
-            allowed_tools=["search", "calculator"],
-            blocked_patterns=["DROP TABLE"],
-        )
-    )
-
-    graph = StateGraph(AgentState)
-    graph.add_node("researcher", research_node)
-    graph.add_node("writer", write_node)
-    graph.add_edge("researcher", "writer")
-
-    governed = kernel.wrap_graph(graph)
-    app = governed.compile(checkpointer=MemorySaver())
-
-Features
---------
-- Four hook points: before_node_execution, before_tool_call,
-  on_state_transition, on_checkpoint
-- Pre-compile node wrapping (after add_node, before compile)
-- Checkpoint metadata fingerprinting for stale-auth detection
-  (fingerprint stored in checkpoint metadata, NOT TypedDict state)
-- Configurable: hard-block (default) or audit-only stale-auth mode
-- Graceful ImportError when langgraph is not installed
-- Extends BaseIntegration — inherits Cedar/OPA, drift detection,
-  pre_execute/post_execute, from_cedar factory
-
-Scope (v1)
-----------
-- ToolNode interception and explicit tool registration
-- MemorySaver checkpointer wrapping (sync + async)
-- 2-node StateGraph end-to-end integration test
-- LangGraph 1.x only (not 0.x)
-
-Out of scope (follow-up PRs)
------------------------------
-- Human-in-the-loop interrupt governance
-- graph.stream() streaming mode
-- Async checkpointer backends (SqliteSaver, PostgresSaver)
-- Subgraph namespace partitioning
+Nodes and tool calls are mediated before execution. Checkpoint fingerprinting
+detects stale authorization state on resume.
 """
 
 from __future__ import annotations
@@ -64,12 +16,11 @@ import time
 from datetime import datetime
 from typing import Any, Optional
 
+from ._native_adapter_runtime import NativeAdapterRuntime
 from .base import (
     BaseIntegration,
-    ExecutionContext,
+    AdapterExecutionState,
     GovernanceEventType,
-    GovernancePolicy,
-    PII_PATTERNS,
     PolicyViolationError,
 )
 
@@ -115,7 +66,7 @@ class GovernedGraph:
         self,
         graph: Any,
         kernel: "LangGraphKernel",
-        ctx: ExecutionContext,
+        ctx: AdapterExecutionState,
     ) -> None:
         self._graph = graph
         self._kernel = kernel
@@ -149,7 +100,7 @@ class _GovernedCheckpointer:
         self,
         checkpointer: Any,
         kernel: "LangGraphKernel",
-        ctx: ExecutionContext,
+        ctx: AdapterExecutionState,
     ) -> None:
         self._cp = checkpointer
         self._kernel = kernel
@@ -206,38 +157,17 @@ class _GovernedCheckpointer:
 # ══════════════════════════════════════════════════════════════════════
 
 class LangGraphKernel(BaseIntegration):
-    """Governance kernel for LangGraph v1.0 stateful workflows.
-
-    Extends :class:`BaseIntegration` to provide:
-
-    - ``before_node_execution`` — policy gate before each node runs
-    - ``before_tool_call`` — tool-level governance gate (ToolNode + explicit)
-    - ``on_state_transition`` — audit-only graph traversal recording
-    - ``on_checkpoint`` — stale-auth fingerprint validation on resume
-
-    The primary integration path is :meth:`wrap_graph`, which wraps a
-    :class:`~langgraph.graph.StateGraph` before compilation::
-
-        kernel = LangGraphKernel(policy=GovernancePolicy(...))
-        governed = kernel.wrap_graph(graph)
-        app = governed.compile(checkpointer=MemorySaver())
-
-    Args:
-        policy: Governance policy. Uses defaults when ``None``.
-        audit_only_stale_auth: When ``True``, a stale-auth fingerprint
-            mismatch emits a ``DRIFT_DETECTED`` event instead of raising
-            ``PolicyViolationError``. Default ``False`` (fail-closed).
-        evaluator: Optional Cedar/OPA policy evaluator.
-    """
+    """Govern LangGraph nodes, tools, transitions, and checkpoints."""
 
     def __init__(
         self,
-        policy: Optional[GovernancePolicy] = None,
         audit_only_stale_auth: bool = False,
-        evaluator: Any = None,
+        *,
+        runtime: Any,
     ) -> None:
         _require_langgraph()
-        super().__init__(policy, evaluator=evaluator)
+        super().__init__(runtime=runtime)
+        self._adapter_runtime = NativeAdapterRuntime(runtime)
         self.audit_only_stale_auth = audit_only_stale_auth
         self._tool_callables: dict[str, Any] = {}
         self._start_time = time.monotonic()
@@ -306,7 +236,7 @@ class LangGraphKernel(BaseIntegration):
         node_name: str,
         state: dict[str, Any],
         config: dict[str, Any],
-        ctx: ExecutionContext,
+        ctx: AdapterExecutionState,
     ) -> None:
         """Policy gate before a graph node runs.
 
@@ -315,27 +245,9 @@ class LangGraphKernel(BaseIntegration):
         """
         logger.debug("before_node_execution: node=%s", node_name)
 
-        # ── 1. Blocked-pattern scan on state ─────────────────────────
-        state_str = str(state)
-        matched = ctx.policy.matches_pattern(state_str)
-        if matched:
-            raise PolicyViolationError(
-                f"Node '{node_name}' blocked: pattern '{matched[0]}' "
-                "detected in agent state"
-            )
-
-        # ── 2. Cedar/OPA gate ────────────────────────────────────────
-        cedar_ctx = self._build_cedar_context(
-            agent_id=ctx.agent_id,
-            action_type="node_execution",
-            tool_name=node_name,
-            tool_args={"node_name": node_name},
-        )
-        allowed, reason = self._evaluate_policy(cedar_ctx)
-        if not allowed:
-            raise PolicyViolationError(
-                f"Node '{node_name}' blocked by policy evaluator: {reason}"
-            )
+        evaluation = self._adapter_runtime.evaluate_input(ctx, body=state)
+        if not evaluation.permits_unchanged:
+            raise evaluation.to_policy_violation(PolicyViolationError)
 
         # ── 3. Audit record ──────────────────────────────────────────
         record = {
@@ -353,7 +265,7 @@ class LangGraphKernel(BaseIntegration):
         self,
         tool_name: str,
         tool_input: dict[str, Any],
-        ctx: ExecutionContext,
+        ctx: AdapterExecutionState,
     ) -> None:
         """Tool-level governance gate.
 
@@ -362,50 +274,15 @@ class LangGraphKernel(BaseIntegration):
         """
         logger.debug("before_tool_call: tool=%s", tool_name)
 
-        # ── 1. Allowlist check ───────────────────────────────────────
-        if ctx.policy.allowed_tools and tool_name not in ctx.policy.allowed_tools:
-            raise PolicyViolationError(
-                f"Tool '{tool_name}' is not in the allowed_tools list: "
-                f"{ctx.policy.allowed_tools}"
-            )
-
-        # ── 2. Blocked-pattern scan on arguments ─────────────────────
-        args_str = str(tool_input)
-        matched = ctx.policy.matches_pattern(args_str)
-        if matched:
-            raise PolicyViolationError(
-                f"Tool '{tool_name}' blocked: pattern '{matched[0]}' "
-                "detected in tool arguments"
-            )
-
-        # ── 3. PII scan on arguments ─────────────────────────────────
-        for pii_pattern in PII_PATTERNS:
-            if pii_pattern.search(args_str):
-                raise PolicyViolationError(
-                    f"Tool '{tool_name}' blocked: PII detected in arguments "
-                    f"(pattern: {pii_pattern.pattern})"
-                )
-
-        # ── 4. Cedar/OPA gate ────────────────────────────────────────
-        cedar_ctx = self._build_cedar_context(
-            agent_id=ctx.agent_id,
-            action_type="tool_call",
+        evaluation = self._adapter_runtime.evaluate_pre_tool_call(
+            ctx,
             tool_name=tool_name,
-            tool_args=tool_input,
+            args=tool_input,
+            call_id=f"langgraph-{ctx.call_count + 1}",
         )
-        allowed, reason = self._evaluate_policy(cedar_ctx)
-        if not allowed:
-            raise PolicyViolationError(
-                f"Tool '{tool_name}' blocked by policy evaluator: {reason}"
-            )
-
-        # ── 5. Call-count limit ──────────────────────────────────────
+        if not evaluation.permits_unchanged:
+            raise evaluation.to_policy_violation(PolicyViolationError)
         ctx.call_count += 1
-        if ctx.call_count > ctx.policy.max_tool_calls:
-            raise PolicyViolationError(
-                f"Tool call limit reached: {ctx.call_count} > "
-                f"{ctx.policy.max_tool_calls}"
-            )
 
         ctx.tool_calls.append({
             "tool_name": tool_name,
@@ -418,7 +295,7 @@ class LangGraphKernel(BaseIntegration):
         from_node: str,
         to_node: str,
         state: dict[str, Any],
-        ctx: ExecutionContext,
+        ctx: AdapterExecutionState,
     ) -> None:
         """Audit-only hook for graph edge traversals.
 
@@ -439,7 +316,7 @@ class LangGraphKernel(BaseIntegration):
 
     # ── Fingerprint helpers ───────────────────────────────────────────
 
-    def _compute_authorization_fingerprint(self, ctx: ExecutionContext) -> str:
+    def _compute_authorization_fingerprint(self, ctx: AdapterExecutionState) -> str:
         """SHA-256 of the enforcement-relevant authorization surface.
 
         Covers:
@@ -448,12 +325,14 @@ class LangGraphKernel(BaseIntegration):
         - Cedar/OPA evaluator revision when configured
         - Schema version field for future-proofing
         """
-        # 1. Policy surface
-        policy_data = ctx.policy.to_dict()
+        # 1. Native manifest surface
+        manifest = self._adapter_runtime.runtime.manifest
+        policy_data = manifest.to_document() if manifest is not None else {}
+        governed_tools = list(manifest.tools) if manifest is not None else []
 
         # 2. Tool content hashes (source SHA-256 for registered callables)
         tool_hashes: dict[str, str] = {}
-        for tool_name in ctx.policy.allowed_tools:
+        for tool_name in governed_tools:
             fn = self._tool_callables.get(tool_name)
             if fn is not None:
                 try:
@@ -466,10 +345,11 @@ class LangGraphKernel(BaseIntegration):
 
         # 3. Cedar/OPA evaluator revision (if configured)
         evaluator_rev = ""
-        if self._evaluator is not None:
+        evaluator = getattr(self, "_evaluator", None)
+        if evaluator is not None:
             evaluator_rev = (
-                getattr(self._evaluator, "bundle_revision", "")
-                or getattr(self._evaluator, "backend_version", "")
+                getattr(evaluator, "bundle_revision", "")
+                or getattr(evaluator, "backend_version", "")
                 or "unknown"
             )
 
@@ -483,7 +363,7 @@ class LangGraphKernel(BaseIntegration):
         return hashlib.sha256(canonical.encode()).hexdigest()
 
     def _inject_fingerprint(
-        self, metadata: Any, ctx: ExecutionContext
+        self, metadata: Any, ctx: AdapterExecutionState
     ) -> dict[str, Any]:
         """Add the authorization fingerprint to checkpoint metadata."""
         if metadata is None:
@@ -507,7 +387,7 @@ class LangGraphKernel(BaseIntegration):
         logger.debug("Checkpoint fingerprint stored: %s...", fingerprint[:12])
         return metadata
 
-    def _validate_fingerprint(self, checkpoint_result: Any, ctx: ExecutionContext) -> None:
+    def _validate_fingerprint(self, checkpoint_result: Any, ctx: AdapterExecutionState) -> None:
         """Validate checkpoint fingerprint on resume — detect stale-auth."""
         metadata = getattr(checkpoint_result, "metadata", None)
         if metadata is None and isinstance(checkpoint_result, dict):
@@ -515,7 +395,7 @@ class LangGraphKernel(BaseIntegration):
         self._validate_checkpoint_metadata(metadata or {}, ctx)
 
     def _validate_checkpoint_metadata(
-        self, metadata: dict[str, Any], ctx: ExecutionContext
+        self, metadata: dict[str, Any], ctx: AdapterExecutionState
     ) -> None:
         """Core stale-auth validation logic.
 
@@ -567,7 +447,7 @@ class LangGraphKernel(BaseIntegration):
 
     # ── Node wrapping internals ───────────────────────────────────────
 
-    def _wrap_nodes(self, graph: Any, ctx: ExecutionContext) -> None:
+    def _wrap_nodes(self, graph: Any, ctx: AdapterExecutionState) -> None:
         """Wrap every node in the StateGraph with governance hooks.
 
         Handles both plain callables and ToolNode instances.
@@ -639,7 +519,7 @@ class LangGraphKernel(BaseIntegration):
             graph.nodes[node_name] = wrapped
 
     def _make_node_wrapper(
-        self, node_name: str, fn: Any, ctx: ExecutionContext
+        self, node_name: str, fn: Any, ctx: AdapterExecutionState
     ) -> Any:
         """Return a governed wrapper preserving sync/async semantics."""
         import asyncio

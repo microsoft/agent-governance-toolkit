@@ -178,13 +178,28 @@ class MuteAgent:
     # -- internals ----------------------------------------------------------
 
     def _scrub(self, value: Any) -> Any:
-        """Recursively scrub strings inside dicts, lists, and scalars."""
+        """Recursively scrub strings inside dicts, sets, sequences, and scalars.
+
+        ``ExecutionResult.data`` is typed ``Any``, so every container an action
+        can plausibly return has to be walked. A container this method does not
+        handle is returned untouched, which for a redaction gate means the
+        secrets inside it reach the caller.
+        """
         if isinstance(value, str):
             return self._scrub_string(value)
         if isinstance(value, dict):
             return {k: self._scrub(v) for k, v in value.items()}
+        if isinstance(value, (set, frozenset)):
+            # Scrubbing can collapse distinct members onto the same placeholder;
+            # a set naturally dedupes them, which is the desired outcome.
+            return type(value)(self._scrub(item) for item in value)
         if isinstance(value, (list, tuple)):
             scrubbed = [self._scrub(item) for item in value]
+            # ``type(value)(iterable)`` is wrong for tuple subclasses with a
+            # positional signature -- a named tuple raises TypeError, taking down
+            # the whole result instead of redacting it. Rebuild those field-wise.
+            if isinstance(value, tuple) and hasattr(value, "_fields"):
+                return type(value)(*scrubbed)
             return type(value)(scrubbed)
         return value
 

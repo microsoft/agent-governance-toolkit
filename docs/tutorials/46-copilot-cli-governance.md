@@ -1,3 +1,9 @@
+---
+title: "Tutorial 46 — Copilot CLI governance installer"
+last_reviewed: 2026-09-03
+owner: agt-maintainers
+---
+
 # Tutorial 46 — Copilot CLI governance installer
 
 > **Package:** `@microsoft/agent-governance-copilot-cli` · **Time:** 15 minutes ·
@@ -62,7 +68,7 @@ At this point `/agt status` should report:
 
 Open the scenario from the repo:
 
-- [`examples/copilot-cli-agt/scenarios/guarded-repo-triage`](../../examples/copilot-cli-agt/scenarios/guarded-repo-triage/README.md)
+- [`examples/copilot-cli-agt/scenarios/guarded-repo-triage`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/copilot-cli-agt/scenarios/guarded-repo-triage/README.md)
 
 Then run the scenario in order:
 
@@ -73,8 +79,8 @@ Then run the scenario in order:
 
 For a proof-oriented threat matrix and evidence checklist, also see:
 
-- [`proof-package.md`](../../examples/copilot-cli-agt/scenarios/guarded-repo-triage/proof-package.md)
-- [`proof-corpus.json`](../../examples/copilot-cli-agt/scenarios/guarded-repo-triage/proof-corpus.json)
+- [`proof-package.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/copilot-cli-agt/scenarios/guarded-repo-triage/proof-package.md)
+- [`proof-corpus.json`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/copilot-cli-agt/scenarios/guarded-repo-triage/proof-corpus.json)
 
 ## Example install from source
 
@@ -116,28 +122,27 @@ Doctor validates:
 If doctor reports an invalid policy, remove `~/.copilot/agt/policy.json` or set
 `AGT_COPILOT_POLICY_PATH` to a valid replacement before reloading Copilot CLI.
 
-### Try an example policy profile
+### Try a bundled policy profile
 
-The example repo path includes ready-to-copy policy profiles:
+The installer package includes these policy profiles:
 
-- `examples/copilot-cli-agt/config/profiles/strict.json`
-- `examples/copilot-cli-agt/config/profiles/balanced.json`
-- `examples/copilot-cli-agt/config/profiles/advisory.json`
+- `strict`
+- `balanced`
+- `advisory`
 
-For example:
+Apply one through the installer CLI:
 
-```powershell
-Copy-Item .\examples\copilot-cli-agt\config\profiles\balanced.json $HOME\.copilot\agt\policy.json -Force
+```bash
+agt-copilot policy apply --profile balanced
 ```
 
 Then reload Copilot CLI with `/clear` and inspect the result with `/agt status`.
 
-You can also manage policy files directly with the installer CLI:
+Other policy-management commands include:
 
 ```bash
 agt-copilot policy path
 agt-copilot policy validate
-agt-copilot policy apply --profile balanced
 ```
 
 ### Node is missing

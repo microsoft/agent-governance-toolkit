@@ -6,9 +6,9 @@ Defines the backend-agnostic API for sandboxed agent execution.  Any
 sandbox backend — Docker, Hyperlight micro-VMs, cloud sandbox services,
 or custom providers — implements the three core lifecycle methods:
 
-* ``create_session`` — provision a sandbox with optional policy-driven
-  resource limits, tool proxy, and network rules.
-* ``execute_code`` — evaluate policy allow/deny, then run code inside
+* ``create_session`` — provision a sandbox with explicit host configuration
+  and an optional native governance runtime.
+* ``execute_code`` — evaluate the native runtime, then run code inside
   an existing session.
 * ``destroy_session`` — tear down the sandbox and release resources.
 
@@ -84,9 +84,25 @@ class SandboxConfig:
     input_dir: str | None = None
     output_dir: str | None = None
     runtime: str | None = None
+    network_allowlist: list[str] = field(default_factory=list)
+    tool_allowlist: list[str] = field(default_factory=list)
+    network_default: str = "deny"
     output_max_bytes: int = 1_048_576  # 1 MiB per stream
     # Hypervisor ring enforcement (#2666). None = no ring gate applied.
     ring: Any = None  # ExecutionRing | None; typed as Any to avoid hard dep
+
+    def __post_init__(self) -> None:
+        if self.network_default not in {"allow", "deny"}:
+            raise ValueError("network_default must be 'allow' or 'deny'")
+        for name, values in (
+            ("network_allowlist", self.network_allowlist),
+            ("tool_allowlist", self.tool_allowlist),
+        ):
+            if not isinstance(values, list) or any(
+                not isinstance(value, str) or not value
+                for value in values
+            ):
+                raise ValueError(f"{name} must contain non-empty strings")
 
 
 @dataclass
@@ -141,10 +157,11 @@ class SandboxProvider(ABC):
     def create_session(
         self,
         agent_id: str,
-        policy: Any | None = None,
+        *,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
-        """Provision a sandbox with optional policy-driven constraints."""
+        """Provision a sandbox with host config and optional ACS runtime."""
 
     @abstractmethod
     def execute_code(
@@ -155,7 +172,7 @@ class SandboxProvider(ABC):
         *,
         context: dict[str, Any] | None = None,
     ) -> ExecutionHandle:
-        """Evaluate policy allow/deny, then run code in a session."""
+        """Evaluate native governance, then run code in a session."""
 
     @abstractmethod
     def destroy_session(self, agent_id: str, session_id: str) -> None:
@@ -215,10 +232,16 @@ class SandboxProvider(ABC):
     async def create_session_async(
         self,
         agent_id: str,
-        policy: Any | None = None,
+        *,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
-        return await asyncio.to_thread(self.create_session, agent_id, policy, config)
+        return await asyncio.to_thread(
+            self.create_session,
+            agent_id,
+            runtime=runtime,
+            config=config,
+        )
 
     async def execute_code_async(
         self,

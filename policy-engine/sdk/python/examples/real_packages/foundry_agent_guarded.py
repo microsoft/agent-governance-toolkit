@@ -24,6 +24,7 @@ project variables below)::
     export AZURE_AI_FOUNDRY_PROJECT_ENDPOINT=...   # https://<res>.services.ai.azure.com/api/projects/<project>
     export AZURE_AI_FOUNDRY_AGENT_MODEL=...         # hosted agent model deployment name
     pip install "agent-control-specification" azure-ai-agents azure-identity
+    # opa must be on PATH (or ACS_OPA_PATH); the Rego policy runs through OPA
     python foundry_agent_guarded.py
 
 Security invariant. A destructive tool call is never executed. The judge policy
@@ -36,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 
 from _common import require_azure
 
@@ -64,6 +66,12 @@ async def main() -> None:
         from azure.identity import DefaultAzureCredential
     except ImportError as exc:
         print(f"skip: install azure-ai-agents and azure-identity to run this example ({exc})")
+        return
+
+    # OPA executes the Rego policy bundle. Skip cleanly when it is absent so the
+    # example reports why instead of failing deep inside policy evaluation.
+    if not (shutil.which("opa") or os.environ.get("ACS_OPA_PATH")):
+        print("skip: opa was not found on PATH (or ACS_OPA_PATH); install OPA to run the Rego policy")
         return
 
     try:

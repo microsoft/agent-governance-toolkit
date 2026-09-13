@@ -1,3 +1,9 @@
+---
+title: "ADR-0019: OTel BatchSpanProcessor Pattern for Event Sink"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # ADR-0019: OTel BatchSpanProcessor Pattern for Event Sink
 
 ## Status

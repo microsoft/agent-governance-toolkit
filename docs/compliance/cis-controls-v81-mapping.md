@@ -1,3 +1,9 @@
+---
+title: "CIS Controls v8.1 Mapping for AI Agent Governance"
+last_reviewed: 2026-04-25
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # CIS Controls v8.1 Mapping for AI Agent Governance

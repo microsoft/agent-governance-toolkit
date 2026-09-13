@@ -1,3 +1,9 @@
+---
+title: "Advisory-to-Blocking Graduation Checklist"
+last_reviewed: 2026-06-24
+owner: agt-maintainers
+---
+
 # Advisory-to-Blocking Graduation Checklist
 
 > Use this checklist when graduating a repository from **advisory** governance
@@ -14,7 +20,7 @@
 
 ## Policy Configuration
 
-- [ ] `governance.yaml` (or equivalent) exists at repo root with:
+- [ ] `agt-manifest.yaml` (or equivalent) exists at repo root with:
   - `mode: strict` (deny-by-default for tool calls)
   - `audit: required` (all governed actions logged)
   - Explicit allow rules for every permitted tool/action

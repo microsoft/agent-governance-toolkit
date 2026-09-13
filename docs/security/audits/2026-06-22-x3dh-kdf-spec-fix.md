@@ -1,3 +1,9 @@
+---
+title: "2026-06-22 - X3DH KDF Signal-spec fix (TypeScript SDK)"
+last_reviewed: 2026-06-24
+owner: agt-maintainers
+---
+
 # 2026-06-22 - X3DH KDF Signal-spec fix (TypeScript SDK)
 
 PR: microsoft/agent-governance-toolkit#3128

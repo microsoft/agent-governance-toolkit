@@ -1,3 +1,9 @@
+---
+title: "Agent Lightning — RL Training Governance"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 # Agent Lightning — RL Training Governance
 
 > [!IMPORTANT]
@@ -8,7 +14,7 @@ Train AI agents with RL while maintaining **0% policy violations**.
 *Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)*
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agentmesh-lightning)](https://pypi.org/project/agentmesh-lightning/)
 
@@ -172,4 +178,4 @@ Agent Lightning is one of 7 packages in the Agent Governance Toolkit:
 
 ## 📋 License
 
-MIT — see [LICENSE](../../LICENSE).
+MIT — see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE).

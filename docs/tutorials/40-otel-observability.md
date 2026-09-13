@@ -1,3 +1,9 @@
+---
+title: "Tutorial 40: OpenTelemetry Observability for Agent Governance"
+last_reviewed: 2026-04-23
+owner: agt-maintainers
+---
+
 # Tutorial 40: OpenTelemetry Observability for Agent Governance
 
 > **Time**: 10 minutes · **Level**: Intermediate · **Prerequisites**: Tutorial 36 (govern basics)

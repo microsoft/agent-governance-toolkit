@@ -14,7 +14,7 @@
  * cleanly with jest.useFakeTimers.
  */
 
-import { MeshClient, type MeshClientOptions } from "../src/encryption/mesh-client";
+import { MeshClient, WS_CLOSE_SESSION_REPLACED, type MeshClientOptions } from "../src/encryption/mesh-client";
 import { X3DHKeyManager } from "../src/encryption/x3dh";
 import { ed25519 } from "@noble/curves/ed25519";
 
@@ -191,6 +191,39 @@ describe("MeshClient auto-reconnect (G2)", () => {
 
     // Exactly one reconnect socket — total 2.
     expect(createdSockets).toHaveLength(2);
+
+    await client.disconnect();
+  });
+
+  test("session-replaced close (4006) is server-attributed, surfaced, and does NOT reconnect", async () => {
+    // The relay closes a displaced socket with WS_CLOSE_SESSION_REPLACED when
+    // another connection authenticates for the same DID. Three properties must
+    // hold together:
+    //   1. it is NOT reported as a client-initiated close — using 1000 here
+    //      made a mailbox takeover indistinguishable from the agent calling
+    //      disconnect() on itself, i.e. silent and unattributable;
+    //   2. it IS surfaced through the error channel so a host can alert on it;
+    //   3. it does NOT auto-reconnect — reconnecting would displace the socket
+    //      that just replaced us, and the two would evict each other in a loop.
+    const client = makeClient({ reconnectBaseDelayMs: 10, reconnectMaxDelayMs: 50 });
+    const disconnects: Array<{ reason: string; code?: number }> = [];
+    const errors: string[] = [];
+    client.onDisconnect((reason, code) => disconnects.push({ reason, code }));
+    client.onError((_kind, _from, detail) => errors.push(detail));
+
+    await client.connect();
+    expect(createdSockets).toHaveLength(1);
+
+    createdSockets[0].simulateServerClose(WS_CLOSE_SESSION_REPLACED);
+    // Long enough that a scheduled reconnect (base 10ms) would have fired.
+    await sleep(120);
+
+    expect(disconnects).toEqual([
+      { reason: "server", code: WS_CLOSE_SESSION_REPLACED },
+    ]);
+    expect(errors.some((e) => e.includes("session replaced"))).toBe(true);
+    expect(createdSockets).toHaveLength(1);
+    expect(client.isConnected).toBe(false);
 
     await client.disconnect();
   });

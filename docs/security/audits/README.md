@@ -1,3 +1,9 @@
+---
+title: "Security Audits"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 # Security Audits
 
 This directory contains security audit documents required by the

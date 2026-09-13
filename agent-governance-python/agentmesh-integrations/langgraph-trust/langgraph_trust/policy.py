@@ -12,8 +12,8 @@ from langgraph_trust.state import TrustState, TrustVerdict
 
 
 @dataclass
-class GovernancePolicy:
-    """Declarative governance policy for graph execution.
+class GraphTrustRules:
+    """Declarative graph trust rules for graph execution.
 
     Policies define constraints that must be satisfied at a checkpoint
     before the graph continues. They can be constructed programmatically
@@ -31,7 +31,7 @@ class GovernancePolicy:
     custom_rules: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> GovernancePolicy:
+    def from_dict(cls, data: dict[str, Any]) -> GraphTrustRules:
         return cls(
             name=data.get("name", "default"),
             max_tokens=data.get("max_tokens"),
@@ -59,14 +59,14 @@ class GovernancePolicy:
 
 
 class PolicyCheckpoint:
-    """A LangGraph node that validates governance policies at graph transitions.
+    """A LangGraph node that validates graph trust rules at graph transitions.
 
-    Checks the current graph state against a :class:`GovernancePolicy` and
+    Checks the current graph state against a :class:`GraphTrustRules` and
     writes a :class:`TrustState` verdict into ``state["trust_result"]``.
 
     Example::
 
-        policy = GovernancePolicy(
+        policy = GraphTrustRules(
             name="prod-safety",
             max_tool_calls=5,
             blocked_tools=["shell_exec", "file_delete"],
@@ -78,7 +78,7 @@ class PolicyCheckpoint:
 
     def __init__(
         self,
-        policy: GovernancePolicy,
+        policy: GraphTrustRules,
         content_key: str = "messages",
         tool_calls_key: str = "tool_calls",
         tokens_key: str = "total_tokens",
@@ -144,7 +144,7 @@ class PolicyCheckpoint:
                 verdict=TrustVerdict.FAIL,
                 score=0.0,
                 threshold=0.0,
-                reason="Policy violations: %s" % "; ".join(violations),
+                reason="Trust rule violations: %s" % "; ".join(violations),
                 policy_violations=violations,
             )
         else:
@@ -152,7 +152,7 @@ class PolicyCheckpoint:
                 verdict=TrustVerdict.PASS,
                 score=1.0,
                 threshold=0.0,
-                reason="Policy '%s' satisfied" % self.policy.name,
+                reason="Trust rules '%s' satisfied" % self.policy.name,
             )
 
         return {"trust_result": ts.to_dict()}

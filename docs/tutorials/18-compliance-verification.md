@@ -1,3 +1,9 @@
+---
+title: "Tutorial 18 — Compliance Verification & Attestation"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Tutorial 18 — Compliance Verification & Attestation
 
 > **Package:** `agent-governance-toolkit` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
@@ -110,9 +116,9 @@ The verifier checks 10 controls from the OWASP Agentic Security Initiatives (ASI
 
 | Control | Risk | Module | Component |
 |---------|------|--------|-----------|
-| ASI-01 | Prompt Injection | `agent_os.integrations.base` | `PolicyInterceptor` |
+| ASI-01 | Prompt Injection | `agent_os.integrations.base` | `NativeAdapterRuntime` |
 | ASI-02 | Insecure Tool Use | `agent_os.integrations.tool_aliases` | `ToolAliasRegistry` |
-| ASI-03 | Excessive Agency | `agent_os.integrations.base` | `GovernancePolicy` |
+| ASI-03 | Excessive Agency | `agent_os.integrations.base` | `AgentControl` |
 | ASI-04 | Unauthorized Escalation | `agent_os.integrations.escalation` | `EscalationPolicy` |
 | ASI-05 | Trust Boundary Violation | `agentmesh.trust.cards` | `CardRegistry` |
 | ASI-06 | Insufficient Logging | `agentmesh.governance.audit` | `AuditChain` |
@@ -266,7 +272,7 @@ The OWASP ASI controls map directly to requirements in major regulatory framewor
 
 GDPR requires demonstrable data protection. The toolkit addresses this through:
 
-- **ASI-01 (Prompt Injection)**: `PolicyInterceptor` prevents prompt-based data exfiltration
+- **ASI-01 (Prompt Injection)**: `NativeAdapterRuntime` prevents prompt-based data exfiltration
 - **ASI-06 (Insufficient Logging)**: `AuditChain` creates tamper-evident logs for data subject access requests
 - **ASI-07 (Insecure Identity)**: `AgentIdentity` ensures every data-processing agent has a verifiable DID
 
@@ -300,7 +306,7 @@ SOX requires segregation of duties and change control:
 
 The EU AI Act mandates transparency and human oversight for high-risk AI:
 
-- **ASI-03 (Excessive Agency)**: `GovernancePolicy` constrains what agents can do autonomously
+- **ASI-03 (Excessive Agency)**: `AgentControl` constrains what agents can do autonomously
 - **ASI-10 (Behavioral Anomaly)**: `ComplianceEngine` monitors for out-of-spec behavior
 
 ### 5.6 SOC 2 — Service Organization Controls
@@ -365,7 +371,7 @@ Output:
       "name": "Prompt Injection",
       "present": true,
       "module": "agent_os.integrations.base",
-      "component": "PolicyInterceptor"
+      "component": "NativeAdapterRuntime"
     }
   ]
 }
@@ -953,7 +959,7 @@ else:
         print(f"   - {c.control_id}: {c.name}")
 ```
 
-For the full OWASP mapping with detailed mitigations, see [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md).
+For the full OWASP mapping with detailed mitigations, see [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../compliance/owasp-agentic-top10-architecture.md).
 
 ---
 
@@ -1092,7 +1098,7 @@ Badge: ![Governance](https://img.shields.io/badge/governance-100%25-brightgreen)
 
 - **[Tutorial 02 — Trust & Identity](02-trust-and-identity.md)** — Agent identity (`AgentIdentity`), trust scoring, and DID credentials that underpin ASI-05 and ASI-07 controls
 - **[Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md)** — `AuditChain` tamper-evident logging and `ComplianceEngine` behavioral monitoring (ASI-06, ASI-10)
-- **[OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)** — Full OWASP Agentic Top 10 mapping with per-risk mitigation details
+- **[OWASP Compliance Mapping](../compliance/owasp-agentic-top10-architecture.md)** — Full OWASP Agentic Top 10 mapping with per-risk mitigation details
 
 ---
 

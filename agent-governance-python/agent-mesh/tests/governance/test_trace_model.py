@@ -27,7 +27,7 @@ _CONFIG = TraceModelConfig(
         "builder": "github-actions",
         "digest": f"sha256:{_ZEROS}",
     },
-    verifier="https://verifier.agentrust.io",
+    verifier="https://verifier.agentrust-io.com",
 )
 
 
@@ -50,13 +50,13 @@ class TestSessionToTrustRecord:
         )
         record = session_to_trust_record(session, _CONFIG)
 
-        assert record["eat_profile"] == "tag:agentrust.io,2026:trace-v0.1"
+        assert record["eat_profile"] == "tag:agentrust-io.com,2026:trace-v0.2"
         assert record["subject"] == "did:mesh:spiffe://cluster/ns/default/sa/agent-1"
         assert record["data_class"] == "public"
         assert isinstance(record["iat"], int) and record["iat"] > 0
-        assert record["transparency"] == ""
+        assert record["transparency"] is None  # unanchored at Level 0/1
         assert record["appraisal"]["status"] == "affirming"
-        assert record["appraisal"]["verifier"] == "https://verifier.agentrust.io"
+        assert record["appraisal"]["verifier"] == "https://verifier.agentrust-io.com"
         assert record["tool_transcript"]["call_count"] == 1
         assert record["tool_transcript"]["hash"].startswith("sha256:")
 

@@ -25,7 +25,7 @@ Input -> Model -> Tool Call -> Tool Result -> Output
 ## Example manifest
 
 ```yaml
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: email-agent
 policies:
@@ -54,10 +54,12 @@ AGT is the host and policy enforcement point around the ACS decision core. The i
 | Layer | Role in the integration |
 | --- | --- |
 | AGT host adapters | Framework adapters in `agent-os` intercept the agent loop, build the snapshot for each intervention point, call the policy layer, and enforce the returned verdict. |
-| `agt-policies` bridge | The Python `agt.policies` package mediates between AGT host calls and the ACS runtime and normalizes verdicts for host consumption. |
+| `agt-policies` bridge | The Python `agent_control_specification` package mediates between AGT host calls and the ACS runtime and normalizes verdicts for host consumption. |
 | ACS native runtime | The `agent_control_specification` Python SDK over the Rust core performs the deterministic decision and is built from `sdk/python` with maturin. |
 
-AGT folder discovery, scope, and merge pre-resolve manifests before the engine evaluates them, so the runtime always receives one fully resolved manifest. Manifest resolution rules live in [`spec/agt/AGT-RESOLUTION-1.0.md`](spec/agt/AGT-RESOLUTION-1.0.md).
+The runtime consumes native ACS/AGT manifests and resolves ACS `extends`.
+Legacy governance folder discovery is available only through the one-way
+`agt migrate v4-to-v5` command.
 
 ## Core properties
 
@@ -100,7 +102,7 @@ These behaviors are part of the normative [`spec/SPECIFICATION.md`](spec/SPECIFI
 
 | Block | Meaning |
 | --- | --- |
-| `agent_control_specification_version` | Non empty version string. The current spec describes `0.3.1-beta`. |
+| `agent_control_specification_version` | Non empty version string. The current spec describes `0.4.0-alpha.1`. |
 | `metadata` | Free form manifest metadata. |
 | `extends` | Ordered parent manifest paths or HTTPS URLs for ACS compatibility. AGT hosts submit the resolved manifest. |
 | `policies` | Named policy definitions. Supported types are `rego`, `cedar`, `test`, and `custom`. |
@@ -262,8 +264,8 @@ Policies must not emit reasons with that prefix. See specification section 15 fo
 
 | Item | Value |
 | --- | --- |
-| Original ACS license | Preserved at `policy-engine/LICENSE.acs`. |
+| Original ACS license | Preserved at `policy-engine/LICENSE.acs`. It covers the specification, schema and conformance files under `policy-engine/spec` and `policy-engine/tests` that originated in the upstream Agent Control Specification project. |
 
 ## License
 
-ACS is licensed under the MIT License. See `LICENSE` in repository checkouts and `LICENSE.acs` for the vendored source attribution.
+The engine is no longer vendored here; it is the `agent-control-spec` crate from crates.io, under its own MIT license. Code in this directory is licensed under the MIT License in `LICENSE` at the repository root. `LICENSE.acs` is the upstream notice for the specification, schema and conformance files that still carry upstream text.

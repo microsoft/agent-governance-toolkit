@@ -11,16 +11,11 @@ import os
 from dataclasses import dataclass, fields
 from typing import Optional
 
-from .base import GovernancePolicy
-
 
 @dataclass
 class AgentOSConfig:
     """Centralized configuration loaded from environment variables with AGENT_OS_ prefix."""
 
-    # Policy defaults
-    max_tokens: int = 10000
-    max_tool_calls: int = 50
     log_level: str = "INFO"
 
     # Backend
@@ -59,14 +54,6 @@ class AgentOSConfig:
                 else:
                     kwargs[f.name] = val
         return cls(**kwargs)
-
-    def to_policy(self) -> GovernancePolicy:
-        """Convert to a GovernancePolicy with these defaults."""
-        return GovernancePolicy(
-            max_tokens=self.max_tokens,
-            max_tool_calls=self.max_tool_calls,
-            log_all_calls=self.audit_enabled,
-        )
 
     def to_dict(self) -> dict:
         """Serialize configuration to a dictionary."""

@@ -1,3 +1,9 @@
+---
+title: "AgentMesh Trust and Coordination -- Version 1.0"
+last_reviewed: 2026-07-09
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # AgentMesh Trust and Coordination -- Version 1.0

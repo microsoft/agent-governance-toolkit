@@ -8,38 +8,28 @@
 #         - id: validate-policy
 #         - id: validate-plugin-manifest
 #         - id: evaluate-plugin-policy
-#           args: ['--policy', 'policies/marketplace-policy.yaml']
+#           args: ['--manifest', 'policies/marketplace-manifest.yaml']
 #
 - id: validate-policy
-  name: Validate Agent-OS policy files
-  language: python
-  entry: python -m agent_os.policies.cli validate
-  files: '.*polic.*\.(yaml|yml|json)$'
+  name: Validate native ACS manifests
+  description: Requires the AGT development environment or installed CLI
+  language: system
+  entry: agt lint-policy
+  files: '(^|/)(manifest|.*polic.*)\.(yaml|yml|json)$'
   types_or: [yaml, json]
-  additional_dependencies:
-    - pydantic>=2.0.0
-    - pyyaml>=6.0.0
 
 - id: validate-plugin-manifest
   name: Validate plugin manifest schema
   description: Validates plugin manifests (plugin.json) for required fields and schema compliance
-  language: python
+  language: system
   entry: python -m agent_marketplace.hooks validate-manifest
   files: '(^|/)plugin\.(json|yaml|yml)$'
   types_or: [json, yaml]
-  additional_dependencies:
-    - pydantic>=2.0.0
-    - pyyaml>=6.0.0
 
 - id: evaluate-plugin-policy
-  name: Evaluate plugin against governance policy
-  description: Evaluates plugin manifests against a governance policy file
-  language: python
-  entry: python -m agent_marketplace.hooks evaluate-policy
+  name: Evaluate plugin against native governance
+  description: Evaluates plugin manifests against a native ACS manifest
+  language: system
+  entry: python -m agent_marketplace.hooks evaluate-governance
   files: '(^|/)plugin\.(json|yaml|yml)$'
   types_or: [json, yaml]
-  additional_dependencies:
-    - pydantic>=2.0.0
-    - pyyaml>=6.0.0
-    - agent-os-kernel
-

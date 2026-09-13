@@ -37,8 +37,30 @@ Shows how a production user gates a Foundry agent's tool calls with ACS. It
 builds real `FunctionTool` definitions from the `azure-ai-agents` SDK and governs
 the tool-execution seam with a policy backed by a **live Azure OpenAI LLM judge**
 (no canned verdicts). The host policy fails closed: it allows only an explicit
-"safe" verdict, so a destructive, unexpected, or missing label denies. Two
-integration styles for the same seam:
+"safe" verdict, so a destructive, unexpected, or missing label denies.
+
+### The three files that make up the integration
+
+This is the minimal shape of a real ACS integration. The governance contract is
+committed as data, not assembled in Python.
+
+| File | Role |
+|------|------|
+| `foundry_governance.acs.yaml` | The ACS manifest. Declares the intervention points, the live Azure OpenAI `intent_judge` annotator, and the policy binding. |
+| `policy/foundry_tool_guard.rego` | The deterministic decision. Reads `annotations.intent_judge.label` and fails closed, allowing only a `safe` label. `policy/foundry_tool_guard_test.rego` proves it with `opa test policy`. |
+| `foundry_agents.py` | The host. Loads the manifest, drives the Foundry run loop, and enforces each verdict at the tool-call seam. |
+
+The Rego policy runs through OPA, so `opa` must be on `PATH` (or `ACS_OPA_PATH`)
+in addition to the Azure credentials above.
+
+### Write your own integration
+
+See [`FOUNDRY_INTEGRATION.md`](FOUNDRY_INTEGRATION.md) for a standalone,
+beginner-friendly walkthrough of adding ACS governance to a Python agent running
+in Azure AI Foundry. It explains the manifest, the Rego policy, and the host
+wiring from scratch, and it is written to hand to a developer new to ACS.
+
+### Two host integration styles for the same seam
 
 - **Short path**: `control.protect_tool(name, execute=fn)` returns a drop-in
   async wrapper that evaluates `PRE_TOOL_CALL` and `POST_TOOL_CALL`, applies any
@@ -52,14 +74,12 @@ The example judges tool input on `PRE_TOOL_CALL`; it does not bind a judge on
 governance would attach). The judge sees untrusted argument text and is subject
 to prompt injection, so treat it as defense in depth behind deterministic policy.
 
-To wire it into a live Foundry agent run, register the same callables with
-`FunctionTool`/`ToolSet` and route the SDK's function-invocation hook through
-`protect_tool`, so every tool the agent decides to call is gated first.
-
-The manifest is built in-process so the Azure endpoint comes from the environment
-and the API key is referenced by name (`api_key_env`), never written to disk. In
-production load a committed manifest with `AgentControl.from_path(...)` or a
-pinned remote one with `AgentControl.from_url(...)`.
+The Azure resource endpoint, deployment, and api_version are per-deployment
+configuration, so `build_control` injects them into the committed manifest from
+the environment at load. The API key is referenced by name (`api_key_env`) and
+never written to disk. A deployment whose endpoint is fixed can commit those
+fields directly and load with `AgentControl.from_path(...)`, or pin a remote
+manifest with `AgentControl.from_url(...)`.
 
 ## Host-side telemetry export (`telemetry.py`)
 

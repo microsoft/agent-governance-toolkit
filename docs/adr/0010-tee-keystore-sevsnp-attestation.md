@@ -1,3 +1,9 @@
+---
+title: "ADR 0010: Add TEE keystore with SEV-SNP attestation for agent identity"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # ADR 0010: Add TEE keystore with SEV-SNP attestation for agent identity
 
 - Status: proposed

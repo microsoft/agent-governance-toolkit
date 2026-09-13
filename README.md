@@ -22,7 +22,7 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Discord](https://dcbadge.limes.pink/api/server/7aVPCcVh?style=flat)](https://discord.gg/7aVPCcVh)
+[![Discord](https://dcbadge.limes.pink/api/server/TxMRqY3pFr?style=flat)](https://discord.gg/TxMRqY3pFr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
@@ -58,21 +58,22 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 
 ## Quick Start
 
-**Prerequisites:** Python 3.10+
+**Prerequisites:** Python 3.11+
 
 ```bash
-pip install agent-governance-toolkit[full]
+pip install "agent-governance-toolkit[full]"
 ```
 
 Use the `[full]` extra for the quick-start imports below. The base
 `agent-governance-toolkit` wheel installs the compliance CLI only; the governance
 modules live in the consolidated core distribution. The `agentmesh` quick-start
-import remains the current wrapper API. The `agent_os` `PolicyEvaluator` example
-below is legacy compatibility: importing `agent_os` currently emits a
+import remains the current wrapper API. Importing `agent_os` emits a
 `DeprecationWarning` because the old `agent-os-kernel` distribution is deprecated.
 Use `agent-governance-toolkit-core` (or the `[full]` extra that includes it) as
-the replacement distribution, and prefer the AGT 5 `agt-policies`/ACS APIs for
-new policy-engine host code.
+the replacement distribution. Policy-engine host code uses the ACS SDK;
+`agt-policies` provides the one-way v4-to-v5 migration command. The pre-ACS
+`agent_os.policies` rule model is gone, and `BREAKING_CHANGES.md` lists its
+replacements.
 
 For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
 
@@ -89,7 +90,8 @@ from agentmesh.governance import govern
 safe_tool = govern(my_tool, policy="policy.yaml")   # every call checked, logged, enforced
 ```
 
-That's it. `safe_tool` evaluates your YAML policy on every call, logs the decision, and raises `GovernanceDenied` if the action is blocked.
+On every call, `safe_tool` evaluates the YAML policy, logs the decision to an
+audit trail, and raises `GovernanceDenied` when the policy blocks the action.
 
 ```yaml
 # policy.yaml
@@ -117,34 +119,27 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
   Destructive operations require human approval
 ```
 
-Or use the full `PolicyEvaluator` API for programmatic control:
+Or use the full `AgentControl` API for programmatic control:
 
 <details>
-<summary><b>PolicyEvaluator example</b></summary>
+<summary><b>AgentControl example</b></summary>
 
 ```python
-from agent_os.policies import (
-    PolicyEvaluator, PolicyDocument, PolicyRule,
-    PolicyCondition, PolicyAction, PolicyOperator, PolicyDefaults
+from agent_control_specification import AgentControl
+
+runtime = AgentControl.from_path(str("manifest.yaml"))
+result = runtime.evaluate(
+    "input",
+    {
+        "envelope": {"agent_id": "example-agent"},
+        "input": {"body": {"action": "web_search", "params": {}}},
+    },
 )
-
-evaluator = PolicyEvaluator(policies=[PolicyDocument(
-    name="my-policy", version="1.0",
-    defaults=PolicyDefaults(action=PolicyAction.ALLOW),
-    rules=[PolicyRule(
-        name="block-dangerous-tools",
-        condition=PolicyCondition(
-            field="tool_name",
-            operator=PolicyOperator.IN,
-            value=["execute_code", "delete_file"]
-        ),
-        action=PolicyAction.DENY, priority=100,
-    )],
-)])
-
-result = evaluator.evaluate({"tool_name": "web_search"})    # Allowed
-result = evaluator.evaluate({"tool_name": "delete_file"})   # Blocked
+print(result.verdict)
+runtime.close()
 ```
+
+[Run the complete ACS email-tool example](examples/acs-email-tool).
 
 </details>
 
@@ -266,7 +261,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 | Language | Package | Command |
 |----------|---------|---------|
-| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
+| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install "agent-governance-toolkit[full]"` |
 | **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
 | **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
@@ -334,12 +329,13 @@ Full list: [Framework Integrations](agent-governance-python/agentmesh-integratio
 
 | Example | Framework | What it demonstrates |
 |---------|-----------|----------------------|
+| [acs-email-tool](examples/acs-email-tool) | Framework-neutral ACS host | Snapshot, verdict, transform, deny, and host enforcement |
+| [acs-atr-annotator](examples/acs-atr-annotator) | ACS custom policy | Independent threat-rule annotations with fail-closed decisions |
 | [openai-agents-governed](examples/openai-agents-governed) | OpenAI Agents SDK | Policy-gated tool calls with trust tiers |
 | [crewai-governed](examples/crewai-governed) | CrewAI | Multi-agent governance with role-based policies |
 | [smolagents-governed](examples/smolagents-governed) | HuggingFace smolagents | Lightweight agent governance |
 | [maf-integration](examples/maf-integration) | MAF | Microsoft Agent Framework integration |
 | [mcp-trust-verified-server](examples/mcp-trust-verified-server) | MCP | Trust-verified MCP server implementation |
-| [cedarling-governed](examples/cedarling-governed) | Cedar/Cedarling | Janssen Cedarling policy engine integration |
 | [governance-dashboard](examples/demos/governance-dashboard) | Streamlit | Real-time fleet visibility dashboard |
 
 ---
@@ -350,7 +346,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 
 | Specification | Scope | Tests |
 |---|---|---|
-| [Agent OS Policy Engine](docs/specs/AGENT-OS-POLICY-ENGINE-1.0.md) | Policy evaluation, rule merging, fail-closed semantics | 68 |
+| [Agent OS Policy Engine](docs/specs/AGENT-OS-POLICY-ENGINE-1.0.md) | Native runtime integration and fail-closed semantics | -- |
 | [Agent Control Specification](policy-engine/spec/SPECIFICATION.md) | Stateless intervention-point policy runtime, verdicts, transform, fail-closed | -- |
 | [AgentMesh Identity and Trust](docs/specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | Credentials, trust scoring, delegation chains | 135 |
 | [Agent Hypervisor Execution Control](docs/specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | Privilege rings, saga orchestration, kill switch | 80 |
@@ -358,7 +354,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 | [Agent SRE Governance](docs/specs/AGENT-SRE-GOVERNANCE-1.0.md) | SLOs, error budgets, chaos, circuit breakers | 111 |
 | [MCP Security Gateway](docs/specs/MCP-SECURITY-GATEWAY-1.0.md) | Tool poisoning, drift detection, hidden instructions | 127 |
 | [Agent Lightning Fast-Path](docs/specs/AGENT-LIGHTNING-FAST-PATH-1.0.md) | RL training governance, violation penalties | 100 |
-| [Framework Adapter Contract](docs/specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md) | 10 adapter integrations, interceptor chain | 152 |
+| [Framework Adapter Contract](docs/specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md) | Native framework mediation contract | -- |
 | [Audit and Compliance](docs/specs/AUDIT-COMPLIANCE-1.0.md) | Merkle audit, compliance mapping, Decision BOM | 157 |
 | [AgentMesh Wire Protocol](docs/specs/AGENTMESH-WIRE-1.0.md) | Message format, routing, serialization | -- |
 
@@ -413,7 +409,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 
 ## Contributing
 
-[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/7aVPCcVh) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/TxMRqY3pFr) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 **Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md).
 

@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 """Cross-gate event bus for governance layer composition.
 
-Enables governance gates (PolicyEvaluator, TrustGate, CircuitBreaker,
+Enables governance gates (native runtime, TrustGate, CircuitBreaker,
 ConversationGuardian) to communicate via events without tight coupling.
 
 Example::

@@ -49,7 +49,7 @@ python -c "from agentmesh import AgentIdentity, PolicyEngine, AuditLog; print('A
 ## Step 2: Define Governance Policies
 
 Create a policy file that controls which MCP tools Claude can access. See
-[`policies/mcp-governance.yaml`](policies/mcp-governance.yaml) for the full
+[`policies/mcp-agt-manifest.yaml`](policies/mcp-agt-manifest.yaml) for the full
 example. The key sections:
 
 ```yaml
@@ -100,7 +100,7 @@ to the appropriate location and adjust paths:
       "args": [
         "-m", "agentmesh.integrations.mcp.proxy",
         "--upstream", "npx @modelcontextprotocol/server-filesystem /home/user/projects",
-        "--policy", "./policies/mcp-governance.yaml",
+        "--policy", "./policies/mcp-agt-manifest.yaml",
         "--audit-dir", "./audit-logs"
       ],
       "env": {
