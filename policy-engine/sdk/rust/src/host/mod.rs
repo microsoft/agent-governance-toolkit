@@ -102,36 +102,53 @@ pub fn default_host_policy_dispatcher(
     ))
 }
 
-/// Load a top-level manifest URL through ACS's URL `extends` resolver.
-///
-/// The temporary manifest is created under the current working directory
-/// rather than the system temporary directory. ACS performs the HTTPS trust
-/// checks, bounded fetch, redirect handling, optional SHA-256 verification,
-/// and recursive `extends` resolution.
 /// Return true for IP destinations a manifest URL fetch must not target.
 ///
-/// Prevents server side request forgery to the host itself or to a cloud
-/// metadata endpoint. Loopback, the unspecified address, the IPv4 broadcast
-/// address, and link-local (IPv4 169.254.0.0/16 including 169.254.169.254, and
-/// IPv6 fe80::/10) are blocked. RFC1918 and IPv6 unique-local are deliberately
-/// allowed so internal HTTPS policy hosting keeps working. IPv4-mapped
-/// (`::ffff:a.b.c.d`) and IPv4-compatible (`::a.b.c.d`) literals canonicalize
-/// to their embedded IPv4 first, so a dual-stack host cannot route past the
+/// Prevents server side request forgery from the manifest loader to the host
+/// itself, to its network, or to a cloud metadata endpoint. Blocked:
+///
+/// - loopback (`127.0.0.0/8`, `::1`), the unspecified address and the
+///   `0.0.0.0/8` "this network" block, and the IPv4 broadcast address;
+/// - link-local (`169.254.0.0/16`, which holds the `169.254.169.254`
+///   metadata endpoint, and `fe80::/10`);
+/// - private ranges (RFC 1918 `10/8`, `172.16/12`, `192.168/16`) and the
+///   shared address space `100.64.0.0/10`, which holds the `100.100.100.200`
+///   metadata endpoint some clouds use;
+/// - IPv6 unique-local `fc00::/7`, which holds the `fd00:ec2::254` metadata
+///   endpoint, and the deprecated site-local `fec0::/10`.
+///
+/// IPv4-mapped (`::ffff:a.b.c.d`), IPv4-compatible (`::a.b.c.d`) and NAT64
+/// well-known-prefix (`64:ff9b::a.b.c.d`) literals are canonicalized to the
+/// embedded IPv4 address first, so a dual-stack host cannot route past the
 /// guard through `[::ffff:169.254.169.254]`.
 ///
-/// Ported from the engine AGT vendored before the retarget;
-/// `agent-control-spec` 0.4.0-alpha.3 validates only scheme, credentials and
-/// fragment. Filed upstream as agent-control-spec#20.
+/// The pre-retarget engine allowed RFC 1918 and unique-local so a policy
+/// could be hosted on an internal HTTPS server by IP literal. That is no
+/// longer allowed; use a hostname for internal hosting. Hostnames are not
+/// resolved by this guard (see [`is_blocked_fetch_name`]).
 fn is_blocked_fetch_ip(ip: std::net::IpAddr) -> bool {
     fn blocked_v4(v4: std::net::Ipv4Addr) -> bool {
-        v4.is_loopback() || v4.is_link_local() || v4.is_unspecified() || v4.is_broadcast()
+        let [a, b, _, _] = v4.octets();
+        v4.is_loopback()
+            || v4.is_link_local()
+            || v4.is_unspecified()
+            || v4.is_broadcast()
+            || v4.is_private()
+            || a == 0
+            || (a == 100 && (b & 0xc0) == 64)
     }
     match ip {
         std::net::IpAddr::V4(v4) => blocked_v4(v4),
         std::net::IpAddr::V6(v6) => {
+            let segments = v6.segments();
             // Native IPv6 specials first: to_ipv4 would map ::1 to 0.0.0.1
             // and let it through.
-            if v6.is_loopback() || v6.is_unspecified() || (v6.segments()[0] & 0xffc0) == 0xfe80 {
+            if v6.is_loopback()
+                || v6.is_unspecified()
+                || (segments[0] & 0xffc0) == 0xfe80
+                || (segments[0] & 0xffc0) == 0xfec0
+                || (segments[0] & 0xfe00) == 0xfc00
+            {
                 return true;
             }
             if let Some(v4) = v6.to_ipv4_mapped() {
@@ -140,42 +157,89 @@ fn is_blocked_fetch_ip(ip: std::net::IpAddr) -> bool {
             if let Some(v4) = v6.to_ipv4() {
                 return blocked_v4(v4);
             }
+            // NAT64 well-known prefix 64:ff9b::/96 embeds IPv4 in the low
+            // 32 bits; a NAT64 gateway forwards it to that address.
+            if segments[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
+                let [.., a, b, c, d] = v6.octets();
+                return blocked_v4(std::net::Ipv4Addr::new(a, b, c, d));
+            }
             false
         }
     }
 }
 
-/// Reject a URL whose host is a literal IP the fetch guard blocks.
+/// Return true for host names a manifest URL fetch must not target.
 ///
-/// Only literal addresses are checked. A hostname that resolves to a blocked
-/// address still passes, which is the same coverage the pre-retarget engine
-/// had: closing that needs resolution-time interception in the fetcher.
-fn reject_blocked_fetch_host(url: &str) -> Result<(), RuntimeError> {
-    let host = url
-        .split("://")
-        .nth(1)
-        .and_then(|rest| rest.split(['/', '?', '#']).next())
-        .map(|authority| authority.rsplit('@').next().unwrap_or(authority))
-        .unwrap_or_default();
-    let host = host.rsplit_once(':').map_or(host, |(h, port)| {
-        if port.chars().all(|c| c.is_ascii_digit()) && !h.is_empty() {
-            h
-        } else {
-            host
-        }
-    });
-    let bare = host.trim_start_matches('[').trim_end_matches(']');
-    if let Ok(ip) = bare.parse::<std::net::IpAddr>() {
-        if is_blocked_fetch_ip(ip) {
-            return Err(RuntimeError::ManifestInvalid(format!(
-                "URL '{url}' targets a loopback or link-local address, which is blocked to \
-                 prevent SSRF to a host-local or cloud metadata endpoint"
-            )));
-        }
-    }
-    Ok(())
+/// `localhost`, any `*.localhost` name (reserved for loopback by RFC 6761)
+/// and any `*.local` name (mDNS, RFC 6762, link-local scope) are blocked.
+/// The `url` crate lowercases ASCII domain labels; a trailing dot is
+/// removed before matching so `localhost.` cannot slip through.
+///
+/// Other names are not resolved here. A name that resolves into a blocked
+/// range, and DNS rebinding between this check and the connect, need a
+/// resolution-time check inside the fetcher, which `agent-control-spec`
+/// 0.4.0-alpha.3 does not expose (upstream issue #20).
+fn is_blocked_fetch_name(domain: &str) -> bool {
+    let name = domain.trim_end_matches('.').to_ascii_lowercase();
+    name == "localhost" || name.ends_with(".localhost") || name.ends_with(".local")
 }
 
+/// Reject a URL whose destination the fetch guard blocks.
+///
+/// The URL is parsed with the `url` crate, the same parser the upstream
+/// loader canonicalizes the fetch target with, and the check runs on the
+/// canonical `Url::host()`. Hand-splitting the authority and calling
+/// `str::parse::<IpAddr>` accepted only dotted-quad literals, so `127.1`,
+/// `2130706433`, `0x7f000001`, `0177.0.0.1` and `127.0.0<TAB>.1` walked past
+/// the guard and were then canonicalized to `127.0.0.1` by the fetcher.
+///
+/// Only the URL a caller passes is checked. Redirect hops are followed by
+/// the HTTP client inside `agent-control-spec` without re-running this
+/// check, and a nested `extends` URL inside the fetched manifest is not
+/// checked at all; see `docs/acs-retarget.md`.
+fn reject_blocked_fetch_host(url: &str) -> Result<(), RuntimeError> {
+    let parsed = url::Url::parse(url).map_err(|error| {
+        RuntimeError::ManifestInvalid(format!("manifest URL '{url}' is invalid: {error}"))
+    })?;
+    let blocked = match parsed.host() {
+        None => Some("no host".to_string()),
+        Some(url::Host::Ipv4(ip)) if is_blocked_fetch_ip(std::net::IpAddr::V4(ip)) => {
+            Some(format!("IPv4 address {ip}"))
+        }
+        Some(url::Host::Ipv6(ip)) if is_blocked_fetch_ip(std::net::IpAddr::V6(ip)) => {
+            Some(format!("IPv6 address {ip}"))
+        }
+        Some(url::Host::Domain(domain)) if is_blocked_fetch_name(domain) => {
+            Some(format!("host name '{domain}'"))
+        }
+        Some(_) => None,
+    };
+    match blocked {
+        Some(detail) => Err(RuntimeError::ManifestInvalid(format!(
+            "URL '{url}' targets a blocked destination ({detail}); manifest fetches must \
+             not reach loopback, link-local, private, unique-local or cloud metadata \
+             addresses, or the names localhost, *.localhost and *.local, to prevent SSRF \
+             against the host or its network"
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// Load a top-level manifest URL through ACS's URL `extends` resolver.
+///
+/// The URL is first run through the SSRF guard ([`reject_blocked_fetch_host`]).
+/// A synthetic one-entry `extends` manifest is then written to a temporary
+/// directory and loaded with `Manifest::from_path_with_limits`, so ACS
+/// performs the HTTPS trust checks, bounded fetch, redirect handling,
+/// optional SHA-256 verification, and recursive `extends` resolution.
+///
+/// The guard covers the URL passed here and nothing deeper. The upstream
+/// fetcher follows up to `limits.max_manifest_url_redirects` redirects
+/// inside its HTTP client without re-checking each hop, and exposes no
+/// hook to intercept them. A host that needs the guard to hold across
+/// redirects must pass `limits` with `max_manifest_url_redirects` set to
+/// `0`. A nested `extends` URL inside the fetched manifest is resolved by
+/// the upstream loader with no destination check (upstream issue #20).
 pub fn manifest_from_url(
     url: &str,
     sha256: Option<&str>,

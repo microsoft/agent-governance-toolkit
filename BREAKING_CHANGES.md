@@ -5,6 +5,45 @@ entries appear first.
 
 ---
 
+## `manifest_from_url` blocks private and unique-local literals and local names
+
+**Date:** TBD
+
+**Affected**
+
+- hosts that load a manifest with `manifest_from_url` (Rust), `AgentControl.from_url`
+  (Python), `AgentControl.fromUrl` (Node) or `acs_builder_from_url` (C ABI) from an
+  RFC 1918, `100.64.0.0/10`, `fc00::/7` or `fec0::/10` IP literal, or from
+  `localhost`, a `*.localhost` name or a `*.local` name
+
+**What changed**
+
+The SSRF guard on the top level manifest URL now parses the URL with the same
+parser the fetcher uses and evaluates the canonical host, so non canonical
+loopback and link-local literals (`127.1`, `2130706433`, `0x7f000001`,
+`0177.0.0.1`, an embedded tab) are refused instead of walking past a
+dotted-quad-only check. While closing that, the blocked set widened. Private,
+shared address space, unique-local and site-local addresses, and the three
+local name patterns, now fail closed with `runtime_error:manifest_invalid`.
+The previous engine allowed private literals so a manifest could be hosted on
+an internal HTTPS server by IP.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `https://10.0.0.5/manifest.yaml` | `https://policies.internal.example/manifest.yaml` |
+| `https://localhost:8443/manifest.yaml` (local testing) | load the file with `from_path`, or serve it under a public name |
+
+The guard still checks only the URL a caller passes. It does not resolve
+hostnames and it does not re-check redirect hops; set the redirect limit to
+zero (`Limits::max_manifest_url_redirects` in Rust, `max_url_redirects=0` in
+Python, `maxRedirects: 0` in Node) if the guard must hold across redirects.
+The C ABI `acs_builder_from_url` fetches with the default budget and cannot
+lower it yet. See `policy-engine/docs/acs-retarget.md`.
+
+---
+
 ## The policy engine moves to `agent-control-spec` and a three verdict contract
 
 **Date:** TBD

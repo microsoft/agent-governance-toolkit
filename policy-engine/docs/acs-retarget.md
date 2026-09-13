@@ -230,15 +230,50 @@ the process.
 path and reason tables were retargeted alongside them, so the normative document
 now describes the implemented contract throughout. The AgentDojo benchmark policy
 computes its own redacted value and returns a single `transform`. The transform a
-host applies is revalidated against `Limits`, and `manifest_from_url` refuses
-loopback and link-local destinations again.
+host applies is revalidated against `Limits`, and `manifest_from_url` runs an
+SSRF guard over the URL before anything is fetched.
 
-That last guard covers the URL a caller passes and nothing deeper. A nested
-`extends` URL inside a fetched manifest resolves through the loader in
-`agent-control-spec`, which has no equivalent check, and the guard resolves the
-host once rather than revalidating after DNS resolution or a redirect. Both sit
-in the same upstream gap as issue #20, so treat the guard as a barrier against
-the obvious case and not as a boundary.
+### The `manifest_from_url` guard
+
+The guard parses the URL with the `url` crate, the same parser the upstream
+loader canonicalizes the fetch target with, and evaluates `Url::host()`. An
+earlier port hand-split the authority and called `str::parse::<IpAddr>`, which
+accepts only dotted-quad literals; `127.1`, `2130706433`, `0x7f000001`,
+`0177.0.0.1` and `127.0.0<TAB>.1` passed it and were then canonicalized to
+`127.0.0.1` by the fetcher, which connected. The test
+`manifest_from_url_blocks_ssrf_targets` now carries every one of those forms,
+and `manifest_from_url_never_connects_to_a_blocked_literal` binds a loopback
+listener and asserts no connection arrives.
+
+Blocked destinations: loopback, the unspecified address and `0.0.0.0/8`,
+broadcast, link-local (`169.254.0.0/16`, `fe80::/10`), RFC 1918 private
+ranges, the shared address space `100.64.0.0/10`, IPv6 unique-local
+`fc00::/7` and site-local `fec0::/10`, and the names `localhost`,
+`*.localhost` and `*.local`. IPv4-mapped, IPv4-compatible and NAT64
+well-known-prefix IPv6 literals are checked on their embedded IPv4 address.
+The pre-retarget engine allowed RFC 1918 and unique-local literals so a policy
+could be hosted on an internal HTTPS server by IP; that is no longer allowed,
+and internal hosting must use a hostname.
+
+What the guard does not do, all of it the same upstream gap as issue #20:
+
+- Hostnames other than the three blocked patterns are not resolved. A name that
+  resolves into a blocked range, and DNS rebinding between the check and the
+  connect, need a resolution-time check inside the fetcher.
+- Redirect hops are not re-checked. `agent-control-spec` 0.4.0-alpha.3 hands
+  redirect following to its HTTP client (`max_redirects` from
+  `Limits::max_manifest_url_redirects`, default 5) and exposes no hook to
+  intercept a hop, so a vetted public URL can redirect to a blocked address.
+  The pre-retarget engine followed redirects itself and re-ran each hop through
+  the guard. A host that needs the guard to hold across redirects must pass
+  `max_manifest_url_redirects: 0` (`max_url_redirects=0` in Python,
+  `maxRedirects: 0` in Node). The C ABI `acs_builder_from_url` fetches with
+  the default budget; `acs_builder_set_url_fetch_limits` runs after the fetch
+  and does not reach it.
+- A nested `extends` URL inside the fetched manifest resolves through the
+  upstream loader with no destination check at all.
+
+Treat the guard as a barrier against the obvious case and not as a boundary.
 
 ### Before this merges
 

@@ -1063,32 +1063,133 @@ fn with_telemetry_emits_one_decision_event_per_evaluation() {
 
 #[test]
 fn manifest_from_url_blocks_ssrf_targets() {
-    // Every form the pre-retarget engine blocked, including the dual-stack
-    // bypasses that motivated the IPv4 canonicalization.
+    // Canonical forms, the dual-stack bypasses that motivated the IPv4
+    // canonicalization, and every non-canonical literal the review probe
+    // showed walking past the hand-split guard: the `url` crate turns each
+    // of them into 127.0.0.1 or 169.254.169.254 before the fetcher connects.
     for url in [
+        // Canonical loopback, link-local, unspecified, broadcast.
         "https://127.0.0.1/m.yaml",
         "https://169.254.169.254/latest/meta-data",
         "https://[::1]/m.yaml",
         "https://[::ffff:169.254.169.254]/m.yaml",
         "https://[::ffff:127.0.0.1]/m.yaml",
+        "https://[::ffff:7f00:1]/m.yaml",
+        "https://[::127.0.0.1]/m.yaml",
+        "https://[64:ff9b::7f00:1]/m.yaml",
+        "https://[fe80::1]/m.yaml",
         "https://0.0.0.0/m.yaml",
+        "https://0.0.0.1/m.yaml",
         "https://255.255.255.255/m.yaml",
         "https://user:pw@127.0.0.1:8443/m.yaml",
+        // Non-canonical IPv4 literals from the probe.
+        "https://127.1/m.yaml",
+        "https://127.0.1/m.yaml",
+        "https://2130706433/m.yaml",
+        "https://0x7f000001/m.yaml",
+        "https://0x7f.0.0.1/m.yaml",
+        "https://0177.0.0.1/m.yaml",
+        "https://0177.0000.0000.0001/m.yaml",
+        "https://2852039166/m.yaml",
+        "https://0xA9FEA9FE/m.yaml",
+        "https://0xa9.0xfe.0xa9.0xfe/m.yaml",
+        "https://0251.0376.0251.0376/m.yaml",
+        "https://169.254.43518/m.yaml",
+        "https://127.0.0.1./m.yaml",
+        "https://127.0.0\t.1/m.yaml",
+        "https://127.0.0.\n1/m.yaml",
+        "https://127.1:8443/m.yaml",
+        // Private, shared address space and unique-local ranges.
+        "https://10.0.0.5/m.yaml",
+        "https://172.16.0.1/m.yaml",
+        "https://172.31.255.254/m.yaml",
+        "https://192.168.1.1/m.yaml",
+        "https://100.100.100.200/m.yaml",
+        "https://100.64.0.1/m.yaml",
+        "https://[fd00:ec2::254]/m.yaml",
+        "https://[fc00::1]/m.yaml",
+        "https://[fec0::1]/m.yaml",
+        "https://[::ffff:10.0.0.5]/m.yaml",
+        "https://[::ffff:c0a8:101]/m.yaml",
+        // Loopback and link-local names.
+        "https://localhost/m.yaml",
+        "https://LOCALHOST/m.yaml",
+        "https://localhost./m.yaml",
+        "https://localhost:8443/m.yaml",
+        "https://api.localhost/m.yaml",
+        "https://printer.local/m.yaml",
+        "https://a.b.local./m.yaml",
     ] {
         let error = crate::manifest_from_url(url, None, crate::Limits::default())
+            .expect_err(&format!("{url:?} must be refused"));
+        assert_eq!(
+            error.reason(),
+            "runtime_error:manifest_invalid",
+            "{url:?} gave {error}"
+        );
+        assert!(
+            error.to_string().contains("blocked destination"),
+            "{url:?} gave {error}"
+        );
+    }
+
+    // A malformed URL fails closed at the guard rather than reaching the
+    // fetcher.
+    for url in [
+        "https://",
+        "https://[::1/m.yaml",
+        "https://exa mple.com/m.yaml",
+        "not a url",
+    ] {
+        let error = super::reject_blocked_fetch_host(url).expect_err(url);
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid", "{url}");
+    }
+
+    // Public destinations pass the guard. Checked on the guard directly so the
+    // test does not open a connection; TEST-NET-3 (RFC 5737), a public
+    // hostname, a `.local`-looking label that is not the suffix, and a
+    // globally routable IPv6 address.
+    for url in [
+        "https://203.0.113.5/m.yaml",
+        "https://policy.example/m.yaml",
+        "https://local.example.com/m.yaml",
+        "https://localhost.example.com/m.yaml",
+        "https://[2001:db8::1]/m.yaml",
+        "https://[64:ff9b::cb00:7105]/m.yaml",
+    ] {
+        super::reject_blocked_fetch_host(url).unwrap_or_else(|error| {
+            panic!("{url} must pass the guard, got {error}");
+        });
+    }
+}
+
+#[test]
+fn manifest_from_url_never_connects_to_a_blocked_literal() {
+    // The review probe: a listener on loopback and a non-canonical literal
+    // for it. Before the fix the guard let `127.1` through, the fetcher
+    // canonicalized it and the listener saw the TCP connect.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    for url in [
+        format!("https://127.1:{port}/m.yaml"),
+        format!("https://2130706433:{port}/m.yaml"),
+        format!("https://0x7f000001:{port}/m.yaml"),
+        format!("https://localhost:{port}/m.yaml"),
+        format!("https://[::ffff:127.0.0.1]:{port}/m.yaml"),
+    ] {
+        let error = crate::manifest_from_url(&url, None, crate::Limits::default())
             .expect_err(&format!("{url} must be refused"));
         assert!(
-            error.to_string().contains("loopback or link-local"),
+            error.to_string().contains("blocked destination"),
             "{url} gave {error}"
         );
     }
 
-    // RFC1918 stays allowed so internal policy hosting keeps working: this
-    // one fails at the fetch, not at the guard.
-    let error = crate::manifest_from_url("https://10.0.0.5/m.yaml", None, crate::Limits::default())
-        .expect_err("unreachable host still errors");
-    assert!(
-        !error.to_string().contains("loopback or link-local"),
-        "RFC1918 must not be blocked by the guard: {error}"
-    );
+    match listener.accept() {
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+        Ok((_, peer)) => panic!("guard let a fetch connect to loopback from {peer}"),
+        Err(error) => panic!("unexpected accept error: {error}"),
+    }
 }
