@@ -757,7 +757,8 @@ class PolicyEngine:
         Raises:
             ValueError: neither rego_path nor rego_content given, both are
                 given, either is an empty string, the declared package
-                doesn't match `package`, or the policy fails to compile.
+                doesn't match `package`, the policy fails to compile, or
+                `package` has no rules anywhere in the loaded source.
             FileNotFoundError: rego_path does not exist.
             RuntimeError: the opa CLI is not on PATH.
         """
@@ -812,6 +813,26 @@ class PolicyEngine:
         probe = evaluator.evaluate("true", {})
         if probe.error is not None:
             raise ValueError(f"rego policy failed to compile: {probe.error}")
+
+        # The static package check above only covers a single-file
+        # rego_path; a directory skips it entirely, and even for a single
+        # file it's a regex match on one `package` line, not proof the
+        # loaded source actually defines anything under it. Query the bare
+        # package path (not `.allow`) with empty input: an *existing*
+        # package is always "defined" here, even if every rule under it is
+        # false or itself undefined for empty input (e.g. no `default`
+        # line and a body that references `input`) — only a package with
+        # zero rules anywhere in the loaded source comes back undefined.
+        # Probing `.allow` directly instead would conflate that second,
+        # legitimate case with an actual package mismatch.
+        package_probe = evaluator.evaluate(f"data.{package}", {})
+        if not package_probe.defined:
+            raise ValueError(
+                f"package '{package}' has no rules anywhere in the loaded "
+                f"rego source (data.{package} is undefined) — every "
+                f"governed call would silently deny. Check that {package} "
+                "matches what the source actually declares."
+            )
 
         self._rego_evaluators.append((package, evaluator))
         return evaluator

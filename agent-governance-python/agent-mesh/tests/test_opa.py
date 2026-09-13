@@ -168,6 +168,42 @@ class TestBuiltinEvaluator:
         assert result.source == "local"
 
 
+# ── Non-boolean `allow` values must deny, not coerce with truthiness ──
+#
+# Rego output is security evidence feeding an authorization decision. A
+# policy author's `allow := "deny"` reads as intending to deny; naive
+# Python truthiness (`bool("deny")`) reads it as permit instead.
+
+@requires_opa
+class TestNonBooleanAllowValueDeniesWithError:
+    @pytest.mark.parametrize(
+        "rego_value",
+        ['"deny"', "{}", "[]", '["x"]', "42", "null"],
+    )
+    def test_non_boolean_allow_denies_with_error(self, rego_value):
+        rego = f"package agentmesh\n\nallow := {rego_value}\n"
+        evaluator = OPAEvaluator(mode="local", rego_content=rego)
+        result = evaluator.evaluate("data.agentmesh.allow", {})
+        assert result.allowed is False
+        assert result.error is not None
+        assert "boolean" in result.error
+
+    def test_true_still_allows(self):
+        evaluator = OPAEvaluator(mode="local", rego_content="package agentmesh\n\nallow := true\n")
+        result = evaluator.evaluate("data.agentmesh.allow", {})
+        assert result.allowed is True
+        assert result.error is None
+
+    def test_false_still_denies_without_error(self):
+        """Zero, unlike the non-boolean values above, used to coerce
+        correctly by accident (bool(0) is False) - pin that it still
+        does, now via the type check rather than a truthiness coincidence."""
+        evaluator = OPAEvaluator(mode="local", rego_content="package agentmesh\n\nallow := false\n")
+        result = evaluator.evaluate("data.agentmesh.allow", {})
+        assert result.allowed is False
+        assert result.error is None
+
+
 # ── OPADecision model ────────────────────────────────────────
 
 class TestOPADecision:
@@ -177,6 +213,7 @@ class TestOPADecision:
         assert d.error is None
         assert d.source == "local"
         assert d.evaluation_ms == 0.0
+        assert d.defined is True
 
     def test_error_decision(self):
         d = OPADecision(allowed=False, error="timeout", source="remote")
@@ -294,6 +331,19 @@ class TestEdgeCases:
         # Querying a rule that doesn't exist returns default False
         result = evaluator.evaluate("data.agentmesh.nonexistent", {})
         assert result.allowed is False
+
+    def test_defined_false_for_nonexistent_package(self):
+        """`allowed=False` alone can't distinguish "genuinely denied" from
+        "this package doesn't exist at all" - `defined` is the field that
+        can (see PolicyEngine.load_rego's package-existence probe)."""
+        evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)  # package agentmesh
+        result = evaluator.evaluate("data.nonexistent_package", {})
+        assert result.defined is False
+
+    def test_defined_true_for_existing_package_with_false_result(self):
+        evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
+        result = evaluator.evaluate("data.agentmesh", {"agent": {"role": "intern"}})
+        assert result.defined is True
 
     def test_empty_input(self):
         evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
@@ -423,6 +473,34 @@ class TestLoadRegoValidation:
     def test_matching_package_succeeds(self):
         engine = PolicyEngine()
         evaluator = engine.load_rego(rego_content=BASIC_REGO, package="agentmesh")
+        assert isinstance(evaluator, OPAEvaluator)
+
+    @requires_opa
+    def test_directory_package_mismatch_raises(self, tmp_path):
+        """The static package check only reads a single rego_content/
+        rego_path *file*; a directory bundle skips it entirely. Without
+        also probing the bare package path, a directory whose file
+        declares a different package than configured loaded silently and
+        every governed call denied forever after."""
+        (tmp_path / "policy.rego").write_text(
+            "package other\n\ndefault allow = false\n\nallow {\n    input.x == \"y\"\n}\n"
+        )
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="has no rules anywhere in the loaded"):
+            engine.load_rego(rego_path=str(tmp_path), package="agentmesh")
+
+    @requires_opa
+    def test_directory_no_default_still_succeeds(self, tmp_path):
+        """The opposite of the case above: the *correct* package, just
+        with no `default` line, so data.<package>.allow is undefined for
+        the {} probe input. That must not be mistaken for a package
+        mismatch - the package genuinely exists, only this one rule is
+        conditionally undefined."""
+        (tmp_path / "policy.rego").write_text(
+            "package agentmesh\n\nallow {\n    input.x == \"y\"\n}\n"
+        )
+        engine = PolicyEngine()
+        evaluator = engine.load_rego(rego_path=str(tmp_path), package="agentmesh")
         assert isinstance(evaluator, OPAEvaluator)
 
     @requires_opa

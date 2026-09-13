@@ -62,6 +62,14 @@ class OPADecision:
         source: How the evaluation was performed
             (``"remote"``, ``"local"``, or ``"fallback"``).
         error: Error message if evaluation failed, otherwise ``None``.
+        defined: Whether OPA returned a result at all. ``False`` means
+            the query path is undefined in the loaded source (e.g. the
+            queried package doesn't exist), not that it evaluated to a
+            falsy value — a query that legitimately resolves to
+            ``{}``/``false`` still has ``defined=True``. ``allowed`` is
+            ``False`` in both cases; this is the field that tells them
+            apart, e.g. for a construction-time "does this package even
+            exist" check (see PolicyEngine.load_rego).
     """
     allowed: bool
     raw_result: Any = None
@@ -69,6 +77,27 @@ class OPADecision:
     evaluation_ms: float = 0.0
     source: Literal["remote", "local", "fallback"] = "local"
     error: Optional[str] = None
+    defined: bool = True
+
+
+def _require_boolean_decision(value: Any) -> tuple[bool, Optional[str]]:
+    """Require *value* to be a genuine Rego boolean.
+
+    Rego output is security evidence feeding an authorization decision,
+    not a generic value to coerce with Python truthiness: a policy
+    author's ``allow := "deny"`` or ``allow := {}`` read as intending to
+    deny, not permit, yet a non-empty string or non-empty collection is
+    truthy. Only ``True``/``False`` are accepted; anything else
+    (strings, collections, numbers other than a bare bool, ``null``)
+    denies with an explicit error, so a miswritten policy is visible
+    instead of silently executing the governed call.
+    """
+    if isinstance(value, bool):
+        return value, None
+    return False, (
+        f"rego policy must evaluate to a boolean, got {value!r} "
+        f"({type(value).__name__})"
+    )
 
 
 class OPAEvaluator:
@@ -220,14 +249,17 @@ class OPAEvaluator:
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:  # noqa: S310 — OPA server URL from configuration
                 body = json.loads(resp.read().decode("utf-8"))
+                defined = "result" in body
                 result_value = body.get("result", False)
-                allowed = bool(result_value) if isinstance(result_value, (bool, int)) else result_value is not None
+                allowed, type_error = _require_boolean_decision(result_value) if defined else (False, None)
 
                 return OPADecision(
                     allowed=allowed,
                     raw_result=body,
                     query=query,
                     source="remote",
+                    error=type_error,
+                    defined=defined,
                 )
         except Exception as e:
             return OPADecision(
@@ -303,15 +335,18 @@ class OPAEvaluator:
             # still exits 0. Treat it as a definite deny rather than
             # indexing into the empty list.
             results = result.get("result") or []
+            defined = bool(results)
             expressions = results[0].get("expressions", [{}]) if results else []
             value = expressions[0].get("value", False) if expressions else False
-            allowed = bool(value) if isinstance(value, (bool, int)) else value is not None
+            allowed, type_error = _require_boolean_decision(value)
 
             return OPADecision(
                 allowed=allowed,
+                defined=defined,
                 raw_result=result,
                 query=query,
                 source="local",
+                error=type_error,
             )
         except subprocess.TimeoutExpired:
             return OPADecision(
