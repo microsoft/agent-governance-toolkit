@@ -218,6 +218,42 @@ class TestFileAuditSink:
 
         assert isinstance(sink, AuditSink)
 
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file modes only")
+    def test_write_tightens_permissions_on_a_pre_existing_file(self, tmp_path: Path):
+        """os.open(..., O_CREAT, 0o600)'s mode only applies if the call
+        creates the file; one that already exists at a looser mode (e.g.
+        world-readable) used to keep it, silently, for every subsequent
+        write of an entry that can carry call arguments."""
+        path = tmp_path / "audit.jsonl"
+        path.touch()
+        path.chmod(0o644)
+
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry())
+
+        assert (path.stat().st_mode & 0o777) == 0o600
+
+    def test_corrupted_middle_line_does_not_break_resume_or_reads(self, tmp_path: Path):
+        """A single trailing corrupt line was already tolerated; a
+        corrupt line followed by a resumed write (e.g. crash mid-append,
+        then process restart) used to leave verify_integrity()/
+        read_entries() permanently broken from that point on."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="first"))
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write('{"not": "valid json"\n')  # simulates a crash mid-write
+        sink.close()
+
+        sink2 = FileAuditSink(path, SECRET_KEY)
+        sink2.write(_make_entry(entry_id="second"))
+
+        entries = sink2.read_entries()
+        assert [e.entry_id for e in entries] == ["first", "second"]
+
+        is_valid, error = sink2.verify_integrity()
+        assert is_valid is True, f"Integrity check failed: {error}"
+
 
 class TestFileAuditSinkConstructionValidation:
     """A bad path used to construct fine and fail lazily on the first
@@ -241,6 +277,16 @@ class TestFileAuditSinkConstructionValidation:
         with pytest.raises(ValueError, match="symlink"):
             FileAuditSink(link, SECRET_KEY)
 
+    def test_existing_file_signed_with_a_different_key_raises(self, tmp_path: Path):
+        """Opening a sink on a file that already has entries - just not
+        ones this key can verify - must fail at construction, not go on
+        to silently extend that chain as if it were this sink's own."""
+        path = tmp_path / "audit.jsonl"
+        FileAuditSink(path, b"a-completely-different-key-32by").write(_make_entry())
+
+        with pytest.raises(ValueError, match="does not verify"):
+            FileAuditSink(path, SECRET_KEY)
+
 
 class TestFileAuditSinkExternalRotation:
     """logrotate-style external rotation (rename the file away, a fresh one
@@ -263,16 +309,16 @@ class TestFileAuditSinkExternalRotation:
         assert is_valid is True, f"Integrity check failed: {error}"
         assert len(sink.read_entries()) == 1
 
-    def test_write_after_external_replace_resyncs_to_new_file(self, tmp_path: Path):
-        """Covers replacement by a *different* sink/process (not just a
-        rename-away): the file at `path` changes identity even though a
-        file exists there the whole time."""
+    def test_write_after_external_replace_with_same_key_resyncs(self, tmp_path: Path):
+        """Replacement by a *different* sink/process using the *same* key
+        (not just a rename-away) is a legitimate resync: the file at
+        `path` changes identity even though a file exists there the
+        whole time, but the chain is still authentically ours."""
         path = tmp_path / "audit.jsonl"
         sink = FileAuditSink(path, SECRET_KEY)
         sink.write(_make_entry(entry_id="original"))
 
-        other_key = b"a-completely-different-key-32by"
-        other = FileAuditSink(tmp_path / "other.jsonl", other_key)
+        other = FileAuditSink(tmp_path / "other.jsonl", SECRET_KEY)
         other.write(_make_entry(entry_id="unrelated"))
         (tmp_path / "other.jsonl").replace(path)
 
@@ -282,6 +328,24 @@ class TestFileAuditSinkExternalRotation:
         assert len(entries) == 2
         assert entries[0].entry_id == "unrelated"
         assert entries[1].entry_id == "after-replace"
+
+    def test_write_after_external_replace_with_different_key_fails_closed(
+        self, tmp_path: Path
+    ):
+        """A file swapped in under a *different* key must not be silently
+        extended as if it were this sink's own chain - see the docstring
+        on FileAuditSink._read_last_hash."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="original"))
+
+        other_key = b"a-completely-different-key-32by"
+        other = FileAuditSink(tmp_path / "other.jsonl", other_key)
+        other.write(_make_entry(entry_id="unrelated"))
+        (tmp_path / "other.jsonl").replace(path)
+
+        with pytest.raises(ValueError, match="does not verify"):
+            sink.write(_make_entry(entry_id="after-replace"))
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +417,22 @@ class TestHashChainVerifier:
 
         assert is_valid is False
         assert any("does not exist" in e for e in errors)
+
+    def test_skips_unparsable_line_instead_of_failing_the_whole_file(self, tmp_path: Path):
+        """A corrupt line does not, on its own, make the surrounding
+        genuine entries unverifiable - only a real chain break or bad
+        signature among what parses should."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="before"))
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("not json at all\n")
+        sink.write(_make_entry(entry_id="after"))
+
+        verifier = HashChainVerifier()
+        is_valid, errors = verifier.verify_file(path, SECRET_KEY)
+
+        assert is_valid is True, errors
 
 
 # ---------------------------------------------------------------------------

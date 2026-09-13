@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 # Not defined on Windows; there a symlinked audit path is a smaller risk
 # (no unprivileged-user symlink-swap TOCTOU) so opening without it is fine.
 _O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+# Not defined on Windows, which has no equivalent POSIX-permission concept.
+_HAS_FCHMOD = hasattr(os, "fchmod")
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +219,34 @@ class SignedAuditEntry(BaseModel):
         return self.model_dump()
 
 
+def _iter_parsed_entries(path: Path) -> list[SignedAuditEntry]:
+    """Parse every line of *path*, skipping (and logging) any that don't.
+
+    A write interrupted mid-line (crash, disk full) leaves a corrupt
+    line; treating that as a hard failure would turn one bad append into
+    a permanent block on ever reading or verifying the file again. This
+    doesn't weaken the hash chain: a skipped line is simply excluded from
+    it, so replacing a real entry with garbage still breaks chain
+    continuity at the next real entry - it can't be smoothed over without
+    the signing key. Shared by read_entries, HashChainVerifier.verify_file,
+    and FileAuditSink's own chain-resume logic, so all three agree on what
+    "readable" means.
+    """
+    entries: list[SignedAuditEntry] = []
+    if not path.exists():
+        return entries
+    with open(path, "r", encoding="utf-8") as fh:
+        for lineno, line in enumerate(fh, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                entries.append(SignedAuditEntry.model_validate_json(stripped))
+            except Exception:
+                logger.warning("%s: skipping unparsable line %d", path, lineno)
+    return entries
+
+
 # ---------------------------------------------------------------------------
 # FileAuditSink
 # ---------------------------------------------------------------------------
@@ -343,6 +373,12 @@ class FileAuditSink:
             os.O_WRONLY | os.O_CREAT | os.O_APPEND | _O_NOFOLLOW,
             0o600,
         )
+        if _HAS_FCHMOD:
+            # The 0o600 above only applies if this call created the file;
+            # one that already existed (e.g. 0644) keeps its old mode
+            # otherwise, and would go on receiving entries - which can
+            # carry call arguments - in the open.
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as fh:
             fh.write(line + "\n")
 
@@ -387,44 +423,32 @@ class FileAuditSink:
         self._file_id = current_id
 
     def _read_last_hash(self) -> str:
-        """Read the content_hash of the last entry in the file.
+        """Return the content_hash to chain the next entry onto, after
+        verifying the existing chain authenticates under this sink's key.
 
-        A write interrupted mid-line (crash, disk full) leaves a corrupt
-        trailing line. Crashing the constructor on that line would turn a
-        single bad append into a permanent block on every future one —
-        the file can never again produce a sink to append through. Instead
-        skip back to the last line that parses, logging the skip; the
-        corrupt line itself is left in place, untouched, for forensics.
+        Resuming onto an unverified chain would let a file swapped out
+        from under this sink - by another process, an attacker, or just a
+        different key - get silently extended as if it were ours;
+        verify_integrity() would then fail confusingly, if anyone thought
+        to check. Fail closed here instead, at resume time, with a clear
+        reason. Unparsable lines are skipped, not treated as a failure -
+        see _iter_parsed_entries.
         """
-        lines: list[str] = []
-        with open(self._path, "r", encoding="utf-8") as fh:
-            for line in fh:
-                stripped = line.strip()
-                if stripped:
-                    lines.append(stripped)
-        for stripped in reversed(lines):
-            try:
-                data = json.loads(stripped)
-            except json.JSONDecodeError:
-                logger.warning(
-                    "FileAuditSink(%s): skipping unparsable trailing line "
-                    "while resuming the hash chain", self._path,
+        previous_hash = ""
+        for entry in _iter_parsed_entries(self._path):
+            if entry.previous_hash != previous_hash or not entry.verify(self._secret_key):
+                raise ValueError(
+                    f"{self._path}: existing audit chain does not verify "
+                    "under the configured audit_secret_key - refusing to "
+                    "resume onto an unauthenticated or tampered file."
                 )
-                continue
-            return data.get("content_hash", "")
-        return ""
+            previous_hash = entry.content_hash
+        return previous_hash
 
     def read_entries(self) -> list[SignedAuditEntry]:
-        """Read all signed entries from the file (for testing/querying)."""
-        entries: list[SignedAuditEntry] = []
-        if not self._path.exists():
-            return entries
-        with open(self._path, "r", encoding="utf-8") as fh:
-            for line in fh:
-                stripped = line.strip()
-                if stripped:
-                    entries.append(SignedAuditEntry.model_validate_json(stripped))
-        return entries
+        """Read all signed entries from the file (for testing/querying).
+        Unparsable lines are skipped - see _iter_parsed_entries."""
+        return _iter_parsed_entries(self._path)
 
 
 # ---------------------------------------------------------------------------
@@ -462,19 +486,10 @@ class HashChainVerifier:
         if not path.exists():
             return False, ["File does not exist"]
 
-        entries: list[SignedAuditEntry] = []
-        with open(path, "r", encoding="utf-8") as fh:
-            for lineno, line in enumerate(fh, start=1):
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                try:
-                    entries.append(SignedAuditEntry.model_validate_json(stripped))
-                except Exception as exc:
-                    errors.append(f"Line {lineno}: parse error: {exc}")
-
-        if errors:
-            return False, errors
+        # Unparsable lines are skipped, not a hard failure - see
+        # _iter_parsed_entries. A genuinely tampered or foreign entry among
+        # what does parse still fails chain-continuity or HMAC below.
+        entries = _iter_parsed_entries(path)
 
         previous_hash = ""
         for idx, entry in enumerate(entries):
