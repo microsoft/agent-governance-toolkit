@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from agentmesh.governance.opa import OPAEvaluator, OPADecision
+from agentmesh.governance.opa import OPADecision, OPAEvaluator
 from agentmesh.governance.policy import PolicyEngine
 
 requires_opa = pytest.mark.skipif(
