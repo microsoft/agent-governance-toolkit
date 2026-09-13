@@ -1,0 +1,15 @@
+version: v4
+rules:
+  - priority: 10
+    condition:
+      lt:
+        - {field: context.risk_score}
+        - 30
+    effect: ALLOW
+  - priority: 5
+    condition:
+      all:
+        - eq: [{field: action.name}, refund]
+        - lte: [{field: action.parameters.amount}, 50000]
+    effect: ALLOW
+default_effect: DENY
