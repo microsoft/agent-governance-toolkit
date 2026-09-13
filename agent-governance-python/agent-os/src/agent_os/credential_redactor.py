@@ -149,6 +149,17 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])(?:xox[baprs]|xapp)-[A-Za-z0-9-]{10,}"),
         ),
         CredentialPattern(
+            # The value class includes "_"/"-", and the length is fixed at 35,
+            # so a real key can end in one of them. When that happens and an
+            # unrelated alphanumeric character follows with no separator (a 35
+            # char run ending in "-" glued straight to more text), this treats
+            # that the same as any other "one more alphanumeric character"
+            # case and does not redact it, on the same reasoning already
+            # applied to AWS access key above. That is a real, if narrow, gap
+            # compared to a trailing \b, which would have treated "-" as an
+            # automatic boundary on its own. Pinned deliberately by
+            # test_does_not_widen_google_api_key_match_when_key_ends_in_hyphen
+            # rather than left as an unexamined side effect.
             name="Google API key",
             pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}(?![A-Za-z0-9])"),
         ),

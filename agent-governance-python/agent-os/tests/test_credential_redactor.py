@@ -407,6 +407,21 @@ def test_trailing_anchor_does_not_widen_the_match(text: str):
     assert CredentialRedactor.contains_credentials(text) is False
 
 
+def test_does_not_widen_google_api_key_match_when_key_ends_in_hyphen():
+    # Pins a deliberate, narrow gap: the 35 char value class includes "-", so a
+    # real key can end in one. A trailing \b would have treated "-" as an
+    # automatic boundary on its own and redacted this shape. The mirror
+    # assertion treats an alphanumeric character glued right after, with no
+    # separator, the same as the other "one more alphanumeric character"
+    # cases above, and leaves it unredacted. Documented here rather than left
+    # as an unexamined side effect of the #3494 fix.
+    key_ending_in_hyphen = "AIza" + "A" * 34 + "-"
+    text = f"{key_ending_in_hyphen}X"
+
+    assert CredentialRedactor.redact(text) == text
+    assert CredentialRedactor.contains_credentials(text) is False
+
+
 @pytest.mark.parametrize(
     "text",
     [
