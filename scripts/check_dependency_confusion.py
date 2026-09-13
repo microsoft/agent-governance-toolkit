@@ -246,9 +246,10 @@ REGISTERED_CARGO_PACKAGES = {
     "opentelemetry", "regex", "regorus",
     "assert_cmd", "predicates",
     # Upstream crates AGT depends on after the policy engine was extracted.
-    # Both are published; verified against the crates.io API:
-    #   agent-control-spec  max_version 0.4.0-alpha.1
-    #   agent-hooks-sdk     max_version 0.1.0-alpha.4
+    # Both are published; the pinned versions, verified against the crates.io
+    # API on 2026-09-13:
+    #   agent-control-spec  =0.4.0-alpha.3
+    #   agent-hooks-sdk     =0.1.0-alpha.5
     "agent-control-spec", "agent-hooks-sdk",
     # Vendored ACS policy-engine crate deps (all real crates.io crates)
     "url", "ureq", "jsonschema", "criterion", "tokio", "rmcp",

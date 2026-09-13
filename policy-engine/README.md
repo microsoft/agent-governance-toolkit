@@ -264,8 +264,8 @@ Policies must not emit reasons with that prefix. See specification section 15 fo
 
 | Item | Value |
 | --- | --- |
-| Original ACS license | Preserved at `policy-engine/LICENSE.acs`. |
+| Original ACS license | Preserved at `policy-engine/LICENSE.acs`. It covers the specification, schema and conformance files under `policy-engine/spec` and `policy-engine/tests` that originated in the upstream Agent Control Specification project. |
 
 ## License
 
-ACS is licensed under the MIT License. See `LICENSE` in repository checkouts and `LICENSE.acs` for the vendored source attribution.
+The engine is no longer vendored here; it is the `agent-control-spec` crate from crates.io, under its own MIT license. Code in this directory is licensed under the MIT License in `LICENSE` at the repository root. `LICENSE.acs` is the upstream notice for the specification, schema and conformance files that still carry upstream text.

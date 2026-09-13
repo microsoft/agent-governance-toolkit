@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Drive real ACS enforcement cases through the shipped native artifact.
 
 This deliberately avoids every Rust and .NET test harness. It dlopen()s the

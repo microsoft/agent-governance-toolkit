@@ -11,8 +11,9 @@ readme = "../../README.md"
 # SECURITY: the bundled annotator dispatchers read host environment
 # credentials. AGT gated that on manifest provenance through a
 # `url_sourced` flag, so a manifest fetched over the network could not
-# reach host credentials. agent-control-spec 0.4.0-alpha.1 dropped the
-# gate while still supporting URL `extends`, so the complete chain
+# reach host credentials. agent-control-spec dropped the gate in
+# 0.4.0-alpha.1 and the pinned 0.4.0-alpha.3 still has none, while URL
+# `extends` remains supported, so the complete chain
 # remote manifest -> llm/endpoint annotator -> attacker endpoint ->
 # `api_key_env: <host secret>` is reachable.
 #

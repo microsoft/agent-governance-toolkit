@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Drift guards for the reserved reason registry and the wire result schema.
 
 These run in CI through `pytest generator`. They exist because three separate

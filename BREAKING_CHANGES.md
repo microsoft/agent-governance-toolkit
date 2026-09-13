@@ -127,6 +127,31 @@ These retain names, not the old signatures or behavior.
 A host that tested `decision == "warn"` should read `warnings` instead. A host
 that tested for `escalate` should test for the `approval` block on a `deny`.
 
+Host-synthesized reasons moved from the engine's `runtime_error:` namespace to
+the reserved `host_error:` namespace, and one was renamed. A host matching on
+the old strings must update:
+
+| Before | After |
+|--------|-------|
+| `runtime_error:approval_resolver_failed` | `host_error:approval_resolver_failed` |
+| `runtime_error:approval_action_mismatch` | `host_error:approval_identity_mismatch` |
+| (none) | `host_error:approval_unresolved`, a liftable deny with no resolver or a timed-out one |
+| `runtime_error:effect_invalid`, `runtime_error:effect_target_forbidden` | gone with the effects plane. The engine keeps `runtime_error:transform_invalid` and `runtime_error:transform_target_forbidden`; a transform the host rejects while applying it reports `host_error:transform_invalid` or `host_error:transform_target_forbidden` |
+| `runtime_error:adapter_unsupported`, `runtime_error:streaming_unsupported` | `host_error:adapter_unsupported`, `host_error:streaming_unsupported` |
+
+`policy-engine/spec/reserved-reasons.json` is the registry.
+
+Rust `use` paths inside `agent_control_specification_core` moved. The root
+re-exports still resolve; module-qualified imports must change:
+
+| Before | After |
+|--------|-------|
+| `manifest::{parse_manifest_yaml_value, validate_manifest_yaml, validate_manifest_overlay_yaml}` | `manifest_yaml::{...}` |
+| `telemetry::{InMemoryTelemetrySink, MultiSink, StdoutJsonTelemetrySink}` | `telemetry_sinks::{...}` |
+| `policy_input::action_identity` | `identity::action_identity` |
+| `intervention_point`, `verdict`, `ffi` modules | removed from the core crate root; the C ABI is `agent_control_specification::ffi` |
+| core `crate-type = ["lib", "cdylib"]` | `lib` only; the `cdylib` is built from `agent_control_specification` |
+
 Python consumers need `agent-control-specification>=0.4.0b0,<0.5.0`.
 `agt-policies` 5.1.0 and the generator declare that requirement so an installed
 0.3.1b1 wheel cannot satisfy it. Publish the new SDK before these consumers.
