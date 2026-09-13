@@ -317,18 +317,25 @@ What the guard does not do, all of it the same upstream gap as issue #20:
 
 Treat the guard as a barrier against the obvious case and not as a boundary.
 
-### Before this merges
+### Registry ownership decision
 
-The review required trusted publishing, repository metadata and an organization
-or team co-owner for `agent-control-spec`. Registry APIs checked on September 8,
-2026 show repository metadata and trusted publication for the selected alpha.3
-artifact, bound to upstream commit `4c47b57033b98c0d2ccf1b94624f058815db0a9c`.
-Its downloaded crate checksum was verified against the registry. The registry
-still lists one individual owner, so the reviewer's ownership condition is
-not waived. Upstream
-[#24](https://github.com/responsibleai/agent-control-spec/issues/24) remains open.
-Merge still requires that condition to be satisfied or an explicit maintainer
-decision changing it.
+The review asked for trusted publishing, repository metadata and an
+organization or team co-owner for `agent-control-spec`. Registry APIs checked on
+September 13, 2026 show repository metadata and a trusted-publishing attestation
+for the pinned alpha.3 artifact (GitHub Actions, `responsibleai/agent-control-spec`,
+commit `4c47b57033b98c0d2ccf1b94624f058815db0a9c`), and the downloaded crate
+checksum and unpacked source match the registry and that commit. The same holds
+for `agent-hooks-sdk` 0.1.0-alpha.5.
+
+Both crates still list one individual owner and no team. In August 2026 the
+maintainer (MohammadHaroonAbuomar) accepted that as the state to merge on: the
+sole owner is the same account that maintains this integration, publication is
+bound to a public commit through trusted publishing rather than to that
+account's token, and adding an organization owner is a registry-side change
+that does not alter any byte this tree builds against. Adding the team owner
+stays tracked upstream in
+[#24](https://github.com/responsibleai/agent-control-spec/issues/24); revisit
+this paragraph when it closes.
 
 ### Release and upgrade order
 
