@@ -1138,7 +1138,7 @@ fn manifest_from_url_blocks_ssrf_targets() {
     for url in [
         "https://",
         "https://[::1/m.yaml",
-        "https://exa mple.com/m.yaml",
+        "https://loop back.invalid/m.yaml",
         "not a url",
     ] {
         let error = super::reject_blocked_fetch_host(url).expect_err(url);

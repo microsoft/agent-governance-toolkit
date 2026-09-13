@@ -328,7 +328,7 @@ checksum and unpacked source match the registry and that commit. The same holds
 for `agent-hooks-sdk` 0.1.0-alpha.5.
 
 Both crates still list one individual owner and no team. In August 2026 the
-maintainer (MohammadHaroonAbuomar) accepted that as the state to merge on: the
+maintainer accepted that as the state to merge on: the
 sole owner is the same account that maintains this integration, publication is
 bound to a public commit through trusted publishing rather than to that
 account's token, and adding an organization owner is a registry-side change
