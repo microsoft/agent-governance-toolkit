@@ -50,9 +50,16 @@ jobs:
       - name: Clippy
         run: |
           cargo clippy --workspace --all-targets -- -D warnings
+      - name: Isolated compatibility crates
+        run: |
+          cargo check --locked -p agent_control_specification_core --no-default-features --lib
+          cargo check --locked -p agent_control_specification_otel --lib
       - name: Test
         run: |
           cargo test --workspace
+      - name: OPA compatibility with upstream Rego enabled
+        run: |
+          AGT_EXPECT_UPSTREAM_REGO=1 cargo test --locked -p agent_control_specification --features bundled-dispatchers,opa,agent-control-spec/rego --test upstream_compatibility
       - name: Package publishable ACS crates
         run: |
           cargo package -p agent_control_specification_core --allow-dirty

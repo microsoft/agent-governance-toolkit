@@ -25,7 +25,7 @@ Input -> Model -> Tool Call -> Tool Result -> Output
 ## Example manifest
 
 ```yaml
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: email-agent
 policies:
@@ -102,7 +102,7 @@ These behaviors are part of the normative [`spec/SPECIFICATION.md`](spec/SPECIFI
 
 | Block | Meaning |
 | --- | --- |
-| `agent_control_specification_version` | Non empty version string. The current spec describes `0.3.1-beta`. |
+| `agent_control_specification_version` | Non empty version string. The current spec describes `0.4.0-alpha.1`. |
 | `metadata` | Free form manifest metadata. |
 | `extends` | Ordered parent manifest paths or HTTPS URLs for ACS compatibility. AGT hosts submit the resolved manifest. |
 | `policies` | Named policy definitions. Supported types are `rego`, `cedar`, `test`, and `custom`. |

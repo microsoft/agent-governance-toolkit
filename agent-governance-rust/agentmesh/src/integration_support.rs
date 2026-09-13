@@ -4,16 +4,16 @@
 //! Lightweight integration, discovery, and prompt-defense helpers for embedding governance.
 
 use agent_control_specification::{
-    AgentControl, Decision, EnforcementMode, InterventionPoint, Manifest, RuntimeError,
+    AgentControl, Decision, EnforcementMode, InterceptionPoint, Manifest, RuntimeError,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::Instant;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn integration_now() -> u64 {
@@ -251,10 +251,7 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
     /// token and cost budgets stay at zero unless the host reports usage here
     /// after each model call. Elapsed time is tracked from construction.
     pub fn record_usage(&self, tokens: u64, cost_usd: f64) {
-        *self
-            .token_count
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) += tokens;
+        *self.token_count.lock().unwrap_or_else(|e| e.into_inner()) += tokens;
         *self.cost_usd.lock().unwrap_or_else(|e| e.into_inner()) += cost_usd;
     }
 
@@ -347,7 +344,7 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
         )];
         let (intervention_point, snapshot) = match tool_name {
             Some(tool) => (
-                InterventionPoint::PreToolCall,
+                InterceptionPoint::PreToolCall,
                 serde_json::json!({
                     "envelope": {
                         "agent": {"id": request.actor},
@@ -368,7 +365,7 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
                 }),
             ),
             None => (
-                InterventionPoint::Input,
+                InterceptionPoint::Input,
                 serde_json::json!({
                     "envelope": {
                         "agent": {"id": request.actor},
@@ -394,7 +391,11 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
             snapshot,
             EnforcementMode::Enforce,
         );
-        let requires_human_approval = evaluation.verdict.decision == Decision::Escalate;
+        // agent-hooks has no `escalate` decision. An escalation is a
+        // liftable deny: `deny` carrying an `approval` block that the
+        // host resolves. A deny without one is final.
+        let requires_human_approval =
+            evaluation.verdict.decision == Decision::Deny && evaluation.verdict.approval.is_some();
         if !evaluation.verdict.decision.permits() {
             let reason = evaluation
                 .verdict
@@ -1434,7 +1435,7 @@ mod tests {
             });
             if let Some(value) = self.transform {
                 output["transform"] = serde_json::json!({
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": value,
                 });
             }
@@ -1445,7 +1446,7 @@ mod tests {
     fn control(decision: &'static str, reason: Option<&'static str>) -> AgentControl {
         let manifest = Manifest::from_yaml_str(
             r#"
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 policies:
   integration:
     type: custom
@@ -1481,7 +1482,7 @@ tools:
     fn capturing_control(policy: CapturingPolicy) -> AgentControl {
         let manifest = Manifest::from_yaml_str(
             r#"
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 policies:
   integration:
     type: custom
@@ -1497,13 +1498,14 @@ tools:
 "#,
         )
         .unwrap();
-        AgentControl::from_manifest_with_dispatchers(manifest, None, Some(Arc::new(policy))).unwrap()
+        AgentControl::from_manifest_with_dispatchers(manifest, None, Some(Arc::new(policy)))
+            .unwrap()
     }
 
     fn transform_control(value: &'static str) -> AgentControl {
         let manifest = Manifest::from_yaml_str(
             r#"
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 policies:
   integration:
     type: custom

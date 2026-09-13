@@ -384,13 +384,12 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/opa" version
       - name: Build native ACS SDK (ACS-backed Python policy runtime)
-        # agent-os, agt-policies, agent-compliance, agent-marketplace and
-        # agent-sandbox route evaluations through the native
-        # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
-        # it from the vendored policy-engine so native-runtime tests run.
+        # Every selected package resolves the local agt-policies dependency.
+        # Its retargeted SDK is not on PyPI yet, so build it from this checkout
+        # rather than letting pip resolve an incompatible registry version.
         # The wheel is abi3-py311, so one build serves all agent-os matrix
         # Python versions (3.11-3.13). ubuntu-latest ships Rust + a C toolchain.
-        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox')
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
@@ -542,13 +541,16 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf dist-coherence && mkdir -p dist-coherence
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          python -m pip wheel --no-deps --no-build-isolation \
+            ./policy-engine/sdk/python --wheel-dir dist-coherence
           # The umbrellas own the source; the sibling stubs are dep-only. Build
           # them all with --wheel because the umbrellas force-include sibling
           # source, which only resolves when building directly from the source
           # tree. -core's set is the five renamed stubs; -cli's set adds
           # agent-sre; -protocols' set adds agent-mcp-governance.
           for pkg in \
-            agent-governance-toolkit-core \
+            agt-policies agent-governance-toolkit-core \
             agent-hypervisor agent-mesh agent-os agent-runtime agent-primitives \
             agent-governance-toolkit-cli agent-sre \
             agent-governance-toolkit-protocols agent-mcp-governance; do
@@ -561,7 +563,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m venv /tmp/venv-core
-          /tmp/venv-core/bin/pip install --no-cache-dir \
+          /tmp/venv-core/bin/pip install --no-cache-dir --find-links dist-coherence \
             dist-coherence/agent_governance_toolkit_core-*.whl
           /tmp/venv-core/bin/python -W ignore \
             -c "import hypervisor, agentmesh, agent_os, agent_runtime, agent_primitives; print('meta import OK')"
@@ -606,6 +608,11 @@ jobs:
           pip install --no-cache-dir --require-hashes --no-deps -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
           pip install --no-cache-dir typer==0.14.0 marshmallow==3.21.3  # Scorecard: version-pinned (safety transitive deps)
           pip install --no-cache-dir safety==3.2.1  # Scorecard: version-pinned, hash-verified via ci-safety.txt
+      - name: Install local policy dependencies
+        run: |
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
+          pip install --no-cache-dir ./agent-governance-python/agt-policies
       - name: Check dependencies
         env:
           GIT_TERMINAL_PROMPT: "0"
@@ -804,13 +811,10 @@ jobs:
           # the latest published wheels.
           pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-core"
           pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-integrations"
+          pip install --no-cache-dir -e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"
           # All agentmesh-integrations packages declare a [dev] extra (audited
           # 2026-05). Deterministic install — no error-swallowing fallback.
           pip install --no-cache-dir -e ".[dev]"
-          # `.[dev]` resolves agt-policies from PyPI. Reinstall the local
-          # checkout afterwards so the integrations test against this commit's
-          # ACS policy API rather than the last published wheel.
-          pip install --no-cache-dir --no-deps --force-reinstall -e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"
           CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
           if [ -f "$CI_TEST_REQS" ]; then
             # Hash-pinned shared test deps. Previously swallowed errors with

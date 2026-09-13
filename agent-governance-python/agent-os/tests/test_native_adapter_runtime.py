@@ -72,7 +72,7 @@ def test_native_result_exposes_transform_without_legacy_conversion() -> None:
             InterventionPointResult(
                 verdict=Verdict(
                     decision=Decision.TRANSFORM,
-                    transform=Transform(path="$policy_target", value="safe"),
+                    transform=Transform(path="$target", value="safe"),
                 )
             )
         )
@@ -91,7 +91,7 @@ def test_native_result_exposes_materialized_nested_transform() -> None:
             InterventionPointResult(
                 verdict=Verdict(
                     decision=Decision.TRANSFORM,
-                    transform=Transform(path="$policy_target.secret", value="[REDACTED]"),
+                    transform=Transform(path="$target.secret", value="[REDACTED]"),
                 ),
                 transformed_policy_target={"secret": "[REDACTED]", "safe": "visible"},
                 transformed_policy_target_applied=True,
