@@ -198,12 +198,21 @@ async function drainBuffer(state, buffer) {
 
     const newlineIndex = remaining.indexOf(0x0a);
     if (newlineIndex < 0) {
-      if (remaining.length > MAX_HEADER_BYTES) {
+      const startsWithHeader = /^[ \t]*[A-Za-z-]+:/.test(
+        remaining.subarray(0, MAX_HEADER_BYTES).toString("utf8"),
+      );
+      if (startsWithHeader && remaining.length > MAX_HEADER_BYTES) {
         throw new Error("MCP header exceeds maximum size");
+      }
+      if (remaining.length > MAX_FRAME_BYTES) {
+        throw new Error("JSON-RPC message exceeds maximum size");
       }
       return remaining;
     }
 
+    if (newlineIndex > MAX_FRAME_BYTES) {
+      throw new Error("JSON-RPC message exceeds maximum size");
+    }
     const line = remaining.subarray(0, newlineIndex).toString("utf8").trim();
     if (
       newlineIndex > 0 &&

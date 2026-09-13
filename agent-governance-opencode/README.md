@@ -61,6 +61,10 @@ It also exposes two custom tools (in-process **and** via the stdio MCP server):
 - `agt_policy_check_text` — inspect arbitrary text for prompt-injection and
   context-poisoning findings
 
+The stdio server accepts `Content-Length` frames and newline-delimited JSON.
+Headers are limited to 8 KiB; JSON messages are limited to 5 MiB in UTF-8 bytes,
+including when a message arrives across multiple reads.
+
 ## Local development
 
 Run these commands from the package directory:
