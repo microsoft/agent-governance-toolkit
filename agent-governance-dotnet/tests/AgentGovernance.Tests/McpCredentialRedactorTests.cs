@@ -230,4 +230,23 @@ public class McpCredentialRedactorTests
         Assert.Equal(text, result.Sanitized);
         Assert.DoesNotContain(CredentialKind.GoogleApiKey, result.Detected);
     }
+
+    // Pins a deliberate, narrow gap: the 35 char value class includes "-", so a
+    // real key can end in one. Before this change, a plain \b treated "-" as
+    // an automatic boundary on its own and redacted this shape. The new
+    // lookahead treats an alphanumeric character glued right after, with no
+    // separator, the same as the other "one more alphanumeric character"
+    // cases in this file, and leaves it unredacted. Documented here rather
+    // than left as an unexamined side effect of the fix in this PR.
+    [Fact]
+    public void Redact_DoesNotWidenGoogleApiKeyMatch_WhenKeyEndsInHyphen()
+    {
+        var keyEndingInHyphen = $"AIza{new string('A', 34)}-";
+        var text = $"{keyEndingInHyphen}X";
+
+        var result = _redactor.Redact(text);
+
+        Assert.Equal(text, result.Sanitized);
+        Assert.DoesNotContain(CredentialKind.GoogleApiKey, result.Detected);
+    }
 }

@@ -109,6 +109,19 @@ public sealed class McpCredentialRedactor
          new Regex(@"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_AWS_ACCESS_KEY]"),
 
+        // Value class includes "-"/"_", and the count is fixed at 35, so a real
+        // key can land on either right where the 35th character happens to be
+        // one of them. When that happens and an unrelated alphanumeric
+        // character follows with no separator (for example a 35 char run
+        // ending in "-" glued straight to more text), this pattern treats that
+        // the same as any other "one more alphanumeric character" case and
+        // does not redact it, on the same reasoning as AwsAccessKey: the
+        // presence of more alphanumeric content right there is evidence this
+        // is not a cleanly isolated key. That is a real, if narrow, gap
+        // compared to the previous plain \b, which treated "-" as an automatic
+        // boundary on its own. Pinned deliberately by
+        // Redact_DoesNotWidenGoogleApiKeyMatch_WhenKeyEndsInHyphen below rather
+        // than left as an unexamined side effect.
         (CredentialKind.GoogleApiKey,
          new Regex(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z\-_]{35}(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_GOOGLE_API_KEY]"),
