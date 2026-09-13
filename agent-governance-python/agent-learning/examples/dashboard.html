@@ -1,0 +1,638 @@
+<!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Learning Governance</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #637083;
+      --line: #d8dee7;
+      --surface: #ffffff;
+      --canvas: #f4f6f8;
+      --blue: #1769aa;
+      --green: #147d64;
+      --red: #b42318;
+      --amber: #9a6700;
+      --graphite: #344054;
+      --sidebar: #202a35;
+      --sidebar-muted: #b7c1cc;
+      --focus: #2e90fa;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background-color: var(--canvas);
+      background-image:
+        linear-gradient(rgba(23, 32, 42, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(23, 32, 42, 0.035) 1px, transparent 1px);
+      background-size: 28px 28px;
+      font-family: Bahnschrift, "Segoe UI Variable", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, input, select { font: inherit; letter-spacing: 0; }
+    button, label[for="snapshot-file"] { cursor: pointer; }
+
+    :focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--focus) 55%, transparent);
+      outline-offset: 2px;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 244px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 16px 18px;
+      color: #f8fafc;
+      background: var(--sidebar);
+      border-right: 1px solid #111820;
+    }
+
+    .brand {
+      margin: 0 8px 28px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .scope {
+      margin: 0 8px 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #3a4652;
+    }
+
+    .scope-label,
+    .scope-value {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    .scope-label {
+      margin-bottom: 6px;
+      color: var(--sidebar-muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .scope-value { font-size: 13px; line-height: 1.5; }
+
+    .tabs {
+      display: grid;
+      gap: 5px;
+    }
+
+    .tab-button {
+      width: 100%;
+      min-height: 40px;
+      padding: 9px 12px;
+      color: var(--sidebar-muted);
+      text-align: left;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+    }
+
+    .tab-button:hover { color: #ffffff; background: #2a3642; }
+    .tab-button[aria-selected="true"] {
+      color: #ffffff;
+      background: #334353;
+      border-color: #4e6072;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 16px 8px 0;
+      color: var(--sidebar-muted);
+      border-top: 1px solid #3a4652;
+      font-size: 11px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    main { min-width: 0; padding: 24px clamp(18px, 3vw, 42px) 48px; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.2;
+    }
+
+    .file-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 9px 15px;
+      color: #ffffff;
+      border: 1px solid #0e568e;
+      border-radius: 5px;
+      background: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .file-button:hover { background: #125d98; }
+    #snapshot-file { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
+
+    .status-line {
+      min-height: 22px;
+      margin: -12px 0 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(112px, 1fr));
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--graphite);
+      border-radius: 5px;
+    }
+
+    .metric:nth-child(2) { border-top-color: var(--green); }
+    .metric:nth-child(3) { border-top-color: var(--blue); }
+    .metric:nth-child(4), .metric:nth-child(5) { border-top-color: var(--red); }
+    .metric:nth-child(6) { border-top-color: var(--amber); }
+
+    .metric-label {
+      min-height: 30px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 7px;
+      font-size: 25px;
+      font-weight: 700;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 53px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h2 { margin: 0; font-size: 16px; line-height: 1.3; }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.75fr);
+      gap: 14px;
+    }
+
+    .chart-wrap { height: 330px; padding: 14px; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    .legend { display: flex; gap: 16px; color: var(--muted); font-size: 12px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+    .swatch { width: 18px; height: 3px; border-radius: 2px; background: var(--blue); }
+    .swatch.final { background: var(--green); }
+
+    .lifecycle { display: grid; }
+    .lifecycle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      min-height: 57px;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .lifecycle-row:last-child { border-bottom: 0; }
+    .lifecycle-name { color: var(--muted); font-size: 12px; }
+    .lifecycle-value { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    .table-wrap { overflow: auto; max-height: calc(100vh - 270px); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 11px 13px; text-align: left; border-bottom: 1px solid var(--line); }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      color: var(--muted);
+      background: #f8fafc;
+      font-size: 10px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    td { max-width: 310px; overflow-wrap: anywhere; vertical-align: top; }
+    tbody tr:hover { background: #f6f9fc; }
+
+    .filter {
+      min-width: 190px;
+      min-height: 34px;
+      padding: 6px 9px;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #ffffff;
+    }
+
+    .empty {
+      display: grid;
+      place-items: center;
+      min-height: 310px;
+      padding: 30px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    [role="tabpanel"][hidden] { display: none; }
+
+    @media (max-width: 1100px) {
+      .metrics { grid-template-columns: repeat(3, 1fr); }
+      .overview-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 720px) {
+      .shell { display: block; }
+      aside {
+        position: static;
+        width: 100%;
+        height: auto;
+        padding: 16px;
+      }
+      .brand { margin-bottom: 14px; }
+      .scope { margin-bottom: 12px; padding-bottom: 12px; }
+      .tabs { grid-template-columns: repeat(5, minmax(96px, 1fr)); overflow-x: auto; }
+      .tab-button { text-align: center; }
+      .sidebar-footer { display: none; }
+      main { padding-top: 18px; }
+      .topbar { align-items: flex-start; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .panel-header { align-items: flex-start; flex-direction: column; }
+      .filter { width: 100%; }
+      .table-wrap { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand">Agent Learning Governance</div>
+      <div class="scope">
+        <span class="scope-label">Selected scope</span>
+        <span class="scope-value" id="scope-value">No snapshot loaded</span>
+      </div>
+      <nav class="tabs" aria-label="Dashboard views">
+        <button class="tab-button" type="button" role="tab" aria-selected="true" aria-controls="overview" id="tab-overview">Overview</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="episodes" id="tab-episodes">Episodes</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="policies" id="tab-policies">Policies</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="runs" id="tab-runs">Runs</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="audit" id="tab-audit">Audit</button>
+      </nav>
+      <div class="sidebar-footer" id="generated-at">Generated at: unavailable</div>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <h1>Governance Operations</h1>
+        <div>
+          <label class="file-button" for="snapshot-file">Open snapshot</label>
+          <input id="snapshot-file" type="file" accept="application/json,.json">
+        </div>
+      </div>
+      <div class="status-line" id="status-line" role="status">No snapshot loaded</div>
+
+      <section class="metrics" aria-label="Governance metrics">
+        <div class="metric"><div class="metric-label">Episodes</div><div class="metric-value" data-metric="episodes">0</div></div>
+        <div class="metric"><div class="metric-label">REINFORCE eligible</div><div class="metric-value" data-metric="reinforce_eligible_episodes">0</div></div>
+        <div class="metric"><div class="metric-label">Bayesian</div><div class="metric-value" data-metric="bayesian_episodes">0</div></div>
+        <div class="metric"><div class="metric-label">Violations</div><div class="metric-value" data-metric="violations">0</div></div>
+        <div class="metric"><div class="metric-label">Denied actions</div><div class="metric-value" data-metric="denied_actions">0</div></div>
+        <div class="metric"><div class="metric-label">Policy versions</div><div class="metric-value" data-metric="policy_versions">0</div></div>
+      </section>
+
+      <section id="overview" role="tabpanel" aria-labelledby="tab-overview">
+        <div class="overview-grid">
+          <div class="panel">
+            <div class="panel-header">
+              <h2>Reward history</h2>
+              <div class="legend">
+                <span class="legend-item"><span class="swatch"></span>Base</span>
+                <span class="legend-item"><span class="swatch final"></span>Final</span>
+              </div>
+            </div>
+            <div class="chart-wrap"><canvas id="reward-chart" aria-label="Reward history chart"></canvas></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><h2>Lifecycle</h2></div>
+            <div class="lifecycle">
+              <div class="lifecycle-row"><span class="lifecycle-name">Governed episodes</span><span class="lifecycle-value" data-life="governed_episodes">0</span></div>
+              <div class="lifecycle-row"><span class="lifecycle-name">Training runs</span><span class="lifecycle-value" data-life="training_runs">0</span></div>
+              <div class="lifecycle-row"><span class="lifecycle-name">Promotion events</span><span class="lifecycle-value" data-life="promotion_events">0</span></div>
+              <div class="lifecycle-row"><span class="lifecycle-name">Audit events</span><span class="lifecycle-value" data-life="audit_events">0</span></div>
+              <div class="lifecycle-row"><span class="lifecycle-name">Violation rate</span><span class="lifecycle-value" data-life="violation_rate">0%</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="episodes" role="tabpanel" aria-labelledby="tab-episodes" hidden>
+        <div class="panel"><div class="panel-header"><h2>Governed episodes</h2></div><div class="table-wrap" id="episodes-table"></div></div>
+      </section>
+
+      <section id="policies" role="tabpanel" aria-labelledby="tab-policies" hidden>
+        <div class="panel"><div class="panel-header"><h2>Policy lineage and promotion</h2></div><div class="table-wrap" id="policies-table"></div></div>
+      </section>
+
+      <section id="runs" role="tabpanel" aria-labelledby="tab-runs" hidden>
+        <div class="panel"><div class="panel-header"><h2>Learning runs</h2></div><div class="table-wrap" id="runs-table"></div></div>
+      </section>
+
+      <section id="audit" role="tabpanel" aria-labelledby="tab-audit" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Audit events</h2>
+            <select id="audit-filter" class="filter" aria-label="Filter audit event type"><option value="">All event types</option></select>
+          </div>
+          <div class="table-wrap" id="audit-table"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    "use strict";
+
+    const columns = {
+      episodes: ["created_at", "episode_id", "action_id", "selection_basis", "execution_status", "reinforce_eligible", "violation_count", "tool_call_count", "risk_levels"],
+      policies: ["policy_id", "version", "promotion_status", "promotion_stage", "parent_policy_id", "training_run_id", "episodes_seen", "updates_applied", "action_count"],
+      runs: ["run_id", "status", "algorithm", "policy_id", "episode_count", "reinforce_eligible_episodes", "candidate_policy_id", "candidate_policy_compliant", "started_at", "completed_at"],
+      audit: ["timestamp", "event_type", "outcome", "artifact_type", "artifact_id", "policy_id", "policy_version", "action_id", "correlation_id", "details"]
+    };
+
+    let snapshot = null;
+    let rewardRows = [];
+
+    const fileInput = document.getElementById("snapshot-file");
+    const statusLine = document.getElementById("status-line");
+    const auditFilter = document.getElementById("audit-filter");
+    const chart = document.getElementById("reward-chart");
+
+    function valueText(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      if (Array.isArray(value)) return value.length ? value.map(valueText).join(", ") : "-";
+      if (typeof value === "object") return JSON.stringify(value);
+      if (typeof value === "boolean") return value ? "Yes" : "No";
+      return String(value);
+    }
+
+    function titleText(key) {
+      return key.replaceAll("_", " ");
+    }
+
+    function emptyState(message) {
+      const div = document.createElement("div");
+      div.className = "empty";
+      div.textContent = message;
+      return div;
+    }
+
+    function renderTable(targetId, rows, keys) {
+      const target = document.getElementById(targetId);
+      target.replaceChildren();
+      if (!rows.length) {
+        target.appendChild(emptyState("No records in this snapshot"));
+        return;
+      }
+
+      const table = document.createElement("table");
+      const head = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      keys.forEach((key) => {
+        const th = document.createElement("th");
+        th.textContent = titleText(key);
+        headRow.appendChild(th);
+      });
+      head.appendChild(headRow);
+      table.appendChild(head);
+
+      const body = document.createElement("tbody");
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        keys.forEach((key) => {
+          const td = document.createElement("td");
+          td.textContent = valueText(row[key]);
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+      table.appendChild(body);
+      target.appendChild(table);
+    }
+
+    function updateMetric(selector, value) {
+      document.querySelector(selector).textContent = valueText(value ?? 0);
+    }
+
+    function renderSummary() {
+      const summary = snapshot.summary || {};
+      document.querySelectorAll("[data-metric]").forEach((element) => {
+        element.textContent = valueText(summary[element.dataset.metric] ?? 0);
+      });
+      document.querySelectorAll("[data-life]").forEach((element) => {
+        const key = element.dataset.life;
+        let value = key === "audit_events" ? snapshot.audit_events.length : summary[key] ?? 0;
+        if (key === "violation_rate") value = `${(Number(value) * 100).toFixed(1)}%`;
+        element.textContent = valueText(value);
+      });
+    }
+
+    function renderAuditFilter() {
+      const prior = auditFilter.value;
+      const eventTypes = [...new Set(snapshot.audit_events.map((event) => event.event_type))].sort();
+      auditFilter.replaceChildren();
+      const all = document.createElement("option");
+      all.value = "";
+      all.textContent = "All event types";
+      auditFilter.appendChild(all);
+      eventTypes.forEach((eventType) => {
+        const option = document.createElement("option");
+        option.value = eventType;
+        option.textContent = titleText(eventType);
+        auditFilter.appendChild(option);
+      });
+      if (eventTypes.includes(prior)) auditFilter.value = prior;
+    }
+
+    function renderAudit() {
+      const selected = auditFilter.value;
+      const rows = selected
+        ? snapshot.audit_events.filter((event) => event.event_type === selected)
+        : snapshot.audit_events;
+      renderTable("audit-table", rows, columns.audit);
+    }
+
+    function drawChart() {
+      const context = chart.getContext("2d");
+      const rect = chart.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const pixelWidth = Math.max(1, Math.round(rect.width * ratio));
+      const pixelHeight = Math.max(1, Math.round(rect.height * ratio));
+      if (chart.width !== pixelWidth || chart.height !== pixelHeight) {
+        chart.width = pixelWidth;
+        chart.height = pixelHeight;
+      }
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      context.clearRect(0, 0, rect.width, rect.height);
+
+      const width = rect.width;
+      const height = rect.height;
+      const pad = { top: 18, right: 18, bottom: 34, left: 44 };
+      const plotWidth = Math.max(1, width - pad.left - pad.right);
+      const plotHeight = Math.max(1, height - pad.top - pad.bottom);
+
+      context.strokeStyle = "#d8dee7";
+      context.fillStyle = "#637083";
+      context.lineWidth = 1;
+      context.font = "11px Bahnschrift, sans-serif";
+      context.textAlign = "right";
+      context.textBaseline = "middle";
+      [-1, -0.5, 0, 0.5, 1].forEach((tick) => {
+        const y = pad.top + (1 - (tick + 1) / 2) * plotHeight;
+        context.beginPath();
+        context.moveTo(pad.left, y);
+        context.lineTo(width - pad.right, y);
+        context.stroke();
+        context.fillText(tick.toFixed(1), pad.left - 8, y);
+      });
+
+      if (!rewardRows.length) {
+        context.textAlign = "center";
+        context.fillText("No aggregate rewards", pad.left + plotWidth / 2, pad.top + plotHeight / 2);
+        return;
+      }
+
+      const point = (value, index) => ({
+        x: rewardRows.length === 1 ? pad.left + plotWidth / 2 : pad.left + index * plotWidth / (rewardRows.length - 1),
+        y: pad.top + (1 - (Number(value) + 1) / 2) * plotHeight
+      });
+
+      function line(key, color) {
+        context.strokeStyle = color;
+        context.lineWidth = 2.5;
+        context.beginPath();
+        rewardRows.forEach((row, index) => {
+          const current = point(row[key], index);
+          if (index === 0) context.moveTo(current.x, current.y);
+          else context.lineTo(current.x, current.y);
+        });
+        context.stroke();
+      }
+
+      line("base_reward", "#1769aa");
+      line("final_reward", "#147d64");
+      context.fillStyle = "#637083";
+      context.textAlign = "center";
+      context.textBaseline = "top";
+      context.fillText(`${rewardRows.length} aggregate reward${rewardRows.length === 1 ? "" : "s"}`, pad.left + plotWidth / 2, height - 21);
+    }
+
+    function validateSnapshot(data) {
+      const arrays = ["episodes", "rewards", "policies", "training_runs", "promotion_events", "audit_events"];
+      if (!data || typeof data !== "object" || typeof data.summary !== "object") return false;
+      return arrays.every((key) => Array.isArray(data[key]));
+    }
+
+    function render() {
+      document.getElementById("scope-value").textContent = `${snapshot.agent_id || "unknown"} / ${snapshot.task_id || "default"}`;
+      document.getElementById("generated-at").textContent = `Generated at: ${valueText(snapshot.generated_at)}`;
+      statusLine.textContent = `${snapshot.episodes.length} episodes, ${snapshot.audit_events.length} audit events`;
+      rewardRows = snapshot.rewards.filter((reward) => reward.source === "aggregate");
+      renderSummary();
+      renderTable("episodes-table", snapshot.episodes, columns.episodes);
+      renderTable("policies-table", snapshot.policies, columns.policies);
+      renderTable("runs-table", snapshot.training_runs, columns.runs);
+      renderAuditFilter();
+      renderAudit();
+      drawChart();
+    }
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      try {
+        const parsed = JSON.parse(await file.text());
+        if (!validateSnapshot(parsed)) throw new Error("Invalid governance dashboard snapshot");
+        snapshot = parsed;
+        render();
+      } catch (error) {
+        statusLine.textContent = error instanceof Error ? error.message : "Unable to load snapshot";
+      } finally {
+        fileInput.value = "";
+      }
+    });
+
+    auditFilter.addEventListener("change", renderAudit);
+
+    document.querySelectorAll("[role=tab]").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll("[role=tab]").forEach((candidate) => {
+          const active = candidate === tab;
+          candidate.setAttribute("aria-selected", String(active));
+          document.getElementById(candidate.getAttribute("aria-controls")).hidden = !active;
+        });
+        if (tab.getAttribute("aria-controls") === "overview") drawChart();
+      });
+    });
+
+    window.addEventListener("resize", drawChart);
+    drawChart();
+    ["episodes-table", "policies-table", "runs-table", "audit-table"].forEach((targetId) => {
+      document.getElementById(targetId).appendChild(emptyState("No snapshot loaded"));
+    });
+  </script>
+</body>
+</html>
