@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Decision trace models extracted from production audit logs."""
 from datetime import datetime
 from typing import Any, Dict, List, Optional

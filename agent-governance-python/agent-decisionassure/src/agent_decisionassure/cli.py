@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 import sys
 import json
 import logging
@@ -209,7 +212,7 @@ def load_traces(filepath: str) -> List[TraceBatch]:
                 )
                 traces.append(trace)
             except Exception as e:
-                logger.warning(f"Skipping malformed trace line: {e}")
+                raise click.ClickException(f"Malformed trace line: {e}")
                 continue
     return traces
 

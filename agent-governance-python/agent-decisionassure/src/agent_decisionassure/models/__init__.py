@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 from .trace import Action, DecisionTrace, TraceBatch
 from .admissibility import GovernanceState, GovernanceDimension
 from .impact import TransitionCounts, BlastRadius, ImpactReport

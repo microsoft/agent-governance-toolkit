@@ -21,7 +21,7 @@ def generate_trace(agent_id, num_decisions=5):
             "action": action,
             "agent_id": agent_id,
             "agent_version": "1.2",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": "2026-09-03T12:00:00+00:00",
             "policy_version": "v4",
             "authority_chain": ["delegation_123"],
             "context": {

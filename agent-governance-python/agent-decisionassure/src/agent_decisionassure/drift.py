@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Runtime governance drift detection."""
 import logging
 from typing import Dict, Any, List

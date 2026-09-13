@@ -470,3 +470,7 @@ _site/
 # Code Security Assessment artifacts
 .security-assessment/
 *.tgz
+
+# Local dev artifacts (do not commit)
+.DS_Store
+**/.gradle/

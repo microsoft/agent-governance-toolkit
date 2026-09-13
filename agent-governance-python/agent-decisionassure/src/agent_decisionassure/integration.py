@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Integration hooks for AGT and other agent frameworks."""
 import logging
 from typing import Dict, Any, Optional

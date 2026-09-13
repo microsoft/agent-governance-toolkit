@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Governance state and admissibility model."""
 from enum import Enum
 from typing import Dict, Any, List, Optional

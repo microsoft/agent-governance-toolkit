@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """DecisionAssure Impact - Governance change impact analysis for agentic AI."""
 
 __version__ = "0.1.0"

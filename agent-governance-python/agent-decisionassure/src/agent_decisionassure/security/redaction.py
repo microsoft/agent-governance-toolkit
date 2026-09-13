@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Sensitive data redaction for traces and reports."""
 import re
 from typing import Any, Dict, List, Optional, Union

@@ -2,11 +2,12 @@ name: DecisionAssure Impact Tests
 
 on:
   push:
-    paths:
-      - 'agent-governance-python/agent-decisionassure/**'
+    paths: ['agent-governance-python/agent-decisionassure/**']
   pull_request:
-    paths:
-      - 'agent-governance-python/agent-decisionassure/**'
+    paths: ['agent-governance-python/agent-decisionassure/**']
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -15,15 +16,11 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
+      - run: |
           cd agent-governance-python/agent-decisionassure
           pip install -e .
-      - name: Run tests
-        run: |
-          cd agent-governance-python/agent-decisionassure
           python -m pytest tests/ -v

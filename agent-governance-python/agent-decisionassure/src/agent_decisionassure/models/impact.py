@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Impact report models."""
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
