@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -258,7 +259,7 @@ def test_unreadable_file_is_recorded(generation_client, tmp_path):
     assert manifest["files"][0]["error_type"]
 
 
-@pytest.mark.skipif(os.name != "posix", reason="Undecodable byte filenames require POSIX")
+@pytest.mark.skipif(sys.platform != "linux", reason="Undecodable byte filename test requires Linux")
 def test_generation_handles_undecodable_filenames(generation_client, tmp_path, caplog):
     content = b"name: unusual\nrules: []\n"
     names = [b"bad\xff.yaml", b"bad\\udcff.yaml", "café.yaml".encode()]
