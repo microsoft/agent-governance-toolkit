@@ -1,12 +1,12 @@
 ---
 title: Action-Bound, Fail-Closed Approval Protocol
-last_reviewed: 2026-06-11
+last_reviewed: 2026-09-06
 owner: agt-maintainers
 ---
 
 # ADR 0030: Use an action-bound, fail-closed approval protocol
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-06-11
 - Related issue: [#2478](https://github.com/microsoft/agent-governance-toolkit/issues/2478)
 

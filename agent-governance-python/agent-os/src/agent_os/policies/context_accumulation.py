@@ -90,13 +90,26 @@ def decide_next(
     # regardless of the current aggregate sensitivity and must never be
     # suppressed below the floor. The floor is an additional, independent
     # trigger for flow-bearing actions once sensitivity is high.
-    restriction_present = gating is not None and gating in env.restrictions
+    #
+    # Both the gate and the obligations read the *evaluated* restriction set,
+    # not the envelope's. evaluate_aggregation seeds from env.restrictions, so
+    # this is a superset -- it can only ever gate more, never less. Reading the
+    # envelope here let a rule that adds a gating token without pushing
+    # sensitivity to the floor slip through: the token existed in agg but not
+    # yet in env, so neither trigger fired.
+    effective_restrictions = agg.restrictions
+    restriction_present = gating is not None and gating in effective_restrictions
     floor_triggered = gating is not None and agg.aggregate_sensitivity >= restricted_floor
     if restriction_present or floor_triggered:
+        # A CONSTRAIN carrying no obligations is a no-op for any host that
+        # enforces through them. When the floor fires on an envelope with no
+        # restrictions recorded, the gating token for the action is the
+        # constraint being applied, so name it.
+        obligation_keys = set(effective_restrictions)
+        if floor_triggered and gating is not None:
+            obligation_keys.add(gating)
         obligations = ObligationSet(
-            obligations=tuple(
-                Obligation(key=r, satisfied=False) for r in sorted(env.restrictions)
-            ),
+            obligations=tuple(Obligation(key=r, satisfied=False) for r in sorted(obligation_keys)),
             result_labels=env.labels,
         )
         reason = (

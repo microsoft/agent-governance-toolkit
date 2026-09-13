@@ -142,8 +142,9 @@ class SupervisorHierarchy:
                 return TrustDecision(
                     allowed=False,
                     reason="Max escalation depth exceeded",
-                    policy_name="escalation_limit",
+                    authority="supervisor",
                 )
 
-        # Final decision always comes from the deterministic trust root
+        # Below the escalation-depth cap, the final decision comes from the
+        # deterministic trust root
         return self.trust_root.validate_action(action)

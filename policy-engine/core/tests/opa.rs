@@ -251,7 +251,7 @@ exec sleep 30
     let dispatcher = OpaPolicyDispatcher::with_runner(
         OpaRegoRunner::new()
             .with_executable(&fake_opa)
-            .with_eval_timeout(Duration::from_millis(30)),
+            .with_eval_timeout(Duration::from_millis(500)),
     );
     let error = dispatcher
         .evaluate(&rego_invocation(

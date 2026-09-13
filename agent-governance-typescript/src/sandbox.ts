@@ -76,6 +76,20 @@ export function defaultSandboxConfig(): SandboxConfig {
   };
 }
 
+// resolveTimeoutMs converts a configured timeoutSeconds into an exec timeout in
+// milliseconds, falling back to the default when the value is not a positive,
+// finite number. This is a safety control: Node's execFile treats timeout: 0
+// (or NaN) as "no timeout", so a degenerate config (e.g. a value that arrived
+// via `any`, or a non-positive operator input) must not be allowed to silently
+// disable the sandbox timeout.
+function resolveTimeoutMs(timeoutSeconds: number): number {
+  const seconds =
+    Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
+      ? timeoutSeconds
+      : defaultSandboxConfig().timeoutSeconds;
+  return seconds * 1000;
+}
+
 // ---------------------------------------------------------------------------
 // Abstract interface
 // ---------------------------------------------------------------------------
@@ -131,6 +145,7 @@ function validateResourceName(value: string, label: string): void {
 export class DockerSandboxProvider implements SandboxProvider {
   private readonly image: string;
   private readonly containers = new Map<string, string>(); // sessionId -> containerId
+  private readonly sessionTimeoutsMs = new Map<string, number>(); // sessionId -> exec timeout (ms)
 
   constructor(image: string = 'python:3.11-slim') {
     this.image = image;
@@ -189,6 +204,7 @@ export class DockerSandboxProvider implements SandboxProvider {
         .trim();
 
       this.containers.set(sessionId, containerId);
+      this.sessionTimeoutsMs.set(sessionId, resolveTimeoutMs(cfg.timeoutSeconds));
 
       return {
         agentId,
@@ -216,6 +232,13 @@ export class DockerSandboxProvider implements SandboxProvider {
     const executionId = randomUUID();
     const startTime = Date.now();
 
+    // Honour the timeout configured for this session (createSession), falling
+    // back to the default only when the session predates timeout tracking.
+    // Previously this was hard-coded to 60_000 ms, so a custom timeoutSeconds
+    // was silently ignored and the sandbox ran longer than the caller allowed.
+    const timeoutMs =
+      this.sessionTimeoutsMs.get(sessionId) ?? resolveTimeoutMs(defaultSandboxConfig().timeoutSeconds);
+
     return new Promise<ExecutionHandle>((resolve) => {
       const encoded = Buffer.from(code).toString('base64');
       const execArgs = [
@@ -223,7 +246,7 @@ export class DockerSandboxProvider implements SandboxProvider {
         `import base64; exec(base64.b64decode('${encoded}').decode())`,
       ];
 
-      execFile('docker', execArgs, { timeout: 60_000 }, (error, stdout, stderr) => {
+      execFile('docker', execArgs, { timeout: timeoutMs }, (error, stdout, stderr) => {
         const durationSeconds = (Date.now() - startTime) / 1000.0;
         // Node's ExecException.code can be: a numeric exit code (child exited
         // non-zero), `null` (child killed by a signal — `error.signal` is set
@@ -265,6 +288,7 @@ export class DockerSandboxProvider implements SandboxProvider {
 
     const containerId = this.containers.get(sessionId);
     if (!containerId) {
+      this.sessionTimeoutsMs.delete(sessionId);
       return; // already destroyed or never existed
     }
 
@@ -275,6 +299,7 @@ export class DockerSandboxProvider implements SandboxProvider {
       });
     } finally {
       this.containers.delete(sessionId);
+      this.sessionTimeoutsMs.delete(sessionId);
     }
   }
 }
