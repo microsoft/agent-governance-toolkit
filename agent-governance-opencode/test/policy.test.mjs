@@ -85,6 +85,7 @@ test("getPolicyStatus distinguishes effective defenses from configured context",
 
 for (const scenario of [
   { name: "no operator policy", invalidOperator: false, invalidDefault: false },
+  { name: "missing explicit operator policy", invalidOperator: false, invalidDefault: false, missingOperator: true },
   { name: "invalid operator policy", invalidOperator: true, invalidDefault: false },
   { name: "minimal fallback policy", invalidOperator: false, invalidDefault: true },
   { name: "both policy files invalid", invalidOperator: true, invalidDefault: true },
@@ -101,7 +102,7 @@ for (const scenario of [
       await writeFile(defaultPolicyPath, "invalid JSON", "utf8");
     }
     const state = await loadPolicy({
-      policyPath,
+      policyPath: scenario.invalidOperator || scenario.missingOperator ? policyPath : null,
       homeDirectory: root,
       auditPath: join(root, "audit.json"),
       ...(scenario.invalidDefault ? { defaultPolicyPath } : {}),
@@ -109,7 +110,10 @@ for (const scenario of [
     const status = await getPolicyStatus(state);
 
     assert.equal(state.source, "bundled-default");
-    assert.equal(Boolean(state.configuredPolicyError), scenario.invalidOperator);
+    assert.equal(Boolean(state.configuredPolicyError), scenario.invalidOperator || Boolean(scenario.missingOperator));
+    if (scenario.missingOperator) {
+      assert.match(state.configuredPolicyError.message, /configured policy file not found/i);
+    }
     assert.equal(Boolean(state.bundledDefaultError), scenario.invalidDefault);
     assert.equal(status.configuredPromptDefenseScope, "operator-additional-context");
     assert.equal(status.configuredPromptDefenseGrade, "F");
@@ -120,7 +124,7 @@ for (const scenario of [
     assert.equal(status.promptDefenseCoverage, "12/12");
     assert.equal(status.promptDefenseBlockingScope, "effective-context");
 
-    if (scenario.invalidOperator || scenario.invalidDefault) {
+    if (scenario.invalidOperator || scenario.missingOperator || scenario.invalidDefault) {
       const result = await evaluateOpenCodePrompt(state, { prompt: "Hello" });
       assert.equal(result.effect, "deny");
       assert.match(result.reason, /policy could not be loaded/i);
