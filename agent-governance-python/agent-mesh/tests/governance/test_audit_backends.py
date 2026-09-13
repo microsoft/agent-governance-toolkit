@@ -233,6 +233,38 @@ class TestFileAuditSink:
 
         assert (path.stat().st_mode & 0o777) == 0o600
 
+    @pytest.mark.skipif(not hasattr(os, "fchmod"), reason="fchmod is POSIX-only")
+    def test_fchmod_failure_does_not_leak_the_descriptor(self, tmp_path: Path, monkeypatch):
+        """fchmod runs inside the fdopen block, on the file object's own
+        descriptor, specifically so a failing fchmod (e.g. EPERM: the file
+        is owned by another user) still closes it via the same path a
+        failing write would - not after os.open but before fdopen, where
+        an exception would skip the close entirely."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+
+        captured_fd = {}
+        real_open = os.open
+
+        def spy_open(*args, **kwargs):
+            fd = real_open(*args, **kwargs)
+            captured_fd["fd"] = fd
+            return fd
+
+        monkeypatch.setattr(os, "open", spy_open)
+        monkeypatch.setattr(
+            os, "fchmod",
+            lambda fd, mode: (_ for _ in ()).throw(PermissionError("EPERM")),
+        )
+
+        with pytest.raises(PermissionError):
+            sink.write(_make_entry())
+
+        # A bad-descriptor error on fstat is proof the descriptor was
+        # actually closed; a leak would instead succeed.
+        with pytest.raises(OSError):
+            os.fstat(captured_fd["fd"])
+
     def test_corrupted_middle_line_does_not_break_resume_or_reads(self, tmp_path: Path):
         """A single trailing corrupt line was already tolerated; a
         corrupt line followed by a resumed write (e.g. crash mid-append,

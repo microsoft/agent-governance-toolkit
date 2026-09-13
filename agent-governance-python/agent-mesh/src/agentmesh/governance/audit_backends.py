@@ -365,7 +365,15 @@ class FileAuditSink:
         open(path, "a"): entries can carry an agent's call arguments, so
         the default 0644 a plain open() creates would make audit content
         world-readable, and O_NOFOLLOW refuses to write through a symlink
-        planted at the configured path.
+        planted at the configured path. The 0o600 above only applies if
+        this call created the file; one that already existed (e.g. 0644)
+        keeps its old mode otherwise, so fchmod tightens it explicitly too
+        - inside the fdopen block, on the file object's own descriptor, so
+        a failing fchmod (e.g. EPERM: the file is owned by another user)
+        still closes the descriptor via the same exception path a failing
+        write would, rather than leaking it. A file this process can't
+        chmod now fails every write instead of silently leaving it at its
+        existing, looser mode.
         """
         line = json.dumps(signed.to_dict(), sort_keys=True, default=str)
         fd = os.open(
@@ -373,13 +381,9 @@ class FileAuditSink:
             os.O_WRONLY | os.O_CREAT | os.O_APPEND | _O_NOFOLLOW,
             0o600,
         )
-        if _HAS_FCHMOD:
-            # The 0o600 above only applies if this call created the file;
-            # one that already existed (e.g. 0644) keeps its old mode
-            # otherwise, and would go on receiving entries - which can
-            # carry call arguments - in the open.
-            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as fh:
+            if _HAS_FCHMOD:
+                os.fchmod(fh.fileno(), 0o600)
             fh.write(line + "\n")
 
     def _maybe_rotate(self) -> None:
