@@ -35,8 +35,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import shutil
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +62,10 @@ class OPADecision:
         source: How the evaluation was performed
             (``"remote"``, ``"local"``, or ``"fallback"``).
         error: Error message if evaluation failed, otherwise ``None``.
+        defined: Whether the query resolved to anything at all, as
+            opposed to the path being undefined (e.g. no such package).
+            ``allowed`` is ``False`` either way; this is what tells them
+            apart (see PolicyEngine.load_rego).
     """
     allowed: bool
     raw_result: Any = None
@@ -67,6 +73,19 @@ class OPADecision:
     evaluation_ms: float = 0.0
     source: Literal["remote", "local", "fallback"] = "local"
     error: Optional[str] = None
+    defined: bool = True
+
+
+def _require_boolean_decision(value: Any) -> tuple[bool, Optional[str]]:
+    """Require *value* to be a real bool, not just truthy - Rego output is
+    a security decision, and e.g. `allow := "deny"` must not be read as
+    permit."""
+    if isinstance(value, bool):
+        return value, None
+    return False, (
+        f"rego policy must evaluate to a boolean, got {value!r} "
+        f"({type(value).__name__})"
+    )
 
 
 class OPAEvaluator:
@@ -105,6 +124,51 @@ class OPAEvaluator:
 
         # Check if opa CLI is available for local mode
         self._opa_available = shutil.which("opa") is not None
+        # rego_content has no filesystem path of its own but `opa eval` only
+        # reads files; materialized lazily, once, and reused for the life of
+        # this evaluator instead of once per evaluate() call.
+        self._materialized_rego_path: Optional[str] = None
+
+    @property
+    def opa_available(self) -> bool:
+        """Whether the ``opa`` CLI was found on PATH at construction time."""
+        return self._opa_available
+
+    def _rego_file_for_cli(self) -> Optional[str]:
+        """Return the file `opa eval` should read the rego source from.
+
+        rego_path is returned as-is. rego_content is written to a private
+        temp file the first time it is needed and reused after that: the
+        previous implementation wrote a fresh ``NamedTemporaryFile(delete=
+        False)`` on every evaluate() call and never removed it, leaking one
+        0600 file per governed call for the life of the process.
+        """
+        if self.rego_path:
+            return self.rego_path
+        if self.rego_content is None:
+            return None
+        if self._materialized_rego_path is None:
+            fd, path = tempfile.mkstemp(suffix=".rego")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write(self.rego_content)
+            except Exception:
+                os.close(fd)
+                raise
+            self._materialized_rego_path = path
+        return self._materialized_rego_path
+
+    def close(self) -> None:
+        """Remove the temp file backing rego_content, if one was created."""
+        if self._materialized_rego_path is not None:
+            try:
+                os.remove(self._materialized_rego_path)
+            except OSError:
+                pass
+            self._materialized_rego_path = None
+
+    def __del__(self) -> None:
+        self.close()
 
     def evaluate(self, query: str, input_data: dict) -> OPADecision:
         """
@@ -173,14 +237,17 @@ class OPAEvaluator:
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:  # noqa: S310 — OPA server URL from configuration
                 body = json.loads(resp.read().decode("utf-8"))
+                defined = "result" in body
                 result_value = body.get("result", False)
-                allowed = bool(result_value) if isinstance(result_value, (bool, int)) else result_value is not None
+                allowed, type_error = _require_boolean_decision(result_value) if defined else (False, None)
 
                 return OPADecision(
                     allowed=allowed,
                     raw_result=body,
                     query=query,
                     source="remote",
+                    error=type_error,
+                    defined=defined,
                 )
         except Exception as e:
             return OPADecision(
@@ -223,16 +290,7 @@ class OPAEvaluator:
         input_json = json.dumps(input_data)
 
         cmd = ["opa", "eval", "--format", "json", "--v0-compatible", "--input", "/dev/stdin", "--data"]
-
-        if self.rego_path:
-            cmd.append(self.rego_path)
-        else:
-            # Write rego content to temp file
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".rego", delete=False) as f:
-                f.write(self.rego_content)
-                cmd.append(f.name)
-
+        cmd.append(self._rego_file_for_cli())
         cmd.append(query)
 
         try:
@@ -245,24 +303,38 @@ class OPAEvaluator:
             )
 
             if proc.returncode != 0:
+                # Parse/compile errors print as JSON to stdout with stderr
+                # empty (exit 2); only runtime/usage errors go to stderr.
+                # Reporting stderr alone left compile errors with an empty
+                # reason.
+                detail = proc.stderr.strip() or proc.stdout.strip()
                 return OPADecision(
                     allowed=False,
                     query=query,
                     source="local",
-                    error=f"opa eval failed: {proc.stderr.strip()}",
+                    error=f"opa eval failed: {detail}",
                 )
 
             result = json.loads(proc.stdout)
-            # OPA eval output: {"result": [{"expressions": [{"value": true}]}]}
-            expressions = result.get("result", [{}])[0].get("expressions", [{}])
+            # OPA eval output: {"result": [{"expressions": [{"value": true}]}]}.
+            # An empty "result" list means the query resolved to no value —
+            # e.g. the query package doesn't match this file's `package`
+            # declaration — which is undefined, not a Rego error: opa eval
+            # still exits 0. Treat it as a definite deny rather than
+            # indexing into the empty list.
+            results = result.get("result") or []
+            defined = bool(results)
+            expressions = results[0].get("expressions", [{}]) if results else []
             value = expressions[0].get("value", False) if expressions else False
-            allowed = bool(value) if isinstance(value, (bool, int)) else value is not None
+            allowed, type_error = _require_boolean_decision(value)
 
             return OPADecision(
                 allowed=allowed,
+                defined=defined,
                 raw_result=result,
                 query=query,
                 source="local",
+                error=type_error,
             )
         except subprocess.TimeoutExpired:
             return OPADecision(

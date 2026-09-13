@@ -136,6 +136,28 @@ class GovernanceConfig:
     # expiry) instead of the legacy handler. Requires a coordinator + chain.
     approval_transport: Optional[ApprovalTransport] = None
     trace: Optional[TraceConfig] = None
+    # Optional Rego policy loaded alongside the YAML/JSON one (see
+    # PolicyEngine.load_rego): YAML rules are checked first, and if none
+    # matches, the Rego policy is consulted. Needed for conditions the YAML
+    # DSL's regex-based matcher cannot express - it supports only
+    # field-vs-literal comparisons (==, !=, in [...], numeric >/</>=/<=,
+    # bare boolean truthiness), not field-vs-field ones, so a rule like
+    # "does the caller's attribute match the resource's attribute" silently
+    # never matches under the YAML engine (falls through to default_action)
+    # rather than raising a load-time error.
+    #
+    # What the Rego policy actually receives as `input`: _build_context()
+    # wraps every scalar kwarg as {"value": <kwarg>} (a dict kwarg is passed
+    # through as-is). A field-vs-field rule like `input.a == input.b` still
+    # matches correctly either way, since two identically-wrapped objects
+    # compare equal - but a field-vs-literal rule needs the accessor:
+    # `input.caller_role.value == "auditor"`, not `input.caller_role ==
+    # "auditor"` (which compares an object to a string and is always false,
+    # with nothing at load time or call time to say so - see govern()'s
+    # docstring for a worked example of both).
+    rego_path: Optional[str] = None
+    rego_content: Optional[str] = None
+    rego_package: str = "agentmesh"
 
 
 class GovernanceDenied(Exception):
@@ -181,6 +203,12 @@ class GovernedCallable:
                 f"policy must be a file path, YAML string, or Policy object, "
                 f"got {type(policy).__name__}"
             )
+
+        # `is not None`, not truthiness: rego_path="" is a mistake worth
+        # load_rego() rejecting outright, not equivalent to "not configured"
+        # and silently skipped.
+        if config.rego_path is not None or config.rego_content is not None:
+            self._engine.load_rego(config.rego_path, config.rego_content, config.rego_package)
 
         # Hash of policy bundle bytes at load time — consumed by TRACEAuditSink (ADR-0032).
         self._policy_bundle_hash: str = (
@@ -583,7 +611,16 @@ class GovernedCallable:
         return str(value)
 
     def _build_context(self, args: tuple, kwargs: dict) -> dict:
-        """Build policy evaluation context from function arguments."""
+        """Build policy evaluation context from function arguments.
+
+        This is also what a Rego policy configured via rego_path/
+        rego_content sees as `input` (see policy.py's evaluate(), which
+        hands this same dict straight to the OPA evaluator). The {"value":
+        ...} wrapping below matters there: `input.role == "auditor"` never
+        matches a scalar kwarg wrapped this way, only `input.role.value ==
+        "auditor"` does - see GovernanceConfig.rego_path and govern()'s
+        docstring, where this bit anyone writing a Rego policy against it.
+        """
         context: dict[str, Any] = {}
 
         # If kwargs contains 'action', use it directly
@@ -678,6 +715,9 @@ def govern(
     approval_ttl_seconds: float = 300.0,
     approval_transport: Optional[ApprovalTransport] = None,
     trace: Optional[TraceConfig] = None,
+    rego_path: Optional[str] = None,
+    rego_content: Optional[str] = None,
+    rego_package: str = "agentmesh",
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
 
@@ -691,6 +731,32 @@ def govern(
             ``GovernanceDenied``.
         conflict_strategy: Conflict resolution strategy. Default
             ``"deny_overrides"`` (any deny wins).
+        rego_path: Optional path to a ``.rego`` policy file, loaded
+            alongside ``policy`` (see ``PolicyEngine.load_rego``). YAML
+            rules are checked first; if none matches, Rego is consulted.
+            Use this for conditions the YAML DSL can't express - it's a
+            regex-based matcher limited to field-vs-literal comparisons
+            (``==``, ``!=``, ``in [...]``, numeric ``>``/``<``/``>=``/``<=``,
+            bare boolean truthiness); it has no field-vs-field comparison,
+            so a rule like "does the caller's attribute match the
+            resource's attribute" silently never matches (falls through to
+            ``default_action``) rather than raising an error. Requires the
+            ``opa`` CLI on PATH for local evaluation.
+
+            **Input shape**: every scalar kwarg reaches Rego as
+            ``{"value": <kwarg>}``, not the bare value - so
+            ``input.role == "auditor"`` never matches (comparing an object
+            to a string; nothing raises, it just always evaluates false),
+            while ``input.role.value == "auditor"`` does. A field-vs-field
+            rule (``input.a == input.b``) works either way, since two
+            identically-wrapped objects still compare equal - which is easy
+            to mistake for the wrapping not mattering, until the first
+            field-vs-literal rule in the same policy silently does nothing.
+            See the second example below.
+        rego_content: Inline Rego policy string, alternative to
+            ``rego_path``.
+        rego_package: Rego package name used to build the query path.
+            Default ``"agentmesh"``, matching ``PolicyEngine.load_rego``.
 
     Returns:
         A ``GovernedCallable`` that enforces policy before execution.
@@ -704,6 +770,22 @@ def govern(
 
         safe_send = govern(send_email, policy="email-policy.yaml")
         safe_send(to="user@example.com", body="Hello")  # policy-checked
+
+    Example with a relational rule the YAML DSL can't express::
+
+        # policy.rego:
+        #   package agentmesh
+        #   default allow := false
+        #   # Field-vs-field: works either wrapped or not, since both sides
+        #   # get the same {"value": ...} treatment.
+        #   allow if input.caller_mission == input.doc_mission
+        #   # Field-vs-literal: needs .value - input.caller_role == "auditor"
+        #   # would silently never match.
+        #   allow if input.caller_role.value == "auditor"
+        safe_read = govern(
+            read_doc, policy="allow-all.yaml", rego_path="policy.rego",
+        )
+        safe_read(caller_mission="ARIEL", doc_mission="ARIEL", caller_role="engineer")
     """
     config = GovernanceConfig(
         policy=policy,
@@ -720,5 +802,8 @@ def govern(
         approval_ttl_seconds=approval_ttl_seconds,
         approval_transport=approval_transport,
         trace=trace,
+        rego_path=rego_path,
+        rego_content=rego_content,
+        rego_package=rego_package,
     )
     return GovernedCallable(fn, config)

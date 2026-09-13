@@ -12,6 +12,7 @@ warnings; unknown versions raise ``ValueError``.
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Literal, Any
 from pydantic import BaseModel, Field, field_validator
 import logging
@@ -738,6 +739,14 @@ class PolicyEngine:
         The OPA evaluator runs in parallel: YAML rules are checked first,
         and if no rule matches, the Rego policy is consulted.
 
+        Validated eagerly, here, rather than left to surface per governed
+        call: an absent opa binary, a missing rego_path, a compile error, or
+        a rego_package that doesn't match the file's own `package`
+        declaration (so ``data.{package}.allow`` could never resolve) used
+        to all evaluate() into an error that PolicyEngine.evaluate() then
+        silently skipped past — the governed call executed, unlogged, as if
+        no Rego policy had been configured at all.
+
         Args:
             rego_path: Path to a .rego file
             rego_content: Inline Rego policy string
@@ -745,9 +754,99 @@ class PolicyEngine:
 
         Returns:
             OPAEvaluator instance for direct use
+
+        Raises:
+            ValueError: neither rego_path nor rego_content given, both are
+                given, either is an empty string, the declared package
+                doesn't match `package`, the policy fails to compile, or
+                `package` has no rules anywhere in the loaded source.
+            FileNotFoundError: rego_path does not exist.
+            RuntimeError: the opa CLI is not on PATH.
         """
         from agentmesh.governance.opa import OPAEvaluator
+
+        # "" is falsy like None, but a caller who passed it explicitly meant
+        # *something* - collapsing it into "nothing configured" would skip
+        # Rego with no error rather than reject the mistake.
+        if rego_path == "":
+            raise ValueError("rego_path must not be an empty string")
+        if rego_content == "":
+            raise ValueError("rego_content must not be an empty string")
+        if not rego_path and not rego_content:
+            raise ValueError("load_rego requires rego_path or rego_content")
+        if rego_path and rego_content:
+            raise ValueError(
+                "load_rego received both rego_path and rego_content — pass "
+                "only one; rego_path would otherwise win silently at "
+                "evaluation time (see OPAEvaluator._rego_file_for_cli) and "
+                "rego_content would be loaded but never actually queried"
+            )
+        if rego_path and not os.path.exists(rego_path):
+            raise FileNotFoundError(f"rego_path does not exist: {rego_path}")
+
+        # A directory of .rego files is a valid `opa eval --data` target
+        # (and worked as rego_path before the existence check above was
+        # narrowed to files only).
+        source = rego_content
+        if source is None and rego_path and os.path.isfile(rego_path):
+            with open(rego_path, "r", encoding="utf-8") as f:
+                source = f.read()
+        if source is not None:
+            declared = re.search(r"^\s*package\s+([\w.]+)", source, re.MULTILINE)
+            if declared and declared.group(1) != package:
+                raise ValueError(
+                    f"rego file declares package '{declared.group(1)}' but "
+                    f"load_rego was called with package='{package}' — "
+                    f"data.{package}.allow would never resolve against it"
+                )
+        elif rego_path and os.path.isdir(rego_path):
+            # Same check as above, across every .rego file opa eval --data
+            # loads from a directory (recursively). Needed because a child
+            # package (e.g. agentmesh.sub for a configured "agentmesh")
+            # would pass the data.<package> probe below too.
+            declared_packages = set()
+            for rego_file in Path(rego_path).rglob("*.rego"):
+                match = re.search(
+                    r"^\s*package\s+([\w.]+)",
+                    rego_file.read_text(encoding="utf-8"),
+                    re.MULTILINE,
+                )
+                if match:
+                    declared_packages.add(match.group(1))
+            if declared_packages and package not in declared_packages:
+                raise ValueError(
+                    f"no .rego file under {rego_path!r} declares package "
+                    f"'{package}' (found: {sorted(declared_packages)}) — "
+                    f"data.{package}.allow would never resolve against it"
+                )
+
         evaluator = OPAEvaluator(mode="local", rego_path=rego_path, rego_content=rego_content)
+        if not evaluator.opa_available:
+            raise RuntimeError(
+                "opa CLI not found on PATH; install it to use Rego policies: "
+                "https://www.openpolicyagent.org/docs/latest/#running-opa"
+            )
+        # A query that only depends on the file compiling, not on `package`
+        # or on any input — so a compile error is distinguishable here from
+        # the query simply being undefined for this input.
+        probe = evaluator.evaluate("true", {})
+        if probe.error is not None:
+            raise ValueError(f"rego policy failed to compile: {probe.error}")
+
+        # Belt-and-suspenders on top of the static check: query the bare
+        # package (not `.allow`) so a package with no rules at all is
+        # still caught even if the regex above missed something. Bare
+        # package, not `.allow`, so a rule that's legitimately undefined
+        # for empty input isn't mistaken for a missing package.
+        package_probe = evaluator.evaluate(f"data.{package}", {})
+        if not package_probe.defined:
+            raise ValueError(
+                f"package '{package}' has no rules anywhere in the loaded "
+                f"rego source (data.{package} is undefined) — every "
+                f"governed call would silently deny. Check that {package} "
+                "matches what the source actually declares."
+            )
+
         self._rego_evaluators.append((package, evaluator))
         return evaluator
 
@@ -960,15 +1059,36 @@ class PolicyEngine:
         for package, evaluator in self._rego_evaluators:
             query = f"data.{package}.allow"
             opa_result = evaluator.evaluate(query, context)
-            if opa_result.error is None:
-                elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            if opa_result.error is not None:
+                # A Rego evaluator that errors at call time (opa binary
+                # vanished, the process hit its timeout, ...) used to be
+                # silently skipped here, falling through to Cedar and then
+                # to default_action — so a call governed only by an
+                # allow-all YAML policy plus Rego was executed, unlogged,
+                # exactly as if Rego had never errored at all. Deny instead:
+                # load_rego() already fails fast on the errors that are
+                # caught at construction (missing opa, bad syntax, wrong
+                # package), so only runtime faults reach here, and denying
+                # is the fail-closed choice for those.
+                logger.error(
+                    "Rego policy (%s) errored during evaluation, denying: %s",
+                    package, opa_result.error,
+                )
                 return PolicyDecision(
-                    allowed=opa_result.allowed,
-                    action="allow" if opa_result.allowed else "deny",
-                    reason=f"OPA/Rego policy ({package}): {'allowed' if opa_result.allowed else 'denied'}",
+                    allowed=False,
+                    action="deny",
+                    reason=f"OPA/Rego policy ({package}) errored: {opa_result.error}",
                     evaluated_at=start,
                     evaluation_ms=elapsed,
                 )
+            return PolicyDecision(
+                allowed=opa_result.allowed,
+                action="allow" if opa_result.allowed else "deny",
+                reason=f"OPA/Rego policy ({package}): {'allowed' if opa_result.allowed else 'denied'}",
+                evaluated_at=start,
+                evaluation_ms=elapsed,
+            )
 
         # 4. Check Cedar policies
         for cedar_eval in self._cedar_evaluators:
