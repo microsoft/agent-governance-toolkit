@@ -165,6 +165,13 @@ impl PolicyDispatcher for CPolicyDispatcher {
     }
 }
 
+/// Apply the checks a loaded manifest must pass before it backs a builder.
+fn checked(manifest: Result<Manifest, RuntimeError>) -> Result<Manifest, RuntimeError> {
+    let manifest = manifest?;
+    crate::reject_removed_manifest_fields(&manifest)?;
+    Ok(manifest)
+}
+
 fn builder_from_manifest(manifest: Manifest) -> *mut AcsBuilder {
     Box::into_raw(Box::new(AcsBuilder {
         manifest: Some(manifest),
@@ -196,7 +203,7 @@ pub unsafe extern "C" fn acs_builder_from_path(
                 return std::ptr::null_mut();
             }
         };
-        match Manifest::from_path(Path::new(path)) {
+        match checked(Manifest::from_path(Path::new(path))) {
             Ok(manifest) => builder_from_manifest(manifest),
             Err(error) => {
                 unsafe { write_err(err, &format!("from_path failed: {error}")) };
@@ -245,7 +252,7 @@ pub unsafe extern "C" fn acs_builder_from_url(
         // The builder does not exist yet, so the fetch uses the default
         // budget. A caller that needs a tighter one sets it with
         // acs_builder_set_url_fetch_limits before dispatch.
-        match crate::manifest_from_url(url, sha256, Limits::default()) {
+        match checked(crate::manifest_from_url(url, sha256, Limits::default())) {
             Ok(manifest) => builder_from_manifest(manifest),
             Err(error) => {
                 unsafe { write_err(err, &format!("from_url failed: {error}")) };
@@ -290,7 +297,7 @@ pub unsafe extern "C" fn acs_builder_from_yaml_chain(
             owned.push(yaml);
         }
 
-        match Manifest::from_yaml_chain(&owned) {
+        match checked(Manifest::from_yaml_chain(&owned)) {
             Ok(manifest) => builder_from_manifest(manifest),
             Err(error) => {
                 unsafe { write_err(err, &format!("from_yaml_chain failed: {error}")) };
@@ -319,7 +326,7 @@ pub unsafe extern "C" fn acs_builder_from_yaml(
                 return std::ptr::null_mut();
             }
         };
-        match Manifest::from_yaml_str(yaml) {
+        match checked(Manifest::from_yaml_str(yaml)) {
             Ok(manifest) => builder_from_manifest(manifest),
             Err(error) => {
                 unsafe { write_err(err, &format!("from_yaml failed: {error}")) };
@@ -348,7 +355,7 @@ pub unsafe extern "C" fn acs_builder_from_json(
                 return std::ptr::null_mut();
             }
         };
-        match Manifest::from_json_str(json) {
+        match checked(Manifest::from_json_str(json)) {
             Ok(manifest) => builder_from_manifest(manifest),
             Err(error) => {
                 unsafe { write_err(err, &format!("from_json failed: {error}")) };
@@ -511,13 +518,18 @@ pub unsafe extern "C" fn acs_builder_set_perf_telemetry(
     })
 }
 
-/// Set the URL fetch limits the bundled default dispatchers use for dispatch
-/// time fetches of a `system_prompt_url` prompt and a file sourced `bundle_url`
-/// rego bundle. `max_bytes` caps the fetched body, `timeout_ms` bounds each
-/// request, and `max_redirects` caps the validated redirect chain. A `max_bytes`
-/// or `timeout_ms` of 0 keeps the built in default for that field; `max_redirects`
-/// is applied as given so 0 forbids redirects. Has no effect unless a bundled
-/// default dispatcher is also enabled.
+/// Record URL fetch limits on the builder. `max_bytes` caps a fetched body,
+/// `timeout_ms` bounds each request, and `max_redirects` caps the redirect
+/// chain. A `max_bytes` or `timeout_ms` of 0 keeps the built in default for
+/// that field; `max_redirects` is applied as given so 0 forbids redirects.
+///
+/// The pre-retarget engine threaded these into its bundled dispatchers for
+/// `system_prompt_url` and `bundle_url` fetches. Those fields were removed
+/// (a manifest declaring them is rejected at load) and `agent-control-spec`
+/// 0.4.0-alpha.3 constructs its dispatchers without limits, so this setter
+/// currently reaches nothing; it is kept so the ABI stays stable while
+/// upstream issue #21 is open. `acs_builder_from_url` fetches before the
+/// builder exists and uses the default budget.
 ///
 /// # Safety
 /// `b` must be a live builder returned by ACS and not concurrently mutated. If

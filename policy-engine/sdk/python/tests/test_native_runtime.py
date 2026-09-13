@@ -119,6 +119,56 @@ agent_control_specification_version: 0.4.0-alpha.1
 """
             )
 
+    def test_removed_manifest_fields_fail_closed_everywhere(self):
+        # agent-control-spec 0.4.0-alpha.3 parses these fields into open config
+        # maps and has nothing behind them, so without this check a manifest
+        # declaring them was accepted with the feature silently missing.
+        bundle_url = """agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: rego
+    query: data.acs.result
+    bundle_url:
+      url: https://bundles.example/b.tar.gz
+      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+intervention_points:
+  input:
+    policy_target: $.input
+    policy:
+      id: p
+"""
+        prompt_file = """agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: custom
+    adapter: mock
+annotators:
+  judge:
+    type: llm
+    system_prompt_file: prompts/judge.txt
+intervention_points:
+  input:
+    policy_target: $.input
+    policy:
+      id: p
+    annotations:
+      judge:
+        from: $.input
+"""
+        for manifest, field in ((bundle_url, "bundle_url"), (prompt_file, "system_prompt_file")):
+            with self.subTest(field=field, entry="validate_manifest"):
+                with self.assertRaisesRegex(RuntimeError, f"'{field}'.*acs-retarget"):
+                    validate_manifest(manifest)
+            with self.subTest(field=field, entry="validate_manifest_overlay"):
+                with self.assertRaisesRegex(RuntimeError, f"'{field}'.*acs-retarget"):
+                    validate_manifest_overlay(manifest)
+            with self.subTest(field=field, entry="from_native"):
+                with self.assertRaisesRegex(RuntimeError, f"runtime_error:manifest_invalid.*'{field}'"):
+                    AgentControl.from_native(manifest, MockAnnotator(), MockPolicy())
+            with self.subTest(field=field, entry="from_manifest_chain"):
+                with self.assertRaisesRegex(RuntimeError, f"runtime_error:manifest_invalid.*'{field}'"):
+                    AgentControl.from_manifest_chain([manifest], MockAnnotator(), MockPolicy())
+
     def test_validate_manifest_overlay_checks_version_without_requiring_points(self):
         validate_manifest_overlay(
             """agent_control_specification_version: 0.4.0-alpha.1

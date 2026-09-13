@@ -28,6 +28,16 @@ pub use tool::{
     UnsupportedFrameworkAdapter, UnsupportedFrameworkAdapterError,
 };
 
+/// Reject a manifest that declares `bundle_url`, `system_prompt_file` or
+/// `system_prompt_url`.
+///
+/// `agent-control-spec` 0.4.0-alpha.3 has no implementation of these
+/// pre-retarget fields and its open config maps accept them, so the feature
+/// would be silently absent. Every host constructor, the C ABI and the
+/// Python and Node bindings run this before building a runtime. See
+/// `docs/acs-retarget.md`, "Removed manifest fields".
+pub use agent_control_specification_core::reject_removed_manifest_fields;
+
 /// Stands in for an annotator dispatcher when the manifest declares no
 /// annotators and the bundled dispatchers are not compiled in. The
 /// runtime only dispatches annotators a manifest names, so `dispatch`
@@ -288,7 +298,9 @@ pub fn manifest_from_url(
             path.display()
         ))
     })?;
-    Manifest::from_path_with_limits(path, limits)
+    let manifest = Manifest::from_path_with_limits(path, limits)?;
+    reject_removed_manifest_fields(&manifest)?;
+    Ok(manifest)
 }
 
 /// Resolved policy identifier and sorted annotator names per interception point.
@@ -403,16 +415,21 @@ impl AgentControl {
     /// `extends` URL fetch performed at load time.
     ///
     /// It does **not** bound a dispatch time fetch. `agent-control-spec`
-    /// 0.4.0-alpha.3 constructs the bundled dispatchers without limits, so a
-    /// `system_prompt_url` or `bundle_url` fetched by an annotator uses that
-    /// crate's own defaults regardless of what is set here. Do not rely on
-    /// this to cap outbound requests from a dispatcher.
+    /// 0.4.0-alpha.3 constructs the bundled dispatchers without limits, so
+    /// any request an annotator dispatcher makes (an `llm` or `endpoint`
+    /// call) uses that crate's own defaults regardless of what is set here.
+    /// Do not rely on this to cap outbound requests from a dispatcher.
+    ///
+    /// Fails closed with `runtime_error:manifest_invalid` when the manifest
+    /// declares a field the pinned engine dropped; see
+    /// [`reject_removed_manifest_fields`].
     pub fn from_manifest_with_dispatchers_and_limits(
         manifest: Manifest,
         annotations: Option<Arc<dyn AnnotatorDispatcher>>,
         policy: Option<Arc<dyn PolicyDispatcher>>,
         limits: Limits,
     ) -> Result<Self, RuntimeError> {
+        reject_removed_manifest_fields(&manifest)?;
         // Falling back to the bundled annotator dispatcher would hand a
         // URL sourced manifest a path to host environment credentials,
         // which is the exposure `bundled-dispatchers` gates. A manifest

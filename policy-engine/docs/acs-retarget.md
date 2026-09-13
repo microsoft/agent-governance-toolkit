@@ -96,13 +96,50 @@ identity profile.
 
 ## Manifests
 
-Two breaking changes, both already applied across this repository.
+Three breaking changes, all already applied across this repository.
 
 1. `agent_control_specification_version` must be `0.4.0-alpha.1`. The engine accepts no
    other value and rejects at parse time.
 2. The path root `$policy_target` is now `$target`. The manifest grammar ships no alias
    and rejects the old root as `unknown path root`. Note that agent-hooks does accept
    `$policy_target` as a deprecated alias on *transform* paths, so the two layers differ.
+3. `bundle_url`, `system_prompt_file` and `system_prompt_url` are removed. See the next
+   section.
+
+### Removed manifest fields
+
+The embedded engine implemented three fields that `agent-control-spec`
+0.4.0-alpha.3 never had (`git log -S bundle_url` on the upstream engine is
+empty): a rego `bundle_url` (remote bundle, fetched and pin-checked at
+dispatch), and the `llm` annotator's `system_prompt_file` and
+`system_prompt_url` prompt sources. Upstream's `RegoPolicyConfig::adapter_config`,
+`PolicyBinding::adapter_config`, `AnnotatorConfig::fields` and
+`AnnotationConfig::fields` are open maps, so a manifest declaring one of these
+keys parsed and validated cleanly while the feature was silently absent: the
+annotator ran with `DEFAULT_SYSTEM_PROMPT`, and the rego policy denied every
+request with `runtime_error:policy_invocation_failed` and no diagnostic. Every
+fail-closed check the old engine had for them (`bundle` with `bundle_url`, an
+unpinned or non-HTTPS URL, inline and file prompt together) had turned into a
+silent accept.
+
+AGT now fails closed instead. `agent_control_specification_core::reject_removed_manifest_fields`
+walks each policy definition, each annotator declaration, and each intervention
+point's policy binding and annotation bindings, and returns
+`runtime_error:manifest_invalid` naming the location and the field. It runs in
+`validate_manifest_yaml`, `validate_manifest_overlay_yaml`, every `AgentControl`
+constructor, `manifest_from_url`, every C ABI `acs_builder_from_*` loader, and
+the Python and Node `from_*` constructors. Both copies of `manifest.schema.json`
+keep the three keys as `not: {}` properties (on the rego policy, the policy
+binding, the annotator and the annotation binding), because the enclosing
+objects allow additional properties and dropping the keys would accept them
+silently.
+
+Migration: inline the value. A `system_prompt_file` becomes `system_prompt`
+with the file's text; a `system_prompt_url` becomes `system_prompt` as well; a
+`bundle_url` becomes a local `bundle` path shipped with the manifest, or a host
+supplied policy dispatcher that fetches the bundle itself. Restoring a remote
+prompt or bundle source is an upstream proposal against `agent-control-spec`.
+`SPECIFICATION.md` sections 2.3, 10 and 12.1 and the schema record the removal.
 
 `core/src/manifest_yaml.rs` re-exports the engine's public `SUPPORTED_VERSIONS`.
 Its legacy `SUPPORTED_MANIFEST_VERSIONS` array is derived from that list, with
@@ -124,6 +161,7 @@ shapes match the legacy consumer contract.
 | `from_url`, `policy_labels`, `validate_overlay` have no equivalent | [#23](https://github.com/responsibleai/agent-control-spec/issues/23) |
 | Original binding validation gap, resolved upstream after alpha.1 | [#14](https://github.com/responsibleai/agent-control-spec/issues/14) |
 | Publisher provenance and organization ownership review condition | [#24](https://github.com/responsibleai/agent-control-spec/issues/24) |
+| `bundle_url`, `system_prompt_file`, `system_prompt_url` have no implementation; AGT rejects them | none filed; restoring them is a proposal, see "Removed manifest fields" |
 
 ### Security, unresolved
 
@@ -227,8 +265,12 @@ the process.
 ## Work remaining in this repository
 
 `SPECIFICATION.md` sections beyond the verdict set, host obligations, approval
-path and reason tables were retargeted alongside them, so the normative document
-now describes the implemented contract throughout. The AgentDojo benchmark policy
+path and reason tables were retargeted alongside them, and sections 2.3, 10 and
+12.1 now record the removed remote prompt and bundle fields. One gap remains in
+section 2.3: the pinned engine skips relative path resolution for a URL sourced
+manifest but does not reject its filesystem path fields (`bundle`, `data`,
+`data_paths`), so a remote manifest can name local files; that needs an
+upstream fix and is tracked as an issue rather than patched here. The AgentDojo benchmark policy
 computes its own redacted value and returns a single `transform`. The transform a
 host applies is revalidated against `Limits`, and `manifest_from_url` runs an
 SSRF guard over the URL before anything is fetched.

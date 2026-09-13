@@ -42,10 +42,10 @@ mod streaming;
 pub use host::{
     create_unsupported_framework_adapter, default_host_annotator_dispatcher,
     default_host_policy_dispatcher, identity, manifest_from_url, policy_labels,
-    with_transformed_target, AgentControl, AgentControlBlocked, AgentControlError,
-    AgentControlInterruption, AgentControlSuspended, ApprovalOutcome, ApprovalResolution,
-    ApprovalResolver, GuardedRigLikeTool, HostEvaluation, ModelRunResult, ProtectedTool,
-    RigLikeTool, RunOptions, RunResult, SessionScope, ToolRunOptions, ToolRunResult,
+    reject_removed_manifest_fields, with_transformed_target, AgentControl, AgentControlBlocked,
+    AgentControlError, AgentControlInterruption, AgentControlSuspended, ApprovalOutcome,
+    ApprovalResolution, ApprovalResolver, GuardedRigLikeTool, HostEvaluation, ModelRunResult,
+    ProtectedTool, RigLikeTool, RunOptions, RunResult, SessionScope, ToolRunOptions, ToolRunResult,
     UnsupportedFrameworkAdapter, UnsupportedFrameworkAdapterError,
 };
 pub use streaming::{

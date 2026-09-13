@@ -1,9 +1,9 @@
 use agent_control_specification::{
     default_host_annotator_dispatcher, default_host_policy_dispatcher, manifest_from_url,
-    policy_labels, runtime_error_verdict, AnnotatorDispatcher, AnnotatorInvocation,
-    EnforcementMode, HostError, HostEvaluation, InterceptionPoint, JsonValue, Limits, Manifest,
-    NoopTelemetrySink, PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
-    RuntimeError, Verdict,
+    policy_labels, reject_removed_manifest_fields, runtime_error_verdict, AnnotatorDispatcher,
+    AnnotatorInvocation, EnforcementMode, HostError, HostEvaluation, InterceptionPoint, JsonValue,
+    Limits, Manifest, NoopTelemetrySink, PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation,
+    Runtime, RuntimeError, Verdict,
 };
 use agent_control_specification_core::{
     parse_manifest_yaml_value, validate_acs_artifacts as validate_artifacts_core,
@@ -404,6 +404,7 @@ impl NativeRuntime {
         perf_telemetry: u8,
         limits: Limits,
     ) -> PyResult<Self> {
+        reject_removed_manifest_fields(&manifest).map_err(runtime_error)?;
         let perf_telemetry = PerfTelemetry::from_u8(perf_telemetry)
             .ok_or_else(|| PyValueError::new_err("perf_telemetry must be 0, 1, or 2"))?;
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_cb {

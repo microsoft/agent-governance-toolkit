@@ -1,9 +1,9 @@
 use agent_control_specification::{
     default_host_annotator_dispatcher, default_host_policy_dispatcher, manifest_from_url,
-    policy_labels, runtime_error_verdict, AnnotatorDispatcher, AnnotatorInvocation,
-    EnforcementMode, HostError, HostEvaluation, InterceptionPoint, JsonValue, Limits, Manifest,
-    NoopTelemetrySink, PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
-    RuntimeError, Verdict,
+    policy_labels, reject_removed_manifest_fields, runtime_error_verdict, AnnotatorDispatcher,
+    AnnotatorInvocation, EnforcementMode, HostError, HostEvaluation, InterceptionPoint, JsonValue,
+    Limits, Manifest, NoopTelemetrySink, PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation,
+    Runtime, RuntimeError, Verdict,
 };
 use agent_control_specification_core::validate_acs_artifacts;
 use napi::bindgen_prelude::{Env, Error, JsFunction, Promise, Result};
@@ -359,6 +359,8 @@ impl NativeRuntime {
         perf_telemetry: Option<u8>,
         limits: Limits,
     ) -> Result<Self> {
+        reject_removed_manifest_fields(&manifest)
+            .map_err(|err| Error::from_reason(err.to_string()))?;
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_callback {
             Some(callback) => Arc::new(JsAnnotatorDispatcher(make_string_tsfn(&env, callback)?)),
             None => default_host_annotator_dispatcher(&manifest)

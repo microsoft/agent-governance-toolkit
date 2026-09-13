@@ -39,6 +39,28 @@
       "codes": [
         "manifest_parse_error"
       ]
+    },
+    {
+      "name": "removed_bundle_url_field",
+      "manifest": "agent_control_specification_version: 0.4.0-alpha.1\npolicies:\n  p:\n    type: rego\n    query: data.p.verdict\n    bundle_url:\n      url: https://bundles.example/p.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nintervention_points:\n  input:\n    policy_target: $.input\n    policy:\n      id: p\n",
+      "rego": {
+        "policy.rego": "package p\nimport rego.v1\ndefault verdict := {\"decision\": \"allow\"}\n"
+      },
+      "valid": false,
+      "codes": [
+        "manifest_schema_error"
+      ]
+    },
+    {
+      "name": "removed_system_prompt_file_field",
+      "manifest": "agent_control_specification_version: 0.4.0-alpha.1\npolicies:\n  p:\n    type: rego\n    query: data.p.verdict\nannotators:\n  judge:\n    type: llm\n    system_prompt_file: prompts/judge.txt\nintervention_points:\n  input:\n    policy_target: $.input\n    policy:\n      id: p\n    annotations:\n      judge:\n        from: $.input\n",
+      "rego": {
+        "policy.rego": "package p\nimport rego.v1\ndefault verdict := {\"decision\": \"allow\"}\n"
+      },
+      "valid": false,
+      "codes": [
+        "manifest_schema_error"
+      ]
     }
   ]
 }

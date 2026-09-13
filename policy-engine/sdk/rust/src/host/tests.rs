@@ -1193,3 +1193,75 @@ fn manifest_from_url_never_connects_to_a_blocked_literal() {
         Err(error) => panic!("unexpected accept error: {error}"),
     }
 }
+
+#[test]
+fn host_constructors_reject_removed_manifest_fields() {
+    // Upstream parses these; the pinned engine has nothing behind them. A
+    // `bundle_url` rego policy would deny every request with
+    // `policy_invocation_failed` and no diagnostic, and an `llm` annotator
+    // with `system_prompt_url` would run with the default prompt.
+    let bundle_url = format!(
+        "agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: rego
+    query: data.acs.result
+    bundle_url:
+      url: https://bundles.example/b.tar.gz
+      sha256: {}
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+",
+        "e".repeat(64)
+    );
+    let manifest = Manifest::from_yaml_str(&bundle_url).expect("upstream accepts the field");
+    let error = AgentControl::from_manifest_with_dispatchers(
+        manifest,
+        Some(Arc::new(NoopAnnotator)),
+        Some(Arc::new(QueuePolicy::with_responses([]))),
+    )
+    .expect_err("host must fail closed");
+    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    assert!(
+        error
+            .detail()
+            .starts_with("policy 'p' declares 'bundle_url'"),
+        "{}",
+        error.detail()
+    );
+
+    let prompt_url = "agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: test
+annotators:
+  judge:
+    type: llm
+    system_prompt_url:
+      url: https://prompts.example/p.txt
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+    annotations:
+      judge:
+        from: $target
+";
+    let error = AgentControl::from_manifest_chain_with_dispatchers(
+        &[prompt_url],
+        Some(Arc::new(NoopAnnotator)),
+        Some(Arc::new(QueuePolicy::with_responses([]))),
+    )
+    .expect_err("host must fail closed");
+    assert!(
+        error
+            .detail()
+            .starts_with("annotator 'judge' declares 'system_prompt_url'"),
+        "{}",
+        error.detail()
+    );
+}

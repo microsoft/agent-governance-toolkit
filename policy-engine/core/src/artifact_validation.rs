@@ -686,6 +686,76 @@ intervention_points:
     }
 
     #[test]
+    fn manifest_schema_rejects_removed_fields() {
+        // The schema keeps these keys as `not: {}` rather than dropping them:
+        // the surrounding objects allow additional properties, so a dropped
+        // key would be accepted silently, which is the fail-open state the
+        // retarget left behind.
+        for manifest in [
+            r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: rego
+    bundle_url:
+      url: https://bundles.example/b.tar.gz
+      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+"#,
+            r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: test
+annotators:
+  judge:
+    type: llm
+    system_prompt_file: prompts/judge.txt
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+    annotations:
+      judge:
+        from: $target
+"#,
+            r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: test
+annotators:
+  judge:
+    type: llm
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+    annotations:
+      judge:
+        from: $target
+        system_prompt_url:
+          url: https://prompts.example/p.txt
+          sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+"#,
+        ] {
+            let result = validate_acs_manifest(manifest);
+            assert!(!result.valid, "{manifest}");
+            assert!(
+                result
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == "manifest_schema_error"),
+                "{manifest}: {:?}",
+                result.diagnostics
+            );
+        }
+    }
+
+    #[test]
     fn validates_partial_manifest_version_without_requiring_resolution() {
         let result = validate_acs_artifacts(
             "agent_control_specification_version: banana\nextends: [base.yaml]\n",

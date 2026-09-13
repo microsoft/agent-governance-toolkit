@@ -5,6 +5,44 @@ entries appear first.
 
 ---
 
+## Manifests declaring `bundle_url`, `system_prompt_file` or `system_prompt_url` are rejected
+
+**Date:** TBD
+
+**Affected**
+
+- manifests with a rego policy, or a policy binding, that declares `bundle_url`
+- manifests with an `llm` annotator, or an annotation binding, that declares
+  `system_prompt_file` or `system_prompt_url`
+- tooling that validates manifests against `policy-engine/spec/schema/manifest.schema.json`
+
+**What changed**
+
+The embedded engine implemented these three fields. `agent-control-spec`
+0.4.0-alpha.3 does not, and its policy and annotator configuration maps are
+open, so after the retarget a manifest declaring one of them was accepted with
+the feature silently missing: the `llm` annotator ran with the default system
+prompt, and a `bundle_url` rego policy denied every request with
+`runtime_error:policy_invocation_failed` and no diagnostic.
+
+Such a manifest now fails at load with `runtime_error:manifest_invalid` naming
+the field and its location, from every constructor in Rust, Python, Node and
+the C ABI, and from `validate_manifest_yaml` and
+`validate_manifest_overlay_yaml`. The schema marks the three keys as rejected
+properties, so schema-only validators reject them as well.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `system_prompt_file: prompts/judge.txt` | `system_prompt: <the file's text>` |
+| `system_prompt_url: {url: ..., sha256: ...}` | `system_prompt: <the fetched text>` |
+| `bundle_url: {url: ..., sha256: ...}` | `bundle: ./policy` shipped with the manifest, or a host policy dispatcher that fetches the bundle |
+
+See `policy-engine/docs/acs-retarget.md`, "Removed manifest fields".
+
+---
+
 ## `manifest_from_url` blocks private and unique-local literals and local names
 
 **Date:** TBD

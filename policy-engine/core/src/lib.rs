@@ -231,7 +231,8 @@ pub use artifact_validation::{
     validate_acs_artifacts, validate_acs_manifest, ArtifactValidationResult, ValidationDiagnostic,
 };
 pub use manifest_yaml::{
-    parse_manifest_yaml_value, validate_manifest_overlay_yaml, validate_manifest_yaml,
+    parse_manifest_yaml_value, reject_removed_fields as reject_removed_manifest_fields,
+    validate_manifest_overlay_yaml, validate_manifest_yaml, REMOVED_MANIFEST_FIELDS,
 };
 pub use telemetry_sinks::{
     InMemoryTelemetrySink, MultiSink, StdoutJsonTelemetrySink, TelemetryEventExt,
