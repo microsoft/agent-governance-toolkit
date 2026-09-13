@@ -57,6 +57,7 @@ from agentmesh.integrations.django_middleware import (  # noqa: E402
     trust_exempt,
     trust_required,
 )
+from agentmesh.integrations.request_auth import select_signed_headers  # noqa: E402
 from agentmesh.integrations.django_middleware import middleware as middleware_module  # noqa: E402
 
 # ── Dummy views & URL configuration ─────────────────────────────────
@@ -72,6 +73,12 @@ def _high_trust_view(request):
     return JsonResponse({"status": "ok"})
 
 
+@trust_required(min_score=0)
+def _open_view(request):
+    """Any *authenticated* agent, at any trust score."""
+    return JsonResponse({"status": "ok", "did": getattr(request, "agent_did", None)})
+
+
 @trust_exempt
 def _exempt_view(request):
     return JsonResponse({"status": "ok"})
@@ -81,6 +88,7 @@ def _exempt_view(request):
 urlpatterns = [
     path("api/data/", _ok_view, name="data"),
     path("api/high/", _high_trust_view, name="high_trust"),
+    path("api/open/", _open_view, name="open"),
     path("api/exempt/", _exempt_view, name="exempt"),
     path("health/", _ok_view, name="health"),
 ]
@@ -103,7 +111,29 @@ def _get(path: str, *, did: str = "", sig: str = "", factory=None):
         headers["HTTP_X_AGENT_DID"] = did
     if sig:
         headers["HTTP_X_AGENT_SIGNATURE"] = sig
-    return factory.get(path, **headers)
+    request = factory.get(path, **headers)
+    request.META["REQUEST_URI"] = path
+    return request
+
+
+def _replay_of(signed, path: str, *, factory=None):
+    """Rebuild a fresh request carrying another request's trust headers.
+
+    Used to prove the signature is bound to the request rather than to the
+    Python object. ``REQUEST_URI`` is set because RequestFactory omits it while
+    every production WSGI server provides it.
+    """
+    factory = factory or RequestFactory()
+    request = factory.get(
+        path,
+        **{
+            key: value
+            for key, value in signed.META.items()
+            if key.startswith("HTTP_X_AGENT_")
+        },
+    )
+    request.META["REQUEST_URI"] = path
+    return request
 
 
 def _signed_request(
@@ -124,17 +154,23 @@ def _signed_request(
     timestamp = timestamp or datetime.now(UTC).isoformat()
     nonce = nonce or secrets.token_urlsafe(16)
     request = factory.generic(method, path, data=body, content_type=content_type)
-    query_string = request.META.get("QUERY_STRING", "")
-    request_target = request.path + (f"?{query_string}" if query_string else "")
+    # Production WSGI servers (gunicorn, uWSGI, mod_wsgi) publish the undecoded
+    # request target; Django's RequestFactory and runserver do not. Simulating
+    # it here keeps these tests on the same default the middleware ships with,
+    # instead of exercising a weaker mode nobody should run in production.
+    request.META["REQUEST_URI"] = path
     payload = build_request_signature_payload(
         agent_did=agent_did,
         audience=audience,
         timestamp=timestamp,
         nonce=nonce,
         method=method,
-        request_target=request_target,
+        request_target=path,
+        target_mode="raw",
         body=body,
-        content_type=request.META.get("CONTENT_TYPE", ""),
+        signed_headers=select_signed_headers(
+            ("content-type",), lambda name: request.headers.get(name)
+        ),
     )
     signature = base64.b64encode(private_key.sign(payload)).decode()
     request.META.update(
@@ -290,14 +326,7 @@ class TestAgentTrustMiddleware:
         try:
             mw = _make_middleware()
             original = _signed_request(private_key, agent_did)
-            replay = RequestFactory().get(
-                "/api/data/",
-                **{
-                    key: value
-                    for key, value in original.META.items()
-                    if key.startswith("HTTP_X_AGENT_")
-                },
-            )
+            replay = _replay_of(original, "/api/data/")
 
             assert mw(original).status_code == 200
             assert mw(replay).status_code == 403
@@ -316,12 +345,7 @@ class TestAgentTrustMiddleware:
         try:
             mw = _make_middleware()
             original = _signed_request(private_key, agent_did)
-            headers = {
-                key: value
-                for key, value in original.META.items()
-                if key.startswith("HTTP_X_AGENT_")
-            }
-            requests = [RequestFactory().get("/api/data/", **headers) for _ in range(2)]
+            requests = [_replay_of(original, "/api/data/") for _ in range(2)]
             barrier = Barrier(2)
             original_add = mw._replay_cache.add
 
@@ -528,6 +552,7 @@ class TestAgentTrustMiddleware:
                 if key.startswith("HTTP_X_AGENT_")
             },
         )
+        tampered.META["REQUEST_URI"] = changed_path
         settings.AGENTMESH_AGENT_KEYS = {agent_did: private_key.public_key()}
         try:
             assert _make_middleware()(tampered).status_code == 403
@@ -555,14 +580,7 @@ class TestAgentTrustMiddleware:
         private_key = ed25519.Ed25519PrivateKey.generate()
         agent_did = "did:mesh:query-bound"
         signed = _signed_request(private_key, agent_did, path="/api/data/?scope=read")
-        tampered = RequestFactory().get(
-            "/api/data/?scope=write",
-            **{
-                key: value
-                for key, value in signed.META.items()
-                if key.startswith("HTTP_X_AGENT_")
-            },
-        )
+        tampered = _replay_of(signed, "/api/data/?scope=write")
         settings.AGENTMESH_AGENT_KEYS = {agent_did: private_key.public_key()}
         try:
             assert _make_middleware()(tampered).status_code == 403
@@ -595,7 +613,10 @@ class TestAgentTrustMiddleware:
 
             monkeypatch.setattr(mw._replay_cache, "add", _cache_failure)
             request = _signed_request(private_key, agent_did)
-            assert mw(request).status_code == 403
+            # 503, not 403: the caller's credentials were fine. Recording our
+            # own cache outage as a rejected agent would corrupt the audit
+            # trail and hide the fault from any alert keyed on 5xx.
+            assert mw(request).status_code == 503
         finally:
             del settings.AGENTMESH_AGENT_KEYS
 
@@ -684,6 +705,36 @@ class TestTrustRequiredDecorator:
     def test_decorator_preserves_function_name(self):
         assert _high_trust_view.__name__ == "_high_trust_view"
 
+    def test_zero_threshold_still_requires_authentication(self):
+        """Regression: a bare X-Agent-DID header used to satisfy min_score=0.
+
+        Every authentication failure scored 0 and the gate was
+        ``score < min_score``, so ``0 < 0`` was False and an unsigned caller
+        was admitted with an attacker-chosen DID. Authentication is now checked
+        before the threshold, so a score floor of zero means "any authenticated
+        agent", never "anyone".
+        """
+        mw = _make_middleware(get_response=_open_view)
+        response = mw(_get("/api/open/", did="did:mesh:impersonated"))
+
+        assert response.status_code == 403
+        assert json.loads(response.content)["error"] == "Trust verification failed"
+
+    def test_zero_threshold_admits_a_correctly_signed_caller(self):
+        """The floor must still be honoured for callers who do authenticate."""
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        agent_did = "did:mesh:zero-threshold"
+        settings.AGENTMESH_AGENT_KEYS = {agent_did: private_key.public_key()}
+        try:
+            mw = _make_middleware(get_response=_open_view)
+            request = _signed_request(private_key, agent_did, path="/api/open/")
+            assert mw(request).status_code == 200
+            assert request.agent_authenticated is True  # type: ignore[attr-defined]
+        finally:
+            del settings.AGENTMESH_AGENT_KEYS
+
 
 class TestTrustExemptDecorator:
     """Tests for @trust_exempt decorator."""
@@ -697,12 +748,30 @@ class TestTrustExemptDecorator:
     def test_exempt_preserves_function_name(self):
         assert _exempt_view.__name__ == "_exempt_view"
 
-    def test_exempt_sets_agent_did(self):
-        """Even exempt views get agent_did set on request."""
+    def test_exempt_does_not_publish_an_unverified_did(self):
+        """An exempt view verifies nothing, so it must assert nothing.
+
+        Regression: the exempt branch used to copy the raw X-Agent-DID header
+        onto the request, letting any caller impersonate any agent to
+        downstream code simply by hitting an exempt endpoint.
+        """
         mw = _make_middleware(get_response=_exempt_view)
         request = _get("/api/exempt/", did="did:mesh:exempt_agent")
         mw(request)
-        assert request.agent_did == "did:mesh:exempt_agent"  # type: ignore[attr-defined]
+        assert request.agent_did is None  # type: ignore[attr-defined]
+        assert request.agent_trust_score is None  # type: ignore[attr-defined]
+        assert request.agent_authenticated is False  # type: ignore[attr-defined]
+
+    def test_exempt_path_prefix_does_not_publish_an_unverified_did(self):
+        settings.AGENTMESH_EXEMPT_PATHS = ["/health/"]
+        try:
+            mw = _make_middleware()
+            request = _get("/health/", did="did:mesh:exempt_agent")
+            assert mw(request).status_code == 200
+            assert request.agent_did is None  # type: ignore[attr-defined]
+            assert request.agent_authenticated is False  # type: ignore[attr-defined]
+        finally:
+            del settings.AGENTMESH_EXEMPT_PATHS
 
 
 class TestImportWithoutDjango:

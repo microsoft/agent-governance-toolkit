@@ -22,7 +22,7 @@ def _write_manifest(path: Path, *, bundle: str | None = None) -> Path:
         else {"type": "custom", "adapter": "test"}
     )
     document = {
-        "agent_control_specification_version": "0.3.1-beta",
+        "agent_control_specification_version": "0.4.0-alpha.1",
         "metadata": {"name": "test", "version": "1.0"},
         "extends": [],
         "policies": {"test": policy},

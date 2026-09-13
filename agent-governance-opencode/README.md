@@ -79,6 +79,12 @@ OpenCode loads plugins from:
 2. `~/.config/opencode/plugins/*.{ts,js,mjs}` (user-global)
 3. `.opencode/plugins/*.{ts,js,mjs}` (workspace-local)
 
+Configure AGT through **one** of these plugin-loading paths for a workspace. Do
+not keep duplicate AGT shims or load the package both from `opencode.json` and a
+workspace plugin file. Duplicate registrations for the same OpenCode client and
+workspace are suppressed and emit a warning, but removing the duplicate source
+keeps startup configuration unambiguous.
+
 ### Option A — workspace `opencode.json`
 
 ```json

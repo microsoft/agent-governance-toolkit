@@ -132,7 +132,7 @@ def _rule(item: Any) -> RulePlan:
         # a transform rule whose effects target different paths cannot be compiled
         # faithfully. Require a single target path; author separate rules for
         # separate locations.
-        paths = {str(effect.get("path") or "$policy_target") for effect in effects}
+        paths = {str(effect.get("path") or "$target") for effect in effects}
         if len(paths) > 1:
             raise PlanError(
                 "a transform rule's effects must target a single path; got " + ", ".join(sorted(paths))
@@ -172,8 +172,8 @@ def _validate_effect(effect: Any) -> None:
     if effect_type not in EFFECT_TYPES:
         raise PlanError(f"unsupported effect type: {effect_type}")
     path = str(effect.get("path", ""))
-    if not path.startswith("$policy_target"):
-        raise PlanError(f"effect path must start with $policy_target: {path}")
+    if not path.startswith("$target"):
+        raise PlanError(f"effect path must start with $target: {path}")
     # Only redact and replace are expressible as a single AGT D1.1 transform.
     # `append` has no faithful single-target transform form (string vs array,
     # path semantics), so reject it rather than compile it incorrectly.
