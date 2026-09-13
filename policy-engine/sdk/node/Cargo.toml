@@ -16,7 +16,10 @@ path = "native/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-agent_control_specification = { path = "../rust" }
+# Both bindings call the OPA-backed artifact validation. Enabling `opa` on
+# the SDK (which forwards to core) rather than only on core keeps the
+# SDK's `required-features = ["opa"]` test target in the workspace run.
+agent_control_specification = { path = "../rust", features = ["opa"] }
 agent_control_specification_core = { path = "../../core", default-features = false, features = ["opa"] }
 napi = { version = "2", default-features = false, features = ["napi8", "async", "serde-json", "tokio_rt"] }
 napi-derive = "2"
