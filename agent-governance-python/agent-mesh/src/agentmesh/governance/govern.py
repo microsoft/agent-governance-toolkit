@@ -22,17 +22,20 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-from .policy import Policy, PolicyDecision, PolicyEngine
-from .audit import AuditLog
-from .trace_sink import TraceConfig, TRACEAuditSink
-from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .advisory import AdvisoryCheck, AdvisoryDecision
-from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
+from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
+from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
+from .audit import AuditLog
+from .audit_backends import FileAuditSink
+from .policy import Policy, PolicyDecision, PolicyEngine
+from .trace_sink import TRACEAuditSink, TraceConfig
 
 if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
@@ -60,6 +63,110 @@ def _get_shared_breach_detector(agent_id: str, session_id: str) -> Any:
 def _reset_shared_breach_detectors() -> None:
     """Test-only helper to clear the shared detector registry."""
     _SHARED_BREACH_DETECTORS.clear()
+
+
+# Module-level shared audit sink, keyed by resolved audit_file path. Each
+# FileAuditSink tracks its own in-memory previous_hash; two sinks opened
+# independently on the same file would interleave their appends and
+# verify_integrity() would report a chain break that never happened from
+# any single writer's point of view. Sharing one sink per path is the fix.
+_AUDIT_SINK_REGISTRY_LOCK = threading.Lock()
+_AUDIT_SINK_REGISTRY: dict[Path, FileAuditSink] = {}
+
+# Env var read when audit_file is set but audit_secret_key is not.
+AUDIT_SECRET_KEY_ENV_VAR = "AGT_AUDIT_SECRET_KEY"
+
+# HMAC-SHA256's output size; NIST SP 800-107 recommends a key at least this
+# long. Also matches what this module used to auto-generate before that was
+# replaced with a caller-supplied key.
+_MIN_AUDIT_SECRET_KEY_BYTES = 32
+
+
+def _check_audit_secret_key_strength(key: bytes) -> None:
+    if len(key) < _MIN_AUDIT_SECRET_KEY_BYTES:
+        raise ValueError(
+            f"audit_secret_key must be at least {_MIN_AUDIT_SECRET_KEY_BYTES} "
+            f"bytes (got {len(key)}) - a short or empty key defeats the HMAC "
+            "integrity check it's meant to provide."
+        )
+
+
+def _resolve_audit_secret_key(
+    explicit_key: Optional[bytes], *, required: bool = True
+) -> Optional[bytes]:
+    """Resolve the HMAC key for a FileAuditSink, never by generating one.
+
+    A randomly generated per-instance key can never verify against a past
+    run, and if two govern() calls point at the same audit_file each
+    minting its own random key would make the chain unverifiable even
+    within one process, before a restart ever enters into it. So the key
+    must come from the caller, one way or another - except when *required*
+    is False (checking an *existing* sink for a mismatch): there, having no
+    key to compare isn't an error, it just means nothing to check against.
+    """
+    if explicit_key is not None:
+        _check_audit_secret_key_strength(explicit_key)
+        return explicit_key
+    env_value = os.environ.get(AUDIT_SECRET_KEY_ENV_VAR)
+    if env_value:
+        try:
+            key = bytes.fromhex(env_value)
+        except ValueError as exc:
+            raise ValueError(
+                f"{AUDIT_SECRET_KEY_ENV_VAR} must be a hex-encoded key"
+            ) from exc
+        _check_audit_secret_key_strength(key)
+        return key
+    if not required:
+        return None
+    raise ValueError(
+        "audit_file is set but no audit_secret_key was given and "
+        f"{AUDIT_SECRET_KEY_ENV_VAR} is not set. Pass audit_secret_key "
+        "explicitly, or set the environment variable, so the audit chain "
+        "is verifiable — a silently auto-generated key would not be."
+    )
+
+
+def _get_shared_audit_sink(path: str, secret_key: Optional[bytes]) -> FileAuditSink:
+    """Return the process-wide FileAuditSink for *path*, creating it once.
+
+    The symlink check happens here, before resolve(), not inside
+    FileAuditSink: Path.resolve() follows symlinks, so by the time a sink
+    would see a resolved path there is no longer a symlink component left
+    for its own O_NOFOLLOW open() to refuse — the check would already have
+    been silently defeated. lstat (Path.is_symlink()) is what actually
+    inspects *path* itself; the realpath is still what keys the registry,
+    so unrelated spellings of one non-symlinked file share one sink.
+    """
+    raw = Path(path).expanduser()
+    if raw.is_symlink():
+        raise ValueError(f"audit_file must not be a symlink: {raw}")
+    resolved = raw.resolve()
+    with _AUDIT_SINK_REGISTRY_LOCK:
+        sink = _AUDIT_SINK_REGISTRY.get(resolved)
+        if sink is None:
+            sink = FileAuditSink(resolved, _resolve_audit_secret_key(secret_key))
+            _AUDIT_SINK_REGISTRY[resolved] = sink
+        else:
+            # required=False: omitting secret_key with no env var set is
+            # still a valid "just reuse whatever's already open" call, not
+            # an error. But when a key *is* resolvable - explicit, or via
+            # AGT_AUDIT_SECRET_KEY - it must match the sink actually in use,
+            # checked here even when this call didn't pass the key
+            # explicitly, so a changed env var doesn't go unnoticed.
+            effective_key = _resolve_audit_secret_key(secret_key, required=False)
+            if effective_key is not None and not sink.matches_key(effective_key):
+                raise ValueError(
+                    f"audit_file {resolved} is already open with a different "
+                    "audit_secret_key (from an earlier govern() call in this "
+                    "process) — pass the same key, or omit it to reuse theirs."
+                )
+        return sink
+
+
+def _reset_shared_audit_sinks() -> None:
+    """Test-only helper to clear the shared audit sink registry."""
+    _AUDIT_SINK_REGISTRY.clear()
 
 
 # Resource-type inference uses exact-token match on action strings split by
@@ -103,6 +210,14 @@ class GovernanceConfig:
         agent_id: Agent identifier for policy evaluation. Defaults to "*".
         audit: Whether to enable audit logging. Defaults to True.
         audit_file: Path for file-based audit log. None = in-memory only.
+            Entries are hash-chained and HMAC-signed (see FileAuditSink).
+        audit_secret_key: HMAC signing key for audit_file, at least 32
+            bytes. Required whenever audit_file is set: pass it explicitly,
+            or set the AGT_AUDIT_SECRET_KEY environment variable
+            (hex-encoded). Not auto-generated — a random per-instance key
+            could never verify across a restart, and would make even two
+            govern() calls sharing one audit_file within the same process
+            unverifiable against each other.
         on_deny: Callback when a policy denies an action. Default: raise.
         conflict_strategy: Policy conflict resolution strategy.
         ring: Optional execution ring for the agent. When set, ring-level
@@ -116,6 +231,7 @@ class GovernanceConfig:
     agent_id: str = "*"
     audit: bool = True
     audit_file: Optional[str] = None
+    audit_secret_key: Optional[bytes] = None
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None
     approval_handler: Optional[ApprovalHandler] = None
     advisory: Optional[AdvisoryCheck] = None
@@ -159,7 +275,15 @@ class GovernedCallable:
         self._fn = fn
         self._config = config
         self._engine = PolicyEngine(conflict_strategy=config.conflict_strategy)
-        self._audit = AuditLog() if config.audit else None
+        # audit_file was previously a documented no-op: this constructor
+        # always built a bare AuditLog() with no sink, so entries never
+        # left memory regardless of what the caller configured. The sink
+        # is shared per resolved path (see _get_shared_audit_sink) so two
+        # govern() calls writing the same file share one hash chain.
+        audit_sink = None
+        if config.audit and config.audit_file:
+            audit_sink = _get_shared_audit_sink(config.audit_file, config.audit_secret_key)
+        self._audit = AuditLog(sink=audit_sink) if config.audit else None
 
         # Load policy
         policy = config.policy
@@ -667,6 +791,8 @@ def govern(
     policy: Union[str, Policy],
     agent_id: str = "*",
     audit: bool = True,
+    audit_file: Optional[str] = None,
+    audit_secret_key: Optional[bytes] = None,
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None,
     approval_handler: Optional[ApprovalHandler] = None,
     advisory: Optional[AdvisoryCheck] = None,
@@ -687,6 +813,14 @@ def govern(
             string, or a ``Policy`` object.
         agent_id: Agent identifier for policy evaluation. Default ``"*"``.
         audit: Enable audit logging. Default ``True``.
+        audit_file: Optional path to also persist audit entries as a
+            hash-chained, HMAC-signed JSON-lines file (see
+            ``FileAuditSink``). ``None`` (default) keeps entries in
+            memory only, lost on process exit.
+        audit_secret_key: HMAC key for ``audit_file``. Required (directly
+            or via the ``AGT_AUDIT_SECRET_KEY`` env var, hex-encoded)
+            whenever ``audit_file`` is set — see
+            ``GovernanceConfig.audit_secret_key``.
         on_deny: Optional callback on denial. Default: raise
             ``GovernanceDenied``.
         conflict_strategy: Conflict resolution strategy. Default
@@ -709,6 +843,8 @@ def govern(
         policy=policy,
         agent_id=agent_id,
         audit=audit,
+        audit_file=audit_file,
+        audit_secret_key=audit_secret_key,
         on_deny=on_deny,
         approval_handler=approval_handler,
         advisory=advisory,

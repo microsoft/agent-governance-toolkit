@@ -3,15 +3,18 @@
 """Tests for the govern() high-level wrapper."""
 
 import os
+import secrets
+
 import pytest
+
+from agentmesh.governance.audit_backends import FileAuditSink
 from agentmesh.governance.govern import (
-    govern,
-    GovernedCallable,
     GovernanceConfig,
     GovernanceDenied,
+    GovernedCallable,
+    govern,
 )
 from agentmesh.governance.policy import Policy
-
 
 # ── Test fixtures ──────────────────────────────────────────────────
 
@@ -322,8 +325,8 @@ rules:
 
     def test_circuit_breaker_trips_after_repeated_violations(self):
         """Repeated ring violations trip the circuit breaker."""
-        from hypervisor.rings.breach_detector import RingBreachDetector
         from hypervisor.models import ExecutionRing
+        from hypervisor.rings.breach_detector import RingBreachDetector
 
         # Use a detector with a very low baseline so the breaker trips quickly
         detector = RingBreachDetector(baseline_rate=0.01)
@@ -339,8 +342,11 @@ rules:
         MUST share one RingBreachDetector. Otherwise a rogue agent with N
         tools can spend the full per-detector violation budget N times."""
         from hypervisor.models import ExecutionRing
+
         from agentmesh.governance.govern import (
-            GovernanceConfig, GovernedCallable, _reset_shared_breach_detectors,
+            GovernanceConfig,
+            GovernedCallable,
+            _reset_shared_breach_detectors,
         )
 
         _reset_shared_breach_detectors()
@@ -359,8 +365,11 @@ rules:
     def test_breach_detector_isolated_across_sessions(self):
         """Different session_ids on the same agent get distinct detectors."""
         from hypervisor.models import ExecutionRing
+
         from agentmesh.governance.govern import (
-            GovernanceConfig, GovernedCallable, _reset_shared_breach_detectors,
+            GovernanceConfig,
+            GovernedCallable,
+            _reset_shared_breach_detectors,
         )
 
         _reset_shared_breach_detectors()
@@ -380,23 +389,269 @@ rules:
 
     def test_resource_inference_no_false_positive_httponly(self):
         """'set_httponly_flag' must NOT be inferred as a network action."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("set_httponly_flag") == ResourceType.TOOL_EXECUTION
 
     def test_resource_inference_no_false_positive_overwrite(self):
         """'overwrite_protection_check' must NOT be inferred as filesystem."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("overwrite_protection_check") == ResourceType.TOOL_EXECUTION
 
     def test_resource_inference_true_positives(self):
         """Real subprocess/network/filesystem actions still classify correctly."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("http_get") == ResourceType.NETWORK
         assert _infer_resource_type("exec.command") == ResourceType.SUBPROCESS
         assert _infer_resource_type("shell-run") == ResourceType.SUBPROCESS
         assert _infer_resource_type("write_file") == ResourceType.FILESYSTEM
         assert _infer_resource_type("read_only_query") == ResourceType.TOOL_EXECUTION
 
+
+# ── govern() + audit_file (file-based audit persistence) ────────────
+
+
+class TestGovernWithAuditFile:
+    """govern(..., audit_file=) - audit_file was a documented
+    GovernanceConfig field ("Path for file-based audit log. None =
+    in-memory only.") that GovernedCallable.__init__ never actually read:
+    it always built AuditLog() with no sink, so entries never left memory
+    no matter what the caller configured, and the top-level govern()
+    factory did not even expose the parameter to pass through."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_registry(self):
+        from agentmesh.governance.govern import _reset_shared_audit_sinks
+
+        _reset_shared_audit_sinks()
+        yield
+        _reset_shared_audit_sinks()
+
+    def test_default_is_in_memory_only(self):
+        """Unaffected default behaviour: no audit_file, no file written."""
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY)
+        safe(action="read")
+        assert safe.audit_log is not None
+        assert len(safe.audit_log.get_entries_by_type("policy_evaluation")) == 1
+
+    def test_audit_file_without_key_or_env_var_raises(self, tmp_path):
+        """No audit_secret_key and no AGT_AUDIT_SECRET_KEY: refuse rather
+        than mint a random key nothing could ever verify against."""
+        path = tmp_path / "audit.jsonl"
+        with pytest.raises(ValueError, match="audit_secret_key"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+
+    def test_audit_file_short_key_raises(self, tmp_path):
+        """An empty or short key would technically compute an HMAC, just
+        not one worth anything as an integrity control."""
+        path = tmp_path / "audit.jsonl"
+        with pytest.raises(ValueError, match="at least 32 bytes"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+                audit_secret_key=b"too-short",
+            )
+
+    def test_audit_file_short_key_from_env_var_raises(self, tmp_path, monkeypatch):
+        path = tmp_path / "audit.jsonl"
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", b"too-short".hex())
+        with pytest.raises(ValueError, match="at least 32 bytes"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+
+    def test_audit_file_key_from_env_var(self, tmp_path, monkeypatch):
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", key.hex())
+
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        safe(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_audit_file_persists_entries(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=key,
+        )
+        safe(action="read")
+        safe(action="write")
+
+        assert path.exists()
+        # A FileAuditSink now verifies the existing chain under its own
+        # key at construction (see FileAuditSink._read_last_hash), so
+        # reading back requires the real key even for read_entries().
+        sink = FileAuditSink(path, secret_key=key)
+        entries = sink.read_entries()
+        assert len(entries) == 2
+        assert entries[0].action == "read"
+        assert entries[1].action == "write"
+        assert entries[1].outcome == "allow"
+
+    def test_audit_file_chain_and_signature_verify(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        for _ in range(3):
+            safe(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_audit_file_appends_across_instances(self, tmp_path):
+        """The whole point of file-based persistence: a second govern()
+        instance pointed at the same path resumes the chain instead of
+        overwriting it."""
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        second(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_second_instance_omitting_key_reuses_first_instances_sink(self, tmp_path):
+        """A second govern() call on the same path with no key of its own
+        shares the first call's sink rather than failing or minting a
+        fresh key that would desync the chain."""
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        second = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        second(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_second_instance_with_mismatched_key_raises(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        first_key = secrets.token_bytes(32)
+        govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=first_key,
+        )
+
+        with pytest.raises(ValueError, match="already open with a different"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+                audit_secret_key=secrets.token_bytes(32),
+            )
+
+    def test_two_instances_same_path_different_relative_spelling_share_one_sink(
+        self, tmp_path, monkeypatch,
+    ):
+        """The registry key is the resolved path, not the string a caller
+        happened to pass — "./audit.jsonl" and its absolute form must
+        still land on the same sink."""
+        monkeypatch.chdir(tmp_path)
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file="audit.jsonl",
+            audit_secret_key=key,
+        )
+        first(action="read")
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY,
+            audit_file=str((tmp_path / "audit.jsonl").resolve()),
+            audit_secret_key=key,
+        )
+        second(action="read")
+
+        sink = FileAuditSink(tmp_path / "audit.jsonl", secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
+    def test_audit_file_created_with_restrictive_permissions(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=secrets.token_bytes(32),
+        )
+        safe(action="read")
+
+        assert (path.stat().st_mode & 0o777) == 0o600
+
+    def test_corrupt_trailing_line_does_not_block_future_appends(self, tmp_path):
+        """A crash mid-write leaves a corrupt last line. Resuming the
+        chain must skip it, not raise and permanently block the file."""
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write('{"entry_id": "truncated", "content_hash": "abc\n')
+
+        from agentmesh.governance.govern import _reset_shared_audit_sinks
+        _reset_shared_audit_sinks()
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        second(action="write")
+
+        lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        assert len(lines) == 3
+        assert lines[1].startswith('{"entry_id": "truncated"')
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX symlinks only")
+    def test_symlinked_audit_file_raises(self, tmp_path):
+        """Path.resolve() (used to key the shared-sink registry) follows
+        symlinks, so by the time a sink would see the resolved path there's
+        no symlink component left for its own O_NOFOLLOW open() to refuse -
+        the FileAuditSink-level check alone would be silently bypassed for
+        exactly this path. Caught here instead, before resolve()."""
+        target = tmp_path / "real.jsonl"
+        target.write_text("")
+        link = tmp_path / "audit.jsonl"
+        link.symlink_to(target)
+
+        with pytest.raises(ValueError, match="symlink"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(link),
+                audit_secret_key=secrets.token_bytes(32),
+            )
+
+    def test_second_instance_env_var_key_mismatch_raises(self, tmp_path, monkeypatch):
+        """The first instance's key came from an explicit argument; the
+        second omits secret_key but AGT_AUDIT_SECRET_KEY now holds a
+        *different* key. Previously only checked when secret_key was
+        passed explicitly, so a changed env var went unnoticed and the
+        second instance silently kept signing with the first key."""
+        path = tmp_path / "audit.jsonl"
+        first_key = secrets.token_bytes(32)
+        govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=first_key,
+        )
+
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", secrets.token_bytes(32).hex())
+        with pytest.raises(ValueError, match="already open with a different"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
