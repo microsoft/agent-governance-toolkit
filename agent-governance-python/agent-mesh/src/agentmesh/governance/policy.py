@@ -12,6 +12,7 @@ warnings; unknown versions raise ``ValueError``.
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Literal, Any
 from pydantic import BaseModel, Field, field_validator
 import logging
@@ -785,9 +786,7 @@ class PolicyEngine:
 
         # A directory of .rego files is a valid `opa eval --data` target
         # (and worked as rego_path before the existence check above was
-        # narrowed to files only). Only a single file's content can be
-        # checked here for a package mismatch; a directory skips that
-        # static check and relies on the compile probe below instead.
+        # narrowed to files only).
         source = rego_content
         if source is None and rego_path and os.path.isfile(rego_path):
             with open(rego_path, "r", encoding="utf-8") as f:
@@ -798,6 +797,26 @@ class PolicyEngine:
                 raise ValueError(
                     f"rego file declares package '{declared.group(1)}' but "
                     f"load_rego was called with package='{package}' — "
+                    f"data.{package}.allow would never resolve against it"
+                )
+        elif rego_path and os.path.isdir(rego_path):
+            # Same check as above, across every .rego file opa eval --data
+            # loads from a directory (recursively). Needed because a child
+            # package (e.g. agentmesh.sub for a configured "agentmesh")
+            # would pass the data.<package> probe below too.
+            declared_packages = set()
+            for rego_file in Path(rego_path).rglob("*.rego"):
+                match = re.search(
+                    r"^\s*package\s+([\w.]+)",
+                    rego_file.read_text(encoding="utf-8"),
+                    re.MULTILINE,
+                )
+                if match:
+                    declared_packages.add(match.group(1))
+            if declared_packages and package not in declared_packages:
+                raise ValueError(
+                    f"no .rego file under {rego_path!r} declares package "
+                    f"'{package}' (found: {sorted(declared_packages)}) — "
                     f"data.{package}.allow would never resolve against it"
                 )
 
@@ -814,17 +833,11 @@ class PolicyEngine:
         if probe.error is not None:
             raise ValueError(f"rego policy failed to compile: {probe.error}")
 
-        # The static package check above only covers a single-file
-        # rego_path; a directory skips it entirely, and even for a single
-        # file it's a regex match on one `package` line, not proof the
-        # loaded source actually defines anything under it. Query the bare
-        # package path (not `.allow`) with empty input: an *existing*
-        # package is always "defined" here, even if every rule under it is
-        # false or itself undefined for empty input (e.g. no `default`
-        # line and a body that references `input`) — only a package with
-        # zero rules anywhere in the loaded source comes back undefined.
-        # Probing `.allow` directly instead would conflate that second,
-        # legitimate case with an actual package mismatch.
+        # Belt-and-suspenders on top of the static check: query the bare
+        # package (not `.allow`) so a package with no rules at all is
+        # still caught even if the regex above missed something. Bare
+        # package, not `.allow`, so a rule that's legitimately undefined
+        # for empty input isn't mistaken for a missing package.
         package_probe = evaluator.evaluate(f"data.{package}", {})
         if not package_probe.defined:
             raise ValueError(

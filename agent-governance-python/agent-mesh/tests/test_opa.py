@@ -169,10 +169,6 @@ class TestBuiltinEvaluator:
 
 
 # ── Non-boolean `allow` values must deny, not coerce with truthiness ──
-#
-# Rego output is security evidence feeding an authorization decision. A
-# policy author's `allow := "deny"` reads as intending to deny; naive
-# Python truthiness (`bool("deny")`) reads it as permit instead.
 
 @requires_opa
 class TestNonBooleanAllowValueDeniesWithError:
@@ -475,27 +471,34 @@ class TestLoadRegoValidation:
         evaluator = engine.load_rego(rego_content=BASIC_REGO, package="agentmesh")
         assert isinstance(evaluator, OPAEvaluator)
 
-    @requires_opa
     def test_directory_package_mismatch_raises(self, tmp_path):
-        """The static package check only reads a single rego_content/
-        rego_path *file*; a directory bundle skips it entirely. Without
-        also probing the bare package path, a directory whose file
-        declares a different package than configured loaded silently and
-        every governed call denied forever after."""
+        """A directory bundle skips the single-file package check;
+        without a directory-aware version, a mismatched package loaded
+        silently and every governed call denied forever after."""
         (tmp_path / "policy.rego").write_text(
             "package other\n\ndefault allow = false\n\nallow {\n    input.x == \"y\"\n}\n"
         )
         engine = PolicyEngine()
-        with pytest.raises(ValueError, match="has no rules anywhere in the loaded"):
+        with pytest.raises(ValueError, match="no .rego file under .* declares package"):
+            engine.load_rego(rego_path=str(tmp_path), package="agentmesh")
+
+    def test_directory_child_package_mismatch_raises(self, tmp_path):
+        """A child package (agentmesh.sub) would pass the data.<package>
+        runtime probe too, since that path is "defined" as soon as any
+        child package exists under it - only the static per-file check
+        catches this one."""
+        (tmp_path / "policy.rego").write_text(
+            "package agentmesh.sub\n\ndefault allow = false\n"
+        )
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="no .rego file under .* declares package"):
             engine.load_rego(rego_path=str(tmp_path), package="agentmesh")
 
     @requires_opa
     def test_directory_no_default_still_succeeds(self, tmp_path):
-        """The opposite of the case above: the *correct* package, just
-        with no `default` line, so data.<package>.allow is undefined for
-        the {} probe input. That must not be mistaken for a package
-        mismatch - the package genuinely exists, only this one rule is
-        conditionally undefined."""
+        """Correct package, no `default` line, so data.<package>.allow is
+        undefined for the {} probe input - must not be mistaken for a
+        package mismatch."""
         (tmp_path / "policy.rego").write_text(
             "package agentmesh\n\nallow {\n    input.x == \"y\"\n}\n"
         )

@@ -537,6 +537,16 @@ allow {
         result = safe_wrapped(**kwargs)
         assert result["doc_id"] == "COMP-042"
 
+    @pytest.mark.parametrize("rego_value", ['"deny"', "{}", "[]", "42", "null"])
+    def test_non_boolean_allow_denies_end_to_end(self, rego_value):
+        """The non-boolean-allow rejection lives in OPAEvaluator; pin that
+        it actually reaches a real govern()-wrapped call, not just the
+        evaluator in isolation."""
+        rego = f"package agentmesh\n\nallow := {rego_value}\n"
+        safe = govern(dummy_tool, policy=DENY_ALL_YAML, rego_content=rego, rego_package="agentmesh")
+        with pytest.raises(GovernanceDenied):
+            safe(action="read")
+
 
 class TestGovernRegoEmptyStringWiring:
     """rego_path="" / rego_content="" used to be indistinguishable from

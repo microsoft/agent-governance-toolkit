@@ -62,14 +62,10 @@ class OPADecision:
         source: How the evaluation was performed
             (``"remote"``, ``"local"``, or ``"fallback"``).
         error: Error message if evaluation failed, otherwise ``None``.
-        defined: Whether OPA returned a result at all. ``False`` means
-            the query path is undefined in the loaded source (e.g. the
-            queried package doesn't exist), not that it evaluated to a
-            falsy value — a query that legitimately resolves to
-            ``{}``/``false`` still has ``defined=True``. ``allowed`` is
-            ``False`` in both cases; this is the field that tells them
-            apart, e.g. for a construction-time "does this package even
-            exist" check (see PolicyEngine.load_rego).
+        defined: Whether the query resolved to anything at all, as
+            opposed to the path being undefined (e.g. no such package).
+            ``allowed`` is ``False`` either way; this is what tells them
+            apart (see PolicyEngine.load_rego).
     """
     allowed: bool
     raw_result: Any = None
@@ -81,17 +77,9 @@ class OPADecision:
 
 
 def _require_boolean_decision(value: Any) -> tuple[bool, Optional[str]]:
-    """Require *value* to be a genuine Rego boolean.
-
-    Rego output is security evidence feeding an authorization decision,
-    not a generic value to coerce with Python truthiness: a policy
-    author's ``allow := "deny"`` or ``allow := {}`` read as intending to
-    deny, not permit, yet a non-empty string or non-empty collection is
-    truthy. Only ``True``/``False`` are accepted; anything else
-    (strings, collections, numbers other than a bare bool, ``null``)
-    denies with an explicit error, so a miswritten policy is visible
-    instead of silently executing the governed call.
-    """
+    """Require *value* to be a real bool, not just truthy - Rego output is
+    a security decision, and e.g. `allow := "deny"` must not be read as
+    permit."""
     if isinstance(value, bool):
         return value, None
     return False, (
