@@ -28,14 +28,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-from .policy import Policy, PolicyDecision, PolicyEngine
+from .advisory import AdvisoryCheck, AdvisoryDecision
+from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
+from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
+from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
 from .audit import AuditLog
 from .audit_backends import FileAuditSink
-from .trace_sink import TraceConfig, TRACEAuditSink
-from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
-from .advisory import AdvisoryCheck, AdvisoryDecision
-from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
-from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
+from .policy import Policy, PolicyDecision, PolicyEngine
+from .trace_sink import TRACEAuditSink, TraceConfig
 
 if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
@@ -76,6 +76,20 @@ _AUDIT_SINK_REGISTRY: dict[Path, FileAuditSink] = {}
 # Env var read when audit_file is set but audit_secret_key is not.
 AUDIT_SECRET_KEY_ENV_VAR = "AGT_AUDIT_SECRET_KEY"
 
+# HMAC-SHA256's output size; NIST SP 800-107 recommends a key at least this
+# long. Also matches what this module used to auto-generate before that was
+# replaced with a caller-supplied key.
+_MIN_AUDIT_SECRET_KEY_BYTES = 32
+
+
+def _check_audit_secret_key_strength(key: bytes) -> None:
+    if len(key) < _MIN_AUDIT_SECRET_KEY_BYTES:
+        raise ValueError(
+            f"audit_secret_key must be at least {_MIN_AUDIT_SECRET_KEY_BYTES} "
+            f"bytes (got {len(key)}) - a short or empty key defeats the HMAC "
+            "integrity check it's meant to provide."
+        )
+
 
 def _resolve_audit_secret_key(
     explicit_key: Optional[bytes], *, required: bool = True
@@ -91,15 +105,18 @@ def _resolve_audit_secret_key(
     key to compare isn't an error, it just means nothing to check against.
     """
     if explicit_key is not None:
+        _check_audit_secret_key_strength(explicit_key)
         return explicit_key
     env_value = os.environ.get(AUDIT_SECRET_KEY_ENV_VAR)
     if env_value:
         try:
-            return bytes.fromhex(env_value)
+            key = bytes.fromhex(env_value)
         except ValueError as exc:
             raise ValueError(
                 f"{AUDIT_SECRET_KEY_ENV_VAR} must be a hex-encoded key"
             ) from exc
+        _check_audit_secret_key_strength(key)
+        return key
     if not required:
         return None
     raise ValueError(
@@ -194,13 +211,13 @@ class GovernanceConfig:
         audit: Whether to enable audit logging. Defaults to True.
         audit_file: Path for file-based audit log. None = in-memory only.
             Entries are hash-chained and HMAC-signed (see FileAuditSink).
-        audit_secret_key: HMAC signing key for audit_file. Required
-            whenever audit_file is set: pass it explicitly, or set the
-            AGT_AUDIT_SECRET_KEY environment variable (hex-encoded). Not
-            auto-generated — a random per-instance key could never verify
-            across a restart, and would make even two govern() calls
-            sharing one audit_file within the same process unverifiable
-            against each other.
+        audit_secret_key: HMAC signing key for audit_file, at least 32
+            bytes. Required whenever audit_file is set: pass it explicitly,
+            or set the AGT_AUDIT_SECRET_KEY environment variable
+            (hex-encoded). Not auto-generated — a random per-instance key
+            could never verify across a restart, and would make even two
+            govern() calls sharing one audit_file within the same process
+            unverifiable against each other.
         on_deny: Callback when a policy denies an action. Default: raise.
         conflict_strategy: Policy conflict resolution strategy.
         ring: Optional execution ring for the agent. When set, ring-level

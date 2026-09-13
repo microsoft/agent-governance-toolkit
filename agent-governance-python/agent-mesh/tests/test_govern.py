@@ -4,16 +4,17 @@
 
 import os
 import secrets
+
 import pytest
+
+from agentmesh.governance.audit_backends import FileAuditSink
 from agentmesh.governance.govern import (
-    govern,
-    GovernedCallable,
     GovernanceConfig,
     GovernanceDenied,
+    GovernedCallable,
+    govern,
 )
-from agentmesh.governance.audit_backends import FileAuditSink
 from agentmesh.governance.policy import Policy
-
 
 # ── Test fixtures ──────────────────────────────────────────────────
 
@@ -324,8 +325,8 @@ rules:
 
     def test_circuit_breaker_trips_after_repeated_violations(self):
         """Repeated ring violations trip the circuit breaker."""
-        from hypervisor.rings.breach_detector import RingBreachDetector
         from hypervisor.models import ExecutionRing
+        from hypervisor.rings.breach_detector import RingBreachDetector
 
         # Use a detector with a very low baseline so the breaker trips quickly
         detector = RingBreachDetector(baseline_rate=0.01)
@@ -341,8 +342,11 @@ rules:
         MUST share one RingBreachDetector. Otherwise a rogue agent with N
         tools can spend the full per-detector violation budget N times."""
         from hypervisor.models import ExecutionRing
+
         from agentmesh.governance.govern import (
-            GovernanceConfig, GovernedCallable, _reset_shared_breach_detectors,
+            GovernanceConfig,
+            GovernedCallable,
+            _reset_shared_breach_detectors,
         )
 
         _reset_shared_breach_detectors()
@@ -361,8 +365,11 @@ rules:
     def test_breach_detector_isolated_across_sessions(self):
         """Different session_ids on the same agent get distinct detectors."""
         from hypervisor.models import ExecutionRing
+
         from agentmesh.governance.govern import (
-            GovernanceConfig, GovernedCallable, _reset_shared_breach_detectors,
+            GovernanceConfig,
+            GovernedCallable,
+            _reset_shared_breach_detectors,
         )
 
         _reset_shared_breach_detectors()
@@ -382,20 +389,20 @@ rules:
 
     def test_resource_inference_no_false_positive_httponly(self):
         """'set_httponly_flag' must NOT be inferred as a network action."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("set_httponly_flag") == ResourceType.TOOL_EXECUTION
 
     def test_resource_inference_no_false_positive_overwrite(self):
         """'overwrite_protection_check' must NOT be inferred as filesystem."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("overwrite_protection_check") == ResourceType.TOOL_EXECUTION
 
     def test_resource_inference_true_positives(self):
         """Real subprocess/network/filesystem actions still classify correctly."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("http_get") == ResourceType.NETWORK
         assert _infer_resource_type("exec.command") == ResourceType.SUBPROCESS
         assert _infer_resource_type("shell-run") == ResourceType.SUBPROCESS
@@ -436,6 +443,22 @@ class TestGovernWithAuditFile:
         with pytest.raises(ValueError, match="audit_secret_key"):
             govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
 
+    def test_audit_file_short_key_raises(self, tmp_path):
+        """An empty or short key would technically compute an HMAC, just
+        not one worth anything as an integrity control."""
+        path = tmp_path / "audit.jsonl"
+        with pytest.raises(ValueError, match="at least 32 bytes"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+                audit_secret_key=b"too-short",
+            )
+
+    def test_audit_file_short_key_from_env_var_raises(self, tmp_path, monkeypatch):
+        path = tmp_path / "audit.jsonl"
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", b"too-short".hex())
+        with pytest.raises(ValueError, match="at least 32 bytes"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+
     def test_audit_file_key_from_env_var(self, tmp_path, monkeypatch):
         path = tmp_path / "audit.jsonl"
         key = secrets.token_bytes(32)
@@ -450,15 +473,19 @@ class TestGovernWithAuditFile:
 
     def test_audit_file_persists_entries(self, tmp_path):
         path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
         safe = govern(
             dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
-            audit_secret_key=secrets.token_bytes(32),
+            audit_secret_key=key,
         )
         safe(action="read")
         safe(action="write")
 
         assert path.exists()
-        sink = FileAuditSink(path, secret_key=b"irrelevant-for-reading")
+        # A FileAuditSink now verifies the existing chain under its own
+        # key at construction (see FileAuditSink._read_last_hash), so
+        # reading back requires the real key even for read_entries().
+        sink = FileAuditSink(path, secret_key=key)
         entries = sink.read_entries()
         assert len(entries) == 2
         assert entries[0].action == "read"
