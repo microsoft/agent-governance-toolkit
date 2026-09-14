@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from agentmesh.governance.policy import PolicyEngine as _PolicyEngine
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -135,14 +135,27 @@ def create_sidecar_app() -> FastAPI:
         """List loaded policies."""
         return {
             "total_loaded": _loaded_count,
+            "skipped": _skipped_count,
             "policy_dir": _policy_dir,
             "version": VERSION,
         }
 
     @app.post("/api/v1/policy/reload", tags=["policy"])
     async def reload_policies() -> dict[str, Any]:
-        """Hot-reload policies from disk."""
-        _load_policies()
+        """Hot-reload policies from disk.
+
+        A strict-mode load failure keeps the previously loaded policy set (see
+        ``_load_policies``); this returns 409 rather than a bare 500 so the
+        caller can tell the reload was rejected and the prior policies serve.
+        """
+        try:
+            _load_policies()
+        except RuntimeError as exc:
+            logger.error("Policy reload rejected, keeping previous set: %s", exc)
+            raise HTTPException(
+                status_code=409,
+                detail=f"Policy reload rejected; previous policy set retained. {exc}",
+            ) from exc
         return {"status": "reloaded", "total_loaded": _loaded_count}
 
     return app
@@ -169,43 +182,91 @@ class EvaluateResponse(BaseModel):
 
 _policy_dir = os.getenv("AGT_POLICY_DIR", "/etc/agt/policies")
 _loaded_count = 0
+_skipped_count = 0
 
 # Initialize engine eagerly so tests work without startup event
 _engine = _PolicyEngine()
 
 
+def _policy_strict() -> bool:
+    """Whether the directory loader fails closed on an unloadable policy file.
+
+    Defaults to on (issue #3538): a policy file that fails to load must not be
+    silently dropped, or a deny policy could vanish while a broader allow keeps
+    serving. Set ``AGT_POLICY_STRICT`` to ``0``/``false``/``no``/``off`` for
+    best-effort loading instead. Any other value, including blank or
+    unrecognised, stays strict so a misconfigured toggle fails closed.
+    """
+    return os.getenv("AGT_POLICY_STRICT", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def _on_load_failure(name: str, exc: Exception, strict: bool) -> None:
+    """Fail closed (raise) or, in non-strict mode, log at error level."""
+    if strict:
+        raise RuntimeError(
+            f"Policy file {name!r} failed to load: {exc}. Refusing to start with a "
+            f"policy silently dropped; set AGT_POLICY_STRICT=0 for best-effort "
+            f"loading (issue #3538)."
+        ) from exc
+    logger.error("Skipped %s: %s", name, exc)
+
+
 def _load_policies() -> None:
-    """Load policies from AGT_POLICY_DIR."""
-    global _engine, _loaded_count, _policy_dir
+    """Load policies from AGT_POLICY_DIR.
+
+    Fails closed by default: if any policy file present in the directory cannot
+    be loaded, the loader raises rather than silently dropping it (issue #3538),
+    so the server never serves decisions with a deny policy quietly missing. Set
+    ``AGT_POLICY_STRICT=0`` for best-effort loading, which logs each unloadable
+    file at error level and records a skipped count exposed via
+    ``/api/v1/policies``.
+    """
+    global _engine, _loaded_count, _skipped_count, _policy_dir
 
     from agentmesh.governance.policy import PolicyEngine
 
     _policy_dir = os.getenv("AGT_POLICY_DIR", "/etc/agt/policies")
-    _engine = PolicyEngine()
+    strict = _policy_strict()
 
     policy_path = Path(_policy_dir)
     if not policy_path.exists():
         logger.warning("Policy directory %s does not exist", _policy_dir)
+        _engine = PolicyEngine()
         _loaded_count = 0
+        _skipped_count = 0
         return
 
+    # Build into a local engine and commit only once every file has loaded, so a
+    # strict-mode failure leaves the previously loaded policy set intact instead
+    # of swapping in a partially loaded (weaker) one on reload (issue #3538).
+    engine = PolicyEngine()
     count = 0
+    skipped = 0
     for f in sorted(policy_path.glob("*.yaml")):
         try:
-            _engine.load_yaml(f.read_text())
+            engine.load_yaml(f.read_text())
             count += 1
             logger.info("Loaded policy: %s", f.name)
         except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
+            skipped += 1
+            _on_load_failure(f.name, exc, strict)
 
     for f in sorted(policy_path.glob("*.json")):
         try:
-            _engine.load_json(f.read_text())
+            engine.load_json(f.read_text())
             count += 1
         except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
+            skipped += 1
+            _on_load_failure(f.name, exc, strict)
 
+    _engine = engine
     _loaded_count = count
+    _skipped_count = skipped
     logger.info("Loaded %d policies from %s", count, _policy_dir)
 
 
