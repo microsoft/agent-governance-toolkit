@@ -1,6 +1,6 @@
 ---
 title: "Known Limitations & Design Boundaries"
-last_reviewed: 2026-05-19
+last_reviewed: 2026-08-16
 owner: agt-maintainers
 ---
 
@@ -353,6 +353,49 @@ AGT uses two DID (Decentralized Identifier) method prefixes across its SDKs:
 **What we're building:**
 - DID method standardization to `did:agentmesh:*` across all SDKs (planned for v4.0)
 - Migration tooling to update existing identity registries
+
+## 13. Kill Switch Semantics Across SDKs
+
+The term `kill switch` does not currently describe one cross-SDK termination
+contract. A recorded kill or active switch should not by itself be treated as
+proof that an execution process has stopped.
+
+### Python
+
+`hypervisor.security.kill_switch.KillSwitch` delegates process termination to a
+callback registered with `register_agent()`. If no callback is registered,
+`kill()` still returns and records a `KillResult`, but `terminated` is `False`.
+A callback that raises or exceeds the default five-second callback timeout also
+produces `terminated=False`.
+
+The target agent's callback registration is removed after every kill attempt,
+including failed or timed-out attempts. A caller that wants to retry after
+`terminated=False` must register the agent again before calling `kill()`.
+In-flight step handoff or compensation is separate from process termination and
+does not imply that the termination callback succeeded.
+
+### Cross-SDK comparison
+
+| Behavior | Python | TypeScript | Go |
+|----------|--------|------------|----|
+| Model | Registered termination callback plus step handoff/compensation | Registered termination handlers plus compensation handlers | Scoped cooperative allow/deny registry |
+| Termination success signal | `KillResult.terminated` | None | None; `KillSwitchDecision.Allowed` describes permission, not process termination |
+| Handler timeout | 5 seconds by default | None | N/A |
+| Handler failure recorded in kill history | Yes, with `terminated=False` | No if a handler throws before the result is created | N/A |
+| Registration/state after kill | Target callback removed unconditionally | Handlers remain registered | Active until `Clear()` |
+| Reversible | No direct clear operation | No direct clear operation | Yes, via `Clear()` |
+| Stops non-cooperating execution | Only if the registered callback stops it | Only if a registered handler stops it | No; the consumer must consult `DecisionFor()` |
+
+**Operational guidance:**
+
+- In Python, check `result.terminated` before treating containment as confirmed.
+  Re-register the agent before retrying a failed or timed-out kill.
+- In TypeScript, do not infer termination success from the shape of a returned
+  result. The current result has no success field and handlers have no built-in
+  timeout; see #3740 and #3741.
+- In Go, treat `Activate()` as a cooperative circuit breaker. It changes what
+  `DecisionFor()` reports, but running work must consult that decision for the
+  switch to affect execution.
 
 ---
 

@@ -40,7 +40,7 @@ def policy_file(tmp_path: Path) -> Path:
     p.write_text(
         textwrap.dedent(
             """\
-            agent_control_specification_version: 0.3.1-beta
+            agent_control_specification_version: 0.4.0-alpha.1
             metadata:
               name: test-policy
               version: "1.0"
@@ -67,7 +67,7 @@ def bad_policy_file(tmp_path: Path) -> Path:
     p.write_text(
         textwrap.dedent(
             """\
-            agent_control_specification_version: 0.3.1-beta
+            agent_control_specification_version: 0.4.0-alpha.1
             metadata:
               name: bad-policy
               version: "1.0"

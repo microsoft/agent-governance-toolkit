@@ -8,6 +8,10 @@ import { checkArbitraryText, getPolicyStatus, loadPolicy } from "../lib/policy.m
 
 const VERSION = "3.6.0";
 const PROTOCOL_VERSION = "2024-11-05";
+const STATELESS_PROTOCOL_VERSION = "2026-07-28";
+const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
+const MAX_HEADER_BYTES = 8 * 1024;
+const MAX_FRAME_BYTES = 5 * 1024 * 1024;
 const TOOL_DEFINITIONS = [
   {
     name: "agt_policy_status",
@@ -46,6 +50,20 @@ export async function handleJsonRpcRequest(state, request) {
     return jsonRpcError(id, -32600, "Invalid Request");
   }
 
+  if (method === "server/discover") {
+    return jsonRpcResult(id, {
+      protocolVersion: STATELESS_PROTOCOL_VERSION,
+      capabilities: {
+        tools: {},
+      },
+      serverInfo: {
+        name: "agt-governance",
+        version: VERSION,
+      },
+      tools: TOOL_DEFINITIONS,
+    });
+  }
+
   if (method === "initialize") {
     const protocolVersion =
       typeof params.protocolVersion === "string" ? params.protocolVersion : PROTOCOL_VERSION;
@@ -70,12 +88,24 @@ export async function handleJsonRpcRequest(state, request) {
     return jsonRpcResult(id, {});
   }
 
+  const requestMeta =
+    method === "tools/list" || method === "tools/call"
+      ? validateStatelessRequestMeta(request)
+      : undefined;
+  if (requestMeta === null) {
+    return jsonRpcError(
+      id,
+      -32001,
+      "Invalid stateless request metadata: _meta.clientInfo requires non-empty name and version, and _meta.capabilities must be an object.",
+    );
+  }
+
   if (method === "tools/list") {
     return jsonRpcResult(id, { tools: TOOL_DEFINITIONS });
   }
 
   if (method === "tools/call") {
-    return jsonRpcResult(id, await callTool(state, params));
+    return jsonRpcResult(id, withRequestMeta(await callTool(state, params), requestMeta));
   }
 
   return jsonRpcError(id, -32601, `Method not found: ${method}`);
@@ -103,6 +133,49 @@ async function callTool(state, params) {
   }
 
   return asJsonError(`Unknown tool: ${String(name)}`);
+}
+
+function validateStatelessRequestMeta(request) {
+  if (!Object.prototype.hasOwnProperty.call(request, "_meta")) {
+    return undefined;
+  }
+
+  const meta = request._meta;
+  if (
+    !isObject(meta) ||
+    !isObject(meta.clientInfo) ||
+    !isNonEmptyString(meta.clientInfo.name) ||
+    !isNonEmptyString(meta.clientInfo.version) ||
+    !isObject(meta.capabilities)
+  ) {
+    return null;
+  }
+
+  return {
+    clientInfo: {
+      name: meta.clientInfo.name,
+      version: meta.clientInfo.version,
+    },
+    capabilities: meta.capabilities,
+  };
+}
+
+function withRequestMeta(result, requestMeta) {
+  if (requestMeta === undefined) {
+    return result;
+  }
+  return {
+    ...result,
+    _meta: requestMeta,
+  };
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function asJsonContent(value) {
@@ -149,52 +222,79 @@ function jsonRpcError(id, code, message) {
 
 async function startServer() {
   const state = await loadPolicy();
-  let buffer = "";
+  let buffer = Buffer.alloc(0);
 
-  process.stdin.setEncoding("utf8");
-  process.stdin.on("data", async (chunk) => {
-    buffer += chunk;
+  for await (const chunk of process.stdin) {
+    buffer = Buffer.concat([buffer, chunk]);
     try {
       buffer = await drainBuffer(state, buffer);
     } catch (error) {
       const response = jsonRpcError(null, -32603, error instanceof Error ? error.message : String(error));
       process.stdout.write(encodeJsonRpcMessage(response));
-      buffer = "";
+      buffer = Buffer.alloc(0);
     }
-  });
+  }
 }
 
 async function drainBuffer(state, buffer) {
   let remaining = buffer;
 
   while (remaining.length > 0) {
-    const headerEnd = remaining.indexOf("\r\n\r\n");
+    const headerEnd = remaining.indexOf(HEADER_SEPARATOR);
     if (headerEnd >= 0) {
-      const headerBlock = remaining.slice(0, headerEnd);
+      if (headerEnd > MAX_HEADER_BYTES) {
+        throw new Error("MCP header exceeds maximum size");
+      }
+      const headerBlock = remaining.subarray(0, headerEnd).toString("utf8");
       const lengthMatch = /Content-Length:\s*(\d+)/i.exec(headerBlock);
       if (!lengthMatch) {
         throw new Error("Missing Content-Length header");
       }
 
-      const bodyStart = headerEnd + 4;
+      const bodyStart = headerEnd + HEADER_SEPARATOR.length;
       const bodyLength = Number(lengthMatch[1]);
+      if (!Number.isSafeInteger(bodyLength) || bodyLength > MAX_FRAME_BYTES) {
+        throw new Error("Invalid or oversized Content-Length header");
+      }
       if (remaining.length < bodyStart + bodyLength) {
         return remaining;
       }
 
-      const body = remaining.slice(bodyStart, bodyStart + bodyLength);
-      remaining = remaining.slice(bodyStart + bodyLength);
+      const body = remaining.subarray(bodyStart, bodyStart + bodyLength).toString("utf8");
+      remaining = remaining.subarray(bodyStart + bodyLength);
       await respondToBody(state, body);
       continue;
     }
 
-    const newlineIndex = remaining.indexOf("\n");
+    const newlineIndex = remaining.indexOf(0x0a);
     if (newlineIndex < 0) {
+      const startsWithHeader = /^[ \t]*[A-Za-z-]+:/.test(
+        remaining.subarray(0, MAX_HEADER_BYTES).toString("utf8"),
+      );
+      if (startsWithHeader && remaining.length > MAX_HEADER_BYTES) {
+        throw new Error("MCP header exceeds maximum size");
+      }
+      if (remaining.length > MAX_FRAME_BYTES) {
+        throw new Error("JSON-RPC message exceeds maximum size");
+      }
       return remaining;
     }
 
-    const line = remaining.slice(0, newlineIndex).trim();
-    remaining = remaining.slice(newlineIndex + 1);
+    if (newlineIndex > MAX_FRAME_BYTES) {
+      throw new Error("JSON-RPC message exceeds maximum size");
+    }
+    const line = remaining.subarray(0, newlineIndex).toString("utf8").trim();
+    if (
+      newlineIndex > 0 &&
+      remaining[newlineIndex - 1] === 0x0d &&
+      /^\s*Content-Length:\s*\d+\s*$/i.test(line)
+    ) {
+      if (remaining.length > MAX_HEADER_BYTES) {
+        throw new Error("MCP header exceeds maximum size");
+      }
+      return remaining;
+    }
+    remaining = remaining.subarray(newlineIndex + 1);
     if (line.length === 0) {
       continue;
     }

@@ -273,7 +273,7 @@ def _plan_from_answers(answers: dict[str, Any]) -> tuple[PolicyPlan, dict[str, d
                 reason="output_redacted",
                 message="The output policy target was redacted.",
                 conditions=("is_string(input.policy_target.value)", f"regex.match({json.dumps(combined)}, input.policy_target.value)"),
-                effects=tuple({"type": "redact", "path": "$policy_target", "pattern": pattern} for pattern in redact_patterns),
+                effects=tuple({"type": "redact", "path": "$target", "pattern": pattern} for pattern in redact_patterns),
             )
         )
     if any(point in TOOL_POINTS for point in points) and not inventory:
