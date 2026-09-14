@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from agent_os.credential_redactor import CredentialRedactor, REDACTED_PLACEHOLDER
+from agent_os.credential_redactor import REDACTED_PLACEHOLDER, CredentialRedactor
 
 
 def _fake_github_token(prefix: str) -> str:
@@ -274,6 +274,46 @@ def test_azure_sas_pattern_has_no_quadratic_backtracking():
     assert elapsed < 1.0
 
 
+@pytest.mark.parametrize(
+    "scheme",
+    [
+        "1.https",
+        ("Z" * 65) + "https",
+        ("a." * 65) + "https",
+        "a" + ("1" * 100),
+        "a" + ("." * 100),
+    ],
+    ids=[
+        "punctuation-prefix",
+        "long-word-prefix",
+        "separator-dense-prefix",
+        "long-numeric-tail",
+        "long-punctuation-tail",
+    ],
+)
+def test_basic_auth_uri_remains_fail_closed_with_padded_scheme(scheme: str):
+    secret = "user:pass123"
+    url = f"{scheme}://{secret}@example.com/resource"
+
+    redacted, types = CredentialRedactor.scan_and_redact(url)
+
+    assert "Basic auth secret" in types
+    assert REDACTED_PLACEHOLDER in redacted
+    assert secret not in redacted
+
+
+def test_basic_auth_scan_and_redact_handles_separator_dense_input_quickly():
+    text = "a." * 24_000
+
+    start = time.perf_counter()
+    redacted, types = CredentialRedactor.scan_and_redact(text)
+    elapsed = time.perf_counter() - start
+
+    assert redacted == text
+    assert "Basic auth secret" not in types
+    assert elapsed < 1.0
+
+
 def test_slack_token_fully_redacted_when_followed_by_word_char():
     # Regression: the "-" in the token class let a trailing word boundary
     # backtrack and redact only a prefix, leaking the final secret segment.
@@ -397,3 +437,88 @@ def test_ssn_pattern_rejects_bare_nine_digit_forms(text: str):
     assert not any(
         m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text)
     )
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_email"),
+    [
+        ("Contact john.doe@corp.com", "john.doe@corp.com"),
+        ("Contact -john.doe@corp.com", "john.doe@corp.com"),
+        ("Contact +tag@example.com", "tag@example.com"),
+        ("Contact .john.doe@corp.com", "john.doe@corp.com"),
+        ("Contact %john.doe@corp.com", "john.doe@corp.com"),
+        ("Contact:-jane.roe@contoso.com", "jane.roe@contoso.com"),
+    ],
+)
+def test_email_detection_remains_fail_closed_next_to_punctuation(
+    text: str, expected_email: str
+):
+    matches = CredentialRedactor.find_pii_matches(text)
+
+    assert any(
+        match.name == "Email address" and expected_email in match.matched_text
+        for match in matches
+    )
+
+
+def test_email_detection_remains_fail_closed_with_uninterrupted_prefix():
+    readable_email = "john@corp.com"
+    attacker_controlled_text = f"{'Z' * 61}{readable_email}"
+
+    assert CredentialRedactor.contains_pii(attacker_controlled_text)
+
+    matches = CredentialRedactor.find_pii_matches(attacker_controlled_text)
+
+    assert any(
+        match.name == "Email address" and readable_email in match.matched_text
+        for match in matches
+    )
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    ["1", "_", "\N{CYRILLIC SMALL LETTER YA}"],
+    ids=["digit", "underscore", "unicode-word-character"],
+)
+def test_email_detection_remains_fail_closed_with_uninterrupted_suffix(suffix: str):
+    readable_email = "john@corp.com"
+    attacker_controlled_text = f"{readable_email}{suffix}"
+
+    assert CredentialRedactor.contains_pii(attacker_controlled_text)
+
+    matches = CredentialRedactor.find_pii_matches(attacker_controlled_text)
+
+    assert any(
+        match.name == "Email address" and readable_email in match.matched_text
+        for match in matches
+    )
+
+
+def test_email_detection_prefers_bounded_suffix_match_to_punctuation_bypass():
+    bounded_suffix = f"{'a' * 64}@example.com"
+    invalid_overlong_email = f"x.{bounded_suffix}"
+
+    matches = CredentialRedactor.find_pii_matches(invalid_overlong_email)
+
+    assert any(
+        match.name == "Email address" and match.matched_text == bounded_suffix
+        for match in matches
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "1.1.1." * 8_000,
+        "123-45-" * 8_000,
+        "a." * 24_000,
+    ],
+    ids=["ipv4-shaped", "ssn-shaped", "email-dots"],
+)
+def test_pii_scan_handles_separator_dense_input_quickly(text: str):
+    start = time.perf_counter()
+    matches = CredentialRedactor.find_pii_matches(text)
+    elapsed = time.perf_counter() - start
+
+    assert not any(match.name == "Email address" for match in matches)
+    assert elapsed < 1.0
