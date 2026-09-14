@@ -1,6 +1,6 @@
 ---
 title: agent-governance-sdk 4.0.0 to 5.0.0 in the three CLI packages
-last_reviewed: 2026-09-03
+last_reviewed: 2026-09-14
 owner: imran-siddique
 ---
 
@@ -46,7 +46,7 @@ clears no advisory.** The override holds the parser at `4.2.0` regardless of
 what the SDK declares, which means every HIGH advisory in range before the bump
 is still in range after it.
 
-`npm audit` against this branch's own tree reported two when this was written.
+`npm audit` against this branch's own tree reported two on 2026-09-03.
 A third was published on 2026-09-08 and also applies to `4.2.0`:
 
 - `GHSA-5p4m-2wfm-xmqj`, HIGH, quadratic CPU consumption in `!!omap`
@@ -55,8 +55,7 @@ A third was published on 2026-09-08 and also applies to `4.2.0`:
   consumption, affecting `>= 4.0.0, < 4.3.0`, first patched in `4.3.0`.
 - `GHSA-2883-xcg3-v3hh`, HIGH, `maxTotalMergeKeys` failing to limit CPU use for
   empty merge sources, affecting `>= 4.0.0, < 4.3.2`, first patched in `4.3.2`.
-  Published after this audit, so it is not in the `npm audit` output quoted
-  below.
+  Published on 2026-09-08, after the 2026-09-03 audit.
 
 The third one changes which fix is sufficient. `#3843`, `#3844` and `#3875` each
 raise the override to `4.3.1`, which clears the first two and leaves
@@ -70,12 +69,14 @@ does **not** apply here, because `5.2.1` is never installed. Neither do
 All of these are the same class: algorithmic-complexity denial of service
 reachable only through parsing attacker-influenced YAML.
 
-**The residual exposure is closed elsewhere, not by this PR.** #3843, #3844 and
-#3875 move the override from `4.2.0` to `4.3.1` in the antigravity, Claude Code
-and Copilot CLI packages respectively, which clears both advisories above.
-Those PRs touch the same `package.json` and `package-lock.json` files as this
-one, so they and this PR conflict with each other and should be sequenced
-rather than merged in parallel.
+**#3894 carries the fix for all three listed advisories.** It raises the override
+to `4.3.2`. #3843, #3844 and #3875 raise it to `4.3.1` in the antigravity,
+Claude Code and Copilot CLI packages respectively, clearing only the first two
+advisories and leaving `GHSA-2883-xcg3-v3hh` in range. #3894 is still open as
+of 2026-09-14; this SDK bump does not close the residual exposure.
+All four PRs overlap this PR's `package.json` and `package-lock.json` changes;
+#3894 touches all six shared files. Land the parser fix first, then reconcile
+this SDK bump with those files so the patched override is preserved.
 
 **The source fix already landed, the published artifact has not.**
 `agent-governance-typescript/package.json` on `main` pins `js-yaml` `5.2.3`,
