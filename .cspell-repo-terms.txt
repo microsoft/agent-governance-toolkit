@@ -1,20 +1,47 @@
 
+
+
+
+
 # --- ACS / crypto terms ---
+# --- Additional West/North Africa terms flagged by cspell ---
 # --- African regulatory policy terms ---
 # --- CloudEvents / signed audit-event terms ---
 # --- Docker / BuildKit toolchain terms ---
+struction
+
+# --- Documentation site and ACS integration terms ---
+# --- EU AI Act regulatory role terms ---
 # --- Flowise integration terms ---
 # --- Python test suite code identifiers and scenario names ---
 # --- TRACE / identity-chain / advisory terms ---
 # --- Test code terms ---
 # --- Vendored ACS (policy-engine) + integration terms (responsibleai MIT subtree) ---
+# --- West/North Africa regulatory policy terms ---
+# --- cloud-board cryptography 50.0.0 audit terms (flagged by cspell) ---
+# Arabic: رقم قومي — "national number" in the Egyptian National ID detection regex
+# British English used in GDPR-modelled African data protection laws
+# British spellings used in GDPR-modelled African data protection laws
+# Egypt
+# Egypt PDPL regex fragments (word stems used in pattern matching)
+# Fictitious order-reference prefix used in a Ghana Card regex regression test
+# Ghana
+# Mauritius (no new abbreviations beyond PDPC)
+# Rwanda
+# Shared currency / country codes used in messages
+# Test name in the TypeScript approval-protocol suite (#3200)
+# URL hostnames in policy file references
 # discarded-verdict census (tests/test_transform_never_dropped.py)
+# dorny/paths-filter — GitHub Actions dependency used in policy-validation.yml
+# git fetch destination-ref syntax, spell-check.yml base fetch
 AACS
 AAIF
 AARM
 ABAC
 ACMR
 AEAD
+AEDT
+AESGCM
 AGENTDOJO
 AGTS
 AILLM
@@ -32,6 +59,7 @@ Actix
 AgentGovernance
 AgentMesh
 AgentOS
+AgentRateLimiter
 Amol
 Anambra
 Authenticode
@@ -39,11 +67,14 @@ BFBFBF
 BLOCKME
 BOTO
 BVN
+Bigspin
 Birsan
+Bleichenbacher
 Bradner
 CBN
 CBOR
 CCPA
+CDLL
 CISA
 CMVK
 CODEOWNERS
@@ -51,15 +82,18 @@ COSE
 Cdecl
 Centralised
 Chatflows
+Clendenen
 CommonMark
 Convs
 Cpus
 CrewAI
 CuriousHet
+Cybercrimes
 DACL
 DEVNULL
 DISCARDABLE
 DOTALL
+DPC
 DYLD
 DataQualityEvidence
 Dedup
@@ -70,14 +104,17 @@ Diffable
 Dify
 Dockerfiles
 Docstrings
+EGP
 ENOENT
 ESRPRELPACMAN
 EUAI
+Ecommerce
 EigenTrust
 Entra
 Errno
 Errorf
 FAKEFORTESTING
+FFDH
 FIPS
 FLUSHALL
 FLUSHDB
@@ -86,12 +123,16 @@ Fernet
 Fpkg
 Fprintf
 GENAI
+GHA
 GHCP
 GHSA
 GOPROXY
 GROUPREF
 GRPC
+Gazetted
+Ghanaian
 GitHub
+Governorate
 HEALTHCHECK
 HKDF
 HMAC
@@ -104,6 +145,9 @@ IGNORECASE
 IPFS
 Initialise
 Jaccard
+Janssen
+Kigali
+KillSwitch
 Kogi
 Kustomization
 LASTEXITCODE
@@ -118,18 +162,27 @@ Leiba
 Linq
 LlamaIndex
 MAAAAAAAAAAAAAAAAAAAAAAA
+MCIT
+MCPGateway
+MCPSecurityScanner
 MSHV
 MSRC
+MUR
 Marp
 Materialise
 Mechanised
+Merchantlife
 Mevil
 Microsoft
+Minimisation
 Moltbook
 Molty
+NCSA
 NDPA
 NFIU
 NFKC
+NIA
+NIDA
 NIN
 NNNN
 NONPY
@@ -137,6 +190,7 @@ Nanvix
 NemoClaw
 Nemotron
 Normalise
+OCSP
 OLLAMA
 ORAS
 OSSF
@@ -144,6 +198,9 @@ OTLP
 OpenAI
 OpenClaw
 PCRE
+PDPC
+PDPL
+PIICRI
 PKCS
 POPIA
 PSMODULEPATH
@@ -155,22 +212,33 @@ Pipfile
 Portkey
 Printf
 Println
+Pseudonymisation
 Pydantic
 REALPKG
+RISA
 RUBYOPT
+RUSTFLAGS
 RUSTUP
+RWF
+RateLimitMiddleware
 Ravande
 Redocly
 Rego
+Regorus
 Rekor
 Repoint
+RingBreachDetector
+RingElevationManager
 Rootfs
 RustCrypto
 RustSec
+Rwandan
+SGHA
 SIEM
 SIGSTOP
 SLSA
 SPIFFE
+SPKI
 SQLGLOT
 SSEMCP
 SVID
@@ -185,6 +253,7 @@ Signtool
 Sigstore
 Slidev
 Smolagents
+SpendGuard
 Stdlib
 Streamable
 Submatch
@@ -203,8 +272,10 @@ Unrevoking
 Ureq
 VADP
 VIRTUALENVS
+Vercel
 XACML
 XFORM
+YYMMDD
 YYMMDDGSSSCAZ
 ZDOTDIR
 aadhaar
@@ -241,7 +312,10 @@ allowlisted
 alnum
 amannn
 anchore
+anes
 anomalyco
+anstyle
+anthonyonazure
 antigravity
 apikey
 apiserver
@@ -250,6 +324,7 @@ approvable
 approvеd
 appsettings
 argparse
+argtypes
 arraycomprehension
 arrowsize
 artefacts
@@ -289,6 +364,7 @@ buildkit
 buildx
 bursty
 bypassable
+byref
 bytearray
 bytecodes
 bytecount
@@ -301,6 +377,7 @@ carloshvp
 carryforward
 carveout
 casefold
+cdylib
 cedarling
 cedarpy
 cedarschema
@@ -327,6 +404,7 @@ clientid
 clippy
 cloudevent
 cloudevents
+clusterfuzzlite
 cmdshell
 cmpl
 codepoint
@@ -359,13 +437,16 @@ crossstate
 crun
 cstr
 cstring
+ctypes
 custodied
 cutover
+cybercrimes
 dalek
 dargs
 dataclass
 dataclasses
 datacontenttype
+dataprotection
 dataset_id
 dateutil
 davidequarracino
@@ -383,6 +464,7 @@ deidentified
 delenv
 deletecollection
 demux
+deployers
 deprioritized
 devdeps
 dids
@@ -390,9 +472,11 @@ digestmod
 displaydoc
 dists
 dkwargs
+dlopen
 dnssec
 doesnotexist
 domaintenantid
+dorny
 dpdp
 dpkg
 dppa
@@ -403,6 +487,7 @@ eastus
 egresspolicy
 elif
 elts
+embedder
 embedders
 emnapi
 endswith
@@ -420,6 +505,7 @@ exfiltrat
 exfiltrated
 exfiltration
 expanduser
+externalidentity
 fastapi
 fastembed
 fastmcp
@@ -434,6 +520,7 @@ flate
 flowise
 fmean
 fnmatch
+fnmatchcase
 folderlocation
 formedness
 fria
@@ -444,6 +531,7 @@ fromtimestamp
 frontmatter
 frozenset
 fullmatch
+gazetted
 gemini
 generativeai
 genkey
@@ -468,6 +556,7 @@ gnullvm
 gomod
 governancekernel
 governancepolicy
+governorate
 grpc
 gunicorn
 gvisor
@@ -481,6 +570,7 @@ hexdigest
 hexdigit
 hitl
 hkdf
+hostnames
 htek
 httponly
 httpx
@@ -546,11 +636,13 @@ kwargs
 kwonlyargs
 laintext
 langflow
+langgenius
 lawcontinue
 levelname
 liamcrumm
 libagent
 libc
+licen
 linkcheck
 linkified
 linkpkg
@@ -590,6 +682,7 @@ microkernel
 microvm
 millicores
 millis
+minimisation
 miniz
 mistralai
 mitapache
@@ -638,6 +731,7 @@ newpartner
 newurl
 nfiu
 nmap
+nonblocking
 nonconformant
 nonimport
 nonlocal
@@ -664,12 +758,16 @@ objectcomprehension
 octo
 octocat
 offence
+offences
 omitempty
 oncall
 oneshot
+oorandom
 opencode
 openpolicyagent
 openshell
+organisational
+organisations
 oserror
 ospo
 otlp
@@ -719,6 +817,7 @@ processcontainer
 promptdefense
 promptinjectiondetector
 proofblob
+pseudonymisation
 psmodules
 psour
 purelib
@@ -756,12 +855,15 @@ recompiles
 redactions
 redef
 rederive
+rederived
 rederives
 redteam
 reemits
 refetch
 refetches
+refspec
 regen
+registr
 reimplementation
 relativedelta
 relpath
@@ -775,8 +877,12 @@ reqwest
 resear
 reserialize
 reshapeable
+resourceid
 responsibleai
+restype
+retarget
 retargeted
+retargets
 returncode
 rfile
 rfind
@@ -795,6 +901,7 @@ runbooks
 runsc
 rustc
 rustdecimal
+rustix
 rustls
 rustup
 sagaorchestrator
@@ -888,6 +995,7 @@ thiserror
 timedelta
 tinyrainbow
 tinystr
+tinytemplate
 tlsv
 tmpfs
 toolkits
@@ -910,6 +1018,7 @@ unioned
 unmigrated
 unparse
 unparseable
+unpermitted
 unreachability
 unrecognised
 unredacted
@@ -958,62 +1067,6 @@ workiq
 workstream
 worktree
 writeln
-# --- West/North Africa regulatory policy terms ---
-# British spellings used in GDPR-modelled African data protection laws
-minimisation
-Minimisation
-pseudonymisation
-Pseudonymisation
-# Ghana
-Ghanaian
-NIA
-DPC
-# Rwanda
-Rwandan
-Kigali
-Gazetted
-gazetted
-NCSA
-NIDA
-RISA
-# Egypt
-Governorate
-governorate
-Cybercrimes
-cybercrimes
-PDPC
-PDPL
-MCIT
-# Mauritius (no new abbreviations beyond PDPC)
-# Shared currency / country codes used in messages
-GHA
-# Fictitious order-reference prefix used in a Ghana Card regex regression test
-SGHA
-RWF
-EGP
-MUR
-YYMMDD
-
-# --- Additional West/North Africa terms flagged by cspell ---
-# British English used in GDPR-modelled African data protection laws
-organisational
-offences
-organisations
-# Egypt PDPL regex fragments (word stems used in pattern matching)
-licen
-registr
-# Arabic: رقم قومي — "national number" in the Egyptian National ID detection regex
-قومي
-رقم
-# URL hostnames in policy file references
-hostnames
-dataprotection
-# dorny/paths-filter — GitHub Actions dependency used in policy-validation.yml
-dorny
-# git fetch destination-ref syntax, spell-check.yml base fetch
-refspec
-# Test name in the TypeScript approval-protocol suite (#3200)
-unpermitted
 writerow
 wslc
 x86
@@ -1025,37 +1078,7 @@ yamls
 zerofrom
 zerotrie
 zerovec
+zmij
 zoneinfo
-
-# --- Documentation site and ACS integration terms ---
-AgentRateLimiter
-AEDT
-anthonyonazure
-Bigspin
-Clendenen
-Ecommerce
-externalidentity
-fnmatchcase
-Janssen
-KillSwitch
-langgenius
-MCPGateway
-MCPSecurityScanner
-Merchantlife
-PIICRI
-RateLimitMiddleware
-resourceid
-RingBreachDetector
-RingElevationManager
-SpendGuard
-Vercel
-
-# --- cloud-board cryptography 50.0.0 audit terms (flagged by cspell) ---
-AESGCM
-Bleichenbacher
-FFDH
-OCSP
-SPKI
-
-# --- EU AI Act regulatory role terms ---
-deployers
+رقم
+قومي

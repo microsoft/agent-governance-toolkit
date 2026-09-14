@@ -379,7 +379,7 @@ does not imply that the termination callback succeeded.
 | Behavior | Python | TypeScript | Go |
 |----------|--------|------------|----|
 | Model | Registered termination callback plus step handoff/compensation | Registered termination handlers plus compensation handlers | Scoped cooperative allow/deny registry |
-| Termination success signal | `KillResult.terminated` | None | None; `KillSwitchDecision.Allowed` describes permission, not process termination |
+| Termination success signal | `KillResult.terminated` | `KillSwitchResult.terminated` (registered handlers completed; no independent process confirmation) | None; `KillSwitchDecision.Allowed` describes permission, not process termination |
 | Handler timeout | 5 seconds by default | None | N/A |
 | Handler failure recorded in kill history | Yes, with `terminated=False` | No if a handler throws before the result is created | N/A |
 | Registration/state after kill | Target callback removed unconditionally | Handlers remain registered | Active until `Clear()` |
@@ -390,9 +390,9 @@ does not imply that the termination callback succeeded.
 
 - In Python, check `result.terminated` before treating containment as confirmed.
   Re-register the agent before retrying a failed or timed-out kill.
-- In TypeScript, do not infer termination success from the shape of a returned
-  result. The current result has no success field and handlers have no built-in
-  timeout; see #3740 and #3741.
+- In TypeScript, check `result.terminated` to confirm that registered termination
+  handlers completed. This does not independently prove that an external process
+  stopped, and handlers still have no built-in timeout; see #3741.
 - In Go, treat `Activate()` as a cooperative circuit breaker. It changes what
   `DecisionFor()` reports, but running work must consult that decision for the
   switch to affect execution.

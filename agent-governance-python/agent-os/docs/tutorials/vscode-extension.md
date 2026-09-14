@@ -130,7 +130,7 @@ Ctrl+Shift+P → "Agent OS: Open Policy Editor"
 ### Native Manifest Structure
 
 ```yaml
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: internal-only
 extends: []

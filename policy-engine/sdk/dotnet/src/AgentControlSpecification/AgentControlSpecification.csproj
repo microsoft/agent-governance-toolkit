@@ -6,7 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>true</IsPackable>
     <PackageId>AgentControlSpecification</PackageId>
-    <Version>0.3.1-beta.0</Version>
+    <Version>0.4.0-beta.0</Version>
     <Description>Thin .NET SDK surface for the stateless Agent Control Specification runtime.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
