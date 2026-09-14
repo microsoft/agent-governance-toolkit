@@ -40,7 +40,9 @@ function controlWith(verdictFor, approvalResolver) {
 
 function escalateAt(point) {
   return (interventionPoint) =>
-    interventionPoint === point ? { verdict: { decision: Decision.Escalate, reason: "needs_approval" } } : {};
+    interventionPoint === point
+      ? { verdict: { decision: Decision.Deny, reason: "needs_approval", approval: {} } }
+      : {};
 }
 
 const allowResolver = (_point, result) => ApprovalResolution.allow(result.actionIdentity);
@@ -69,7 +71,11 @@ test("escalate with no resolver fails closed to a block", async () => {
   const control = controlWith(escalateAt(InterventionPoint.Input));
   await assert.rejects(
     control.run("hi", (input) => input),
-    (error) => error instanceof AgentControlBlockedError,
+    (error) => {
+      assert.ok(error instanceof AgentControlBlockedError);
+      assert.equal(error.result.verdict.reason, "host_error:approval_unresolved");
+      return true;
+    },
   );
 });
 
@@ -88,7 +94,7 @@ test("transform verdict routes through transformedPolicyTarget without an approv
             verdict: {
               decision: Decision.Transform,
               reason: "redact_pii",
-              transform: { path: "$policy_target", value: "REDACTED" },
+              transform: { path: "$target", value: "REDACTED" },
             },
             transformedPolicyTarget: "REDACTED",
           }
@@ -108,7 +114,7 @@ test("escalate resolved to allow does not apply transforms after approval", asyn
     (point) =>
       point === InterventionPoint.Input
         ? {
-            verdict: { decision: Decision.Escalate },
+            verdict: { decision: Decision.Deny, approval: {} },
             transformedPolicyTarget: "REDACTED",
           }
         : {},
@@ -125,7 +131,7 @@ test("run splices nested output transforms into the original output shape", asyn
           verdict: {
             decision: Decision.Transform,
             reason: "redact_pii",
-            transform: { path: "$policy_target", value: "deployment complete [REDACTED]" },
+            transform: { path: "$target", value: "deployment complete [REDACTED]" },
           },
           transformedPolicyTarget: "deployment complete [REDACTED]",
           policyInput: {
@@ -172,7 +178,7 @@ test("approval action mismatch fails closed", async () => {
     control.run("hi", (input) => input),
     (error) => {
       assert.ok(error instanceof AgentControlBlockedError);
-      assert.equal(error.result.verdict.reason, "runtime_error:approval_action_mismatch");
+      assert.equal(error.result.verdict.reason, "host_error:approval_identity_mismatch");
       return true;
     },
   );
@@ -249,7 +255,7 @@ test("a throwing resolver fails closed and preserves the cause", async () => {
     control.run("hi", (input) => input),
     (error) => {
       assert.ok(error instanceof AgentControlBlockedError);
-      assert.equal(error.result.verdict.reason, "runtime_error:approval_resolver_failed");
+      assert.equal(error.result.verdict.reason, "host_error:approval_resolver_failed");
       assert.equal(error.result.verdict.message, "Approval resolver failed closed.");
       assert.equal(error.result.actionIdentity, actionIdentity(error.result.policyInput));
       assert.ok(error.cause instanceof Error);
@@ -266,7 +272,7 @@ test("a resolver returning null or malformed fails closed with resolver-failed r
       control.run("hi", (input) => input),
       (error) => {
         assert.ok(error instanceof AgentControlBlockedError);
-        assert.equal(error.result.verdict.reason, "runtime_error:approval_resolver_failed");
+        assert.equal(error.result.verdict.reason, "host_error:approval_resolver_failed");
         assert.equal(error.result.verdict.message, "Approval resolver failed closed.");
         assert.equal(error.result.actionIdentity, actionIdentity(error.result.policyInput));
         return true;

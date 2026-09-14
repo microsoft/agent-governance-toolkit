@@ -36,11 +36,11 @@ def _has_azure_ai_agents() -> bool:
 _HAS_AZURE_AI_AGENTS = _has_azure_ai_agents()
 
 
-def _result(decision=Decision.ALLOW, transformed=None, applied=False):
+def _result(decision=Decision.ALLOW, transformed=None, applied=False, approval=None):
     if transformed is not None or applied:
         decision = Decision.TRANSFORM
     return InterventionPointResult(
-        Verdict(decision),
+        Verdict(decision, approval=approval),
         transformed_policy_target=transformed,
         transformed_policy_target_applied=applied,
     )
@@ -291,7 +291,7 @@ class FoundryAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_field(runs.submitted[0][0], "output"), "rows for SELECT 1")
 
     async def test_escalate_surfaced_to_approval_path_not_auto_allowed(self):
-        runtime = QueueRuntime([_result(Decision.ESCALATE)])
+        runtime = QueueRuntime([_result(Decision.DENY, approval={})])
         recorder = ToolRecorder()
         runs = FakeRuns(_action(_FakeToolCall("call-1", "run_sql", '{"query": "DELETE FROM t"}')))
         consulted = []
@@ -448,7 +448,7 @@ class FoundryAdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_suspend_outcome_propagates_and_does_not_execute(self):
         # A suspend approval outcome surfaces AgentControlSuspended to the host
         # (deferred approval), never auto-allowing the tool.
-        runtime = IdentityQueueRuntime([_result(Decision.ESCALATE)])
+        runtime = IdentityQueueRuntime([_result(Decision.DENY, approval={})])
         recorder = ToolRecorder()
         runs = FakeRuns(_action(_FakeToolCall("call-1", "run_sql", '{"query": "DELETE FROM t"}')))
 

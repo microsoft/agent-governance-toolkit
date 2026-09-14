@@ -88,6 +88,28 @@ class TestInboxStore:
         assert store.store(msg) is True
         assert store.store(msg) is False  # duplicate
 
+    def test_same_message_id_is_scoped_to_recipient(self):
+        store = InMemoryInboxStore()
+        bob_message = StoredMessage(
+            message_id="shared-1", sender_did="a", recipient_did="bob", payload="for bob",
+        )
+        carol_message = StoredMessage(
+            message_id="shared-1", sender_did="a", recipient_did="carol", payload="for carol",
+        )
+
+        assert store.store(bob_message) is True
+        assert store.store(carol_message) is True
+        assert store.message_count == 2
+        assert store.fetch_pending("bob")[0].payload == "for bob"
+        assert store.fetch_pending("carol")[0].payload == "for carol"
+
+        # An unscoped acknowledgement cannot choose an arbitrary mailbox.
+        assert store.acknowledge("shared-1") is False
+        assert store.message_count == 2
+        assert store.acknowledge("shared-1", "bob") is True
+        assert store.fetch_pending("bob") == []
+        assert store.fetch_pending("carol")[0].payload == "for carol"
+
     def test_acknowledge(self):
         store = InMemoryInboxStore()
         msg = StoredMessage(message_id="ack-1", sender_did="a", recipient_did="b", payload="{}")

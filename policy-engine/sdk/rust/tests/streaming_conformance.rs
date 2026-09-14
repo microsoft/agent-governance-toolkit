@@ -1,6 +1,6 @@
 use agent_control_specification::{
     assemble_sse_stream_with_limits, synthesize_sse_stream, AgentControl, AnnotatorDispatcher,
-    AnnotatorInvocation, Decision, InterventionPoint, JsonValue, Manifest, PolicyDispatcher,
+    AnnotatorInvocation, Decision, InterceptionPoint, JsonValue, Manifest, PolicyDispatcher,
     PreparedPolicyInvocation, Runtime, RuntimeError, StreamingLimits, DEFAULT_MAX_STREAM_BYTES,
     DEFAULT_MAX_STREAM_EVENTS,
 };
@@ -51,7 +51,7 @@ fn manifest_json() -> JsonValue {
 
 fn model_control() -> AgentControl {
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   test_policy:
     type: test
@@ -186,7 +186,7 @@ fn streaming_guard_transforms_to_single_synthesized_chunk() {
             let input = invocation.policy_input().unwrap();
             if input["intervention_point"] == "post_model_call" {
                 Ok(json!({
-                    "decision": "transform", "transform": {"path": "$policy_target.choices[0].message.content", "value": "[redacted]"}
+                    "decision": "transform", "transform": {"path": "$target.choices[0].message.content", "value": "[redacted]"}
                 }))
             } else {
                 Ok(json!({"decision": "allow"}))
@@ -195,7 +195,7 @@ fn streaming_guard_transforms_to_single_synthesized_chunk() {
     }
 
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   test_policy:
     type: test
@@ -236,9 +236,9 @@ fn streaming_guard_fails_closed_on_unrepresentable_stream() {
         .run_model_stream(json!({"messages": []}), |_| input)
         .unwrap_err();
 
-    assert_eq!(error.intervention_point(), InterventionPoint::PostModelCall);
+    assert_eq!(error.intervention_point(), InterceptionPoint::PostModelCall);
     assert_eq!(
         error.intervention_point_result().verdict.reason.as_deref(),
-        Some("runtime_error:streaming_unsupported")
+        Some("host_error:streaming_unsupported")
     );
 }
