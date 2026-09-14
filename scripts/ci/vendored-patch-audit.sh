@@ -7,8 +7,8 @@
 # Exception (issue #2975): routine Dependabot patch/minor bumps cannot author
 # that doc by construction, so they are exempt when the caller sets
 # PR_ACTOR=dependabot[bot] and DEPENDABOT_UPDATE_TYPE to a non-major update.
-# This mirrors auto-merge-dependabot.yml, which already auto-merges exactly that
-# set. Human PRs and Dependabot major bumps still require the doc.
+# The exemption is deliberately limited to that routine set; human PRs and
+# Dependabot major bumps still require the doc and full maintainer review.
 set -euo pipefail
 
 BASE_REF="${1:-origin/main}"
@@ -50,8 +50,7 @@ if [ "$LOCK_TOUCHED" = false ]; then
   exit 0
 fi
 
-# Exempt routine Dependabot patch/minor bumps (issue #2975). "Not major"
-# matches the auto-merge policy in auto-merge-dependabot.yml. Human PRs (no
+# Exempt routine Dependabot patch/minor bumps (issue #2975). Human PRs (no
 # PR_ACTOR match) and Dependabot major bumps fall through and still need a doc.
 if [ "$PR_ACTOR" = "dependabot[bot]" ] && \
    [ -n "$DEPENDABOT_UPDATE_TYPE" ] && \
