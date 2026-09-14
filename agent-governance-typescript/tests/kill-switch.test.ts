@@ -30,7 +30,7 @@ describe('KillSwitch', () => {
   it('reports unsuccessful termination when no handler is registered', async () => {
     const killSwitch = new KillSwitch();
 
-    const result = await killSwitch.kill('agent-unwired', {
+    const result = await killSwitch.kill('agent-no-handlers', {
       reason: 'manual stop',
     });
 
