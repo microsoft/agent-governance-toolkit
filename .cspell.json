@@ -96,7 +96,6 @@
     "Microtask",
     "headerless",
     "desync",
-    "starlette",
     "realpeerrealpeerrealpeerreal",
     "pwsh",
     "notlike",
@@ -114,7 +113,8 @@
     "runserver",
     "datastructures",
     "jsonify",
-    "undecoded"
+    "undecoded",
+    "clusterfuzzlite"
   ],
   "ignorePaths": [
     "**/node_modules/**",
