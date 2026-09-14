@@ -86,7 +86,7 @@ post_tool_call_verdict := {
     "reason": "secret_redacted",
     "message": "",
     "transform": {
-        "path": "$policy_target",
+        "path": "$target",
         "value": "[REDACTED_SECRET]"
     }
 } if {
@@ -95,12 +95,15 @@ post_tool_call_verdict := {
     input.annotations.secret_scan == "secret_present"
 }
 
+# The output target is the object at $.output, so the transform addresses
+# $target.text. Replacing $target itself swapped the object for a bare string
+# and silently changed the shape the host hands back.
 output_verdict := {
     "decision": "transform",
     "reason": "secret_redacted",
     "message": "",
     "transform": {
-        "path": "$policy_target",
+        "path": "$target.text",
         "value": "[REDACTED_SECRET]"
     }
 } if {

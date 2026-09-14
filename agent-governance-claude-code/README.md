@@ -33,6 +33,10 @@ It also exposes two MCP tools:
 - `agt_policy_status`
 - `agt_policy_check_text`
 
+The stdio server accepts `Content-Length` frames and newline-delimited JSON.
+Headers are limited to 8 KiB; JSON messages are limited to 5 MiB in UTF-8 bytes,
+including when a message arrives across multiple reads.
+
 ## Important parity gaps
 
 - Claude slash commands are markdown-driven, so `/agt-governance:agt-status` and `/agt-governance:agt-check` are thin wrappers around MCP tools rather than deterministic code handlers.
@@ -103,6 +107,18 @@ Audit entries are written to:
 - macOS/Linux: `~/.claude/agt/audit-log.json`
 
 Override with `AGT_CLAUDE_AUDIT_PATH`.
+
+The audit log retains the newest 10,000 entries. Before the first rollover it
+uses the legacy JSON array format, whose chain is always anchored to the genesis
+hash. After rollover, it stores the retained entries with a `seamHash` object so
+the shortened hash chain stays verifiable. Removing entries from the front still
+fails verification if the stored anchor and hashes are left unchanged (naive
+tampering). This is an unkeyed SHA-256 chain, not proof against an attacker who
+can rewrite the log: truncating and recomputing `seamHash`, or converting a legacy
+array into the seam format with a matching anchor, can pass verification. Such
+rewriting was already possible by recomputing the chain before this change.
+A log already front-truncated by an older version is not automatically
+re-anchored and remains unverifiable by design.
 
 ## Validation
 
