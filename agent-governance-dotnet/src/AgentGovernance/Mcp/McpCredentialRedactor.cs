@@ -74,11 +74,11 @@ public sealed class McpCredentialRedactor
          "[REDACTED_SECRET]"),
 
         (CredentialKind.GitHubToken,
-         new Regex(@"(?<![A-Za-z0-9_])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_GITHUB_TOKEN]"),
 
         (CredentialKind.OpenAiToken,
-         new Regex(@"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9_-])", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_OPENAI_TOKEN]"),
 
         (CredentialKind.SlackToken,
@@ -86,11 +86,11 @@ public sealed class McpCredentialRedactor
          "[REDACTED_SLACK_TOKEN]"),
 
         (CredentialKind.AwsAccessKey,
-         new Regex(@"\bAKIA[A-Z0-9]{16}\b", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_AWS_ACCESS_KEY]"),
 
         (CredentialKind.GoogleApiKey,
-         new Regex(@"\bAIza[0-9A-Za-z\-_]{35}\b", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z\-_]{35}(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_GOOGLE_API_KEY]"),
 
         (CredentialKind.PemPrivateKey,

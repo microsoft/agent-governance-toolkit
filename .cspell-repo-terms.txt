@@ -639,6 +639,9 @@ langflow
 langgenius
 lawcontinue
 levelname
+lookahead
+lookaround
+lookbehind
 liamcrumm
 libagent
 libc
