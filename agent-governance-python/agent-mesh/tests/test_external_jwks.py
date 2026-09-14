@@ -493,3 +493,253 @@ def test_resolve_endpoint_matches_trusted_domain_case_insensitively():
     endpoint = provider._resolve_endpoint("partner-corp.example.com")
     assert endpoint is not None
     assert endpoint.trust_tier == "verified_partner"
+
+
+# ── RS256/ES256 (standard OIDC providers - Keycloak's default is RS256) ──
+
+
+def _uint_to_b64url(n: int, byte_len: int) -> str:
+    return _b64url_encode(n.to_bytes(byte_len, "big"))
+
+
+def _make_rsa_keypair(kid: str = KEY_ID):
+    from cryptography.hazmat.primitives.asymmetric import rsa as rsa_mod
+
+    private_key = rsa_mod.generate_private_key(public_exponent=65537, key_size=2048)
+    numbers = private_key.public_key().public_numbers()
+    byte_len = (numbers.n.bit_length() + 7) // 8
+    jwk = {
+        "kty": "RSA",
+        "n": _uint_to_b64url(numbers.n, byte_len),
+        "e": _uint_to_b64url(numbers.e, 3),
+        "kid": kid,
+        "use": "sig",
+        "alg": "RS256",
+    }
+    return private_key, jwk
+
+
+def _sign_jwt_rs256(private_key, payload: dict, kid: str = KEY_ID) -> str:
+    from cryptography.hazmat.primitives import hashes as hashes_mod
+    from cryptography.hazmat.primitives.asymmetric import padding as padding_mod
+
+    header = {"alg": "RS256", "typ": "JWT", "kid": kid}
+    header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
+    payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
+    signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+    signature = private_key.sign(signing_input, padding_mod.PKCS1v15(), hashes_mod.SHA256())
+    return f"{header_b64}.{payload_b64}.{_b64url_encode(signature)}"
+
+
+def _make_ec_keypair(kid: str = KEY_ID):
+    from cryptography.hazmat.primitives.asymmetric import ec as ec_mod
+
+    private_key = ec_mod.generate_private_key(ec_mod.SECP256R1())
+    numbers = private_key.public_key().public_numbers()
+    jwk = {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": _uint_to_b64url(numbers.x, 32),
+        "y": _uint_to_b64url(numbers.y, 32),
+        "kid": kid,
+        "use": "sig",
+        "alg": "ES256",
+    }
+    return private_key, jwk
+
+
+def _sign_jwt_es256(private_key, payload: dict, kid: str = KEY_ID) -> str:
+    from cryptography.hazmat.primitives import hashes as hashes_mod
+    from cryptography.hazmat.primitives.asymmetric import ec as ec_mod
+    from cryptography.hazmat.primitives.asymmetric import utils as utils_mod
+
+    header = {"alg": "ES256", "typ": "JWT", "kid": kid}
+    header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
+    payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
+    signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+    der_signature = private_key.sign(signing_input, ec_mod.ECDSA(hashes_mod.SHA256()))
+    r, s = utils_mod.decode_dss_signature(der_signature)
+    # JWS ES256 signatures are raw R||S, each a fixed 32 bytes for P-256 -
+    # not the DER encoding `cryptography`'s sign() returns.
+    raw_signature = r.to_bytes(32, "big") + s.to_bytes(32, "big")
+    return f"{header_b64}.{payload_b64}.{_b64url_encode(raw_signature)}"
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_rs256_token_keycloak_default_algorithm():
+    """Keycloak - and most standard OIDC providers - sign with RS256 by
+    default, not the Ed25519 this module originally shipped with."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "did:web:x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+    assert identity.issuer_domain == PARTNER_DOMAIN
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_rs256_token_with_wrong_key():
+    _, jwk_a = _make_rsa_keypair()
+    private_key_b, _ = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key_b, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk_a]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_es256_token():
+    private_key, jwk = _make_ec_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "did:web:x", "exp": now + 900}
+    token = _sign_jwt_es256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_unsupported_key_type():
+    """An HMAC ('oct') or other unsupported JWK type must not silently
+    verify - only OKP/Ed25519, RSA, and EC/P-256 are supported."""
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    header = {"alg": "HS256", "typ": "JWT", "kid": KEY_ID}
+    header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
+    payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
+    token = f"{header_b64}.{payload_b64}.{_b64url_encode(b'not-a-real-signature')}"
+    jwk = {"kty": "oct", "kid": KEY_ID, "k": _b64url_encode(b"shared-secret")}
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
+# ── Role/group claim extraction ──────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_verify_extracts_keycloak_shaped_role_and_group_claims_by_default():
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "realm_access": {"roles": ["auditor", "offline_access"]},
+        "groups": ["/engineering/compliance"],
+    }
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+    assert identity.roles == ["auditor", "offline_access"]
+    assert identity.groups == ["/engineering/compliance"]
+
+
+@pytest.mark.asyncio
+async def test_verify_uses_per_endpoint_claim_path_override():
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "roles": ["reader"],
+        "team_groups": ["platform"],
+    }
+    token = _sign_jwt_rs256(private_key, payload)
+    policy = FederationPolicy(
+        trusted_endpoints=[
+            TrustedEndpoint(
+                domain=PARTNER_DOMAIN,
+                jwks_url=PARTNER_JWKS_URL,
+                trust_tier="verified_partner",
+                role_claim_path="roles",
+                group_claim_path="team_groups",
+            )
+        ],
+    )
+    provider = ExternalJWKSProvider(policy=policy)
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+    assert identity.roles == ["reader"]
+    assert identity.groups == ["platform"]
+
+
+@pytest.mark.asyncio
+async def test_verify_missing_role_claims_yield_empty_lists_not_an_error():
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+    assert identity.roles == []
+    assert identity.groups == []
+
+
+@pytest.mark.asyncio
+async def test_verify_non_list_role_claim_yields_empty_list():
+    """A malformed claim (e.g. a bare string instead of a list) must not
+    raise - verification already succeeded; a shape mismatch downstream
+    of that just means no extractable roles."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "realm_access": {"roles": "not-a-list"},
+    }
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+    assert identity.roles == []
+
+
+def test_as_policy_kwargs_bridges_identity_to_governs_context():
+    identity = ExternalIdentity(
+        did_web="did:web:x",
+        jwks_url=PARTNER_JWKS_URL,
+        issuer_domain=PARTNER_DOMAIN,
+        federation_tier="verified_partner",
+        verified_at=datetime.now(timezone.utc),
+        token_expires_at=datetime.now(timezone.utc),
+        roles=["auditor", "engineer"],
+        groups=["/engineering/compliance"],
+    )
+    kwargs = identity.as_policy_kwargs()
+    assert kwargs == {
+        "caller_role": "auditor",
+        "caller_roles": ["auditor", "engineer"],
+        "caller_groups": ["/engineering/compliance"],
+    }
+
+
+def test_as_policy_kwargs_caller_role_is_none_without_roles():
+    identity = ExternalIdentity(
+        did_web="did:web:x",
+        jwks_url=PARTNER_JWKS_URL,
+        issuer_domain=PARTNER_DOMAIN,
+        federation_tier="verified_partner",
+        verified_at=datetime.now(timezone.utc),
+        token_expires_at=datetime.now(timezone.utc),
+    )
+    kwargs = identity.as_policy_kwargs()
+    assert kwargs["caller_role"] is None
+    assert kwargs["caller_roles"] == []
+    assert kwargs["caller_groups"] == []

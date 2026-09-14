@@ -338,20 +338,34 @@ config = RevocationConfig(
 
 ## Enterprise Identity Integration
 
-### OIDC/SAML for Sponsor Verification
+### OIDC for Cross-Org Identity Verification
+
+`ExternalJWKSProvider` verifies tokens from a standard OIDC provider
+(Keycloak, Okta, Auth0, etc. - RS256 and ES256 are supported alongside
+this module's original Ed25519 scheme) against the issuer's published
+JWKS, and extracts role/group claims into the verified identity:
 
 ```python
-from agentmesh.enterprise import OIDCProvider
-
-# Configure OIDC for sponsor verification
-oidc = OIDCProvider(
-    issuer="https://login.company.com",
-    client_id="agentmesh",
-    client_secret="...",
+from agentmesh.identity.external_jwks import (
+    ExternalJWKSProvider,
+    FederationPolicy,
+    TrustedEndpoint,
 )
 
-# Verify sponsor is a valid enterprise user
-sponsor_verified = await oidc.verify_user("alice@company.com")
+policy = FederationPolicy(
+    trusted_endpoints=[
+        TrustedEndpoint(
+            domain="login.company.com",
+            jwks_url="https://login.company.com/realms/company/protocol/openid-connect/certs",
+        ),
+    ],
+)
+provider = ExternalJWKSProvider(policy=policy)
+identity = await provider.verify(token)  # None if verification fails
+
+# Bridge the verified role/group claims into govern()'s policy context
+safe = govern(read_doc, policy="policy.yaml")
+result = safe(**identity.as_policy_kwargs(), doc_id="COMP-042")
 ```
 
 ### Active Directory Integration

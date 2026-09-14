@@ -24,7 +24,8 @@ from urllib.parse import urlparse, urlunparse
 
 import httpx
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, padding, rsa, utils
 from pydantic import BaseModel, Field, HttpUrl
 
 
@@ -38,10 +39,16 @@ def _b64url_decode(s: str) -> bytes:
 
     Mirrors the helper in agentmesh.identity.jwk for module independence.
     """
-    padding = 4 - len(s) % 4
-    if padding != 4:
-        s += "=" * padding
+    pad_len = 4 - len(s) % 4
+    if pad_len != 4:
+        s += "=" * pad_len
     return base64.urlsafe_b64decode(s)
+
+
+def _b64url_decode_uint(s: str) -> int:
+    """Decode a base64url string into the big-endian unsigned integer it
+    encodes, per RFC 7518 section 6.3 (JWK RSA/EC coordinate encoding)."""
+    return int.from_bytes(_b64url_decode(s), "big")
 
 
 class DelegationClaims(BaseModel):
@@ -83,21 +90,40 @@ class DelegationClaims(BaseModel):
 
 
 class TrustedEndpoint(BaseModel):
-    """Configured trusted JWKS endpoint per ADR-0007 federation policy."""
+    """Configured trusted JWKS endpoint per ADR-0007 federation policy.
+
+    `role_claim_path`/`group_claim_path` are dotted paths into the verified
+    payload (e.g. "realm_access.roles") for extracting standard OIDC
+    role/group claims — different issuers shape these differently (Keycloak
+    nests roles under `realm_access`; others put a flat `roles` claim at the
+    top level). `None` means "use the policy-level default" — see
+    `FederationPolicy.default_role_claim_path`.
+    """
 
     domain: str
     jwks_url: HttpUrl
     trust_tier: str = "trusted"
+    role_claim_path: Optional[str] = None
+    group_claim_path: Optional[str] = None
 
 
 class FederationPolicy(BaseModel):
-    """Federation policy per ADR-0007 — trusted endpoints, caching, TOFU/open opt-in."""
+    """Federation policy per ADR-0007 — trusted endpoints, caching, TOFU/open opt-in.
+
+    `default_role_claim_path`/`default_group_claim_path` default to
+    Keycloak's shape (`realm_access.roles`, a top-level `groups` claim),
+    since it's the most common self-hosted OIDC provider; override per
+    endpoint via `TrustedEndpoint.role_claim_path`/`group_claim_path` for
+    issuers that shape claims differently.
+    """
 
     trusted_endpoints: list[TrustedEndpoint] = Field(default_factory=list)
     unknown_endpoint_policy: str = "deny"
     jwks_cache_ttl_seconds: int = _DEFAULT_JWKS_TTL_SECONDS
     revocation_cache_ttl_seconds: int = _DEFAULT_REVOCATION_TTL_SECONDS
     require_dnssec: bool = False
+    default_role_claim_path: str = "realm_access.roles"
+    default_group_claim_path: str = "groups"
 
 
 class ExternalIdentity(BaseModel):
@@ -110,6 +136,23 @@ class ExternalIdentity(BaseModel):
     verified_at: datetime
     token_expires_at: datetime
     delegation_claims: DelegationClaims = Field(default_factory=DelegationClaims)
+    roles: list[str] = Field(default_factory=list)
+    groups: list[str] = Field(default_factory=list)
+
+    def as_policy_kwargs(self) -> dict:
+        """Bridge this verified identity into govern()'s policy context.
+
+        govern()'s context is built purely from caller-supplied kwargs
+        (`caller_role`, etc.) — there is no framework-level wiring from a
+        verified identity to that context anywhere in this codebase, by
+        design (kwargs-only, no hidden magic). Spread the result into a
+        governed call: `safe(**identity.as_policy_kwargs(), doc_id=...)`.
+        """
+        return {
+            "caller_role": self.roles[0] if self.roles else None,
+            "caller_roles": self.roles,
+            "caller_groups": self.groups,
+        }
 
 
 class _CacheEntry(BaseModel):
@@ -215,13 +258,46 @@ class ExternalJWKSProvider:
 
     @staticmethod
     def _verify_signature(jwk: dict, signature: bytes, signing_input: bytes) -> bool:
-        if jwk.get("kty") != "OKP" or jwk.get("crv") != "Ed25519":
-            return False
+        """Verify against whatever key type the JWKS actually published.
+
+        Dispatches on the JWK's own `kty`/`crv` rather than the JWT
+        header's `alg`: the header is unverified at this point, so trusting
+        it to pick the verification routine would let a crafted token steer
+        itself onto the wrong check (classic algorithm-confusion). Ed25519
+        was this module's original scheme (ADR-0007 agent-to-agent
+        federation); RSA (RS256) and P-256 EC (ES256) are added so it can
+        also verify tokens from a standard OIDC provider (Keycloak, Okta,
+        etc.), whose default signing key is RS256, not Ed25519.
+        """
+        kty = jwk.get("kty")
         try:
-            public_bytes = _b64url_decode(jwk["x"])
-            public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_bytes)
-            public_key.verify(signature, signing_input)
-            return True
+            if kty == "OKP" and jwk.get("crv") == "Ed25519":
+                public_bytes = _b64url_decode(jwk["x"])
+                public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_bytes)
+                public_key.verify(signature, signing_input)
+                return True
+            if kty == "RSA":
+                n = _b64url_decode_uint(jwk["n"])
+                e = _b64url_decode_uint(jwk["e"])
+                public_key = rsa.RSAPublicNumbers(e, n).public_key()
+                public_key.verify(
+                    signature, signing_input, padding.PKCS1v15(), hashes.SHA256()
+                )
+                return True
+            if kty == "EC" and jwk.get("crv") == "P-256":
+                x = _b64url_decode_uint(jwk["x"])
+                y = _b64url_decode_uint(jwk["y"])
+                public_key = ec.EllipticCurvePublicNumbers(
+                    x, y, ec.SECP256R1()
+                ).public_key()
+                if len(signature) != 64:
+                    return False
+                r = int.from_bytes(signature[:32], "big")
+                s = int.from_bytes(signature[32:], "big")
+                der_signature = utils.encode_dss_signature(r, s)
+                public_key.verify(der_signature, signing_input, ec.ECDSA(hashes.SHA256()))
+                return True
+            return False
         except (InvalidSignature, KeyError, ValueError):
             return False
 
@@ -396,6 +472,8 @@ class ExternalJWKSProvider:
         self, payload: dict, endpoint: TrustedEndpoint
     ) -> ExternalIdentity:
         delegation = payload.get("delegation_claims") or {}
+        role_path = endpoint.role_claim_path or self._policy.default_role_claim_path
+        group_path = endpoint.group_claim_path or self._policy.default_group_claim_path
         return ExternalIdentity(
             did_web=payload.get("sub", f"did:web:{endpoint.domain}"),
             jwks_url=endpoint.jwks_url,
@@ -404,4 +482,24 @@ class ExternalJWKSProvider:
             verified_at=datetime.now(timezone.utc),
             token_expires_at=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
             delegation_claims=DelegationClaims.model_validate(delegation),
+            roles=self._extract_claim_list(payload, role_path),
+            groups=self._extract_claim_list(payload, group_path),
         )
+
+    @staticmethod
+    def _extract_claim_list(payload: dict, dotted_path: str) -> list[str]:
+        """Walk `dotted_path` into `payload` and return a list of strings.
+
+        Any missing segment, or a final value that isn't a list, yields an
+        empty list rather than raising — a malformed or absent claim just
+        means no roles/groups, not a verification failure. Non-string
+        entries in the list are dropped rather than coerced.
+        """
+        value: object = payload
+        for segment in dotted_path.split("."):
+            if not isinstance(value, dict):
+                return []
+            value = value.get(segment)
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, str)]
