@@ -1011,6 +1011,7 @@ tzdata
 ufeff
 unaliased
 uncallable
+uncompilable
 unconfigured
 unicodedata
 uninspectable
