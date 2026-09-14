@@ -120,7 +120,9 @@
     "runserver",
     "datastructures",
     "jsonify",
-    "undecoded"
+    "undecoded",
+    "webmcp",
+    "webmachinelearning"
   ],
   "ignorePaths": [
     "**/node_modules/**",

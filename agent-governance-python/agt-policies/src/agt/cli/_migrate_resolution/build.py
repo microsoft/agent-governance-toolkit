@@ -266,6 +266,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
                 f"\"reason\": \"runtime_error:manifest_invalid\", "
                 f"\"message\": {json.dumps(f'rule {name!r} has {invalid_detail}; fail-closed deny')}}} if {{\n"
                 f"    _match_{idx}\n"
+                f"    _snapshot_valid\n"
                 + "".join(f"    not _match_{j}\n" for j in range(idx))
                 + "}"
             )
@@ -289,6 +290,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         branches.append(
             f"verdict := {verdict_dict} if {{\n"
             f"    _match_{idx}\n"
+            f"    _snapshot_valid\n"
             f"{previous_negations}"
             f"}}"
         )
@@ -300,6 +302,35 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
             len(unsupported_drops),
             unsupported_drops,
         )
+
+    # Fail-closed snapshot guard (issue #3517): when input.snapshot is absent,
+    # null, or not an object, every field accessor is undefined, no _match_i
+    # fires, and evaluation would fall through to the default-allow verdict, so a
+    # caller that omits or mistypes the snapshot root would be allowed on a
+    # deny-side policy. Snapshot validity is expressed with a defaulted helper: a
+    # bare `not is_object(input.snapshot)` does not hold when the reference is
+    # undefined (an inline negation over a builtin with an undefined operand is
+    # itself undefined), so the absent-snapshot case would leak through to
+    # default-allow. `default _snapshot_valid := false` makes the undefined case
+    # explicit. Every rule branch above is gated on `_snapshot_valid` so the
+    # guard is mutually exclusive with them: a rule branch (including the
+    # always-matching fail-closed deny for an unsupported operator) and the guard
+    # can never both hold, or OPA would raise a complete-rule conflict on
+    # `verdict`.
+    matchers.insert(
+        0,
+        "default _snapshot_valid := false\n\n"
+        "_snapshot_valid if {\n    is_object(input.snapshot)\n}",
+    )
+    branches.insert(
+        0,
+        "verdict := {\"decision\": \"deny\", "
+        "\"reason\": \"runtime_error:snapshot_invalid\", "
+        "\"message\": \"input.snapshot is absent, null, or not an object; "
+        "fail-closed deny\"} if {\n"
+        "    not _snapshot_valid\n"
+        "}",
+    )
 
     return header + "\n\n".join(matchers) + ("\n\n" if matchers else "") + "\n\n".join(branches) + "\n"
 
