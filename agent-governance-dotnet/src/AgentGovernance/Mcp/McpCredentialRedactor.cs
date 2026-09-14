@@ -110,20 +110,21 @@ public sealed class McpCredentialRedactor
          "[REDACTED_AWS_ACCESS_KEY]"),
 
         // Value class includes "-"/"_", and the count is fixed at 35, so a real
-        // key can land on either right where the 35th character happens to be
-        // one of them. When that happens and an unrelated alphanumeric
-        // character follows with no separator (for example a 35 char run
-        // ending in "-" glued straight to more text), this pattern treats that
-        // the same as any other "one more alphanumeric character" case and
-        // does not redact it, on the same reasoning as AwsAccessKey: the
-        // presence of more alphanumeric content right there is evidence this
-        // is not a cleanly isolated key. That is a real, if narrow, gap
-        // compared to the previous plain \b, which treated "-" as an automatic
-        // boundary on its own. Pinned deliberately by
-        // Redact_DoesNotWidenGoogleApiKeyMatch_WhenKeyEndsInHyphen below rather
-        // than left as an unexamined side effect.
+        // key can end in one of them. A plain \b treats "-" as an automatic
+        // boundary on its own, since "-" is not a word character, so a key
+        // ending in "-" was redacted even when glued straight to more text. A
+        // detector change must never lose a shape the previous version
+        // caught, so the trailing assertion also accepts whenever the
+        // character actually consumed is "-", on top of the existing "not
+        // alphanumeric" check, restoring that original behavior for that one
+        // shape while keeping the "one more alphanumeric character means a
+        // different token" guard for every other ending. Verified against the
+        // previous pattern across every 35th character crossed with every
+        // plausible following character: the only cases that change are
+        // exactly this one. Pinned as a positive case by
+        // Redact_RedactsGoogleApiKeyEndingInHyphenWhenGlued below.
         (CredentialKind.GoogleApiKey,
-         new Regex(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z\-_]{35}(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z\-_]{35}(?:(?![A-Za-z0-9])|(?<=-))", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_GOOGLE_API_KEY]"),
 
         (CredentialKind.PemPrivateKey,
