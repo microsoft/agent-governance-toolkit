@@ -24,10 +24,10 @@ describe('toFrameworkInvocation', () => {
       { name: 'search' },
       {},
       undefined,
-      { actionPrefix: 'easely.webmcp' },
+      { actionPrefix: 'acme.webmcp' },
     );
 
-    expect(invocation.action).toBe('easely.webmcp.search');
+    expect(invocation.action).toBe('acme.webmcp.search');
   });
 
   it('passes through unmerged/proposed annotations under a dedicated namespace', () => {
