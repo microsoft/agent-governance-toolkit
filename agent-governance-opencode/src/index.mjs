@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import { resolve } from "node:path";
+
 import {
   checkArbitraryText,
   evaluateOpenCodePrompt,
@@ -8,13 +10,18 @@ import {
   evaluateOpenCodeToolOutput,
   getPolicyStatus,
   loadPolicy,
-} from "../lib/policy.mjs";
+} from "../lib/opencode-policy.mjs";
+
+// Track registrations by OpenCode client instance and normalized workspace.
+// The WeakMap lets registrations disappear with their host client instead of
+// keeping process-wide workspace state alive indefinitely.
+const registrationsByClient = new WeakMap();
 
 /**
  * AGT governance plugin for OpenCode.
  *
- * Loads the AGT policy once per OpenCode process and wires it into the
- * OpenCode plugin contract:
+ * Loads the AGT policy once per effective plugin registration and wires it into
+ * the OpenCode plugin contract:
  *
  *  - session.created           — log AGT governance status at session start
  *  - event (chat.params/start) — scan submitted prompts; throw to block
@@ -32,8 +39,8 @@ import {
  * @type {Plugin}
  */
 export const AgtGovernance = async (ctx) => {
-  // OpenCode loads plugins once per process. Cache the compiled policy so we
-  // don't re-read it on every hook invocation.
+  // Cache the compiled policy for this effective registration so we do not
+  // re-read it on every hook invocation.
   let stateCache;
   let stateError;
 
@@ -51,6 +58,19 @@ export const AgtGovernance = async (ctx) => {
       stateError = error instanceof Error ? error : new Error(String(error));
       throw stateError;
     }
+  }
+
+  const initialState = await getState();
+  const initializationError = getPolicyInitializationError(initialState);
+  if (initializationError && initialState.policy.denyOnPolicyError) {
+    throw new Error(initializationError);
+  }
+
+  // Failed policy initialization must not claim a successful registration.
+  const registration = claimRegistration(ctx);
+  if (registration.duplicate) {
+    await logDuplicateRegistration(ctx, registration.workspace);
+    return {};
   }
 
   return {
@@ -89,8 +109,9 @@ export const AgtGovernance = async (ctx) => {
       });
 
       if (result.effect === "deny") {
-        // throwing here silently breaks the OpenCode session. Exception message is never displayed to the user, this is not the way to go...       
-        throw new Error(result.reason || "AGT governance blocked the submitted prompt.");
+        const reason = result.reason || "AGT governance blocked the submitted prompt.";
+        await surfaceGovernanceDenial(ctx, reason);
+        throw new Error(reason);
       }
     },
     "tool.execute.before": async (input, output) => {
@@ -151,9 +172,9 @@ export const AgtGovernance = async (ctx) => {
       agt_policy_check_text: {
         description:
           "Check text against AGT prompt, context-poisoning, and MCP-style threat detectors.",
-          args: {
-            text: { type: "string", description: "Text to inspect." },
-          },
+        args: {
+          text: { type: "string", description: "Text to inspect." },
+        },
         async execute(args) {
           const state = await getState();
           const text = typeof args?.text === "string" ? args.text : "";
@@ -164,7 +185,98 @@ export const AgtGovernance = async (ctx) => {
   };
 };
 
+function getPolicyInitializationError(state) {
+  if (state.configuredPolicyError) {
+    return `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`;
+  }
+  if (state.bundledDefaultError) {
+    return `AGT bundled default policy could not be loaded from ${state.path}: ${state.bundledDefaultError.message}`;
+  }
+  return "";
+}
+
+async function surfaceGovernanceDenial(ctx, reason) {
+  const notifications = [];
+  if (typeof ctx?.client?.tui?.showToast === "function") {
+    notifications.push(
+      ctx.client.tui.showToast({
+        body: {
+          title: "AGT governance blocked the prompt",
+          message: reason,
+          variant: "error",
+        },
+      }),
+    );
+  }
+  if (typeof ctx?.client?.app?.log === "function") {
+    notifications.push(
+      ctx.client.app.log({
+        body: {
+          service: "agt-governance",
+          level: "warn",
+          message: `[AGT] Prompt denied: ${reason}`,
+        },
+      }),
+    );
+  }
+  await Promise.allSettled(notifications);
+}
+
 export default AgtGovernance;
+
+function claimRegistration(ctx) {
+  const client = ctx?.client;
+  const clientType = typeof client;
+  const workspaceValue =
+    typeof ctx?.worktree === "string" && ctx.worktree.trim()
+      ? ctx.worktree
+      : typeof ctx?.directory === "string" && ctx.directory.trim()
+        ? ctx.directory
+        : undefined;
+  const workspace = workspaceValue ? resolve(workspaceValue) : undefined;
+
+  // Without both a stable client object and workspace path, do not suppress a
+  // registration because independent OpenCode instances cannot be distinguished.
+  if ((clientType !== "object" && clientType !== "function") || client === null || !workspace) {
+    return { duplicate: false, workspace };
+  }
+
+  let workspaces = registrationsByClient.get(client);
+  if (!workspaces) {
+    workspaces = new Set();
+    registrationsByClient.set(client, workspaces);
+  }
+
+  if (workspaces.has(workspace)) {
+    return { duplicate: true, workspace };
+  }
+
+  workspaces.add(workspace);
+  return { duplicate: false, workspace };
+}
+
+async function logDuplicateRegistration(ctx, workspace) {
+  const message =
+    `[AGT] Duplicate OpenCode governance registration ignored for workspace ${workspace}. ` +
+    "Remove duplicate AGT workspace shims or package registrations.";
+
+  if (typeof ctx?.client?.app?.log !== "function") {
+    console.warn(message);
+    return;
+  }
+
+  try {
+    await ctx.client.app.log({
+      body: {
+        service: "agt-governance",
+        level: "warn",
+        message,
+      },
+    });
+  } catch {
+    console.warn(message);
+  }
+}
 
 function extractPromptFromEvent(event) {
   if (!event || typeof event !== "object") {

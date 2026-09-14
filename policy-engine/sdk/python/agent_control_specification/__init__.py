@@ -75,6 +75,7 @@ from ._types import (
     ToolRunResult,
     Transform,
     Verdict,
+    Warning,
     action_identity,
 )
 from .validation import (
@@ -134,6 +135,7 @@ __all__ = [
     "Transform",
     "UnsupportedFrameworkAdapter",
     "Verdict",
+    "Warning",
     "ValidationDiagnostic",
     "action_identity",
     "guard_agent_method",
