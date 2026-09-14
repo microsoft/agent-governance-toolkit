@@ -13,6 +13,14 @@ import rego.v1
 # Per agent_os.integrations.base.PII_PATTERNS. Patterns are anchored with
 # word boundaries where the source uses them; the secrets pattern is case
 # insensitive via the inline (?i) flag accepted by the Go RE2 engine.
+#
+# NOTE: Go RE2 \b treats _ as a word character, same as PCRE. The SSN pattern
+# uses \b here because the Rego evaluator is detection-only (no hard-block):
+# a false-negative on ``employee_123-45-6789`` is reported by the Python
+# MCP gateway's hard-block path, which uses (?<![A-Za-z0-9]) lookaround.
+# The bounded-token credential patterns in the Python, C#, TypeScript, and
+# Rust SDKs must NOT use \b — they use (?<![A-Za-z0-9]) / (?![A-Za-z0-9])
+# lookaround instead (issue #3933).
 
 pii_ssn := `\b\d{3}[\s.\-]?\d{2}[\s.\-]?\d{4}\b`
 

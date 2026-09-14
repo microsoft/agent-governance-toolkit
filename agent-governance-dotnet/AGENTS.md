@@ -28,6 +28,7 @@ dotnet test AgentGovernance.sln
 - Prefer explicit types and validation over convenience shortcuts.
 - Match existing naming and namespace conventions.
 - If a feature brings the .NET SDK closer to parity with other SDKs, update relevant docs.
+- Credential-detection patterns (in `McpCredentialRedactor.cs`) must use `(?<![A-Za-z0-9])` / `(?![A-Za-z0-9])` lookaround anchors, not `\b`. Word boundaries treat `_` as a word character, which silently misses secrets annotated `_old` or preceded by `session_`.
 
 ## Boundaries
 

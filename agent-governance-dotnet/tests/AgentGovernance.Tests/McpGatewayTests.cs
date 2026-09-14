@@ -275,4 +275,69 @@ public class McpGatewayTests
         Assert.Equal(McpGatewayStatus.Denied, decision.Status);
         Assert.Empty(decision.Findings);
     }
+
+    // ---------------------------------------------------------------
+    // Boundary regression tests for issue #3933: credentials glued
+    // to _ must be caught by the full gateway pipeline.
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void ProcessRequest_BlockOnSuspiciousPayload_CatchesGluedAwsKey()
+    {
+        var gateway = new McpGateway(new McpGatewayConfig
+        {
+            BlockOnSuspiciousPayload = true
+        });
+
+        var decision = gateway.ProcessRequest(new McpGatewayRequest
+        {
+            AgentId = "did:agentmesh:test",
+            ToolName = "fetch",
+            Payload = "result: env_AKIAAAAAAAAAAAAAAAAA_old found"
+        });
+
+        Assert.Equal(McpGatewayStatus.Denied, decision.Status);
+        Assert.Contains(decision.Findings, f =>
+            f.ThreatType == McpResponseThreatType.CredentialLeakage);
+    }
+
+    [Fact]
+    public void ProcessRequest_SanitizesGluedGitHubToken()
+    {
+        var gateway = new McpGateway(new McpGatewayConfig
+        {
+            BlockOnSuspiciousPayload = false
+        });
+
+        var decision = gateway.ProcessRequest(new McpGatewayRequest
+        {
+            AgentId = "did:agentmesh:test",
+            ToolName = "fetch",
+            Payload = "session_ghp_FAKEFORTESTING000000000000000000_rotated"
+        });
+
+        Assert.Equal(McpGatewayStatus.Allowed, decision.Status);
+        Assert.Contains("[REDACTED_GITHUB_TOKEN]", decision.SanitizedPayload);
+        Assert.DoesNotContain("ghp_FAKEFORTESTING", decision.SanitizedPayload);
+    }
+
+    [Fact]
+    public void ProcessRequest_SanitizesGluedGoogleKey()
+    {
+        var key = $"AIza{new string('A', 35)}";
+        var gateway = new McpGateway(new McpGatewayConfig
+        {
+            BlockOnSuspiciousPayload = false
+        });
+
+        var decision = gateway.ProcessRequest(new McpGatewayRequest
+        {
+            AgentId = "did:agentmesh:test",
+            ToolName = "fetch",
+            Payload = $"svc_{key}_deprecated"
+        });
+
+        Assert.Equal(McpGatewayStatus.Allowed, decision.Status);
+        Assert.DoesNotContain(key, decision.SanitizedPayload);
+    }
 }

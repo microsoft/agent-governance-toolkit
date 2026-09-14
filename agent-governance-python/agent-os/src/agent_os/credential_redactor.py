@@ -51,26 +51,32 @@ class CredentialRedactor:
     # Python's stdlib ``re`` does not support per-pattern timeouts. These
     # patterns are kept simple and anchored to avoid pathological backtracking.
     #
-    # Prefix-anchored patterns use a ``(?<![A-Za-z0-9])`` lookbehind rather than
-    # ``\b`` so a secret glued directly to a preceding word character (for
-    # example ``session_sk-...``) is still detected. ``\b`` treats ``_`` as a
-    # word character, so ``_sk-`` has no boundary and the secret would be missed;
-    # ``(?<![A-Za-z0-9])`` treats ``_`` (and ``-``, ``/``, ``.``, whitespace) as a
-    # valid left edge while still not matching inside an alphanumeric word.
+    # Both anchors use a ``(?<![A-Za-z0-9])`` lookbehind and a
+    # ``(?![A-Za-z0-9])`` lookahead rather than ``\b`` so a secret glued
+    # directly to a word character via ``_`` or ``-`` (for example
+    # ``session_sk-...`` or ``AKIAXXXX_old``) is still detected. ``\b``
+    # treats ``_`` as a word character, so ``_sk-`` has no boundary and the
+    # secret would be missed; the explicit lookaround treats ``_`` (and
+    # ``-``, ``/``, ``.``, whitespace) as a valid edge while still not
+    # matching inside an alphanumeric word.
+    #
+    # Slack and xapp tokens intentionally omit a right-edge lookahead
+    # because their value class includes ``-``, and a trailing ``\b`` would
+    # backtrack and redact only a prefix, leaking the final segment.
     PATTERNS: tuple[CredentialPattern, ...] = (
         CredentialPattern(
             name="OpenAI API key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             name="GitHub token",
             pattern=re.compile(
-                r"(?<![A-Za-z0-9])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])"
+                r"(?<![A-Za-z0-9])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9])"
             ),
         ),
         CredentialPattern(
             name="AWS access key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             # The 40-char base64 secret value has no distinctive prefix, so it is
@@ -139,11 +145,11 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="Google API key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             name="Stripe secret key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             name="Generic API secret",

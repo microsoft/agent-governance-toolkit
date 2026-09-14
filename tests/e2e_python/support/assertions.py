@@ -13,6 +13,9 @@ RAW_SECRETS = (
     "123-45-6789",
     "person@example.test",
     "sk-1234567890abcdefghijkl",
+    # Underscore-glued form: a secret annotated _old must be redacted too
+    # (regression for issue #3933).
+    "AKIAIOSFODNN7EXAMPLE",
 )
 
 

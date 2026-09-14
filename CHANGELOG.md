@@ -25,6 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runtime=` plus explicit `SandboxConfig`.
 
 ### Fixed
+- **Cross-SDK credential redactor boundary fix** — `McpCredentialRedactor`
+  (C#), `AuditLogger` (TypeScript), `CredentialRedactor` (Rust), and
+  `CredentialRedactor` (Python) all contained boundary anchors that treated
+  `_` as a boundary-blocking character, so a valid GitHub, OpenAI, AWS, or
+  Google API secret annotated with `_old`, `_deprecated`, or `_rotated` (or
+  preceded by `session_`, `env_`, etc.) passed through completely unredacted.
+  All four SDKs now use `(?<![A-Za-z0-9])…(?![A-Za-z0-9])` lookaround
+  anchors that exclude only alphanumerics, matching the existing `SlackToken`
+  pattern which was already correct. The `content_scanner.py` SSN pattern in
+  `agent-rag-governance` is also updated to accept space and dot separators
+  and use the consistent lookaround anchor, closing the detection-disagreement
+  gap with `credential_redactor.py` (#3933, #3815).
 - **Spell check no longer reports the base branch's own history as a
   contributor's changes** — `scripts/ci/changed_lines.py` diffed from the tip of
   the base branch, so on a branch behind `main` every line `main` had since
