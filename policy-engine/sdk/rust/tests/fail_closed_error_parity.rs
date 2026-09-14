@@ -1,6 +1,7 @@
 use agent_control_specification::{
-    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
-    JsonValue, Manifest, PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError,
+    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, HostEvaluation,
+    InterceptionPoint, JsonValue, Manifest, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
+    RuntimeError,
 };
 use serde_json::Value;
 use std::{collections::BTreeSet, fs, path::PathBuf, str::FromStr, sync::Arc};
@@ -105,14 +106,21 @@ fn sdk_fail_closed_errors_match_shared_fixture() {
 
         let runtime = runtime.unwrap_or_else(|error| panic!("{id}: build failed: {error}"));
         let intervention_point =
-            InterventionPoint::from_str(case["intervention_point"].as_str().unwrap()).unwrap();
-        let result = runtime.evaluate_intervention_point(
-            agent_control_specification::InterventionPointRequest {
-                intervention_point,
-                snapshot: case["snapshot"].clone(),
-                mode: EnforcementMode::Enforce,
-            },
-        );
+            InterceptionPoint::from_str(case["intervention_point"].as_str().unwrap()).unwrap();
+        let engine = runtime.evaluate_point(intervention_point, case["snapshot"].clone());
+        // AGENT-HOOKS-0.1 sections 8 to 10: applying and validating a
+        // transform is a host obligation, so an inapplicable transform
+        // fails closed in the host layer rather than in the engine.
+        let result =
+            HostEvaluation::from_engine(intervention_point, engine, EnforcementMode::Enforce)
+                .unwrap_or_else(|(error, detail)| HostEvaluation {
+                    verdict: agent_hooks::Verdict::host_error(error, Some(detail)),
+                    policy_input: None,
+                    transformed_policy_target: None,
+                    action_identity: None,
+                    input_identity: None,
+                    enforced_identity: None,
+                });
         assert_eq!(result.verdict.decision, Decision::Deny, "{id}");
         assert_eq!(
             result.verdict.reason.as_deref(),
