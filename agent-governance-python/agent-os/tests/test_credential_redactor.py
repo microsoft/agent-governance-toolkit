@@ -407,19 +407,27 @@ def test_trailing_anchor_does_not_widen_the_match(text: str):
     assert CredentialRedactor.contains_credentials(text) is False
 
 
-def test_does_not_widen_google_api_key_match_when_key_ends_in_hyphen():
-    # Pins a deliberate, narrow gap: the 35 char value class includes "-", so a
-    # real key can end in one. A trailing \b would have treated "-" as an
-    # automatic boundary on its own and redacted this shape. The mirror
-    # assertion treats an alphanumeric character glued right after, with no
-    # separator, the same as the other "one more alphanumeric character"
-    # cases above, and leaves it unredacted. Documented here rather than left
-    # as an unexamined side effect of the #3494 fix.
+def test_redacts_google_api_key_ending_in_hyphen_when_glued():
+    # Regression: the 35 char value class includes "-", so a real key can end
+    # in one. A trailing \b treats "-" as an automatic boundary on its own,
+    # since "-" is not a word character, so a key ending in "-" and glued
+    # straight to more text was redacted before the #3494 fix. The mirror
+    # assertion by itself loses that shape, since it only looks at what
+    # follows, not at what was actually consumed. The pattern now also
+    # accepts whenever the last character consumed is "-", so this case is
+    # redacted the same as it was before, while a key ending in a plain
+    # alphanumeric character glued to more text still correctly stays
+    # unmatched (see test_trailing_anchor_does_not_widen_the_match above).
     key_ending_in_hyphen = "AIza" + "A" * 34 + "-"
     text = f"{key_ending_in_hyphen}X"
 
-    assert CredentialRedactor.redact(text) == text
-    assert CredentialRedactor.contains_credentials(text) is False
+    redacted = CredentialRedactor.redact(text)
+
+    assert REDACTED_PLACEHOLDER in redacted
+    assert "Google API key" in CredentialRedactor.detect_credential_types(text)
+    assert CredentialRedactor.contains_credentials(text) is True
+    # The unrelated glued character is not part of the secret and must survive.
+    assert redacted == f"{REDACTED_PLACEHOLDER}X"
 
 
 @pytest.mark.parametrize(

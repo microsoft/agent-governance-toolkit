@@ -150,18 +150,20 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             # The value class includes "_"/"-", and the length is fixed at 35,
-            # so a real key can end in one of them. When that happens and an
-            # unrelated alphanumeric character follows with no separator (a 35
-            # char run ending in "-" glued straight to more text), this treats
-            # that the same as any other "one more alphanumeric character"
-            # case and does not redact it, on the same reasoning already
-            # applied to AWS access key above. That is a real, if narrow, gap
-            # compared to a trailing \b, which would have treated "-" as an
-            # automatic boundary on its own. Pinned deliberately by
-            # test_does_not_widen_google_api_key_match_when_key_ends_in_hyphen
-            # rather than left as an unexamined side effect.
+            # so a real key can end in one of them. A trailing \b treats "-"
+            # as an automatic boundary on its own, since "-" is not a word
+            # character, so it redacted a key ending in "-" even when glued
+            # straight to more text. The mirror assertion by itself loses that
+            # shape: a detector change must never lose a shape the previous
+            # version caught, so the trailing assertion also accepts whenever
+            # the character actually consumed is "-", regardless of what
+            # follows, restoring the original \b behavior for exactly that
+            # case while keeping the "one more alphanumeric character" guard
+            # everywhere else. Verified against base and head with no
+            # regressions and no new over-redaction; pinned as a positive
+            # case by test_redacts_google_api_key_ending_in_hyphen_when_glued.
             name="Google API key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}(?![A-Za-z0-9])"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}(?:(?![A-Za-z0-9])|(?<=-))"),
         ),
         CredentialPattern(
             name="Stripe secret key",
