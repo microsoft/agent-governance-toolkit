@@ -743,6 +743,7 @@ noresolver
 normalisation
 normalised
 normalises
+normcase
 normpath
 nostr
 nother
