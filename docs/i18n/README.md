@@ -13,12 +13,13 @@ This directory contains translated entry points for the Agent Governance Toolkit
 | Language | README | Quickstart | Status |
 |---|---|---|---|
 | English | [`/README.md`](../index.md) | [`/docs/quickstart.md`](../quickstart.md) | Source |
+| Spanish | [`README.es.md`](./README.es.md) | [`quickstart.es.md`](./quickstart.es.md) | Available |
 | Japanese | [`README.ja.md`](./README.ja.md) | [`quickstart.ja.md`](./quickstart.ja.md) | Available |
 | Chinese (Simplified) | [`README.zh-CN.md`](./README.zh-CN.md) | [`quickstart.zh-CN.md`](./quickstart.zh-CN.md) | Available |
 | Korean | [`README.ko.md`](./README.ko.md) | [`quickstart.ko.md`](./quickstart.ko.md) | Available |
 | Chinese (Traditional) | [`README.zh-TW.md`](./README.zh-TW.md) | [`quickstart.zh-TW.md`](./quickstart.zh-TW.md) | Available |
 
-Wanted languages include Spanish, French, German, Portuguese, and Hindi.
+Wanted languages include French, German, Portuguese, and Hindi.
 
 ## Contributing a Translation
 
