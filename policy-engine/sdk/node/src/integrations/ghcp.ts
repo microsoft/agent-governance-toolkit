@@ -53,7 +53,7 @@ export interface GhcpHooksOptions {
    * Restrict which tools this guardrail evaluates. When set, tool calls whose
    * name is not governed are passed through untouched instead of being run
    * through a policy that may not be shaped for them (which would otherwise
-   * fail closed, e.g. an LLM judge reading `$policy_target.command` on a
+   * fail closed, e.g. an LLM judge reading `$target.command` on a
    * web-fetch tool that has no `command`). Omit to govern every tool.
    */
   tools?: string[] | ((toolName: string) => boolean);
@@ -190,9 +190,9 @@ export function createGhcpExtension(control: AgentControl, options: GhcpHooksOpt
   }
 
   /**
-   * Map a verdict to a host gate outcome. Returns `undefined` to allow (also
-   * for `warn`, which is non-blocking). Effects are applied separately by the
-   * caller via {@link transformedOr}.
+   * Map a verdict to a host gate outcome. Returns `undefined` for permitting
+   * decisions, including an allow carrying warnings. Transforms are applied
+   * separately by the caller via {@link transformedOr}.
    */
   async function gate(
     interventionPoint: InterventionPoint,
@@ -206,11 +206,14 @@ export function createGhcpExtension(control: AgentControl, options: GhcpHooksOpt
     const decision = result.verdict.decision;
     const reason = result.verdict.reason ?? result.verdict.message ?? undefined;
 
-    if (decision === Decision.Deny) {
+    if (decision === Decision.Allow || decision === Decision.Transform) {
+      return undefined;
+    }
+    if (decision !== Decision.Deny) {
       log({ hook, sessionId, interventionPoint, decision, reason, toolName, binding });
       return { deny: denialMessage(result) };
     }
-    if (decision === Decision.Escalate) {
+    if (decision === Decision.Deny && result.verdict.approval !== undefined) {
       const resolver = options.approvalResolver;
       if (resolver !== undefined) {
         try {
@@ -225,7 +228,8 @@ export function createGhcpExtension(control: AgentControl, options: GhcpHooksOpt
       if (escalateBehavior === "deny") return { deny: denialMessage(result) };
       return { ask: denialMessage(result) };
     }
-    return undefined;
+    log({ hook, sessionId, interventionPoint, decision, reason, toolName, binding });
+    return { deny: denialMessage(result) };
   }
 
   async function evaluate(
