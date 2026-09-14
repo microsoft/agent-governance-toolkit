@@ -818,3 +818,43 @@ class TestGovernWithAuditFile:
         monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", secrets.token_bytes(32).hex())
         with pytest.raises(ValueError, match="already open with a different"):
             govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+
+
+# ── govern() + advisory: an audit-write failure must not fail open ──
+
+
+class TestGovernAdvisoryAuditFailure:
+    """_run_advisory's try/except is meant to fail open only when
+    advisory.check() itself fails (non-deterministic, defense-in-depth).
+    It used to also wrap the audit log() call, so a failing audit write
+    (the file-backed sink's own fail-closed errors: ENOSPC, EPERM, ELOOP,
+    a tamper-detected chain) was indistinguishable from the classifier
+    failing and silently turned a BLOCK into allow."""
+
+    def test_audit_failure_during_advisory_check_does_not_downgrade_block(self):
+        from agentmesh.governance.advisory import AdvisoryDecision, CallbackAdvisory
+
+        block_always = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="block", reason="blocked by test classifier"),
+            name="test",
+        )
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, advisory=block_always)
+
+        real_log = safe.audit_log.log
+        seen_event_types = []
+
+        def flaky_log(*args, **kwargs):
+            seen_event_types.append(kwargs.get("event_type"))
+            if kwargs.get("event_type") == "advisory_check":
+                raise OSError("simulated audit-sink write failure")
+            return real_log(*args, **kwargs)
+
+        safe.audit_log.log = flaky_log
+
+        with pytest.raises(OSError, match="simulated audit-sink write failure"):
+            safe(action="read")
+
+        # The deterministic policy_evaluation write must have gone through
+        # before the advisory_check write that failed - confirms the block
+        # decision was actually reached, not skipped some other way.
+        assert seen_event_types == ["policy_evaluation", "advisory_check"]

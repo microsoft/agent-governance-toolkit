@@ -768,33 +768,43 @@ class GovernedCallable:
         return context
 
     def _run_advisory(self, context: dict) -> Optional[AdvisoryDecision]:
-        """Run the optional advisory check (defense-in-depth)."""
+        """Run the optional advisory check (defense-in-depth).
+
+        Only advisory.check() itself fails open - it's non-deterministic,
+        defense-in-depth. The audit write below is deliberately outside
+        that try: it used to sit inside it, so an audit-sink failure (e.g.
+        the file-backed sink's own fail-closed errors - ENOSPC, EPERM,
+        ELOOP, a tamper-detected chain) was indistinguishable from the
+        classifier itself failing, silently turning a BLOCK into allow.
+        The deterministic policy_evaluation audit write a few lines up
+        already fails closed the same way (unguarded, propagates out of
+        __call__) - this matches that.
+        """
         advisory = self._config.advisory
         if not advisory:
             return None
 
         try:
             decision = advisory.check(context)
-
-            # Log advisory decision
-            if self._audit:
-                self._audit.log(
-                    event_type="advisory_check",
-                    agent_did=self._config.agent_id,
-                    action=context.get("action", {}).get("type", "unknown"),
-                    outcome=decision.action,
-                    data={
-                        "classifier": decision.classifier,
-                        "reason": decision.reason,
-                        "confidence": decision.confidence,
-                        "deterministic": False,
-                    },
-                )
-
-            return decision
         except Exception as e:
             logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
             return AdvisoryDecision(action="allow", reason=f"Error: {e}")
+
+        if self._audit:
+            self._audit.log(
+                event_type="advisory_check",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome=decision.action,
+                data={
+                    "classifier": decision.classifier,
+                    "reason": decision.reason,
+                    "confidence": decision.confidence,
+                    "deterministic": False,
+                },
+            )
+
+        return decision
 
     @property
     def engine(self) -> PolicyEngine:
