@@ -284,6 +284,7 @@ ababa
 abprs
 abspath
 abstractmethod
+acall
 achat
 addinfourl
 addinivalue
@@ -833,6 +834,7 @@ pypdf
 pypistats
 pyproject
 pypy
+pyright
 pytest
 pytestmark
 pythonhosted
