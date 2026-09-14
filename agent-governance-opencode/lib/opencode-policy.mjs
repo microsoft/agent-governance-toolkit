@@ -412,7 +412,7 @@ function collectHttpUrlCandidates(value) {
   while (stack.length) {
     const current = stack.pop();
     if (typeof current === "string") {
-      const raw = current.trim();
+      const raw = preprocessUrlInput(current);
       if (!/^https?:/i.test(raw)) {
         continue;
       }
@@ -465,6 +465,24 @@ function collectHttpUrlCandidates(value) {
   }
 
   return candidates;
+}
+
+function preprocessUrlInput(value) {
+  const input = String(value);
+  let start = 0;
+  let end = input.length;
+  while (start < end && input.charCodeAt(start) <= 0x20) {
+    start += 1;
+  }
+  while (end > start && input.charCodeAt(end - 1) <= 0x20) {
+    end -= 1;
+  }
+  return [...input.slice(start, end)]
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code !== 0x09 && code !== 0x0a && code !== 0x0d;
+    })
+    .join("");
 }
 
 function hasAmbiguousHttpAuthorityBackslash(raw) {

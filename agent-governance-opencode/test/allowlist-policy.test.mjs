@@ -304,6 +304,9 @@ test("URL default deny canonicalizes alternate HTTP(S) spellings", async () => {
       for (const url of [
         "https:/collector.invalid/next",
         "https:collector.invalid/next",
+        "\u0000https://collector.invalid/next",
+        "ht\ttps://collector.invalid/next",
+        "htt\nps://collector.invalid/next",
       ]) {
         const denied = await evaluateOpenCodeTool(state, {
           tool: "webfetch",
@@ -322,7 +325,7 @@ test("URL governance rejects backslashes in the raw HTTP(S) authority", async ()
   await withPolicy(
     makePolicy({
       directResourcePolicies: {
-        urlDefaultEffect: "deny",
+        urlDefaultEffect: "allow",
         allowedDomains: ["api.github.com"],
       },
     }),
@@ -330,6 +333,8 @@ test("URL governance rejects backslashes in the raw HTTP(S) authority", async ()
       for (const url of [
         String.raw`https://api.github.com\@evil.com/`,
         String.raw`https:\\api.github.com/repos/microsoft/agent-governance-toolkit`,
+        "\u0000https:\\api.github.com/guarded",
+        "ht\ttps:\\api.github.com/guarded",
       ]) {
         const result = await evaluateOpenCodeTool(state, {
           tool: "webfetch",
@@ -423,15 +428,21 @@ test("canonicalized direct-resource denies apply when URL allowlists are disable
       },
     }),
     async (state, root) => {
-      const result = await evaluateOpenCodeTool(state, {
-        tool: "webfetch",
-        args: { url: "http:169.254.169.254/latest/meta-data/" },
-        cwd: root,
-        sessionId: "metadata-deny-without-url-allowlist",
-      });
+      for (const url of [
+        "http:169.254.169.254/latest/meta-data/",
+        "\u0000http://169.254.169.254/latest/meta-data/",
+        "ht\ttp://169.254.169.254/latest/meta-data/",
+      ]) {
+        const result = await evaluateOpenCodeTool(state, {
+          tool: "webfetch",
+          args: { url },
+          cwd: root,
+          sessionId: `metadata-deny-without-url-allowlist-${url}`,
+        });
 
-      assert.equal(result.effect, "deny");
-      assert.match(result.reason, /metadata endpoint remains blocked/i);
+        assert.equal(result.effect, "deny", url);
+        assert.match(result.reason, /metadata endpoint remains blocked/i);
+      }
     },
   );
 });
