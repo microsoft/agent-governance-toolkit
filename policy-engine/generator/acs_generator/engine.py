@@ -17,8 +17,8 @@ Return JSON only. Do not emit YAML. Do not emit complete Rego modules.
 Schema: {name, guarded_points, annotators, annotations, tools, rules, warnings}.
 Valid intervention points: %s.
 Annotator types: classifier, llm, endpoint. Decisions: allow, warn, deny, escalate, transform.
-To mutate the policy target (for example redaction) use decision "transform" with a single effect of type redact or replace and a path beginning with $policy_target; allow, warn, deny, and escalate must never carry effects.
-A transform path is rooted at the mediated policy target value itself, so use "$policy_target" to replace it; never append ".value".
+To mutate the policy target (for example redaction) use decision "transform" with a single effect of type redact or replace and a path beginning with $target; allow, warn, deny, and escalate must never carry effects.
+A transform path is rooted at the mediated policy target value itself, so use "$target" to replace it; never append ".value".
 Rule conditions are Rego body lines that may read only input.intervention_point, input.annotations.<annotator>, input.policy_target.value, input.tool.name, input.tool.id, and constants.
 Every rule must set "point" to one of the valid intervention points and include at least one condition that selects when it fires, unless its decision is "allow" with no effects. Never emit a rule with an empty point or empty conditions.
 """ % ", ".join(INTERVENTION_POINT_NAMES)

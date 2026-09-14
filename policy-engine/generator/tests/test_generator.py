@@ -27,7 +27,7 @@ def valid_plan() -> dict:
         ],
         "annotations": [
             {"point": "input", "annotator": "prompt_classifier", "from": "$.input.text"},
-            {"point": "output", "annotator": "output_classifier", "from": "$policy_target.text"},
+            {"point": "output", "annotator": "output_classifier", "from": "$target.text"},
         ],
         "tools": ["wire_transfer"],
         "rules": [
@@ -54,7 +54,7 @@ def valid_plan() -> dict:
                 "reason": "redact_account_identifier",
                 "message": "Account identifier redacted.",
                 "conditions": ["input.annotations.output_classifier.contains_account_identifier == true"],
-                "effects": [{"type": "replace", "path": "$policy_target.text", "value": "[REDACTED]"}],
+                "effects": [{"type": "replace", "path": "$target.text", "value": "[REDACTED]"}],
             },
         ],
     }
@@ -174,7 +174,7 @@ def test_empty_annotation_from_defaults_to_policy_target() -> None:
         prompt="Protect a bank agent.", out_dir=out, tool_inventory=tool_inventory(), strict=True
     )
 
-    assert result.manifest["intervention_points"]["input"]["annotations"]["prompt_classifier"]["from"] == "$policy_target"
+    assert result.manifest["intervention_points"]["input"]["annotations"]["prompt_classifier"]["from"] == "$target"
 
 
 def test_tools_are_derived_from_tool_identity_conditions() -> None:

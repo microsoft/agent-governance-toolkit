@@ -33,6 +33,10 @@ It also exposes two MCP tools:
 - `agt_policy_status`
 - `agt_policy_check_text`
 
+The stdio server accepts `Content-Length` frames and newline-delimited JSON.
+Headers are limited to 8 KiB; JSON messages are limited to 5 MiB in UTF-8 bytes,
+including when a message arrives across multiple reads.
+
 ## Important parity gaps
 
 - Claude slash commands are markdown-driven, so `/agt-governance:agt-status` and `/agt-governance:agt-check` are thin wrappers around MCP tools rather than deterministic code handlers.

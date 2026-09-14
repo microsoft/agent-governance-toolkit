@@ -45,8 +45,8 @@ Every manifest path has an explicit root and a small deterministic grammar: fiel
 |---|---|
 | `policy_target` | `$snap`, `$`, `$.field` |
 | `tool_name_from` | `$snap`, `$`, `$.field` |
-| annotation `from` | preliminary `$pi`, `$policy_target`, `$tool`, `$snap`, `$`, `$.field` |
-| `transform.path` | `$policy_target` only |
+| annotation `from` | preliminary `$pi`, `$target`, `$tool`, `$snap`, `$`, `$.field` |
+| `transform.path` | `$target` only |
 
 ## Annotators
 

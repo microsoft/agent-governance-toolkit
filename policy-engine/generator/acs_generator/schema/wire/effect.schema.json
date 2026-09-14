@@ -20,8 +20,8 @@
   "$defs": {
     "base_path": {
       "type": "string",
-      "pattern": "^\\$policy_target(\\.|\\[|$)",
-      "description": "JSON path rooted at $policy_target. Other roots are rejected by the core."
+      "pattern": "^\\$target(\\.|\\[|$)",
+      "description": "JSON path rooted at $target. Other roots are rejected by the core."
     },
     "replace": {
       "type": "object",

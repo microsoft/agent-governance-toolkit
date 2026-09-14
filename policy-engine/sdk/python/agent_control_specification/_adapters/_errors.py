@@ -8,6 +8,6 @@ class AdapterUnsupportedError(AgentControlBlocked):
 
     def __init__(self, message: str):
         result = InterventionPointResult(
-            Verdict(Decision.DENY, reason="runtime_error:adapter_unsupported", message=message)
+            Verdict(Decision.DENY, reason="host_error:adapter_unsupported", message=message)
         )
         super().__init__(InterventionPoint.INPUT, result)

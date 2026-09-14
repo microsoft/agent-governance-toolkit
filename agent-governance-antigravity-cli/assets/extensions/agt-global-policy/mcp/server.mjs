@@ -10,6 +10,7 @@ const SERVER_INFO = {
   version: "3.3.0",
 };
 const PROTOCOL_VERSION = "2024-11-05";
+const STATELESS_PROTOCOL_VERSION = "2026-07-28";
 const JSONRPC_VERSION = "2.0";
 const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
 const extensionRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -107,6 +108,18 @@ async function handleMessage(message) {
   }
 
   try {
+    if (message.method === "server/discover") {
+      writeResult(message.id, {
+        protocolVersion: STATELESS_PROTOCOL_VERSION,
+        capabilities: {
+          tools: {},
+        },
+        serverInfo: SERVER_INFO,
+        tools,
+      });
+      return;
+    }
+
     if (message.method === "initialize") {
       writeResult(message.id, {
         protocolVersion: PROTOCOL_VERSION,
@@ -123,13 +136,29 @@ async function handleMessage(message) {
       return;
     }
 
+    const requestMeta =
+      message.method === "tools/list" || message.method === "tools/call"
+        ? validateStatelessRequestMeta(message)
+        : undefined;
+    if (requestMeta === null) {
+      writeError(
+        message.id ?? null,
+        -32001,
+        "Invalid stateless request metadata: _meta.clientInfo requires non-empty name and version, and _meta.capabilities must be an object.",
+      );
+      return;
+    }
+
     if (message.method === "tools/list") {
       writeResult(message.id, { tools });
       return;
     }
 
     if (message.method === "tools/call") {
-      writeResult(message.id, await callTool(message.params ?? {}));
+      writeResult(
+        message.id,
+        withRequestMeta(await callTool(message.params ?? {}), requestMeta),
+      );
       return;
     }
 
@@ -194,6 +223,49 @@ async function callTool(params) {
     ],
     isError: true,
   };
+}
+
+function validateStatelessRequestMeta(request) {
+  if (!Object.prototype.hasOwnProperty.call(request, "_meta")) {
+    return undefined;
+  }
+
+  const meta = request._meta;
+  if (
+    !isObject(meta) ||
+    !isObject(meta.clientInfo) ||
+    !isNonEmptyString(meta.clientInfo.name) ||
+    !isNonEmptyString(meta.clientInfo.version) ||
+    !isObject(meta.capabilities)
+  ) {
+    return null;
+  }
+
+  return {
+    clientInfo: {
+      name: meta.clientInfo.name,
+      version: meta.clientInfo.version,
+    },
+    capabilities: meta.capabilities,
+  };
+}
+
+function withRequestMeta(result, requestMeta) {
+  if (requestMeta === undefined) {
+    return result;
+  }
+  return {
+    ...result,
+    _meta: requestMeta,
+  };
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function writeResult(id, result) {
