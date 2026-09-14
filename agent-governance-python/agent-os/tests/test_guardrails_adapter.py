@@ -148,3 +148,82 @@ def test_add_validator_and_reset() -> None:
     kernel.reset()
 
     assert kernel.get_history() == []
+
+
+def test_validator_returning_none_fails_closed() -> None:
+    """A validator that returns ``None`` carries no verdict at all.
+
+    ``_run_validators`` duck-types third-party results. ``None`` must not be
+    read as a pass, matching the exception handler that records an unusable
+    validator as a failure.
+    """
+
+    class _ReturnsNoneValidator:
+        name = "returns-none"
+
+        def validate(self, value: str) -> Any:
+            return None
+
+    result = _kernel(_ReturnsNoneValidator()).validate_input("unsafe")
+
+    assert not result.passed
+    assert result.failed_validators == ["returns-none"]
+
+
+def test_validator_result_without_outcome_keeps_its_error_message() -> None:
+    """A non-conforming result that carries an error must not lose it."""
+
+    class _ErrorOnlyResult:
+        error_message = "this content is unsafe"
+
+    class _ErrorOnlyValidator:
+        name = "error-only"
+
+        def validate(self, value: str) -> Any:
+            return _ErrorOnlyResult()
+
+    result = _kernel(_ErrorOnlyValidator()).validate_input("unsafe")
+
+    assert not result.passed
+    assert result.outcomes[0].error_message == "this content is unsafe"
+
+
+def test_explicit_none_outcome_fails_closed_with_accurate_message() -> None:
+    """``outcome`` present but ``None`` is also unusable.
+
+    The attribute exists here, so the diagnostic must not claim it is missing.
+    """
+
+    class _NullOutcomeResult:
+        outcome = None
+
+    class _NullOutcomeValidator:
+        name = "null-outcome"
+
+        def validate(self, value: str) -> Any:
+            return _NullOutcomeResult()
+
+    result = _kernel(_NullOutcomeValidator()).validate_input("unsafe")
+
+    assert not result.passed
+    assert "missing or None" in result.outcomes[0].error_message
+
+
+def test_conforming_duck_typed_results_are_unchanged() -> None:
+    """Results that do satisfy the protocol keep their existing verdicts."""
+
+    class _Conforming:
+        def __init__(self, outcome: str) -> None:
+            self.outcome = outcome
+            self.error_message = "" if outcome == "pass" else "blocked"
+
+    class _ConformingValidator:
+        def __init__(self, outcome: str) -> None:
+            self.name = f"conforming-{outcome}"
+            self._outcome = outcome
+
+        def validate(self, value: str) -> Any:
+            return _Conforming(self._outcome)
+
+    assert _kernel(_ConformingValidator("pass")).validate_input("x").passed
+    assert not _kernel(_ConformingValidator("fail")).validate_input("x").passed
