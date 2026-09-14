@@ -79,8 +79,9 @@ All four PRs overlap this PR's `package.json` and `package-lock.json` changes;
 this SDK bump with those files so the patched override is preserved.
 
 **The source fix already landed, the published artifact has not.**
-`agent-governance-typescript/package.json` on `main` pins `js-yaml` `5.2.3`,
-via #3623 on 2026-08-12, so the SDK source is clear. What these three packages
+`agent-governance-typescript/package.json` on `main` pins `js-yaml` `5.4.0`
+(`5.2.3` via #3623 on 2026-08-12, then `5.4.0` via #3868 on 2026-09-08),
+so the SDK source is clear. What these three packages
 resolve is the *published* `@microsoft/agent-governance-sdk` `5.0.0`, released
 to npm on 2026-08-03, whose manifest pins `js-yaml` `5.2.1`. That artifact is
 immutable. It is also moot while the override is in place, which is the point:
