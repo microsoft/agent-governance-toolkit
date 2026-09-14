@@ -38,7 +38,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "\\brm\\b[\\s\\S]*\\b-rf\\b",
+          "source": "\\brm\\b[\\s\\S]*\\s-(?:rf|fr)\\b",
           "flags": "i"
         }
       ]
