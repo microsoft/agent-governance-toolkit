@@ -105,7 +105,18 @@
     "binascii",
     "locmem",
     "altchars",
-    "filebased"
+    "filebased",
+    "werkzeug",
+    "wsgi",
+    "wsgiref",
+    "anyio",
+    "hypercorn",
+    "runserver",
+    "datastructures",
+    "jsonify",
+    "undecoded",
+    "webmcp",
+    "webmachinelearning"
   ],
   "ignorePaths": [
     "**/node_modules/**",

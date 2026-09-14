@@ -1,7 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-use agent_control_specification::{validate_acs_artifacts, OpaRegoRunner};
+use agent_control_specification::OpaRegoRunner;
+use agent_control_specification_core::validate_acs_artifacts;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::env;
