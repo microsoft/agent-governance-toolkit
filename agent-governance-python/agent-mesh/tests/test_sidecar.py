@@ -4,11 +4,14 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
+
+fastapi = pytest.importorskip("fastapi", reason="fastapi not installed (optional [server] extra)")
+from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture
@@ -35,6 +38,20 @@ class TestHealthProbes:
         data = resp.json()
         assert data["status"] == "ready"
         assert "policies_loaded" in data
+
+    def test_ready_reports_startup_warning_when_no_policies(self, caplog, tmp_path):
+        with patch.dict(os.environ, {"AGT_POLICY_DIR": str(tmp_path)}):
+            from agentmesh.server.sidecar import create_sidecar_app
+
+            app = create_sidecar_app()
+            with caplog.at_level(logging.WARNING):
+                with TestClient(app) as client:
+                    resp = client.get("/ready")
+
+        data = resp.json()
+        assert data["policies_loaded"] == 0
+        assert data["startup_warnings"]
+        assert any("Startup validation: no policies loaded" in msg for msg in caplog.messages)
 
     def test_healthz(self, client):
         resp = client.get("/healthz")
@@ -115,6 +132,7 @@ class TestPolicyEvaluation:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "reloaded"
+        assert "startup_warnings" in data
 
 
 class TestPolicyWithFiles:
