@@ -43,15 +43,25 @@ surface to consider.
 
 **This bump changes nothing about the `js-yaml` these packages install, and so
 clears no advisory.** The override holds the parser at `4.2.0` regardless of
-what the SDK declares, which means the two HIGH advisories in range before the
-bump are still in range after it.
+what the SDK declares, which means every HIGH advisory in range before the bump
+is still in range after it.
 
-`npm audit` against this branch's own tree reports both, and no others:
+`npm audit` against this branch's own tree reported two when this was written.
+A third was published on 2026-09-08 and also applies to `4.2.0`:
 
 - `GHSA-5p4m-2wfm-xmqj`, HIGH, quadratic CPU consumption in `!!omap`
   resolution, affecting `>= 4.0.0, < 4.3.1`, first patched in `4.3.1`.
 - `GHSA-52cp-r559-cp3m`, HIGH, YAML merge-key chains forcing quadratic CPU
   consumption, affecting `>= 4.0.0, < 4.3.0`, first patched in `4.3.0`.
+- `GHSA-2883-xcg3-v3hh`, HIGH, `maxTotalMergeKeys` failing to limit CPU use for
+  empty merge sources, affecting `>= 4.0.0, < 4.3.2`, first patched in `4.3.2`.
+  Published after this audit, so it is not in the `npm audit` output quoted
+  below.
+
+The third one changes which fix is sufficient. `#3843`, `#3844` and `#3875` each
+raise the override to `4.3.1`, which clears the first two and leaves
+`GHSA-2883-xcg3-v3hh` in range. Only `#3894`, which raises it to `4.3.2`, clears
+all three.
 
 `GHSA-pm4m-ph32-ghv5` (HIGH, `>= 5.0.0, <= 5.2.1`, first patched in `5.2.2`)
 does **not** apply here, because `5.2.1` is never installed. Neither do
