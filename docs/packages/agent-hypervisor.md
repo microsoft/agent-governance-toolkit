@@ -18,8 +18,9 @@ owner: agt-maintainers
 [![Benchmarks](https://img.shields.io/badge/benchmarks-available-blue)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-hypervisor/benchmarks)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
-> [!IMPORTANT]
-> `agent-hypervisor` is deprecated as a standalone PyPI package. For new work, install `agent-governance-toolkit-core` or the full toolkit. The source in this directory remains tested and documents the runtime features that are implemented here.
+!!! important
+
+    `agent-hypervisor` is deprecated as a standalone PyPI package. For new work, install `agent-governance-toolkit-core` or the full toolkit. The source in this directory remains tested and documents the runtime features that are implemented here.
 
 [Quick start](#quick-start) | [Why a hypervisor](#why-agent-hypervisor) | [Configuration](#configuration) | [Architecture](#architecture) | [Key features](#key-features) | [REST API](#rest-api) | [Ecosystem](#ecosystem)
 
@@ -380,43 +381,43 @@ flowchart LR
 
 ## Key Features
 
-<table>
-<tr>
-<td width="50%">
+<table markdown="block">
+<tr markdown="block">
+<td width="50%" markdown="block">
 
 ### 🔐 Execution Rings
 Hardware-inspired privilege model (Ring 0-3). Agents earn ring access based on trust score. Real-time demotion on trust drops. Sudo elevation with TTL. Breach detection with circuit breakers.
 
 </td>
-<td width="50%">
+<td width="50%" markdown="block">
 
 ### 🛑 Kill Switch
 Graceful termination with saga step handoff to substitute agents. Rate limiting per agent per ring (sandbox: 5 rps, root: 100 rps). Stop runaway agents without data loss.
 
 </td>
 </tr>
-<tr>
-<td width="50%">
+<tr markdown="block">
+<td width="50%" markdown="block">
 
 ### 🔄 Saga Compensation
 Multi-step transactions with timeout enforcement, retry with backoff, and reverse-order compensation of committed steps on failure.
 
 </td>
-<td width="50%">
+<td width="50%" markdown="block">
 
 ### 📋 Hash-Chained Audit
 Forensic-grade delta trails. Semantic diffs, hash-chained entries, and a summary commitment (root hash) returned at session end.
 
 </td>
 </tr>
-<tr>
-<td width="50%">
+<tr markdown="block">
+<td width="50%" markdown="block">
 
 ### 📡 Observability
 Structured event bus emits typed events for every action. Causal trace IDs with full delegation-tree encoding. Version counters for causal consistency. **Prometheus metrics collector** for ring transitions and breaches. **OpenTelemetry span exporter** for saga-to-span mapping with distributed trace context.
 
 </td>
-<td width="50%">
+<td width="50%" markdown="block">
 
 ### 🧩 Session Isolation
 Shared Session Object with a per-session virtual file system, snapshots, and vector-clock causal ordering. DID-bound identity keeps rogue agents from corrupting other sessions.
@@ -425,7 +426,7 @@ Shared Session Object with a per-session virtual file system, snapshots, and vec
 </tr>
 </table>
 
-<details>
+<details markdown>
 <summary><b>📖 Feature details (click to expand)</b></summary>
 
 ### 🔐 Execution Rings, Deep Dive
@@ -594,7 +595,7 @@ MIT, see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/ma
 
 ---
 
-<div align="center">
+<div align="center" markdown>
 
 **[Agent OS](https://github.com/microsoft/agent-governance-toolkit)** | **[AgentMesh](https://github.com/microsoft/agent-governance-toolkit)** | **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** | **[Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)**
 

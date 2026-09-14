@@ -25,7 +25,7 @@ internally consistent.
   detection reported and left a secret in place.
 - New credential patterns cover the AWS secret access key, Azure Storage SAS
   token, and Slack, Google, and Stripe tokens.
-- Prefix-anchored patterns use a `(?<![A-Za-z0-9])` left anchor instead of `\b`,
+- Prefix-anchored patterns use a <code>(?&lt;![A-Za-z0-9])</code> left anchor instead of `\b`,
   so a secret glued to a preceding word character (for example `session_sk-...`)
   is detected. Under redact-and-allow this matters because a secret the scanner
   cannot see would otherwise be returned when it co-occurs with a detected one.
@@ -49,7 +49,7 @@ in tool output.
 | Secret coverage | **Strengthened.** AWS secret keys, Azure SAS tokens, and Slack, Google, and Stripe tokens are now detected and redacted. |
 | SANITIZE behavior | **Changed.** Credential-bearing responses are returned redacted rather than hard-blocked. A fail-closed guard re-checks the redacted output and blocks if a credential remains, so relaxing the hard block cannot leak a detected secret. |
 | Denial-of-service | **Strengthened.** The Azure SAS pattern matches the signature value directly instead of a lazy cross-parameter span that scanned to end from each marker, removing a super-linear backtracking path on untrusted input. |
-| Secret gluing | **Strengthened.** Prefix-anchored patterns use a `(?<![A-Za-z0-9])` left anchor instead of a word boundary, so a secret joined directly to a preceding word character (for example `session_sk-...`) is now detected and redacted. Previously such a secret was missed, and under redact-and-allow it could leak when it co-occurred with a separately detected credential. |
+| Secret gluing | **Strengthened.** Prefix-anchored patterns use a <code>(?&lt;![A-Za-z0-9])</code> left anchor instead of a word boundary, so a secret joined directly to a preceding word character (for example `session_sk-...`) is now detected and redacted. Previously such a secret was missed, and under redact-and-allow it could leak when it co-occurred with a separately detected credential. |
 | Log and audit exposure | **Unchanged.** Threats and the new `scan_and_redact` API expose only credential type names, never raw secret values; `redact` logs a span count only. |
 | PII handling | **Unchanged.** PII is still detected and hard-blocked; PII matches that fall inside a credential span are suppressed so a secret is not double-reported. |
 
