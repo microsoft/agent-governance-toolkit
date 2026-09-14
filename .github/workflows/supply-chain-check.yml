@@ -279,7 +279,7 @@ jobs:
           if ! [[ "$BASE_REF" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ "$BASE_REF" == -* ]]; then
             echo "::error::refusing unsafe BASE_REF: $BASE_REF"; exit 1
           fi
-          git fetch --no-tags --depth=50 origin -- "$BASE_REF"
+          git fetch --no-tags origin -- "$BASE_REF"
           # Each token becomes its own --skip-pattern arg so the script's
           # per-pattern regex validation runs over each value individually.
           extra_args=()
