@@ -305,7 +305,7 @@ def _post_model_effect_applied(result: Any, mode: EnforcementMode | str) -> bool
 def _effect_applied(result: Any, mode: EnforcementMode | str) -> bool:
     return (
         EnforcementMode(mode) == EnforcementMode.ENFORCE
-        and result.verdict.decision.applies_effects
+        and result.verdict.decision.applies_transform
         and (result.transformed_policy_target_applied or result.transformed_policy_target is not None)
     )
 

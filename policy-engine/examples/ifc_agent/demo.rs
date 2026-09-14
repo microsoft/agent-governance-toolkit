@@ -1,4 +1,4 @@
-use agent_control_specification::{AgentControl, Decision, EnforcementMode, InterventionPoint};
+use agent_control_specification::{AgentControl, Decision, EnforcementMode, InterceptionPoint};
 use serde_json::json;
 use std::{env, path::Path};
 
@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let control = AgentControl::from_path("manifest.yaml")?;
 
     let allowed = control.evaluate_intervention_point(
-        InterventionPoint::PreToolCall,
+        InterceptionPoint::PreToolCall,
         json!({
             "ifc": {"source_labels": ["public"]},
             "tool_call": {
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // dominates the propagated public label, so the flow is allowed and the
     // label propagates again unchanged.
     let next_turn = control.evaluate_intervention_point(
-        InterventionPoint::PreToolCall,
+        InterceptionPoint::PreToolCall,
         json!({
             "ifc": {"source_labels": propagated_labels},
             "tool_call": {
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(next_turn.verdict.result_labels, vec!["public".to_string()]);
 
     let denied = control.evaluate_intervention_point(
-        InterventionPoint::PreToolCall,
+        InterceptionPoint::PreToolCall,
         json!({
             "ifc": {"source_labels": ["confidential"]},
             "tool_call": {

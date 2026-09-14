@@ -16,16 +16,19 @@ Environment variables:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from agentmesh.governance.policy import PolicyEngine as _PolicyEngine
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from agentmesh.governance.policy import PolicyEngine as _PolicyEngine
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +65,7 @@ def create_sidecar_app() -> FastAPI:
         return {
             "status": "ready",
             "component": "governance-sidecar",
-            "policies_loaded": _loaded_count,
+            **_policy_state[1].model_dump(exclude={"files"}),
         }
 
     @app.get("/healthz", tags=["health"])
@@ -81,7 +84,7 @@ def create_sidecar_app() -> FastAPI:
     async def metrics_endpoint() -> PlainTextResponse:
         """Prometheus exposition format metrics."""
         try:
-            from prometheus_client import generate_latest, REGISTRY
+            from prometheus_client import REGISTRY, generate_latest
 
             output = generate_latest(REGISTRY).decode("utf-8")
             uptime = time.monotonic() - _start_time
@@ -122,28 +125,37 @@ def create_sidecar_app() -> FastAPI:
             "resource": req.resource,
             **req.context,
         }
-        result: PolicyDecision = _engine.evaluate(agent_did=req.agent_did, context=ctx)
+        engine, generation = _policy_state
+        result: PolicyDecision = engine.evaluate(agent_did=req.agent_did, context=ctx)
         return EvaluateResponse(
             decision=result.action,
             matched_rule=result.matched_rule,
             reason=result.reason,
             policy_name=result.policy_name,
+            policy_set_id=generation.policy_set_id,
+            policy_set_status=generation.policy_set_status,
         )
 
     @app.get("/api/v1/policies", tags=["policy"])
     async def list_policies() -> dict[str, Any]:
         """List loaded policies."""
+        generation = _policy_state[1]
         return {
-            "total_loaded": _loaded_count,
+            "total_loaded": generation.policies_loaded,
             "policy_dir": _policy_dir,
             "version": VERSION,
+            **generation.model_dump(),
         }
 
     @app.post("/api/v1/policy/reload", tags=["policy"])
     async def reload_policies() -> dict[str, Any]:
         """Hot-reload policies from disk."""
-        _load_policies()
-        return {"status": "reloaded", "total_loaded": _loaded_count}
+        generation = _load_policies()
+        return {
+            "status": "reloaded",
+            "total_loaded": generation.policies_loaded,
+            **generation.model_dump(exclude={"files"}),
+        }
 
     return app
 
@@ -163,50 +175,111 @@ class EvaluateResponse(BaseModel):
     matched_rule: str | None = None
     reason: str = ""
     policy_name: str | None = None
+    policy_set_id: str
+    policy_set_status: Literal["complete", "degraded", "not_loaded"]
+
+
+class PolicyFileLoad(BaseModel):
+    """One discovered file, without raw policy content or exception messages."""
+
+    model_config = ConfigDict(frozen=True)
+    name: str
+    content_sha256: str | None
+    status: Literal["loaded", "failed"]
+    error_type: str | None = None
+
+
+class PolicyLoadGeneration(BaseModel):
+    """Immutable manifest of a completed load; counts refer to files, not unique names."""
+
+    model_config = ConfigDict(frozen=True)
+    policy_set_id: str
+    policy_set_status: Literal["complete", "degraded", "not_loaded"]
+    policies_discovered: int
+    policies_loaded: int
+    policies_failed: int
+    directory_status: Literal["available", "unavailable", "not_loaded"]
+    files: tuple[PolicyFileLoad, ...]
 
 
 # ── Internal state ───────────────────────────────────────────────────
 
 _policy_dir = os.getenv("AGT_POLICY_DIR", "/etc/agt/policies")
-_loaded_count = 0
+_policy_state = (
+    _PolicyEngine(),
+    PolicyLoadGeneration(
+        policy_set_id="sha256:" + hashlib.sha256(b"not_loaded").hexdigest(),
+        policy_set_status="not_loaded",
+        policies_discovered=0,
+        policies_loaded=0,
+        policies_failed=0,
+        directory_status="not_loaded",
+        files=(),
+    ),
+)
 
-# Initialize engine eagerly so tests work without startup event
-_engine = _PolicyEngine()
 
-
-def _load_policies() -> None:
-    """Load policies from AGT_POLICY_DIR."""
-    global _engine, _loaded_count, _policy_dir
+def _load_policies() -> PolicyLoadGeneration:
+    """Build then publish an engine and its content-addressed load manifest together."""
+    global _policy_state, _policy_dir
 
     from agentmesh.governance.policy import PolicyEngine
 
     _policy_dir = os.getenv("AGT_POLICY_DIR", "/etc/agt/policies")
-    _engine = PolicyEngine()
+    engine = PolicyEngine()
 
     policy_path = Path(_policy_dir)
-    if not policy_path.exists():
-        logger.warning("Policy directory %s does not exist", _policy_dir)
-        _loaded_count = 0
-        return
+    files = []
+    directory_status: Literal["available", "unavailable"] = "available"
+    try:
+        # iterdir surfaces discovery errors instead of silently claiming an empty load.
+        discovered = list(policy_path.iterdir())
+    except OSError:
+        discovered = []
+        directory_status = "unavailable"
+        logger.warning("Policy directory is unavailable")
 
-    count = 0
-    for f in sorted(policy_path.glob("*.yaml")):
-        try:
-            _engine.load_yaml(f.read_text())
-            count += 1
-            logger.info("Loaded policy: %s", f.name)
-        except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
+    # Preserve YAML-before-JSON precedence for duplicate policy names.
+    for suffix, loader in ((".yaml", engine.load_yaml), (".json", engine.load_json)):
+        for f in sorted(p for p in discovered if p.suffix == suffix):
+            digest = None
+            error_type = None
+            try:
+                content = f.read_bytes()
+                digest = hashlib.sha256(content).hexdigest()
+                loader(content.decode("utf-8"))
+            except Exception as exc:
+                error_type = type(exc).__name__
+                logger.warning("Skipped policy %r: %s", f.name, error_type)
+            files.append(
+                PolicyFileLoad(
+                    name=f.name.encode("unicode_escape").decode("ascii"),
+                    content_sha256=digest,
+                    status="failed" if error_type else "loaded",
+                    error_type=error_type,
+                )
+            )
 
-    for f in sorted(policy_path.glob("*.json")):
-        try:
-            _engine.load_json(f.read_text())
-            count += 1
-        except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
-
-    _loaded_count = count
-    logger.info("Loaded %d policies from %s", count, _policy_dir)
+    manifest = {
+        "directory_status": directory_status,
+        "files": [entry.model_dump() for entry in files],
+    }
+    canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
+    failed = sum(entry.status == "failed" for entry in files)
+    generation = PolicyLoadGeneration(
+        policy_set_id="sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        policy_set_status="degraded" if failed or directory_status == "unavailable" else "complete",
+        policies_discovered=len(files),
+        policies_loaded=len(files) - failed,
+        policies_failed=failed,
+        directory_status=directory_status,
+        files=tuple(files),
+    )
+    serialized = generation.model_dump_json()
+    _policy_state = (engine, generation)
+    # ponytail: retain historical manifests through deployment logs, not an unbounded cache.
+    logger.info("Policy load generation: %s", serialized)
+    return generation
 
 
 def _bootstrap_telemetry() -> None:
