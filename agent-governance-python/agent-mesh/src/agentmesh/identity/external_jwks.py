@@ -26,7 +26,7 @@ import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, padding, rsa, utils
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 _DEFAULT_JWKS_TTL_SECONDS = 300
@@ -121,6 +121,24 @@ class TrustedEndpoint(BaseModel):
     group_claim_path: Optional[Union[str, list[str]]] = None
     audience: Optional[Union[str, list[str]]] = None
 
+    @field_validator("audience")
+    @classmethod
+    def _audience_not_empty(cls, v: Optional[Union[str, list[str]]]):
+        # An empty string is a real (if unusual) `aud` value some tokens
+        # carry - configuring audience="" would match it, silently
+        # trusting a token that asserts no audience at all. An empty
+        # list is the opposite footgun: it can never intersect anything,
+        # so every token is rejected with no signal that the field is
+        # misconfigured rather than intentionally locking things down.
+        # Both look "configured" while doing something the caller almost
+        # certainly didn't intend - reject them outright instead.
+        if v is not None and len(v) == 0:
+            raise ValueError(
+                "audience must not be empty - omit it entirely to accept "
+                "a token for any client, rather than an empty string or list"
+            )
+        return v
+
 
 class FederationPolicy(BaseModel):
     """Federation policy per ADR-0007 — trusted endpoints, caching, TOFU/open opt-in.
@@ -172,6 +190,22 @@ class ExternalIdentity(BaseModel):
         against a *list* value silently never matches. Against this dict
         shape, `caller_roles.admin` resolves through _get_nested and is
         evaluated as a plain (order-independent) boolean attribute.
+
+        That dict-key addressing only reaches names matching `\\w+`
+        (letters, digits, underscore) — no dots, slashes, or hyphens —
+        since PolicyRule's bare-attribute matcher both splits the path on
+        "." and requires each segment to match `\\w+` (governance/policy.py:
+        241, 250). Keycloak's own `groups` claim is typically `/path`
+        values (e.g. `/engineering/compliance`), and its default roles
+        include hyphenated names like `default-roles-company`; neither is
+        addressable this way, and a rule written against one doesn't
+        error — it just never matches (an allow rule silently denies, a
+        deny rule silently lets the call through). There is no list/dict
+        membership operator to fall back on yet — tracked in #3924. Only
+        write rules against role/group names that are already
+        identifier-shaped; resolve anything else upstream (e.g. via
+        role_claim_path/group_claim_path extraction) before it reaches
+        govern().
 
         There is no singular `caller_role`: an earlier version picked
         `roles[0]`, but role order in the verified token is whatever the
@@ -244,8 +278,12 @@ class ExternalJWKSProvider:
         if not isinstance(exp, (int, float)) or exp < time.time():
             return None
 
+        # nbf is optional (RFC 7519 §4.1.5) - absence means valid
+        # immediately - but a *present* one is checked the same way exp
+        # is above: a non-numeric value fails closed rather than being
+        # silently ignored as if unset.
         nbf = payload.get("nbf")
-        if isinstance(nbf, (int, float)) and nbf > time.time():
+        if nbf is not None and (not isinstance(nbf, (int, float)) or nbf > time.time()):
             return None
 
         # A verified signature only proves the issuer minted this token,
@@ -328,7 +366,15 @@ class ExternalJWKSProvider:
         if use is not None and use != "sig":
             return False
         key_ops = jwk.get("key_ops")
-        if key_ops is not None and "verify" not in key_ops:
+        if key_ops is not None and (
+            not isinstance(key_ops, list) or "verify" not in key_ops
+        ):
+            # Fail closed on any non-list shape rather than falling into
+            # `"verify" not in key_ops` on a bare string - a malformed
+            # value like "noverify" would pass that check via substring
+            # match ("verify" IS a substring of "noverify"), and a
+            # non-iterable value like an int/bool would raise TypeError
+            # out of this remote-controlled document instead of denying.
             return False
 
         kty = jwk.get("kty")

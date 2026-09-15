@@ -371,7 +371,9 @@ policy = FederationPolicy(
     ],
 )
 provider = ExternalJWKSProvider(policy=policy)
-identity = await provider.verify(token)  # None if verification fails
+identity = await provider.verify(token)
+if identity is None:
+    raise PermissionError("token rejected: signature, expiry, or audience check failed")
 
 # Bridge the verified role/group claims into govern()'s policy context.
 # caller_roles/caller_groups are dicts ({"admin": True, ...}), not lists -
@@ -379,6 +381,18 @@ identity = await provider.verify(token)  # None if verification fails
 # "caller_roles.auditor"), which govern()'s YAML DSL evaluates as a plain
 # boolean attribute. The wrapped function must accept the identity's
 # kwargs even where it ignores them, e.g. via **policy_ctx.
+#
+# Only names matching \w+ (letters, digits, underscore - no dots, slashes,
+# or hyphens) are addressable this way, since the DSL has no list/dict
+# membership operator (tracked in #3924) and its bare-attribute matcher
+# both splits on "." and requires \w+ segments. Keycloak's own group
+# claims are typically "/path" values (e.g. "/engineering/compliance")
+# and it mixes in hyphenated default roles like "default-roles-company" -
+# neither is addressable, and a rule written against one doesn't error,
+# it just never matches (an allow rule silently denies; a deny rule
+# silently lets the call through). Extract only identifier-shaped
+# roles/groups via role_claim_path/group_claim_path, or resolve the
+# mismatch upstream, until #3924 lands.
 def read_doc(doc_id: str, **policy_ctx):
     ...
 

@@ -14,6 +14,7 @@ from unittest.mock import patch
 from urllib.parse import urlparse
 
 import httpx
+import pydantic
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -669,6 +670,26 @@ async def test_verify_accepts_jwk_with_no_use_or_key_ops():
     assert identity is not None
 
 
+@pytest.mark.parametrize("bad_key_ops", [123, True, "noverify"])
+@pytest.mark.asyncio
+async def test_verify_rejects_non_list_key_ops(bad_key_ops):
+    """key_ops must be a real list, not just something "verify" not in
+    happens to accept: a bare int/bool raised TypeError out of the
+    remote-controlled JWKS instead of failing closed, and a string like
+    "noverify" passed the substring check ("verify" IS a substring of
+    "noverify") and let the key verify anyway."""
+    private_key, jwk = _make_rsa_keypair()
+    del jwk["use"]
+    jwk["key_ops"] = bad_key_ops
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
 @pytest.mark.asyncio
 async def test_verify_survives_non_string_jwk_members_typeerror():
     """A malformed JWKS entry (e.g. a numeric or null 'n') must fail
@@ -801,6 +822,23 @@ async def test_verify_accepts_any_audience_when_unconfigured():
     assert identity is not None
 
 
+@pytest.mark.parametrize("empty_audience", ["", []])
+def test_trusted_endpoint_rejects_empty_audience(empty_audience):
+    """audience="" would match a token whose own aud is also "" (a real,
+    if unusual, claim value) - silently trusting a token that asserts no
+    audience at all. audience=[] is the opposite footgun: it can never
+    intersect anything, so every token is rejected with no signal that
+    the field is misconfigured rather than intentionally locking things
+    down. Both look configured while doing something almost certainly
+    unintended - reject at construction instead of accepting silently."""
+    with pytest.raises(pydantic.ValidationError):
+        TrustedEndpoint(
+            domain=PARTNER_DOMAIN,
+            jwks_url=PARTNER_JWKS_URL,
+            audience=empty_audience,
+        )
+
+
 @pytest.mark.asyncio
 async def test_verify_rejects_future_nbf():
     private_key, jwk = _make_rsa_keypair()
@@ -837,6 +875,22 @@ async def test_verify_accepts_token_with_no_nbf_claim():
     with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
         identity = await provider.verify(token)
     assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_non_numeric_nbf():
+    """A present-but-malformed nbf must fail closed the same way a
+    malformed exp already does, not be treated as though it were
+    absent - a string "9999999999" is truthy-adjacent but isn't the
+    numeric type verify() actually compares against time.time()."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900, "nbf": "9999999999"}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
 
 
 # ── Role/group claim extraction ──────────────────────────────────────
@@ -1092,6 +1146,71 @@ rules:
         safe_read(**engineer.as_policy_kwargs(), doc_id="COMP-099")
 
 
+def test_as_policy_kwargs_group_paths_and_hyphenated_roles_never_match():
+    """Pins the documented limit (as_policy_kwargs docstring and
+    docs/identity.md): PolicyRule's bare-attribute matcher splits the
+    condition on "." and requires each segment to match \\w+, so it can
+    never address a Keycloak-shaped "/engineering" group path or a
+    hyphenated role like "default-roles-company" - not a crash, just a
+    condition that never matches. That makes an allow rule against one
+    silently deny, and a deny rule against one silently let the call
+    through - both pinned here so the limitation stays visible rather
+    than reappearing as a surprise."""
+    from agentmesh.governance import GovernanceDenied, govern
+
+    identity = ExternalIdentity(
+        did_web="did:web:z",
+        jwks_url=PARTNER_JWKS_URL,
+        issuer_domain=PARTNER_DOMAIN,
+        federation_tier="verified_partner",
+        verified_at=datetime.now(timezone.utc),
+        token_expires_at=datetime.now(timezone.utc),
+        roles=["default-roles-company"],
+        groups=["/engineering"],
+    )
+    kwargs = identity.as_policy_kwargs()
+    assert kwargs["caller_groups"] == {"/engineering": True}
+    assert kwargs["caller_roles"] == {"default-roles-company": True}
+
+    def action(**policy_ctx):
+        return "executed"
+
+    allow_on_group = govern(
+        action,
+        policy="""
+apiVersion: governance.toolkit/v1
+name: allow-engineering-group
+default_action: deny
+rules:
+  - name: allow-engineering
+    condition: "caller_groups./engineering"
+    action: allow
+""",
+    )
+    # The condition can't address the "/engineering" key at all, so the
+    # allow rule never fires and the deny default takes over - despite
+    # the caller actually holding that group.
+    with pytest.raises(GovernanceDenied):
+        allow_on_group(**kwargs)
+
+    deny_on_role = govern(
+        action,
+        policy="""
+apiVersion: governance.toolkit/v1
+name: deny-non-employee-roles
+default_action: allow
+rules:
+  - name: deny-default-role
+    condition: "caller_roles.default-roles-company"
+    action: deny
+""",
+    )
+    # Same limitation from the other side: the deny rule can't address
+    # the hyphenated key either, so it never fires and the call executes
+    # even though the caller does hold that exact role.
+    assert deny_on_role(**kwargs) == "executed"
+
+
 @pytest.mark.asyncio
 async def test_docs_identity_md_oidc_example_runs_as_written():
     """Pins docs/identity.md's "OIDC for Cross-Org Identity Verification"
@@ -1126,7 +1245,8 @@ async def test_docs_identity_md_oidc_example_runs_as_written():
     provider = ExternalJWKSProvider(policy=policy)
     with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
         identity = await provider.verify(token)
-    assert identity is not None
+    if identity is None:
+        raise PermissionError("token rejected: signature, expiry, or audience check failed")
 
     def read_doc(doc_id: str, **policy_ctx):
         return {"doc_id": doc_id}
@@ -1140,3 +1260,44 @@ rules: []
     safe = govern(read_doc, policy=policy_yaml)
     result = safe(**identity.as_policy_kwargs(), doc_id="COMP-042")
     assert result == {"doc_id": "COMP-042"}
+
+
+@pytest.mark.asyncio
+async def test_docs_identity_md_oidc_example_raises_permission_error_on_rejection():
+    """The other half of the same doc example: before the fix, a
+    verification failure (here, wrong audience) meant identity was None
+    and the example's later identity.as_policy_kwargs() call raised
+    AttributeError on the None itself - a confusing crash instead of the
+    doc's own promised PermissionError for a rejected token."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    token = _sign_jwt_rs256(
+        private_key,
+        {
+            "iss": PARTNER_DOMAIN,
+            "sub": "x",
+            "exp": now + 900,
+            "aud": "some-other-client",
+            "realm_access": {"roles": ["auditor"]},
+        },
+    )
+
+    policy = FederationPolicy(
+        trusted_endpoints=[
+            TrustedEndpoint(
+                domain=PARTNER_DOMAIN,
+                jwks_url=PARTNER_JWKS_URL,
+                trust_tier="verified_partner",
+                audience="agent-mesh-service",
+            ),
+        ],
+    )
+    provider = ExternalJWKSProvider(policy=policy)
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+
+    with pytest.raises(PermissionError):
+        if identity is None:
+            raise PermissionError(
+                "token rejected: signature, expiry, or audience check failed"
+            )
