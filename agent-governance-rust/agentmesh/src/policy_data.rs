@@ -101,7 +101,25 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
         let boolean_tag = tag
             .as_ref()
             .is_some_and(|tag| tag.is_yaml_core_schema_tag("bool"));
-        if style != ScalarStyle::Plain && !boolean_tag {
+        let kind = tag.as_ref().and_then(|tag| tag.core_suffix());
+        let string_tag = kind == Some("str")
+            || tag
+                .as_ref()
+                .is_some_and(|tag| tag.handle() == "!" && tag.suffix().is_empty());
+        let integer_tag = kind == Some("int");
+        let float_tag = kind == Some("float");
+        let null_tag = kind == Some("null");
+        let invalid = |message: &str| {
+            YamlError::custom(format!(
+                "{message} at line {}, column {}",
+                span.start.line(),
+                span.start.col() + 1
+            ))
+        };
+        if tag.is_some() && !boolean_tag && !string_tag && !integer_tag && !float_tag && !null_tag {
+            return Err(invalid("unsupported YAML scalar tag"));
+        }
+        if style != ScalarStyle::Plain && tag.is_none() {
             continue;
         }
         let boolean = if tag
@@ -116,11 +134,30 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
         } else {
             None
         };
-        if tag.is_some() && boolean.is_none() {
-            continue;
+        if boolean_tag && boolean.is_none() {
+            return Err(invalid("invalid YAML boolean"));
         }
-        let mixed_boolean = boolean.is_none()
-            && (value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false"));
+        let mut explicit_scalar = None;
+        if null_tag {
+            if !matches!(value.as_ref(), "" | "~" | "null" | "Null" | "NULL") {
+                return Err(invalid("invalid YAML null"));
+            }
+            explicit_scalar = Some("null".to_string());
+        }
+        if float_tag {
+            let number = value
+                .parse::<f64>()
+                .map_err(|_| invalid("invalid YAML float"))?;
+            if !number.is_finite() {
+                return Err(invalid("YAML numbers must be finite"));
+            }
+            explicit_scalar =
+                Some(serde_json::to_string(&number).map_err(|_| invalid("invalid YAML float"))?);
+        }
+        let mixed_keyword = (boolean.is_none()
+            && (value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false")))
+            || (value.eq_ignore_ascii_case("null")
+                && !matches!(value.as_ref(), "null" | "Null" | "NULL"));
         let unsigned = value.strip_prefix(['+', '-']).unwrap_or(&value);
         let leading_zero = unsigned.len() > 1
             && unsigned.starts_with('0')
@@ -134,7 +171,12 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
         } else {
             (unsigned, 10)
         };
-        if !leading_zero && !digits.is_empty() && digits.chars().all(|ch| ch.is_digit(radix)) {
+        if !string_tag
+            && !float_tag
+            && !leading_zero
+            && !digits.is_empty()
+            && digits.chars().all(|ch| ch.is_digit(radix))
+        {
             let magnitude = u64::from_str_radix(digits, radix).map_err(|_| {
                 YamlError::custom("YAML integer exceeds the supported 64-bit range")
             })?;
@@ -143,6 +185,16 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
                     "YAML integer exceeds the supported 64-bit range",
                 ));
             }
+            if integer_tag {
+                explicit_scalar = Some(if value.starts_with('-') {
+                    format!("-{magnitude}")
+                } else {
+                    magnitude.to_string()
+                });
+            }
+        }
+        if integer_tag && explicit_scalar.is_none() {
+            return Err(invalid("invalid YAML integer"));
         }
         let separated_number = unsigned.contains('_')
             && unsigned.starts_with(|ch: char| ch.is_ascii_digit() || ch == '.')
@@ -158,7 +210,9 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
             && !separated_number
             && !legacy_prefix
             && boolean.is_none()
-            && !mixed_boolean
+            && !mixed_keyword
+            && !string_tag
+            && explicit_scalar.is_none()
         {
             continue;
         }
@@ -166,7 +220,7 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
             .byte_range()
             .ok_or_else(|| YamlError::custom("missing YAML scalar source range"))?;
         let mut prefix_start = copied;
-        if boolean_tag {
+        if tag.is_some() && !string_tag {
             let start = span
                 .tag_start()
                 .and_then(|marker| marker.byte_offset())
@@ -188,10 +242,22 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
             .get(prefix_start..range.start)
             .ok_or_else(|| YamlError::custom("invalid YAML scalar source range"))?;
         output.push_str(prefix);
-        if let Some(boolean) = boolean {
+        if string_tag && range.is_empty() {
+            output.push(' ');
+        }
+        if let Some(explicit_scalar) = explicit_scalar {
+            output.push_str(&explicit_scalar);
+        } else if let Some(boolean) = boolean {
             output.push_str(boolean);
         } else {
-            output.push_str(&serde_json::to_string(value.as_ref()).map_err(YamlError::custom)?);
+            output.push_str(
+                &serde_json::to_string(if string_tag && range.is_empty() {
+                    ""
+                } else {
+                    value.as_ref()
+                })
+                .map_err(YamlError::custom)?,
+            );
         }
         copied = range.end;
     }

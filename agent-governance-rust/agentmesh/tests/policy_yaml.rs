@@ -86,6 +86,12 @@ fn scalar_types_and_case_are_not_coerced_during_matching() {
         ("!!bool TRUE", json!(true), json!("TRUE")),
         ("!!bool \"TRUE\"", json!(true), json!("TRUE")),
         ("!!str True", json!("True"), json!(true)),
+        ("!!str null", json!("null"), json!(null)),
+        ("!!str", json!(""), json!(null)),
+        ("!!int \"7\"", json!(7), json!("7")),
+        ("!!float \"7\"", json!(7.0), json!(7)),
+        ("!!null NULL", json!(null), json!("NULL")),
+        ("nUlL", json!("nUlL"), json!(null)),
         ("7", json!(7), json!(7.0)),
         ("7.0", json!(7.0), json!(7)),
         ("null", json!(null), json!("null")),
@@ -109,7 +115,7 @@ fn scalar_types_and_case_are_not_coerced_during_matching() {
         let engine = PolicyEngine::new();
         engine
             .load_from_yaml(&policy(&format!("    value: {yaml}")))
-            .unwrap();
+            .unwrap_or_else(|error| panic!("{yaml}: {error}"));
         assert!(
             matches!(
                 engine.evaluate("run", Some(&context(json!({"value": matching})))),
@@ -142,6 +148,13 @@ fn unsupported_values_and_ambiguous_maps_are_errors_not_default_policies() {
         "    value: 18446744073709551616",
         "    value: -9223372036854775809",
         "    value: 0x10000000000000000",
+        "    value: !!bool null",
+        "    value: !!int null",
+        "    value: !!null garbage",
+        "    value: !custom null",
+        "    value: !!float null",
+        "    value: !!int \"1_000\"",
+        "    value: !!bool \"tRuE\"",
         "    value: !custom prod",
         "    value: {1: prod}",
         "    value: {true: prod}",

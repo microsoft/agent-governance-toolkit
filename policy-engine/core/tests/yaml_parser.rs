@@ -38,6 +38,11 @@ fn invalid_or_non_json_yaml_is_rejected_with_manifest_errors() {
         "number: 18446744073709551616",
         "number: -9223372036854775809",
         "number: 0x10000000000000000",
+        "value: !!bool null",
+        "value: !!int null",
+        "value: !!float null",
+        "value: !!null garbage",
+        "value: !custom null",
         "first: document\n---\nsecond: document",
     ] {
         assert!(
@@ -72,7 +77,8 @@ fn implicit_numeric_strings_retain_their_type_in_keys_values_and_aliases() {
         "010: &digits 010\nseparated: 1_000\ncopy: *digits\nsigned: -010\n\
          literal: '1_000'\nexplicit: !!str 010\nbinary: 0b1010\noctal: 0o12\nhex: 0xA\n\
          unicode: é\nupper: 0X10\nnested: [010, {value: 1_000}]\n\
-         booleans: [True, TRUE, False, FALSE, tRuE, !!bool TRUE, !!str TRUE, !!bool \"FALSE\"]\n# ignored: 1_000\n",
+         booleans: [True, TRUE, False, FALSE, tRuE, !!bool TRUE, !!str TRUE, !!bool \"FALSE\"]\n\
+         tagged: [!!str null, !!int \"7\", !!float \"7\", !!null NULL, nUlL]\n# ignored: 1_000\n",
     )
     .unwrap();
     assert_eq!(value["010"], "010");
@@ -82,6 +88,7 @@ fn implicit_numeric_strings_retain_their_type_in_keys_values_and_aliases() {
     assert_eq!(value["literal"], "1_000");
     assert_eq!(value["explicit"], "010");
     assert_eq!(value["upper"], "0X10");
+    assert_eq!(value["tagged"], json!(["null", 7, 7.0, null, "nUlL"]));
     assert_eq!(value["nested"], json!(["010", {"value": "1_000"}]));
     assert_eq!(
         value["booleans"],
