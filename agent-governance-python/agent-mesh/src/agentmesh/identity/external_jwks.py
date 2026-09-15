@@ -19,7 +19,7 @@ import base64
 import json
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union
 from urllib.parse import urlparse, urlunparse
 
 import httpx
@@ -97,14 +97,29 @@ class TrustedEndpoint(BaseModel):
     role/group claims — different issuers shape these differently (Keycloak
     nests roles under `realm_access`; others put a flat `roles` claim at the
     top level). `None` means "use the policy-level default" — see
-    `FederationPolicy.default_role_claim_path`.
+    `FederationPolicy.default_role_claim_path`. A path segment containing a
+    literal dot (e.g. a Keycloak client id like `resource_access.my.client
+    .roles`) can't be expressed as a dotted string; pass a pre-split
+    `list[str]` of segments instead (`["resource_access", "my.client",
+    "roles"]`).
+
+    `audience` is the client id (or ids) this endpoint's tokens must be
+    issued for, checked against the verified token's own `aud` claim
+    (`aud` may be a single string or a list, per RFC 7519). **Leaving it
+    unset accepts a token minted for ANY client the issuer trusts** — a
+    verified RS256 token is otherwise only proof the issuer signed it, not
+    that it was meant for this verifier (e.g. a browser SPA's stolen
+    access token would verify identically to one this integration
+    actually requested). Set it whenever the issuer mints tokens for more
+    than one client.
     """
 
     domain: str
     jwks_url: HttpUrl
     trust_tier: str = "trusted"
-    role_claim_path: Optional[str] = None
-    group_claim_path: Optional[str] = None
+    role_claim_path: Optional[Union[str, list[str]]] = None
+    group_claim_path: Optional[Union[str, list[str]]] = None
+    audience: Optional[Union[str, list[str]]] = None
 
 
 class FederationPolicy(BaseModel):
@@ -147,11 +162,29 @@ class ExternalIdentity(BaseModel):
         verified identity to that context anywhere in this codebase, by
         design (kwargs-only, no hidden magic). Spread the result into a
         governed call: `safe(**identity.as_policy_kwargs(), doc_id=...)`.
+
+        `caller_roles`/`caller_groups` are dicts (`{"admin": True, ...}`),
+        not lists: GovernedCallable._build_context passes a dict kwarg
+        through to the policy context as-is, and PolicyRule._eval_expression
+        only supports scalar equality/membership/comparison on a bare
+        dotted path, not a list-membership test — a YAML rule referencing
+        `caller_roles.value in [...]` or `caller_roles.value == 'admin'`
+        against a *list* value silently never matches. Against this dict
+        shape, `caller_roles.admin` resolves through _get_nested and is
+        evaluated as a plain (order-independent) boolean attribute.
+
+        There is no singular `caller_role`: an earlier version picked
+        `roles[0]`, but role order in the verified token is whatever the
+        issuer happened to serialize (Keycloak's realm_access.roles comes
+        from a Python-side set with no defined order), so a YAML rule
+        keyed on a single caller_role gave different decisions for the
+        same role set depending on iteration order — a deny-by-role rule
+        was bypassable just by how the roles happened to sort that
+        request. Write rules against caller_roles.<role> instead.
         """
         return {
-            "caller_role": self.roles[0] if self.roles else None,
-            "caller_roles": self.roles,
-            "caller_groups": self.groups,
+            "caller_roles": {role: True for role in self.roles},
+            "caller_groups": {group: True for group in self.groups},
         }
 
 
@@ -166,10 +199,11 @@ class ExternalJWKSProvider:
     """Cross-org JWKS-backed identity provider.
 
     Verifies tokens by fetching the issuer's JWKS endpoint, validating
-    the Ed25519 signature using AGT's existing cryptography primitives,
-    and applying federation-policy rules. Federation tier is resolved
-    against the configured FederationPolicy. JWKS and revocation lists
-    are cached with TTLs; both use the same httpx fetch path.
+    the signature (Ed25519, RS256, or ES256 - see `_verify_signature`)
+    using AGT's existing cryptography primitives, and applying
+    federation-policy rules. Federation tier is resolved against the
+    configured FederationPolicy. JWKS and revocation lists are cached with
+    TTLs; both use the same httpx fetch path.
     """
 
     def __init__(self, policy: FederationPolicy) -> None:
@@ -208,6 +242,20 @@ class ExternalJWKSProvider:
 
         exp = payload.get("exp")
         if not isinstance(exp, (int, float)) or exp < time.time():
+            return None
+
+        nbf = payload.get("nbf")
+        if isinstance(nbf, (int, float)) and nbf > time.time():
+            return None
+
+        # A verified signature only proves the issuer minted this token,
+        # not that it was minted *for this verifier*: without an audience
+        # check, a token the issuer signed for any other client (e.g. one
+        # lifted from a browser SPA) verifies identically to one actually
+        # requested for this integration. See TrustedEndpoint.audience.
+        if endpoint.audience is not None and not self._audience_satisfied(
+            endpoint.audience, payload.get("aud")
+        ):
             return None
 
         revocation_url = self._revocation_url_for(endpoint, payload)
@@ -267,8 +315,22 @@ class ExternalJWKSProvider:
         was this module's original scheme (ADR-0007 agent-to-agent
         federation); RSA (RS256) and P-256 EC (ES256) are added so it can
         also verify tokens from a standard OIDC provider (Keycloak, Okta,
-        etc.), whose default signing key is RS256, not Ed25519.
+        etc.), whose default signing key is RS256, not Ed25519. Only these
+        three key types verify; a realm's own PS256/RS512/ES384 keys (or
+        anything else) are rejected.
         """
+        # A realm's JWKS can publish encryption keys (use="enc", e.g. for
+        # RSA-OAEP) alongside its signing keys. Using one to verify a
+        # signature makes no cryptographic sense and RFC 7517 §4.2/4.3
+        # reserve `use`/`key_ops` to say so; honour that instead of trying
+        # every key regardless of its declared purpose.
+        use = jwk.get("use")
+        if use is not None and use != "sig":
+            return False
+        key_ops = jwk.get("key_ops")
+        if key_ops is not None and "verify" not in key_ops:
+            return False
+
         kty = jwk.get("kty")
         try:
             if kty == "OKP" and jwk.get("crv") == "Ed25519":
@@ -298,8 +360,28 @@ class ExternalJWKSProvider:
                 public_key.verify(der_signature, signing_input, ec.ECDSA(hashes.SHA256()))
                 return True
             return False
-        except (InvalidSignature, KeyError, ValueError):
+        except (InvalidSignature, KeyError, ValueError, TypeError):
             return False
+
+    @staticmethod
+    def _audience_satisfied(configured: Union[str, list[str]], token_aud: object) -> bool:
+        """Whether `token_aud` (the token's own `aud` claim) contains at
+        least one of the configured expected audience(s).
+
+        Per RFC 7519 §4.1.3, `aud` may be a single string or an array — a
+        multi-audience token is valid for any client named in it, so this
+        checks for a non-empty intersection rather than exact equality.
+        Anything else for `token_aud` (missing, not a string/list) fails
+        closed rather than being coerced into a match.
+        """
+        configured_set = {configured} if isinstance(configured, str) else set(configured)
+        if isinstance(token_aud, str):
+            token_aud_set = {token_aud}
+        elif isinstance(token_aud, list):
+            token_aud_set = {a for a in token_aud if isinstance(a, str)}
+        else:
+            return False
+        return bool(configured_set & token_aud_set)
 
     @staticmethod
     def _normalize_host(host: Optional[str]) -> Optional[str]:
@@ -472,8 +554,19 @@ class ExternalJWKSProvider:
         self, payload: dict, endpoint: TrustedEndpoint
     ) -> ExternalIdentity:
         delegation = payload.get("delegation_claims") or {}
-        role_path = endpoint.role_claim_path or self._policy.default_role_claim_path
-        group_path = endpoint.group_claim_path or self._policy.default_group_claim_path
+        # `is not None`, not `or`: an endpoint that explicitly sets
+        # role_claim_path="" to disable role extraction must not fall back
+        # to the policy default just because "" is falsy.
+        role_path = (
+            endpoint.role_claim_path
+            if endpoint.role_claim_path is not None
+            else self._policy.default_role_claim_path
+        )
+        group_path = (
+            endpoint.group_claim_path
+            if endpoint.group_claim_path is not None
+            else self._policy.default_group_claim_path
+        )
         return ExternalIdentity(
             did_web=payload.get("sub", f"did:web:{endpoint.domain}"),
             jwks_url=endpoint.jwks_url,
@@ -487,8 +580,16 @@ class ExternalJWKSProvider:
         )
 
     @staticmethod
-    def _extract_claim_list(payload: dict, dotted_path: str) -> list[str]:
+    def _extract_claim_list(payload: dict, dotted_path: Union[str, list[str]]) -> list[str]:
         """Walk `dotted_path` into `payload` and return a list of strings.
+
+        `dotted_path` is either a dotted string ("realm_access.roles") or a
+        pre-split `list[str]` of literal segments. The latter is required
+        when a segment itself contains a dot — e.g. Keycloak's
+        `resource_access.<client_id>.roles`, where `<client_id>` may be
+        something like "my.dotted.client": splitting a dotted *string* on
+        "." can't tell that dot apart from the path separator and would
+        never find the claim.
 
         Any missing segment, or a final value that isn't a list, yields an
         empty list rather than raising — a malformed or absent claim just
@@ -496,7 +597,8 @@ class ExternalJWKSProvider:
         entries in the list are dropped rather than coerced.
         """
         value: object = payload
-        for segment in dotted_path.split("."):
+        segments = dotted_path if isinstance(dotted_path, list) else dotted_path.split(".")
+        for segment in segments:
             if not isinstance(value, dict):
                 return []
             value = value.get(segment)

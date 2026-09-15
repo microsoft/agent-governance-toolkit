@@ -622,6 +622,223 @@ async def test_verify_rejects_unsupported_key_type():
     assert result is None
 
 
+@pytest.mark.asyncio
+async def test_verify_rejects_encryption_only_jwk():
+    """A JWKS can publish an encryption key (use="enc", e.g. RSA-OAEP)
+    alongside signing keys - it must never be accepted for signature
+    verification just because it happens to parse as an RSA/EC public
+    key."""
+    private_key, jwk = _make_rsa_keypair()
+    jwk["use"] = "enc"
+    jwk["alg"] = "RSA-OAEP"
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_jwk_with_key_ops_excluding_verify():
+    private_key, jwk = _make_rsa_keypair()
+    del jwk["use"]
+    jwk["key_ops"] = ["encrypt"]
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_jwk_with_no_use_or_key_ops():
+    """use/key_ops are both optional per RFC 7517 - a JWK naming neither
+    is not thereby excluded from signing, it just declines to say."""
+    private_key, jwk = _make_rsa_keypair()
+    del jwk["use"]
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_survives_non_string_jwk_members_typeerror():
+    """A malformed JWKS entry (e.g. a numeric or null 'n') must fail
+    verification, not raise TypeError out of rsa.RSAPublicNumbers /
+    public_key.verify."""
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    header = {"alg": "RS256", "typ": "JWT", "kid": KEY_ID}
+    header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
+    payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
+    token = f"{header_b64}.{payload_b64}.{_b64url_encode(b'not-a-real-signature')}"
+    jwk = {"kty": "RSA", "kid": KEY_ID, "use": "sig", "n": 12345, "e": None}
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
+# ── Audience (aud) and not-before (nbf) ─────────────────────────────
+
+
+def _policy_with_audience(audience) -> FederationPolicy:
+    return FederationPolicy(
+        trusted_endpoints=[
+            TrustedEndpoint(
+                domain=PARTNER_DOMAIN,
+                jwks_url=PARTNER_JWKS_URL,
+                trust_tier="verified_partner",
+                audience=audience,
+            )
+        ],
+    )
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_token_with_wrong_audience():
+    """A verified token minted for a different client (e.g. one lifted
+    from a browser SPA) must not pass just because the issuer signed it -
+    without this check every client sharing an issuer is interchangeable."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "aud": "some-other-webapp",
+    }
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_policy_with_audience("this-service"))
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_token_with_matching_audience():
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "aud": "this-service",
+    }
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_policy_with_audience("this-service"))
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_token_with_aud_as_list_containing_match():
+    """`aud` may be an array (RFC 7519 §4.1.3) for a token valid across
+    multiple clients; a match anywhere in it is sufficient."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "aud": ["some-other-webapp", "this-service"],
+    }
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_policy_with_audience("this-service"))
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_configured_audience_list_matching_any():
+    """endpoint.audience may itself be a list - any one of them is an
+    acceptable client for this endpoint."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900, "aud": "service-b"}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(
+        policy=_policy_with_audience(["service-a", "service-b"])
+    )
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_missing_audience_claim_when_configured():
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_policy_with_audience("this-service"))
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_any_audience_when_unconfigured():
+    """Documents the default: leaving audience unset accepts a token
+    minted for any client the issuer trusts."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900, "aud": "anything"}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_future_nbf():
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900, "nbf": now + 3000}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        result = await provider.verify(token)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_past_nbf():
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900, "nbf": now - 60}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_accepts_token_with_no_nbf_claim():
+    """nbf is optional per RFC 7519 §4.1.5 - its absence means valid
+    immediately, not rejected."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt_rs256(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
 # ── Role/group claim extraction ──────────────────────────────────────
 
 
@@ -677,6 +894,69 @@ async def test_verify_uses_per_endpoint_claim_path_override():
 
 
 @pytest.mark.asyncio
+async def test_verify_claim_path_as_list_reaches_dotted_client_id():
+    """resource_access.<client_id>.roles can't be expressed as a dotted
+    *string* when the client id itself contains a dot - splitting on "."
+    can't tell that dot from the path separator. A pre-split list of
+    segments sidesteps the ambiguity entirely."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "resource_access": {"my.dotted.client": {"roles": ["viewer"]}},
+    }
+    token = _sign_jwt_rs256(private_key, payload)
+    policy = FederationPolicy(
+        trusted_endpoints=[
+            TrustedEndpoint(
+                domain=PARTNER_DOMAIN,
+                jwks_url=PARTNER_JWKS_URL,
+                trust_tier="verified_partner",
+                role_claim_path=["resource_access", "my.dotted.client", "roles"],
+            )
+        ],
+    )
+    provider = ExternalJWKSProvider(policy=policy)
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+    assert identity.roles == ["viewer"]
+
+
+@pytest.mark.asyncio
+async def test_verify_empty_string_claim_path_disables_extraction():
+    """role_claim_path="" must disable extraction for this endpoint, not
+    be treated as unset and fall back to the policy default - `or` treats
+    "" and None identically, but they mean different things here."""
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "realm_access": {"roles": ["would-default-extract"]},
+    }
+    token = _sign_jwt_rs256(private_key, payload)
+    policy = FederationPolicy(
+        trusted_endpoints=[
+            TrustedEndpoint(
+                domain=PARTNER_DOMAIN,
+                jwks_url=PARTNER_JWKS_URL,
+                trust_tier="verified_partner",
+                role_claim_path="",
+            )
+        ],
+    )
+    provider = ExternalJWKSProvider(policy=policy)
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+    assert identity.roles == []
+
+
+@pytest.mark.asyncio
 async def test_verify_missing_role_claims_yield_empty_lists_not_an_error():
     private_key, jwk = _make_rsa_keypair()
     now = int(time.time())
@@ -724,13 +1004,12 @@ def test_as_policy_kwargs_bridges_identity_to_governs_context():
     )
     kwargs = identity.as_policy_kwargs()
     assert kwargs == {
-        "caller_role": "auditor",
-        "caller_roles": ["auditor", "engineer"],
-        "caller_groups": ["/engineering/compliance"],
+        "caller_roles": {"auditor": True, "engineer": True},
+        "caller_groups": {"/engineering/compliance": True},
     }
 
 
-def test_as_policy_kwargs_caller_role_is_none_without_roles():
+def test_as_policy_kwargs_empty_dicts_without_roles():
     identity = ExternalIdentity(
         did_web="did:web:x",
         jwks_url=PARTNER_JWKS_URL,
@@ -740,6 +1019,124 @@ def test_as_policy_kwargs_caller_role_is_none_without_roles():
         token_expires_at=datetime.now(timezone.utc),
     )
     kwargs = identity.as_policy_kwargs()
-    assert kwargs["caller_role"] is None
-    assert kwargs["caller_roles"] == []
-    assert kwargs["caller_groups"] == []
+    assert kwargs["caller_roles"] == {}
+    assert kwargs["caller_groups"] == {}
+    assert "caller_role" not in kwargs
+
+
+def test_as_policy_kwargs_role_membership_is_order_independent():
+    """Pins the fix for the caller_role[0] ordering bug: the same role set
+    in a different order must bridge to an identical policy context, since
+    a YAML rule keyed on role membership must not depend on how the issuer
+    happened to serialize the roles claim."""
+    common = dict(
+        did_web="did:web:x",
+        jwks_url=PARTNER_JWKS_URL,
+        issuer_domain=PARTNER_DOMAIN,
+        federation_tier="verified_partner",
+        verified_at=datetime.now(timezone.utc),
+        token_expires_at=datetime.now(timezone.utc),
+    )
+    forward = ExternalIdentity(roles=["contractor", "offline_access"], **common)
+    reverse = ExternalIdentity(roles=["offline_access", "contractor"], **common)
+    assert forward.as_policy_kwargs() == reverse.as_policy_kwargs()
+    assert forward.as_policy_kwargs()["caller_roles"] == {
+        "contractor": True,
+        "offline_access": True,
+    }
+
+
+def test_as_policy_kwargs_role_membership_matches_through_govern():
+    """End-to-end through the public govern() API, per #3954: a policy
+    keyed on a verified identity's roles allows a match and denies a
+    non-match, regardless of role order."""
+    from agentmesh.governance import GovernanceDenied, govern
+
+    policy_yaml = """
+apiVersion: governance.toolkit/v1
+name: deny-non-auditors
+default_action: deny
+rules:
+  - name: allow-auditors
+    condition: "caller_roles.auditor"
+    action: allow
+"""
+
+    def read_doc(doc_id: str, **policy_ctx):
+        return {"doc_id": doc_id}
+
+    safe_read = govern(read_doc, policy=policy_yaml)
+
+    auditor = ExternalIdentity(
+        did_web="did:web:x",
+        jwks_url=PARTNER_JWKS_URL,
+        issuer_domain=PARTNER_DOMAIN,
+        federation_tier="verified_partner",
+        verified_at=datetime.now(timezone.utc),
+        token_expires_at=datetime.now(timezone.utc),
+        roles=["offline_access", "auditor"],
+    )
+    result = safe_read(**auditor.as_policy_kwargs(), doc_id="COMP-042")
+    assert result == {"doc_id": "COMP-042"}
+
+    engineer = ExternalIdentity(
+        did_web="did:web:y",
+        jwks_url=PARTNER_JWKS_URL,
+        issuer_domain=PARTNER_DOMAIN,
+        federation_tier="verified_partner",
+        verified_at=datetime.now(timezone.utc),
+        token_expires_at=datetime.now(timezone.utc),
+        roles=["engineer"],
+    )
+    with pytest.raises(GovernanceDenied):
+        safe_read(**engineer.as_policy_kwargs(), doc_id="COMP-099")
+
+
+@pytest.mark.asyncio
+async def test_docs_identity_md_oidc_example_runs_as_written():
+    """Pins docs/identity.md's "OIDC for Cross-Org Identity Verification"
+    example verbatim: it must actually run, not just look plausible - an
+    earlier version raised TypeError (read_doc took no **kwargs) and used
+    govern() without importing it."""
+    from agentmesh.governance import govern
+
+    private_key, jwk = _make_rsa_keypair()
+    now = int(time.time())
+    token = _sign_jwt_rs256(
+        private_key,
+        {
+            "iss": PARTNER_DOMAIN,
+            "sub": "x",
+            "exp": now + 900,
+            "aud": "agent-mesh-service",
+            "realm_access": {"roles": ["auditor"]},
+        },
+    )
+
+    policy = FederationPolicy(
+        trusted_endpoints=[
+            TrustedEndpoint(
+                domain=PARTNER_DOMAIN,
+                jwks_url=PARTNER_JWKS_URL,
+                trust_tier="verified_partner",
+                audience="agent-mesh-service",
+            ),
+        ],
+    )
+    provider = ExternalJWKSProvider(policy=policy)
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+    def read_doc(doc_id: str, **policy_ctx):
+        return {"doc_id": doc_id}
+
+    policy_yaml = """
+apiVersion: governance.toolkit/v1
+name: allow-all
+default_action: allow
+rules: []
+"""
+    safe = govern(read_doc, policy=policy_yaml)
+    result = safe(**identity.as_policy_kwargs(), doc_id="COMP-042")
+    assert result == {"doc_id": "COMP-042"}
