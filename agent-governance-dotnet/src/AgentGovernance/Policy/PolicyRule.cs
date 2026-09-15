@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace AgentGovernance.Policy;
@@ -40,8 +41,14 @@ public sealed class PolicyRule
     private static readonly Regex InequalityPattern =
         new(@"^(\w+(?:\.\w+)*)\s*!=\s*['""]([^'""]+)['""]$", RegexOptions.Compiled);
 
+    private static readonly Regex NumericEqualityPattern =
+        new(@"^(\w+(?:\.\w+)*)\s*==\s*(-?\d+(?:\.\d+)?)$", RegexOptions.Compiled);
+
+    private static readonly Regex NumericInequalityPattern =
+        new(@"^(\w+(?:\.\w+)*)\s*!=\s*(-?\d+(?:\.\d+)?)$", RegexOptions.Compiled);
+
     private static readonly Regex NumericComparisonPattern =
-        new(@"^(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(\d+(?:\.\d+)?)$", RegexOptions.Compiled);
+        new(@"^(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$", RegexOptions.Compiled);
 
     private static readonly Regex InListPattern =
         new(@"^(\w+(?:\.\w+)*)\s+in\s+(\w+(?:\.\w+)*)$", RegexOptions.Compiled);
@@ -58,6 +65,8 @@ public sealed class PolicyRule
     /// Condition expression to evaluate (e.g., "tool_name in blocked_tools").
     /// Supports equality, inequality, numeric comparisons, <c>in</c> list checks,
     /// boolean fields, and compound <c>and</c>/<c>or</c> operators.
+    /// Numeric <c>==</c>/<c>!=</c> use a 1e-9 tolerance, and <c>!=</c> matches when
+    /// the field is missing or non-numeric (consistent with the TypeScript SDK).
     /// </summary>
     public required string Condition { get; init; }
 
@@ -236,13 +245,47 @@ public sealed class PolicyRule
             return !string.Equals(fieldValue?.ToString(), match.Groups[2].Value, StringComparison.Ordinal);
         }
 
+        // Numeric equality: field == 5, field == 3.14, field == -5
+        match = NumericEqualityPattern.Match(expression);
+        if (match.Success)
+        {
+            var fieldValue = ResolveField(match.Groups[1].Value, context);
+            if (fieldValue is not null && TryParseNumericValue(fieldValue, out var left)
+                && TryParseNumericValue(match.Groups[2].Value, out var right))
+            {
+                return Math.Abs(left - right) < 1e-9;
+            }
+            return false;
+        }
+
+        // Numeric inequality: field != 5, field != 3.14, field != -5
+        match = NumericInequalityPattern.Match(expression);
+        if (match.Success)
+        {
+            var fieldValue = ResolveField(match.Groups[1].Value, context);
+            if (fieldValue is not null && TryParseNumericValue(fieldValue, out var left)
+                && TryParseNumericValue(match.Groups[2].Value, out var right))
+            {
+                // NaN never equals any value, matching the TypeScript reference
+                // (Number(NaN) !== rhs is true). This also keeps == and != exact
+                // complements for every parseable input.
+                return double.IsNaN(left) || double.IsNaN(right) || Math.Abs(left - right) >= 1e-9;
+            }
+
+            // Missing or non-numeric field: the TypeScript reference treats these
+            // as NaN (Number(undefined) and Number("abc") are NaN) and NaN !== rhs
+            // is true. Return true so a deny rule fails closed instead of being
+            // silently bypassed, matching the string `field != 'value'` branch.
+            return true;
+        }
+
         // Numeric comparison: field > 10, field <= 100
         match = NumericComparisonPattern.Match(expression);
         if (match.Success)
         {
             var fieldValue = ResolveField(match.Groups[1].Value, context);
-            if (fieldValue is not null && double.TryParse(fieldValue.ToString(), out var left)
-                && double.TryParse(match.Groups[3].Value, out var right))
+            if (fieldValue is not null && TryParseNumericValue(fieldValue, out var left)
+                && TryParseNumericValue(match.Groups[3].Value, out var right))
             {
                 return match.Groups[2].Value switch
                 {
@@ -288,6 +331,56 @@ public sealed class PolicyRule
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Parses a value as a double for numeric comparisons. Numeric types are
+    /// unwrapped directly; strings are parsed with the invariant culture using
+    /// <see cref="NumberStyles.Float"/> so evaluation is deterministic across
+    /// host locales (a dot decimal separator can never be read as a thousands
+    /// separator, which would turn "5.5" into 55 on comma-decimal locales).
+    /// Mirrors the TypeScript SDK's <c>Number()</c> coercion for common types.
+    /// </summary>
+    private static bool TryParseNumericValue(object? value, out double result)
+    {
+        switch (value)
+        {
+            case double d:
+                result = d;
+                return true;
+            case float f:
+                result = f;
+                return true;
+            case decimal m:
+                result = (double)m;
+                return true;
+            case byte b:
+                result = b;
+                return true;
+            case sbyte sb:
+                result = sb;
+                return true;
+            case short s:
+                result = s;
+                return true;
+            case ushort us:
+                result = us;
+                return true;
+            case int i:
+                result = i;
+                return true;
+            case uint ui:
+                result = ui;
+                return true;
+            case long l:
+                result = l;
+                return true;
+            case ulong ul:
+                result = ul;
+                return true;
+            default:
+                return double.TryParse(value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out result);
+        }
     }
 
     /// <summary>
