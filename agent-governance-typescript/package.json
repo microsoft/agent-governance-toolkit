@@ -45,7 +45,7 @@
     "@noble/ciphers": "2.4.0",
     "@noble/curves": "2.3.0",
     "@noble/ed25519": "3.2.0",
-    "@noble/hashes": "2.3.0",
+    "@noble/hashes": "2.4.0",
     "js-yaml": "5.4.1"
   },
   "engines": {
