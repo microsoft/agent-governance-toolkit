@@ -1,0 +1,99 @@
+---
+title: Rust 5.0 YAML migration
+last_reviewed: 2026-09-15
+owner: microsoft/agent-governance-toolkit
+---
+
+# Rust 5.0 YAML migration
+
+This change targets the pending Rust 5.0 major release, not a 4.x patch.
+The latest published `agentmesh` version checked on September 15, 2026 was
+4.0.0. The workspace already declares 5.0.0. Do not republish an existing
+artifact or tag to deliver this change.
+
+## Policy contexts
+
+Import `Context`, `Mapping` and `Value` from `agentmesh::policy_data`.
+They use the JSON data model and do not expose the YAML parser.
+
+| Previous API | Rust 5.0 API |
+|---|---|
+| `serde_yaml::Value` | `agentmesh::policy_data::Value` |
+| `serde_yaml::Mapping` | `agentmesh::policy_data::Mapping` |
+| `Value::Mapping(map)` | `Value::Object(map)` |
+| `Value::Sequence(values)` | `Value::Array(values)` |
+| `map.insert(Value::String(key), value)` | `map.insert(key, value)` |
+| YAML error payloads | `agentmesh::policy_data::YamlError` |
+
+`PolicyRule.conditions`, `PolicyEngine::evaluate`,
+`AgentMeshClient::execute_with_governance` and protocol extractor callbacks
+use these values. This changes Rust type identity. Update custom callback
+signatures and map constructors along with imports. The CLI's JSON context
+format is unchanged.
+
+```rust
+use agentmesh::{policy_data::Context, PolicyEngine};
+
+let context: Context = serde_json::from_str(r#"{"environment":"production"}"#)?;
+let policy_yaml = r#"
+version: "1"
+agent: example
+policies:
+  - name: production
+    type: capability
+    denied_actions: ["deploy.*"]
+    conditions: {environment: production}
+"#;
+let engine = PolicyEngine::new();
+engine.load_from_yaml(policy_yaml)?;
+let decision = engine.evaluate("deploy.app", Some(&context));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+YAML and JSON policies remain supported. Conditions retain case-sensitive
+equality and sequence membership. Nested string-keyed objects, arrays,
+booleans, null and finite numbers are supported. Numeric and string values
+remain distinct. Non-string mapping keys, non-finite numbers, duplicate keys
+and unsupported tags are rejected rather than converted or ignored.
+Quote numeric-looking strings, including versions and all-digit checksums.
+Use `true` and `false` for booleans. YAML aliases remain supported within
+resource limits. Merge keys remain literal keys, not inherited policy fields.
+
+`PolicyError::InvalidYaml` and `PromptInjectionError::ConfigParse` retain their
+variant names but now contain `YamlError`. Its `location()` returns an optional
+one-based `(line, column)` pair. Old `serde_yaml::Error` conversions and
+downcasts are not preserved. Diagnostics omit source snippets.
+
+Configuration loaders cap source size at 1 MiB, nesting at 64 levels and
+parser nodes at 100,000, with additional event and retained-anchor budgets.
+File reads are bounded before parsing. Invalid reloads leave the last valid
+policy intact. Client construction and CLI checks propagate parse failures;
+they do not substitute an allow policy. An intentionally empty engine retains
+its existing allow behavior.
+
+## Compiler and release gates
+
+`serde-saphyr` 1.2.0 requires Rust 1.89. The Rust workspace already uses that
+floor. AGT's policy-engine core, host SDK and their Rust consumers now declare
+1.89 as well. The lockfiles retain age-compliant `granit-parser` 1.2.0 and
+`encoding_rs` 0.8.35.
+
+The committed registry-only graph still contains
+`agentmesh → agent_control_specification → agent-control-spec 0.4.0-alpha.3
+→ serde_yaml → unsafe-libyaml`. The core shim also depends on that external
+engine. The companion ACS parser change in
+`https://github.com/responsibleai/agent-control-spec/pull/75` must be released
+before these paths can disappear.
+
+Release the ACS companion first, wait for the repository's dependency-age
+requirement, update both AGT external ACS pins to that actual published
+version, and regenerate locks with Cargo. Then publish a newly versioned core
+shim, its host SDK and finally the Rust 5.0 packages in the existing coordinated
+release process. No unpublished registry version or permanent local override
+is introduced by this change.
+
+A validation-only local patch of the companion engine removes `serde_yaml`,
+`unsafe-libyaml`, `yaml_serde` and `libyaml-rs` from AGT's all-features graph.
+AGT uses Regorus with `regex` only. This is not a claim about consumers that
+independently enable Regorus YAML, nor a claim that the entire Rust graph
+contains no unsafe code. Regorus's optional YAML implementation is unchanged.

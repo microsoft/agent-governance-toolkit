@@ -161,30 +161,62 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
             limits.max_merged_manifest_bytes
         )));
     }
-    let mut documents = serde_yaml::Deserializer::from_str(input);
-    let document = documents.next().ok_or_else(|| {
-        RuntimeError::ManifestInvalid("manifest source must not be empty".to_string())
-    })?;
-    let mut budget = ManifestValueBudget::new(limits);
-    let parsed = BoundedJsonValueSeed {
-        budget: &mut budget,
-        depth: 0,
+    if input.trim().is_empty() {
+        return Err(RuntimeError::ManifestInvalid(
+            "manifest source must not be empty".to_string(),
+        ));
     }
-    .deserialize(document);
+    let mut budget = ManifestValueBudget::new(limits);
+    // Alias diagnostics can wrap the typed error. Use the structured budget report.
+    let parser_limit = std::rc::Rc::new(std::cell::Cell::new(false));
+    let reported_limit = std::rc::Rc::clone(&parser_limit);
+    let parsed = serde_saphyr::with_deserializer_from_str_with_options(
+        input,
+        serde_saphyr::options! {
+            strict_booleans: true,
+            reject_unsupported_tags: true,
+            merge_keys: serde_saphyr::MergeKeyPolicy::AsOrdinary,
+            with_snippet: false,
+            budget: serde_saphyr::budget! {
+                max_depth: limits.max_policy_input_depth,
+                max_nodes: MAX_MANIFEST_PARSE_NODES,
+                max_events: MAX_MANIFEST_PARSE_NODES * 3,
+                max_total_scalar_bytes: limits.max_merged_manifest_bytes,
+                max_recorded_anchor_bytes: limits.max_merged_manifest_bytes,
+                max_recorded_anchor_events: MAX_MANIFEST_PARSE_NODES,
+            },
+        }
+        .with_budget_report(move |report| {
+            reported_limit.set(report.breached.is_some());
+        }),
+        |document| {
+            BoundedJsonValueSeed {
+                budget: &mut budget,
+                depth: 0,
+            }
+            .deserialize(document)
+        },
+    );
     let value = match parsed {
         Ok(value) => value,
         Err(error) => {
             if let Some(detail) = budget.limit_error.take() {
                 return Err(RuntimeError::ResourceLimitExceeded(detail));
             }
+            if parser_limit.get()
+                || matches!(
+                    error,
+                    serde_saphyr::Error::Budget { .. }
+                        | serde_saphyr::Error::AliasReplayLimitExceeded { .. }
+                        | serde_saphyr::Error::AliasExpansionLimitExceeded { .. }
+                        | serde_saphyr::Error::AliasReplayStackDepthExceeded { .. }
+                )
+            {
+                return Err(RuntimeError::ResourceLimitExceeded(error.to_string()));
+            }
             return Err(RuntimeError::ManifestInvalid(error.to_string()));
         }
     };
-    if documents.next().is_some() {
-        return Err(RuntimeError::ManifestInvalid(
-            "manifest source must contain exactly one YAML or JSON document".to_string(),
-        ));
-    }
     limits.validate_json_depth(&value, "manifest")?;
     let serialized = serde_json::to_vec(&value).map_err(|err| {
         RuntimeError::ManifestInvalid(format!("failed to serialize parsed manifest: {err}"))

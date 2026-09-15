@@ -570,6 +570,7 @@ gomod
 governancekernel
 governancepolicy
 governorate
+granit
 grpc
 gunicorn
 gvisor
@@ -656,6 +657,7 @@ levelname
 liamcrumm
 libagent
 libc
+libyaml
 licen
 linkcheck
 linkified
@@ -926,6 +928,7 @@ sandboxing
 sandboxprovider
 sanitisation
 sanitised
+saphyr
 sarif
 sboms
 scak

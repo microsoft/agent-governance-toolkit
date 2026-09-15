@@ -2,7 +2,7 @@
 name = "agent_control_specification_rig"
 version = "0.4.0-beta.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.89"
 publish = false
 description = "Rig tool guard backed by Agent Control Specification intervention points"
 
