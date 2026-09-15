@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Tests for saga orchestrator and state machine."""
 
+import asyncio
+
 import pytest
 
 from hypervisor.saga.orchestrator import SagaOrchestrator
@@ -134,6 +136,29 @@ class TestSagaOrchestrator:
         assert step.state == StepState.COMMITTED
 
     @pytest.mark.asyncio
+    async def test_committed_step_rejects_execution_before_executor_is_called(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
+
+        async def ok_executor():
+            return "ok"
+
+        await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=ok_executor)
+        assert step.state == StepState.COMMITTED
+
+        calls = 0
+
+        def executor():
+            nonlocal calls
+            calls += 1
+            return asyncio.ensure_future(ok_executor())
+
+        with pytest.raises(SagaStateError, match="Invalid step transition"):
+            await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=executor)
+
+        assert calls == 0
+
+    @pytest.mark.asyncio
     async def test_execute_step_accepts_generic_awaitable(self):
         saga = self.orchestrator.create_saga("session:1")
         step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
@@ -175,6 +200,8 @@ class TestSagaOrchestrator:
             await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=executor)
 
         assert calls == 1
+        assert step.state == StepState.FAILED
+        assert "executor must return an awaitable" in step.error
 
     @pytest.mark.asyncio
     async def test_sync_executor_exception_retries(self):
