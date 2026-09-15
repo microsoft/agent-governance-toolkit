@@ -6,6 +6,7 @@
 # --- ACS / crypto terms ---
 # --- Additional West/North Africa terms flagged by cspell ---
 # --- African regulatory policy terms ---
+# --- UK regulatory policy terms ---
 # --- CloudEvents / signed audit-event terms ---
 # --- Docker / BuildKit toolchain terms ---
 struction
@@ -52,6 +53,7 @@ AKIAFAKE
 AKIAFAKEFORTEST
 AKIDEXAMPLE
 APIM
+APPI
 ASGI
 ATF
 AUXV
@@ -81,6 +83,7 @@ CISA
 CMVK
 CODEOWNERS
 COSE
+Caldicott
 Cdecl
 Centralised
 Chatflows
@@ -96,6 +99,8 @@ DEVNULL
 DISCARDABLE
 DOTALL
 DPC
+DSPT
+DUAA
 DYLD
 DataQualityEvidence
 Dedup
@@ -202,9 +207,13 @@ OpenClaw
 PCRE
 PDPC
 PDPL
+PECR
+PIHBOs
 PIICRI
+PIPEDA
 PKCS
 POPIA
+PRIN
 PSMODULEPATH
 PYTHONHOME
 PYTHONPATH
@@ -244,6 +253,7 @@ SPKI
 SQLGLOT
 SSEMCP
 SVID
+SYSC
 SYSTEMDRIVE
 SYSTEMROOT
 Sandboxed
