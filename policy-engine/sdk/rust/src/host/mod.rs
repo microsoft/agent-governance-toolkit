@@ -37,6 +37,10 @@ pub use tool::{
 /// Python and Node bindings run this before building a runtime. See
 /// `docs/acs-retarget.md`, "Removed manifest fields".
 pub use agent_control_specification_core::reject_removed_manifest_fields;
+/// Reject filesystem path fields on a URL sourced manifest.
+///
+/// SPECIFICATION.md 2.3. The pinned engine does not.
+pub use agent_control_specification_core::reject_url_sourced_local_paths;
 
 /// Stands in for an annotator dispatcher when the manifest declares no
 /// annotators and the bundled dispatchers are not compiled in. The
@@ -300,6 +304,8 @@ pub fn manifest_from_url(
     })?;
     let manifest = Manifest::from_path_with_limits(path, limits)?;
     reject_removed_manifest_fields(&manifest)?;
+    // Upstream skips resolve_relative_paths for ManifestLocation::Url.
+    reject_url_sourced_local_paths(&manifest)?;
     Ok(manifest)
 }
 

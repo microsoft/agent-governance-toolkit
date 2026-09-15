@@ -266,11 +266,12 @@ the process.
 
 `SPECIFICATION.md` sections beyond the verdict set, host obligations, approval
 path and reason tables were retargeted alongside them, and sections 2.3, 10 and
-12.1 now record the removed remote prompt and bundle fields. One gap remains in
-section 2.3: the pinned engine skips relative path resolution for a URL sourced
-manifest but does not reject its filesystem path fields (`bundle`, `data`,
-`data_paths`), so a remote manifest can name local files; that needs an
-upstream fix and is tracked as an issue rather than patched here. The AgentDojo benchmark policy
+12.1 now record the removed remote prompt and bundle fields. The pinned engine
+still skips relative path resolution for a URL sourced manifest. AGT's
+`manifest_from_url` then rejects filesystem path fields (`bundle`, `data`,
+`data_paths`, Cedar `policy_path`, `entities_path`, `schema_path`) so a remote
+manifest cannot name local files. Closing the same gap inside
+`agent-control-spec` remains an upstream issue. The AgentDojo benchmark policy
 computes its own redacted value and returns a single `transform`. The transform a
 host applies is revalidated against `Limits`, and `manifest_from_url` runs an
 SSRF guard over the URL before anything is fetched.
