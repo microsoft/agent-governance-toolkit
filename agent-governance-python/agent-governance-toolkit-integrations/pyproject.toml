@@ -51,7 +51,7 @@ adk = ["google-adk>=0.1.0,<1.0"]
 avp = []
 nostr-wot = []
 structural-authz = []
-openshell = ["pyyaml>=6.0,<7.0"]
+openshell = []
 audit-export = []
 
 dev = [
@@ -65,6 +65,9 @@ Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
 Repository = "https://github.com/microsoft/agent-governance-toolkit"
 "Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+[project.scripts]
+openshell-governance = "openshell_agentmesh.cli:main"
 
 # ============================================================================
 # Hatchling: pull adapter sources from agentmesh-integrations/
