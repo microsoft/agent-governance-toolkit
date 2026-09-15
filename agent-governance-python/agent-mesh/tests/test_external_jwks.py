@@ -822,7 +822,7 @@ async def test_verify_accepts_any_audience_when_unconfigured():
     assert identity is not None
 
 
-@pytest.mark.parametrize("empty_audience", ["", []])
+@pytest.mark.parametrize("empty_audience", ["", [], [""], ["", "x"]])
 def test_trusted_endpoint_rejects_empty_audience(empty_audience):
     """audience="" would match a token whose own aud is also "" (a real,
     if unusual, claim value) - silently trusting a token that asserts no
@@ -830,7 +830,9 @@ def test_trusted_endpoint_rejects_empty_audience(empty_audience):
     intersect anything, so every token is rejected with no signal that
     the field is misconfigured rather than intentionally locking things
     down. Both look configured while doing something almost certainly
-    unintended - reject at construction instead of accepting silently."""
+    unintended - reject at construction instead of accepting silently.
+    [""] and ["", "x"] are the same footgun hiding inside a non-empty
+    list - len() alone doesn't catch an empty-string member."""
     with pytest.raises(pydantic.ValidationError):
         TrustedEndpoint(
             domain=PARTNER_DOMAIN,

@@ -131,11 +131,17 @@ class TrustedEndpoint(BaseModel):
         # so every token is rejected with no signal that the field is
         # misconfigured rather than intentionally locking things down.
         # Both look "configured" while doing something the caller almost
-        # certainly didn't intend - reject them outright instead.
-        if v is not None and len(v) == 0:
+        # certainly didn't intend - reject them outright instead. A list
+        # containing an empty-string member (`[""]`, `["", "x"]`) is the
+        # same footgun in disguise - len() alone doesn't catch it.
+        if v is None:
+            return v
+        members = [v] if isinstance(v, str) else v
+        if not members or any(m == "" for m in members):
             raise ValueError(
                 "audience must not be empty - omit it entirely to accept "
-                "a token for any client, rather than an empty string or list"
+                "a token for any client, rather than an empty string, "
+                "empty list, or a list containing an empty-string member"
             )
         return v
 
