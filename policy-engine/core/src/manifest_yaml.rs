@@ -43,6 +43,89 @@ const _: () = assert!(
 pub const REMOVED_MANIFEST_FIELDS: [&str; 3] =
     ["bundle_url", "system_prompt_file", "system_prompt_url"];
 
+/// Filesystem path fields a URL sourced manifest must not declare.
+///
+/// `agent-control-spec` 0.4.0-alpha.3 skips relative path resolution for a
+/// URL sourced manifest and then resolves these against the process working
+/// directory at dispatch. SPECIFICATION.md 2.3 requires fail closed instead.
+/// `query` is a Rego expression, not a path, so it is not in this set.
+pub const URL_SOURCED_FILESYSTEM_FIELDS: [&str; 6] = [
+    "bundle",
+    "data",
+    "data_paths",
+    "policy_path",
+    "entities_path",
+    "schema_path",
+];
+
+/// Reject a URL sourced manifest that names a host filesystem path.
+///
+/// Walks each policy definition and each intervention point policy binding.
+/// Rego `bundle` and Cedar path fields are typed on the config structs.
+/// `data` and `data_paths` live on the open adapter map. Annotator
+/// `system_prompt_file` is already rejected for every source by
+/// [`reject_removed_fields`].
+pub fn reject_url_sourced_local_paths(manifest: &Manifest) -> Result<(), RuntimeError> {
+    fn check(
+        location: impl Fn() -> String,
+        keys: impl Iterator<Item = impl AsRef<str>>,
+    ) -> Result<(), RuntimeError> {
+        for key in keys {
+            let key = key.as_ref();
+            if URL_SOURCED_FILESYSTEM_FIELDS.contains(&key) {
+                return Err(RuntimeError::ManifestInvalid(format!(
+                    "{} declares '{key}', which is a filesystem path field; a URL sourced \
+                     manifest has no filesystem root and MUST NOT name local files \
+                     (SPECIFICATION.md 2.3). Supply policy inline, or load the manifest \
+                     from the filesystem.",
+                    location()
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    for (name, policy) in &manifest.policies {
+        match policy {
+            PolicyConfig::Rego(config) => {
+                check(
+                    || format!("policy '{name}'"),
+                    config
+                        .adapter_config
+                        .keys()
+                        .map(String::as_str)
+                        .chain(config.bundle.is_some().then_some("bundle")),
+                )?;
+            }
+            PolicyConfig::Test(config) => {
+                check(|| format!("policy '{name}'"), config.adapter_config.keys())?;
+            }
+            PolicyConfig::Custom(config) => {
+                check(|| format!("policy '{name}'"), config.adapter_config.keys())?;
+            }
+            PolicyConfig::Cedar(config) => {
+                check(
+                    || format!("policy '{name}'"),
+                    [
+                        config.policy_path.is_some().then_some("policy_path"),
+                        config.entities_path.is_some().then_some("entities_path"),
+                        config.schema_path.is_some().then_some("schema_path"),
+                    ]
+                    .into_iter()
+                    .flatten(),
+                )?;
+            }
+        }
+    }
+    for (point, config) in &manifest.intervention_points {
+        check(
+            || format!("intervention point '{}' policy binding", point.as_str()),
+            config.policy.adapter_config.keys(),
+        )?;
+    }
+    Ok(())
+}
+
 /// Reject a manifest that declares any of [`REMOVED_MANIFEST_FIELDS`].
 ///
 /// Checks every open map a manifest author can reach: each policy definition,
@@ -462,8 +545,8 @@ fn json_string_size(value: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        reject_removed_fields, validate_manifest_overlay_yaml, validate_manifest_yaml,
-        REMOVED_MANIFEST_FIELDS,
+        reject_removed_fields, reject_url_sourced_local_paths, validate_manifest_overlay_yaml,
+        validate_manifest_yaml, REMOVED_MANIFEST_FIELDS, URL_SOURCED_FILESYSTEM_FIELDS,
     };
     use agent_control_spec::Manifest;
 
@@ -639,5 +722,112 @@ mod tests {
         validate_manifest_yaml(&local_bundle).unwrap();
         validate_manifest_overlay_yaml(&local_bundle).unwrap();
         assert_eq!(REMOVED_MANIFEST_FIELDS.len(), 3);
+    }
+
+    fn url_sourced_error(yaml: &str) -> String {
+        let manifest = Manifest::from_yaml_str(yaml).unwrap_or_else(|error| {
+            panic!("URL sourced probe must parse so the extra rejection can run: {error}")
+        });
+        reject_url_sourced_local_paths(&manifest)
+            .expect_err("URL sourced filesystem path fields must fail closed")
+            .detail()
+            .to_string()
+    }
+
+    fn cedar_manifest(fields: &str) -> String {
+        format!(
+            "{VERSION}policies:\n  p:\n    type: cedar\n{fields}\
+             intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n"
+        )
+    }
+
+    #[test]
+    fn url_sourced_manifests_reject_filesystem_path_fields() {
+        // Upstream accepts these. SPECIFICATION.md 2.3 requires the URL
+        // loader to fail closed so a remote manifest cannot name local files.
+        assert_eq!(
+            URL_SOURCED_FILESYSTEM_FIELDS,
+            [
+                "bundle",
+                "data",
+                "data_paths",
+                "policy_path",
+                "entities_path",
+                "schema_path",
+            ]
+        );
+
+        let bundle = url_sourced_error(&rego_manifest("    bundle: ./policy\n"));
+        assert!(
+            bundle.starts_with("policy 'p' declares 'bundle'"),
+            "{bundle}"
+        );
+
+        let data_path = url_sourced_error(&rego_manifest("    data: ./data.json\n"));
+        assert!(
+            data_path.starts_with("policy 'p' declares 'data'"),
+            "{data_path}"
+        );
+
+        let data_paths =
+            url_sourced_error(&rego_manifest("    data_paths:\n      - ./extra.rego\n"));
+        assert!(
+            data_paths.starts_with("policy 'p' declares 'data_paths'"),
+            "{data_paths}"
+        );
+
+        let binding = format!(
+            "{VERSION}policies:\n  p:\n    type: rego\n    query: data.acs.result\n\
+             intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n\
+             \x20     data_paths:\n        - ./extra.rego\n"
+        );
+        let binding_error = url_sourced_error(&binding);
+        assert!(
+            binding_error
+                .starts_with("intervention point 'input' policy binding declares 'data_paths'"),
+            "{binding_error}"
+        );
+
+        for (field, yaml) in [
+            (
+                "policy_path",
+                cedar_manifest("    policy_path: ./policy.cedar\n"),
+            ),
+            (
+                "entities_path",
+                cedar_manifest("    entities_path: ./entities.json\n"),
+            ),
+            (
+                "schema_path",
+                cedar_manifest("    schema_path: ./schema.json\n"),
+            ),
+        ] {
+            let error = url_sourced_error(&yaml);
+            assert!(
+                error.starts_with(&format!("policy 'p' declares '{field}'")),
+                "{field}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn url_sourced_inline_policy_without_filesystem_paths_is_accepted() {
+        let inline_query = rego_manifest("");
+        reject_url_sourced_local_paths(&Manifest::from_yaml_str(&inline_query).unwrap()).unwrap();
+
+        let inline_data = rego_manifest("    data:\n      allow: true\n");
+        let inline_manifest = Manifest::from_yaml_str(&inline_data).unwrap();
+        // SPECIFICATION.md 2.3 names adapter `data` as a filesystem path
+        // field, so the key is rejected even when the value is an object.
+        let error = reject_url_sourced_local_paths(&inline_manifest).unwrap_err();
+        assert!(
+            error.detail().starts_with("policy 'p' declares 'data'"),
+            "{}",
+            error.detail()
+        );
+
+        let cedar =
+            cedar_manifest("    policy_set: |\n      permit(principal, action, resource);\n");
+        reject_url_sourced_local_paths(&Manifest::from_yaml_str(&cedar).unwrap()).unwrap();
     }
 }
