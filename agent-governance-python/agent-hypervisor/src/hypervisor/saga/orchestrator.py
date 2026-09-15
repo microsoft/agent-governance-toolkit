@@ -120,15 +120,28 @@ class SagaOrchestrator:
 
         last_error: Exception | None = None
         attempts = 1 + step.max_retries
-        execution = executor()
-        self._ensure_awaitable(execution, "executor")
 
         for attempt in range(attempts):
-            if attempt > 0:
-                execution = executor()
-                self._ensure_awaitable(execution, "executor")
             step.retry_count = attempt
             step.transition(StepState.EXECUTING)
+            try:
+                execution = executor()
+            except Exception as e:
+                last_error = e
+                step.error = str(e)
+                step.transition(StepState.FAILED)
+                if attempt < attempts - 1:
+                    step.reset_for_retry()
+                    await asyncio.sleep(self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1))
+                continue
+
+            try:
+                self._ensure_awaitable(execution, "executor")
+            except TypeError as e:
+                step.error = str(e)
+                step.transition(StepState.FAILED)
+                raise
+
             try:
                 result = await asyncio.wait_for(
                     execution,
@@ -195,9 +208,9 @@ class SagaOrchestrator:
                 continue
 
             step.transition(StepState.COMPENSATING)
-            compensation = compensator(step)
-            self._ensure_awaitable(compensation, "compensator")
             try:
+                compensation = compensator(step)
+                self._ensure_awaitable(compensation, "compensator")
                 result = await asyncio.wait_for(
                     compensation,
                     timeout=step.timeout_seconds,

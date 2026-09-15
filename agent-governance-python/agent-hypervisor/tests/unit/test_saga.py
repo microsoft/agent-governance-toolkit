@@ -177,6 +177,39 @@ class TestSagaOrchestrator:
         assert calls == 1
 
     @pytest.mark.asyncio
+    async def test_sync_executor_exception_retries(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(
+            saga.saga_id,
+            "a1",
+            "did:a",
+            "/api/exec",
+            max_retries=1,
+        )
+        calls = 0
+
+        def executor():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("setup failed")
+
+            async def _run():
+                return "ok"
+
+            return _run()
+
+        result = await self.orchestrator.execute_step(
+            saga.saga_id,
+            step.step_id,
+            executor=executor,
+        )
+
+        assert result == "ok"
+        assert calls == 2
+        assert step.state == StepState.COMMITTED
+
+    @pytest.mark.asyncio
     async def test_execute_step_failure(self):
         saga = self.orchestrator.create_saga("session:1")
         step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
@@ -228,3 +261,43 @@ class TestSagaOrchestrator:
         failed = await self.orchestrator.compensate(saga.saga_id, failing_compensator)
         assert len(failed) == 1
         assert saga.state == SagaState.ESCALATED
+
+    @pytest.mark.asyncio
+    async def test_sync_compensator_exception_escalates(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/exec", "/undo")
+
+        async def ok_executor():
+            return "ok"
+
+        await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=ok_executor)
+
+        def failing_compensator(step):
+            raise RuntimeError("sync undo failed")
+
+        failed = await self.orchestrator.compensate(saga.saga_id, failing_compensator)
+
+        assert failed == [step]
+        assert step.state == StepState.COMPENSATION_FAILED
+        assert saga.state == SagaState.ESCALATED
+        assert "sync undo failed" in step.error
+
+    @pytest.mark.asyncio
+    async def test_non_awaitable_compensator_result_escalates(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/exec", "/undo")
+
+        async def ok_executor():
+            return "ok"
+
+        await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=ok_executor)
+
+        def compensator(step):
+            return "not-awaitable"
+
+        failed = await self.orchestrator.compensate(saga.saga_id, compensator)
+
+        assert failed == [step]
+        assert step.state == StepState.COMPENSATION_FAILED
+        assert saga.state == SagaState.ESCALATED
+        assert "compensator must return an awaitable" in step.error
