@@ -15,6 +15,10 @@ owner: agt-maintainers
 
 ## Security Fix
 
+[GHSA-5j58-vjjg-pcgm](https://github.com/microsoft/agent-governance-toolkit/security/advisories/GHSA-5j58-vjjg-pcgm)
+lists both `agent-governance-toolkit-core` and `agentmesh-platform` as affected
+package identities.
+
 The HTTP trust middleware accepted caller-controlled identity data without
 binding authentication to the complete request. The Django middleware verified
 an Ed25519 signature over only the agent DID, so a captured request could be

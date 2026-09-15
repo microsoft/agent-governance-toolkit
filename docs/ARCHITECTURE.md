@@ -1,9 +1,3 @@
----
-title: Architecture
-last_reviewed: 2026-09-10
-owner: agt-maintainers
----
-
 # Architecture
 
 ## Overview

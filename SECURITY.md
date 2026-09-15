@@ -92,9 +92,10 @@ Out of scope:
 
 | Version | Supported          |
 |---------|--------------------|
-| >= 5.0.1 | :white_check_mark: |
-| 4.0.0 - 5.0.0 | :x:          |
-| < 4.0.0 | :x:                |
+| 3.4.x   | :white_check_mark: |
+| 3.3.x   | :white_check_mark: |
+| 3.2.x   | :white_check_mark: |
+| < 3.2   | :x:                |
 
 ## Disclosure Policy
 
@@ -112,10 +113,14 @@ the reporter before any public disclosure.
 
 ### HTTP Trust Middleware Authentication and Replay Protection (Fixed in v5.0.1)
 
+**Advisory:** [GHSA-5j58-vjjg-pcgm](https://github.com/microsoft/agent-governance-toolkit/security/advisories/GHSA-5j58-vjjg-pcgm)
 **Affected packages:** `agent-governance-toolkit-core`, `agentmesh-platform`
 **Affected versions:** `agent-governance-toolkit-core` 4.0.0 through 5.0.0;
 `agentmesh-platform` through 5.0.0
 **Fixed in:** 5.0.1
+
+The advisory lists both `agent-governance-toolkit-core` and
+`agentmesh-platform` as affected package identities.
 
 The HTTP trust middleware accepted caller-controlled identity data without
 binding authentication to the complete request. The Django middleware verified
