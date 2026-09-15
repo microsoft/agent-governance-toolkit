@@ -113,7 +113,8 @@ the reporter before any public disclosure.
 
 ### HTTP Trust Middleware Authentication and Replay Protection (Fixed in v5.0.1)
 
-**Advisory:** [GHSA-5j58-vjjg-pcgm](https://github.com/microsoft/agent-governance-toolkit/security/advisories/GHSA-5j58-vjjg-pcgm)
+<!-- cspell:ignore vjjg pcgm -->
+**Advisory:** `GHSA-5j58-vjjg-pcgm`
 **Affected packages:** `agent-governance-toolkit-core`, `agentmesh-platform`
 **Affected versions:** `agent-governance-toolkit-core` 4.0.0 through 5.0.0;
 `agentmesh-platform` through 5.0.0

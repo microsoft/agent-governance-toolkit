@@ -15,7 +15,8 @@ owner: agt-maintainers
 
 ## Security Fix
 
-[GHSA-5j58-vjjg-pcgm](https://github.com/microsoft/agent-governance-toolkit/security/advisories/GHSA-5j58-vjjg-pcgm)
+<!-- cspell:ignore vjjg pcgm -->
+`GHSA-5j58-vjjg-pcgm`
 lists both `agent-governance-toolkit-core` and `agentmesh-platform` as affected
 package identities.
 
@@ -38,7 +39,7 @@ Verified nonces are claimed atomically in a shared Redis or memcached cache and
 retained through the request-signature validity window. Identity keys and
 capabilities are resolved from a trusted registry, protected routes require an
 authenticated result, and invalid configuration or dependency failures fail
-closed. Django resolves the replay cache per request to avoid sharing unpooled
+closed. Django resolves the replay cache per request to avoid sharing non-pooled
 Memcached clients across threads, and Memcached claims include a one-second
 expiry allowance for the backend's second-resolution expiration.
 
