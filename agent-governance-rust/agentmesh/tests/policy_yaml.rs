@@ -56,12 +56,13 @@ fn aliases_nested_values_and_literal_merge_keys_preserve_matching() {
     let engine = PolicyEngine::new();
     engine
         .load_from_yaml(&policy(
-            "    original: &data {name: prod, flags: [true, null, 7, 1.5]}\n    copy: *data\n    scope: {<<: {tenant: prod}}",
+            "    original: &data {name: prod, flags: [true, null, 7, 1.5]}\n    copy: *data\n    scope: {<<: {tenant: prod}}\n    flag: !!bool &flag \"TRUE\"\n    copied_flag: *flag",
         ))
         .unwrap();
     let data = json!({"name": "prod", "flags": [true, null, 7, 1.5]});
     let ctx = context(json!({
-        "original": data, "copy": data, "scope": {"<<": {"tenant": "prod"}}
+        "original": data, "copy": data, "scope": {"<<": {"tenant": "prod"}},
+        "flag": true, "copied_flag": true
     }));
     assert!(matches!(
         engine.evaluate("deploy", Some(&ctx)),
@@ -83,6 +84,7 @@ fn scalar_types_and_case_are_not_coerced_during_matching() {
         ("FALSE", json!(false), json!("FALSE")),
         ("tRuE", json!("tRuE"), json!(true)),
         ("!!bool TRUE", json!(true), json!("TRUE")),
+        ("!!bool \"TRUE\"", json!(true), json!("TRUE")),
         ("!!str True", json!("True"), json!(true)),
         ("7", json!(7), json!(7.0)),
         ("7.0", json!(7.0), json!(7)),
@@ -94,6 +96,13 @@ fn scalar_types_and_case_are_not_coerced_during_matching() {
         ("010", json!("010"), json!(10)),
         ("1_000", json!("1_000"), json!(1000)),
         ("-010", json!("-010"), json!(-10)),
+        ("0X10", json!("0X10"), json!(16)),
+        (
+            "18446744073709551615",
+            json!(u64::MAX),
+            json!("18446744073709551615"),
+        ),
+        ("-9223372036854775808", json!(i64::MIN), json!(0)),
         ("DROP", json!("DROP"), json!("drop")),
         ("!!str 7", json!("7"), json!(7)),
     ] {
@@ -130,6 +139,9 @@ fn unsupported_values_and_ambiguous_maps_are_errors_not_default_policies() {
     for conditions in [
         "    value: .nan",
         "    value: .inf",
+        "    value: 18446744073709551616",
+        "    value: -9223372036854775809",
+        "    value: 0x10000000000000000",
         "    value: !custom prod",
         "    value: {1: prod}",
         "    value: {true: prod}",

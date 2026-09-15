@@ -52,7 +52,8 @@ let decision = engine.evaluate("deploy.app", Some(&context));
 
 YAML and JSON policies remain supported. Conditions retain case-sensitive
 equality and sequence membership. Nested string-keyed objects, arrays,
-booleans, null and finite numbers are supported. Numeric and string values
+booleans, null, 64-bit integers and finite floating-point numbers are supported.
+Out-of-range integers are rejected rather than rounded. Numeric and string values
 remain distinct. Non-string mapping keys, non-finite numbers, duplicate keys
 and unsupported tags are rejected rather than converted or ignored.
 Quote numeric-looking strings when a string is intended. Legacy forms such as

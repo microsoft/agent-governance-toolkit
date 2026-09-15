@@ -239,7 +239,7 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
 }
 
 /// Preserve legacy numeric strings and YAML 1.2 boolean capitalization.
-/// Token spans, rather than text matching, keep quoted strings, tags and comments intact.
+/// Token spans distinguish scalar syntax from string content and comments.
 fn preserve_scalar_types(
     input: &str,
     limits: Limits,
@@ -299,10 +299,43 @@ fn preserve_scalar_types(
         let leading_zero = unsigned.len() > 1
             && unsigned.starts_with('0')
             && unsigned.bytes().all(|byte| byte.is_ascii_digit());
+        let (digits, radix) = if let Some(digits) = unsigned.strip_prefix("0x") {
+            (digits, 16)
+        } else if let Some(digits) = unsigned.strip_prefix("0o") {
+            (digits, 8)
+        } else if let Some(digits) = unsigned.strip_prefix("0b") {
+            (digits, 2)
+        } else {
+            (unsigned, 10)
+        };
+        if !leading_zero && !digits.is_empty() && digits.chars().all(|ch| ch.is_digit(radix)) {
+            let magnitude = u64::from_str_radix(digits, radix).map_err(|_| {
+                RuntimeError::ManifestInvalid(
+                    "YAML integer exceeds the supported 64-bit range".to_string(),
+                )
+            })?;
+            if value.starts_with('-') && magnitude > (i64::MAX as u64) + 1 {
+                return Err(RuntimeError::ManifestInvalid(
+                    "YAML integer exceeds the supported 64-bit range".to_string(),
+                ));
+            }
+        }
         let separated_number = unsigned.contains('_')
             && unsigned.starts_with(|ch: char| ch.is_ascii_digit() || ch == '.')
             && !unsigned.chars().any(char::is_whitespace);
-        if !leading_zero && !separated_number && boolean.is_none() && !mixed_boolean {
+        let legacy_prefix = [("0X", 16), ("0O", 8), ("0B", 2)]
+            .iter()
+            .any(|(prefix, radix)| {
+                unsigned.strip_prefix(*prefix).is_some_and(|digits| {
+                    !digits.is_empty() && digits.chars().all(|ch| ch.is_digit(*radix))
+                })
+            });
+        if !leading_zero
+            && !separated_number
+            && !legacy_prefix
+            && boolean.is_none()
+            && !mixed_boolean
+        {
             continue;
         }
         let range = span.byte_range().ok_or_else(|| {
