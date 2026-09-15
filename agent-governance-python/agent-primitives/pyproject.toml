@@ -34,7 +34,7 @@ classifiers = [
 
 dependencies = [
     "agent-governance-toolkit-core>=5.0.0,<6.0",
-    "pydantic>=2.13.4,<3.0",
+    "pydantic>=2.13.5,<3.0",
 ]
 
 [project.optional-dependencies]
