@@ -136,6 +136,8 @@ REGISTERED_PACKAGES = {
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",
+    # Microsoft Agent Learning (real PyPI package, used by agent-learning governance)
+    "agent-learning", "agent_learning",
     # Azure Functions Python worker (used in foundry-ai-gateway-pdp example)
     "azure-functions", "azure_functions",
     # Azure SDK core libs (used by agent-sandbox ACASandboxProvider)
