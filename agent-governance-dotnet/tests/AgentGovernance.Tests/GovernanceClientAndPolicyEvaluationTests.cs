@@ -486,4 +486,89 @@ rules:
         Assert.False(decision.Allowed);
         Assert.Equal("deny-write", decision.MatchedRule);
     }
+
+    /// <summary>Records whether the sync or async path was invoked.</summary>
+    private sealed class AsyncTrackingBackend : IExternalPolicyBackend
+    {
+        public string Name => "async-tracking";
+
+        public int SyncCalls { get; private set; }
+
+        public int AsyncCalls { get; private set; }
+
+        public ExternalPolicyDecision Evaluate(IReadOnlyDictionary<string, object> context)
+        {
+            SyncCalls++;
+            return Decision();
+        }
+
+        public Task<ExternalPolicyDecision> EvaluateAsync(IReadOnlyDictionary<string, object> context, CancellationToken cancellationToken = default)
+        {
+            AsyncCalls++;
+            return Task.FromResult(Decision());
+        }
+
+        private ExternalPolicyDecision Decision() => new()
+        {
+            Backend = Name,
+            Allowed = true,
+            Reason = "ok"
+        };
+    }
+
+    [Fact]
+    public async Task PolicyEngine_EvaluateAsync_UsesBackendAsyncPath()
+    {
+        var backend = new AsyncTrackingBackend();
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(backend);
+
+        var decision = await engine.EvaluateAsync("did:agentmesh:test", new Dictionary<string, object>
+        {
+            ["tool_name"] = "anything"
+        });
+
+        Assert.True(decision.Allowed);
+        Assert.Equal(1, backend.AsyncCalls);
+        Assert.Equal(0, backend.SyncCalls);
+    }
+
+    [Fact]
+    public void PolicyEngine_Evaluate_UsesBackendSyncPath()
+    {
+        var backend = new AsyncTrackingBackend();
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(backend);
+
+        var decision = engine.Evaluate("did:agentmesh:test", new Dictionary<string, object>
+        {
+            ["tool_name"] = "anything"
+        });
+
+        Assert.True(decision.Allowed);
+        Assert.Equal(1, backend.SyncCalls);
+        Assert.Equal(0, backend.AsyncCalls);
+    }
+
+    [Fact]
+    public async Task PolicyEngine_EvaluateAsync_FailsClosedOnBackendError()
+    {
+        var stub = new StubExternalBackend("stub-error", _ => new ExternalPolicyDecision
+        {
+            Backend = "stub-error",
+            Allowed = true, // even if the backend says allow, a non-empty Error must fail closed
+            Reason = "transport failure",
+            Error = "connection refused"
+        });
+
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(stub);
+
+        var decision = await engine.EvaluateAsync("did:agentmesh:test", new Dictionary<string, object>
+        {
+            ["tool_name"] = "anything"
+        });
+
+        Assert.False(decision.Allowed);
+    }
 }
