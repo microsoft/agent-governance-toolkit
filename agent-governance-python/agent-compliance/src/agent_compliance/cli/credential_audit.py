@@ -4,7 +4,7 @@
 """Credential audit: detect when merged PRs are used as spray credentials.
 
 Checks whether a contributor cites merges from a target repo in issues
-filed across other repos, a pattern called "credential laundering."
+or pull requests filed across other repos, a pattern called "credential laundering."
 
 Usage:
     python scripts/credential_audit.py --username <handle> --repo org/repo
@@ -186,7 +186,7 @@ class MergeRecord:
 
 @dataclass
 class SprayCitation:
-    """An issue in another repo that cites a merge from the target repo."""
+    """An issue or pull request in another repo that cites a merge from the target repo."""
     repo: str
     issue_number: int
     title: str
@@ -275,8 +275,8 @@ def find_spray_citations(
     target_repo: str,
     merges: list[MergeRecord],
 ) -> list[SprayCitation]:
-    """Find issues by username in OTHER repos that cite merges from target_repo."""
-    issues = _search("issues", f"author:{username} is:issue", per_page=100)
+    """Find issues and pull requests by username in OTHER repos that cite merges from target_repo."""
+    issues = _search("issues", f"author:{username}", per_page=100)
 
     # Normalize target repo references to check for
     target_lower = target_repo.lower()
@@ -442,7 +442,7 @@ def format_report(report: CredentialAuditReport, as_json: bool = False) -> str:
                 lines.append(f"    > {clean}")
             lines.append("")
     else:
-        lines.append("No credential citations found in external issues.")
+        lines.append("No credential citations found in external issues or pull requests.")
         lines.append("")
 
     return "\n".join(lines)
