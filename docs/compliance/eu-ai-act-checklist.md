@@ -550,5 +550,3 @@ Several "Partial" ratings rely on a **single mechanism with no fallback**:
 > **Maintenance**: This checklist should be reviewed when: (a) the toolkit releases a new version, (b) the EU Commission adopts delegated acts amending Annex III risk categories, or (c) implementing acts on conformity procedures are published. The Annex III domain sets in the risk classifier are hardcoded and cannot track regulatory amendments without a code release.
 
 > **Disclaimer**: This checklist is an automated mapping of toolkit capabilities against EU AI Act requirements. It is not legal advice and does not constitute a conformity assessment. **Partial coverage does not equal partial compliance** -- a conformity assessor evaluates pass/fail per obligation, not percentage coverage. Organizations should engage qualified legal counsel and notified bodies for formal compliance evaluation.
-
-
