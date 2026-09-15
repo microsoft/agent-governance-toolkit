@@ -54,7 +54,7 @@ test("evaluateOpenCodePrompt allows benign prompts", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persistence writes", async () => {
+test("evaluateOpenCodeTool denies dangerous bash bootstrap and enforce-mode review tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-tool-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });
 
@@ -72,7 +72,7 @@ test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persisten
     sessionId: "write-session",
     cwd: root,
   });
-  assert.equal(reviewResult.effect, "review");
+  assert.equal(reviewResult.effect, "deny");
 
   const status = await getPolicyStatus(state);
   assert.ok(status.auditEntries >= 2);

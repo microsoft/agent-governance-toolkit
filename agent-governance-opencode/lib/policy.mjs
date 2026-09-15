@@ -1344,7 +1344,7 @@ function normalizeEffectForOpenCode(state, effectiveDecision) {
     return "deny";
   }
   if (effectiveDecision === "review") {
-    return state.policy.mode === "advisory" ? "review" : "review";
+    return state.policy.mode === "advisory" ? "review" : "deny";
   }
   return "allow";
 }
