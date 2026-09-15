@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 #![cfg(feature = "telemetry")]
 
 use agentmesh::telemetry::{
