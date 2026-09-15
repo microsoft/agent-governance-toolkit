@@ -22,12 +22,14 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from .policy import Policy, PolicyDecision, PolicyEngine
 from .audit import AuditLog
+from .audit_backends import FileAuditSink
 from .trace_sink import TraceConfig, TRACEAuditSink
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .advisory import AdvisoryCheck, AdvisoryDecision
@@ -182,6 +184,12 @@ class GovernedCallable:
         self._config = config
         self._engine = PolicyEngine(conflict_strategy=config.conflict_strategy)
         self._audit = AuditLog() if config.audit else None
+
+        # Wire file-based audit sink if audit_file is configured
+        if config.audit and config.audit_file:
+            secret_key = secrets.token_bytes(32)
+            sink = FileAuditSink(path=config.audit_file, secret_key=secret_key)
+            self._audit = AuditLog(sink=sink)
 
         # Load policy
         policy = config.policy
@@ -704,6 +712,7 @@ def govern(
     policy: Union[str, Policy],
     agent_id: str = "*",
     audit: bool = True,
+    audit_file: Optional[str] = None,
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None,
     approval_handler: Optional[ApprovalHandler] = None,
     advisory: Optional[AdvisoryCheck] = None,
@@ -727,6 +736,9 @@ def govern(
             string, or a ``Policy`` object.
         agent_id: Agent identifier for policy evaluation. Default ``"*"``.
         audit: Enable audit logging. Default ``True``.
+        audit_file: Optional path for file-based audit log (JSONL). When set,
+            enables :class:`FileAuditSink` with HMAC-signed, hash-chained entries.
+            Default ``None`` (in-memory only).
         on_deny: Optional callback on denial. Default: raise
             ``GovernanceDenied``.
         conflict_strategy: Conflict resolution strategy. Default
@@ -793,6 +805,7 @@ def govern(
         policy=policy,
         agent_id=agent_id,
         audit=audit,
+        audit_file=audit_file,
         on_deny=on_deny,
         approval_handler=approval_handler,
         advisory=advisory,
