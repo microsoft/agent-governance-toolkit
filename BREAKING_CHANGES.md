@@ -5,6 +5,164 @@ entries appear first.
 
 ---
 
+## Manifests declaring `bundle_url`, `system_prompt_file` or `system_prompt_url` are rejected
+
+**Date:** TBD
+
+**Affected**
+
+- manifests with a rego policy, or a policy binding, that declares `bundle_url`
+- manifests with an `llm` annotator, or an annotation binding, that declares
+  `system_prompt_file` or `system_prompt_url`
+- tooling that validates manifests against `policy-engine/spec/schema/manifest.schema.json`
+
+**What changed**
+
+The embedded engine implemented these three fields. `agent-control-spec`
+0.4.0-alpha.3 does not, and its policy and annotator configuration maps are
+open, so after the retarget a manifest declaring one of them was accepted with
+the feature silently missing: the `llm` annotator ran with the default system
+prompt, and a `bundle_url` rego policy denied every request with
+`runtime_error:policy_invocation_failed` and no diagnostic.
+
+Such a manifest now fails at load with `runtime_error:manifest_invalid` naming
+the field and its location, from every constructor in Rust, Python, Node and
+the C ABI, and from `validate_manifest_yaml` and
+`validate_manifest_overlay_yaml`. The schema marks the three keys as rejected
+properties, so schema-only validators reject them as well.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `system_prompt_file: prompts/judge.txt` | `system_prompt: <the file's text>` |
+| `system_prompt_url: {url: ..., sha256: ...}` | `system_prompt: <the fetched text>` |
+| `bundle_url: {url: ..., sha256: ...}` | `bundle: ./policy` shipped with the manifest, or a host policy dispatcher that fetches the bundle |
+
+See `policy-engine/docs/acs-retarget.md`, "Removed manifest fields".
+
+---
+
+## `manifest_from_url` blocks private and unique-local literals and local names
+
+**Date:** TBD
+
+**Affected**
+
+- hosts that load a manifest with `manifest_from_url` (Rust), `AgentControl.from_url`
+  (Python), `AgentControl.fromUrl` (Node) or `acs_builder_from_url` (C ABI) from an
+  RFC 1918, `100.64.0.0/10`, `fc00::/7` or `fec0::/10` IP literal, or from
+  `localhost`, a `*.localhost` name or a `*.local` name
+
+**What changed**
+
+The SSRF guard on the top level manifest URL now parses the URL with the same
+parser the fetcher uses and evaluates the canonical host, so non canonical
+loopback and link-local literals (`127.1`, `2130706433`, `0x7f000001`,
+`0177.0.0.1`, an embedded tab) are refused instead of walking past a
+dotted-quad-only check. While closing that, the blocked set widened. Private,
+shared address space, unique-local and site-local addresses, and the three
+local name patterns, now fail closed with `runtime_error:manifest_invalid`.
+The previous engine allowed private literals so a manifest could be hosted on
+an internal HTTPS server by IP.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `https://10.0.0.5/manifest.yaml` | `https://policies.internal.example/manifest.yaml` |
+| `https://localhost:8443/manifest.yaml` (local testing) | load the file with `from_path`, or serve it under a public name |
+
+The guard still checks only the URL a caller passes. It does not resolve
+hostnames and it does not re-check redirect hops; set the redirect limit to
+zero (`Limits::max_manifest_url_redirects` in Rust, `max_url_redirects=0` in
+Python, `maxRedirects: 0` in Node) if the guard must hold across redirects.
+The C ABI `acs_builder_from_url` fetches with the default budget and cannot
+lower it yet. See `policy-engine/docs/acs-retarget.md`.
+
+---
+
+## The policy engine moves to `agent-control-spec` and a three verdict contract
+
+**Date:** TBD
+
+**Affected**
+
+- every manifest, because `agent_control_specification_version` accepts exactly
+  one value and rejects the rest at parse time
+- manifests using the `$policy_target` path root
+- callers reading `warn` or `escalate` off a verdict
+- callers that relied on the engine applying a transform, honouring
+  `evaluate_only`, or resolving an approval
+- Rust, Python, Node and .NET code importing from `policy-engine`
+
+**What changed**
+
+AGT no longer carries its own policy engine. It depends on `agent-control-spec`,
+the same engine extracted from this tree and rebased onto the agent-hooks control
+contract.
+
+The verdict set closed to `allow`, `deny` and `transform`. A policy may still
+express `warn` and `escalate`, but the engine normalizes them. `warn` becomes an
+`allow` with an entry in `warnings[]`. `escalate` becomes a `deny` carrying an
+`approval` block, which the spec calls a liftable deny. A `deny` without that
+block is final.
+
+The engine also stopped mutating anything. Applying a transform, honouring
+`evaluate_only`, resolving an approval, and deriving the identity trio are host
+obligations now, discharged by `HostEvaluation`.
+
+`policy-engine/core` retains compatibility aliases for one release cycle.
+These retain names, not the old signatures or behavior.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `agent_control_specification_version: 0.3.1-beta` | `agent_control_specification_version: 0.4.0-alpha.1` |
+| `$policy_target` | `$target` |
+| `decision: warn` | `decision: allow` with `warnings[]` |
+| `decision: escalate` | `decision: deny` with `approval` |
+
+A host that tested `decision == "warn"` should read `warnings` instead. A host
+that tested for `escalate` should test for the `approval` block on a `deny`.
+
+Host-synthesized reasons moved from the engine's `runtime_error:` namespace to
+the reserved `host_error:` namespace, and one was renamed. A host matching on
+the old strings must update:
+
+| Before | After |
+|--------|-------|
+| `runtime_error:approval_resolver_failed` | `host_error:approval_resolver_failed` |
+| `runtime_error:approval_action_mismatch` | `host_error:approval_identity_mismatch` |
+| (none) | `host_error:approval_unresolved`, a liftable deny with no resolver or a timed-out one |
+| `runtime_error:effect_invalid`, `runtime_error:effect_target_forbidden` | gone with the effects plane. The engine keeps `runtime_error:transform_invalid` and `runtime_error:transform_target_forbidden`; a transform the host rejects while applying it reports `host_error:transform_invalid` or `host_error:transform_target_forbidden` |
+| `runtime_error:adapter_unsupported`, `runtime_error:streaming_unsupported` | `host_error:adapter_unsupported`, `host_error:streaming_unsupported` |
+
+`policy-engine/spec/reserved-reasons.json` is the registry.
+
+Rust `use` paths inside `agent_control_specification_core` moved. The root
+re-exports still resolve; module-qualified imports must change:
+
+| Before | After |
+|--------|-------|
+| `manifest::{parse_manifest_yaml_value, validate_manifest_yaml, validate_manifest_overlay_yaml}` | `manifest_yaml::{...}` |
+| `telemetry::{InMemoryTelemetrySink, MultiSink, StdoutJsonTelemetrySink}` | `telemetry_sinks::{...}` |
+| `policy_input::action_identity` | `identity::action_identity` |
+| `intervention_point`, `verdict`, `ffi` modules | removed from the core crate root; the C ABI is `agent_control_specification::ffi` |
+| core `crate-type = ["lib", "cdylib"]` | `lib` only; the `cdylib` is built from `agent_control_specification` |
+
+Python consumers need `agent-control-specification>=0.4.0b0,<0.5.0`.
+`agt-policies` 5.1.0 and the generator declare that requirement so an installed
+0.3.1b1 wheel cannot satisfy it. Publish the new SDK before these consumers.
+The .NET SDK and adapters move together to 0.4.0-beta.0, and their native
+library is now `agent_control_specification`, without the `_core` suffix.
+
+`policy-engine/docs/acs-retarget.md` carries the full symbol mapping and the
+list of gaps filed upstream.
+
+---
+
 ## `TrustMiddleware` requires signed requests and an explicit trust anchor
 
 **Date:** TBD

@@ -4,7 +4,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 OUTPUT="${ACS_CONFORMANCE_RESULTS:-tests/conformance/results/rust.json}"
 
-cargo test -p agent_control_specification_core --test conformance_corpus --quiet
+# The corpus moved to the SDK: applying a transform and deriving identities
+# are host obligations, so the expected results are only observable there.
+cargo test -p agent_control_specification --test conformance_corpus --quiet
 
 python3 - <<'PY'
 from __future__ import annotations

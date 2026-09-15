@@ -35,13 +35,10 @@ test("Decision union includes 'transform' per AGT D1", () => {
   assert.equal(Decision.Transform, "transform");
 });
 
-// AGT D1: only transform mutates the policy target. allow|warn|deny|
-// escalate MUST NOT mutate.
+// AGT D1: only transform mutates the policy target.
 test("appliesTransform is true only for Decision.Transform", () => {
   assert.equal(appliesTransform(Decision.Allow), false);
-  assert.equal(appliesTransform(Decision.Warn), false);
   assert.equal(appliesTransform(Decision.Deny), false);
-  assert.equal(appliesTransform(Decision.Escalate), false);
   assert.equal(appliesTransform(Decision.Transform), true);
 });
 
@@ -55,11 +52,11 @@ test("appliesEffects is a back-compat alias of appliesTransform", () => {
 
 // AGT D1.1: transformedOr returns transformedPolicyTarget only when the
 // verdict is transform in enforce mode. Pre-AGT the fallback was applied
-// for allow|warn|escalate too; the new gate strips that incorrect path.
+// for non-transform decisions too; the new gate strips that incorrect path.
 test("transformedOr applies only TRANSFORM in enforce mode", () => {
   const fallback = { text: "raw" };
   const transformedTarget = { text: "redacted" };
-  for (const decision of [Decision.Allow, Decision.Warn, Decision.Deny, Decision.Escalate]) {
+  for (const decision of [Decision.Allow, Decision.Deny]) {
     const result = {
       verdict: { decision },
       transformedPolicyTarget: transformedTarget,
@@ -97,7 +94,7 @@ test("transformedOr returns fallback in evaluate_only even for transform", () =>
 // alias for enforcedIdentity.
 test("InterventionPointResult surfaces inputIdentity, enforcedIdentity, actionIdentity", async () => {
   const control = makeControl(() => ({
-    verdict: { decision: Decision.Transform, transform: { path: "$policy_target", value: "redacted" } },
+    verdict: { decision: Decision.Transform, transform: { path: "$target", value: "redacted" } },
     transformedPolicyTarget: "redacted",
     inputIdentity: "sha256:input",
     enforcedIdentity: "sha256:enforced",
@@ -141,7 +138,7 @@ test("control.run routes TRANSFORM through transformedPolicyTarget without an ap
       verdict: {
         decision: Decision.Transform,
         reason: "redact_pii",
-        transform: { path: "$policy_target.text", value: "redacted" },
+        transform: { path: "$target.text", value: "redacted" },
       },
       transformedPolicyTarget: { text: "redacted" },
     },
@@ -170,7 +167,10 @@ test("control.run routes TRANSFORM through transformedPolicyTarget without an ap
 test("control.run ignores transformedPolicyTarget on non-TRANSFORM verdicts", async () => {
   const queue = [
     {
-      verdict: { decision: Decision.Warn, reason: "audited" },
+      verdict: {
+        decision: Decision.Allow,
+        warnings: [{ reason: "audited" }],
+      },
       transformedPolicyTarget: { text: "leaked" },
     },
     { verdict: { decision: Decision.Allow } },

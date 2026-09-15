@@ -65,6 +65,7 @@ export class KillSwitch {
       action: context.action,
       reason: context.reason,
       killedAt: new Date().toISOString(),
+      terminated: handlers.length > 0,
       callbacksExecuted: handlers.length,
       compensationsExecuted: compensations.length,
       handoffAgentId,

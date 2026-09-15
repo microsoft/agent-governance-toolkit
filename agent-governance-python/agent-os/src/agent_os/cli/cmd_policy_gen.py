@@ -58,7 +58,7 @@ def generate_policy(template_name: str) -> str:
         )
     policy_id = f"{template_name.replace('-', '_')}_starter"
     document = {
-        "agent_control_specification_version": "0.3.1-beta",
+        "agent_control_specification_version": "0.4.0-alpha.1",
         "metadata": {
             "name": f"{template_name}-starter",
             "version": "1.0",

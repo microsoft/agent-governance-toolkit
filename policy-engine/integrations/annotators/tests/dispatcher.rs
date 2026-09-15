@@ -76,7 +76,7 @@ fn endpoint_returns_json_response() {
     let url = server("200 OK", r#"{"risk":"low"}"#);
     let annotator = invocation(&[
         ("type", json!("endpoint")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("url", json!(url)),
     ]);
 
@@ -92,7 +92,7 @@ fn endpoint_rejects_non_success_status() {
     let url = server("500 Internal Server Error", r#"{"error":"bad"}"#);
     let annotator = invocation(&[
         ("type", json!("endpoint")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("url", json!(url)),
     ]);
 
@@ -107,7 +107,7 @@ fn endpoint_rejects_non_success_status() {
 fn endpoint_rejects_unresolvable_from_path() {
     let annotator = invocation(&[
         ("type", json!("endpoint")),
-        ("from", json!("$policy_target.missing")),
+        ("from", json!("$target.missing")),
         ("url", json!("http://127.0.0.1:1")),
     ]);
 
@@ -121,7 +121,7 @@ fn classifier_returns_json_response() {
     let url = server("200 OK", r#"{"labels":[{"label":"safe","score":0.9}]}"#);
     let annotator = invocation(&[
         ("type", json!("classifier")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("url", json!(url)),
         ("api_key_env", json!("ACS_CLASSIFIER_TEST_KEY")),
     ]);
@@ -139,7 +139,7 @@ fn classifier_rejects_malformed_json() {
     let url = server("200 OK", "not-json");
     let annotator = invocation(&[
         ("type", json!("classifier")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("url", json!(url)),
     ]);
 
@@ -152,7 +152,7 @@ fn classifier_rejects_malformed_json() {
 fn classifier_rejects_unresolvable_from_path() {
     let annotator = invocation(&[
         ("type", json!("classifier")),
-        ("from", json!("$policy_target.missing")),
+        ("from", json!("$target.missing")),
         ("url", json!("http://127.0.0.1:1")),
     ]);
 
@@ -169,7 +169,7 @@ fn llm_returns_label_and_raw_content() {
     );
     let annotator = invocation(&[
         ("type", json!("llm")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("endpoint", json!(url)),
         ("model", json!("test-model")),
         ("prompt", json!("judge")),
@@ -195,7 +195,7 @@ fn llm_rejects_malformed_model_content() {
     );
     let annotator = invocation(&[
         ("type", json!("llm")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("endpoint", json!(url)),
         ("api_key_env", json!("ACS_LLM_MALFORMED_TEST_KEY")),
     ]);
@@ -210,7 +210,7 @@ fn llm_rejects_malformed_model_content() {
 fn llm_rejects_unresolvable_from_path() {
     let annotator = invocation(&[
         ("type", json!("llm")),
-        ("from", json!("$policy_target.missing")),
+        ("from", json!("$target.missing")),
         ("endpoint", json!("http://127.0.0.1:1")),
         ("api_key_env", json!("ACS_LLM_MISSING_PATH_TEST_KEY")),
     ]);
@@ -271,7 +271,7 @@ fn error_status_surfaces_response_body() {
     );
     let annotator = invocation(&[
         ("type", json!("endpoint")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("url", json!(url)),
     ]);
 
@@ -291,7 +291,7 @@ fn classifier_uses_custom_auth_header() {
     std::env::set_var("ACS_CLASSIFIER_HEADER_TEST_KEY", "secret-token");
     let annotator = invocation(&[
         ("type", json!("classifier")),
-        ("from", json!("$policy_target.text")),
+        ("from", json!("$target.text")),
         ("url", json!(url)),
         ("api_key_env", json!("ACS_CLASSIFIER_HEADER_TEST_KEY")),
         ("api_key_header", json!("Ocp-Apim-Subscription-Key")),
