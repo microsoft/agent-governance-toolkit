@@ -1165,3 +1165,6 @@ zmij
 zoneinfo
 رقم
 قومي
+
+# --- Python stdlib identifiers (scripts/check_lockfile_integrity.py) ---
+fromhex
