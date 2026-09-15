@@ -1,6 +1,6 @@
 ---
 title: EU AI Act Compliance Checklist
-last_reviewed: 2026-08-12
+last_reviewed: 2026-09-03
 owner: agt-maintainers
 ---
 
@@ -12,7 +12,7 @@ owner: agt-maintainers
 
 > **Regulation**: [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng), as amended by Regulation (EU) 2026/1744 (Digital Omnibus on AI) -- Harmonised Rules on Artificial Intelligence
 > **Applicability**: Phased -- Art. 5 prohibited practices and Art. 4 AI literacy from 2 February 2025, except Art. 5(1) points (ba) and (bb), Art. 5(1a), and Art. 5(1b) from 2 December 2026; GPAI obligations from 2 August 2025; Art. 50 transparency from 2 August 2026; Art. 50(2) machine-readable marking from 2 December 2026 for generative systems already placed on the market before 2 August 2026; Annex III high-risk obligations / Art. 6(2) from 2 December 2027; Annex I high-risk obligations / Art. 6(1) from 2 August 2028
-> **Prepared**: 2026-04-03; **Last reviewed**: 2026-08-12
+> **Prepared**: 2026-04-03; **Last reviewed**: 2026-09-03
 > **Methodology**: 4-wave multi-agent investigation -- parallel discovery, adversarial conformity testing, citation validation, and strategic review. Article 11 was revalidated against the shipped Annex IV exporter and evidence pipeline.
 
 ---
@@ -550,3 +550,4 @@ Several "Partial" ratings rely on a **single mechanism with no fallback**:
 > **Maintenance**: This checklist should be reviewed when: (a) the toolkit releases a new version, (b) the EU Commission adopts delegated acts amending Annex III risk categories, or (c) implementing acts on conformity procedures are published. The Annex III domain sets in the risk classifier are hardcoded and cannot track regulatory amendments without a code release.
 
 > **Disclaimer**: This checklist is an automated mapping of toolkit capabilities against EU AI Act requirements. It is not legal advice and does not constitute a conformity assessment. **Partial coverage does not equal partial compliance** -- a conformity assessor evaluates pass/fail per obligation, not percentage coverage. Organizations should engage qualified legal counsel and notified bodies for formal compliance evaluation.
+
