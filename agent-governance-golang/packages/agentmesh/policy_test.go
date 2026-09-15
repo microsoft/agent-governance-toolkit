@@ -750,3 +750,39 @@ func TestRateLimitCounterDoesNotGrowAfterDeny(t *testing.T) {
 		t.Errorf("after multiple denies, count = %d, want 3", got)
 	}
 }
+
+// ── Scope validation (#3536) ────────────────────────────────
+
+func TestValidateScope_ValidValues(t *testing.T) {
+	for _, s := range []PolicyScope{Global, Tenant, Organization, Agent} {
+		if err := ValidateScope(s); err != nil {
+			t.Errorf("ValidateScope(%q) = %v, want nil", s, err)
+		}
+	}
+}
+
+func TestValidateScope_InvalidValues(t *testing.T) {
+	invalid := []PolicyScope{
+		"organisation", "Agent", "GLOBAL", "team", "",
+	}
+	for _, s := range invalid {
+		if err := ValidateScope(s); err == nil {
+			t.Errorf("ValidateScope(%q) = nil, want error", s)
+		}
+	}
+}
+
+func TestOrganizationSpecificity(t *testing.T) {
+	org := CandidateDecision{Rule: PolicyRule{Scope: Organization}}
+	tenant := CandidateDecision{Rule: PolicyRule{Scope: Tenant}}
+	agent := CandidateDecision{Rule: PolicyRule{Scope: Agent}}
+	orgSpec := ruleSpecificity(org)
+	tenantSpec := ruleSpecificity(tenant)
+	agentSpec := ruleSpecificity(agent)
+	if tenantSpec >= orgSpec {
+		t.Errorf("tenant specificity %d >= org specificity %d", tenantSpec, orgSpec)
+	}
+	if orgSpec >= agentSpec {
+		t.Errorf("org specificity %d >= agent specificity %d", orgSpec, agentSpec)
+	}
+}

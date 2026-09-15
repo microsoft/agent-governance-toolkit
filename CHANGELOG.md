@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runtime=` plus explicit `SandboxConfig`.
 
 ### Fixed
+- **BREAKING: `Policy.scope` is now validated at construction (Python, TS,
+  .NET).** A misspelled scope (e.g. `"organisation"`, `"Agent"`, `""`) was
+  silently demoted to `GLOBAL`, which under `most_specific_wins` could flip
+  a deny into an allow.  The fix rejects invalid scopes at load time and
+  logs a warning on the runtime fallback path.  The TypeScript `PolicyScope`
+  enum gains the `Organization` member for parity with Python and .NET.
+  Policies with misspelled scopes that were previously loaded (and silently
+  weakened) will now fail to load — this is the desired behavior.  (#3536)
 - **Spell check no longer reports the base branch's own history as a
   contributor's changes** — `scripts/ci/changed_lines.py` diffed from the tip of
   the base branch, so on a branch behind `main` every line `main` had since

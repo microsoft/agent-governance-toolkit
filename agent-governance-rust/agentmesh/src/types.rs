@@ -110,6 +110,8 @@ pub enum ConflictResolutionStrategy {
 }
 
 /// The scope at which a policy rule applies.
+///
+/// Specificity order (most → least): Agent > Organization > Tenant > Global.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicyScope {
@@ -118,6 +120,8 @@ pub enum PolicyScope {
     Global,
     /// Applies to a specific tenant.
     Tenant,
+    /// Applies to a specific organization within a tenant.
+    Organization,
     /// Applies to a specific agent.
     Agent,
 }
@@ -128,9 +132,13 @@ impl PolicyScope {
         match self {
             PolicyScope::Global => 0,
             PolicyScope::Tenant => 1,
-            PolicyScope::Agent => 2,
+            PolicyScope::Organization => 2,
+            PolicyScope::Agent => 3,
         }
     }
+
+    /// The set of valid scope string values.
+    pub const VALID_VALUES: &'static [&'static str] = &["global", "tenant", "organization", "agent"];
 }
 
 /// A candidate decision produced by a single policy rule evaluation.
@@ -385,5 +393,34 @@ mod tests {
         assert_ne!(TrustTier::Standard, TrustTier::Trusted);
         assert_eq!(TrustTier::VerifiedPartner, TrustTier::VerifiedPartner);
         assert_ne!(TrustTier::Untrusted, TrustTier::Probationary);
+    }
+
+    // ── Scope validation (#3536) ────────────────────────────────
+
+    #[test]
+    fn test_organization_scope_specificity() {
+        assert!(PolicyScope::Tenant.specificity() < PolicyScope::Organization.specificity());
+        assert!(PolicyScope::Organization.specificity() < PolicyScope::Agent.specificity());
+    }
+
+    #[test]
+    fn test_valid_scope_values_count() {
+        assert_eq!(PolicyScope::VALID_VALUES.len(), 4);
+        assert!(PolicyScope::VALID_VALUES.contains(&"organization"));
+    }
+
+    #[test]
+    fn test_organization_scope_serde_roundtrip() {
+        let scope = PolicyScope::Organization;
+        let json = serde_json::to_string(&scope).unwrap();
+        assert_eq!(json, "\"organization\"");
+        let back: PolicyScope = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, PolicyScope::Organization);
+    }
+
+    #[test]
+    fn test_invalid_scope_serde_rejects() {
+        let result: Result<PolicyScope, _> = serde_json::from_str("\"organisation\"");
+        assert!(result.is_err());
     }
 }

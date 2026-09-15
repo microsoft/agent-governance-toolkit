@@ -70,10 +70,15 @@ export enum ConflictResolutionStrategy {
   MostSpecificWins = 'most_specific_wins',
 }
 
-/** Policy scope for conflict resolution specificity. */
+/** Policy scope for conflict resolution specificity.
+ *
+ * Specificity order (most → least): Agent > Organization > Tenant > Global.
+ * The Organization level was added for parity with the Python and .NET SDKs.
+ */
 export enum PolicyScope {
   Global = 'global',
   Tenant = 'tenant',
+  Organization = 'organization',
   Agent = 'agent',
 }
 

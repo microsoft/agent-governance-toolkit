@@ -10,11 +10,13 @@ from agentmesh.governance._conflict_resolution_impl import (  # noqa: F401
     PolicyConflictResolver,
     PolicyScope,
     ResolutionResult,
+    VALID_SCOPES,
 )
 
 __all__ = [
     "ConflictResolutionStrategy",
     "PolicyScope",
+    "VALID_SCOPES",
     "CandidateDecision",
     "ResolutionResult",
     "PolicyConflictResolver",

@@ -139,19 +139,40 @@ public static class PolicyConflictResolver
     }
 
     /// <summary>
-    /// Parses a <see cref="PolicyScope"/> from a string value.
+    /// The set of valid scope string values.  Callers that validate
+    /// user-supplied policy documents should check against this set
+    /// to reject typos early rather than silently demoting to Global.
     /// </summary>
-    /// <param name="value">The scope string (e.g., "global", "tenant", "agent").</param>
+    public static readonly IReadOnlySet<string> ValidScopes =
+        new HashSet<string>(StringComparer.Ordinal) { "global", "tenant", "organization", "agent" };
+
+    /// <summary>
+    /// Parses a <see cref="PolicyScope"/> from a string value.
+    /// Returns <see cref="PolicyScope.Global"/> for unrecognised values
+    /// but logs a warning so the misconfiguration is observable.
+    /// </summary>
+    /// <param name="value">The scope string (e.g., "global", "tenant", "organization", "agent").</param>
     /// <returns>The parsed <see cref="PolicyScope"/>.</returns>
     public static PolicyScope ParseScope(string? value)
     {
-        return value?.ToLowerInvariant() switch
+        var result = value?.ToLowerInvariant() switch
         {
+            "global" => PolicyScope.Global,
             "tenant" => PolicyScope.Tenant,
             "organization" => PolicyScope.Organization,
             "agent" => PolicyScope.Agent,
             _ => PolicyScope.Global
         };
+
+        if (value is not null && !ValidScopes.Contains(value))
+        {
+            System.Diagnostics.Trace.TraceWarning(
+                $"Policy has unrecognised scope '{value}' — demoting to Global. " +
+                $"This weakens the policy under MostSpecificWins. " +
+                $"Valid scopes: {string.Join(", ", ValidScopes)}.");
+        }
+
+        return result;
     }
 }
 

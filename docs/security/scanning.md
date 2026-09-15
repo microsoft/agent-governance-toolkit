@@ -328,6 +328,7 @@ If you're blocked by security findings:
 - Trust user input without validation
 - Use `pickle` for untrusted data
 - Leave vulnerable dependencies unfixed
+- Use a free-form string for `Policy.scope` without validating against `PolicyScope` — a typo silently demotes to GLOBAL and can flip deny→allow under `most_specific_wins` (#3536)
 
 ## Exemption Review
 

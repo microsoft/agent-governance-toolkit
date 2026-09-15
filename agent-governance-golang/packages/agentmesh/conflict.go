@@ -79,6 +79,8 @@ func ruleSpecificity(c CandidateDecision) int {
 	score := len(c.Rule.Conditions)
 	switch c.Rule.Scope {
 	case Agent:
+		score += 4
+	case Organization:
 		score += 3
 	case Tenant:
 		score += 2

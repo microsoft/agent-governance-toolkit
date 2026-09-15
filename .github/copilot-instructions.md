@@ -252,6 +252,7 @@ Before approving or merging ANY PR, verify ALL of the following:
 6. **No plaintext config in pipelines** — ESRP Client IDs, Key Vault names, cert names go in secrets, not YAML
 7. **Verify PR has actual changes** — check `additions > 0` before merging (empty PRs have happened)
 8. **MIT license headers** — every new source file (`.py`, `.ts`, `.js`, `.rs`, `.go`, `.cs`, `.sh`) must have the license header. This is the #1 most common review finding.
+9. **Policy scope values** — any new or modified policy YAML/JSON must use one of the four valid scopes: `global`, `tenant`, `organization`, `agent` (case-sensitive). A misspelled scope silently demotes to `GLOBAL` at evaluation time, which can flip deny→allow under `most_specific_wins` (#3536).
 
 ## Security Rules
 

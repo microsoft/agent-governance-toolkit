@@ -14,13 +14,40 @@ import (
 )
 
 // PolicyScope represents the scope at which a policy rule applies.
+//
+// Specificity order (most → least): Agent > Organization > Tenant > Global.
 type PolicyScope string
 
 const (
-	Global PolicyScope = "global"
-	Tenant PolicyScope = "tenant"
-	Agent  PolicyScope = "agent"
+	Global       PolicyScope = "global"
+	Tenant       PolicyScope = "tenant"
+	Organization PolicyScope = "organization"
+	Agent        PolicyScope = "agent"
 )
+
+// ValidScopes is the set of accepted PolicyScope values.  Use it to reject
+// typos at load time rather than silently demoting to Global.
+var ValidScopes = map[PolicyScope]bool{
+	Global:       true,
+	Tenant:       true,
+	Organization: true,
+	Agent:        true,
+}
+
+// ValidateScope checks whether s is a recognised PolicyScope value.
+// It returns a non-nil error for misspelled, empty, or capitalised values.
+//
+// The Go SDK does not yet have a Policy document model (see #3680), so
+// callers that build PolicyRule values from YAML/JSON should call
+// ValidateScope before passing rules to NewPolicyEngine.
+func ValidateScope(s PolicyScope) error {
+	if !ValidScopes[s] {
+		return fmt.Errorf(
+			"invalid policy scope %q: accepted values (case-sensitive): global, tenant, organization, agent; "+
+				"hint: 'organisation' is not accepted — use 'organization'", s)
+	}
+	return nil
+}
 
 // PolicyRule defines a single governance rule.
 type PolicyRule struct {
