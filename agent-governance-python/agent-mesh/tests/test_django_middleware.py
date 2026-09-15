@@ -731,6 +731,15 @@ class TestAgentTrustMiddleware:
         finally:
             del settings.AGENTMESH_REPLAY_WINDOW_SECONDS
 
+    def test_missing_replay_cache_alias_fails_at_startup(self):
+        replay_cache_alias = settings.AGENTMESH_REPLAY_CACHE_ALIAS
+        settings.AGENTMESH_REPLAY_CACHE_ALIAS = ""
+        try:
+            with pytest.raises(ImproperlyConfigured, match="REPLAY_CACHE_ALIAS"):
+                _make_middleware()
+        finally:
+            settings.AGENTMESH_REPLAY_CACHE_ALIAS = replay_cache_alias
+
     def test_invalid_max_signed_body_size_fails_at_startup(self):
         settings.AGENTMESH_MAX_SIGNED_BODY_BYTES = 0
         try:
