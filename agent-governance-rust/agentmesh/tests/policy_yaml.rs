@@ -77,6 +77,33 @@ fn aliases_nested_values_and_literal_merge_keys_preserve_matching() {
 }
 
 #[test]
+fn tagged_boolean_blocks_keep_deny_conditions_and_siblings() {
+    for header in [
+        "!!bool |-",
+        "!!bool &flag |- # comment with >",
+        "&flag !!bool >-",
+    ] {
+        let mut conditions = format!("    value: {header}\n      TRUE\n    required: true");
+        if header.contains("&flag") {
+            conditions.push_str("\n    copy: *flag");
+        }
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(&policy(&conditions)).unwrap();
+        let ctx = context(json!({"value": true, "required": true, "copy": true}));
+        assert!(
+            matches!(engine.evaluate("run", Some(&ctx)), PolicyDecision::Deny(_)),
+            "{header}"
+        );
+        let ctx = context(json!({"value": true, "required": false, "copy": true}));
+        assert_eq!(
+            engine.evaluate("run", Some(&ctx)),
+            PolicyDecision::Allow,
+            "{header}"
+        );
+    }
+}
+
+#[test]
 fn scalar_types_and_case_are_not_coerced_during_matching() {
     for (yaml, matching, different) in [
         ("true", json!(true), json!("true")),

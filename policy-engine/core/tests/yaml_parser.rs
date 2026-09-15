@@ -7,6 +7,30 @@ use agent_control_specification_core::{
 use serde_json::json;
 
 #[test]
+fn tagged_blocks_preserve_values_siblings_and_diagnostic_lines() {
+    for (block, expected) in [
+        ("!!bool |-\n  TRUE", json!(true)),
+        ("!!int >-\n  7", json!(7)),
+        ("!!float |-\n  7", json!(7.0)),
+        ("!!str |-\n  first\n  second", json!("first\nsecond")),
+        ("!!str >-\n  first\n  second", json!("first second")),
+        ("!!null |-\n", json!(null)),
+    ] {
+        let source = format!("value: {block}\nrequired: true\n");
+        let value = parse_manifest_yaml_value(&source).unwrap();
+        assert_eq!(
+            value,
+            json!({"value": expected, "required": true}),
+            "{block}"
+        );
+    }
+    let error =
+        parse_manifest_yaml_value("value: !!bool |-\n  TRUE\nrequired: true\nrequired: false\n")
+            .unwrap_err();
+    assert!(error.to_string().contains("line 4, column 1"), "{error}");
+}
+
+#[test]
 fn json_compatible_values_aliases_and_literal_merge_keys_survive() {
     let value = parse_manifest_yaml_value(
         "first: &data {values: [null, true, 7, 1.5, \"7\"]}\nsecond: *data\nliteral: {<<: {key: value}}",

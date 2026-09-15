@@ -119,7 +119,7 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
         if tag.is_some() && !boolean_tag && !string_tag && !integer_tag && !float_tag && !null_tag {
             return Err(invalid("unsupported YAML scalar tag"));
         }
-        if style != ScalarStyle::Plain && tag.is_none() {
+        if style != ScalarStyle::Plain && (tag.is_none() || string_tag) {
             continue;
         }
         let boolean = if tag
@@ -219,6 +219,8 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
         let range = span
             .byte_range()
             .ok_or_else(|| YamlError::custom("missing YAML scalar source range"))?;
+        let block = matches!(style, ScalarStyle::Literal | ScalarStyle::Folded);
+        let mut replacement_start = range.start;
         let mut prefix_start = copied;
         if tag.is_some() && !string_tag {
             let start = span
@@ -238,8 +240,34 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
             output.extend(std::iter::repeat_n(' ', length));
             prefix_start = start + length;
         }
+        if block {
+            let mut cursor = prefix_start;
+            loop {
+                let remaining = input
+                    .get(cursor..range.end)
+                    .ok_or_else(|| invalid("invalid YAML block scalar range"))?;
+                let ch = remaining
+                    .chars()
+                    .next()
+                    .ok_or_else(|| invalid("missing YAML block scalar header"))?;
+                match ch {
+                    '|' | '>' => {
+                        replacement_start = cursor;
+                        break;
+                    }
+                    '#' => cursor += remaining.find('\n').unwrap_or(remaining.len()),
+                    '&' => {
+                        cursor += remaining
+                            .find(char::is_whitespace)
+                            .ok_or_else(|| invalid("invalid YAML block scalar properties"))?
+                    }
+                    ch if ch.is_whitespace() => cursor += ch.len_utf8(),
+                    _ => return Err(invalid("invalid YAML block scalar header")),
+                }
+            }
+        }
         let prefix = input
-            .get(prefix_start..range.start)
+            .get(prefix_start..replacement_start)
             .ok_or_else(|| YamlError::custom("invalid YAML scalar source range"))?;
         output.push_str(prefix);
         if string_tag && range.is_empty() {
@@ -258,6 +286,20 @@ fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlE
                 })
                 .map_err(YamlError::custom)?,
             );
+        }
+        if block {
+            // Block spans consume separators before the next node; retain their layout.
+            let replaced = input
+                .get(replacement_start..range.end)
+                .ok_or_else(|| invalid("invalid YAML block scalar range"))?;
+            let tail = &replaced[replaced.trim_end_matches(char::is_whitespace).len()..];
+            let removed_lines = replaced.bytes().filter(|byte| *byte == b'\n').count();
+            let tail_lines = tail.bytes().filter(|byte| *byte == b'\n').count();
+            output.extend(std::iter::repeat_n(
+                '\n',
+                removed_lines.saturating_sub(tail_lines),
+            ));
+            output.push_str(tail);
         }
         copied = range.end;
     }
