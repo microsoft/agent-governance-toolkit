@@ -22,7 +22,7 @@ use crate::error::CliError;
 struct CheckInput {
     action: String,
     #[serde(default)]
-    context: Option<HashMap<String, serde_yaml::Value>>,
+    context: Option<HashMap<String, agentmesh::policy_data::Value>>,
 }
 
 /// Returns the intended process exit code: 0 if allowed, 1 if not allowed.

@@ -45,6 +45,7 @@ pub mod mcp {
 }
 pub mod normalize;
 pub mod policy;
+pub mod policy_data;
 pub mod prompt_injection;
 pub mod prompt_injection_embedding;
 pub mod protocol_facets;
@@ -193,7 +194,7 @@ impl AgentMeshClient {
     pub fn execute_with_governance(
         &self,
         action: &str,
-        context: Option<&HashMap<String, serde_yaml::Value>>,
+        context: Option<&HashMap<String, policy_data::Value>>,
     ) -> GovernanceResult {
         #[cfg(feature = "telemetry")]
         let policy_start = std::time::Instant::now();
