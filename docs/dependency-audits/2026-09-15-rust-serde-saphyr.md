@@ -20,9 +20,11 @@ Apache-2.0. Version 1.2.0 was published August 30, 2026 and requires Rust 1.89.
 The dependency-age check passes. The hosted OSSF Scorecard service has no
 entry for this project.
 
-The repository's dependency-confusion checker does not include this
-registered package in its static list. That check remains a release/review
-gate. This change does not alter the scanner or bypass its decision.
+The repository's dependency-confusion checker recognizes registered packages
+through `REGISTERED_CARGO_PACKAGES`. This change adds only the verified
+`serde-saphyr` name to that list. Tests confirm that the registered name passes
+and an unregistered name still fails in dependency, development and build
+sections. Detection logic and the dependency-age requirement are unchanged.
 
 ## Security advisory relevance
 
