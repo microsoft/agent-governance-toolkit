@@ -76,6 +76,9 @@ ALLOWLIST: frozenset[str] = frozenset({
     "deasync",
     "node-sass",
     "sass-embedded",
+    # Native FS watcher (jest-haste-map); install hook is a no-op unless
+    # npm_config_build_from_source=true, binaries ship as platform packages.
+    "@parcel/watcher",
 })
 
 MANIFEST_BASENAMES = ["package.json", "package-lock.json", "npm-shrinkwrap.json"]
