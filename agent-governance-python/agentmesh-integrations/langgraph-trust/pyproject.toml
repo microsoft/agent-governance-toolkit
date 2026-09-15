@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langgraph_agentmesh"
-version = "5.0.0"
+version = "5.0.1"
 description = "Deprecated. Previously published as langgraph-agentmesh. Install agent-governance-toolkit-integrations[langgraph] instead."
 license = {text = "MIT"}
 requires-python = ">=3.11"
