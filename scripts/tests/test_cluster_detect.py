@@ -15,12 +15,122 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import cluster_detect
 from cluster_detect import (
     Edge,
     AccountInfo,
     ClusterReport,
     format_report,
 )
+
+
+# ---------------------------------------------------------------------------
+# _search / _paginate pagination tests
+# ---------------------------------------------------------------------------
+
+class TestSearchPagination:
+    def test_paginates_across_multiple_pages(self):
+        """A short first page must still trigger a request for the next page,
+        not be treated as the end of the results."""
+        pages = {
+            "1": {"items": [{"number": i} for i in range(100)]},
+            "2": {"items": [{"number": i} for i in range(100, 150)]},
+        }
+
+        def fake_api(path, params=None):
+            return pages.get(params["page"])
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._search("issues", "author:x is:issue", per_page=100)
+
+        assert len(items) == 150
+        assert mock_api.call_count == 2
+
+    def test_stops_when_a_short_page_is_returned(self):
+        pages = {"1": {"items": [{"number": 1}, {"number": 2}]}}
+
+        def fake_api(path, params=None):
+            return pages.get(params["page"])
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._search("issues", "author:x is:issue", per_page=100)
+
+        assert len(items) == 2
+        assert mock_api.call_count == 1
+
+    def test_stops_at_github_search_result_window(self):
+        """GitHub's Search API never returns more than 1000 results for a
+        query; a subject with more than that must not cause unbounded
+        pagination."""
+        def fake_api(path, params=None):
+            return {"items": [{"number": i} for i in range(int(params["per_page"]))]}
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._search("issues", "author:x is:issue", per_page=100)
+
+        assert len(items) == 1000
+        assert mock_api.call_count == 10
+
+    def test_empty_first_page_returns_no_items(self):
+        with patch.object(cluster_detect, "_api", return_value=None) as mock_api:
+            items = cluster_detect._search("issues", "author:x is:issue", per_page=100)
+
+        assert items == []
+        assert mock_api.call_count == 1
+
+
+class TestPaginate:
+    """`_paginate` backs the regular (non-Search) REST calls in
+    detect_shared_forks/detect_co_comments (`/users/{x}/repos`, `/repos/{x}/forks`,
+    an issue's comments_url) — these return a bare JSON array, not a `{"items": [...]}`
+    envelope, and have no 1000-result Search API cap, only the `_MAX_PAGES` safety cap."""
+
+    def test_paginates_across_multiple_pages(self):
+        pages = {
+            "1": [{"id": i} for i in range(100)],
+            "2": [{"id": i} for i in range(100, 130)],
+        }
+
+        def fake_api(path, params=None):
+            return pages.get(params["page"])
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._paginate("/users/x/repos", {"type": "all"}, per_page=100)
+
+        assert len(items) == 130
+        assert mock_api.call_count == 2
+
+    def test_stops_when_a_short_page_is_returned(self):
+        pages = {"1": [{"id": 1}, {"id": 2}]}
+
+        def fake_api(path, params=None):
+            return pages.get(params["page"])
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._paginate("/repos/x/forks", {}, per_page=30)
+
+        assert len(items) == 2
+        assert mock_api.call_count == 1
+
+    def test_stops_at_max_pages_safety_cap(self):
+        """No Search-API-style 1000-result cap applies to these endpoints, so an
+        account with more pages than `_MAX_PAGES` must still terminate rather than
+        loop unboundedly."""
+        def fake_api(path, params=None):
+            return [{"id": i} for i in range(int(params["per_page"]))]
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._paginate("/users/x/repos", {}, per_page=100)
+
+        assert len(items) == cluster_detect._MAX_PAGES * 100
+        assert mock_api.call_count == cluster_detect._MAX_PAGES
+
+    def test_empty_first_page_returns_no_items(self):
+        with patch.object(cluster_detect, "_api", return_value=None) as mock_api:
+            items = cluster_detect._paginate("/users/x/repos", {}, per_page=100)
+
+        assert items == []
+        assert mock_api.call_count == 1
 
 
 # ---------------------------------------------------------------------------
