@@ -129,6 +129,55 @@ def test_string_operators_reject_trailing_garbage():
     assert rule.evaluate({"action": {"path": "safe/file"}}) is False
 
 
+def test_trailing_whitespace_does_not_trigger_unrecognized_syntax():
+    deny_rule = _rule("action.cost > 100 ")
+    assert deny_rule.evaluate({"action": {"cost": 50}}) is False
+
+    allow_rule = OrgPolicyRule(name="allow-cheap", condition="action.cost > 100\t", action="allow")
+    assert allow_rule.evaluate({"action": {"cost": 150}}) is True
+
+
+def test_equality_inequality_and_membership_reject_trailing_garbage():
+    allow_eq = OrgPolicyRule(
+        name="allow-eq", condition="action.path == 'safe/file' JUNK", action="allow"
+    )
+    assert allow_eq.evaluate({"action": {"path": "safe/file"}}) is False
+
+    allow_neq = OrgPolicyRule(name="allow-neq", condition="action.path != 'x' JUNK", action="allow")
+    assert allow_neq.evaluate({"action": {"path": "safe/file"}}) is False
+
+    allow_in = OrgPolicyRule(
+        name="allow-in", condition="action.path in ['safe/file'] JUNK", action="allow"
+    )
+    assert allow_in.evaluate({"action": {"path": "safe/file"}}) is False
+
+
+def test_numeric_comparison_rejects_non_finite_values():
+    deny_rule = _rule("action.cost > 100")
+    assert deny_rule.evaluate({"action": {"cost": "NaN"}}) is True
+    assert deny_rule.evaluate({"action": {"cost": "inf"}}) is True
+
+    allow_rule = OrgPolicyRule(name="allow-cheap", condition="action.cost > 100", action="allow")
+    assert allow_rule.evaluate({"action": {"cost": "NaN"}}) is False
+
+
+def test_inequality_rejects_non_string_values():
+    deny_rule = _rule("user.role != 'blocked'")
+    assert deny_rule.evaluate({"user": {"role": []}}) is True
+
+    allow_rule = OrgPolicyRule(
+        name="allow-not-blocked", condition="user.role != 'blocked'", action="allow"
+    )
+    assert allow_rule.evaluate({"user": {"role": []}}) is False
+
+
+def test_string_operators_require_matching_quote_delimiters():
+    allow_rule = OrgPolicyRule(
+        name="allow-safe-path", condition="action.path contains 'safe\"", action="allow"
+    )
+    assert allow_rule.evaluate({"action": {"path": "safe/file"}}) is False
+
+
 def test_string_operators_compose_with_and_or():
     rule = _rule("action.type == 'export' and resource.name endswith '.pem'")
     assert rule.evaluate({"action": {"type": "export"}, "resource": {"name": "id.pem"}}) is True

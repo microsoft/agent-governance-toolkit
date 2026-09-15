@@ -1032,7 +1032,12 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
     - ``expr1 and expr2``
     - ``expr1 or expr2``
     """
+    import math
     import re
+
+    # Trailing whitespace would otherwise push a valid condition into the
+    # anchored regexes' unrecognized-syntax fallback.
+    expr = expr.strip()
 
     # Non-allow rules fail closed on a guard trip (matches the except-block
     # semantics in OrgPolicyRule.evaluate); an allow rule failing open here
@@ -1041,7 +1046,8 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
         match = action != "allow"
         logger.warning(
             "OrgPolicyRule: expression exceeded max depth %d — treating as %s",
-            _MAX_EXPRESSION_DEPTH, "MATCH" if match else "NO-MATCH",
+            _MAX_EXPRESSION_DEPTH,
+            "MATCH" if match else "NO-MATCH",
         )
         return match
 
@@ -1049,7 +1055,8 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
         match = action != "allow"
         logger.warning(
             "OrgPolicyRule: expression length %d exceeds 2000-char limit — treating as %s",
-            len(expr), "MATCH" if match else "NO-MATCH",
+            len(expr),
+            "MATCH" if match else "NO-MATCH",
         )
         return match
 
@@ -1064,18 +1071,14 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
         return all(_eval_expression(p.strip(), context, _depth + 1, action) for p in parts)
 
     # Equality: field == 'value'
-    eq_match = re.match(
-        r"(\w+(?:\.\w+)*)\s*==\s*['\"]([^'\"]+)['\"]", expr
-    )
+    eq_match = re.match(r"(\w+(?:\.\w+)*)\s*==\s*['\"]([^'\"]+)['\"]$", expr)
     if eq_match:
         path, value = eq_match.groups()
         actual = _get_nested(context, path)
         return actual == value
 
     # Inequality: field != 'value'
-    neq_match = re.match(
-        r"(\w+(?:\.\w+)*)\s*!=\s*['\"]([^'\"]+)['\"]", expr
-    )
+    neq_match = re.match(r"(\w+(?:\.\w+)*)\s*!=\s*['\"]([^'\"]+)['\"]$", expr)
     if neq_match:
         path, value = neq_match.groups()
         actual = _get_nested(context, path)
@@ -1085,15 +1088,25 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
             match = action != "allow"
             logger.warning(
                 "OrgPolicyRule: '%s' is absent, '!=' cannot match — treating as %s",
-                path, "MATCH" if match else "NO-MATCH",
+                path,
+                "MATCH" if match else "NO-MATCH",
+            )
+            return match
+        if not isinstance(actual, str):
+            # Non-string values always compare unequal to a string literal,
+            # which would falsely satisfy '!=' on malformed evidence.
+            match = action != "allow"
+            logger.warning(
+                "OrgPolicyRule: '%s' resolved to non-string %s, '!=' cannot match — treating as %s",
+                path,
+                type(actual).__name__,
+                "MATCH" if match else "NO-MATCH",
             )
             return match
         return actual != value
 
     # Membership: field in ['a', 'b', 'c']
-    in_match = re.match(
-        r"(\w+(?:\.\w+)*)\s+in\s+\[([^\]]*)\]", expr
-    )
+    in_match = re.match(r"(\w+(?:\.\w+)*)\s+in\s+\[([^\]]*)\]$", expr)
     if in_match:
         path, items_str = in_match.groups()
         actual = _get_nested(context, path)
@@ -1101,49 +1114,49 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
         return actual in items
 
     # String containment: field contains 'substring'
-    contains_match = re.match(
-        r"(\w+(?:\.\w+)*)\s+contains\s+['\"]([^'\"]+)['\"]$", expr
-    )
+    contains_match = re.match(r"(\w+(?:\.\w+)*)\s+contains\s+(['\"])([^'\"]+)\2$", expr)
     if contains_match:
-        path, needle = contains_match.groups()
+        path, _quote, needle = contains_match.groups()
         actual = _get_nested(context, path)
         if not isinstance(actual, str):
             logger.warning(
                 "OrgPolicyRule: '%s' resolved to non-string %s, "
                 "'contains' cannot match — treating as %s",
-                path, type(actual).__name__, "MATCH" if action != "allow" else "NO-MATCH",
+                path,
+                type(actual).__name__,
+                "MATCH" if action != "allow" else "NO-MATCH",
             )
             return action != "allow"
         return needle in actual
 
     # String prefix: field startswith 'prefix'
-    startswith_match = re.match(
-        r"(\w+(?:\.\w+)*)\s+startswith\s+['\"]([^'\"]+)['\"]$", expr
-    )
+    startswith_match = re.match(r"(\w+(?:\.\w+)*)\s+startswith\s+(['\"])([^'\"]+)\2$", expr)
     if startswith_match:
-        path, prefix = startswith_match.groups()
+        path, _quote, prefix = startswith_match.groups()
         actual = _get_nested(context, path)
         if not isinstance(actual, str):
             logger.warning(
                 "OrgPolicyRule: '%s' resolved to non-string %s, "
                 "'startswith' cannot match — treating as %s",
-                path, type(actual).__name__, "MATCH" if action != "allow" else "NO-MATCH",
+                path,
+                type(actual).__name__,
+                "MATCH" if action != "allow" else "NO-MATCH",
             )
             return action != "allow"
         return actual.startswith(prefix)
 
     # String suffix: field endswith 'suffix'
-    endswith_match = re.match(
-        r"(\w+(?:\.\w+)*)\s+endswith\s+['\"]([^'\"]+)['\"]$", expr
-    )
+    endswith_match = re.match(r"(\w+(?:\.\w+)*)\s+endswith\s+(['\"])([^'\"]+)\2$", expr)
     if endswith_match:
-        path, suffix = endswith_match.groups()
+        path, _quote, suffix = endswith_match.groups()
         actual = _get_nested(context, path)
         if not isinstance(actual, str):
             logger.warning(
                 "OrgPolicyRule: '%s' resolved to non-string %s, "
                 "'endswith' cannot match — treating as %s",
-                path, type(actual).__name__, "MATCH" if action != "allow" else "NO-MATCH",
+                path,
+                type(actual).__name__,
+                "MATCH" if action != "allow" else "NO-MATCH",
             )
             return action != "allow"
         return actual.endswith(suffix)
@@ -1159,14 +1172,26 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
             # recorded at all.
             match = action != "allow"
             logger.warning(
-                "OrgPolicyRule: '%s' is absent, numeric comparison cannot "
-                "match — treating as %s",
-                path, "MATCH" if match else "NO-MATCH",
+                "OrgPolicyRule: '%s' is absent, numeric comparison cannot match — treating as %s",
+                path,
+                "MATCH" if match else "NO-MATCH",
             )
             return match
         try:
             actual_num = float(actual)
             target = float(num_str)
+            if not (math.isfinite(actual_num) and math.isfinite(target)):
+                # NaN/inf parse fine but every ordered comparison against
+                # them is False, silently failing open a deny rule.
+                match = action != "allow"
+                logger.warning(
+                    "OrgPolicyRule: '%s' is non-finite (%r), comparison cannot "
+                    "match — treating as %s",
+                    path,
+                    actual,
+                    "MATCH" if match else "NO-MATCH",
+                )
+                return match
             if op == ">":
                 return actual_num > target
             if op == "<":
@@ -1178,9 +1203,9 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
         except (TypeError, ValueError):
             match = action != "allow"
             logger.warning(
-                "OrgPolicyRule: '%s' is not numeric, comparison cannot "
-                "match — treating as %s",
-                path, "MATCH" if match else "NO-MATCH",
+                "OrgPolicyRule: '%s' is not numeric, comparison cannot match — treating as %s",
+                path,
+                "MATCH" if match else "NO-MATCH",
             )
             return match
 
@@ -1196,7 +1221,8 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
     match = action != "allow"
     logger.warning(
         "OrgPolicyRule: unrecognized condition syntax %r — treating as %s",
-        expr, "MATCH" if match else "NO-MATCH",
+        expr,
+        "MATCH" if match else "NO-MATCH",
     )
     return match
 

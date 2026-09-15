@@ -130,6 +130,63 @@ def test_oversized_expression_fails_closed_for_deny_and_open_for_allow(caplog):
     assert allow_rule.evaluate({"action": {"type": "a" * 3000}}) is False
 
 
+def test_trailing_whitespace_does_not_trigger_unrecognized_syntax():
+    """Trailing whitespace must not push an otherwise-valid condition into
+    the anchored regexes' unrecognized-syntax fallback."""
+    deny_rule = PolicyRule(name="deny-cheap", condition="action.cost > 100 ", action="deny")
+    assert deny_rule.evaluate({"action": {"cost": 50}}) is False
+
+    allow_rule = PolicyRule(name="allow-cheap", condition="action.cost > 100\t", action="allow")
+    assert allow_rule.evaluate({"action": {"cost": 150}}) is True
+
+
+def test_equality_inequality_and_membership_reject_trailing_garbage():
+    allow_eq = PolicyRule(
+        name="allow-eq", condition="action.path == 'safe/file' JUNK", action="allow"
+    )
+    assert allow_eq.evaluate({"action": {"path": "safe/file"}}) is False
+
+    allow_neq = PolicyRule(name="allow-neq", condition="action.path != 'x' JUNK", action="allow")
+    assert allow_neq.evaluate({"action": {"path": "safe/file"}}) is False
+
+    allow_in = PolicyRule(
+        name="allow-in", condition="action.path in ['safe/file'] JUNK", action="allow"
+    )
+    assert allow_in.evaluate({"action": {"path": "safe/file"}}) is False
+
+
+def test_numeric_comparison_rejects_non_finite_values():
+    """NaN/inf parse as floats but every ordered comparison against them is
+    False -- that must not silently fail open a deny rule."""
+    deny_rule = PolicyRule(name="deny-cheap", condition="action.cost > 100", action="deny")
+    assert deny_rule.evaluate({"action": {"cost": "NaN"}}) is True
+    assert deny_rule.evaluate({"action": {"cost": "inf"}}) is True
+
+    allow_rule = PolicyRule(name="allow-cheap", condition="action.cost > 100", action="allow")
+    assert allow_rule.evaluate({"action": {"cost": "NaN"}}) is False
+
+
+def test_inequality_rejects_non_string_values():
+    """A non-string value always compares unequal to a string literal, which
+    must not be treated as evidence of inequality."""
+    deny_rule = PolicyRule(name="deny-blocked", condition="user.role != 'blocked'", action="deny")
+    assert deny_rule.evaluate({"user": {"role": []}}) is True
+
+    allow_rule = PolicyRule(
+        name="allow-not-blocked", condition="user.role != 'blocked'", action="allow"
+    )
+    assert allow_rule.evaluate({"user": {"role": []}}) is False
+
+
+def test_string_operators_require_matching_quote_delimiters():
+    """A mismatched quote pair (opening `'`, closing `"`) is a malformed
+    literal, not a valid operand."""
+    allow_rule = PolicyRule(
+        name="allow-safe-path", condition="action.path contains 'safe\"", action="allow"
+    )
+    assert allow_rule.evaluate({"action": {"path": "safe/file"}}) is False
+
+
 def test_string_operators_compose_with_and_or():
     rule = PolicyRule(
         name="deny-sensitive-export",
