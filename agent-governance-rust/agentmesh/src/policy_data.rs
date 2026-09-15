@@ -13,18 +13,34 @@ pub type Context = std::collections::HashMap<String, Value>;
 /// A YAML configuration error, including a source location when available.
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
-pub struct YamlError(#[source] Box<serde_saphyr::Error>);
+pub struct YamlError(#[source] YamlErrorSource);
+
+#[derive(Debug, thiserror::Error)]
+enum YamlErrorSource {
+    #[error("{0}")]
+    Deserialize(#[source] Box<serde_saphyr::Error>),
+    #[error("{0}")]
+    Tokenize(#[source] serde_saphyr::granit_parser::ScanError),
+}
 
 impl YamlError {
     /// One-based line and column, if the parser supplied a location.
     pub fn location(&self) -> Option<(u64, u64)> {
-        self.0.location().map(|loc| (loc.line(), loc.column()))
+        match &self.0 {
+            YamlErrorSource::Deserialize(error) => {
+                error.location().map(|loc| (loc.line(), loc.column()))
+            }
+            YamlErrorSource::Tokenize(error) => Some((
+                error.marker().line() as u64,
+                error.marker().col() as u64 + 1,
+            )),
+        }
     }
 }
 
 impl From<serde_saphyr::Error> for YamlError {
     fn from(error: serde_saphyr::Error) -> Self {
-        Self(Box::new(error))
+        Self(YamlErrorSource::Deserialize(Box::new(error)))
     }
 }
 
@@ -36,8 +52,9 @@ pub(crate) fn from_yaml<T: serde::de::DeserializeOwned>(input: &str) -> Result<T
             "YAML configuration exceeds 1048576 bytes",
         ));
     }
-    serde_saphyr::from_str_with_options(
-        input,
+    let normalized = preserve_scalar_types(input)?;
+    let value: serde_json::Value = serde_saphyr::from_str_with_options(
+        &normalized,
         serde_saphyr::options! {
             strict_booleans: true,
             no_schema: true,
@@ -54,7 +71,105 @@ pub(crate) fn from_yaml<T: serde::de::DeserializeOwned>(input: &str) -> Result<T
             },
         },
     )
-    .map_err(YamlError::from)
+    .map_err(YamlError::from)?;
+    serde_json::from_value(value).map_err(<YamlError as serde::de::Error>::custom)
+}
+
+// Normalize only implicit scalar tokens, preserving the old policy value types.
+fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlError> {
+    use serde::de::Error;
+    use serde_saphyr::granit_parser::{self, Event, Parser, ScalarStyle};
+
+    let parser = Parser::new_from_str_with_options(
+        input,
+        granit_parser::options! {
+            emit_comments: false,
+            flow_nesting_limit: 64,
+            block_nesting_limit: 64,
+        },
+    );
+    let mut output = String::new();
+    let mut copied = 0;
+    for (events, event) in parser.enumerate() {
+        if events >= 300_000 {
+            return Err(YamlError::custom("YAML parser event limit exceeded"));
+        }
+        let (event, span) = event.map_err(|error| YamlError(YamlErrorSource::Tokenize(error)))?;
+        let Event::Scalar(value, style, _, tag) = event else {
+            continue;
+        };
+        let boolean_tag = tag
+            .as_ref()
+            .is_some_and(|tag| tag.is_yaml_core_schema_tag("bool"));
+        if style != ScalarStyle::Plain && !boolean_tag {
+            continue;
+        }
+        let boolean = if tag
+            .as_ref()
+            .is_none_or(|tag| tag.is_yaml_core_schema_tag("bool"))
+        {
+            match value.as_ref() {
+                "true" | "True" | "TRUE" => Some("true"),
+                "false" | "False" | "FALSE" => Some("false"),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if tag.is_some() && boolean.is_none() {
+            continue;
+        }
+        let mixed_boolean = boolean.is_none()
+            && (value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false"));
+        let unsigned = value.strip_prefix(['+', '-']).unwrap_or(&value);
+        let leading_zero = unsigned.len() > 1
+            && unsigned.starts_with('0')
+            && unsigned.bytes().all(|byte| byte.is_ascii_digit());
+        let separated_number = unsigned.contains('_')
+            && unsigned.starts_with(|ch: char| ch.is_ascii_digit() || ch == '.')
+            && !unsigned.chars().any(char::is_whitespace);
+        if !leading_zero && !separated_number && boolean.is_none() && !mixed_boolean {
+            continue;
+        }
+        let range = span
+            .byte_range()
+            .ok_or_else(|| YamlError::custom("missing YAML scalar source range"))?;
+        let mut prefix_start = copied;
+        if boolean_tag {
+            let start = span
+                .tag_start()
+                .and_then(|marker| marker.byte_offset())
+                .ok_or_else(|| YamlError::custom("missing YAML tag source range"))?;
+            let prefix = input
+                .get(copied..start)
+                .ok_or_else(|| YamlError::custom("invalid YAML tag source range"))?;
+            let tag_source = input
+                .get(start..range.start)
+                .ok_or_else(|| YamlError::custom("invalid YAML tag source range"))?;
+            let length = tag_source
+                .find(char::is_whitespace)
+                .unwrap_or(tag_source.len());
+            output.push_str(prefix);
+            output.extend(std::iter::repeat_n(' ', length));
+            prefix_start = start + length;
+        }
+        let prefix = input
+            .get(prefix_start..range.start)
+            .ok_or_else(|| YamlError::custom("invalid YAML scalar source range"))?;
+        output.push_str(prefix);
+        if let Some(boolean) = boolean {
+            output.push_str(boolean);
+        } else {
+            output.push_str(&serde_json::to_string(value.as_ref()).map_err(YamlError::custom)?);
+        }
+        copied = range.end;
+    }
+    if copied == 0 {
+        Ok(std::borrow::Cow::Borrowed(input))
+    } else {
+        output.push_str(&input[copied..]);
+        Ok(std::borrow::Cow::Owned(output))
+    }
 }
 
 impl serde::de::Error for YamlError {

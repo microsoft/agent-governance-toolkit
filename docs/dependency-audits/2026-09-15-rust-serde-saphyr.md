@@ -45,11 +45,13 @@ Optional Regorus YAML configurations are outside this consumer scope.
 This targets the pending Rust 5.0 major release. Policy values and custom
 protocol callbacks move to JSON-compatible types, and YAML error payloads
 change to `YamlError`. Non-string keys, non-finite numbers, duplicate keys
-and unsupported tags are errors. Numeric-looking strings must be quoted.
+and unsupported tags are errors. Legacy numeric string forms retain their
+types, and numeric fields reject strings rather than coercing them.
 The policy-engine Rust compiler floor rises from 1.85 to 1.89.
 
-Validation includes 561 optimized workspace tests, 21 core tests, Rust 1.89
-checking, and 561 workspace tests with the companion ACS code. The
+Validation includes authorization and bounded-parser regressions, Rust 1.89
+checking, and workspace tests with the companion ACS code. Python validation
+also checks duplicate-key diagnostics and schema paths for invalid limits. The
 [migration guide](../../agent-governance-rust/YAML-MIGRATION.md) describes the
 API changes and the required upstream, core, host SDK and Rust package
 release order. No unpublished version or permanent local patch is committed.

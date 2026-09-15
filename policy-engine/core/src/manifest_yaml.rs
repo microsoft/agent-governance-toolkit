@@ -166,12 +166,13 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
             "manifest source must not be empty".to_string(),
         ));
     }
+    let normalized = preserve_scalar_types(input, limits)?;
     let mut budget = ManifestValueBudget::new(limits);
     // Alias diagnostics can wrap the typed error. Use the structured budget report.
     let parser_limit = std::rc::Rc::new(std::cell::Cell::new(false));
     let reported_limit = std::rc::Rc::clone(&parser_limit);
     let parsed = serde_saphyr::with_deserializer_from_str_with_options(
-        input,
+        &normalized,
         serde_saphyr::options! {
             strict_booleans: true,
             reject_unsupported_tags: true,
@@ -203,6 +204,12 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
             if let Some(detail) = budget.limit_error.take() {
                 return Err(RuntimeError::ResourceLimitExceeded(detail));
             }
+            if let serde_saphyr::Error::DuplicateMappingKey { key, .. } = &error {
+                return Err(RuntimeError::ManifestInvalid(format!(
+                    "duplicate manifest mapping key {}: {error}",
+                    key.as_deref().unwrap_or("<unknown>")
+                )));
+            }
             if parser_limit.get()
                 || matches!(
                     error,
@@ -229,6 +236,119 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
         )));
     }
     Ok(value)
+}
+
+/// Preserve legacy numeric strings and YAML 1.2 boolean capitalization.
+/// Token spans, rather than text matching, keep quoted strings, tags and comments intact.
+fn preserve_scalar_types(
+    input: &str,
+    limits: Limits,
+) -> Result<std::borrow::Cow<'_, str>, RuntimeError> {
+    use serde_saphyr::granit_parser::{self, ErrorKind, Event, Parser, ScalarStyle};
+
+    let parser = Parser::new_from_str_with_options(
+        input,
+        granit_parser::options! {
+            emit_comments: false,
+            flow_nesting_limit: limits.max_policy_input_depth,
+            block_nesting_limit: limits.max_policy_input_depth,
+        },
+    );
+    let mut output = String::new();
+    let mut copied = 0;
+    for (events, event) in parser.enumerate() {
+        if events >= MAX_MANIFEST_PARSE_NODES * 3 {
+            return Err(RuntimeError::ResourceLimitExceeded(
+                "manifest parser event limit exceeded".to_string(),
+            ));
+        }
+        let (event, span) = event.map_err(|error| {
+            if matches!(error.kind(), ErrorKind::RecursionLimitExceeded) {
+                RuntimeError::ResourceLimitExceeded(error.to_string())
+            } else {
+                RuntimeError::ManifestInvalid(error.to_string())
+            }
+        })?;
+        let Event::Scalar(value, style, _, tag) = event else {
+            continue;
+        };
+        let boolean_tag = tag
+            .as_ref()
+            .is_some_and(|tag| tag.is_yaml_core_schema_tag("bool"));
+        if style != ScalarStyle::Plain && !boolean_tag {
+            continue;
+        }
+        let boolean = if tag
+            .as_ref()
+            .is_none_or(|tag| tag.is_yaml_core_schema_tag("bool"))
+        {
+            match value.as_ref() {
+                "true" | "True" | "TRUE" => Some("true"),
+                "false" | "False" | "FALSE" => Some("false"),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if tag.is_some() && boolean.is_none() {
+            continue;
+        }
+        let mixed_boolean = boolean.is_none()
+            && (value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false"));
+        let unsigned = value.strip_prefix(['+', '-']).unwrap_or(&value);
+        let leading_zero = unsigned.len() > 1
+            && unsigned.starts_with('0')
+            && unsigned.bytes().all(|byte| byte.is_ascii_digit());
+        let separated_number = unsigned.contains('_')
+            && unsigned.starts_with(|ch: char| ch.is_ascii_digit() || ch == '.')
+            && !unsigned.chars().any(char::is_whitespace);
+        if !leading_zero && !separated_number && boolean.is_none() && !mixed_boolean {
+            continue;
+        }
+        let range = span.byte_range().ok_or_else(|| {
+            RuntimeError::ManifestInvalid("missing YAML scalar source range".to_string())
+        })?;
+        let mut prefix_start = copied;
+        if boolean_tag {
+            let start = span
+                .tag_start()
+                .and_then(|marker| marker.byte_offset())
+                .ok_or_else(|| {
+                    RuntimeError::ManifestInvalid("missing YAML tag source range".to_string())
+                })?;
+            let prefix = input.get(copied..start).ok_or_else(|| {
+                RuntimeError::ManifestInvalid("invalid YAML tag source range".to_string())
+            })?;
+            let tag_source = input.get(start..range.start).ok_or_else(|| {
+                RuntimeError::ManifestInvalid("invalid YAML tag source range".to_string())
+            })?;
+            let length = tag_source
+                .find(char::is_whitespace)
+                .unwrap_or(tag_source.len());
+            output.push_str(prefix);
+            output.extend(std::iter::repeat_n(' ', length));
+            prefix_start = start + length;
+        }
+        let prefix = input.get(prefix_start..range.start).ok_or_else(|| {
+            RuntimeError::ManifestInvalid("invalid YAML scalar source range".to_string())
+        })?;
+        output.push_str(prefix);
+        if let Some(boolean) = boolean {
+            output.push_str(boolean);
+        } else {
+            output.push_str(
+                &serde_json::to_string(value.as_ref())
+                    .map_err(|error| RuntimeError::ManifestInvalid(error.to_string()))?,
+            );
+        }
+        copied = range.end;
+    }
+    if copied == 0 {
+        Ok(std::borrow::Cow::Borrowed(input))
+    } else {
+        output.push_str(&input[copied..]);
+        Ok(std::borrow::Cow::Owned(output))
+    }
 }
 
 /// Full manifest validation. Delegates to the `agent_control_spec` strict
@@ -498,6 +618,17 @@ mod tests {
         REMOVED_MANIFEST_FIELDS,
     };
     use agent_control_spec::Manifest;
+
+    #[test]
+    fn scalar_normalization_preserves_tagged_and_mixed_case_values() {
+        let input = "values: [True, tRuE, !!bool TRUE, !!str TRUE]";
+        let normalized =
+            super::preserve_scalar_types(input, agent_control_spec::Limits::default()).unwrap();
+        assert_eq!(
+            normalized,
+            "values: [true, \"tRuE\",        true, !!str TRUE]"
+        );
+    }
 
     const VERSION: &str = "agent_control_specification_version: 0.4.0-alpha.1\n";
 

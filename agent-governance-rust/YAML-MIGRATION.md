@@ -55,8 +55,10 @@ equality and sequence membership. Nested string-keyed objects, arrays,
 booleans, null and finite numbers are supported. Numeric and string values
 remain distinct. Non-string mapping keys, non-finite numbers, duplicate keys
 and unsupported tags are rejected rather than converted or ignored.
-Quote numeric-looking strings, including versions and all-digit checksums.
-Use `true` and `false` for booleans. YAML aliases remain supported within
+Quote numeric-looking strings when a string is intended. Legacy forms such as
+`010` and `1_000` retain their string type and are rejected in numeric fields.
+YAML 1.2 boolean spellings retain their types, while mixed-case forms such as
+`tRuE` remain strings. YAML aliases remain supported within
 resource limits. Merge keys remain literal keys, not inherited policy fields.
 
 `PolicyError::InvalidYaml` and `PromptInjectionError::ConfigParse` retain their

@@ -79,6 +79,11 @@ fn aliases_nested_values_and_literal_merge_keys_preserve_matching() {
 fn scalar_types_and_case_are_not_coerced_during_matching() {
     for (yaml, matching, different) in [
         ("true", json!(true), json!("true")),
+        ("True", json!(true), json!("True")),
+        ("FALSE", json!(false), json!("FALSE")),
+        ("tRuE", json!("tRuE"), json!(true)),
+        ("!!bool TRUE", json!(true), json!("TRUE")),
+        ("!!str True", json!("True"), json!(true)),
         ("7", json!(7), json!(7.0)),
         ("7.0", json!(7.0), json!(7)),
         ("null", json!(null), json!("null")),
@@ -86,6 +91,9 @@ fn scalar_types_and_case_are_not_coerced_during_matching() {
         ("yes", json!("yes"), json!(true)),
         ("on", json!("on"), json!(true)),
         ("0x10", json!(16), json!("0x10")),
+        ("010", json!("010"), json!(10)),
+        ("1_000", json!("1_000"), json!(1000)),
+        ("-010", json!("-010"), json!(-10)),
         ("DROP", json!("DROP"), json!("drop")),
         ("!!str 7", json!("7"), json!(7)),
     ] {
@@ -93,14 +101,27 @@ fn scalar_types_and_case_are_not_coerced_during_matching() {
         engine
             .load_from_yaml(&policy(&format!("    value: {yaml}")))
             .unwrap();
-        assert!(matches!(
-            engine.evaluate("run", Some(&context(json!({"value": matching})))),
-            PolicyDecision::Deny(_)
-        ));
+        assert!(
+            matches!(
+                engine.evaluate("run", Some(&context(json!({"value": matching})))),
+                PolicyDecision::Deny(_)
+            ),
+            "{yaml}"
+        );
         assert_eq!(
             engine.evaluate("run", Some(&context(json!({"value": different})))),
             PolicyDecision::Allow
         );
+    }
+}
+
+#[test]
+fn legacy_numeric_limits_are_rejected_instead_of_enabling_a_rule() {
+    for scalar in ["010", "1_000", "1:2:3"] {
+        let source = format!(
+            "version: \"1\"\nagent: test\npolicies:\n- name: rate\n  type: rate_limit\n  max_calls: {scalar}\n  window: 1m\n  actions: [\"*\"]\n"
+        );
+        assert!(PolicyEngine::new().load_from_yaml(&source).is_err());
     }
 }
 
