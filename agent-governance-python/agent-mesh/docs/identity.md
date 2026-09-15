@@ -338,20 +338,66 @@ config = RevocationConfig(
 
 ## Enterprise Identity Integration
 
-### OIDC/SAML for Sponsor Verification
+### OIDC for Cross-Org Identity Verification
+
+`ExternalJWKSProvider` verifies tokens from a standard OIDC provider
+(Keycloak, Okta, Auth0, etc.) against the issuer's published JWKS, and
+extracts role/group claims into the verified identity. Only Ed25519 (this
+module's original scheme), RS256, and ES256 signing keys verify - a realm
+whose signing key is PS256, RS512, ES384, or anything else is rejected,
+not silently skipped.
 
 ```python
-from agentmesh.enterprise import OIDCProvider
-
-# Configure OIDC for sponsor verification
-oidc = OIDCProvider(
-    issuer="https://login.company.com",
-    client_id="agentmesh",
-    client_secret="...",
+from agentmesh.governance import govern
+from agentmesh.identity.external_jwks import (
+    ExternalJWKSProvider,
+    FederationPolicy,
+    TrustedEndpoint,
 )
 
-# Verify sponsor is a valid enterprise user
-sponsor_verified = await oidc.verify_user("alice@company.com")
+policy = FederationPolicy(
+    trusted_endpoints=[
+        TrustedEndpoint(
+            domain="login.company.com",
+            jwks_url="https://login.company.com/realms/company/protocol/openid-connect/certs",
+            # Restrict to tokens minted for this integration's own OIDC
+            # client. Leaving audience unset accepts a token minted for
+            # ANY client the issuer trusts (e.g. one lifted from an
+            # unrelated browser SPA) - only skip it if every client
+            # registered with this issuer should be treated as equally
+            # trusted here.
+            audience="agent-mesh-service",
+        ),
+    ],
+)
+provider = ExternalJWKSProvider(policy=policy)
+identity = await provider.verify(token)
+if identity is None:
+    raise PermissionError("token rejected: signature, expiry, or audience check failed")
+
+# Bridge the verified role/group claims into govern()'s policy context.
+# caller_roles/caller_groups are dicts ({"admin": True, ...}), not lists -
+# write policy rules against caller_roles.<role> (e.g.
+# "caller_roles.auditor"), which govern()'s YAML DSL evaluates as a plain
+# boolean attribute. The wrapped function must accept the identity's
+# kwargs even where it ignores them, e.g. via **policy_ctx.
+#
+# Only names matching \w+ (letters, digits, underscore - no dots, slashes,
+# or hyphens) are addressable this way, since the DSL has no list/dict
+# membership operator (tracked in #3924) and its bare-attribute matcher
+# both splits on "." and requires \w+ segments. Keycloak's own group
+# claims are typically "/path" values (e.g. "/engineering/compliance")
+# and it mixes in hyphenated default roles like "default-roles-company" -
+# neither is addressable, and a rule written against one doesn't error,
+# it just never matches (an allow rule silently denies; a deny rule
+# silently lets the call through). Extract only identifier-shaped
+# roles/groups via role_claim_path/group_claim_path, or resolve the
+# mismatch upstream, until #3924 lands.
+def read_doc(doc_id: str, **policy_ctx):
+    ...
+
+safe = govern(read_doc, policy="policy.yaml")
+result = safe(**identity.as_policy_kwargs(), doc_id="COMP-042")
 ```
 
 ### Active Directory Integration

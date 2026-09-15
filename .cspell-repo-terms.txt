@@ -197,6 +197,7 @@ Nanvix
 NemoClaw
 Nemotron
 Normalise
+OAEP
 OCSP
 OLLAMA
 ORAS
@@ -244,6 +245,7 @@ Rootfs
 RustCrypto
 RustSec
 Rwandan
+SECP
 SGHA
 SIEM
 SIGSTOP
@@ -534,6 +536,7 @@ fmean
 fnmatch
 fnmatchcase
 folderlocation
+footgun
 formedness
 fria
 fromisoformat
@@ -762,6 +765,7 @@ normpath
 nostr
 nother
 notrequirements
+noverify
 npmjs
 nsecure
 ntpath
