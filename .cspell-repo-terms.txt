@@ -600,6 +600,7 @@ isatty
 isawaitable
 iscoroutine
 isdigit
+isdir
 isdisjoint
 isfile
 isfinite
@@ -1022,6 +1023,7 @@ unconfigured
 unicodedata
 uninspectable
 unioned
+unlogged
 unkeyed
 unmigrated
 unparse
@@ -1128,6 +1130,7 @@ tcpdump
 filterwarnings
 simplefilter
 subn
+recwarn
 
 # --- Azure credential pattern terms (used in credential_redactor regexes) ---
 accountkey

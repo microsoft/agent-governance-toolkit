@@ -372,7 +372,11 @@ jobs:
         # The native ACS runtime evaluates policy via OPA; without it the
         # runtime fails closed (runtime_error:policy_invocation_failed) and
         # denies everything. Same pinned binary the policy-engine CI uses.
-        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox')
+        # agent-mesh also needs it: PolicyEngine.load_rego()/OPAEvaluator
+        # shell out to the opa CLI, and every test that exercises that path
+        # is marked @requires_opa and skips without it — so this job was
+        # giving those tests zero real coverage.
+        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox' || matrix.package == 'agent-mesh')
         run: |
           set -euo pipefail
           curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
