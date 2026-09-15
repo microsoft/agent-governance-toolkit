@@ -1165,3 +1165,47 @@ zmij
 zoneinfo
 رقم
 قومي
+
+# --- Documentation site and ACS integration terms ---
+AgentRateLimiter
+AEDT
+anthonyonazure
+Bigspin
+Clendenen
+Ecommerce
+externalidentity
+fnmatchcase
+Janssen
+KillSwitch
+langgenius
+MCPGateway
+MCPSecurityScanner
+Merchantlife
+PIICRI
+RateLimitMiddleware
+resourceid
+RingBreachDetector
+RingElevationManager
+SpendGuard
+Vercel
+
+# --- cloud-board cryptography 50.0.0 audit terms (flagged by cspell) ---
+AESGCM
+Bleichenbacher
+FFDH
+OCSP
+SPKI
+
+# --- audit_backends.py / govern.py fail-closed-error comment terms (PR #3916) ---
+CREAT
+ELOOP
+ENOSPC
+EPERM
+FCHMOD
+WRONLY
+containerised
+fchmod
+fileno
+fromhex
+fstat
+serialisation
