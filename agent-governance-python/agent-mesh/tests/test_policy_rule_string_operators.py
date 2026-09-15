@@ -181,10 +181,26 @@ def test_inequality_rejects_non_string_values():
 def test_string_operators_require_matching_quote_delimiters():
     """A mismatched quote pair (opening `'`, closing `"`) is a malformed
     literal, not a valid operand."""
-    allow_rule = PolicyRule(
+    allow_contains = PolicyRule(
         name="allow-safe-path", condition="action.path contains 'safe\"", action="allow"
     )
-    assert allow_rule.evaluate({"action": {"path": "safe/file"}}) is False
+    assert allow_contains.evaluate({"action": {"path": "safe/file"}}) is False
+
+    allow_startswith = PolicyRule(
+        name="allow-safe-path", condition="action.path startswith 'safe\"", action="allow"
+    )
+    assert allow_startswith.evaluate({"action": {"path": "safe/file"}}) is False
+
+    allow_endswith = PolicyRule(
+        name="allow-safe-path", condition="action.path endswith 'file\"", action="allow"
+    )
+    assert allow_endswith.evaluate({"action": {"path": "safe/file"}}) is False
+
+    allow_eq = PolicyRule(name="allow-eq", condition="action.path == 'safe/file\"", action="allow")
+    assert allow_eq.evaluate({"action": {"path": "safe/file"}}) is False
+
+    allow_neq = PolicyRule(name="allow-neq", condition="action.path != 'zzz\"", action="allow")
+    assert allow_neq.evaluate({"action": {"path": "safe/file"}}) is False
 
 
 def test_string_operators_compose_with_and_or():

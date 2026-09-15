@@ -1071,16 +1071,16 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
         return all(_eval_expression(p.strip(), context, _depth + 1, action) for p in parts)
 
     # Equality: field == 'value'
-    eq_match = re.match(r"(\w+(?:\.\w+)*)\s*==\s*['\"]([^'\"]+)['\"]$", expr)
+    eq_match = re.match(r"(\w+(?:\.\w+)*)\s*==\s*(['\"])([^'\"]+)\2$", expr)
     if eq_match:
-        path, value = eq_match.groups()
+        path, _quote, value = eq_match.groups()
         actual = _get_nested(context, path)
         return actual == value
 
     # Inequality: field != 'value'
-    neq_match = re.match(r"(\w+(?:\.\w+)*)\s*!=\s*['\"]([^'\"]+)['\"]$", expr)
+    neq_match = re.match(r"(\w+(?:\.\w+)*)\s*!=\s*(['\"])([^'\"]+)\2$", expr)
     if neq_match:
-        path, value = neq_match.groups()
+        path, _quote, value = neq_match.groups()
         actual = _get_nested(context, path)
         if actual is None:
             # A missing field is not evidence of inequality: `x != 'v'`
