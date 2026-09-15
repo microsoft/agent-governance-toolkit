@@ -50,6 +50,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 | [Nostr Web of Trust](nostr-wot/) | `agentmesh-nostr-wot` | 🚧 Scaffold | Trust scoring via [MaximumSats](https://github.com/joelklabo/maximumsats-mcp) NIP-85 WoT |
 | [OpenAI Agents](openai-agents-trust/) | [`agentmesh-openai-agents-trust`](https://pypi.org/project/agentmesh-openai-agents-trust/) | ✅ Published (PyPI) | Trust guardrails, policy enforcement, governance hooks, trust-gated handoffs for OpenAI Agents SDK |
 | [OpenClaw Skill](openclaw-skill/) | [`agentmesh-governance`](https://clawhub.ai/microsoft/agentmesh-governance) | ✅ Published (ClawHub) | Governance skill for [OpenClaw](https://openclaw.im) agents — policy enforcement, trust scoring, Ed25519 DIDs, hash-chain audit |
+| [Cedarling](cedarling-acs/) | `agent-governance-toolkit-integrations[cedarling]` | 🚧 Preview | Cedarling policy dispatcher for the ACS v5 extension point: signed policy stores, JWT multi-issuer auth, in-process evaluation |
 
 ## Quick Start
 
