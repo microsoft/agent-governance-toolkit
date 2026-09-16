@@ -383,16 +383,19 @@ if identity is None:
 # kwargs even where it ignores them, e.g. via **policy_ctx.
 #
 # Only names matching \w+ (letters, digits, underscore - no dots, slashes,
-# or hyphens) are addressable this way, since the DSL has no list/dict
-# membership operator (tracked in #3924) and its bare-attribute matcher
-# both splits on "." and requires \w+ segments. Keycloak's own group
-# claims are typically "/path" values (e.g. "/engineering/compliance")
-# and it mixes in hyphenated default roles like "default-roles-company" -
-# neither is addressable, and a rule written against one doesn't error,
-# it just never matches (an allow rule silently denies; a deny rule
-# silently lets the call through). Extract only identifier-shaped
-# roles/groups via role_claim_path/group_claim_path, or resolve the
-# mismatch upstream, until #3924 lands.
+# or hyphens) are addressable this way, since the DSL still has no
+# list/dict membership operator and its bare-attribute matcher both
+# splits on "." and requires \w+ segments. Keycloak's own group claims
+# are typically "/path" values (e.g. "/engineering/compliance") and it
+# mixes in hyphenated default roles like "default-roles-company" -
+# neither is addressable. An allow rule against one silently denies
+# (the condition can never match, so default_action applies); a deny
+# rule against one currently also denies, but only because policy.py's
+# fail-closed fallback for an unparseable condition treats any non-allow
+# rule as matching - not because the name was actually addressed. Don't
+# rely on that fallback for a specific rule's intent: extract only
+# identifier-shaped roles/groups via role_claim_path/group_claim_path,
+# or resolve the mismatch upstream.
 def read_doc(doc_id: str, **policy_ctx):
     ...
 

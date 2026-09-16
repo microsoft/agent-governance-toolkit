@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for ExternalJWKSProvider per ADR-0007.
 
 Uses real Ed25519 keypairs and real JWT serialization. Only the
@@ -1154,10 +1156,15 @@ def test_as_policy_kwargs_group_paths_and_hyphenated_roles_never_match():
     condition on "." and requires each segment to match \\w+, so it can
     never address a Keycloak-shaped "/engineering" group path or a
     hyphenated role like "default-roles-company" - not a crash, just a
-    condition that never matches. That makes an allow rule against one
-    silently deny, and a deny rule against one silently let the call
-    through - both pinned here so the limitation stays visible rather
-    than reappearing as a surprise."""
+    condition that never matches. Both directions land on deny, but for
+    different reasons: an allow rule against one can never match, so the
+    default_action (deny here) takes over; a deny rule against one also
+    can't match syntactically, but policy.py's unrecognized-condition
+    fallback (see PolicyRule._eval_expression) treats that as a MATCH for
+    any non-allow rule, so the deny fires anyway - fail-closed by
+    construction, not because the name was actually addressed. Pinned so
+    that if either mechanism regresses, this test catches it rather than
+    the gap reappearing as a silent surprise."""
     from agentmesh.governance import GovernanceDenied, govern
 
     identity = ExternalIdentity(
@@ -1208,9 +1215,11 @@ rules:
 """,
     )
     # Same limitation from the other side: the deny rule can't address
-    # the hyphenated key either, so it never fires and the call executes
-    # even though the caller does hold that exact role.
-    assert deny_on_role(**kwargs) == "executed"
+    # the hyphenated key either, but an unrecognized condition on a
+    # non-allow rule fails closed (see policy.py's _eval_expression), so
+    # the call is still denied - just not because the name was matched.
+    with pytest.raises(GovernanceDenied):
+        deny_on_role(**kwargs)
 
 
 @pytest.mark.asyncio

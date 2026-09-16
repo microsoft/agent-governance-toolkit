@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """External JWKS identity provider for cross-org agent federation.
 
 Implements the ExternalJWKSProvider piece of ADR-0007 (External JWKS
@@ -204,11 +206,17 @@ class ExternalIdentity(BaseModel):
         241, 250). Keycloak's own `groups` claim is typically `/path`
         values (e.g. `/engineering/compliance`), and its default roles
         include hyphenated names like `default-roles-company`; neither is
-        addressable this way, and a rule written against one doesn't
-        error — it just never matches (an allow rule silently denies, a
-        deny rule silently lets the call through). There is no list/dict
-        membership operator to fall back on yet — tracked in #3924. Only
-        write rules against role/group names that are already
+        addressable this way. An allow rule against one silently denies,
+        since the condition can never match and the default_action takes
+        over. A deny rule against one currently also denies — but only
+        because policy.py's unrecognized-condition fallback treats an
+        unparseable condition on any non-allow rule as a fail-closed
+        match (see `_eval_expression`'s final branch), not because the
+        name was actually addressed; that fallback is a general
+        hardening measure, not something this module can rely on for a
+        specific rule. There is still no list/dict membership operator
+        or way to address a hyphenated/slash-containing key directly.
+        Only write rules against role/group names that are already
         identifier-shaped; resolve anything else upstream (e.g. via
         role_claim_path/group_claim_path extraction) before it reaches
         govern().
