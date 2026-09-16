@@ -124,10 +124,13 @@ for (const scenario of [
     assert.equal(status.promptDefenseCoverage, "12/12");
     assert.equal(status.promptDefenseBlockingScope, "effective-context");
 
+    const result = await evaluateOpenCodePrompt(state, { prompt: "Hello" });
     if (scenario.invalidOperator || scenario.missingOperator || scenario.invalidDefault) {
-      const result = await evaluateOpenCodePrompt(state, { prompt: "Hello" });
       assert.equal(result.effect, "deny");
       assert.match(result.reason, /policy could not be loaded/i);
+    } else {
+      assert.equal(status.configuredPolicyError, undefined);
+      assert.equal(result.effect, "allow");
     }
   });
 }
