@@ -337,6 +337,7 @@ Full list: [Framework Integrations](agent-governance-python/agentmesh-integratio
 | [maf-integration](examples/maf-integration) | MAF | Microsoft Agent Framework integration |
 | [mcp-trust-verified-server](examples/mcp-trust-verified-server) | MCP | Trust-verified MCP server implementation |
 | [governance-dashboard](examples/demos/governance-dashboard) | Streamlit | Real-time fleet visibility dashboard |
+| [k8s-agent-sandbox-governed](examples/k8s-agent-sandbox-governed) | kubernetes-sigs/agent-sandbox | Pre-dispatch command policy on top of Kubernetes-native execution isolation |
 
 ---
 

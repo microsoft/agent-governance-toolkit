@@ -687,11 +687,11 @@ config = SessionConfig(
     min_eff_score=0.60,
     enable_audit=True,
 )
-managed = await hv.create_session(config=config, creator_did="did:example:alice")
+managed = hv.create_session(config=config, creator_did="did:example:alice")
 session_id = managed.sso.session_id
 
 # Join agents
-ring = await hv.join_session(
+ring = hv.join_session(
     session_id=session_id,
     agent_did="did:example:bob",
     sigma_raw=0.72,
@@ -699,8 +699,8 @@ ring = await hv.join_session(
 print(ring)  # ExecutionRing.RING_2_STANDARD
 
 # Activate and later terminate
-await hv.activate_session(session_id)
-hash_root = await hv.terminate_session(session_id)
+hv.activate_session(session_id)
+hash_root = hv.terminate_session(session_id)
 ```
 
 **Constructor Parameters**

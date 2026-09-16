@@ -50,7 +50,7 @@
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",
     "@types/node": "26.5.0",
-    "@typescript-eslint/eslint-plugin": "8.69.0",
+    "@typescript-eslint/eslint-plugin": "8.70.0",
     "@typescript-eslint/parser": "8.70.0",
     "eslint": "10.10.0",
     "jest": "30.4.2",
