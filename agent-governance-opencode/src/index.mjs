@@ -10,7 +10,7 @@ import {
   evaluateOpenCodeToolOutput,
   getPolicyStatus,
   loadPolicy,
-} from "../lib/policy.mjs";
+} from "../lib/opencode-policy.mjs";
 
 // Track registrations by OpenCode client instance and normalized workspace.
 // The WeakMap lets registrations disappear with their host client instead of

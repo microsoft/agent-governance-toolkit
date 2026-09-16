@@ -20,7 +20,7 @@ test_post_tool_call_ssn_redacts_via_transform if {
 	}
 	verdict.decision == "transform"
 	verdict.reason == "redact_ssn_in_tool_result"
-	verdict.transform.path == "$policy_target.text"
+	verdict.transform.path == "$target.text"
 	verdict.transform.value == "customer SSN [SSN-REDACTED] file"
 }
 

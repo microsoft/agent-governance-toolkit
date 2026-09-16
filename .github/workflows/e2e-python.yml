@@ -81,6 +81,7 @@ jobs:
           python -m pip install --upgrade pip==24.3.1
           python -m pip install \
             -e agent-governance-python/agent-governance-toolkit-core \
+            -e agent-governance-python/agt-policies \
             ./policy-engine/sdk/python \
             pytest==9.0.3 \
             pytest-timeout==2.4.0
