@@ -1265,3 +1265,59 @@ intervention_points:
         error.detail()
     );
 }
+
+fn url_sourced_probe(fields: &str) -> Manifest {
+    Manifest::from_yaml_str(&format!(
+        r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: rego
+    query: data.acs.result
+{fields}intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+"#
+    ))
+    .unwrap()
+}
+
+#[test]
+fn url_sourced_loader_rejects_local_bundle_and_data_paths() {
+    // File-sourced constructors still accept a local bundle. The URL loader
+    // calls reject_url_sourced_local_paths after the fetch because upstream
+    // does not implement SPECIFICATION.md 2.3.
+    let local_bundle = url_sourced_probe("    bundle: ./policy\n");
+    AgentControl::from_manifest_with_dispatchers(
+        local_bundle.clone(),
+        Some(Arc::new(NoopAnnotator)),
+        Some(Arc::new(QueuePolicy::with_responses([]))),
+    )
+    .expect("a filesystem sourced manifest may name a local bundle");
+
+    let bundle_error =
+        reject_url_sourced_local_paths(&local_bundle).expect_err("URL sourced must fail closed");
+    assert_eq!(bundle_error.reason(), "runtime_error:manifest_invalid");
+    assert!(
+        bundle_error
+            .detail()
+            .starts_with("policy 'p' declares 'bundle'"),
+        "{}",
+        bundle_error.detail()
+    );
+
+    let data_paths = url_sourced_probe("    data_paths:\n      - ./extra.rego\n");
+    let data_error =
+        reject_url_sourced_local_paths(&data_paths).expect_err("URL sourced must fail closed");
+    assert!(
+        data_error
+            .detail()
+            .starts_with("policy 'p' declares 'data_paths'"),
+        "{}",
+        data_error.detail()
+    );
+
+    reject_url_sourced_local_paths(&url_sourced_probe(""))
+        .expect("inline query is not a filesystem path field");
+}

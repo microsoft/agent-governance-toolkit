@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runtime=` plus explicit `SandboxConfig`.
 
 ### Fixed
+- **URL-sourced ACS manifests cannot name local policy files** — `manifest_from_url` fails closed when a remote manifest declares filesystem path fields (`bundle`, `data`, `data_paths`, Cedar `policy_path` / `entities_path` / `schema_path`), matching SPECIFICATION.md 2.3.
 - **Spell check no longer reports the base branch's own history as a
   contributor's changes** — `scripts/ci/changed_lines.py` diffed from the tip of
   the base branch, so on a branch behind `main` every line `main` had since
