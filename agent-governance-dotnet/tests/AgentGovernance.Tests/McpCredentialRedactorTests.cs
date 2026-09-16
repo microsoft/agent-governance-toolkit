@@ -143,4 +143,112 @@ public class McpCredentialRedactorTests
         Assert.Equal(text, result.Sanitized);
         Assert.Empty(result.Detected);
     }
+
+    // Regression: GitHubToken, OpenAiToken, AwsAccessKey and GoogleApiKey used an
+    // excluded-character set (or, for the latter two, plain \b) that treated "_"
+    // as an ordinary word character. AwsAccessKey and GoogleApiKey are fixed
+    // length, and GitHubToken's gh[psour]_ alternative has no "_" in its own
+    // value class, so none of the three had a shorter match to fall back to when
+    // the boundary check rejected a suffix like "_old" — the whole pattern
+    // failed, and a complete, valid secret passed through unredacted rather than
+    // being truncated.
+    [Theory]
+    [InlineData("ghp_FAKEFORTESTING000000000000000000_old", "[REDACTED_GITHUB_TOKEN]_old", CredentialKind.GitHubToken)]
+    [InlineData("ghs_FAKEFORTESTING000000000000000000_deprecated", "[REDACTED_GITHUB_TOKEN]_deprecated", CredentialKind.GitHubToken)]
+    [InlineData("sk-FAKEFORTESTING00000000000000000000_old", "[REDACTED_OPENAI_TOKEN]", CredentialKind.OpenAiToken)]
+    public void Redact_RedactsSecretGluedToAFollowingUnderscoreSuffix(string text, string expectedSanitized, CredentialKind expectedKind)
+    {
+        var result = _redactor.Redact(text);
+
+        Assert.Equal(expectedSanitized, result.Sanitized);
+        Assert.Contains(expectedKind, result.Detected);
+    }
+
+    [Fact]
+    public void Redact_RedactsAwsAndGoogleKeysGluedToAFollowingSuffix()
+    {
+        var awsAccessKey = $"AKIA{new string('A', 16)}";
+        var googleApiKey = $"AIza{new string('A', 35)}";
+
+        var result = _redactor.Redact($"{awsAccessKey}_old and {googleApiKey}_rotated");
+
+        Assert.Equal("[REDACTED_AWS_ACCESS_KEY]_old and [REDACTED_GOOGLE_API_KEY]_rotated", result.Sanitized);
+        Assert.Contains(CredentialKind.AwsAccessKey, result.Detected);
+        Assert.Contains(CredentialKind.GoogleApiKey, result.Detected);
+    }
+
+    // Mirror of the suffix regression above, on the left edge: a secret glued
+    // directly after "_" was missed because "_" was excluded from the left side
+    // of the same boundary check.
+    [Theory]
+    [InlineData("session_ghp_FAKEFORTESTING000000000000000000", "session_[REDACTED_GITHUB_TOKEN]", CredentialKind.GitHubToken)]
+    [InlineData("session_sk-FAKEFORTESTING00000000000000000000", "session_[REDACTED_OPENAI_TOKEN]", CredentialKind.OpenAiToken)]
+    public void Redact_RedactsSecretGluedToAPrecedingUnderscore(string text, string expectedSanitized, CredentialKind expectedKind)
+    {
+        var result = _redactor.Redact(text);
+
+        Assert.Equal(expectedSanitized, result.Sanitized);
+        Assert.Contains(expectedKind, result.Detected);
+    }
+
+    [Fact]
+    public void Redact_RedactsAwsAndGoogleKeysGluedToAPrecedingUnderscore()
+    {
+        var awsAccessKey = $"AKIA{new string('A', 16)}";
+        var googleApiKey = $"AIza{new string('A', 35)}";
+
+        var result = _redactor.Redact($"session_{awsAccessKey} svc_{googleApiKey}");
+
+        Assert.Equal("session_[REDACTED_AWS_ACCESS_KEY] svc_[REDACTED_GOOGLE_API_KEY]", result.Sanitized);
+        Assert.Contains(CredentialKind.AwsAccessKey, result.Detected);
+        Assert.Contains(CredentialKind.GoogleApiKey, result.Detected);
+    }
+
+    // The mirror assertion on AwsAccessKey/GoogleApiKey's right edge is exactly
+    // as strict about what may follow as the fixed length already was: one more
+    // alphanumeric character is a longer, different token, not the same key
+    // with an annotation, and must stay unmatched. Same for one more
+    // alphanumeric character directly before the key on the left.
+    [Theory]
+    [InlineData("AKIAAAAAAAAAAAAAAAAAX")]
+    [InlineData("XAKIAAAAAAAAAAAAAAAAA")]
+    public void Redact_DoesNotWidenAwsAccessKeyMatch(string text)
+    {
+        var result = _redactor.Redact(text);
+
+        Assert.Equal(text, result.Sanitized);
+        Assert.DoesNotContain(CredentialKind.AwsAccessKey, result.Detected);
+    }
+
+    [Theory]
+    [InlineData("AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA9")]
+    [InlineData("XAIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public void Redact_DoesNotWidenGoogleApiKeyMatch(string text)
+    {
+        var result = _redactor.Redact(text);
+
+        Assert.Equal(text, result.Sanitized);
+        Assert.DoesNotContain(CredentialKind.GoogleApiKey, result.Detected);
+    }
+
+    // Regression: the 35 char value class includes "-", so a real key can end
+    // in one. A plain \b treats "-" as an automatic boundary on its own,
+    // since "-" is not a word character, so a key ending in "-" and glued
+    // straight to more text was redacted before this fix. A detector change
+    // must never lose a shape the previous version caught, so the pattern
+    // now also accepts whenever the character actually consumed is "-",
+    // restoring that behavior, while a key ending in a plain alphanumeric
+    // character glued to more text still correctly stays unmatched (see
+    // Redact_DoesNotWidenGoogleApiKeyMatch above).
+    [Fact]
+    public void Redact_RedactsGoogleApiKeyEndingInHyphenWhenGlued()
+    {
+        var keyEndingInHyphen = $"AIza{new string('A', 34)}-";
+        var text = $"{keyEndingInHyphen}X";
+
+        var result = _redactor.Redact(text);
+
+        Assert.Equal("[REDACTED_GOOGLE_API_KEY]X", result.Sanitized);
+        Assert.Contains(CredentialKind.GoogleApiKey, result.Detected);
+    }
 }

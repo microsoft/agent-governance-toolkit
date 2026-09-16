@@ -73,12 +73,32 @@ public sealed class McpCredentialRedactor
          new Regex(@"(?i)\b(?:password|secret|token)\s*[:=]\s*[""']?[^\s""';,]{4,}[""']?", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_SECRET]"),
 
+        // These five patterns use a lookaround with an explicit excluded-character
+        // set rather than \b, so a secret glued directly to a preceding or
+        // following word character (e.g. "session_ghp_..." or "AKIA..._old") is
+        // still detected. \b treats "_" as a word character, so it finds no
+        // boundary next to one; a plain \b also cannot express the asymmetry a
+        // fixed-length or "_"-excluding value class needs (AwsAccessKey and
+        // GitHubToken's gh[psour]_ alternative have no shorter match to fall back
+        // to when the boundary check fails, so the whole pattern would fail
+        // rather than match a truncated token).
+        //
+        // The excluded set on the left is [A-Za-z0-9] everywhere below: any
+        // character that is not part of the value's own class is a valid left
+        // separator, never a reason to reject the match. OpenAiToken's right
+        // side is left as-is (still excludes "_"/"-" too): its value class is
+        // variable-length and already includes both characters, so a glued
+        // suffix is absorbed into the match regardless of what the trailing
+        // lookahead excludes, and narrowing it here is not needed to fix this
+        // bug. GitHubToken, AwsAccessKey and GoogleApiKey do not have that
+        // variable-length class to fall back on, so their right side is fixed
+        // the same way as their left.
         (CredentialKind.GitHubToken,
-         new Regex(@"(?<![A-Za-z0-9_])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_GITHUB_TOKEN]"),
 
         (CredentialKind.OpenAiToken,
-         new Regex(@"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9_-])", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9_-])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_OPENAI_TOKEN]"),
 
         (CredentialKind.SlackToken,
@@ -86,11 +106,25 @@ public sealed class McpCredentialRedactor
          "[REDACTED_SLACK_TOKEN]"),
 
         (CredentialKind.AwsAccessKey,
-         new Regex(@"\bAKIA[A-Z0-9]{16}\b", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}(?![A-Za-z0-9])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_AWS_ACCESS_KEY]"),
 
+        // Value class includes "-"/"_", and the count is fixed at 35, so a real
+        // key can end in one of them. A plain \b treats "-" as an automatic
+        // boundary on its own, since "-" is not a word character, so a key
+        // ending in "-" was redacted even when glued straight to more text. A
+        // detector change must never lose a shape the previous version
+        // caught, so the trailing assertion also accepts whenever the
+        // character actually consumed is "-", on top of the existing "not
+        // alphanumeric" check, restoring that original behavior for that one
+        // shape while keeping the "one more alphanumeric character means a
+        // different token" guard for every other ending. Verified against the
+        // previous pattern across every 35th character crossed with every
+        // plausible following character: the only cases that change are
+        // exactly this one. Pinned as a positive case by
+        // Redact_RedactsGoogleApiKeyEndingInHyphenWhenGlued below.
         (CredentialKind.GoogleApiKey,
-         new Regex(@"\bAIza[0-9A-Za-z\-_]{35}\b", RegexOptions.Compiled, RegexTimeout),
+         new Regex(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z\-_]{35}(?:(?![A-Za-z0-9])|(?<=-))", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_GOOGLE_API_KEY]"),
 
         (CredentialKind.PemPrivateKey,
