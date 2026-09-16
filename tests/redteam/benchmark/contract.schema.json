@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-toolkit.local/redteam/benchmark-contract-v1",
+  "title": "AGT deterministic red-team benchmark contract v1",
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^rt-smoke-[a-z0-9-]+-[0-9]{2}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 100
+        },
+        "trap_class": {
+          "enum": [
+            "Content Injection",
+            "Semantic Manipulation",
+            "Cognitive State",
+            "Behavioural Control",
+            "Systemic",
+            "Human-in-the-Loop"
+          ]
+        },
+        "scenario_kind": {
+          "enum": [
+            "canonical_positive",
+            "evasion_positive",
+            "hard_benign",
+            "near_miss"
+          ]
+        },
+        "delivery_vector": {
+          "enum": [
+            "direct_prompt",
+            "carrier_document",
+            "browser_dom",
+            "tool_result",
+            "memory_record",
+            "a2a_message",
+            "approval_request",
+            "reporting_artifact"
+          ]
+        },
+        "target_layer": {
+          "enum": [
+            "input",
+            "retrieval",
+            "memory",
+            "tool",
+            "browser",
+            "a2a",
+            "human_approval",
+            "reporting"
+          ]
+        },
+        "detection_verdict": {
+          "enum": ["flagged", "clean"]
+        },
+        "tool": {
+          "enum": [
+            "mock_content_reader",
+            "mock_task_router",
+            "mock_memory",
+            "mock_tool",
+            "mock_agent_channel",
+            "mock_approval"
+          ]
+        },
+        "unsafe": {
+          "type": "boolean"
+        },
+        "control_id": {
+          "type": "string",
+          "pattern": "^mock:[a-z0-9-]+$"
+        },
+        "expected_action_outcome": {
+          "enum": ["contained", "executed"]
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "trap_class",
+        "scenario_kind",
+        "delivery_vector",
+        "target_layer",
+        "detection_verdict",
+        "tool",
+        "unsafe",
+        "control_id",
+        "expected_action_outcome"
+      ]
+    },
+    "tool_trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scenario_id": {"type": "string"},
+        "tool": {"type": "string"},
+        "attempted": {"const": true},
+        "executed": {"type": "boolean"},
+        "action_outcome": {"enum": ["contained", "executed"]},
+        "blocked_at": {"type": ["string", "null"]},
+        "control_id": {"type": ["string", "null"]},
+        "audit_event_present": {"const": true},
+        "side_effects": {"const": "none"},
+        "reason": {
+          "enum": [
+            "contained by mock control",
+            "allowed benign dry-run",
+            "unsafe action executed",
+            "benign action blocked by mock control"
+          ]
+        }
+      },
+      "required": [
+        "scenario_id",
+        "tool",
+        "attempted",
+        "executed",
+        "action_outcome",
+        "blocked_at",
+        "control_id",
+        "audit_event_present",
+        "side_effects",
+        "reason"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scenario_id": {"type": "string"},
+        "trap_class": {"type": "string"},
+        "scenario_kind": {"type": "string"},
+        "detection_verdict": {"enum": ["flagged", "clean"]},
+        "expected_action_outcome": {"enum": ["contained", "executed"]},
+        "action_outcome": {"enum": ["contained", "executed"]},
+        "status": {"enum": ["pass", "fail"]},
+        "evidence_level": {"const": "L2_mock_behavioural"},
+        "trace": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {"$ref": "#/$defs/tool_trace"}
+        }
+      },
+      "required": [
+        "scenario_id",
+        "trap_class",
+        "scenario_kind",
+        "detection_verdict",
+        "expected_action_outcome",
+        "action_outcome",
+        "status",
+        "evidence_level",
+        "trace"
+      ]
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "benchmark": {"const": "agt-redteam-smoke-v1"},
+        "scenario_set_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "evidence_level": {"const": "L2_mock_behavioural"},
+        "certification_claim": {"const": false},
+        "scenario_count": {"const": 24},
+        "passed": {"type": "boolean"},
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "attack_matrix": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "detected_contained": {"type": "integer", "minimum": 0},
+                "detected_executed": {"type": "integer", "minimum": 0},
+                "undetected_contained": {"type": "integer", "minimum": 0},
+                "undetected_executed": {"type": "integer", "minimum": 0}
+              },
+              "required": [
+                "detected_contained",
+                "detected_executed",
+                "undetected_contained",
+                "undetected_executed"
+              ]
+            },
+            "utility": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "benign_total": {"type": "integer", "minimum": 0},
+                "benign_allowed": {"type": "integer", "minimum": 0},
+                "benign_false_blocks": {"type": "integer", "minimum": 0},
+                "benign_detector_flags": {"type": "integer", "minimum": 0}
+              },
+              "required": [
+                "benign_total",
+                "benign_allowed",
+                "benign_false_blocks",
+                "benign_detector_flags"
+              ]
+            },
+            "failure_count": {"type": "integer", "minimum": 0}
+          },
+          "required": ["attack_matrix", "utility", "failure_count"]
+        },
+        "results": {
+          "type": "array",
+          "minItems": 24,
+          "maxItems": 24,
+          "items": {"$ref": "#/$defs/result"}
+        }
+      },
+      "required": [
+        "benchmark",
+        "scenario_set_hash",
+        "evidence_level",
+        "certification_claim",
+        "scenario_count",
+        "passed",
+        "summary",
+        "results"
+      ]
+    }
+  }
+}

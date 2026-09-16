@@ -34,6 +34,8 @@ updates:
       - "/agent-governance-python/agent-sandbox"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -53,17 +55,28 @@ updates:
     directory: "/agent-governance-python/agent-os/extensions/mcp-server"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
+    groups:
+      # vitest and its plugins pin each other with exact peer ranges;
+      # a lone @vitest/coverage-v8 major (#3869) leaves an unsupported pair.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
 
   - package-ecosystem: "npm"
     directory: "/agent-governance-python/agent-os/extensions/copilot"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -75,6 +88,8 @@ updates:
     directory: "/agent-governance-copilot-cli"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -86,6 +101,8 @@ updates:
     directory: "/agent-governance-claude-code"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -97,6 +114,8 @@ updates:
     directory: "/agent-governance-typescript"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -108,6 +127,8 @@ updates:
     directory: "/agent-governance-antigravity-cli"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -120,6 +141,8 @@ updates:
     directory: "/agent-governance-dotnet"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -135,6 +158,8 @@ updates:
     directory: "/agent-governance-rust"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -147,6 +172,8 @@ updates:
     directory: "/agent-governance-golang"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -159,6 +186,8 @@ updates:
     directory: "/agent-governance-python/agent-os"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     labels:
       - "dependencies"

@@ -41,7 +41,7 @@ DEFAULT_OTEL_METER_NAME = "agent_control_specification"
 
 # Mirrors integrations/otel/src/lib.rs DECISION_WIRE_STRINGS. One counter per
 # wire decision so the transform path is observable alongside the rest.
-_DECISION_WIRE_STRINGS = ("allow", "deny", "warn", "escalate", "transform")
+_DECISION_WIRE_STRINGS = ("allow", "deny", "transform")
 
 # Maximum identifier length accepted as a low cardinality reason_code, matching
 # core/src/runtime.rs is_identifier_reason_code.
@@ -102,13 +102,19 @@ def safe_reason_code(reason: str | None) -> str | None:
 def error_class_for(reason: str | None) -> str | None:
     """Derive the telemetry error_class from a verdict reason.
 
-    Reproduces core/src/runtime.rs telemetry_error_class. A reason carrying the
-    reserved ``runtime_error:`` prefix maps to the ``runtime_error`` class;
-    every other reason yields no error class.
+    There are two reserved namespaces. A reason carrying ``runtime_error:``
+    comes from the engine and maps to the ``runtime_error`` class; one carrying
+    ``host_error:`` is synthesized by this host and maps to ``host_error``.
+    Every other reason yields no error class. Recognising only the engine
+    namespace would leave every host failure unclassified.
     """
 
-    if reason is not None and reason.startswith("runtime_error:"):
+    if reason is None:
+        return None
+    if reason.startswith("runtime_error:"):
         return "runtime_error"
+    if reason.startswith("host_error:"):
+        return "host_error"
     return None
 
 
