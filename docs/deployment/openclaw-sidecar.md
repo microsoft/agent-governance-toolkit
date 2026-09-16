@@ -8,11 +8,13 @@ owner: agt-maintainers
 
 Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a sidecar on Azure Kubernetes Service (AKS) for prompt injection detection, governance API access, and action auditing.
 
-> [!WARNING]
-> **Known limitations — read before deploying:**
-> - OpenClaw does **not** natively call the governance sidecar. Your orchestration layer must call the sidecar HTTP API explicitly before executing tools.
-> - The docker-compose example in this doc is for illustration. For a working local demo, use [`examples/demos/openclaw-governed/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/demos/openclaw-governed).
-> - See [Roadmap](#roadmap) for the full list of unimplemented features.
+!!! warning
+
+    **Known limitations — read before deploying:**
+    
+    - OpenClaw does **not** natively call the governance sidecar. Your orchestration layer must call the sidecar HTTP API explicitly before executing tools.
+    - The docker-compose example in this doc is for illustration. For a working local demo, use [`examples/demos/openclaw-governed/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/demos/openclaw-governed).
+    - See [Roadmap](#roadmap) for the full list of unimplemented features.
 
 > **Container images** are not yet published to a public registry. Build from source and push to your own registry (see [Build the Sidecar Image](#1-build-the-governance-sidecar-image)).
 

@@ -8,10 +8,11 @@ owner: agt-maintainers
 
 **Release Date:** 2026-05-18
 
-> [!IMPORTANT]
-> **Public Preview** - All packages published from this repository are
-> **Microsoft-signed public preview releases**. They are production-quality but
-> may have breaking changes before GA.
+!!! important
+
+    **Public Preview** - All packages published from this repository are
+    **Microsoft-signed public preview releases**. They are production-quality but
+    may have breaking changes before GA.
 
 ## Highlights
 

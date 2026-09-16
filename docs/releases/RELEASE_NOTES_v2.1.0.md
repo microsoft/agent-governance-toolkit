@@ -6,10 +6,11 @@ owner: agt-maintainers
 
 # Agent Governance Toolkit v2.1.0
 
-> [!IMPORTANT]
-> **Community Preview Release** — This release is for testing and evaluation purposes only.
-> Packages published to PyPI, npm, and NuGet are **not** official Microsoft-signed releases.
-> Official Microsoft-signed packages via ESRP Release will be available in a future release.
+!!! important
+
+    **Community Preview Release** — This release is for testing and evaluation purposes only.
+    Packages published to PyPI, npm, and NuGet are **not** official Microsoft-signed releases.
+    Official Microsoft-signed packages via ESRP Release will be available in a future release.
 
 **The missing security layer for AI agents — now in Python, TypeScript, and .NET.**
 
