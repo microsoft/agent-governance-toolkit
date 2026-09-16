@@ -1216,15 +1216,16 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
       surface: SURFACE_NAME,
     });
     const reason = summarizeBackendReasons(decision.backendResults);
+    const effect = normalizeEffectForOpenCode(state, decision.effectiveDecision);
 
     await recordAudit(state, {
       action: "prompt.submit",
-      decision: decision.effectiveDecision,
+      decision: effect,
       sessionId: input.sessionId,
     });
 
     return {
-      effect: normalizeEffectForOpenCode(state, decision.effectiveDecision),
+      effect,
       reason: reason || "",
     };
   } catch (error) {
@@ -1273,15 +1274,16 @@ export async function evaluateOpenCodeTool(state, input = {}) {
       toolName,
     });
     const reason = summarizeBackendReasons(decision.backendResults);
+    const effect = normalizeEffectForOpenCode(state, decision.effectiveDecision);
 
     await recordAudit(state, {
       action: `tool.${toolName}`,
-      decision: decision.effectiveDecision,
+      decision: effect,
       sessionId: input.sessionId,
     });
 
     return {
-      effect: normalizeEffectForOpenCode(state, decision.effectiveDecision),
+      effect,
       reason: reason || "",
     };
   } catch (error) {
