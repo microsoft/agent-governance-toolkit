@@ -13,6 +13,11 @@ const PROTOCOL_VERSION = "2024-11-05";
 const STATELESS_PROTOCOL_VERSION = "2026-07-28";
 const JSONRPC_VERSION = "2.0";
 const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
+const HEADER_LINE_PATTERN = /^[ \t]*[A-Za-z-]+:/;
+// Only the start of the buffer is inspected, so a large JSON line is never
+// decoded just to decide which framing it uses.
+const HEADER_PROBE_BYTES = 256;
+const NEWLINE = 0x0a;
 const extensionRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const tools = [
@@ -49,40 +54,65 @@ process.stdin.on("data", (chunk) => {
   void drainInputBuffer();
 });
 
+// The MCP stdio transport is newline-delimited JSON. Legacy callers may still
+// send LSP Content-Length frames, so both are accepted on the read side.
 async function drainInputBuffer() {
-  while (true) {
-    const headerEnd = inputBuffer.indexOf(HEADER_SEPARATOR);
-    if (headerEnd === -1) {
-      return;
-    }
+  while (inputBuffer.length > 0) {
+    if (startsWithHeaderLine(inputBuffer)) {
+      const headerEnd = inputBuffer.indexOf(HEADER_SEPARATOR);
+      if (headerEnd === -1) {
+        return;
+      }
 
-    const headerText = inputBuffer.subarray(0, headerEnd).toString("utf8");
-    const contentLength = getContentLength(headerText);
-    if (contentLength === null) {
-      inputBuffer = Buffer.alloc(0);
-      writeError(null, -32700, "Missing or invalid Content-Length header.");
-      return;
-    }
+      const headerText = inputBuffer.subarray(0, headerEnd).toString("utf8");
+      const contentLength = getContentLength(headerText);
+      if (contentLength === null) {
+        inputBuffer = Buffer.alloc(0);
+        writeError(null, -32700, "Missing or invalid Content-Length header.");
+        return;
+      }
 
-    const messageStart = headerEnd + HEADER_SEPARATOR.length;
-    const messageEnd = messageStart + contentLength;
-    if (inputBuffer.length < messageEnd) {
-      return;
-    }
+      const messageStart = headerEnd + HEADER_SEPARATOR.length;
+      const messageEnd = messageStart + contentLength;
+      if (inputBuffer.length < messageEnd) {
+        return;
+      }
 
-    const payload = inputBuffer.subarray(messageStart, messageEnd).toString("utf8");
-    inputBuffer = inputBuffer.subarray(messageEnd);
-
-    let message;
-    try {
-      message = JSON.parse(payload);
-    } catch {
-      writeError(null, -32700, "Invalid JSON payload.");
+      const payload = inputBuffer.subarray(messageStart, messageEnd).toString("utf8");
+      inputBuffer = inputBuffer.subarray(messageEnd);
+      await handlePayload(payload);
       continue;
     }
 
-    await handleMessage(message);
+    const newlineIndex = inputBuffer.indexOf(NEWLINE);
+    if (newlineIndex === -1) {
+      return;
+    }
+
+    const line = inputBuffer.subarray(0, newlineIndex).toString("utf8").trim();
+    inputBuffer = inputBuffer.subarray(newlineIndex + 1);
+    if (line.length === 0) {
+      continue;
+    }
+
+    await handlePayload(line);
   }
+}
+
+function startsWithHeaderLine(buffer) {
+  return HEADER_LINE_PATTERN.test(buffer.subarray(0, HEADER_PROBE_BYTES).toString("utf8"));
+}
+
+async function handlePayload(payload) {
+  let message;
+  try {
+    message = JSON.parse(payload);
+  } catch {
+    writeError(null, -32700, "Invalid JSON payload.");
+    return;
+  }
+
+  await handleMessage(message);
 }
 
 function getContentLength(headerText) {
@@ -291,6 +321,6 @@ function writeError(id, code, message) {
 }
 
 function writeMessage(payload) {
-  const body = JSON.stringify(payload);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
+  // MCP stdio transport: newline-delimited JSON, not LSP Content-Length framing.
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
 }

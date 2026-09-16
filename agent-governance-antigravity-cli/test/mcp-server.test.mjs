@@ -245,6 +245,103 @@ test("legacy lifecycle remains compatible and terminal outcomes stay distinct ov
   });
 });
 
+test("bundled MCP server completes a newline-delimited JSON handshake over stdio", async () => {
+  await withServer("agt-antigravity-mcp-ndjson-handshake-", async (child) => {
+    const initialize = await request(child, {
+      jsonrpc: "2.0",
+      id: 30,
+      method: "initialize",
+      params: { protocolVersion: "2024-11-05" },
+    });
+    child.stdin.write(encodeMessage({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+      params: {},
+    }));
+    const listTools = await request(child, {
+      jsonrpc: "2.0",
+      id: 31,
+      method: "tools/list",
+      params: {},
+      _meta: STATELESS_META,
+    });
+    const discover = await request(child, {
+      jsonrpc: "2.0",
+      id: 32,
+      method: "server/discover",
+      params: {},
+      _meta: STATELESS_META,
+    });
+
+    assert.equal(initialize.result.serverInfo.name, "agt-global-policy");
+    assert.deepEqual(listTools.result.tools.map(({ name }) => name), [
+      "agt_policy_status",
+      "agt_policy_check_text",
+    ]);
+    assert.equal(discover.result.protocolVersion, "2026-07-28");
+  });
+});
+
+test("bundled MCP server frames responses as newline-delimited JSON", async () => {
+  await withServer("agt-antigravity-mcp-ndjson-frame-", async (child) => {
+    const raw = await rawResponse(child, { jsonrpc: "2.0", id: 33, method: "ping", params: {} });
+
+    assert.ok(raw.endsWith("\n"));
+    assert.equal(raw.indexOf("\n"), raw.length - 1);
+    assert.deepEqual(JSON.parse(raw), { jsonrpc: "2.0", id: 33, result: {} });
+  });
+});
+
+test("bundled MCP server handles a newline-delimited frame split across writes", async () => {
+  await withServer("agt-antigravity-mcp-ndjson-split-", async (child) => {
+    const frame = Buffer.from(
+      encodeMessage({ jsonrpc: "2.0", id: 34, method: "ping", params: { note: "Привет" } }),
+      "utf8",
+    );
+    const characterStart = frame.indexOf(Buffer.from("Привет", "utf8"));
+    assert.notEqual(characterStart, -1);
+
+    const response = await requestFrame(child, [
+      frame.subarray(0, characterStart + 1),
+      frame.subarray(characterStart + 1),
+    ]);
+
+    assert.deepEqual(response, { jsonrpc: "2.0", id: 34, result: {} });
+  });
+});
+
+test("bundled MCP server still reads legacy Content-Length requests", async () => {
+  await withServer("agt-antigravity-mcp-legacy-read-", async (child) => {
+    const response = await requestFrame(
+      child,
+      encodeLegacyContentLengthFrame({ jsonrpc: "2.0", id: 35, method: "ping", params: {} }),
+    );
+
+    assert.deepEqual(response, { jsonrpc: "2.0", id: 35, result: {} });
+  });
+});
+
+test("bundled MCP server rejects a legacy frame without Content-Length", async () => {
+  await withServer("agt-antigravity-mcp-legacy-bad-header-", async (child) => {
+    const response = await requestFrame(
+      child,
+      'X-Extension: 1\r\n\r\n{"jsonrpc":"2.0","id":36,"method":"ping"}',
+    );
+
+    assert.equal(response.error.code, -32700);
+    assert.equal(response.error.message, "Missing or invalid Content-Length header.");
+  });
+});
+
+test("bundled MCP server rejects a malformed newline-delimited line", async () => {
+  await withServer("agt-antigravity-mcp-bad-json-", async (child) => {
+    const response = await requestFrame(child, "{not json}\n");
+
+    assert.equal(response.error.code, -32700);
+    assert.equal(response.error.message, "Invalid JSON payload.");
+  });
+});
+
 async function withServer(prefix, callback) {
   const root = await mkdtemp(join(tmpdir(), prefix));
   const antigravityHome = join(root, ".antigravity");
@@ -264,6 +361,10 @@ async function withServer(prefix, callback) {
 }
 
 function request(child, payload) {
+  return requestFrame(child, encodeMessage(payload));
+}
+
+function requestFrame(child, frame) {
   return new Promise((resolve, reject) => {
     let buffer = Buffer.alloc(0);
     let settled = false;
@@ -303,36 +404,66 @@ function request(child, payload) {
     child.stdout.on("data", onData);
     child.on("error", onError);
     child.on("exit", onExit);
-    child.stdin.write(encodeMessage(payload));
+    void writeChunks(child, Array.isArray(frame) ? frame : [frame]);
   });
 }
 
+async function writeChunks(child, chunks) {
+  for (const [index, chunk] of chunks.entries()) {
+    child.stdin.write(chunk);
+    if (index < chunks.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+}
+
 function encodeMessage(payload) {
+  return `${JSON.stringify(payload)}\n`;
+}
+
+// The read side still accepts legacy LSP frames, so the legacy tests drive the
+// server with Content-Length input while it answers with NDJSON.
+function encodeLegacyContentLengthFrame(payload) {
   const body = JSON.stringify(payload);
   return `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
 }
 
 function tryDecodeMessage(buffer) {
-  const separator = "\r\n\r\n";
-  const headerEnd = buffer.indexOf(separator);
-  if (headerEnd === -1) {
+  const newlineIndex = buffer.indexOf(0x0a);
+  if (newlineIndex === -1) {
     return null;
   }
 
-  const headerText = buffer.subarray(0, headerEnd).toString("utf8");
-  const contentLengthHeader = headerText
-    .split("\r\n")
-    .find((line) => line.toLowerCase().startsWith("content-length:"));
-  if (!contentLengthHeader) {
-    throw new Error("MCP response is missing Content-Length.");
-  }
+  const line = buffer.subarray(0, newlineIndex).toString("utf8");
+  assert.doesNotMatch(line, /^Content-Length:/i, "MCP server framed a response with an LSP header");
 
-  const contentLength = Number.parseInt(contentLengthHeader.split(":")[1].trim(), 10);
-  const messageStart = headerEnd + separator.length;
-  const messageEnd = messageStart + contentLength;
-  if (buffer.length < messageEnd) {
-    return null;
-  }
+  return JSON.parse(line);
+}
 
-  return JSON.parse(buffer.subarray(messageStart, messageEnd).toString("utf8"));
+function rawResponse(child, payload) {
+  return new Promise((resolve, reject) => {
+    let buffer = Buffer.alloc(0);
+
+    const cleanup = () => {
+      child.stdout.off("data", onData);
+      child.off("error", onError);
+    };
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    const onData = (chunk) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      const newlineIndex = buffer.indexOf(0x0a);
+      if (newlineIndex === -1) {
+        return;
+      }
+      cleanup();
+      resolve(buffer.subarray(0, newlineIndex + 1).toString("utf8"));
+    };
+
+    child.stdout.on("data", onData);
+    child.on("error", onError);
+    child.stdin.write(encodeMessage(payload));
+  });
 }
