@@ -259,7 +259,9 @@ export interface KillSwitchConfig {
    * executed, so a hung callback cannot stall the kill flow.
    *
    * Defaults to 5000, matching `DEFAULT_CALLBACK_TIMEOUT_SECONDS` in the
-   * Python kill switch.
+   * Python kill switch. A non-finite or non-positive value (including `0` and
+   * `Infinity`, which cannot mean "no timeout" here) falls back to that
+   * default, and anything above the 2^31-1 ms timer ceiling is clamped to it.
    */
   callbackTimeoutMs?: number;
 }

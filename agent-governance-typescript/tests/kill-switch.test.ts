@@ -1,7 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { KillSwitch } from '../src/kill-switch';
+import {
+  DEFAULT_CALLBACK_TIMEOUT_MS,
+  KillSwitch,
+  MAX_CALLBACK_TIMEOUT_MS,
+} from '../src/kill-switch';
 
 describe('KillSwitch', () => {
   it('runs registered handlers and compensations', async () => {
@@ -105,6 +109,62 @@ describe('KillSwitch', () => {
       const result = await killSwitch.kill('agent-1', { reason: 'manual stop' });
 
       expect(result.callbacksExecuted).toBe(1);
+    });
+  });
+
+  describe('callback timeout validation', () => {
+    let warn: jest.SpyInstance;
+
+    beforeEach(() => {
+      warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    // A degenerate budget reaches setTimeout as a ~1ms delay, which would
+    // abandon every async callback after a tick and report a kill that never
+    // happened. Each case must fall back to the default budget instead.
+    it.each([
+      ['zero', 0],
+      ['negative', -1],
+      ['NaN', Number.NaN],
+      ['Infinity', Number.POSITIVE_INFINITY],
+    ])('falls back to the default budget for a %s timeout', async (_label, timeout) => {
+      const killSwitch = new KillSwitch({ callbackTimeoutMs: timeout });
+      killSwitch.registerHandler('agent-1', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      });
+
+      const result = await killSwitch.kill('agent-1', { reason: 'breach detected' });
+
+      expect(result.callbacksExecuted).toBe(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(`falling back to ${DEFAULT_CALLBACK_TIMEOUT_MS}ms`),
+      );
+    });
+
+    it('clamps a budget beyond the timer ceiling instead of wrapping to 1ms', async () => {
+      const killSwitch = new KillSwitch({ callbackTimeoutMs: MAX_CALLBACK_TIMEOUT_MS + 1 });
+      killSwitch.registerHandler('agent-1', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      });
+
+      const result = await killSwitch.kill('agent-1', { reason: 'breach detected' });
+
+      expect(result.callbacksExecuted).toBe(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('clamping to it'));
+    });
+
+    it('accepts a valid budget without warning', async () => {
+      const killSwitch = new KillSwitch({ callbackTimeoutMs: 20 });
+      killSwitch.registerHandler('agent-hung', () => new Promise<void>(() => {}));
+
+      const result = await killSwitch.kill('agent-hung', { reason: 'rate_limit' });
+
+      expect(result.callbacksExecuted).toBe(0);
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('callbackTimeoutMs'));
     });
   });
 });

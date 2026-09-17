@@ -18,6 +18,50 @@ type KillHandler = (agentId: string, context: KillContext) => void | Promise<voi
  */
 export const DEFAULT_CALLBACK_TIMEOUT_MS = 5000;
 
+/**
+ * Longest delay `setTimeout` can represent. The delay is stored in a signed
+ * 32-bit integer, and anything larger silently degrades to ~1ms, so larger
+ * budgets are clamped to this instead of being passed through.
+ */
+export const MAX_CALLBACK_TIMEOUT_MS = 2_147_483_647;
+
+/**
+ * Turn a configured callback budget into a delay `setTimeout` actually honours.
+ *
+ * `0`, negatives, `NaN` and anything past the timer ceiling all arrive at
+ * `setTimeout` as a ~1ms delay. That would abandon every async termination and
+ * compensation callback after a single tick while `kill()` still resolved
+ * normally with `callbacksExecuted: 0` — a fail-open on a containment control,
+ * reachable from plausible operator config, since both `0` and `Infinity` are
+ * common "no timeout" conventions. So non-finite and non-positive values fall
+ * back to the default (matching how the sandbox timeout is guarded), and a
+ * finite budget beyond the ceiling is clamped to it (~24.8 days), which is the
+ * longest wait a timer can express.
+ */
+function resolveCallbackTimeoutMs(configured: number | undefined): number {
+  if (configured === undefined) {
+    return DEFAULT_CALLBACK_TIMEOUT_MS;
+  }
+
+  if (!Number.isFinite(configured) || configured <= 0) {
+    console.warn(
+      `KillSwitch: callbackTimeoutMs must be a positive, finite number; got ` +
+        `${String(configured)}, falling back to ${DEFAULT_CALLBACK_TIMEOUT_MS}ms`,
+    );
+    return DEFAULT_CALLBACK_TIMEOUT_MS;
+  }
+
+  if (configured > MAX_CALLBACK_TIMEOUT_MS) {
+    console.warn(
+      `KillSwitch: callbackTimeoutMs ${configured} exceeds the ` +
+        `${MAX_CALLBACK_TIMEOUT_MS}ms timer ceiling; clamping to it`,
+    );
+    return MAX_CALLBACK_TIMEOUT_MS;
+  }
+
+  return configured;
+}
+
 export class KillSwitch {
   private readonly enabled: boolean;
   private readonly defaultSubstituteAgentId?: string;
@@ -30,7 +74,7 @@ export class KillSwitch {
   constructor(config: KillSwitchConfig = {}) {
     this.enabled = config.enabled ?? true;
     this.defaultSubstituteAgentId = config.defaultSubstituteAgentId;
-    this.callbackTimeoutMs = config.callbackTimeoutMs ?? DEFAULT_CALLBACK_TIMEOUT_MS;
+    this.callbackTimeoutMs = resolveCallbackTimeoutMs(config.callbackTimeoutMs);
   }
 
   registerHandler(agentId: string, handler: KillHandler): void {
