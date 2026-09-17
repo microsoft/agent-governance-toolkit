@@ -25,6 +25,8 @@ export {
 } from './metrics';
 export { McpSecurityScanner, McpThreatType } from './mcp';
 export type { McpScanResult, McpThreat, McpToolDefinition } from './mcp';
+export { toFrameworkInvocation } from './webmcp';
+export type { WebMcpToolLike, WebMcpClientLike, WebMcpInvocationOptions } from './webmcp';
 export { LifecycleManager, LifecycleState } from './lifecycle';
 export type { LifecycleEvent } from './lifecycle';
 export { ShadowDiscovery } from './discovery';

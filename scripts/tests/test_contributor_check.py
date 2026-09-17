@@ -23,6 +23,7 @@ from contributor_check import (
     ReputationReport,
     check_account_shape,
     check_contributor,
+    check_credential_spray,
     check_feature_overlap,
     check_thin_credibility,
     check_spray_pattern,
@@ -807,3 +808,38 @@ class TestApplyAllowlist:
         _apply_allowlist(report)
         assert report.risk == "HIGH"
         assert any(s.name == "allowlist_blocked" for s in report.signals)
+
+
+# ---------------------------------------------------------------------------
+# check_credential_spray two-query pinning
+# ---------------------------------------------------------------------------
+# cspell:ignore spray
+
+class TestCheckCredentialSprayTwoQuery:
+    """Pin the two-query (is:issue + is:pr) behavior of check_credential_spray."""
+
+    def test_two_queries_issued_and_pr_citation_detected(self):
+        """check_credential_spray must issue two searches and detect a PR citation."""
+        pr_item = {
+            "html_url": "https://github.com/other-org/other-repo/pull/7",
+            "repository_url": "https://api.github.com/repos/other-org/other-repo",
+            "body": "We integrated microsoft/agent-governance-toolkit via pr #42 merged last week",
+            "pull_request": {"url": "https://api.github.com/repos/other-org/other-repo/pulls/7"},
+        }
+
+        with patch("contributor_check._search_issues", side_effect=[[], [pr_item]]) as mock_search:
+            signals = check_credential_spray(
+                "spray-user", "microsoft/agent-governance-toolkit",
+            )
+
+        # Must have called _search_issues exactly twice
+        assert mock_search.call_count == 2
+
+        # Verify the two query strings
+        calls = [c.args[0] for c in mock_search.call_args_list]
+        assert calls[0] == "author:spray-user is:issue"
+        assert calls[1] == "author:spray-user is:pr"
+
+        # Should detect credential_citation from the PR item
+        assert len(signals) == 1
+        assert signals[0].name == "credential_citation"

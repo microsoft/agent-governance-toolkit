@@ -63,6 +63,13 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
+    groups:
+      # vitest and its plugins pin each other with exact peer ranges;
+      # a lone @vitest/coverage-v8 major (#3869) leaves an unsupported pair.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
 
   - package-ecosystem: "npm"
     directory: "/agent-governance-python/agent-os/extensions/copilot"

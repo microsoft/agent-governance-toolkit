@@ -904,10 +904,22 @@ def _check_self_promotion(
 
 
 def check_credential_spray(username: str, target_repo: str | None = None) -> list[Signal]:
-    """Check if user cites merges from one repo in issues across other repos."""
+    """Check if user cites merges from one repo in issues or pull requests across other repos."""
     signals: list[Signal] = []
 
-    issues = _search_issues(f"author:{username} is:issue", per_page=50)
+    issue_items = _search_issues(f"author:{username} is:issue", per_page=50)
+    pr_items = _search_issues(f"author:{username} is:pr", per_page=50)
+
+    seen_urls = set()
+    issues = []
+    for item in issue_items + pr_items:
+        url = item.get("html_url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            issues.append(item)
+        elif not url:
+            issues.append(item)
+
     if not issues:
         return signals
 
@@ -939,14 +951,14 @@ def check_credential_spray(username: str, target_repo: str | None = None) -> lis
         signals.append(Signal(
             name="credential_laundering",
             severity="HIGH",
-            detail=f"Cites {target_repo} merges in issues across {len(repos_with_citations)} repos",
+            detail=f"Cites {target_repo} merges in issues and pull requests across {len(repos_with_citations)} repos",
             value=credential_citations,
         ))
     elif credential_citations >= 1:
         signals.append(Signal(
             name="credential_citation",
             severity="MEDIUM",
-            detail=f"Cites {target_repo} in issues across {len(repos_with_citations)} other repos",
+            detail=f"Cites {target_repo} in issues and pull requests across {len(repos_with_citations)} other repos",
             value=credential_citations,
         ))
 

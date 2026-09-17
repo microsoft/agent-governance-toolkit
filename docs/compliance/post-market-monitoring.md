@@ -1,6 +1,6 @@
 ---
 title: "Post-Market Monitoring and Incident Reporting"
-last_reviewed: 2026-04-25
+last_reviewed: 2026-08-14
 owner: agt-maintainers
 ---
 
@@ -11,7 +11,7 @@ owner: agt-maintainers
 > **Purpose**: Define post-deployment monitoring capabilities for AI agent systems
 > and incident reporting procedures as required by EU AI Act Articles 72 and 62.
 >
-> **Deadline**: EU AI Act provisions apply from **August 2, 2026**.
+> **Applicability**: Post-market monitoring obligations for high-risk AI systems apply in line with the amended high-risk schedule: **2 December 2027** for Annex III / Art. 6(2) systems and **2 August 2028** for Annex I / Art. 6(1) systems. Under amended Art. 72(3), the Commission must publish guidance, including a voluntary post-market monitoring plan template, by **2 September 2027**.
 
 ---
 

@@ -271,7 +271,20 @@ export interface KillSwitchResult {
   action?: string;
   reason: string;
   killedAt: string;
+  /**
+   * True when at least one termination handler ran to completion within
+   * `callbackTimeoutMs`. This does not independently confirm that an execution
+   * process stopped — it reports only that a handler finished.
+   *
+   * A handler that rejects, throws, or exceeds its budget is reported as not
+   * executed rather than propagating, so `kill()` always settles and always
+   * records the attempt. An agent with no registered handler, or one whose
+   * every handler failed or hung, reports `false`.
+   */
+  terminated: boolean;
+  /** Termination handlers that completed within `callbackTimeoutMs`. */
   callbacksExecuted: number;
+  /** Compensation handlers that completed within `callbackTimeoutMs`. */
   compensationsExecuted: number;
   handoffAgentId?: string;
 }

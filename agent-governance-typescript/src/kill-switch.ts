@@ -125,6 +125,7 @@ export class KillSwitch {
       action: context.action,
       reason: context.reason,
       killedAt: new Date().toISOString(),
+      terminated: callbacksExecuted > 0,
       callbacksExecuted,
       compensationsExecuted,
       handoffAgentId,

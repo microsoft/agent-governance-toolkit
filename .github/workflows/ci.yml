@@ -32,7 +32,7 @@ jobs:
       changed-py-pkgs: ${{ steps.py-pkgs.outputs.list }}
       changed-ts-pkgs: ${{ steps.ts-pkgs.outputs.list }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
@@ -47,6 +47,7 @@ jobs:
               - 'agent-governance-python/agent-compliance/**'
               - 'agent-governance-python/agent-runtime/**'
               - 'agent-governance-python/agent-lightning/**'
+              - 'agent-governance-python/agent-learning/**'
               - 'agent-governance-python/agent-primitives/**'
               - 'agent-governance-python/agent-mcp-governance/**'
               - 'agent-governance-python/agent-marketplace/**'
@@ -109,6 +110,8 @@ jobs:
               - 'agent-governance-python/agent-runtime/**'
             pkg-agent-lightning:
               - 'agent-governance-python/agent-lightning/**'
+            pkg-agent-learning:
+              - 'agent-governance-python/agent-learning/**'
             pkg-agent-primitives:
               - 'agent-governance-python/agent-primitives/**'
             pkg-agent-mcp-governance:
@@ -150,6 +153,7 @@ jobs:
           AC: ${{ steps.filter.outputs.pkg-agent-compliance }}
           AR: ${{ steps.filter.outputs.pkg-agent-runtime }}
           AL: ${{ steps.filter.outputs.pkg-agent-lightning }}
+          ALE: ${{ steps.filter.outputs.pkg-agent-learning }}
           AP: ${{ steps.filter.outputs.pkg-agent-primitives }}
           AMG: ${{ steps.filter.outputs.pkg-agent-mcp-governance }}
           AMP: ${{ steps.filter.outputs.pkg-agent-marketplace }}
@@ -167,6 +171,7 @@ jobs:
           [ "$AC" = "true" ] && pkgs+=('"agent-compliance"')
           [ "$AR" = "true" ] && pkgs+=('"agent-runtime"')
           [ "$AL" = "true" ] && pkgs+=('"agent-lightning"')
+          [ "$ALE" = "true" ] && pkgs+=('"agent-learning"')
           [ "$AP" = "true" ] && pkgs+=('"agent-primitives"')
           [ "$AMG" = "true" ] && pkgs+=('"agent-mcp-governance"')
           [ "$AMP" = "true" ] && pkgs+=('"agent-marketplace"')
@@ -219,6 +224,7 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-learning,
             agent-primitives,
             agent-mcp-governance,
             agent-marketplace,
@@ -244,7 +250,7 @@ jobs:
             echo "::notice::Package $PKG unchanged on this PR — skipping lint."
           fi
       - if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - if: steps.gate.outputs.run == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -281,6 +287,7 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-learning,
             agent-primitives,
             agent-mcp-governance,
             agent-marketplace,
@@ -303,6 +310,8 @@ jobs:
           - package: agent-runtime
             python-version: "3.10"
           - package: agent-lightning
+            python-version: "3.10"
+          - package: agent-learning
             python-version: "3.10"
           - package: agent-primitives
             python-version: "3.10"
@@ -338,7 +347,7 @@ jobs:
       - name: Skip (unchanged package)
         if: steps.gate.outputs.run != 'true'
         run: echo "Package ${{ matrix.package }} unchanged — skipping tests"
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: steps.gate.outputs.run == 'true'
@@ -372,7 +381,11 @@ jobs:
         # The native ACS runtime evaluates policy via OPA; without it the
         # runtime fails closed (runtime_error:policy_invocation_failed) and
         # denies everything. Same pinned binary the policy-engine CI uses.
-        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox')
+        # agent-mesh also needs it: PolicyEngine.load_rego()/OPAEvaluator
+        # shell out to the opa CLI, and every test that exercises that path
+        # is marked @requires_opa and skips without it — so this job was
+        # giving those tests zero real coverage.
+        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox' || matrix.package == 'agent-mesh')
         run: |
           set -euo pipefail
           curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
@@ -384,13 +397,12 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/opa" version
       - name: Build native ACS SDK (ACS-backed Python policy runtime)
-        # agent-os, agt-policies, agent-compliance, agent-marketplace and
-        # agent-sandbox route evaluations through the native
-        # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
-        # it from the vendored policy-engine so native-runtime tests run.
+        # Every selected package resolves the local agt-policies dependency.
+        # Its retargeted SDK is not on PyPI yet, so build it from this checkout
+        # rather than letting pip resolve an incompatible registry version.
         # The wheel is abi3-py311, so one build serves all agent-os matrix
         # Python versions (3.11-3.13). ubuntu-latest ships Rust + a C toolchain.
-        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox')
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
@@ -410,7 +422,7 @@ jobs:
             agent-compliance|agent-runtime|agent-mcp-governance)
               pip install --no-cache-dir -e .
               ;;
-            agent-os|agt-policies|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
+            agent-os|agt-policies|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-learning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
               pip install --no-cache-dir -e ".[dev]"
               ;;
             *)
@@ -494,7 +506,7 @@ jobs:
       - name: Skip (unchanged package)
         if: steps.gate.outputs.run != 'true'
         run: echo "Package ${{ matrix.package }} unchanged — skipping wheel build"
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: steps.gate.outputs.run == 'true'
@@ -532,7 +544,7 @@ jobs:
     if: needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -542,13 +554,16 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf dist-coherence && mkdir -p dist-coherence
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          python -m pip wheel --no-deps --no-build-isolation \
+            ./policy-engine/sdk/python --wheel-dir dist-coherence
           # The umbrellas own the source; the sibling stubs are dep-only. Build
           # them all with --wheel because the umbrellas force-include sibling
           # source, which only resolves when building directly from the source
           # tree. -core's set is the five renamed stubs; -cli's set adds
           # agent-sre; -protocols' set adds agent-mcp-governance.
           for pkg in \
-            agent-governance-toolkit-core \
+            agt-policies agent-governance-toolkit-core \
             agent-hypervisor agent-mesh agent-os agent-runtime agent-primitives \
             agent-governance-toolkit-cli agent-sre \
             agent-governance-toolkit-protocols agent-mcp-governance; do
@@ -561,7 +576,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m venv /tmp/venv-core
-          /tmp/venv-core/bin/pip install --no-cache-dir \
+          /tmp/venv-core/bin/pip install --no-cache-dir --find-links dist-coherence \
             dist-coherence/agent_governance_toolkit_core-*.whl
           /tmp/venv-core/bin/python -W ignore \
             -c "import hypervisor, agentmesh, agent_os, agent_runtime, agent_primitives; print('meta import OK')"
@@ -597,7 +612,7 @@ jobs:
     if: needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -606,6 +621,11 @@ jobs:
           pip install --no-cache-dir --require-hashes --no-deps -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
           pip install --no-cache-dir typer==0.14.0 marshmallow==3.21.3  # Scorecard: version-pinned (safety transitive deps)
           pip install --no-cache-dir safety==3.2.1  # Scorecard: version-pinned, hash-verified via ci-safety.txt
+      - name: Install local policy dependencies
+        run: |
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
+          pip install --no-cache-dir ./agent-governance-python/agt-policies
       - name: Check dependencies
         env:
           GIT_TERMINAL_PROMPT: "0"
@@ -669,7 +689,7 @@ jobs:
     if: needs.changes.outputs.dotnet == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "8.0.x"
@@ -730,7 +750,7 @@ jobs:
             --output binskim-results.sarif
       - name: Upload BinSkim SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: agent-governance-dotnet/binskim-results.sarif
           category: binskim
@@ -784,7 +804,7 @@ jobs:
           - package: pydantic-ai-governance
             import-module: pydantic_ai_governance
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -804,13 +824,10 @@ jobs:
           # the latest published wheels.
           pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-core"
           pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-integrations"
+          pip install --no-cache-dir -e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"
           # All agentmesh-integrations packages declare a [dev] extra (audited
           # 2026-05). Deterministic install — no error-swallowing fallback.
           pip install --no-cache-dir -e ".[dev]"
-          # `.[dev]` resolves agt-policies from PyPI. Reinstall the local
-          # checkout afterwards so the integrations test against this commit's
-          # ACS policy API rather than the last published wheel.
-          pip install --no-cache-dir --no-deps --force-reinstall -e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"
           CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
           if [ -f "$CI_TEST_REQS" ]; then
             # Hash-pinned shared test deps. Previously swallowed errors with
@@ -906,7 +923,7 @@ jobs:
   version-sync-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -917,7 +934,7 @@ jobs:
   dep-confusion-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -928,7 +945,7 @@ jobs:
   notebook-pip-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -989,7 +1006,7 @@ jobs:
     if: github.event_name == 'schedule' || needs.changes.outputs['docs-only'] == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Markdown link check
@@ -1009,7 +1026,7 @@ jobs:
     if: needs.changes.outputs.workflows == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Audit pull_request_target workflows
         run: |
           echo "=== Checking pull_request_target safety ==="
@@ -1035,7 +1052,7 @@ jobs:
       'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
@@ -1116,7 +1133,7 @@ jobs:
       - name: Skip (unchanged package)
         if: steps.gate.outputs.run != 'true'
         run: echo "Package ${{ matrix.name }} unchanged — skipping npm build"
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: steps.gate.outputs.run == 'true'
@@ -1162,7 +1179,7 @@ jobs:
     if: needs.changes.outputs.rust == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - name: Build
         working-directory: agent-governance-rust
@@ -1177,7 +1194,7 @@ jobs:
     if: needs.changes.outputs.go == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.25"
@@ -1207,7 +1224,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Diagnostic — Docker / Compose / Buildx versions
         run: |
@@ -1216,7 +1233,7 @@ jobs:
           docker buildx version
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:
           # Use the daemon's built-in BuildKit (docker driver) instead of the
           # default docker-container driver. The container driver boots a
@@ -1304,7 +1321,7 @@ jobs:
       ]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check job results
         env:
           NEEDS: ${{ toJSON(needs) }}

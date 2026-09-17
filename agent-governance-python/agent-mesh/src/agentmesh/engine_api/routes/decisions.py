@@ -10,7 +10,7 @@ A later epic wires this to the decision log to return persisted
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from agentmesh.engine_api.capabilities import capability_flags
 from agentmesh.engine_api.models import DecisionListResponse, Verdict
@@ -30,10 +30,12 @@ router = APIRouter()
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def list_decisions(
     request: Request,
+    response: Response,
     pagination: PaginationParams = Depends(),
     agent_did: str | None = Query(None, description="Filter by agent DID"),
     verdict: Verdict | None = Query(None, description="Filter by decision verdict"),
 ) -> DecisionListResponse:
     """Return recent policy decisions (empty until the decision log ships)."""
+    response.headers["X-AGT-Backend-Status"] = "placeholder"
     items, page = paginate([], pagination)
     return DecisionListResponse(items=items, pagination=page)

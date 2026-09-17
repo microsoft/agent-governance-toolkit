@@ -5,6 +5,293 @@ entries appear first.
 
 ---
 
+## Python manifests declaring annotators require an explicit dispatcher
+
+**Date:** TBD
+
+**Affected**
+
+- Python hosts loading manifests with a non-empty `annotators` section using
+  the default wheel or a source build without `bundled-dispatchers`
+
+**What changed**
+
+After the ACS retarget, the credential-reading bundled annotator dispatcher
+is opt-in. Without it, constructing `AgentControl` with a manifest that
+declares annotators fails unless the host supplies `annotator_dispatcher`.
+This applies even if those annotators are not used by an interception point.
+Manifests without annotators still construct without an annotator dispatcher,
+and the default OPA policy dispatcher remains available.
+
+**How to update**
+
+Pass a host dispatcher with a `dispatch(annotator_name, annotator_config,
+preliminary_policy_input)` method, for example
+`AgentControl.from_path("manifest.yaml", annotator_dispatcher=host_annotator)`.
+Alternatively, build the Python extension with the `bundled-dispatchers`
+Cargo feature to opt into the bundled dispatcher and its access to host
+environment credentials. This is a build-time feature, not a Python package extra.
+
+See [the Python SDK dispatcher guidance](policy-engine/sdk/python/README.md#annotator-dispatchers).
+
+---
+
+## Manifests declaring `bundle_url`, `system_prompt_file` or `system_prompt_url` are rejected
+
+**Date:** TBD
+
+**Affected**
+
+- manifests with a rego policy, or a policy binding, that declares `bundle_url`
+- manifests with an `llm` annotator, or an annotation binding, that declares
+  `system_prompt_file` or `system_prompt_url`
+- tooling that validates manifests against `policy-engine/spec/schema/manifest.schema.json`
+
+**What changed**
+
+The embedded engine implemented these three fields. `agent-control-spec`
+0.4.0-alpha.3 does not, and its policy and annotator configuration maps are
+open, so after the retarget a manifest declaring one of them was accepted with
+the feature silently missing: the `llm` annotator ran with the default system
+prompt, and a `bundle_url` rego policy denied every request with
+`runtime_error:policy_invocation_failed` and no diagnostic.
+
+Such a manifest now fails at load with `runtime_error:manifest_invalid` naming
+the field and its location, from every constructor in Rust, Python, Node and
+the C ABI, and from `validate_manifest_yaml` and
+`validate_manifest_overlay_yaml`. The schema marks the three keys as rejected
+properties, so schema-only validators reject them as well.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `system_prompt_file: prompts/judge.txt` | `system_prompt: <the file's text>` |
+| `system_prompt_url: {url: ..., sha256: ...}` | `system_prompt: <the fetched text>` |
+| `bundle_url: {url: ..., sha256: ...}` | `bundle: ./policy` shipped with the manifest, or a host policy dispatcher that fetches the bundle |
+
+See `policy-engine/docs/acs-retarget.md`, "Removed manifest fields".
+
+---
+
+## `manifest_from_url` blocks private and unique-local literals and local names
+
+**Date:** TBD
+
+**Affected**
+
+- hosts that load a manifest with `manifest_from_url` (Rust), `AgentControl.from_url`
+  (Python), `AgentControl.fromUrl` (Node) or `acs_builder_from_url` (C ABI) from an
+  RFC 1918, `100.64.0.0/10`, `fc00::/7` or `fec0::/10` IP literal, or from
+  `localhost`, a `*.localhost` name or a `*.local` name
+
+**What changed**
+
+The SSRF guard on the top level manifest URL now parses the URL with the same
+parser the fetcher uses and evaluates the canonical host, so non canonical
+loopback and link-local literals (`127.1`, `2130706433`, `0x7f000001`,
+`0177.0.0.1`, an embedded tab) are refused instead of walking past a
+dotted-quad-only check. While closing that, the blocked set widened. Private,
+shared address space, unique-local and site-local addresses, and the three
+local name patterns, now fail closed with `runtime_error:manifest_invalid`.
+The previous engine allowed private literals so a manifest could be hosted on
+an internal HTTPS server by IP.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `https://10.0.0.5/manifest.yaml` | `https://policies.internal.example/manifest.yaml` |
+| `https://localhost:8443/manifest.yaml` (local testing) | load the file with `from_path`, or serve it under a public name |
+
+The guard still checks only the URL a caller passes. It does not resolve
+hostnames and it does not re-check redirect hops; set the redirect limit to
+zero (`Limits::max_manifest_url_redirects` in Rust, `max_url_redirects=0` in
+Python, `maxRedirects: 0` in Node) if the guard must hold across redirects.
+The C ABI `acs_builder_from_url` fetches with the default budget and cannot
+lower it yet. See `policy-engine/docs/acs-retarget.md`.
+
+---
+
+## The policy engine moves to `agent-control-spec` and a three verdict contract
+
+**Date:** TBD
+
+**Affected**
+
+- every manifest, because `agent_control_specification_version` accepts exactly
+  one value and rejects the rest at parse time
+- manifests using the `$policy_target` path root
+- callers reading `warn` or `escalate` off a verdict
+- callers that relied on the engine applying a transform, honouring
+  `evaluate_only`, or resolving an approval
+- Rust, Python, Node and .NET code importing from `policy-engine`
+
+**What changed**
+
+AGT no longer carries its own policy engine. It depends on `agent-control-spec`,
+the same engine extracted from this tree and rebased onto the agent-hooks control
+contract.
+
+The verdict set closed to `allow`, `deny` and `transform`. A policy may still
+express `warn` and `escalate`, but the engine normalizes them. `warn` becomes an
+`allow` with an entry in `warnings[]`. `escalate` becomes a `deny` carrying an
+`approval` block, which the spec calls a liftable deny. A `deny` without that
+block is final.
+
+The engine also stopped mutating anything. Applying a transform, honouring
+`evaluate_only`, resolving an approval, and deriving the identity trio are host
+obligations now, discharged by `HostEvaluation`.
+
+`policy-engine/core` retains compatibility aliases for one release cycle.
+These retain names, not the old signatures or behavior.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `agent_control_specification_version: 0.3.1-beta` | `agent_control_specification_version: 0.4.0-alpha.1` |
+| `$policy_target` | `$target` |
+| `decision: warn` | `decision: allow` with `warnings[]` |
+| `decision: escalate` | `decision: deny` with `approval` |
+
+A host that tested `decision == "warn"` should read `warnings` instead. A host
+that tested for `escalate` should test for the `approval` block on a `deny`.
+
+Host-synthesized reasons moved from the engine's `runtime_error:` namespace to
+the reserved `host_error:` namespace, and one was renamed. A host matching on
+the old strings must update:
+
+| Before | After |
+|--------|-------|
+| `runtime_error:approval_resolver_failed` | `host_error:approval_resolver_failed` |
+| `runtime_error:approval_action_mismatch` | `host_error:approval_identity_mismatch` |
+| (none) | `host_error:approval_unresolved`, a liftable deny with no resolver or a timed-out one |
+| `runtime_error:effect_invalid`, `runtime_error:effect_target_forbidden` | gone with the effects plane. The engine keeps `runtime_error:transform_invalid` and `runtime_error:transform_target_forbidden`; a transform the host rejects while applying it reports `host_error:transform_invalid` or `host_error:transform_target_forbidden` |
+| `runtime_error:adapter_unsupported`, `runtime_error:streaming_unsupported` | `host_error:adapter_unsupported`, `host_error:streaming_unsupported` |
+
+`policy-engine/spec/reserved-reasons.json` is the registry.
+
+Rust `use` paths inside `agent_control_specification_core` moved. The root
+re-exports still resolve; module-qualified imports must change:
+
+| Before | After |
+|--------|-------|
+| `manifest::{parse_manifest_yaml_value, validate_manifest_yaml, validate_manifest_overlay_yaml}` | `manifest_yaml::{...}` |
+| `telemetry::{InMemoryTelemetrySink, MultiSink, StdoutJsonTelemetrySink}` | `telemetry_sinks::{...}` |
+| `policy_input::action_identity` | `identity::action_identity` |
+| `intervention_point`, `verdict`, `ffi` modules | removed from the core crate root; the C ABI is `agent_control_specification::ffi` |
+| core `crate-type = ["lib", "cdylib"]` | `lib` only; the `cdylib` is built from `agent_control_specification` |
+
+Python consumers need `agent-control-specification>=0.4.0b0,<0.5.0`.
+`agt-policies` 5.1.0 and the generator declare that requirement so an installed
+0.3.1b1 wheel cannot satisfy it. Publish the new SDK before these consumers.
+The .NET SDK and adapters move together to 0.4.0-beta.0, and their native
+library is now `agent_control_specification`, without the `_core` suffix.
+
+`policy-engine/docs/acs-retarget.md` carries the full symbol mapping and the
+list of gaps filed upstream.
+
+---
+
+## `TrustMiddleware` requires signed requests and an explicit trust anchor
+
+**Date:** TBD
+
+**Affected**
+
+- `agentmesh.integrations.TrustMiddleware` and the Flask/FastAPI decorators
+  `flask_trust_required` / `fastapi_trust_required`
+- any client that authenticated by sending only an `X-Agent-DID` header
+
+**What changed**
+
+`TrustMiddleware` treated a caller-supplied `X-Agent-DID` header as proof of
+identity: `verify_request` started from a trust score of `1.0` and only lowered
+it inside an `except` branch that could never run, because
+`AgentIdentity.verify_signature` returns a `bool` and never raises. Any caller
+who set the header was verified with full trust, and `X-Agent-Capabilities` was
+honoured as self-asserted authorization.
+
+Callers now prove possession of a registered Ed25519 key over a canonical
+envelope binding DID, audience, timestamp, nonce, method, undecoded request
+target, target mode, covered request headers, and body digest, with single-use
+nonce replay protection. Verification keys and capabilities come only from a
+peer resolver, never from headers — `did:mesh` identifiers are random rather
+than key-derived, so a DID is not self-certifying and a presented public key can
+never authenticate anyone.
+
+**How to update**
+
+Servers:
+
+| Before | After |
+|--------|-------|
+| `TrustMiddleware(identity)` | `TrustMiddleware.from_registry(registry, TrustConfig(audience=...))`; `audience`, `peer_resolver` and `replay_cache` are required and raise `ValueError` when missing |
+| `verify_request(headers)` | Pass `method`, `request_target` and `body`; omitting them fails closed with `500` |
+| `TrustConfig(permissive_mode=True)` | Also set `required_trust_score=0.0` and remove `required_capabilities` |
+| Anonymous callers reached `*_trust_required` | Use `flask_trust_optional` / `fastapi_trust_optional` and branch on `result.authenticated` |
+| `err["reason"]` on a `401` | Removed from the client-visible body; read `result.reason` server-side |
+| `VerificationResult` was mutable | Now frozen, and gained `authenticated` |
+| `TrustConfig` was mutable | Now frozen; assigning a field after construction raises `FrozenInstanceError` |
+| `TrustConfig(required_capabilities="admin")` | Rejected with `ValueError`; pass a sequence such as `("admin",)`. A bare string was silently expanded into five single-character capabilities |
+| A raising `peer_resolver` yielded `401` | Now `503`. A registry outage is a server fault, not a credential failure |
+| Custom `replay_cache` returned `False` when full | Must now raise `ReplayCacheFull`, which yields `503`. `False` still means "nonce already used" and yields `401` |
+| FastAPI body limit | Build the dependency with `install_fastapi_trust(app, middleware)`, which installs the pre-routing `SignedBodyLimitMiddleware` guard and binds the dependency to it. The dependency alone runs after FastAPI has buffered the body, and now fails closed with `500` if the guard is absent |
+| The signed target was the percent-decoded path | It is now the undecoded target, read from `RAW_URI`/`REQUEST_URI`/`scope["raw_path"]`. Servers that publish none of these fail with `500` until you set `request_target_mode="decoded"` (or `AGENTMESH_REQUEST_TARGET_MODE`). Django's `runserver` and `RequestFactory` are in this group; gunicorn, uWSGI and mod_wsgi are not |
+| `build_request_signature_payload(..., content_type=...)` | Pass `target_mode=` and `signed_headers=` instead. Covered headers are chosen by the server via `TrustConfig.signed_header_names` (default `("content-type",)`), and an absent header is omitted rather than signed as `""` |
+| Verification had no time bound | `TrustConfig.io_timeout_seconds` (default `5.0`) budgets the whole verification. Resolvers and replay caches that declare a `timeout_seconds` parameter receive the remaining budget; exhaustion denies with `503` before the nonce is consumed |
+| Django exempt views saw `request.agent_did` | Exempt views and exempt path prefixes verify nothing and now set `agent_did=None`, `agent_trust_score=None`, `agent_authenticated=False`. Check `request.agent_authenticated` first |
+
+Clients must sign each request; `build_request_signature_payload` in
+`agent-governance-python/agent-mesh/src/agentmesh/integrations/request_auth.py`
+builds the canonical envelope and is the authority on its contents.
+
+Both sides must be upgraded together: an unpatched client cannot authenticate
+against a patched server, by design.
+
+---
+
+## Hypervisor session lifecycle methods are synchronous
+
+**Date:** TBD
+
+**Affected**
+
+- `agent-hypervisor` (`hypervisor.Hypervisor`)
+- callers of `create_session`, `join_session`, `activate_session`,
+  `terminate_session`, `verify_behavior`, and `monitor_sessions`
+
+**What changed**
+
+The following `Hypervisor` methods are now synchronous:
+
+- `create_session`
+- `join_session`
+- `activate_session`
+- `terminate_session`
+- `verify_behavior`
+- `monitor_sessions`
+
+They previously returned coroutines despite having no internal await points.
+They now return their result directly.
+
+**How to migrate**
+
+Remove `await` when calling these methods:
+
+```python
+session = hv.create_session(config=config, creator_did="did:mesh:admin")
+ring = hv.join_session(session.sso.session_id, "did:mesh:agent", sigma_raw=0.85)
+hv.activate_session(session.sso.session_id)
+hash_root = hv.terminate_session(session.sso.session_id)
+```
+
+Keep awaiting unrelated async APIs such as `SagaOrchestrator.execute_step` and
+`SagaOrchestrator.compensate`.
+
+---
+
 ## `HostSession.post_tool_call` and `pre_model_call` emit the adapter snapshot shape
 
 **Date:** TBD

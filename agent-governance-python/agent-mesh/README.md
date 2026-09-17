@@ -742,6 +742,45 @@ verifier rejects unsupported `alg` headers (including `none` and
 `HS*`) **before** the JWKS lookup as defense-in-depth against
 algorithm-confusion attacks.
 
+## Sidecar policy-load provenance
+
+The governance sidecar (`agentmesh.server.sidecar`) includes `policy_set_id` and
+`policy_set_status` on every `POST /api/v1/policy/evaluate` response. Each decision
+uses one engine/manifest snapshot, even if a reload publishes another generation
+during evaluation. This metadata does not change allow/deny behavior.
+
+`GET /ready` and `POST /api/v1/policy/reload` also report `policies_discovered`,
+`policies_loaded`, and `policies_failed`. These count discovered `.yaml` and `.json`
+files, not distinct policy names or policies expected by an operator. YAML files
+load in name order before JSON files; duplicate policy names retain the existing
+last-loaded-wins behavior.
+
+`GET /api/v1/policies` includes the current manifest's `files`: filename, raw-byte
+SHA-256 digest (or null if unreadable), load status, and exception class on failure.
+Filenames use Python `unicode_escape` text, escaping backslashes, non-ASCII
+characters, and undecodable filesystem bytes without conflating their names.
+Raw policy content and exception messages are omitted. `policy_set_id` is `sha256:`
+followed by the SHA-256 of UTF-8 encoded Python
+`json.dumps({"directory_status": ..., "files": ...}, sort_keys=True, separators=(",", ":"))`
+with the default ASCII escaping. File order is load order. Failed content and load
+outcomes contribute to identity; identical manifests reuse the same ID. The ID is
+a content reference, not a unique reload timestamp or a cryptographic attestation.
+
+Status is `complete` after discovery and all file loads succeed, `degraded` after
+a file failure or unavailable directory, and `not_loaded` before initial loading.
+An available empty directory is complete; this does not establish that every
+required policy was deployed. Existing readiness and permissive partial-loading
+behavior remain unchanged. A generation describes bytes actually read; it is not
+an atomic filesystem snapshot of a concurrently changing directory.
+
+Each completed manifest is also emitted once per load at INFO as
+`Policy load generation: {...}`. Retain those deployment logs with decision records
+to resolve historical IDs after reload/restart; the API exposes only the current
+manifest. The sidecar does not authenticate `GET /api/v1/policies`; anyone who can
+reach it can read these filenames and digests. Restrict access through deployment
+network controls or an authenticated proxy, and protect retained logs as policy
+diagnostics because filenames and digests may themselves be sensitive.
+
 ## Contributing
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.

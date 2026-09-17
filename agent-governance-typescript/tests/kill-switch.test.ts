@@ -26,8 +26,21 @@ describe('KillSwitch', () => {
     });
 
     expect(events).toEqual(['handler', 'compensation']);
+    expect(result.terminated).toBe(true);
     expect(result.callbacksExecuted).toBe(1);
     expect(result.compensationsExecuted).toBe(1);
+  });
+
+  it('reports unsuccessful termination when no handler is registered', async () => {
+    const killSwitch = new KillSwitch();
+
+    const result = await killSwitch.kill('agent-no-handlers', {
+      reason: 'manual stop',
+    });
+
+    expect(result.terminated).toBe(false);
+    expect(result.callbacksExecuted).toBe(0);
+    expect(killSwitch.getHistory()[0]?.terminated).toBe(false);
   });
 
   it('records substitute handoff targets', async () => {
@@ -165,6 +178,54 @@ describe('KillSwitch', () => {
 
       expect(result.callbacksExecuted).toBe(0);
       expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('callbackTimeoutMs'));
+    });
+  });
+
+  // `terminated` counts handlers that finished, not handlers that were
+  // registered: under a bounded callback a registered handler can be abandoned,
+  // and reporting containment for one would be a fail-open on the signal
+  // operators check.
+  describe('termination status', () => {
+    it('reports unsuccessful termination when the only handler hangs', async () => {
+      const killSwitch = new KillSwitch({ callbackTimeoutMs: 20 });
+      killSwitch.registerHandler('agent-hung', () => new Promise<void>(() => {}));
+
+      const result = await killSwitch.kill('agent-hung', { reason: 'breach detected' });
+
+      expect(result.terminated).toBe(false);
+      expect(result.callbacksExecuted).toBe(0);
+    });
+
+    it('reports unsuccessful termination when the only handler rejects', async () => {
+      const killSwitch = new KillSwitch();
+      killSwitch.registerHandler('agent-rejects', async () => {
+        throw new Error('async handler blew up');
+      });
+
+      const result = await killSwitch.kill('agent-rejects', { reason: 'breach detected' });
+
+      expect(result.terminated).toBe(false);
+    });
+
+    it('reports successful termination when one of several handlers completes', async () => {
+      const killSwitch = new KillSwitch({ callbackTimeoutMs: 20 });
+      killSwitch.registerHandler('agent-1', () => new Promise<void>(() => {}));
+      killSwitch.registerHandler('agent-1', () => {});
+
+      const result = await killSwitch.kill('agent-1', { reason: 'breach detected' });
+
+      expect(result.terminated).toBe(true);
+      expect(result.callbacksExecuted).toBe(1);
+    });
+
+    it('does not treat a completed compensation as termination', async () => {
+      const killSwitch = new KillSwitch();
+      killSwitch.registerCompensation('agent-1', () => {});
+
+      const result = await killSwitch.kill('agent-1', { reason: 'breach detected' });
+
+      expect(result.terminated).toBe(false);
+      expect(result.compensationsExecuted).toBe(1);
     });
   });
 });

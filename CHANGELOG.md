@@ -13,8 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **ACS artifact validation API** - added one bounded Rust-core validator for canonical manifest schema checks, typed ACS semantics, and OPA Rego parsing, exposed with the same structured result through Rust, Python, Node, and .NET. The `acs-generator` CLI now consumes this shared SDK surface.
+- **Go SDK context accumulation governance** - added workflow-scoped context envelopes, a data-classification sensitivity ladder, aggregation-rule evaluation with unknown-combination escalation, constrain-as-obligations policy mapping, grow-only restriction inheritance, and classified context-transition audit events for parity with the Python implementation (#3084).
 
 ### Changed
+- **OpenCode URL policy hardening** — HTTP(S) forms such as `https:host` are canonicalized before existing `urlRules` are evaluated, and HTTP(S) URL authorities containing backslashes are denied regardless of `urlDefaultEffect` to avoid parser ambiguity.
 - **BREAKING: `acs-generator` is CLI-only in `0.4.0b0`.** Removed top-level library re-exports such as `GenerationEngine` and `FakeLanguageModel`. Reusable manifest and Rego validation now lives under `agent_control_specification.validation`; the Python SDK moves to `0.3.1b1`.
 - **BREAKING: Python policy runtime now uses native ACS only.** Removed the
   compatibility bridge, pre-ACS rule and result types, runtime folder
@@ -23,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runtime=` plus explicit `SandboxConfig`.
 
 ### Fixed
+- **.NET numeric equality/inequality in policy-rule conditions** — `PolicyRule` conditions such as `count == 5` and `score != 3.14` now evaluate numeric literals (integers, decimals, and negatives) instead of failing to match, and numeric `!=` matches when the field is missing or non-numeric so deny rules fail closed. Numeric operands are parsed with the invariant culture so evaluation is deterministic across host locales (#3205).
+- **`agent-governance-toolkit-core` and `[full]` no longer require `agt-policies`
+  as a base dependency.** `agt-policies>=5.1.0` (requiring an unpublished
+  `agent-control-specification>=0.4.0b0`) had become a base dependency, blocking
+  `pip install`. Moved `agt-policies` to an opt-in `migrate` extra — existing
+  `agt migrate` users now need `pip install agent-governance-toolkit-core[migrate]`
+  — and made `agent-control-specification>=0.4.0b0,<0.5.0` a direct base
+  dependency instead, matching the version `agent_os` actually requires. A
+  resolvable PyPI install of `agent-governance-toolkit-core` still depends on
+  `agent-control-specification` 0.4.0b0 and `agt-policies` 5.1.0 being
+  published — tracked in #4019.
 - **Spell check no longer reports the base branch's own history as a
   contributor's changes** — `scripts/ci/changed_lines.py` diffed from the tip of
   the base branch, so on a branch behind `main` every line `main` had since

@@ -63,6 +63,7 @@ REGISTERED_PACKAGES = {
     "agt-policies", "agt_policies",
     "agent-control-specification", "agent_control_specification",
     "acs-generator", "acs_generator",
+    "k8s-agent-sandbox", "k8s_agent_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
@@ -136,6 +137,8 @@ REGISTERED_PACKAGES = {
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",
+    # Microsoft Agent Learning (real PyPI package, used by agent-learning governance)
+    "agent-learning", "agent_learning",
     # Azure Functions Python worker (used in foundry-ai-gateway-pdp example)
     "azure-functions", "azure_functions",
     # Azure SDK core libs (used by agent-sandbox ACASandboxProvider)
@@ -245,6 +248,12 @@ REGISTERED_CARGO_PACKAGES = {
     "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
     "opentelemetry", "regex", "regorus",
     "assert_cmd", "predicates",
+    # Upstream crates AGT depends on after the policy engine was extracted.
+    # Both are published; the pinned versions, verified against the crates.io
+    # API on 2026-09-13:
+    #   agent-control-spec  =0.4.0-alpha.3
+    #   agent-hooks-sdk     =0.1.0-alpha.5
+    "agent-control-spec", "agent-hooks-sdk",
     # Vendored ACS policy-engine crate deps (all real crates.io crates)
     "url", "ureq", "jsonschema", "criterion", "tokio", "rmcp",
     "async-openai", "rig-core", "napi", "napi-derive", "napi-build",
