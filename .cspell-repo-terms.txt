@@ -1283,3 +1283,10 @@ sha256sum
 fromhex
 EBADENGINE
 hono
+# --- rmcp 2.0.0 dependency audit (docs/dependency-audits) ---
+Abuomar
+Haroon
+alexhancock
+chrono
+pastey
+schemars
