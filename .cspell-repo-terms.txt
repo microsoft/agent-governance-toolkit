@@ -1281,3 +1281,5 @@ resolver
 sha256sum
 # --- Python stdlib identifiers (scripts/check_lockfile_integrity.py) ---
 fromhex
+EBADENGINE
+hono
