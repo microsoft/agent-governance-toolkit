@@ -5,6 +5,37 @@ entries appear first.
 
 ---
 
+## Python manifests declaring annotators require an explicit dispatcher
+
+**Date:** TBD
+
+**Affected**
+
+- Python hosts loading manifests with a non-empty `annotators` section using
+  the default wheel or a source build without `bundled-dispatchers`
+
+**What changed**
+
+After the ACS retarget, the credential-reading bundled annotator dispatcher
+is opt-in. Without it, constructing `AgentControl` with a manifest that
+declares annotators fails unless the host supplies `annotator_dispatcher`.
+This applies even if those annotators are not used by an interception point.
+Manifests without annotators still construct without an annotator dispatcher,
+and the default OPA policy dispatcher remains available.
+
+**How to update**
+
+Pass a host dispatcher with a `dispatch(annotator_name, annotator_config,
+preliminary_policy_input)` method, for example
+`AgentControl.from_path("manifest.yaml", annotator_dispatcher=host_annotator)`.
+Alternatively, build the Python extension with the `bundled-dispatchers`
+Cargo feature to opt into the bundled dispatcher and its access to host
+environment credentials. This is a build-time feature, not a Python package extra.
+
+See [the Python SDK dispatcher guidance](policy-engine/sdk/python/README.md#annotator-dispatchers).
+
+---
+
 ## Manifests declaring `bundle_url`, `system_prompt_file` or `system_prompt_url` are rejected
 
 **Date:** TBD
