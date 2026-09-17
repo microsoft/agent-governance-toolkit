@@ -121,12 +121,40 @@ class TestCredentialAuditReport:
 # ---------------------------------------------------------------------------
 
 class TestFindSprayCitations:
-    def test_query_does_not_contain_is_issue(self):
-        """find_spray_citations must search without `is:issue` so pull requests are examined."""
+    def test_queries_both_issues_and_pull_requests(self):
+        """find_spray_citations must query both `is:issue` and `is:pr` so each has its own 1000-result window."""
         with patch.object(credential_audit, "_search", return_value=[]) as mock_search:
-            find_spray_citations("testuser", "target/repo", [])
+            find_spray_citations("test-user", "target/repo", [])
 
-        mock_search.assert_called_once_with("issues", "author:testuser", per_page=100)
+        assert mock_search.call_count == 2
+        mock_search.assert_any_call("issues", "author:test-user is:issue", per_page=100)
+        mock_search.assert_any_call("issues", "author:test-user is:pr", per_page=100)
+
+    def test_deduplicates_citations_across_queries(self):
+        """Items appearing in both issue and PR searches must be deduplicated by html_url."""
+        merges = [
+            MergeRecord(
+                pr_number=42,
+                title="feat: add core feature",
+                merged_at="2026-04-01T00:00:00Z",
+                additions=100,
+                url="https://github.com/target/repo/pull/42",
+            )
+        ]
+        shared_item = {
+            "number": 105,
+            "title": "chore: integrate upstream changes",
+            "html_url": "https://github.com/external/project/pull/105",
+            "repository_url": "https://api.github.com/repos/external/project",
+            "pull_request": {"url": "https://api.github.com/repos/external/project/pulls/105"},
+            "body": "As implemented in target/repo PR #42 merged previously.",
+            "created_at": "2026-04-05T00:00:00Z",
+        }
+
+        with patch.object(credential_audit, "_search", side_effect=[[shared_item], [shared_item]]):
+            citations = find_spray_citations("test-user", "target/repo", merges)
+
+        assert len(citations) == 1
 
     def test_finds_citations_in_pull_requests(self):
         """Pull requests in external repos citing merges from target_repo must be detected."""
@@ -149,8 +177,8 @@ class TestFindSprayCitations:
             "created_at": "2026-04-05T00:00:00Z",
         }
 
-        with patch.object(credential_audit, "_search", return_value=[pr_item]):
-            citations = find_spray_citations("testuser", "target/repo", merges)
+        with patch.object(credential_audit, "_search", side_effect=[[], [pr_item]]):
+            citations = find_spray_citations("test-user", "target/repo", merges)
 
         assert len(citations) == 1
         citation = citations[0]
@@ -159,6 +187,7 @@ class TestFindSprayCitations:
         assert citation.title == "chore: integrate upstream changes"
         assert citation.url == "https://github.com/external/project/pull/105"
         assert citation.days_after_merge == 4
+        assert citation.kind == "pull_request"
         assert len(citation.citation_snippets) > 0
         assert "#42" in citation.citation_snippets[0]
 
@@ -182,13 +211,14 @@ class TestFindSprayCitations:
             "created_at": "2026-04-03T00:00:00Z",
         }
 
-        with patch.object(credential_audit, "_search", return_value=[issue_item]):
-            citations = find_spray_citations("testuser", "target/repo", merges)
+        with patch.object(credential_audit, "_search", side_effect=[[issue_item], []]):
+            citations = find_spray_citations("test-user", "target/repo", merges)
 
         assert len(citations) == 1
         assert citations[0].repo == "external/other"
         assert citations[0].issue_number == 77
         assert citations[0].days_after_merge == 2
+        assert citations[0].kind == "issue"
 
     def test_skips_items_in_target_repo(self):
         """Items in the target repo itself must be ignored."""
@@ -210,8 +240,8 @@ class TestFindSprayCitations:
             "created_at": "2026-04-02T00:00:00Z",
         }
 
-        with patch.object(credential_audit, "_search", return_value=[target_pr]):
-            citations = find_spray_citations("testuser", "target/repo", merges)
+        with patch.object(credential_audit, "_search", side_effect=[[], [target_pr]]):
+            citations = find_spray_citations("test-user", "target/repo", merges)
 
         assert citations == []
 
@@ -251,12 +281,14 @@ class TestFormatReport:
                 "https://example.com",
                 citation_snippets=["PR #598 merged"],
                 days_after_merge=1,
+                kind="pull_request",
             ),
         ]
         report.spray_repos = {"contoso/example-project"}
         output = format_report(report)
         assert "contoso" in output
         assert "12544" in output
+        assert "[pull_request]" in output
 
     def test_json_output_valid(self):
         report = CredentialAuditReport(
@@ -267,7 +299,7 @@ class TestFormatReport:
         ]
         report.citations = [
             SprayCitation("other/repo", 1, "t", "2026-04-02T00:00:00Z", "u",
-                          ["snippet"], 1),
+                          ["snippet"], 1, kind="issue"),
         ]
         report.spray_repos = {"other/repo"}
         report.spray_window_hours = 0.0
@@ -277,6 +309,7 @@ class TestFormatReport:
         assert data["risk"] == "HIGH"
         assert len(data["merges"]) == 1
         assert len(data["citations"]) == 1
+        assert data["citations"][0]["kind"] == "issue"
         assert data["spray_repos_count"] == 1
 
     def test_no_citations_message(self):
