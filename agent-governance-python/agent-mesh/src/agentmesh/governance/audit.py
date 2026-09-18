@@ -491,6 +491,7 @@ class AuditLog:
         policy_decision: Optional[str] = None,
         trace_id: Optional[str] = None,
         *,
+        session_id: str | None = None,
         arguments_hash: str | None = None,
         approver_did: str | None = None,
         policy_version: str | None = None,
@@ -499,7 +500,7 @@ class AuditLog:
     ) -> AuditEntry:
         """Log an audit event.
 
-        The ``arguments_hash``, ``approver_did``, ``policy_version``,
+        The ``session_id``, ``arguments_hash``, ``approver_did``, ``policy_version``,
         ``issued_at``, and ``completed_at`` parameters are accepted as
         keyword-only arguments to preserve the positional signature for
         existing callers. See spec §4.3.1 for semantics and the v1.0/v1.1
@@ -514,6 +515,7 @@ class AuditLog:
             outcome=outcome,
             policy_decision=policy_decision,
             trace_id=trace_id,
+            session_id=session_id,
             sandbox_id=self._env_context.sandbox_id,
             environment=self._env_context.environment,
             compute_driver=self._env_context.compute_driver,
