@@ -235,27 +235,46 @@ fn reject_blocked_fetch_host(url: &str) -> Result<(), RuntimeError> {
     }
 }
 
+/// Fail closed: forbid redirects on a URL-sourced manifest.
+///
+/// The SSRF guard in [`reject_blocked_fetch_host`] runs on the URL a caller
+/// passes and on nothing deeper. The upstream `agent-control-spec` fetcher
+/// follows redirects inside its HTTP client (bounded by
+/// `Limits::max_manifest_url_redirects`, default 5) without re-running that
+/// guard and exposes no hook to intercept a hop, so a vetted public URL can
+/// bounce the fetch to a blocked address that the guard would have refused.
+/// The pinned engine therefore cannot re-validate each redirect hop, and the
+/// only fail-closed option is to not follow redirects at all: zero the
+/// redirect budget. A direct (non-redirecting) URL is unaffected because a
+/// budget of zero still loads a 2xx response. Tracked upstream in
+/// responsibleai/agent-control-spec#20.
+fn fail_closed_url_fetch_limits(mut limits: Limits) -> Limits {
+    limits.max_manifest_url_redirects = 0;
+    limits
+}
+
 /// Load a top-level manifest URL through ACS's URL `extends` resolver.
 ///
 /// The URL is first run through the SSRF guard ([`reject_blocked_fetch_host`]).
 /// A synthetic one-entry `extends` manifest is then written to a temporary
 /// directory and loaded with `Manifest::from_path_with_limits`, so ACS
-/// performs the HTTPS trust checks, bounded fetch, redirect handling,
-/// optional SHA-256 verification, and recursive `extends` resolution.
+/// performs the HTTPS trust checks, bounded fetch, optional SHA-256
+/// verification, and recursive `extends` resolution.
 ///
 /// The guard covers the URL passed here and nothing deeper. The upstream
-/// fetcher follows up to `limits.max_manifest_url_redirects` redirects
-/// inside its HTTP client without re-checking each hop, and exposes no
-/// hook to intercept them. A host that needs the guard to hold across
-/// redirects must pass `limits` with `max_manifest_url_redirects` set to
-/// `0`. A nested `extends` URL inside the fetched manifest is resolved by
-/// the upstream loader with no destination check (upstream issue #20).
+/// fetcher follows redirects inside its HTTP client without re-checking each
+/// hop and exposes no hook to intercept them, so this function zeroes the
+/// redirect budget ([`fail_closed_url_fetch_limits`]) and a redirecting URL
+/// fails closed rather than bouncing the fetch to an unchecked host. A
+/// nested `extends` URL inside the fetched manifest is resolved by the
+/// upstream loader with no destination check (upstream issue #20).
 pub fn manifest_from_url(
     url: &str,
     sha256: Option<&str>,
     limits: Limits,
 ) -> Result<Manifest, RuntimeError> {
     reject_blocked_fetch_host(url)?;
+    let limits = fail_closed_url_fetch_limits(limits);
     // A URL `extends` never resolves against the base directory, so this
     // synthetic manifest can live in the system temp dir. Writing it into
     // the working directory would fail on a read-only checkout and would

@@ -1195,6 +1195,29 @@ fn manifest_from_url_never_connects_to_a_blocked_literal() {
 }
 
 #[test]
+fn manifest_from_url_forces_redirects_off() {
+    // The SSRF guard runs on the URL a caller passes and on nothing deeper:
+    // the upstream fetcher follows redirects inside its HTTP client without
+    // re-running the guard and exposes no hook, so a vetted public URL could
+    // bounce the fetch to a blocked address. `manifest_from_url` must
+    // therefore refuse to follow any redirect hop. A direct 2xx URL is
+    // unaffected because a zero redirect budget still loads the response.
+    let mut limits = Limits::default();
+    limits.max_manifest_url_redirects = 9;
+    limits.max_manifest_url_bytes = 2048;
+
+    let effective = super::fail_closed_url_fetch_limits(limits);
+
+    assert_eq!(effective.max_manifest_url_redirects, 0);
+    // The unrelated fetch limits are preserved.
+    assert_eq!(effective.max_manifest_url_bytes, 2048);
+    assert_eq!(
+        effective.manifest_url_timeout_ms,
+        Limits::default().manifest_url_timeout_ms
+    );
+}
+
+#[test]
 fn host_constructors_reject_removed_manifest_fields() {
     // Upstream parses these; the pinned engine has nothing behind them. A
     // `bundle_url` rego policy would deny every request with
