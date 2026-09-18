@@ -177,6 +177,115 @@ class TestCompliance:
         assert len(violations) > 0
         assert violations[0].framework == ComplianceFramework.GDPR
 
+    def test_report_marks_never_assessed_controls_as_unassessed(self):
+        """A report with no assessments must not read as fully assessed (#3957)."""
+        engine = ComplianceEngine([ComplianceFramework.SOC2])
+
+        now = datetime.now(timezone.utc)
+        report = engine.generate_report(
+            framework=ComplianceFramework.SOC2,
+            period_start=now - timedelta(days=30),
+            period_end=now,
+        )
+
+        # Existing score semantics are preserved: no violations -> 100.
+        assert report.total_controls == 2
+        assert report.controls_met == 2
+        assert report.controls_failed == 0
+        assert report.compliance_score == 100.0
+        # But coverage now says nothing was actually evaluated.
+        assert report.controls_assessed == 0
+        assert report.controls_unassessed == 2
+        assert report.assessment_coverage == 0.0
+
+    def test_report_counts_assessed_controls_after_check(self):
+        """Controls evaluated by check_compliance count as assessed, pass or fail."""
+        engine = ComplianceEngine([ComplianceFramework.SOC2])
+
+        # data_access maps to SOC2-CC6.1 (and non-SOC2 controls that are not
+        # loaded); SOC2-CC7.2 is never evaluated.
+        violations = engine.check_compliance(
+            agent_did="did:agentmesh:test-agent",
+            action_type="data_access",
+            context={},
+        )
+        assert violations == []
+
+        assessments = engine.get_assessments(framework=ComplianceFramework.SOC2)
+        assert [a.control_id for a in assessments] == ["SOC2-CC6.1"]
+        assert assessments[0].passed is True
+        assert assessments[0].violation_id is None
+
+        now = datetime.now(timezone.utc)
+        report = engine.generate_report(
+            framework=ComplianceFramework.SOC2,
+            period_start=now - timedelta(days=1),
+            period_end=now + timedelta(days=1),
+        )
+
+        assert report.total_controls == 2
+        assert report.controls_assessed == 1
+        assert report.controls_unassessed == 1
+        assert report.assessment_coverage == 50.0
+        assert report.controls_assessed + report.controls_unassessed == report.total_controls
+
+    def test_failed_assessment_is_recorded_with_violation(self):
+        """A failing check records an assessment linked to its violation."""
+        engine = ComplianceEngine([ComplianceFramework.HIPAA])
+
+        violations = engine.check_compliance(
+            agent_did="did:agentmesh:test-agent",
+            action_type="data_access",
+            context={"data_type": "phi", "encrypted": False},
+        )
+        assert len(violations) == 1
+
+        assessments = engine.get_assessments(control_id="HIPAA-164.312(b)")
+        assert len(assessments) == 1
+        assert assessments[0].passed is False
+        assert assessments[0].violation_id == violations[0].violation_id
+
+        now = datetime.now(timezone.utc)
+        report = engine.generate_report(
+            framework=ComplianceFramework.HIPAA,
+            period_start=now - timedelta(days=1),
+            period_end=now + timedelta(days=1),
+        )
+        assert report.controls_failed == 1
+        assert report.controls_assessed == 1
+        assert report.controls_unassessed == 1
+
+    def test_assessment_coverage_respects_period_and_agent_scope(self):
+        """Assessments outside the period or agent scope do not count as coverage."""
+        engine = ComplianceEngine([ComplianceFramework.SOC2])
+
+        engine.check_compliance(
+            agent_did="did:agentmesh:agent-a",
+            action_type="data_access",
+            context={},
+        )
+
+        now = datetime.now(timezone.utc)
+
+        # Different agent scope: the assessment belongs to agent-a only.
+        scoped = engine.generate_report(
+            framework=ComplianceFramework.SOC2,
+            period_start=now - timedelta(days=1),
+            period_end=now + timedelta(days=1),
+            agent_ids=["did:agentmesh:agent-b"],
+        )
+        assert scoped.controls_assessed == 0
+        assert scoped.controls_unassessed == 2
+
+        # Period that ends before the assessment was recorded.
+        past = engine.generate_report(
+            framework=ComplianceFramework.SOC2,
+            period_start=now - timedelta(days=30),
+            period_end=now - timedelta(days=29),
+        )
+        assert past.controls_assessed == 0
+        assert past.assessment_coverage == 0.0
+
 
 class TestAudit:
     """Tests for AuditLog and AuditChain."""

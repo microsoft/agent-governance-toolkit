@@ -115,6 +115,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Compliance reports distinguish unassessed controls from satisfied ones.**
+  `ComplianceEngine.check_compliance()` now records a `ComplianceAssessment`
+  for every control it evaluates, pass or fail, and `generate_report()` adds
+  `controls_assessed`, `controls_unassessed` and `assessment_coverage` so a
+  consumer can tell "assessed and no violation" from "never assessed".
+  `controls_met` and `compliance_score` keep their existing semantics
+  (no violations still scores 100); a report generated without any
+  `check_compliance()` call now reads `controls_assessed=0` and
+  `assessment_coverage=0.0`. `get_assessments()` exposes the records (#3957).
+
 - **Pending-message batch isolation.** A single malformed entry in a relay-supplied
   `pending_messages` batch no longer aborts the drain; the failure is surfaced
   through the error handler and the remaining queued messages are still delivered.
