@@ -66,6 +66,24 @@ fn mapping_colon_tabs_preserve_policy_conditions() {
 }
 
 #[test]
+fn documented_parser_relaxations_preserve_deny_decisions() {
+    let source = policy("    value: {b: c}");
+    for input in [
+        format!("%FOO bar\n---\n{source}"),
+        source.replace("- name: gate", "-\tname: gate"),
+        source.replace("    value: {b: c}", "    value:\n     \tb: c"),
+        format!("{source}\n{}", "#\n".repeat(301_000)),
+    ] {
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(&input).unwrap();
+        assert!(matches!(
+            engine.evaluate("deploy", Some(&context(json!({"value": {"b": "c"}})))),
+            PolicyDecision::Deny(_)
+        ));
+    }
+}
+
+#[test]
 fn yaml_and_json_policies_make_the_same_authorization_decisions() {
     let json_policy = json!({
         "version": "1", "agent": "test", "policies": [{

@@ -7,7 +7,7 @@ use agent_control_specification_core::{
 use serde_json::json;
 
 #[test]
-fn tabs_separate_mapping_values_but_cannot_indent_them() {
+fn mapping_colon_tabs_pass_but_tab_first_indentation_fails() {
     for (input, expected) in [
         ("a:\tb\n", json!({"a": "b"})),
         ("a:\t7\n", json!({"a": 7})),
@@ -20,6 +20,26 @@ fn tabs_separate_mapping_values_but_cannot_indent_them() {
         parse_manifest_yaml_value("a:\n\tb: c\n"),
         Err(RuntimeError::ManifestInvalid(_))
     ));
+}
+
+#[test]
+fn documented_parser_relaxations_preserve_values() {
+    for (input, expected) in [
+        ("a:\n \tb: c\n", json!({"a": {"b": "c"}})),
+        ("-\tb\n", json!(["b"])),
+        ("%FOO bar\n---\na: b\n", json!({"a": "b"})),
+    ] {
+        assert_eq!(parse_manifest_yaml_value(input).unwrap(), expected);
+    }
+}
+
+#[test]
+fn comment_lines_do_not_consume_document_event_budget() {
+    let source = format!("a: b\n{}", "#\n".repeat(301_000));
+    assert_eq!(
+        parse_manifest_yaml_value(&source).unwrap(),
+        json!({"a": "b"})
+    );
 }
 
 #[test]

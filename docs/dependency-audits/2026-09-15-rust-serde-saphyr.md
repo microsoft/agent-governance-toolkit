@@ -13,8 +13,11 @@ dependency with `serde-saphyr = "=1.2.0"`. The parser deserializes typed
 configuration without exposing a YAML DOM as the policy-context API.
 The lockfiles select `granit-parser` 1.2.1 and retain `encoding_rs` 0.8.35.
 Granit 1.2.1 was published September 11, 2026 at 09:25 UTC, more than seven
-days before this update. It fixes plain values following a colon and tab
-without permitting tab indentation. AGT retains its exact direct-dependency
+days before this update. It fixes plain values following a colon and tab.
+It also accepts space-then-tab indentation, tabs after sequence dashes and
+reserved directives such as `%FOO bar`, which libyaml rejected. These
+relaxations are intentional and covered by value and authorization regressions.
+Tab-first indentation remains invalid. AGT retains its exact direct-dependency
 convention; the transitive parser is selected by the lockfiles, not pinned
 by the `serde-saphyr` requirement.
 
@@ -41,8 +44,11 @@ The registry graph still includes `serde_yaml` and `unsafe-libyaml` through
 `agent-control-spec 0.4.0-alpha.3`. The companion change is
 `https://github.com/responsibleai/agent-control-spec/pull/75`. The tested
 combined code removes those packages, and the renamed `yaml_serde` and
-`libyaml-rs` implementations, from AGT's default and all-features graphs.
-Optional Regorus YAML configurations are outside this consumer scope.
+`libyaml-rs` implementations, from the standalone Rust workspace's default
+and all-features graphs. The policy-engine workspace's all-features graph
+now includes the core shim's optional `rego` forwarding. With the companion
+engine, that graph still contains Regorus's `yaml_serde` and `libyaml-rs`
+dependencies. The optional backend and its YAML builtins remain enabled.
 
 ## Breaking change risk assessment
 

@@ -54,6 +54,7 @@ pub(crate) fn from_yaml<T: serde::de::DeserializeOwned>(input: &str) -> Result<T
     let value: serde_json::Value = serde_saphyr::from_str_with_options(
         &normalized,
         serde_saphyr::options! {
+            emit_comments: false,
             strict_booleans: true,
             no_schema: true,
             reject_unsupported_tags: true,

@@ -179,6 +179,7 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
     let parsed = serde_saphyr::with_deserializer_from_str_with_options(
         &normalized,
         serde_saphyr::options! {
+            emit_comments: false,
             strict_booleans: true,
             reject_unsupported_tags: true,
             merge_keys: serde_saphyr::MergeKeyPolicy::AsOrdinary,

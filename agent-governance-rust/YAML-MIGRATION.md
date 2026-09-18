@@ -66,7 +66,12 @@ mapping keys as well. Legacy forms such as
 YAML 1.2 boolean spellings retain their types, while mixed-case forms such as
 `tRuE` remain strings. YAML aliases remain supported within
 resource limits. Merge keys remain literal keys, not inherited policy fields.
-Tabs may separate a mapping colon from its value, but cannot indent a node.
+Granit 1.2.1 accepts tabs after mapping colons and sequence dashes, and
+accepts a tab following spaces in indentation. A tab at the start of an
+indented line is still rejected. Reserved directives such as `%FOO bar`
+are ignored. Space-then-tab indentation, dash-tab separation and reserved
+directives are intentional parser relaxations compared with libyaml;
+regressions pin their resulting values and policy decisions.
 Non-specific `!` tags are rejected on scalars and collections alike.
 
 The core shim owns one scalar-normalization pre-pass, re-exported through
@@ -110,7 +115,10 @@ release process. No unpublished registry version or permanent local override
 is introduced by this change.
 
 A validation-only local patch of the companion engine removes `serde_yaml`,
-`unsafe-libyaml`, `yaml_serde` and `libyaml-rs` from AGT's all-features graph.
-AGT uses Regorus with `regex` only. This is not a claim about consumers that
-independently enable Regorus YAML, nor a claim that the entire Rust graph
-contains no unsafe code. Regorus's optional YAML implementation is unchanged.
+`unsafe-libyaml`, `yaml_serde` and `libyaml-rs` from the standalone Rust
+workspace's default and all-features graphs. Agentmesh requests Regorus with
+`regex` only. The policy-engine workspace now forwards an optional `rego`
+feature from the core shim, so its all-features graph also enables upstream
+Regorus YAML. That path retains `yaml_serde` and `libyaml-rs` with the companion
+engine. No YAML builtin is disabled to remove a dependency, and this is not
+a claim that the entire Rust graph contains no unsafe code.
