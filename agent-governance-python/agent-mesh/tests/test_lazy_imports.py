@@ -77,7 +77,9 @@ class TestLazyTopLevelImport:
         heavy = {
             m
             for m in loaded
-            if m.startswith(("agentmesh.identity", "agentmesh.client", "agentmesh.trust", "agentmesh.reward"))
+            if m.startswith(
+                ("agentmesh.identity", "agentmesh.client", "agentmesh.trust", "agentmesh.reward")
+            )
         }
         assert not heavy, f"from agentmesh.governance import govern pulled in: {heavy}"
 
@@ -115,3 +117,34 @@ class TestLazyAttributeAccessCorrectness:
         for name in agentmesh.__all__:
             if name != "__version__":
                 assert name in exported
+
+
+class TestLazySubmoduleAttributeParity:
+    """On main, `import agentmesh` then `agentmesh.identity` (etc.) worked
+    as a side effect of the eager `from .xxx import (...)` statements -
+    any submodule import binds the submodule itself onto its parent
+    package. That must keep working even though those imports are gone."""
+
+    @pytest.mark.parametrize(
+        "submodule_name",
+        [
+            "client",
+            "exceptions",
+            "governance",
+            "identity",
+            "reward",
+            "telemetry",
+            "trust",
+            "trust_types",
+        ],
+    )
+    def test_submodule_attribute_resolves_to_the_submodule(self, submodule_name):
+        import importlib
+
+        value = getattr(agentmesh, submodule_name)
+        assert value is importlib.import_module(f"agentmesh.{submodule_name}")
+
+    def test_dir_includes_submodule_names(self):
+        exported = set(dir(agentmesh))
+        for submodule_name in ("client", "identity", "trust", "reward", "telemetry"):
+            assert submodule_name in exported

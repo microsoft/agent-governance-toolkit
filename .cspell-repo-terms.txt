@@ -871,6 +871,7 @@ pypdf
 pypistats
 pyproject
 pypy
+pyright
 pytest
 pytestmark
 pythonhosted
