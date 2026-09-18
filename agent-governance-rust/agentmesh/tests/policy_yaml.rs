@@ -270,6 +270,8 @@ fn invalid_reload_keeps_the_previous_deny_policy() {
         String::new(),
         "{{invalid".into(),
         "[]".into(),
+        "[\"1\", test, []]".into(),
+        "version: \"1\"\nagent: test\npolicies: [[deny, capability, [], [], [\"*\"]]]".into(),
         format!("{source}\n---\n{source}"),
         source.replace("version: \"1\"", "version: \"1\"\nversion: \"2\""),
         source.replace(
@@ -323,4 +325,15 @@ fn oversized_files_and_detector_configs_are_rejected() {
         .is_err());
     assert!(PromptInjectionDetector::from_yaml_file(&path).is_err());
     assert!(PromptInjectionDetector::from_yaml_str("detection: !custom {}").is_err());
+    for source in [
+        "[]",
+        "detection: []",
+        "detection: {rule_overrides: {add: [[direct, name, pattern, high, 0.9]]}}",
+        "detection: {threshold_overrides: {strict: [low, 0.1]}}",
+    ] {
+        assert!(
+            PromptInjectionDetector::from_yaml_str(source).is_err(),
+            "accepted positional config: {source}"
+        );
+    }
 }

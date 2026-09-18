@@ -72,6 +72,9 @@ Non-specific `!` tags are rejected on scalars and collections alike.
 The core shim owns one scalar-normalization pre-pass, re-exported through
 the host SDK and reused by agentmesh. Both consumers retain their separate
 bounded deserialization and error contracts.
+Typed configurations require mappings at every struct boundary, including
+policy profiles, rules and nested detector settings. Positional arrays are
+rejected without replacing an already loaded policy.
 
 `PolicyError::InvalidYaml` and `PromptInjectionError::ConfigParse` retain their
 variant names but now contain `YamlError`. Its `location()` returns an optional

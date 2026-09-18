@@ -70,7 +70,106 @@ pub(crate) fn from_yaml<T: serde::de::DeserializeOwned>(input: &str) -> Result<T
         },
     )
     .map_err(YamlError::from)?;
-    serde_json::from_value(value).map_err(<YamlError as serde::de::Error>::custom)
+    T::deserialize(ConfigValue(value)).map_err(<YamlError as serde::de::Error>::custom)
+}
+
+// JSON's default struct decoder accepts positional arrays. Configuration structs
+// must be mappings, including structs inside sequences, options and enum payloads.
+struct ConfigValue(Value);
+
+impl<'de> serde::de::IntoDeserializer<'de, serde_json::Error> for ConfigValue {
+    type Deserializer = Self;
+
+    fn into_deserializer(self) -> Self {
+        self
+    }
+}
+
+impl<'de> serde::Deserializer<'de> for ConfigValue {
+    type Error = serde_json::Error;
+
+    fn deserialize_any<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        use serde::de::value::{MapDeserializer, SeqDeserializer};
+        match self.0 {
+            Value::Array(values) => {
+                SeqDeserializer::new(values.into_iter().map(ConfigValue)).deserialize_any(visitor)
+            }
+            Value::Object(values) => MapDeserializer::new(
+                values
+                    .into_iter()
+                    .map(|(key, value)| (key, ConfigValue(value))),
+            )
+            .deserialize_any(visitor),
+            value => value.deserialize_any(visitor),
+        }
+    }
+
+    fn deserialize_map<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        if self.0.is_object() {
+            self.deserialize_any(visitor)
+        } else {
+            self.0.deserialize_map(visitor)
+        }
+    }
+
+    fn deserialize_struct<V: serde::de::Visitor<'de>>(
+        self,
+        _name: &'static str,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        self.deserialize_map(visitor)
+    }
+
+    fn deserialize_option<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        if self.0.is_null() {
+            visitor.visit_none()
+        } else {
+            visitor.visit_some(self)
+        }
+    }
+
+    fn deserialize_newtype_struct<V: serde::de::Visitor<'de>>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        visitor.visit_newtype_struct(self)
+    }
+
+    fn deserialize_enum<V: serde::de::Visitor<'de>>(
+        self,
+        name: &'static str,
+        variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        use serde::de::value::{MapAccessDeserializer, MapDeserializer};
+        match self.0 {
+            Value::Object(values) if values.len() == 1 => {
+                MapAccessDeserializer::new(MapDeserializer::new(
+                    values
+                        .into_iter()
+                        .map(|(key, value)| (key, ConfigValue(value))),
+                ))
+                .deserialize_enum(name, variants, visitor)
+            }
+            value => value.deserialize_enum(name, variants, visitor),
+        }
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+        bytes byte_buf unit unit_struct seq tuple tuple_struct identifier ignored_any
+    }
 }
 
 impl serde::de::Error for YamlError {

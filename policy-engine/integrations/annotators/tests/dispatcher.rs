@@ -4,7 +4,6 @@ use agent_control_specification_annotators::{
 };
 use serde_json::json;
 use std::{
-    collections::BTreeMap,
     io::{Read, Write},
     net::TcpListener,
     thread,
@@ -59,12 +58,13 @@ fn content_length(headers: &[u8]) -> Option<usize> {
 }
 
 fn invocation(fields: &[(&str, JsonValue)]) -> AnnotatorInvocation {
-    AnnotatorInvocation {
-        fields: fields
+    serde_json::from_value(JsonValue::Object(
+        fields
             .iter()
             .map(|(key, value)| ((*key).to_string(), value.clone()))
-            .collect::<BTreeMap<_, _>>(),
-    }
+            .collect(),
+    ))
+    .expect("local annotator invocation")
 }
 
 fn input() -> JsonValue {

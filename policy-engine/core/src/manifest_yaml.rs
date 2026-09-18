@@ -906,16 +906,14 @@ mod tests {
     }
 
     #[test]
-    fn upstream_parser_still_accepts_the_removed_fields() {
-        // The reason the check exists: the pinned engine's open config maps
-        // swallow these keys. If upstream starts rejecting them this test
-        // fails and the AGT check can be retired.
-        for (label, manifest, _) in probe_manifests() {
-            let parsed = Manifest::from_yaml_str(&manifest)
+    fn upstream_parser_retains_removed_fields_for_agt_validation() {
+        // Parsing must retain these keys for AGT's rejection, even when newer
+        // upstream semantic validation also rejects an invalid URL combination.
+        for (label, manifest, field) in probe_manifests() {
+            let parsed = Manifest::parse_yaml_str(&manifest)
                 .unwrap_or_else(|error| panic!("{label}: upstream parse failed: {error}"));
-            parsed
-                .validate()
-                .unwrap_or_else(|error| panic!("{label}: upstream validate failed: {error}"));
+            let error = reject_removed_fields(&parsed).expect_err("AGT rejects removed fields");
+            assert!(error.detail().contains(field), "{label}: {error}");
         }
     }
 
@@ -930,7 +928,7 @@ mod tests {
                 ),
                 (
                     "reject_removed_fields",
-                    reject_removed_fields(&Manifest::from_yaml_str(&manifest).unwrap()),
+                    reject_removed_fields(&Manifest::parse_yaml_str(&manifest).unwrap()),
                 ),
             ] {
                 let error = match result {
