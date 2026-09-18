@@ -1,6 +1,6 @@
 [package]
 name = "agent_control_specification_core"
-version = "0.3.1-beta.0"
+version = "0.3.2-beta.0"
 edition = "2021"
 rust-version = "1.85"
 description = "Deprecated compatibility shim over agent-control-spec. Use agent-control-spec directly."
