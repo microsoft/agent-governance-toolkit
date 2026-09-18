@@ -237,7 +237,7 @@ _LAZY_SUBMODULE_BY_NAME: dict[str, str] = {
 # On main, `agentmesh.client`/`.identity`/`.trust`/`.reward`/`.telemetry`/
 # `.governance`/`.exceptions`/`.trust_types` were all accessible as plain
 # submodule attributes (e.g. `import agentmesh; agentmesh.identity`) purely
-# as a side effect of the eager `from .xxx import (...)` statements this
+# as a side effect of the eager `from .<submodule> import (...)` statements this
 # file used to have - any submodule import binds the submodule itself onto
 # its parent package. Preserve that without re-adding the eager imports:
 # each of these names resolves to the submodule object itself.

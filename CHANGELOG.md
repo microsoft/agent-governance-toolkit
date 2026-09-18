@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   API changes — existing `from agentmesh import AgentMeshClient`-style access
   still works, just pays the cost on first access instead of at import time
   (#3923).
-- **.NET numeric equality/inequality in policy-rule conditions** — `PolicyRule` conditions such as `count == 5` and `score != 3.14` now evaluate numeric literals (integers, decimals, and negatives) instead of failing to match, and numeric `!=` matches when the field is missing or non-numeric so deny rules fail closed. Numeric operands are parsed with the invariant culture so evaluation is deterministic across host locales (#3205).
+- **.NET numeric equality/inequality in policy-rule conditions** -- `PolicyRule` conditions such as `count == 5` and `score != 3.14` now evaluate numeric literals (integers, decimals, and negatives) instead of failing to match, and numeric `!=` matches when the field is missing or non-numeric so deny rules fail closed. Numeric operands are parsed with the invariant culture so evaluation is deterministic across host locales (#3205).
 - **`agent-governance-toolkit-core` and `[full]` no longer require `agt-policies`
   as a base dependency.** `agt-policies>=5.1.0` (requiring an unpublished
   `agent-control-specification>=0.4.0b0`) had become a base dependency, blocking

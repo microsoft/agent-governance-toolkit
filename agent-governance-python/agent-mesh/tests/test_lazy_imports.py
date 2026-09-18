@@ -121,7 +121,7 @@ class TestLazyAttributeAccessCorrectness:
 
 class TestLazySubmoduleAttributeParity:
     """On main, `import agentmesh` then `agentmesh.identity` (etc.) worked
-    as a side effect of the eager `from .xxx import (...)` statements -
+    as a side effect of the eager `from .<submodule> import (...)` statements -
     any submodule import binds the submodule itself onto its parent
     package. That must keep working even though those imports are gone."""
 
