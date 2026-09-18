@@ -1112,7 +1112,7 @@ jobs:
             node-version: "20"
           - name: agentos-mcp-server
             path: agent-governance-python/agent-os/extensions/mcp-server
-            node-version: "20"
+            node-version: "22"
     steps:
       - name: Determine if package changed
         id: gate
