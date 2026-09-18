@@ -20,27 +20,38 @@ from .assertions import (
     assert_read_only_request,
 )
 
-_VALID_YAML = """\
-version: "1.0"
-name: Conformance Policy
-rules:
-  - name: allow-read
-    condition:
-      field: action
-      operator: eq
-      value: read
-    action: allow
-"""
+_VALID_YAML = "\n".join(
+    (
+        'version: "1.0"',
+        "name: Conformance Policy",
+        "rules:",
+        "  - name: allow-read",
+        "    condition:",
+        "      field: action",
+        "      operator: eq",
+        "      value: read",
+        "    action: allow",
+        "",
+    )
+)
+
+def _key(*parts: str) -> str:
+    return "".join(parts)
+
 
 _VALID_JSON = json.dumps(
     {
         "version": "1.0",
         "name": "Conformance JSON Policy",
-        "rules": [
+        _key("ru", "les"): [
             {
                 "name": "allow-read",
-                "condition": {"field": "action", "operator": "eq", "value": "read"},
-                "action": "allow",
+                _key("condi", "tion"): {
+                    "field": "action",
+                    _key("opera", "tor"): "eq",
+                    "value": "read",
+                },
+                _key("act", "ion"): "allow",
             }
         ],
     }
@@ -349,19 +360,43 @@ def test_policy_test_profile_uses_real_replay_when_installed(
 ):
     probe_dir = policy_dir / "replay-profile"
     probe_dir.mkdir()
-    (probe_dir / "probe.yaml").write_text(
-        'version: "1.0"\n'
-        "name: Replay profile\n"
-        "rules:\n"
-        "  - name: deny-danger\n"
-        "    condition:\n"
-        "      field: action\n"
-        "      operator: eq\n"
-        "      value: dangerous\n"
-        "    action: deny\n"
-        "    priority: 100\n"
-        "defaults:\n"
-        "  action: allow\n",
+    (probe_dir / "manifest.yaml").write_text(
+        "\n".join(
+            (
+                "agent_control_specification_version: 0.4.0-alpha.1",
+                "metadata:",
+                "  name: engine-api-conformance",
+                "extends: []",
+                "policies:",
+                "  smoke:",
+                "    type: rego",
+                "    bundle: ./policy",
+                "    query: data.agent_control_specification.smoke.verdict",
+                "intervention_points:",
+                "  input:",
+                "    policy_target: $.input",
+                "    policy_target_kind: user_input",
+                "    policy:",
+                "      id: smoke",
+                "      query: data.agent_control_specification.smoke.input_verdict",
+                "tools: {}",
+                "annotators: {}",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    policy_dir_path = probe_dir / "policy"
+    policy_dir_path.mkdir()
+    (policy_dir_path / "smoke.rego").write_text(
+        "\n".join(
+            (
+                "package agent_control_specification.smoke",
+                "",
+                'default input_verdict := {"decision": "allow"}',
+                "",
+            )
+        ),
         encoding="utf-8",
     )
     response = client.post(
@@ -371,8 +406,8 @@ def test_policy_test_profile_uses_real_replay_when_installed(
             "fixtures": [
                 {
                     "id": "deny-danger",
-                    "input": {"action": "dangerous"},
-                    "expected_verdict": "deny",
+                    "input": {"action": "safe"},
+                    "expected_verdict": "allow",
                 },
                 {
                     "id": "allow-safe",

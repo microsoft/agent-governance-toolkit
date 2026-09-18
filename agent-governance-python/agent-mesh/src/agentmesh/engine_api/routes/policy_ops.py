@@ -101,6 +101,25 @@ def _safe_policy_dir(request: Request, override: str | None) -> str:
     return candidate
 
 
+def _replay_target(policy_dir: str) -> str:
+    """Resolve a policy directory to an ACS manifest when one is present.
+
+    Older test doubles accept a directory directly. The real
+    ``agent_compliance.policy_test.replay`` API accepts a manifest file, so a directory
+    target is upgraded only when it contains an unambiguous manifest.
+    """
+    path = Path(policy_dir)
+    if path.is_file():
+        return str(path)
+    manifests = sorted(
+        candidate
+        for pattern in ("manifest.yaml", "manifest.yml", "manifest.json")
+        for candidate in path.glob(pattern)
+        if candidate.is_file()
+    )
+    return str(manifests[0]) if len(manifests) == 1 else policy_dir
+
+
 @router.post(
     "/api/v1/policy/validate",
     operation_id="validatePolicy",
@@ -153,6 +172,7 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
     ``503 ENGINE_UNAVAILABLE`` when the policy-test engine is not installed, and
     ``422 FIXTURE_LOAD_ERROR`` when fixtures or policies cannot be loaded.
     """
+    policy_dir = _safe_policy_dir(request, body.policy_dir)
     try:
         replay = _load_replay()
     except ImportError:
@@ -163,14 +183,14 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
             {"package": "agent-compliance"},
         )
 
-    policy_dir = _safe_policy_dir(request, body.policy_dir)
+    replay_target = _replay_target(policy_dir)
     fixtures_payload = [fixture.model_dump() for fixture in body.fixtures]
 
     with tempfile.TemporaryDirectory(prefix="agt-policy-test-") as tmp:
         fixtures_file = Path(tmp) / "fixtures.json"
         fixtures_file.write_text(json.dumps(fixtures_payload), encoding="utf-8")
         try:
-            report = replay(policy_dir, fixtures_file)
+            report = replay(replay_target, fixtures_file)
         except ImportError as exc:
             raise ApiError(
                 503,

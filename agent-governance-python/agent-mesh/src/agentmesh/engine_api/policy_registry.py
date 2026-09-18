@@ -26,6 +26,7 @@ import json
 import logging
 import os
 import re
+import stat
 import tempfile
 import threading
 from dataclasses import dataclass
@@ -140,7 +141,12 @@ class PolicyRegistry:
                 return
 
             for path in sorted(self._policy_dir.iterdir()):
-                if not path.is_file():
+                try:
+                    path_stat = path.stat()
+                except OSError as exc:
+                    logger.warning("Could not stat policy %s: %s", path.name, exc)
+                    continue
+                if not stat.S_ISREG(path_stat.st_mode):
                     continue
                 fmt = _format_for_suffix(path.suffix)
                 if fmt is None:
@@ -161,12 +167,7 @@ class PolicyRegistry:
                         records[policy_id].source,
                     )
                 name, description, rules_count = _extract_meta(content, fmt)
-                try:
-                    mtime = path.stat().st_mtime
-                except OSError as exc:
-                    logger.warning("Could not stat policy %s: %s", path.name, exc)
-                    continue
-                last_modified = datetime.fromtimestamp(mtime, tz=UTC)
+                last_modified = datetime.fromtimestamp(path_stat.st_mtime, tz=UTC)
                 records[policy_id] = _PolicyRecord(
                     id=policy_id,
                     name=name or policy_id,
