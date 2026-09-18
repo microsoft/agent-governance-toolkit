@@ -125,7 +125,9 @@ export class KillSwitch {
       action: context.action,
       reason: context.reason,
       killedAt: new Date().toISOString(),
-      terminated: callbacksExecuted > 0,
+      // Every registered handler must finish. A notifier completing while the
+      // handler that actually stops the process hung or threw is not containment.
+      terminated: handlers.length > 0 && callbacksExecuted === handlers.length,
       callbacksExecuted,
       compensationsExecuted,
       handoffAgentId,

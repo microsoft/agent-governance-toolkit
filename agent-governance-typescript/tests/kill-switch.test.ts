@@ -207,15 +207,28 @@ describe('KillSwitch', () => {
       expect(result.terminated).toBe(false);
     });
 
-    it('reports successful termination when one of several handlers completes', async () => {
+    it('reports unsuccessful termination when only one of several handlers completes', async () => {
       const killSwitch = new KillSwitch({ callbackTimeoutMs: 20 });
       killSwitch.registerHandler('agent-1', () => new Promise<void>(() => {}));
       killSwitch.registerHandler('agent-1', () => {});
 
       const result = await killSwitch.kill('agent-1', { reason: 'breach detected' });
 
-      expect(result.terminated).toBe(true);
+      expect(result.terminated).toBe(false);
       expect(result.callbacksExecuted).toBe(1);
+    });
+
+    it('reports successful termination when every handler completes', async () => {
+      const killSwitch = new KillSwitch({ callbackTimeoutMs: 500 });
+      killSwitch.registerHandler('agent-1', () => {});
+      killSwitch.registerHandler('agent-1', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      });
+
+      const result = await killSwitch.kill('agent-1', { reason: 'breach detected' });
+
+      expect(result.terminated).toBe(true);
+      expect(result.callbacksExecuted).toBe(2);
     });
 
     it('does not treat a completed compensation as termination', async () => {
