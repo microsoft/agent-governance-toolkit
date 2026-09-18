@@ -182,14 +182,10 @@ class TestMalformedTolerance:
         (tmp_path / "good.yaml").write_text(_YAML_POLICY, encoding="utf-8")
         (tmp_path / "bad.yaml").write_text(_YAML_POLICY, encoding="utf-8")
         original = Path.stat
-        bad_stat_calls = 0
 
         def _raise_for_bad(self, *args, **kwargs):
-            nonlocal bad_stat_calls
             if self.name == "bad.yaml":
-                bad_stat_calls += 1
-                if bad_stat_calls > 1:
-                    raise OSError("metadata unavailable")
+                raise OSError("metadata unavailable")
             return original(self, *args, **kwargs)
 
         monkeypatch.setattr(Path, "stat", _raise_for_bad)
