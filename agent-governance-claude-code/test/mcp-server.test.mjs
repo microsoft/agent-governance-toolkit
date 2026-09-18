@@ -63,7 +63,7 @@ test("tools/call rejects invalid agt_policy_check_text arguments", async () => {
   assert.match(response.result.content[0].text, /requires a string 'text' argument/i);
 });
 
-test("encoded JSON-RPC messages include a content-length header", () => {
+test("encoded JSON-RPC messages are newline-delimited JSON", () => {
   const encoded = encodeJsonRpcMessage({
     jsonrpc: "2.0",
     id: 4,
@@ -72,8 +72,13 @@ test("encoded JSON-RPC messages include a content-length header", () => {
     },
   });
 
-  assert.match(encoded, /^Content-Length: \d+\r\n\r\n/);
-  assert.match(encoded, /"ok":true/);
+  assert.ok(encoded.endsWith("\n"));
+  assert.equal(encoded.indexOf("\n"), encoded.length - 1);
+  assert.deepEqual(JSON.parse(encoded), {
+    jsonrpc: "2.0",
+    id: 4,
+    result: { ok: true },
+  });
 });
 
 test("stdio server handles UTF-8 JSON-RPC frames", async () => {
