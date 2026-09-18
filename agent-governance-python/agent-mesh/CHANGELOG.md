@@ -121,6 +121,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Opt-in strict fail-closed for the policy directory loaders.** A `*.yaml`/`*.json`
+  file that fails to load is skipped and the load is marked degraded by default
+  (issue #3538). A silently dropped deny alongside a broader allow could flip the
+  effective decision to allow, so setting the sidecar's `AGT_POLICY_STRICT` or the
+  policy server's `AGENTMESH_POLICY_STRICT` to `1`/`true`/`yes`/`on` makes the
+  loader refuse to serve when any file fails to load or the directory is
+  unavailable. Strict is **off by default** so a shipped deployment carrying an
+  unparseable policy file keeps serving its degraded set rather than crash-looping
+  at upgrade time. The policy server also no longer silently accepts a
+  governance-shaped file (top-level `kind`/`apiVersion`) or a rule-less trust
+  policy through the trust fallback: such a file is treated as a load failure
+  instead of quietly installing an empty trust policy.
 - **Displaced connections now close with a distinct WebSocket code.** When a second
   connection authenticates for a DID, the relay closes the displaced socket with
   `4006` (`WS_CLOSE_SESSION_REPLACED`) instead of `1000`. `1000` was reported by

@@ -770,6 +770,7 @@ nonimport
 nonlocal
 nono
 nonpositive
+nonstrict
 nonstring
 noqa
 noresolver
@@ -1059,6 +1060,7 @@ uninspectable
 unioned
 unlogged
 unkeyed
+unloadable
 unmigrated
 unparse
 unparseable

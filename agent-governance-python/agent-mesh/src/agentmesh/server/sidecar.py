@@ -219,6 +219,25 @@ _policy_state = (
 )
 
 
+def _policy_strict() -> bool:
+    """Whether the directory loader fails closed on an unloadable policy file.
+
+    Opt-in (issue #3538, review feedback on #3660): strict fail-closed is OFF by
+    default so a shipped deployment with an unparseable policy file keeps serving
+    a degraded set rather than crash-looping. Honoured via ``AGT_POLICY_STRICT``
+    (primary here, matching the module's ``AGT_*`` settings such as
+    ``AGT_POLICY_DIR``) OR ``AGENTMESH_POLICY_STRICT`` (the policy-server's name,
+    accepted as an alias so an operator running both components need set only
+    one). When enabled the loader refuses to serve if any file fails to load or
+    the directory is unavailable. Truthy values are ``1``/``true``/``yes``/``on``.
+    """
+    truthy = {"1", "true", "yes", "on"}
+    return any(
+        os.environ.get(var, "").strip().lower() in truthy
+        for var in ("AGT_POLICY_STRICT", "AGENTMESH_POLICY_STRICT")
+    )
+
+
 def _load_policies() -> PolicyLoadGeneration:
     """Build then publish an engine and its content-addressed load manifest together."""
     global _policy_state, _policy_dir
@@ -275,6 +294,11 @@ def _load_policies() -> PolicyLoadGeneration:
         directory_status=directory_status,
         files=tuple(files),
     )
+    if _policy_strict() and (generation.policies_failed or generation.directory_status == "unavailable"):
+        raise RuntimeError(
+            f"strict policy load failed: {generation.policies_failed} file(s) failed, "
+            f"directory_status={generation.directory_status}"
+        )
     serialized = generation.model_dump_json()
     _policy_state = (engine, generation)
     # ponytail: retain historical manifests through deployment logs, not an unbounded cache.
