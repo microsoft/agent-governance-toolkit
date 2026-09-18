@@ -166,7 +166,12 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
             "manifest source must not be empty".to_string(),
         ));
     }
-    let normalized = preserve_scalar_types(input, limits)?;
+    let normalized = normalize_yaml_scalars(
+        input,
+        limits.max_policy_input_depth,
+        MAX_MANIFEST_PARSE_NODES * 3,
+    )
+    .map_err(RuntimeError::from)?;
     let mut budget = ManifestValueBudget::new(limits);
     // Alias diagnostics can wrap the typed error. Use the structured budget report.
     let parser_limit = std::rc::Rc::new(std::cell::Cell::new(false));
@@ -238,37 +243,107 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
     Ok(value)
 }
 
+/// Failure while normalizing YAML scalar types before bounded deserialization.
+#[derive(Debug)]
+pub enum YamlScalarError {
+    /// A parser error with its original source location.
+    Scan(serde_saphyr::granit_parser::ScanError),
+    /// A scalar outside the supported JSON-compatible YAML contract.
+    Invalid(String),
+    /// The event or nesting limit was exceeded.
+    ResourceLimit(String),
+}
+
+impl YamlScalarError {
+    /// One-based line and column when the scanner supplied a location.
+    pub fn location(&self) -> Option<(u64, u64)> {
+        match self {
+            Self::Scan(error) => Some((
+                error.marker().line() as u64,
+                error.marker().col() as u64 + 1,
+            )),
+            Self::Invalid(_) | Self::ResourceLimit(_) => None,
+        }
+    }
+}
+
+impl fmt::Display for YamlScalarError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Scan(error) => error.fmt(formatter),
+            Self::Invalid(detail) | Self::ResourceLimit(detail) => formatter.write_str(detail),
+        }
+    }
+}
+
+impl std::error::Error for YamlScalarError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Scan(error) => Some(error),
+            Self::Invalid(_) | Self::ResourceLimit(_) => None,
+        }
+    }
+}
+
+impl From<YamlScalarError> for RuntimeError {
+    fn from(error: YamlScalarError) -> Self {
+        match error {
+            YamlScalarError::ResourceLimit(detail) => Self::ResourceLimitExceeded(detail),
+            YamlScalarError::Scan(error)
+                if matches!(
+                    error.kind(),
+                    serde_saphyr::granit_parser::ErrorKind::RecursionLimitExceeded
+                ) =>
+            {
+                Self::ResourceLimitExceeded(error.to_string())
+            }
+            error => Self::ManifestInvalid(error.to_string()),
+        }
+    }
+}
+
 /// Preserve legacy numeric strings and YAML 1.2 boolean capitalization.
-/// Token spans distinguish scalar syntax from string content and comments.
-fn preserve_scalar_types(
+///
+/// This shared pre-pass is used by manifest and agentmesh configuration parsing.
+/// It preserves token structure and rejects unsupported scalar forms. Callers must
+/// bound source bytes first and still deserialize with expanded-node/alias budgets.
+pub fn normalize_yaml_scalars(
     input: &str,
-    limits: Limits,
-) -> Result<std::borrow::Cow<'_, str>, RuntimeError> {
-    use serde_saphyr::granit_parser::{self, ErrorKind, Event, Parser, ScalarStyle};
+    max_depth: usize,
+    max_events: usize,
+) -> Result<std::borrow::Cow<'_, str>, YamlScalarError> {
+    use serde_saphyr::granit_parser::{self, Event, Parser, ScalarStyle};
 
     let parser = Parser::new_from_str_with_options(
         input,
         granit_parser::options! {
             emit_comments: false,
-            flow_nesting_limit: limits.max_policy_input_depth,
-            block_nesting_limit: limits.max_policy_input_depth,
+            flow_nesting_limit: max_depth,
+            block_nesting_limit: max_depth,
         },
     );
     let mut output = String::new();
     let mut copied = 0;
     for (events, event) in parser.enumerate() {
-        if events >= MAX_MANIFEST_PARSE_NODES * 3 {
-            return Err(RuntimeError::ResourceLimitExceeded(
-                "manifest parser event limit exceeded".to_string(),
+        if events >= max_events {
+            return Err(YamlScalarError::ResourceLimit(
+                "YAML parser event limit exceeded".to_string(),
             ));
         }
-        let (event, span) = event.map_err(|error| {
-            if matches!(error.kind(), ErrorKind::RecursionLimitExceeded) {
-                RuntimeError::ResourceLimitExceeded(error.to_string())
-            } else {
-                RuntimeError::ManifestInvalid(error.to_string())
-            }
-        })?;
+        let (event, span) = event.map_err(YamlScalarError::Scan)?;
+        let tag = match &event {
+            Event::Scalar(_, _, _, tag)
+            | Event::MappingStart(_, _, tag)
+            | Event::SequenceStart(_, _, tag) => tag.as_ref(),
+            _ => None,
+        };
+        if tag.is_some_and(|tag| tag.handle().is_empty() && tag.suffix() == "!") {
+            return Err(YamlScalarError::Invalid(format!(
+                "non-specific YAML tags are not supported at line {}, column {}",
+                span.start.line(),
+                span.start.col() + 1
+            )));
+        }
         let Event::Scalar(value, style, _, tag) = event else {
             continue;
         };
@@ -276,15 +351,12 @@ fn preserve_scalar_types(
             .as_ref()
             .is_some_and(|tag| tag.is_yaml_core_schema_tag("bool"));
         let kind = tag.as_ref().and_then(|tag| tag.core_suffix());
-        let string_tag = kind == Some("str")
-            || tag
-                .as_ref()
-                .is_some_and(|tag| tag.handle() == "!" && tag.suffix().is_empty());
+        let string_tag = kind == Some("str");
         let integer_tag = kind == Some("int");
         let float_tag = kind == Some("float");
         let null_tag = kind == Some("null");
         let invalid = |message: &str| {
-            RuntimeError::ManifestInvalid(format!(
+            YamlScalarError::Invalid(format!(
                 "{message} at line {}, column {}",
                 span.start.line(),
                 span.start.col() + 1
@@ -352,12 +424,12 @@ fn preserve_scalar_types(
             && digits.chars().all(|ch| ch.is_digit(radix))
         {
             let magnitude = u64::from_str_radix(digits, radix).map_err(|_| {
-                RuntimeError::ManifestInvalid(
+                YamlScalarError::Invalid(
                     "YAML integer exceeds the supported 64-bit range".to_string(),
                 )
             })?;
             if value.starts_with('-') && magnitude > (i64::MAX as u64) + 1 {
-                return Err(RuntimeError::ManifestInvalid(
+                return Err(YamlScalarError::Invalid(
                     "YAML integer exceeds the supported 64-bit range".to_string(),
                 ));
             }
@@ -393,7 +465,7 @@ fn preserve_scalar_types(
             continue;
         }
         let range = span.byte_range().ok_or_else(|| {
-            RuntimeError::ManifestInvalid("missing YAML scalar source range".to_string())
+            YamlScalarError::Invalid("missing YAML scalar source range".to_string())
         })?;
         let block = matches!(style, ScalarStyle::Literal | ScalarStyle::Folded);
         let mut replacement_start = range.start;
@@ -403,13 +475,13 @@ fn preserve_scalar_types(
                 .tag_start()
                 .and_then(|marker| marker.byte_offset())
                 .ok_or_else(|| {
-                    RuntimeError::ManifestInvalid("missing YAML tag source range".to_string())
+                    YamlScalarError::Invalid("missing YAML tag source range".to_string())
                 })?;
             let prefix = input.get(copied..start).ok_or_else(|| {
-                RuntimeError::ManifestInvalid("invalid YAML tag source range".to_string())
+                YamlScalarError::Invalid("invalid YAML tag source range".to_string())
             })?;
             let tag_source = input.get(start..range.start).ok_or_else(|| {
-                RuntimeError::ManifestInvalid("invalid YAML tag source range".to_string())
+                YamlScalarError::Invalid("invalid YAML tag source range".to_string())
             })?;
             let length = tag_source
                 .find(char::is_whitespace)
@@ -445,7 +517,7 @@ fn preserve_scalar_types(
             }
         }
         let prefix = input.get(prefix_start..replacement_start).ok_or_else(|| {
-            RuntimeError::ManifestInvalid("invalid YAML scalar source range".to_string())
+            YamlScalarError::Invalid("invalid YAML scalar source range".to_string())
         })?;
         output.push_str(prefix);
         if string_tag && range.is_empty() {
@@ -462,7 +534,7 @@ fn preserve_scalar_types(
                 } else {
                     value.as_ref()
                 })
-                .map_err(|error| RuntimeError::ManifestInvalid(error.to_string()))?,
+                .map_err(|error| YamlScalarError::Invalid(error.to_string()))?,
             );
         }
         if block {
@@ -760,8 +832,7 @@ mod tests {
     #[test]
     fn scalar_normalization_preserves_tagged_and_mixed_case_values() {
         let input = "values: [True, tRuE, !!bool TRUE, !!str TRUE]";
-        let normalized =
-            super::preserve_scalar_types(input, agent_control_spec::Limits::default()).unwrap();
+        let normalized = super::normalize_yaml_scalars(input, 64, 300_000).unwrap();
         assert_eq!(
             normalized,
             "values: [true, \"tRuE\",        true, !!str \"TRUE\"]"

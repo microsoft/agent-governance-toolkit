@@ -1,6 +1,6 @@
 ---
 title: Rust 5.0 YAML migration
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-18
 owner: microsoft/agent-governance-toolkit
 ---
 
@@ -56,11 +56,22 @@ booleans, null, 64-bit integers and finite floating-point numbers are supported.
 Out-of-range integers are rejected rather than rounded. Numeric and string values
 remain distinct. Non-string mapping keys, non-finite numbers, duplicate keys
 and unsupported tags are rejected rather than converted or ignored.
-Quote numeric-looking strings when a string is intended. Legacy forms such as
+Typed string fields no longer coerce unquoted numbers, booleans or null.
+In particular, write `version: "1"` or `version: "1.0"`, not `version: 1`
+or `version: 1.0`. Numeric `agent` values and boolean-looking rule names also
+need quotes. An empty plain value is null, not an empty string; use `""`
+for an empty string. Quote canonical number-, boolean- and null-looking
+mapping keys as well. Legacy forms such as
 `010` and `1_000` retain their string type and are rejected in numeric fields.
 YAML 1.2 boolean spellings retain their types, while mixed-case forms such as
 `tRuE` remain strings. YAML aliases remain supported within
 resource limits. Merge keys remain literal keys, not inherited policy fields.
+Tabs may separate a mapping colon from its value, but cannot indent a node.
+Non-specific `!` tags are rejected on scalars and collections alike.
+
+The core shim owns one scalar-normalization pre-pass, re-exported through
+the host SDK and reused by agentmesh. Both consumers retain their separate
+bounded deserialization and error contracts.
 
 `PolicyError::InvalidYaml` and `PromptInjectionError::ConfigParse` retain their
 variant names but now contain `YamlError`. Its `location()` returns an optional
@@ -78,7 +89,7 @@ its existing allow behavior.
 
 `serde-saphyr` 1.2.0 requires Rust 1.89. The Rust workspace already uses that
 floor. AGT's policy-engine core, host SDK and their Rust consumers now declare
-1.89 as well. The lockfiles retain age-compliant `granit-parser` 1.2.0 and
+1.89 as well. The lockfiles select age-compliant `granit-parser` 1.2.1 and
 `encoding_rs` 0.8.35.
 
 The committed registry-only graph still contains

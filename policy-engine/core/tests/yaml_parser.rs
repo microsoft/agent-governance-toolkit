@@ -7,6 +7,48 @@ use agent_control_specification_core::{
 use serde_json::json;
 
 #[test]
+fn tabs_separate_mapping_values_but_cannot_indent_them() {
+    for (input, expected) in [
+        ("a:\tb\n", json!({"a": "b"})),
+        ("a:\t7\n", json!({"a": 7})),
+        ("a: {b:\tc}\n", json!({"a": {"b": "c"}})),
+        ("a:\n  b:\tc\n", json!({"a": {"b": "c"}})),
+    ] {
+        assert_eq!(parse_manifest_yaml_value(input).unwrap(), expected);
+    }
+    assert!(matches!(
+        parse_manifest_yaml_value("a:\n\tb: c\n"),
+        Err(RuntimeError::ManifestInvalid(_))
+    ));
+}
+
+#[test]
+fn shared_scalar_scan_preserves_error_kinds_and_bounds() {
+    use agent_control_specification_core::manifest_yaml::normalize_yaml_scalars;
+    for source in ["value: ! 7", "value: ! {a: 1}", "value: ! [1, 2]"] {
+        assert!(matches!(
+            parse_manifest_yaml_value(source),
+            Err(RuntimeError::ManifestInvalid(_))
+        ));
+    }
+    assert!(matches!(
+        normalize_yaml_scalars("[a, b, c]", 64, 3).map_err(RuntimeError::from),
+        Err(RuntimeError::ResourceLimitExceeded(_))
+    ));
+    assert!(matches!(
+        normalize_yaml_scalars("[[[[0]]]]", 2, 100).map_err(RuntimeError::from),
+        Err(RuntimeError::ResourceLimitExceeded(_))
+    ));
+    let error = normalize_yaml_scalars("a: [\n", 64, 100).unwrap_err();
+    assert!(error.location().is_some());
+    assert!(std::error::Error::source(&error).is_some());
+    assert!(matches!(
+        RuntimeError::from(error),
+        RuntimeError::ManifestInvalid(_)
+    ));
+}
+
+#[test]
 fn tagged_blocks_preserve_values_siblings_and_diagnostic_lines() {
     for (block, expected) in [
         ("!!bool |-\n  TRUE", json!(true)),

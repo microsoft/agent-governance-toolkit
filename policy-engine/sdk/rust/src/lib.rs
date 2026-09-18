@@ -3,6 +3,9 @@
 //! Thin host-side orchestration over the stateless `agent_control_spec`
 //! runtime. Re-exports the full core API plus ergonomic `AgentControl` helpers.
 pub use agent_control_spec::*;
+pub use agent_control_specification_core::manifest_yaml::{
+    normalize_yaml_scalars, YamlScalarError,
+};
 pub use agent_hooks::HostError;
 
 // ---------------------------------------------------------------------

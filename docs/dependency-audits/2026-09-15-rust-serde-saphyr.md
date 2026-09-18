@@ -1,6 +1,6 @@
 ---
 title: Rust YAML parser migration to serde-saphyr
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-18
 owner: agt-maintainers
 ---
 
@@ -11,8 +11,12 @@ owner: agt-maintainers
 AGT's Rust workspace and policy-engine core replace their direct `serde_yaml`
 dependency with `serde-saphyr = "=1.2.0"`. The parser deserializes typed
 configuration without exposing a YAML DOM as the policy-context API.
-The lockfiles retain `granit-parser` 1.2.0 and `encoding_rs` 0.8.35 rather
-than adopting releases less than seven days old.
+The lockfiles select `granit-parser` 1.2.1 and retain `encoding_rs` 0.8.35.
+Granit 1.2.1 was published September 11, 2026 at 09:25 UTC, more than seven
+days before this update. It fixes plain values following a colon and tab
+without permitting tab indentation. AGT retains its exact direct-dependency
+convention; the transitive parser is selected by the lockfiles, not pinned
+by the `serde-saphyr` requirement.
 
 The parser is registered on crates.io, maintained at
 `https://github.com/bourumir-wyngs/serde-saphyr`, and licensed MIT OR
@@ -47,6 +51,10 @@ protocol callbacks move to JSON-compatible types, and YAML error payloads
 change to `YamlError`. Non-string keys, non-finite numbers, duplicate keys
 and unsupported tags are errors. Legacy numeric string forms retain their
 types, and numeric fields reject strings rather than coercing them.
+Typed strings also reject unquoted numbers, booleans and null, including
+`version: 1`; quote those values and mapping keys. Non-specific `!` tags
+are rejected consistently. The core shim and agentmesh share one
+scalar-normalization implementation, with separate bounded decoders.
 The policy-engine Rust compiler floor rises from 1.85 to 1.89.
 
 Validation includes authorization and bounded-parser regressions, Rust 1.89

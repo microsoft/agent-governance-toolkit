@@ -20,7 +20,7 @@ enum YamlErrorSource {
     #[error("{0}")]
     Deserialize(#[source] Box<serde_saphyr::Error>),
     #[error("{0}")]
-    Tokenize(#[source] serde_saphyr::granit_parser::ScanError),
+    Normalize(#[source] agent_control_specification::YamlScalarError),
 }
 
 impl YamlError {
@@ -30,10 +30,7 @@ impl YamlError {
             YamlErrorSource::Deserialize(error) => {
                 error.location().map(|loc| (loc.line(), loc.column()))
             }
-            YamlErrorSource::Tokenize(error) => Some((
-                error.marker().line() as u64,
-                error.marker().col() as u64 + 1,
-            )),
+            YamlErrorSource::Normalize(error) => error.location(),
         }
     }
 }
@@ -52,7 +49,8 @@ pub(crate) fn from_yaml<T: serde::de::DeserializeOwned>(input: &str) -> Result<T
             "YAML configuration exceeds 1048576 bytes",
         ));
     }
-    let normalized = preserve_scalar_types(input)?;
+    let normalized = agent_control_specification::normalize_yaml_scalars(input, 64, 300_000)
+        .map_err(|error| YamlError(YamlErrorSource::Normalize(error)))?;
     let value: serde_json::Value = serde_saphyr::from_str_with_options(
         &normalized,
         serde_saphyr::options! {
@@ -73,242 +71,6 @@ pub(crate) fn from_yaml<T: serde::de::DeserializeOwned>(input: &str) -> Result<T
     )
     .map_err(YamlError::from)?;
     serde_json::from_value(value).map_err(<YamlError as serde::de::Error>::custom)
-}
-
-// Resolve scalar types before strict JSON decoding so numeric limits cannot coerce strings.
-fn preserve_scalar_types(input: &str) -> Result<std::borrow::Cow<'_, str>, YamlError> {
-    use serde::de::Error;
-    use serde_saphyr::granit_parser::{self, Event, Parser, ScalarStyle};
-
-    let parser = Parser::new_from_str_with_options(
-        input,
-        granit_parser::options! {
-            emit_comments: false,
-            flow_nesting_limit: 64,
-            block_nesting_limit: 64,
-        },
-    );
-    let mut output = String::new();
-    let mut copied = 0;
-    for (events, event) in parser.enumerate() {
-        if events >= 300_000 {
-            return Err(YamlError::custom("YAML parser event limit exceeded"));
-        }
-        let (event, span) = event.map_err(|error| YamlError(YamlErrorSource::Tokenize(error)))?;
-        let Event::Scalar(value, style, _, tag) = event else {
-            continue;
-        };
-        let boolean_tag = tag
-            .as_ref()
-            .is_some_and(|tag| tag.is_yaml_core_schema_tag("bool"));
-        let kind = tag.as_ref().and_then(|tag| tag.core_suffix());
-        let string_tag = kind == Some("str")
-            || tag
-                .as_ref()
-                .is_some_and(|tag| tag.handle() == "!" && tag.suffix().is_empty());
-        let integer_tag = kind == Some("int");
-        let float_tag = kind == Some("float");
-        let null_tag = kind == Some("null");
-        let invalid = |message: &str| {
-            YamlError::custom(format!(
-                "{message} at line {}, column {}",
-                span.start.line(),
-                span.start.col() + 1
-            ))
-        };
-        if tag.is_some() && !boolean_tag && !string_tag && !integer_tag && !float_tag && !null_tag {
-            return Err(invalid("unsupported YAML scalar tag"));
-        }
-        if style != ScalarStyle::Plain && (tag.is_none() || string_tag) {
-            continue;
-        }
-        let boolean = if tag
-            .as_ref()
-            .is_none_or(|tag| tag.is_yaml_core_schema_tag("bool"))
-        {
-            match value.as_ref() {
-                "true" | "True" | "TRUE" => Some("true"),
-                "false" | "False" | "FALSE" => Some("false"),
-                _ => None,
-            }
-        } else {
-            None
-        };
-        if boolean_tag && boolean.is_none() {
-            return Err(invalid("invalid YAML boolean"));
-        }
-        let mut explicit_scalar = None;
-        if null_tag {
-            if !matches!(value.as_ref(), "" | "~" | "null" | "Null" | "NULL") {
-                return Err(invalid("invalid YAML null"));
-            }
-            explicit_scalar = Some("null".to_string());
-        }
-        if float_tag {
-            let number = value
-                .parse::<f64>()
-                .map_err(|_| invalid("invalid YAML float"))?;
-            if !number.is_finite() {
-                return Err(invalid("YAML numbers must be finite"));
-            }
-            explicit_scalar =
-                Some(serde_json::to_string(&number).map_err(|_| invalid("invalid YAML float"))?);
-        }
-        let mixed_keyword = (boolean.is_none()
-            && (value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false")))
-            || (value.eq_ignore_ascii_case("null")
-                && !matches!(value.as_ref(), "null" | "Null" | "NULL"));
-        let unsigned = value.strip_prefix(['+', '-']).unwrap_or(&value);
-        let leading_zero = unsigned.len() > 1
-            && unsigned.starts_with('0')
-            && unsigned.bytes().all(|byte| byte.is_ascii_digit());
-        let (digits, radix) = if let Some(digits) = unsigned.strip_prefix("0x") {
-            (digits, 16)
-        } else if let Some(digits) = unsigned.strip_prefix("0o") {
-            (digits, 8)
-        } else if let Some(digits) = unsigned.strip_prefix("0b") {
-            (digits, 2)
-        } else {
-            (unsigned, 10)
-        };
-        if !string_tag
-            && !float_tag
-            && !leading_zero
-            && !digits.is_empty()
-            && digits.chars().all(|ch| ch.is_digit(radix))
-        {
-            let magnitude = u64::from_str_radix(digits, radix).map_err(|_| {
-                YamlError::custom("YAML integer exceeds the supported 64-bit range")
-            })?;
-            if value.starts_with('-') && magnitude > (i64::MAX as u64) + 1 {
-                return Err(YamlError::custom(
-                    "YAML integer exceeds the supported 64-bit range",
-                ));
-            }
-            if integer_tag {
-                explicit_scalar = Some(if value.starts_with('-') {
-                    format!("-{magnitude}")
-                } else {
-                    magnitude.to_string()
-                });
-            }
-        }
-        if integer_tag && explicit_scalar.is_none() {
-            return Err(invalid("invalid YAML integer"));
-        }
-        let separated_number = unsigned.contains('_')
-            && unsigned.starts_with(|ch: char| ch.is_ascii_digit() || ch == '.')
-            && !unsigned.chars().any(char::is_whitespace);
-        let legacy_prefix = [("0X", 16), ("0O", 8), ("0B", 2)]
-            .iter()
-            .any(|(prefix, radix)| {
-                unsigned.strip_prefix(*prefix).is_some_and(|digits| {
-                    !digits.is_empty() && digits.chars().all(|ch| ch.is_digit(*radix))
-                })
-            });
-        if !leading_zero
-            && !separated_number
-            && !legacy_prefix
-            && boolean.is_none()
-            && !mixed_keyword
-            && !string_tag
-            && explicit_scalar.is_none()
-        {
-            continue;
-        }
-        let range = span
-            .byte_range()
-            .ok_or_else(|| YamlError::custom("missing YAML scalar source range"))?;
-        let block = matches!(style, ScalarStyle::Literal | ScalarStyle::Folded);
-        let mut replacement_start = range.start;
-        let mut prefix_start = copied;
-        if tag.is_some() && !string_tag {
-            let start = span
-                .tag_start()
-                .and_then(|marker| marker.byte_offset())
-                .ok_or_else(|| YamlError::custom("missing YAML tag source range"))?;
-            let prefix = input
-                .get(copied..start)
-                .ok_or_else(|| YamlError::custom("invalid YAML tag source range"))?;
-            let tag_source = input
-                .get(start..range.start)
-                .ok_or_else(|| YamlError::custom("invalid YAML tag source range"))?;
-            let length = tag_source
-                .find(char::is_whitespace)
-                .unwrap_or(tag_source.len());
-            output.push_str(prefix);
-            output.extend(std::iter::repeat_n(' ', length));
-            prefix_start = start + length;
-        }
-        if block {
-            let mut cursor = prefix_start;
-            loop {
-                let remaining = input
-                    .get(cursor..range.end)
-                    .ok_or_else(|| invalid("invalid YAML block scalar range"))?;
-                let ch = remaining
-                    .chars()
-                    .next()
-                    .ok_or_else(|| invalid("missing YAML block scalar header"))?;
-                match ch {
-                    '|' | '>' => {
-                        replacement_start = cursor;
-                        break;
-                    }
-                    '#' => cursor += remaining.find('\n').unwrap_or(remaining.len()),
-                    '&' => {
-                        cursor += remaining
-                            .find(char::is_whitespace)
-                            .ok_or_else(|| invalid("invalid YAML block scalar properties"))?
-                    }
-                    ch if ch.is_whitespace() => cursor += ch.len_utf8(),
-                    _ => return Err(invalid("invalid YAML block scalar header")),
-                }
-            }
-        }
-        let prefix = input
-            .get(prefix_start..replacement_start)
-            .ok_or_else(|| YamlError::custom("invalid YAML scalar source range"))?;
-        output.push_str(prefix);
-        if string_tag && range.is_empty() {
-            output.push(' ');
-        }
-        if let Some(explicit_scalar) = explicit_scalar {
-            output.push_str(&explicit_scalar);
-        } else if let Some(boolean) = boolean {
-            output.push_str(boolean);
-        } else {
-            output.push_str(
-                &serde_json::to_string(if string_tag && range.is_empty() {
-                    ""
-                } else {
-                    value.as_ref()
-                })
-                .map_err(YamlError::custom)?,
-            );
-        }
-        if block {
-            // Block spans consume separators before the next node; retain their layout.
-            let replaced = input
-                .get(replacement_start..range.end)
-                .ok_or_else(|| invalid("invalid YAML block scalar range"))?;
-            let tail = &replaced[replaced.trim_end_matches(char::is_whitespace).len()..];
-            let removed_lines = replaced.bytes().filter(|byte| *byte == b'\n').count();
-            let tail_lines = tail.bytes().filter(|byte| *byte == b'\n').count();
-            output.extend(std::iter::repeat_n(
-                '\n',
-                removed_lines.saturating_sub(tail_lines),
-            ));
-            output.push_str(tail);
-        }
-        copied = range.end;
-    }
-    if copied == 0 {
-        Ok(std::borrow::Cow::Borrowed(input))
-    } else {
-        output.push_str(&input[copied..]);
-        Ok(std::borrow::Cow::Owned(output))
-    }
 }
 
 impl serde::de::Error for YamlError {

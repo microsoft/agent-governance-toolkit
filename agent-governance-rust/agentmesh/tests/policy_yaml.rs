@@ -19,6 +19,53 @@ fn context(value: serde_json::Value) -> Context {
 }
 
 #[test]
+fn typed_strings_require_quotes_for_number_boolean_and_null_scalars() {
+    let source = policy("    environment: prod");
+    for (field, scalar, kind) in [
+        ("version: \"1\"", "version: 1", "integer"),
+        ("version: \"1\"", "version: 1.0", "floating point"),
+        ("agent: test", "agent: 7", "integer"),
+        ("name: gate", "name: TRUE", "boolean"),
+        ("agent: test", "agent: null", "null"),
+        ("agent: test", "agent:", "null"),
+    ] {
+        let engine = PolicyEngine::new();
+        let error = engine
+            .load_from_yaml(&source.replace(field, scalar))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&format!("invalid type: {kind}")), "{error}");
+        assert!(error.contains("expected a string"), "{error}");
+        assert!(!engine.is_loaded());
+    }
+    for scalar in ["\"1\"", "\"1.0\"", "\"TRUE\"", "\"null\""] {
+        assert!(PolicyEngine::new()
+            .load_from_yaml(&source.replace("version: \"1\"", &format!("version: {scalar}")))
+            .is_ok());
+    }
+}
+
+#[test]
+fn mapping_colon_tabs_preserve_policy_conditions() {
+    for (conditions, value) in [
+        ("    value:\tprod", json!("prod")),
+        ("    value:\t7", json!(7)),
+        ("    value: {nested:\tprod}", json!({"nested": "prod"})),
+        ("    value:\n      nested:\tprod", json!({"nested": "prod"})),
+    ] {
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(&policy(conditions)).unwrap();
+        assert!(matches!(
+            engine.evaluate("deploy", Some(&context(json!({"value": value})))),
+            PolicyDecision::Deny(_)
+        ));
+    }
+    assert!(PolicyEngine::new()
+        .load_from_yaml(&policy("    value:\n\t nested: prod"))
+        .is_err());
+}
+
+#[test]
 fn yaml_and_json_policies_make_the_same_authorization_decisions() {
     let json_policy = json!({
         "version": "1", "agent": "test", "policies": [{
@@ -183,6 +230,9 @@ fn unsupported_values_and_ambiguous_maps_are_errors_not_default_policies() {
         "    value: !!int \"1_000\"",
         "    value: !!bool \"tRuE\"",
         "    value: !custom prod",
+        "    value: ! 7",
+        "    value: ! {a: 1}",
+        "    value: ! [1, 2]",
         "    value: {1: prod}",
         "    value: {true: prod}",
         "    value: {[a, b]: prod}",
