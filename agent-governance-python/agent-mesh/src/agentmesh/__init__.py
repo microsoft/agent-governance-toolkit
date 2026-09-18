@@ -8,6 +8,7 @@
     https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md
 """
 
+import importlib
 import warnings
 
 warnings.warn(
@@ -20,82 +21,6 @@ warnings.warn(
 
 # Keep in sync with the ``version`` field in pyproject.toml.
 __version__ = "5.0.0"
-
-# Telemetry bootstrap
-from agentmesh.telemetry import bootstrap_otel, is_bootstrapped  # noqa: E402
-
-# Trust types (shared across integrations)
-from agentmesh.trust_types import (  # noqa: E402
-    AgentProfile,
-    TrustRecord,
-    TrustTracker,
-)
-
-# Unified Client
-from .client import AgentMeshClient, GovernanceResult  # noqa: E402
-
-# Exceptions
-from .exceptions import (  # noqa: E402
-    AgentMeshError,
-    DelegationDepthError,
-    DelegationError,
-    GovernanceError,
-    HandshakeError,
-    HandshakeTimeoutError,
-    IdentityError,
-    StorageError,
-    TrustError,
-    TrustVerificationError,
-    TrustViolationError,
-)
-
-# Layer 3: Governance & Compliance Plane
-from .governance import (  # noqa: E402
-    AuditChain,
-    AuditEntry,
-    AuditLog,
-    ComplianceEngine,
-    ComplianceFramework,
-    ComplianceReport,
-    Policy,
-    PolicyDecision,
-    PolicyEngine,
-    PolicyRule,
-    ShadowMode,
-    ShadowResult,
-)
-from .identity import (  # noqa: E402
-    SVID,
-    AgentDID,
-    AgentIdentity,
-    Credential,
-    CredentialManager,
-    DelegationLink,
-    HumanSponsor,
-    RiskScore,
-    RiskScorer,
-    ScopeChain,
-    SPIFFEIdentity,
-)
-
-# Layer 4: Reward & Learning Engine
-from .reward import (  # noqa: E402
-    RewardDimension,
-    RewardEngine,
-    RewardSignal,
-    TrustScore,
-)
-
-# Layer 2: Trust & Protocol Bridge
-from .trust import (  # noqa: E402
-    CapabilityGrant,
-    CapabilityRegistry,
-    CapabilityScope,
-    HandshakeResult,
-    ProtocolBridge,
-    TrustBridge,
-    TrustHandshake,
-)
 
 __all__ = [
     # Version
@@ -161,3 +86,108 @@ __all__ = [
     "bootstrap_otel",
     "is_bootstrapped",
 ]
+
+# Every public name above (everything except __version__) is resolved lazily
+# from its owning submodule on first access, via the PEP 562 __getattr__
+# below - none of these submodules are imported at package-init time.
+#
+# Before this change, `agentmesh/__init__.py` imported every layer eagerly
+# at module level, and Python always runs this file before any submodule
+# import completes - so even `import agentmesh.governance` (which only
+# needs the governance package's own ~30 lines of code) paid the full cost
+# of `.client`, `.identity`, `.trust`, `.reward`, and `.telemetry` too.
+# `.client` alone pulls in `agentmesh.identity` (httpx-based external JWKS
+# federation) and `agentmesh.reward`, making a cold `import
+# agentmesh.governance` cost ~3.5s for code that never touches identity,
+# trust, or reward at all - the exact case that motivated this (see
+# https://github.com/microsoft/agent-governance-toolkit/issues/3923).
+_LAZY_SUBMODULE_BY_NAME: dict[str, str] = {
+    **dict.fromkeys(("bootstrap_otel", "is_bootstrapped"), "telemetry"),
+    **dict.fromkeys(("AgentProfile", "TrustRecord", "TrustTracker"), "trust_types"),
+    **dict.fromkeys(("AgentMeshClient", "GovernanceResult"), "client"),
+    **dict.fromkeys(
+        (
+            "AgentMeshError",
+            "DelegationDepthError",
+            "DelegationError",
+            "GovernanceError",
+            "HandshakeError",
+            "HandshakeTimeoutError",
+            "IdentityError",
+            "StorageError",
+            "TrustError",
+            "TrustVerificationError",
+            "TrustViolationError",
+        ),
+        "exceptions",
+    ),
+    **dict.fromkeys(
+        (
+            "AuditChain",
+            "AuditEntry",
+            "AuditLog",
+            "ComplianceEngine",
+            "ComplianceFramework",
+            "ComplianceReport",
+            "Policy",
+            "PolicyDecision",
+            "PolicyEngine",
+            "PolicyRule",
+            "ShadowMode",
+            "ShadowResult",
+        ),
+        "governance",
+    ),
+    **dict.fromkeys(
+        (
+            "SVID",
+            "AgentDID",
+            "AgentIdentity",
+            "Credential",
+            "CredentialManager",
+            "DelegationLink",
+            "HumanSponsor",
+            "RiskScore",
+            "RiskScorer",
+            "ScopeChain",
+            "SPIFFEIdentity",
+        ),
+        "identity",
+    ),
+    **dict.fromkeys(
+        ("RewardDimension", "RewardEngine", "RewardSignal", "TrustScore"),
+        "reward",
+    ),
+    **dict.fromkeys(
+        (
+            "CapabilityGrant",
+            "CapabilityRegistry",
+            "CapabilityScope",
+            "HandshakeResult",
+            "ProtocolBridge",
+            "TrustBridge",
+            "TrustHandshake",
+        ),
+        "trust",
+    ),
+}
+
+
+def __getattr__(name: str):
+    """Resolve a public name from its owning submodule on first access.
+
+    Caches the result as a real module attribute (``globals()[name] =
+    value``), so this only runs once per name - every access after the
+    first is a plain attribute lookup, not a re-import.
+    """
+    submodule_name = _LAZY_SUBMODULE_BY_NAME.get(name)
+    if submodule_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    submodule = importlib.import_module(f".{submodule_name}", __name__)
+    value = getattr(submodule, name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_SUBMODULE_BY_NAME))
