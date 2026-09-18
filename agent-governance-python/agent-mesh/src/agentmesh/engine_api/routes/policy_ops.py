@@ -133,7 +133,7 @@ async def validate_policy(body: ValidateRequest) -> ValidateResponse:
     lint_errors = validate_policy_schema(body.content)
     return ValidateResponse(
         valid=not lint_errors,
-        errors=[PolicyValidationError(line=0, col=0, message=msg) for msg in lint_errors],
+        errors=[PolicyValidationError(line=1, col=1, message=msg) for msg in lint_errors],
     )
 
 
@@ -142,6 +142,7 @@ async def validate_policy(body: ValidateRequest) -> ValidateResponse:
     operation_id="testPolicy",
     tags=["policy"],
     response_model=TestResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def test_policy(request: Request, body: TestRequest) -> TestResponse:
@@ -170,6 +171,13 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
         fixtures_file.write_text(json.dumps(fixtures_payload), encoding="utf-8")
         try:
             report = replay(policy_dir, fixtures_file)
+        except ImportError as exc:
+            raise ApiError(
+                503,
+                ENGINE_UNAVAILABLE,
+                "Policy-test engine dependencies are not installed",
+                {"package": "agent-compliance"},
+            ) from exc
         except (
             FileNotFoundError,
             ValueError,
@@ -191,10 +199,10 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
             passed=item.passed,
             expected_verdict=item.expected_verdict,
             actual_verdict=item.actual_verdict,
-            expected_rule=item.expected_rule,
-            actual_rule=item.actual_rule,
-            fixture_path=item.fixture_path or None,
-            resolution_metadata=item.resolution_metadata,
+            expected_rule=getattr(item, "expected_rule", None),
+            actual_rule=getattr(item, "actual_rule", None),
+            fixture_path=getattr(item, "fixture_path", "") or None,
+            resolution_metadata=getattr(item, "resolution_metadata", None),
         )
         for item in report.results
     ]

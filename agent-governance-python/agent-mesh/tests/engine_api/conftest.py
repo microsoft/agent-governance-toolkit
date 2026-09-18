@@ -2,9 +2,10 @@
 # Licensed under the MIT License.
 """Shared fixtures for the Engine API reference adapter tests.
 
-All adapter tests need FastAPI (and httpx for ``TestClient``); the whole package is skipped
-when FastAPI is not installed. The :func:`client` fixture builds a fresh app over a temporary
-policy directory seeded with one YAML and one JSON policy so the policy routes have real data.
+All adapter tests need FastAPI and httpx for ``TestClient``. Missing dependencies fail
+collection instead of allowing the required conformance gate to pass with every test skipped.
+The :func:`client` fixture builds a fresh app over a temporary policy directory seeded with one
+YAML and one JSON policy so the policy routes have real data.
 """
 
 from __future__ import annotations
@@ -13,10 +14,6 @@ import json
 from pathlib import Path
 
 import pytest
-
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
-
 from fastapi.testclient import TestClient  # noqa: E402
 
 from agentmesh.engine_api import create_app  # noqa: E402
