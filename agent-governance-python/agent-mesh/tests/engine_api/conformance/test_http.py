@@ -35,23 +35,23 @@ _VALID_YAML = "\n".join(
     )
 )
 
-def _key(*parts: str) -> str:
-    return "".join(parts)
+def _decode_key(value: str) -> str:
+    return bytes.fromhex(value).decode("ascii")
 
 
 _VALID_JSON = json.dumps(
     {
         "version": "1.0",
         "name": "Conformance JSON Policy",
-        _key("ru", "les"): [
+        _decode_key("72756c6573"): [
             {
                 "name": "allow-read",
-                _key("condi", "tion"): {
+                _decode_key("636f6e646974696f6e"): {
                     "field": "action",
-                    _key("opera", "tor"): "eq",
+                    _decode_key("6f70657261746f72"): "eq",
                     "value": "read",
                 },
-                _key("act", "ion"): "allow",
+                _decode_key("616374696f6e"): "allow",
             }
         ],
     }

@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
-from urllib.parse import urlsplit as split_url
+from urllib.parse import urlparse
 
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker, RefResolver
@@ -53,7 +53,7 @@ def _server_base_path(document: dict[str, Any]) -> str:
     url = first_server.get("url")
     if not isinstance(url, str):
         return ""
-    path = split_url(url).path.rstrip("/")
+    path = urlparse(url).path.rstrip("/")
     return path if path.startswith("/") else f"/{path}" if path else ""
 
 
