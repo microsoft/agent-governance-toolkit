@@ -102,7 +102,6 @@
     "Microtask",
     "headerless",
     "desync",
-    "starlette",
     "realpeerrealpeerrealpeerreal",
     "pwsh",
     "notlike",
@@ -122,7 +121,16 @@
     "jsonify",
     "undecoded",
     "webmcp",
-    "webmachinelearning"
+    "webmachinelearning",
+    "chacha",
+    "chacha20",
+    "getrandom",
+    "spki",
+    "zerocopy",
+    "rngs",
+    "keygen",
+    "csprng",
+    "CSPRNG"
   ],
   "ignorePaths": [
     "**/node_modules/**",
