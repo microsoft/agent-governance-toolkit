@@ -1,6 +1,6 @@
 ---
 title: "NSA MCP Security Considerations — Compliance Mapping"
-last_reviewed: 2026-05-24
+last_reviewed: 2026-09-18
 owner: agt-maintainers
 ---
 
@@ -29,7 +29,7 @@ owner: agt-maintainers
 
 | NSA MCP Theme | Coverage | Primary AGT Components |
 |---|---|---|
-| Zero-trust defaults | ✅ Covered | MCP Security Gateway, Trust Proxy, session authentication |
+| Zero-trust defaults | ✅ Covered | MCP Security Gateway, Trust Proxy, application-level session authentication |
 | Least-privilege tool access | ✅ Covered | `MCPGateway`, policy engine, capability sandbox |
 | Authentication and authorization | ✅ Covered | `MCPSessionAuthenticator`, DID identity, auth enforcement |
 | Tool poisoning and metadata abuse | ✅ Covered | `MCPSecurityScanner`, trust-gated MCP controls |
@@ -68,11 +68,11 @@ Coverage levels are assigned as:
 
 **Coverage: ✅ COVERED**
 
-AGT's MCP Security Gateway specification explicitly states that unknown agents start with no session, no call budget, and no tool access until explicitly granted. This aligns well with the NSA publication's emphasis on explicit trust boundaries and defensive default posture.
+AGT's MCP Security Gateway specification explicitly states that unknown agents start with "no budget, no session, and no tool access" until explicitly granted. In that specification, "session" refers to the gateway's application-level authentication state, not an MCP protocol session. This aligns well with the NSA publication's emphasis on explicit trust boundaries and defensive default posture.
 
 - **MCP Security Gateway** — fail-closed interception for all MCP tool calls and responses
 - **Trust Proxy** — identity- and trust-gated tool access
-- **Session Authentication** — explicit session issuance and validation before access
+- **Application Session Authentication** — explicit AGT authentication-handle issuance and validation before access; this is application state, not an MCP protocol session
 
 **Evidence:**
 - [MCP Security Gateway spec](../specs/MCP-SECURITY-GATEWAY-1.0.md)
@@ -100,9 +100,9 @@ AGT applies least privilege to MCP tool invocation through allow-lists, deny-lis
 
 **Coverage: ✅ COVERED**
 
-AGT provides session-based MCP authentication, DID- and trust-based authorization, and per-server authentication method enforcement with TLS requirements.
+AGT provides application-level, time-bounded authentication state, DID- and trust-based authorization, and per-server authentication method enforcement with TLS requirements. The historical `MCPSessionAuthenticator` name refers to an AGT governance/authentication helper; it is not a protocol-session requirement. MCP `2026-07-28` removes protocol-level sessions, so these AGT-managed handles must be treated separately from transport semantics.
 
-- **`MCPSessionAuthenticator`** — scoped, time-bounded MCP sessions
+- **`MCPSessionAuthenticator`** — scoped, time-bounded AGT authentication handles
 - **Trust-gated MCP** — DID identity, trust thresholds, required capabilities
 - **Auth enforcement** — approved authentication methods and TLS validation
 

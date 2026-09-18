@@ -176,6 +176,92 @@ class TestAdvisoryWithGovern:
         result = safe(action="read")
         assert result["status"] == "executed"
 
+    def test_advisory_flag_for_review_still_executes(self):
+        """flag_for_review never blocks — the call proceeds either way,
+        with or without an on_flag callback configured."""
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="flag_for_review", reason="Borderline"),
+        )
+        safe = govern(dummy_tool, policy=ALLOW_ALL, advisory=advisory)
+        result = safe(action="read")
+        assert result["status"] == "executed"
+
+    def test_advisory_flag_for_review_calls_on_flag(self):
+        """on_flag receives the context and the AdvisoryDecision, and the
+        wrapped call still executes — flag can only annotate, never
+        withhold, a deterministic allow."""
+        seen = []
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="flag_for_review", reason="Borderline"),
+            name="borderline-detector",
+        )
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL, advisory=advisory,
+            on_flag=lambda ctx, decision: seen.append((ctx, decision)),
+        )
+        result = safe(action="read")
+
+        assert result["status"] == "executed"
+        assert len(seen) == 1
+        ctx, decision = seen[0]
+        assert ctx["action"]["type"] == "read"
+        assert decision.action == "flag_for_review"
+        assert decision.reason == "Borderline"
+        assert decision.classifier == "borderline-detector"
+
+    def test_advisory_flag_for_review_survives_on_flag_exception(self):
+        """A broken on_flag callback must not be able to block execution —
+        that would contradict flag_for_review being annotation-only."""
+        def broken_on_flag(ctx, decision):
+            raise RuntimeError("callback bug")
+
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="flag_for_review", reason="Borderline"),
+        )
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL, advisory=advisory,
+            on_flag=broken_on_flag,
+        )
+        result = safe(action="read")
+
+        assert result["status"] == "executed"
+
+    def test_advisory_on_flag_exception_is_audited(self):
+        """A failing on_flag is discoverable in the audit trail, not just
+        application logs — on_flag is meant as a real extension point
+        (e.g. routing to a review queue), so a silently-broken one should
+        be findable without correlating timestamps against logs."""
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="flag_for_review", reason="Borderline"),
+            name="borderline-detector",
+        )
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL, advisory=advisory,
+            on_flag=lambda ctx, decision: (_ for _ in ()).throw(RuntimeError("callback bug")),
+        )
+        safe(action="read")
+
+        entries = safe.audit_log.query(event_type="on_flag_callback_error")
+        assert len(entries) == 1
+        assert entries[0].data.get("classifier") == "borderline-detector"
+        assert "callback bug" in entries[0].data.get("error", "")
+
+    def test_advisory_block_does_not_call_on_flag(self):
+        """on_flag is specific to flag_for_review — a block goes through
+        on_deny (or raises), never on_flag."""
+        flagged = []
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="block", reason="Bad"),
+        )
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL, advisory=advisory,
+            on_deny=lambda d: None,
+            on_flag=lambda ctx, decision: flagged.append(decision),
+        )
+        safe(action="read")
+
+        assert flagged == []
+
     def test_advisory_never_overrides_deterministic_deny(self):
         """Even if advisory would allow, deterministic deny takes precedence."""
         advisory = CallbackAdvisory(

@@ -25,6 +25,9 @@ crate-type = ["lib"]
 # features as blocked pending an upstream fix. See docs/acs-retarget.md.
 default = ["opa", "cedar"]
 opa = ["agent-control-spec/opa"]
+# These two opt-ins are outside the blocked bundled-dispatcher feature set.
+rego = ["agent-control-spec/rego"]
+streaming = ["agent-control-spec/streaming"]
 cedar = ["agent-control-spec/cedar"]
 default-dispatchers = ["agent-control-spec/default-dispatchers"]
 aacs = ["agent-control-spec/aacs"]

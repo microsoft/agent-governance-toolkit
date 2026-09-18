@@ -437,6 +437,7 @@ All contributions that add or change functionality **must** include correspondin
 - **New features** — Add unit tests covering the primary use case and at least one edge case.
 - **Bug fixes** — Add a regression test that reproduces the bug before the fix.
 - **Security patches** — Add tests verifying the vulnerability is mitigated.
+- **Credential detection patterns** , Bounded-token patterns (GitHub, OpenAI, AWS, Google) in the regex SDKs (TypeScript, Python; C# is in #3934) must use `(?<![A-Za-z0-9])` / `(?![A-Za-z0-9])` lookaround anchors, not `\b` word boundaries. Rust uses procedural `is_left_boundary_char` / `is_right_boundary_char` match arms instead. `\b` treats `_` as a word character, which silently misses secrets annotated with `_old`, `_deprecated`, or preceded by `session_`, `env_`, etc. See `tests/ci/test_regression_credential_boundary.py` and `docs/security/audits/2026-09-14-credential-boundary-redaction-cross-sdk.md`.
 
 Tests are run automatically via CI on every pull request. The test matrix covers
 Python 3.10–3.12 across all four core packages. PRs will not be merged until

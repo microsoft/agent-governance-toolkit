@@ -65,6 +65,12 @@ cargo check --locked -p agent_control_specification_otel --lib
 name = "Test"
 run = "cargo test --workspace"
 [[workflow.job.step]]
+name = "Optional core compatibility features"
+run = """
+cargo test --locked -p agent_control_specification_core --no-default-features --features rego,streaming
+cargo clippy --locked -p agent_control_specification_core --no-default-features --features rego,streaming --all-targets -- -D warnings
+"""
+[[workflow.job.step]]
 name = "OPA compatibility with upstream Rego enabled"
 run = "AGT_EXPECT_UPSTREAM_REGO=1 cargo test --locked -p agent_control_specification --features bundled-dispatchers,opa,agent-control-spec/rego --test upstream_compatibility"
 [[workflow.job.step]]

@@ -50,7 +50,7 @@ through **social engineering of trust**:
 2. **Credibility farming**: Forking popular awesome-lists and curated
    repositories to manufacture a profile that appears legitimate
 3. **Credential laundering**: Getting a small PR merged, then citing that merge
-   as a credential in issues filed across dozens of other repos
+   as a credential in issues and pull requests filed across dozens of other repos
 4. **Feature cloning**: Creating a near-copy of an existing project, then
    filing issues in related repos to promote the clone
 5. **Coordinated networks**: Multiple accounts working together to cross-promote
@@ -199,8 +199,8 @@ These signals analyze the user's issue-filing patterns across GitHub.
 | `cross_repo_spray` | HIGH | Issues filed in 5+ distinct repos within 7 days |
 | `cross_repo_spread` | MEDIUM | Issues filed across 8+ distinct repos total |
 | `self_promotion_spray` | MEDIUM/HIGH | 3+ issues promoting the author's own repos across 2+ orgs (MEDIUM) or 5+ issues across 3+ orgs (HIGH) |
-| `credential_citation` | MEDIUM | Citing a target repo's merges in issues across 1+ other repos |
-| `credential_laundering` | HIGH | Citing a target repo's merges in issues across 3+ other repos |
+| `credential_citation` | MEDIUM | Citing a target repo's merges in issues and pull requests across 1+ other repos |
+| `credential_laundering` | HIGH | Citing a target repo's merges in issues and pull requests across 3+ other repos |
 
 **Self-promotion spray explained:** This is the key signal that separates
 legitimate protocol contributors from product placement accounts. Both may file
@@ -261,8 +261,8 @@ MEDIUM signals = MEDIUM risk. Otherwise LOW.
 ### credential_audit.py
 
 Deep-dive tool for investigating credential laundering. Checks if a user has
-merged PRs in one repo and cites those merges in issues filed against other
-repos.
+merged PRs in one repo and cites those merges in issues and pull requests filed
+against other repos.
 
 ```bash
 python scripts/credential_audit.py --username <handle> --repo <target-repo>

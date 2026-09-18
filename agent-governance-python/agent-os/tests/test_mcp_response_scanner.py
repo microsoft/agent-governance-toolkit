@@ -135,3 +135,49 @@ def test_scan_response_fails_closed(monkeypatch):
 
     assert result.is_safe is False
     assert result.threats[0].category == "error"
+
+
+# ---------------------------------------------------------------
+# Boundary regression tests for issue #3933: credentials glued to
+# underscore must be detected by the response scanner.
+# ---------------------------------------------------------------
+
+
+def test_scan_response_detects_aws_key_glued_to_underscore():
+    scanner = MCPResponseScanner()
+    result = scanner.scan_response("key AKIAIOSFODNN7EXAMPLE_old stored", "tool")
+
+    credential_threats = [t for t in result.threats if t.category == "credential_leak"]
+    assert len(credential_threats) >= 1
+
+
+def test_scan_response_detects_github_token_glued_to_underscore():
+    scanner = MCPResponseScanner()
+    result = scanner.scan_response(
+        "session_ghp_FAKEFORTESTING000000000000000000_rotated", "tool"
+    )
+
+    credential_threats = [t for t in result.threats if t.category == "credential_leak"]
+    assert len(credential_threats) >= 1
+
+
+def test_scan_response_detects_google_key_glued_to_underscore():
+    scanner = MCPResponseScanner()
+    result = scanner.scan_response(
+        f"svc_{_FAKE_GOOGLE_KEY}_deprecated", "tool"
+    )
+
+    credential_threats = [t for t in result.threats if t.category == "credential_leak"]
+    assert len(credential_threats) >= 1
+
+
+def test_sanitize_response_redacts_glued_credential():
+    scanner = MCPResponseScanner()
+    sanitized, threats = scanner.sanitize_response(
+        "env_AKIAIOSFODNN7EXAMPLE_old", "tool"
+    )
+
+    assert "AKIAIOSFODNN7EXAMPLE" not in sanitized
+    assert "[REDACTED]" in sanitized
+    credential_threats = [t for t in threats if t.category == "credential_leak"]
+    assert len(credential_threats) >= 1

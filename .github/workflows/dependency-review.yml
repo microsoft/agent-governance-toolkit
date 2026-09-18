@@ -47,4 +47,5 @@ jobs:
           # LicenseRef-bad-mitapache-2.0. The crate is in fact dual-licensed
           # MIT OR Apache-2.0 (both allowed above), so allow it by package
           # rather than encoding the malformed identifier in allow-licenses.
-          allow-dependencies-licenses: pkg:cargo/futures-timer
+          # borrow-or-share uses MIT-0, which is MIT without the attribution clause.
+          allow-dependencies-licenses: pkg:cargo/futures-timer, pkg:cargo/borrow-or-share

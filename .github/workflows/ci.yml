@@ -47,6 +47,7 @@ jobs:
               - 'agent-governance-python/agent-compliance/**'
               - 'agent-governance-python/agent-runtime/**'
               - 'agent-governance-python/agent-lightning/**'
+              - 'agent-governance-python/agent-learning/**'
               - 'agent-governance-python/agent-primitives/**'
               - 'agent-governance-python/agent-mcp-governance/**'
               - 'agent-governance-python/agent-marketplace/**'
@@ -109,6 +110,8 @@ jobs:
               - 'agent-governance-python/agent-runtime/**'
             pkg-agent-lightning:
               - 'agent-governance-python/agent-lightning/**'
+            pkg-agent-learning:
+              - 'agent-governance-python/agent-learning/**'
             pkg-agent-primitives:
               - 'agent-governance-python/agent-primitives/**'
             pkg-agent-mcp-governance:
@@ -150,6 +153,7 @@ jobs:
           AC: ${{ steps.filter.outputs.pkg-agent-compliance }}
           AR: ${{ steps.filter.outputs.pkg-agent-runtime }}
           AL: ${{ steps.filter.outputs.pkg-agent-lightning }}
+          ALE: ${{ steps.filter.outputs.pkg-agent-learning }}
           AP: ${{ steps.filter.outputs.pkg-agent-primitives }}
           AMG: ${{ steps.filter.outputs.pkg-agent-mcp-governance }}
           AMP: ${{ steps.filter.outputs.pkg-agent-marketplace }}
@@ -167,6 +171,7 @@ jobs:
           [ "$AC" = "true" ] && pkgs+=('"agent-compliance"')
           [ "$AR" = "true" ] && pkgs+=('"agent-runtime"')
           [ "$AL" = "true" ] && pkgs+=('"agent-lightning"')
+          [ "$ALE" = "true" ] && pkgs+=('"agent-learning"')
           [ "$AP" = "true" ] && pkgs+=('"agent-primitives"')
           [ "$AMG" = "true" ] && pkgs+=('"agent-mcp-governance"')
           [ "$AMP" = "true" ] && pkgs+=('"agent-marketplace"')
@@ -219,6 +224,7 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-learning,
             agent-primitives,
             agent-mcp-governance,
             agent-marketplace,
@@ -281,6 +287,7 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-learning,
             agent-primitives,
             agent-mcp-governance,
             agent-marketplace,
@@ -303,6 +310,8 @@ jobs:
           - package: agent-runtime
             python-version: "3.10"
           - package: agent-lightning
+            python-version: "3.10"
+          - package: agent-learning
             python-version: "3.10"
           - package: agent-primitives
             python-version: "3.10"
@@ -413,7 +422,7 @@ jobs:
             agent-compliance|agent-runtime|agent-mcp-governance)
               pip install --no-cache-dir -e .
               ;;
-            agent-os|agt-policies|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
+            agent-os|agt-policies|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-learning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
               pip install --no-cache-dir -e ".[dev]"
               ;;
             *)
@@ -741,7 +750,7 @@ jobs:
             --output binskim-results.sarif
       - name: Upload BinSkim SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: agent-governance-dotnet/binskim-results.sarif
           category: binskim
