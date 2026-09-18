@@ -762,6 +762,7 @@ neutralised
 neutralises
 neutralising
 newpartner
+newtype
 newurl
 nfiu
 nmap
