@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 04 — Audit Logging & Compliance"
-last_reviewed: 2026-04-26
+last_reviewed: 2026-09-19
 owner: agt-maintainers
 ---
 
@@ -385,7 +385,194 @@ The output file (`audit_trail.jsonl`) contains one JSON object per
 line. Each entry includes `content_hash`, `previous_hash`, and
 an HMAC `signature`.
 
-### 5.2 Writing a Custom Sink
+### 5.2 FileAuditSink verification format
+
+The object returned by `audit.log()` is an in-memory `AuditEntry`. Each
+JSON-Lines record on disk is a `SignedAuditEntry` wrapper around that
+entry. In addition to the audit fields, the wrapper contains
+`content_hash`, `previous_hash`, and `signature`. It can also contain
+the observability fields `sandbox_id`, `environment`, and
+`compute_driver`.
+
+To reproduce `content_hash`, build a payload with **exactly** these
+fields, preserving `null` values:
+
+```python
+HASHED_FIELDS = (
+    "entry_id",
+    "timestamp",
+    "event_type",
+    "agent_did",
+    "action",
+    "resource",
+    "target_did",
+    "data",
+    "outcome",
+    "policy_decision",
+    "matched_rule",
+    "trace_id",
+    "session_id",
+    "previous_hash",
+)
+
+payload = {field: row.get(field) for field in HASHED_FIELDS}
+canonical = json.dumps(payload, sort_keys=True, default=str).encode()
+content_hash = hashlib.sha256(canonical).hexdigest()
+```
+
+The `sandbox_id`, `environment`, and `compute_driver` fields are stored
+for observability but are intentionally excluded from the payload. The
+integrity fields (`content_hash` and `signature`) are also excluded
+because they are derived values. The hash chain starts with an empty
+`previous_hash` (`""`); each later record must set `previous_hash` to
+the preceding record's `content_hash`.
+
+Finally, the signature is an HMAC-SHA256 over the **hexadecimal text**
+of `content_hash`:
+
+```python
+signature = hmac.new(
+    secret_key,
+    content_hash.encode(),
+    hashlib.sha256,
+).hexdigest()
+```
+
+The signature is not computed over the raw 32-byte SHA-256 digest, and
+the JSON object itself is not signed directly. When file rotation is
+enabled, each rotated file starts a new chain and must be verified
+independently. The SDK verifier ignores blank lines and skips lines
+that cannot be parsed as `SignedAuditEntry`; an external ingestion
+pipeline can instead fail closed on malformed input.
+
+### 5.3 Standalone verifier
+
+The following script verifies the on-disk format without importing
+Agent Governance Toolkit. Store it as `verify_audit_file.py`, set
+`AUDIT_SECRET_KEY` to the same key used by `FileAuditSink`, and run it
+against a JSONL file:
+
+```python
+#!/usr/bin/env python3
+"""Verify a FileAuditSink JSONL file without importing AGT."""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+
+HASHED_FIELDS = (
+    "entry_id",
+    "timestamp",
+    "event_type",
+    "agent_did",
+    "action",
+    "resource",
+    "target_did",
+    "data",
+    "outcome",
+    "policy_decision",
+    "matched_rule",
+    "trace_id",
+    "session_id",
+    "previous_hash",
+)
+
+
+def _content_hash(row: dict[str, Any]) -> str:
+    payload = {field: row.get(field) for field in HASHED_FIELDS}
+    canonical = json.dumps(payload, sort_keys=True, default=str).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _text_field(row: dict[str, Any], field: str, line_number: int) -> str:
+    value = row.get(field)
+    if not isinstance(value, str):
+        raise ValueError(f"line {line_number}: {field} must be a string")
+    return value
+
+
+def verify_file(path: Path, secret_key: bytes) -> int:
+    previous_hash = ""
+    verified_entries = 0
+
+    with path.open("r", encoding="utf-8") as audit_file:
+        for line_number, line in enumerate(audit_file, start=1):
+            if not line.strip():
+                continue
+
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"line {line_number}: invalid JSON") from exc
+            if not isinstance(row, dict):
+                raise ValueError(f"line {line_number}: expected a JSON object")
+
+            stored_previous = _text_field(row, "previous_hash", line_number)
+            if not hmac.compare_digest(stored_previous, previous_hash):
+                raise ValueError(f"line {line_number}: hash-chain link is invalid")
+
+            expected_hash = _content_hash(row)
+            stored_hash = _text_field(row, "content_hash", line_number)
+            if not hmac.compare_digest(stored_hash, expected_hash):
+                raise ValueError(f"line {line_number}: content hash is invalid")
+
+            expected_signature = hmac.new(
+                secret_key,
+                expected_hash.encode(),
+                hashlib.sha256,
+            ).hexdigest()
+            stored_signature = _text_field(row, "signature", line_number)
+            if not hmac.compare_digest(stored_signature, expected_signature):
+                raise ValueError(f"line {line_number}: HMAC signature is invalid")
+
+            previous_hash = stored_hash
+            verified_entries += 1
+
+    return verified_entries
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print(f"usage: {sys.argv[0]} AUDIT_FILE", file=sys.stderr)
+        return 2
+
+    try:
+        secret_key = os.environ["AUDIT_SECRET_KEY"].encode()
+        verified_entries = verify_file(Path(sys.argv[1]), secret_key)
+    except KeyError:
+        print("AUDIT_SECRET_KEY is not set", file=sys.stderr)
+        return 2
+    except (OSError, ValueError) as exc:
+        print(f"Verification failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Verified {verified_entries} entries")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+For example, in PowerShell:
+
+```powershell
+$env:AUDIT_SECRET_KEY = "<the FileAuditSink secret>"
+python verify_audit_file.py audit_trail.jsonl
+```
+
+The script fails on an edited record, a reordered record, a removed
+record in the middle of the chain, or a signature generated with a
+different key.
+
+### 5.4 Writing a Custom Sink
 
 Implement the `AuditSink` protocol to push entries to a database,
 message queue, or cloud service:
@@ -728,7 +915,10 @@ jobs:
 
 ## 8 — AuditEntry Reference
 
-Every call to `audit.log()` returns an `AuditEntry` with these fields:
+Every call to `audit.log()` returns an in-memory `AuditEntry` with these
+fields. `FileAuditSink` serializes a separate `SignedAuditEntry` wrapper
+to disk; see [FileAuditSink verification format](#52-fileauditsink-verification-format)
+for its integrity fields and canonical payload.
 
 | Field | Type | Description |
 |-------|------|-------------|
