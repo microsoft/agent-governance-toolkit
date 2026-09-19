@@ -514,7 +514,7 @@ jobs:
         run: agent-os scan --path src/ --output sarif
       
       - name: Upload Results
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: agentos-results.sarif
 ```

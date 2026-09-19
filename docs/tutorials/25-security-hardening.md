@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 25 — Security Hardening"
-last_reviewed: 2026-05-09
+last_reviewed: 2026-09-19
 owner: agt-maintainers
 ---
 
@@ -239,10 +239,10 @@ jobs:
         language: [python, javascript]
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           languages: ${{ matrix.language }}
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
 ```
 
 ### Custom Queries
@@ -362,7 +362,7 @@ jobs:
         with:
           results_file: scorecard-results.sarif
           publish_results: true
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: scorecard-results.sarif
 ```
