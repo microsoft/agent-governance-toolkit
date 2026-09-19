@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 04 — Audit Logging & Compliance"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-09-19
 owner: agt-maintainers
 ---
 
@@ -465,6 +465,12 @@ def verify_file(path: Path, secret_key: bytes) -> bool:
     return True
 ```
 
+Unlike the SDK's `HashChainVerifier`, this sample treats an unparsable,
+nonblank line as an error and raises `json.JSONDecodeError`. The SDK instead
+skips that line after logging a warning. Catch `json.JSONDecodeError` around
+`json.loads()` and continue after appropriate logging if your verifier must
+match the SDK's recovery behavior.
+
 ### 5.2 Writing a Custom Sink
 
 Implement the `AuditSink` protocol to push entries to a database,
@@ -811,9 +817,12 @@ jobs:
 Every call to `audit.log()` returns an `AuditEntry` with these fields:
 
 > **Note:** `FileAuditSink` serializes a `SignedAuditEntry`, not this
-> `AuditEntry`. On disk, the `entry_hash` field is represented by
-> `content_hash`, with `previous_hash` and `signature` added for file-chain
-> verification. See [Verifying a File Without the SDK](#511-verifying-a-file-without-the-sdk)
+> `AuditEntry`. The file omits `entry_hash`, `arguments_hash`, `approver_did`,
+> `policy_version`, `issued_at`, and `completed_at`. It uses its own integrity
+> fields: `content_hash` (a separate SHA-256 over the 14-field payload below),
+> `previous_hash` (the file-chain link, not the in-memory Merkle-chain link),
+> and `signature`. `content_hash` and `entry_hash` differ; do not compare
+> them. See [Verifying a File Without the SDK](#511-verifying-a-file-without-the-sdk)
 > for the on-disk format.
 
 | Field | Type | Description |
