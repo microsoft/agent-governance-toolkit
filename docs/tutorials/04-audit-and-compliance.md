@@ -466,7 +466,7 @@ def verify_file(path: Path, secret_key: bytes) -> bool:
 ```
 
 Unlike the SDK's `HashChainVerifier`, this sample treats an unparsable,
-nonblank line as an error and raises `json.JSONDecodeError`. The SDK instead
+non-blank line as an error and raises `json.JSONDecodeError`. The SDK instead
 skips that line after logging a warning. Catch `json.JSONDecodeError` around
 `json.loads()` and continue after appropriate logging if your verifier must
 match the SDK's recovery behavior.
