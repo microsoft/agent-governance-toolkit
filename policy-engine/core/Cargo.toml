@@ -2,7 +2,7 @@
 name = "agent_control_specification_core"
 version = "0.3.1-beta.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.89"
 description = "Deprecated compatibility shim over agent-control-spec. Use agent-control-spec directly."
 license = "MIT"
 readme = "../README.md"
@@ -42,10 +42,6 @@ auto = ["agent-control-spec/auto"]
 agent-control-spec = { version = "=0.4.0-alpha.3", default-features = false, features = ["opa"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
-# The final serde_yaml release carries build metadata in its version, so
-# "=0.9.34" names nothing on crates.io and the cooling-off scanner cannot
-# resolve it. Cargo ignores the metadata when matching and says so on every
-# build; the pin is exact either way.
-serde_yaml = "=0.9.34+deprecated"
+serde-saphyr = "=1.2.0"
 sha2 = "=0.10.9"
 jsonschema = { version = "=0.17.1", default-features = false }

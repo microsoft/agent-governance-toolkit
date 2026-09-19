@@ -159,7 +159,7 @@ export class TrustManager {
     }
 
     const didFingerprint = peerIdentity.did.slice(didPrefix.length);
-    if (!/^[0-9a-f]{16}$/i.test(didFingerprint)) {
+    if (!/^[0-9a-f]{16}$/.test(didFingerprint)) {
       return 'Peer identity DID fingerprint is invalid';
     }
 

@@ -34,7 +34,7 @@ class RuntimeClient(Protocol):
 
 
 def parse_manifest(manifest: str | bytes) -> JsonValue:
-    """Parse manifest text with the same serde_yaml implementation as the Rust runtime."""
+    """Parse manifest text with AGT's bounded serde-saphyr parser."""
 
     try:
         from agent_control_specification import _native

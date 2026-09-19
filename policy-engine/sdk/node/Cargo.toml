@@ -2,7 +2,7 @@
 name = "agent-control-specification-node"
 version = "0.4.0-beta.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.89"
 description = "Node.js napi-rs bindings for Agent Control Specification core"
 license = "MIT"
 publish = false

@@ -562,12 +562,12 @@ fn strict_sensitivity_catches_lower_confidence_signals() {
 #[test]
 fn default_config_round_trips_through_yaml_unchanged() {
     let default = DetectionConfig::default();
-    let yaml = serde_yaml::to_string(&PromptInjectionConfig {
+    let yaml = serde_saphyr::to_string(&PromptInjectionConfig {
         detection: default.clone(),
     })
     .expect("serialize default config");
 
-    let parsed: PromptInjectionConfig = serde_yaml::from_str(&yaml).expect("deserialize");
+    let parsed: PromptInjectionConfig = serde_saphyr::from_str(&yaml).expect("deserialize");
     assert_eq!(parsed.detection, default);
 }
 

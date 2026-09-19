@@ -48,32 +48,53 @@ def _load_policies() -> None:
         logger.warning("Policy directory %s does not exist", POLICY_DIR)
         return
 
-    _engine = PolicyEngine()
-    _trust_policies = []
+    # Load into locals first; assign globals only after all files succeed.
+    # A failed reload (POST /api/v1/policy/reload) must not leave a
+    # partially loaded engine live (#3536 review feedback).
+    local_engine = PolicyEngine()
+    local_trust: list = []
     governance_count = 0
+    errors: list[tuple[str, Exception]] = []
 
     for f in sorted(policy_path.glob("*.yaml")):
+        gov_exc = None
         try:
-            _engine.load_yaml(f.read_text())
+            local_engine.load_yaml(f.read_text())
             governance_count += 1
             logger.info("Loaded governance policy: %s", f.name)
-        except Exception:
+        except Exception as ge:
+            gov_exc = ge
             try:
                 tp = TrustPolicy.from_yaml(f.read_text())
-                _trust_policies.append(tp)
+                local_trust.append(tp)
                 logger.info("Loaded trust policy: %s", f.name)
-            except Exception as exc:
-                logger.warning("Skipped %s: %s", f.name, exc)
+            except Exception:
+                # Log the governance exception (the real cause), not the
+                # TrustPolicy fallback's misleading error.
+                errors.append((f.name, gov_exc))
 
     for f in sorted(policy_path.glob("*.json")):
         try:
-            _engine.load_json(f.read_text())
+            local_engine.load_json(f.read_text())
             governance_count += 1
         except Exception as exc:
-            logger.warning("Skipped %s: %s", f.name, exc)
+            errors.append((f.name, exc))
 
-    if _trust_policies:
-        _trust_evaluator = PolicyEvaluator(_trust_policies)
+    if errors:
+        for name, exc in errors:
+            logger.error("Policy load failed for %s: %s", name, exc)
+        raise RuntimeError(
+            f"{len(errors)} policy file(s) failed to load: "
+            + ", ".join(name for name, _ in errors)
+        )
+
+    # All loaded successfully -- swap globals atomically.
+    _engine = local_engine
+    _trust_policies = local_trust
+
+    # Clear or replace the trust evaluator so a reload without trust
+    # policies does not keep a stale evaluator from the previous load.
+    _trust_evaluator = PolicyEvaluator(_trust_policies) if _trust_policies else None
 
     _loaded_count = governance_count + len(_trust_policies)
     logger.info(

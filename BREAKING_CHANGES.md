@@ -36,6 +36,49 @@ See [the Python SDK dispatcher guidance](policy-engine/sdk/python/README.md#anno
 
 ---
 
+## `Policy.scope` is validated at construction, invalid scopes are rejected
+
+**Date:** TBD
+
+**Affected**
+
+- Any `Policy` YAML/JSON file or programmatic construction that uses a
+  `scope` value other than `global`, `tenant`, `organization`, or `agent`
+  (case-sensitive)
+- Python: `Policy(scope="organisation")` now raises `ValueError`
+- TypeScript: `engine.loadYaml(...)` / `engine.loadJson(...)` now throws
+  `Error` for invalid scope
+- .NET: `Policy.FromYaml(...)` / `Policy.FromJson(...)` now throws
+  `ArgumentException` for invalid scope
+
+**What changed**
+
+Previously, an unrecognised `scope` value (British spelling, wrong case,
+invented value, empty string) was silently demoted to `GLOBAL` at evaluation
+time.  Under the `most_specific_wins` conflict strategy this demotion could
+flip a deny into an allow, the wrong failure direction for a governance
+component.
+
+The fix validates `scope` at the earliest possible point: model construction
+(Python), `dataToPolicy` (TypeScript), and `FromDocument` (.NET).  The set
+of accepted values is derived from the `PolicyScope` enum so the validator
+and the enum cannot drift apart.
+
+**Migration**
+
+Fix the typo.  If you used `"organisation"`, change it to `"organization"`.
+If you relied on the silent demotion to `GLOBAL`, set the scope explicitly to
+`"global"`.
+
+**Additional TypeScript change:** The `PolicyScope` enum now includes
+`Organization = 'organization'`.  The `SCOPE_SPECIFICITY` map adds
+`Organization: 2` and bumps `Agent` from `2` to `3` to match the Python and
+.NET SDKs.  The numeric specificity values are an internal implementation
+detail, the string-based `resolutionTrace` is the stable contract, but if
+you logged or stored numeric specificity values, they will change.
+
+---
+
 ## Manifests declaring `bundle_url`, `system_prompt_file` or `system_prompt_url` are rejected
 
 **Date:** TBD

@@ -161,30 +161,75 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
             limits.max_merged_manifest_bytes
         )));
     }
-    let mut documents = serde_yaml::Deserializer::from_str(input);
-    let document = documents.next().ok_or_else(|| {
-        RuntimeError::ManifestInvalid("manifest source must not be empty".to_string())
-    })?;
-    let mut budget = ManifestValueBudget::new(limits);
-    let parsed = BoundedJsonValueSeed {
-        budget: &mut budget,
-        depth: 0,
+    if input.trim().is_empty() {
+        return Err(RuntimeError::ManifestInvalid(
+            "manifest source must not be empty".to_string(),
+        ));
     }
-    .deserialize(document);
+    let normalized = normalize_yaml_scalars(
+        input,
+        limits.max_policy_input_depth,
+        MAX_MANIFEST_PARSE_NODES * 3,
+    )
+    .map_err(RuntimeError::from)?;
+    let mut budget = ManifestValueBudget::new(limits);
+    // Alias diagnostics can wrap the typed error. Use the structured budget report.
+    let parser_limit = std::rc::Rc::new(std::cell::Cell::new(false));
+    let reported_limit = std::rc::Rc::clone(&parser_limit);
+    let parsed = serde_saphyr::with_deserializer_from_str_with_options(
+        &normalized,
+        serde_saphyr::options! {
+            emit_comments: false,
+            strict_booleans: true,
+            reject_unsupported_tags: true,
+            merge_keys: serde_saphyr::MergeKeyPolicy::AsOrdinary,
+            with_snippet: false,
+            budget: serde_saphyr::budget! {
+                max_depth: limits.max_policy_input_depth,
+                max_nodes: MAX_MANIFEST_PARSE_NODES,
+                max_events: MAX_MANIFEST_PARSE_NODES * 3,
+                max_total_scalar_bytes: limits.max_merged_manifest_bytes,
+                max_recorded_anchor_bytes: limits.max_merged_manifest_bytes,
+                max_recorded_anchor_events: MAX_MANIFEST_PARSE_NODES,
+            },
+        }
+        .with_budget_report(move |report| {
+            reported_limit.set(report.breached.is_some());
+        }),
+        |document| {
+            BoundedJsonValueSeed {
+                budget: &mut budget,
+                depth: 0,
+            }
+            .deserialize(document)
+        },
+    );
     let value = match parsed {
         Ok(value) => value,
         Err(error) => {
             if let Some(detail) = budget.limit_error.take() {
                 return Err(RuntimeError::ResourceLimitExceeded(detail));
             }
+            if let serde_saphyr::Error::DuplicateMappingKey { key, .. } = &error {
+                return Err(RuntimeError::ManifestInvalid(format!(
+                    "duplicate manifest mapping key {}: {error}",
+                    key.as_deref().unwrap_or("<unknown>")
+                )));
+            }
+            if parser_limit.get()
+                || matches!(
+                    error,
+                    serde_saphyr::Error::Budget { .. }
+                        | serde_saphyr::Error::AliasReplayLimitExceeded { .. }
+                        | serde_saphyr::Error::AliasExpansionLimitExceeded { .. }
+                        | serde_saphyr::Error::AliasReplayStackDepthExceeded { .. }
+                )
+            {
+                return Err(RuntimeError::ResourceLimitExceeded(error.to_string()));
+            }
             return Err(RuntimeError::ManifestInvalid(error.to_string()));
         }
     };
-    if documents.next().is_some() {
-        return Err(RuntimeError::ManifestInvalid(
-            "manifest source must contain exactly one YAML or JSON document".to_string(),
-        ));
-    }
     limits.validate_json_depth(&value, "manifest")?;
     let serialized = serde_json::to_vec(&value).map_err(|err| {
         RuntimeError::ManifestInvalid(format!("failed to serialize parsed manifest: {err}"))
@@ -197,6 +242,324 @@ pub fn parse_manifest_yaml_value(input: &str) -> Result<JsonValue, RuntimeError>
         )));
     }
     Ok(value)
+}
+
+/// Failure while normalizing YAML scalar types before bounded deserialization.
+#[derive(Debug)]
+pub enum YamlScalarError {
+    /// A parser error with its original source location.
+    Scan(serde_saphyr::granit_parser::ScanError),
+    /// A scalar outside the supported JSON-compatible YAML contract.
+    Invalid(String),
+    /// The event or nesting limit was exceeded.
+    ResourceLimit(String),
+}
+
+impl YamlScalarError {
+    /// One-based line and column when the scanner supplied a location.
+    pub fn location(&self) -> Option<(u64, u64)> {
+        match self {
+            Self::Scan(error) => Some((
+                error.marker().line() as u64,
+                error.marker().col() as u64 + 1,
+            )),
+            Self::Invalid(_) | Self::ResourceLimit(_) => None,
+        }
+    }
+}
+
+impl fmt::Display for YamlScalarError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Scan(error) => error.fmt(formatter),
+            Self::Invalid(detail) | Self::ResourceLimit(detail) => formatter.write_str(detail),
+        }
+    }
+}
+
+impl std::error::Error for YamlScalarError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Scan(error) => Some(error),
+            Self::Invalid(_) | Self::ResourceLimit(_) => None,
+        }
+    }
+}
+
+impl From<YamlScalarError> for RuntimeError {
+    fn from(error: YamlScalarError) -> Self {
+        match error {
+            YamlScalarError::ResourceLimit(detail) => Self::ResourceLimitExceeded(detail),
+            YamlScalarError::Scan(error)
+                if matches!(
+                    error.kind(),
+                    serde_saphyr::granit_parser::ErrorKind::RecursionLimitExceeded
+                ) =>
+            {
+                Self::ResourceLimitExceeded(error.to_string())
+            }
+            error => Self::ManifestInvalid(error.to_string()),
+        }
+    }
+}
+
+/// Preserve legacy numeric strings and YAML 1.2 boolean capitalization.
+///
+/// This shared pre-pass is used by manifest and agentmesh configuration parsing.
+/// It preserves token structure and rejects unsupported scalar forms. Callers must
+/// bound source bytes first and still deserialize with expanded-node/alias budgets.
+pub fn normalize_yaml_scalars(
+    input: &str,
+    max_depth: usize,
+    max_events: usize,
+) -> Result<std::borrow::Cow<'_, str>, YamlScalarError> {
+    use serde_saphyr::granit_parser::{self, Event, Parser, ScalarStyle};
+
+    let parser = Parser::new_from_str_with_options(
+        input,
+        granit_parser::options! {
+            emit_comments: false,
+            flow_nesting_limit: max_depth,
+            block_nesting_limit: max_depth,
+        },
+    );
+    let mut output = String::new();
+    let mut copied = 0;
+    for (events, event) in parser.enumerate() {
+        if events >= max_events {
+            return Err(YamlScalarError::ResourceLimit(
+                "YAML parser event limit exceeded".to_string(),
+            ));
+        }
+        let (event, span) = event.map_err(YamlScalarError::Scan)?;
+        let tag = match &event {
+            Event::Scalar(_, _, _, tag)
+            | Event::MappingStart(_, _, tag)
+            | Event::SequenceStart(_, _, tag) => tag.as_ref(),
+            _ => None,
+        };
+        if tag.is_some_and(|tag| tag.handle().is_empty() && tag.suffix() == "!") {
+            return Err(YamlScalarError::Invalid(format!(
+                "non-specific YAML tags are not supported at line {}, column {}",
+                span.start.line(),
+                span.start.col() + 1
+            )));
+        }
+        let Event::Scalar(value, style, _, tag) = event else {
+            continue;
+        };
+        let boolean_tag = tag
+            .as_ref()
+            .is_some_and(|tag| tag.is_yaml_core_schema_tag("bool"));
+        let kind = tag.as_ref().and_then(|tag| tag.core_suffix());
+        let string_tag = kind == Some("str");
+        let integer_tag = kind == Some("int");
+        let float_tag = kind == Some("float");
+        let null_tag = kind == Some("null");
+        let invalid = |message: &str| {
+            YamlScalarError::Invalid(format!(
+                "{message} at line {}, column {}",
+                span.start.line(),
+                span.start.col() + 1
+            ))
+        };
+        if tag.is_some() && !boolean_tag && !string_tag && !integer_tag && !float_tag && !null_tag {
+            return Err(invalid("unsupported YAML scalar tag"));
+        }
+        if style != ScalarStyle::Plain && (tag.is_none() || string_tag) {
+            continue;
+        }
+        let boolean = if tag
+            .as_ref()
+            .is_none_or(|tag| tag.is_yaml_core_schema_tag("bool"))
+        {
+            match value.as_ref() {
+                "true" | "True" | "TRUE" => Some("true"),
+                "false" | "False" | "FALSE" => Some("false"),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if boolean_tag && boolean.is_none() {
+            return Err(invalid("invalid YAML boolean"));
+        }
+        let mut explicit_scalar = None;
+        if null_tag {
+            if !matches!(value.as_ref(), "" | "~" | "null" | "Null" | "NULL") {
+                return Err(invalid("invalid YAML null"));
+            }
+            explicit_scalar = Some("null".to_string());
+        }
+        if float_tag {
+            let number = value
+                .parse::<f64>()
+                .map_err(|_| invalid("invalid YAML float"))?;
+            if !number.is_finite() {
+                return Err(invalid("YAML numbers must be finite"));
+            }
+            explicit_scalar =
+                Some(serde_json::to_string(&number).map_err(|_| invalid("invalid YAML float"))?);
+        }
+        let mixed_keyword = (boolean.is_none()
+            && (value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false")))
+            || (value.eq_ignore_ascii_case("null")
+                && !matches!(value.as_ref(), "null" | "Null" | "NULL"));
+        let unsigned = value.strip_prefix(['+', '-']).unwrap_or(&value);
+        let leading_zero = unsigned.len() > 1
+            && unsigned.starts_with('0')
+            && unsigned.bytes().all(|byte| byte.is_ascii_digit());
+        let (digits, radix) = if let Some(digits) = unsigned.strip_prefix("0x") {
+            (digits, 16)
+        } else if let Some(digits) = unsigned.strip_prefix("0o") {
+            (digits, 8)
+        } else if let Some(digits) = unsigned.strip_prefix("0b") {
+            (digits, 2)
+        } else {
+            (unsigned, 10)
+        };
+        if !string_tag
+            && !float_tag
+            && !leading_zero
+            && !digits.is_empty()
+            && digits.chars().all(|ch| ch.is_digit(radix))
+        {
+            let magnitude = u64::from_str_radix(digits, radix).map_err(|_| {
+                YamlScalarError::Invalid(
+                    "YAML integer exceeds the supported 64-bit range".to_string(),
+                )
+            })?;
+            if value.starts_with('-') && magnitude > (i64::MAX as u64) + 1 {
+                return Err(YamlScalarError::Invalid(
+                    "YAML integer exceeds the supported 64-bit range".to_string(),
+                ));
+            }
+            if integer_tag {
+                explicit_scalar = Some(if value.starts_with('-') {
+                    format!("-{magnitude}")
+                } else {
+                    magnitude.to_string()
+                });
+            }
+        }
+        if integer_tag && explicit_scalar.is_none() {
+            return Err(invalid("invalid YAML integer"));
+        }
+        let separated_number = unsigned.contains('_')
+            && unsigned.starts_with(|ch: char| ch.is_ascii_digit() || ch == '.')
+            && !unsigned.chars().any(char::is_whitespace);
+        let legacy_prefix = [("0X", 16), ("0O", 8), ("0B", 2)]
+            .iter()
+            .any(|(prefix, radix)| {
+                unsigned.strip_prefix(*prefix).is_some_and(|digits| {
+                    !digits.is_empty() && digits.chars().all(|ch| ch.is_digit(*radix))
+                })
+            });
+        if !leading_zero
+            && !separated_number
+            && !legacy_prefix
+            && boolean.is_none()
+            && !mixed_keyword
+            && !string_tag
+            && explicit_scalar.is_none()
+        {
+            continue;
+        }
+        let range = span.byte_range().ok_or_else(|| {
+            YamlScalarError::Invalid("missing YAML scalar source range".to_string())
+        })?;
+        let block = matches!(style, ScalarStyle::Literal | ScalarStyle::Folded);
+        let mut replacement_start = range.start;
+        let mut prefix_start = copied;
+        if tag.is_some() && !string_tag {
+            let start = span
+                .tag_start()
+                .and_then(|marker| marker.byte_offset())
+                .ok_or_else(|| {
+                    YamlScalarError::Invalid("missing YAML tag source range".to_string())
+                })?;
+            let prefix = input.get(copied..start).ok_or_else(|| {
+                YamlScalarError::Invalid("invalid YAML tag source range".to_string())
+            })?;
+            let tag_source = input.get(start..range.start).ok_or_else(|| {
+                YamlScalarError::Invalid("invalid YAML tag source range".to_string())
+            })?;
+            let length = tag_source
+                .find(char::is_whitespace)
+                .unwrap_or(tag_source.len());
+            output.push_str(prefix);
+            output.extend(std::iter::repeat_n(' ', length));
+            prefix_start = start + length;
+        }
+        if block {
+            let mut cursor = prefix_start;
+            loop {
+                let remaining = input
+                    .get(cursor..range.end)
+                    .ok_or_else(|| invalid("invalid YAML block scalar range"))?;
+                let ch = remaining
+                    .chars()
+                    .next()
+                    .ok_or_else(|| invalid("missing YAML block scalar header"))?;
+                match ch {
+                    '|' | '>' => {
+                        replacement_start = cursor;
+                        break;
+                    }
+                    '#' => cursor += remaining.find('\n').unwrap_or(remaining.len()),
+                    '&' => {
+                        cursor += remaining
+                            .find(char::is_whitespace)
+                            .ok_or_else(|| invalid("invalid YAML block scalar properties"))?
+                    }
+                    ch if ch.is_whitespace() => cursor += ch.len_utf8(),
+                    _ => return Err(invalid("invalid YAML block scalar header")),
+                }
+            }
+        }
+        let prefix = input.get(prefix_start..replacement_start).ok_or_else(|| {
+            YamlScalarError::Invalid("invalid YAML scalar source range".to_string())
+        })?;
+        output.push_str(prefix);
+        if string_tag && range.is_empty() {
+            output.push(' ');
+        }
+        if let Some(explicit_scalar) = explicit_scalar {
+            output.push_str(&explicit_scalar);
+        } else if let Some(boolean) = boolean {
+            output.push_str(boolean);
+        } else {
+            output.push_str(
+                &serde_json::to_string(if string_tag && range.is_empty() {
+                    ""
+                } else {
+                    value.as_ref()
+                })
+                .map_err(|error| YamlScalarError::Invalid(error.to_string()))?,
+            );
+        }
+        if block {
+            // Block spans consume separators before the next node; retain their layout.
+            let replaced = input
+                .get(replacement_start..range.end)
+                .ok_or_else(|| invalid("invalid YAML block scalar range"))?;
+            let tail = &replaced[replaced.trim_end_matches(char::is_whitespace).len()..];
+            let removed_lines = replaced.bytes().filter(|byte| *byte == b'\n').count();
+            let tail_lines = tail.bytes().filter(|byte| *byte == b'\n').count();
+            output.extend(std::iter::repeat_n(
+                '\n',
+                removed_lines.saturating_sub(tail_lines),
+            ));
+            output.push_str(tail);
+        }
+        copied = range.end;
+    }
+    if copied == 0 {
+        Ok(std::borrow::Cow::Borrowed(input))
+    } else {
+        output.push_str(&input[copied..]);
+        Ok(std::borrow::Cow::Owned(output))
+    }
 }
 
 /// Full manifest validation. Delegates to the `agent_control_spec` strict
@@ -467,6 +830,16 @@ mod tests {
     };
     use agent_control_spec::Manifest;
 
+    #[test]
+    fn scalar_normalization_preserves_tagged_and_mixed_case_values() {
+        let input = "values: [True, tRuE, !!bool TRUE, !!str TRUE]";
+        let normalized = super::normalize_yaml_scalars(input, 64, 300_000).unwrap();
+        assert_eq!(
+            normalized,
+            "values: [true, \"tRuE\",        true, !!str \"TRUE\"]"
+        );
+    }
+
     const VERSION: &str = "agent_control_specification_version: 0.4.0-alpha.1\n";
 
     fn llm_manifest(annotator_fields: &str) -> String {
@@ -534,16 +907,14 @@ mod tests {
     }
 
     #[test]
-    fn upstream_parser_still_accepts_the_removed_fields() {
-        // The reason the check exists: the pinned engine's open config maps
-        // swallow these keys. If upstream starts rejecting them this test
-        // fails and the AGT check can be retired.
-        for (label, manifest, _) in probe_manifests() {
-            let parsed = Manifest::from_yaml_str(&manifest)
+    fn upstream_parser_retains_removed_fields_for_agt_validation() {
+        // Parsing must retain these keys for AGT's rejection, even when newer
+        // upstream semantic validation also rejects an invalid URL combination.
+        for (label, manifest, field) in probe_manifests() {
+            let parsed = Manifest::parse_yaml_str(&manifest)
                 .unwrap_or_else(|error| panic!("{label}: upstream parse failed: {error}"));
-            parsed
-                .validate()
-                .unwrap_or_else(|error| panic!("{label}: upstream validate failed: {error}"));
+            let error = reject_removed_fields(&parsed).expect_err("AGT rejects removed fields");
+            assert!(error.detail().contains(field), "{label}: {error}");
         }
     }
 
@@ -558,7 +929,7 @@ mod tests {
                 ),
                 (
                     "reject_removed_fields",
-                    reject_removed_fields(&Manifest::from_yaml_str(&manifest).unwrap()),
+                    reject_removed_fields(&Manifest::parse_yaml_str(&manifest).unwrap()),
                 ),
             ] {
                 let error = match result {

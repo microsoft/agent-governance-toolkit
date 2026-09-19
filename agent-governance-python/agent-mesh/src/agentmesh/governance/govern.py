@@ -219,6 +219,21 @@ class GovernanceConfig:
             govern() calls sharing one audit_file within the same process
             unverifiable against each other.
         on_deny: Callback when a policy denies an action. Default: raise.
+        on_flag: Callback when the advisory layer returns
+            ``action="flag_for_review"`` (see ``agentmesh.governance.advisory``).
+            Unlike ``on_deny``, this never changes the outcome — the wrapped
+            call still executes either way, since a flag can only annotate,
+            never withhold, a deterministic allow. This holds even if the
+            callback itself raises: the exception is logged, recorded as
+            its own ``on_flag_callback_error`` audit event, and swallowed
+            rather than propagated, so a broken on_flag can't accidentally
+            start blocking execution while still being discoverable without
+            correlating application logs against audit timestamps. Receives
+            the evaluation ``context`` dict and the ``AdvisoryDecision``
+            that triggered it; return value is ignored. Default: ``None``
+            (no-op — the flag is still recorded in the audit trail's
+            ``advisory_check`` event either way, just with no caller-visible
+            effect beyond that).
         conflict_strategy: Policy conflict resolution strategy.
         ring: Optional execution ring for the agent. When set, ring-level
             resource constraints are enforced before policy evaluation and
@@ -233,6 +248,7 @@ class GovernanceConfig:
     audit_file: Optional[str] = None
     audit_secret_key: Optional[bytes] = None
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None
+    on_flag: Optional[Callable[[dict, AdvisoryDecision], Any]] = None
     approval_handler: Optional[ApprovalHandler] = None
     advisory: Optional[AdvisoryCheck] = None
     conflict_strategy: str = "deny_overrides"
@@ -445,6 +461,38 @@ class GovernedCallable:
                 if self._config.on_deny:
                     return self._config.on_deny(blocked)
                 raise GovernanceDenied(blocked)
+            if advisory_result and advisory_result.action == "flag_for_review":
+                # Flag is annotation-only — the audit trail already records
+                # it (see _run_advisory), but without this callback nothing
+                # else about the decision was ever reachable: it can only
+                # tighten, never withhold, a deterministic allow, so the
+                # wrapped call proceeds regardless of whether on_flag is set
+                # OR whether it raises — a broken on_flag callback must not
+                # be able to block execution any more than the flag itself
+                # can, or the "never changes the outcome" guarantee is fake.
+                if self._config.on_flag:
+                    try:
+                        self._config.on_flag(context, advisory_result)
+                    except Exception as e:
+                        logger.warning("on_flag callback failed", exc_info=True)
+                        # The flag itself is already in the advisory_check
+                        # entry above; a separate entry here means a failing
+                        # on_flag is visible in the audit trail too, not just
+                        # in application logs — on_flag is meant as a real
+                        # extension point (e.g. routing to a review queue),
+                        # so a silently-broken one is worth being able to
+                        # find without correlating timestamps against logs.
+                        if self._audit:
+                            self._audit.log(
+                                event_type="on_flag_callback_error",
+                                agent_did=self._config.agent_id,
+                                action=context.get("action", {}).get("type", "unknown"),
+                                outcome="error",
+                                data={
+                                    "classifier": advisory_result.classifier,
+                                    "error": str(e),
+                                },
+                            )
 
         # Allowed — execute the wrapped function
         return self._fn(*args, **kwargs)
@@ -841,6 +889,7 @@ def govern(
     audit_file: Optional[str] = None,
     audit_secret_key: Optional[bytes] = None,
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None,
+    on_flag: Optional[Callable[[dict, AdvisoryDecision], Any]] = None,
     approval_handler: Optional[ApprovalHandler] = None,
     advisory: Optional[AdvisoryCheck] = None,
     conflict_strategy: str = "deny_overrides",
@@ -873,6 +922,9 @@ def govern(
             ``GovernanceConfig.audit_secret_key``.
         on_deny: Optional callback on denial. Default: raise
             ``GovernanceDenied``.
+        on_flag: Optional callback when ``advisory`` returns
+            ``action="flag_for_review"``. Never changes the outcome — the
+            call still executes — see ``GovernanceConfig.on_flag``.
         conflict_strategy: Conflict resolution strategy. Default
             ``"deny_overrides"`` (any deny wins).
         rego_path: Optional path to a ``.rego`` policy file, loaded
@@ -940,6 +992,7 @@ def govern(
         audit_file=audit_file,
         audit_secret_key=audit_secret_key,
         on_deny=on_deny,
+        on_flag=on_flag,
         approval_handler=approval_handler,
         advisory=advisory,
         conflict_strategy=conflict_strategy,

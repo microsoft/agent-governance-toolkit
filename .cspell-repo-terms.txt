@@ -51,6 +51,10 @@ AILLM
 AKIA
 AKIAFAKE
 AKIAFAKEFORTEST
+AKIAAAAAAAAAAAAAAAAA
+AKIAIOSFODNN
+AKIAXXXX
+fooghp
 AKIDEXAMPLE
 APIM
 APPI
@@ -105,6 +109,8 @@ DYLD
 DataQualityEvidence
 Dedup
 Defence
+demotes
+demoting
 Deque
 Deserialise
 Diffable
@@ -385,6 +391,7 @@ bytecount
 caas
 cands
 canonicality
+capitalised
 caplog
 capsys
 carloshvp
@@ -574,6 +581,7 @@ gomod
 governancekernel
 governancepolicy
 governorate
+granit
 grpc
 gunicorn
 gvisor
@@ -659,9 +667,14 @@ langflow
 langgenius
 lawcontinue
 levelname
+lookahead
+lookaround
+lookarounds
+lookbehind
 liamcrumm
 libagent
 libc
+libyaml
 licen
 lifecycles
 linkcheck
@@ -752,6 +765,7 @@ neutralised
 neutralises
 neutralising
 newpartner
+newtype
 newurl
 nfiu
 nmap
@@ -794,6 +808,7 @@ oorandom
 opencode
 openpolicyagent
 openshell
+organisation
 organisational
 organisations
 oserror
@@ -863,6 +878,7 @@ pypdf
 pypistats
 pyproject
 pypy
+pyright
 pytest
 pytestmark
 pythonhosted
@@ -939,6 +955,7 @@ sandboxing
 sandboxprovider
 sanitisation
 sanitised
+saphyr
 sarif
 sboms
 sbyte

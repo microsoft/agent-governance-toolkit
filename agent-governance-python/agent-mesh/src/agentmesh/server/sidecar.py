@@ -126,6 +126,19 @@ def create_sidecar_app() -> FastAPI:
             **req.context,
         }
         engine, generation = _policy_state
+
+        # Fail-closed (#3536): if any policy file failed to load, deny all
+        # actions so a broken deny policy is not silently bypassed.
+        if generation.policies_failed > 0:
+            return EvaluateResponse(
+                decision="deny",
+                matched_rule=None,
+                reason=f"Policy set degraded: {generation.policies_failed} file(s) failed to load",
+                policy_name=None,
+                policy_set_id=generation.policy_set_id,
+                policy_set_status=generation.policy_set_status,
+            )
+
         result: PolicyDecision = engine.evaluate(agent_did=req.agent_did, context=ctx)
         return EvaluateResponse(
             decision=result.action,
@@ -176,7 +189,7 @@ class EvaluateResponse(BaseModel):
     reason: str = ""
     policy_name: str | None = None
     policy_set_id: str
-    policy_set_status: Literal["complete", "degraded", "not_loaded"]
+    policy_set_status: Literal["complete", "degraded", "rejected", "not_loaded"]
 
 
 class PolicyFileLoad(BaseModel):
@@ -194,7 +207,7 @@ class PolicyLoadGeneration(BaseModel):
 
     model_config = ConfigDict(frozen=True)
     policy_set_id: str
-    policy_set_status: Literal["complete", "degraded", "not_loaded"]
+    policy_set_status: Literal["complete", "degraded", "rejected", "not_loaded"]
     policies_discovered: int
     policies_loaded: int
     policies_failed: int
@@ -266,9 +279,25 @@ def _load_policies() -> PolicyLoadGeneration:
     }
     canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
     failed = sum(entry.status == "failed" for entry in files)
+
+    # Fail-closed (#3536 review): when files fail, publish the generation
+    # as 'degraded' so evaluate_policy can deny based on policies_failed.
+    # Do NOT raise or use 'rejected' -- #3909's generation model and its
+    # existing tests expect 'degraded' for file-level parse failures.
+    if failed:
+        failed_names = [e.name for e in files if e.status == "failed"]
+        logger.error(
+            "Policy load generation degraded: %d file(s) failed: %s",
+            failed, ", ".join(failed_names),
+        )
+
+    policy_set_status = "complete"
+    if failed or directory_status == "unavailable":
+        policy_set_status = "degraded"
+
     generation = PolicyLoadGeneration(
         policy_set_id="sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
-        policy_set_status="degraded" if failed or directory_status == "unavailable" else "complete",
+        policy_set_status=policy_set_status,
         policies_discovered=len(files),
         policies_loaded=len(files) - failed,
         policies_failed=failed,

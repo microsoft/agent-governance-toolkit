@@ -169,6 +169,15 @@ def test_github_token_boundaries_and_lengths_avoid_false_positives(text: str):
     assert CredentialRedactor.contains_credentials(text) is False
 
 
+def test_github_token_trailing_underscore_is_detected():
+    """A GitHub token followed by a bare underscore (e.g. ``TOKEN_``) must be
+    detected — the trailing ``_`` is not part of the token and must not block
+    detection. Regression for issue #3933."""
+    text = f"{_fake_github_token('ghs')}_"
+    assert CredentialRedactor.contains_credentials(text) is True
+    assert REDACTED_PLACEHOLDER in CredentialRedactor.redact(text)
+
+
 def test_redaction_is_idempotent():
     text = (
         f"first {_fake_github_token('ghp')} "
@@ -501,3 +510,107 @@ def test_ssn_pattern_rejects_bare_nine_digit_forms(text: str):
     assert not any(
         m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text)
     )
+
+
+# ---------------------------------------------------------------
+# Boundary regression tests for issue #3933
+# A valid credential glued to a preceding or following word
+# character via ``_`` must still be detected and redacted. The
+# left-edge anchor was already ``(?<![A-Za-z0-9])``; the right-edge
+# previously used ``\b`` or ``(?![A-Za-z0-9_])``, both of which
+# treat ``_`` as a boundary-blocker and silently pass the secret
+# through.
+# ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"{_fake_github_token('ghp')}_old",
+        f"{_fake_github_token('ghp')}_deprecated",
+        f"{_fake_github_token('ghp')}_rotated",
+    ],
+)
+def test_github_token_right_edge_underscore_is_detected(text: str):
+    """A GitHub token followed by ``_old`` etc. must be detected."""
+    assert CredentialRedactor.contains_credentials(text) is True
+    assert REDACTED_PLACEHOLDER in CredentialRedactor.redact(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "AKIAIOSFODNN7EXAMPLE_old",
+        "AKIAIOSFODNN7EXAMPLE_deprecated",
+        "AKIAIOSFODNN7EXAMPLE_rotated",
+    ],
+)
+def test_aws_key_right_edge_underscore_is_detected(text: str):
+    """An AWS access key followed by ``_old`` etc. must be detected."""
+    assert CredentialRedactor.contains_credentials(text) is True
+    redacted = CredentialRedactor.redact(text)
+    assert "AKIAIOSFODNN7EXAMPLE" not in redacted
+    assert REDACTED_PLACEHOLDER in redacted
+
+
+def test_google_key_right_edge_underscore_is_detected():
+    text = _FAKE_GOOGLE_KEY + "_old"
+    assert CredentialRedactor.contains_credentials(text) is True
+    redacted = CredentialRedactor.redact(text)
+    assert _FAKE_GOOGLE_KEY not in redacted
+    assert REDACTED_PLACEHOLDER in redacted
+
+
+def test_google_key_left_edge_underscore_is_detected():
+    text = "svc_" + _FAKE_GOOGLE_KEY
+    assert CredentialRedactor.contains_credentials(text) is True
+    redacted = CredentialRedactor.redact(text)
+    assert _FAKE_GOOGLE_KEY not in redacted
+
+
+def test_openai_key_right_edge_underscore_is_detected():
+    token = "sk-abcdefghijklmnopqrstuvwxyz0123"
+    text = f"{token}_old"
+    assert CredentialRedactor.contains_credentials(text) is True
+    redacted = CredentialRedactor.redact(text)
+    assert token not in redacted
+    assert REDACTED_PLACEHOLDER in redacted
+
+
+def test_stripe_key_right_edge_underscore_is_detected():
+    text = "sk_live_FakeTestKey0000_old"
+    assert CredentialRedactor.contains_credentials(text) is True
+    redacted = CredentialRedactor.redact(text)
+    assert "sk_live_FakeTestKey0000" not in redacted
+
+
+def test_multiple_underscore_glued_credentials_all_detected():
+    """Multiple credentials each glued to ``_`` must all be detected in one pass."""
+    aws = "AKIAIOSFODNN7EXAMPLE"
+    github = _fake_github_token("ghp")
+    google = _FAKE_GOOGLE_KEY
+    openai = "sk-abcdefghijklmnopqrstuvwxyz0123"
+
+    text = f"env_{aws}_old cfg_{github}_rotated svc_{google}_deprecated session_{openai}_bak"
+    types = CredentialRedactor.detect_credential_types(text)
+
+    assert "AWS access key" in types
+    assert "GitHub token" in types
+    assert "Google API key" in types
+    assert "OpenAI API key" in types
+
+    redacted = CredentialRedactor.redact(text)
+    assert aws not in redacted
+    assert github not in redacted
+    assert google not in redacted
+    assert openai not in redacted
+
+
+def test_underscore_glued_credential_does_not_false_positive_inside_alphanumeric():
+    """The fix must not match inside a contiguous alphanumeric word."""
+    for text in [
+        "fooAKIAIOSFODNN7EXAMPLE",
+        "0AKIAIOSFODNN7EXAMPLE",
+        f"x{_fake_github_token('ghp')}",
+    ]:
+        assert CredentialRedactor.contains_credentials(text) is False

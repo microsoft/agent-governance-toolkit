@@ -1242,6 +1242,7 @@ annotators:
     type: llm
     system_prompt_url:
       url: https://prompts.example/p.txt
+      sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 intervention_points:
   input:
     policy_target: $snap.input

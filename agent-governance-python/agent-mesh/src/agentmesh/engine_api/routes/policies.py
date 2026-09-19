@@ -14,7 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 
 from agentmesh.engine_api.capabilities import capability_flags
-from agentmesh.engine_api.errors import POLICY_NOT_FOUND, ApiError
+from agentmesh.engine_api.errors import POLICY_NOT_FOUND, ApiError, ErrorEnvelope
 from agentmesh.engine_api.models import PolicyDetail, PolicyListResponse
 from agentmesh.engine_api.pagination import PaginationParams, paginate
 from agentmesh.engine_api.policy_registry import PolicyRegistry
@@ -48,6 +48,7 @@ async def list_policies(
     operation_id="getPolicy",
     tags=["policy"],
     response_model=PolicyDetail,
+    responses={404: {"model": ErrorEnvelope, "description": "Policy not found"}},
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def get_policy(request: Request, id: str) -> PolicyDetail:

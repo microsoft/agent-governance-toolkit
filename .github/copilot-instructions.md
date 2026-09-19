@@ -381,6 +381,7 @@ After merging ANY external contributor PR, perform these follow-up checks and fi
 4. **Network exposure** — check for `0.0.0.0` bindings in new code (must be `127.0.0.1` for dev servers).
 5. **Wildcard CORS** — check for `allow_origins=["*"]` in new code (must use env-driven origins).
 6. **Credential leaks in scanners** — if new security scanning code stores matched patterns, ensure values are redacted (not raw secrets in audit logs).
+   - **Credential boundary anchors** , bounded-token patterns (GitHub, OpenAI, AWS, Google) must use `(?<![A-Za-z0-9])` / `(?![A-Za-z0-9])` lookaround anchors, NOT `\b` word boundaries. `\b` treats `_` as a word character, so a secret annotated `_old` or preceded by `session_` is missed. The `tests/ci/test_regression_credential_boundary.py` guard verifies this in the regex SDKs (TypeScript, Python; C# is in #3934) and checks Rust boundary match arms separately.
 
 ### Build & Compatibility
 7. **License headers** — verify all new `.py`, `.ts`, `.cs`, `.rs`, `.go`, `.sh` files have the MIT copyright header.

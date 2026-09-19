@@ -506,7 +506,7 @@ pub enum PromptInjectionError {
     #[error("failed to read prompt-injection config: {0}")]
     ConfigIo(#[from] std::io::Error),
     #[error("failed to parse prompt-injection config: {0}")]
-    ConfigParse(#[from] serde_yaml::Error),
+    ConfigParse(#[from] crate::policy_data::YamlError),
 }
 
 /// Deterministic prompt-injection detector with bounded hash-only audit.
@@ -618,13 +618,13 @@ impl PromptInjectionDetector {
 
     /// Construct a detector from the YAML config-file shape.
     pub fn from_yaml_str(raw: &str) -> Result<Self, PromptInjectionError> {
-        let config: PromptInjectionConfig = serde_yaml::from_str(raw)?;
+        let config: PromptInjectionConfig = crate::policy_data::from_yaml(raw)?;
         Self::with_config(config.detection)
     }
 
     /// Read a YAML config file and construct a detector from it.
     pub fn from_yaml_file(path: impl AsRef<std::path::Path>) -> Result<Self, PromptInjectionError> {
-        let raw = std::fs::read_to_string(path)?;
+        let raw = crate::policy_data::read_yaml(path)?;
         Self::from_yaml_str(&raw)
     }
 

@@ -244,6 +244,8 @@ REGISTERED_NPM_PACKAGES = {
 # Known Cargo crate names
 REGISTERED_CARGO_PACKAGES = {
     "serde", "serde_json", "serde_yaml", "sha2", "ed25519-dalek",
+    # Published 1.2.0 verified against crates.io on 2026-09-15.
+    "serde-saphyr",
     "rand", "thiserror", "tempfile", "agentmesh",
     "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
     "opentelemetry", "regex", "regorus",

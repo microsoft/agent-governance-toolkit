@@ -51,26 +51,22 @@ class CredentialRedactor:
     # Python's stdlib ``re`` does not support per-pattern timeouts. These
     # patterns are kept simple and anchored to avoid pathological backtracking.
     #
-    # Prefix-anchored patterns use a ``(?<![A-Za-z0-9])`` lookbehind rather than
-    # ``\b`` so a secret glued directly to a preceding word character (for
-    # example ``session_sk-...``) is still detected. ``\b`` treats ``_`` as a
-    # word character, so ``_sk-`` has no boundary and the secret would be missed;
-    # ``(?<![A-Za-z0-9])`` treats ``_`` (and ``-``, ``/``, ``.``, whitespace) as a
-    # valid left edge while still not matching inside an alphanumeric word.
+    # Both anchors use a ``(?<![A-Za-z0-9])`` lookbehind and a
+    # ``(?![A-Za-z0-9])`` lookahead rather than ``\b`` so a secret glued
+    # directly to a word character via ``_`` or ``-`` (for example
+    # ``session_sk-...`` or ``AKIA<key>_old``) is still detected. ``\b``
+    # treats ``_`` as a word character, so ``_sk-`` has no boundary and the
+    # secret would be missed; the explicit lookaround treats ``_`` (and
+    # ``-``, ``/``, ``.``, whitespace) as a valid edge while still not
+    # matching inside an alphanumeric word.
     #
-    # The same problem exists on the right edge for a pattern whose value class
-    # excludes ``_``: AWS access key, GitHub token, Google API key and Stripe
-    # secret key all have a fixed length or a value class without ``_``, so a
-    # trailing ``\b`` after a suffix like ``_old`` finds no shorter match to
-    # back off to and the whole pattern fails, leaving a valid secret fully
-    # unredacted rather than truncated. Those four use the mirror assertion
-    # ``(?![A-Za-z0-9])`` instead. Patterns whose value class already includes
-    # ``_`` (OpenAI, Bearer, JWT) do not need this: the class consumes the
-    # suffix on its own and a trailing ``\b`` is harmless there.
+    # Slack and xapp tokens intentionally omit a right-edge lookahead
+    # because their value class includes ``-``, and a trailing ``\b`` would
+    # backtrack and redact only a prefix, leaking the final segment.
     PATTERNS: tuple[CredentialPattern, ...] = (
         CredentialPattern(
             name="OpenAI API key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             name="GitHub token",

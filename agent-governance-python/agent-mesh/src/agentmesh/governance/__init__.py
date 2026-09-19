@@ -39,6 +39,7 @@ from .advisory import (
 from .conflict_resolution import (
     ConflictResolutionStrategy,
     PolicyScope,
+    VALID_SCOPES,
     PolicyConflictResolver,
     CandidateDecision,
     ResolutionResult,
@@ -162,6 +163,7 @@ __all__ = [
     "PolicyDecision",
     "ConflictResolutionStrategy",
     "PolicyScope",
+    "VALID_SCOPES",
     "PolicyConflictResolver",
     "CandidateDecision",
     "ResolutionResult",
