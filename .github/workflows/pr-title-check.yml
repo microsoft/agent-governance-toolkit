@@ -34,7 +34,7 @@ jobs:
             build
             revert
           requireScope: false
-          subjectPattern: ^(?![A-Z]).+$
+          subjectPattern: ^.+$
           subjectPatternError: |
-            The PR title subject "{subject}" must not start with an uppercase letter.
-            Use lowercase: "feat: add foo" not "feat: Add foo".
+            The PR title subject "{subject}" must not be empty.
+            Use a descriptive subject: "feat: add foo".
