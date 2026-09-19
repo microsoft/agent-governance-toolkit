@@ -1,4 +1,5 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+
 name: PR Title Check
 
 on:
@@ -14,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read    # amannn/action-semantic-pull-request reads the PR title/body
+      pull-requests: read # amannn/action-semantic-pull-request reads the PR title/body
     steps:
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         env:
@@ -34,7 +35,7 @@ jobs:
             build
             revert
           requireScope: false
-          subjectPattern: ^(?![A-Z]).+$
+          subjectPattern: ${{ github.event.pull_request.user.login == 'dependabot[bot]' && '.+' || '^(?![A-Z]).+$' }}
           subjectPatternError: |
             The PR title subject "{subject}" must not start with an uppercase letter.
             Use lowercase: "feat: add foo" not "feat: Add foo".
