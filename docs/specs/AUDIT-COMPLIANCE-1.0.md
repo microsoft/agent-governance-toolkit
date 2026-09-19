@@ -741,11 +741,14 @@ A compliance report MUST contain:
 | `period_end` | datetime | REQUIRED | End of assessment period. |
 | `organization_id` | string | OPTIONAL | Organization being assessed. |
 | `agents_covered` | list[string] | REQUIRED | Agent DIDs included in assessment. |
-| `total_controls` | int | REQUIRED | Total number of controls assessed. |
-| `controls_met` | int | REQUIRED | Controls fully satisfied. |
+| `total_controls` | int | REQUIRED | Total number of controls defined for the framework. |
+| `controls_met` | int | REQUIRED | Controls with no recorded violation (includes unassessed controls; see `controls_assessed`). |
 | `controls_partial` | int | REQUIRED | Controls partially satisfied. |
 | `controls_failed` | int | REQUIRED | Controls not satisfied. |
 | `compliance_score` | float | REQUIRED | Overall score (0--100). |
+| `controls_assessed` | int | REQUIRED | Controls evaluated at least once during the period for the covered agents. |
+| `controls_unassessed` | int | REQUIRED | Controls never evaluated during the period. `controls_assessed + controls_unassessed = total_controls`. |
+| `assessment_coverage` | float | REQUIRED | `controls_assessed / total_controls * 100` (0 when no controls are defined). |
 | `violations` | list[ComplianceViolation] | REQUIRED | Violations during the period. |
 | `evidence_items` | list[dict] | REQUIRED | Evidence collected. |
 | `recommendations` | list[string] | REQUIRED | Improvement recommendations (max 10). |

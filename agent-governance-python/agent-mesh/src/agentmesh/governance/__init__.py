@@ -44,7 +44,12 @@ from .conflict_resolution import (
     CandidateDecision,
     ResolutionResult,
 )
-from .compliance import ComplianceEngine, ComplianceFramework, ComplianceReport
+from .compliance import (
+    ComplianceAssessment,
+    ComplianceEngine,
+    ComplianceFramework,
+    ComplianceReport,
+)
 from .audit import AuditLog, AuditEntry, AuditChain
 from .audit_backends import (
     AuditSink,
@@ -167,6 +172,7 @@ __all__ = [
     "PolicyConflictResolver",
     "CandidateDecision",
     "ResolutionResult",
+    "ComplianceAssessment",
     "ComplianceEngine",
     "ComplianceFramework",
     "ComplianceReport",

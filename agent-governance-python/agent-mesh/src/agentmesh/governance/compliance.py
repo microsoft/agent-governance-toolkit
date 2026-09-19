@@ -118,6 +118,33 @@ class ComplianceViolation(BaseModel):
     remediation_notes: Optional[str] = None
 
 
+class ComplianceAssessment(BaseModel):
+    """A record that a control was evaluated for an action.
+
+    One assessment is recorded for every control that ``check_compliance``
+    evaluates, whether or not a violation was found. Reports use these
+    records to distinguish a control that was assessed and passed from a
+    control that was never assessed during the reporting period.
+
+    Attributes:
+        timestamp: When the control was evaluated.
+        agent_did: DID of the agent whose action was evaluated.
+        action_type: The action that triggered the evaluation.
+        control_id: ID of the control that was evaluated.
+        framework: The compliance framework of the evaluated control.
+        passed: ``True`` when no violation was found for this control.
+        violation_id: ID of the recorded violation when ``passed`` is ``False``.
+    """
+
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    agent_did: str
+    action_type: str
+    control_id: str
+    framework: ComplianceFramework
+    passed: bool
+    violation_id: Optional[str] = None
+
+
 class ComplianceReport(BaseModel):
     """Compliance audit report for a given framework and time period.
 
@@ -129,11 +156,20 @@ class ComplianceReport(BaseModel):
         period_end: End of the reporting period.
         organization_id: Optional organisation scope.
         agents_covered: Agent DIDs included in the report.
-        total_controls: Total number of controls evaluated.
-        controls_met: Number of controls fully satisfied.
+        total_controls: Total number of controls defined for the framework.
+        controls_met: Number of controls with no recorded violation. This
+            includes controls that were never assessed; use
+            ``controls_assessed`` to tell the two apart.
         controls_partial: Number of controls partially satisfied.
         controls_failed: Number of controls with violations.
         compliance_score: Overall score from 0 to 100.
+        controls_assessed: Number of framework controls evaluated at least
+            once during the period (for the covered agents).
+        controls_unassessed: Number of framework controls never evaluated
+            during the period. ``controls_assessed + controls_unassessed``
+            equals ``total_controls``.
+        assessment_coverage: ``controls_assessed / total_controls * 100``
+            (0 when the framework defines no controls).
         violations: List of violations found during the period.
         evidence_items: Count of evidence artefacts collected.
         recommendations: Actionable remediation recommendations (max 10).
@@ -157,6 +193,11 @@ class ComplianceReport(BaseModel):
     controls_partial: int = 0
     controls_failed: int = 0
     compliance_score: float = 0.0  # 0-100
+
+    # Assessment coverage
+    controls_assessed: int = 0
+    controls_unassessed: int = 0
+    assessment_coverage: float = 0.0  # 0-100
 
     # Violations
     violations: list[ComplianceViolation] = Field(default_factory=list)
@@ -187,6 +228,7 @@ class ComplianceEngine:
         self._controls: dict[str, ComplianceControl] = {}
         self._mappings: dict[str, ComplianceMapping] = {}
         self._violations: list[ComplianceViolation] = []
+        self._assessments: list[ComplianceAssessment] = []
 
         # Load default controls
         self._load_default_controls()
@@ -400,6 +442,17 @@ class ComplianceEngine:
                 violations.append(violation)
                 self._violations.append(violation)
 
+            # Record that this control was assessed, pass or fail, so reports
+            # can separate "assessed and passed" from "never assessed".
+            self._assessments.append(ComplianceAssessment(
+                agent_did=agent_did,
+                action_type=action_type,
+                control_id=control.control_id,
+                framework=control.framework,
+                passed=violation is None,
+                violation_id=violation.violation_id if violation else None,
+            ))
+
         return violations
 
     def _check_control(
@@ -486,6 +539,22 @@ class ComplianceEngine:
 
         score = (met / total * 100) if total > 0 else 100.0
 
+        # Assessment coverage: which framework controls were actually
+        # evaluated during the period for the covered agents. A control
+        # with no recorded violation is only "met" if it was assessed;
+        # otherwise it is unassessed, and the caller can tell the difference.
+        framework_control_ids = set(c.control_id for c in framework_controls)
+        assessed_controls = set(
+            a.control_id for a in self._assessments
+            if a.framework == framework
+            and a.control_id in framework_control_ids
+            and period_start <= a.timestamp <= period_end
+            and (not agent_ids or a.agent_did in agent_ids)
+        )
+        assessed = len(assessed_controls)
+        unassessed = total - assessed
+        coverage = (assessed / total * 100) if total > 0 else 0.0
+
         # Generate recommendations
         recommendations = []
         for v in violations:
@@ -504,6 +573,9 @@ class ComplianceEngine:
             controls_met=met,
             controls_failed=failed,
             compliance_score=score,
+            controls_assessed=assessed,
+            controls_unassessed=unassessed,
+            assessment_coverage=coverage,
             violations=violations,
             recommendations=recommendations[:10],  # Top 10
         )
@@ -530,6 +602,36 @@ class ComplianceEngine:
                 v.remediation_notes = notes
                 return True
         return False
+
+    def get_assessments(
+        self,
+        framework: Optional[ComplianceFramework] = None,
+        agent_did: Optional[str] = None,
+        control_id: Optional[str] = None,
+    ) -> list[ComplianceAssessment]:
+        """Get recorded control assessments with optional filters.
+
+        Args:
+            framework: Filter to a specific compliance framework.
+            agent_did: Filter to a specific agent DID.
+            control_id: Filter to a specific control ID.
+
+        Returns:
+            List of matching ``ComplianceAssessment`` instances, in the
+            order they were recorded.
+        """
+        assessments = self._assessments
+
+        if framework:
+            assessments = [a for a in assessments if a.framework == framework]
+
+        if agent_did:
+            assessments = [a for a in assessments if a.agent_did == agent_did]
+
+        if control_id:
+            assessments = [a for a in assessments if a.control_id == control_id]
+
+        return assessments
 
     def get_violations(
         self,
