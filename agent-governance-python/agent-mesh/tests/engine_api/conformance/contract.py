@@ -10,7 +10,9 @@ from typing import Any, Iterator
 from urllib.parse import urlparse
 
 import yaml
-from jsonschema import Draft202012Validator, FormatChecker, RefResolver
+from jsonschema import Draft202012Validator, FormatChecker
+from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT202012
 
 OPENAPI_METHODS = frozenset({"get", "put", "post", "delete", "options", "head", "patch", "trace"})
 CAPABILITY_FLAGS = frozenset({"runtime_mutating", "user_intent_required", "read_only_surface"})
@@ -138,38 +140,6 @@ def _json_pointer(document: dict[str, Any], reference: str) -> Any:
     return value
 
 
-def response_schema(operation: Operation, status: int) -> dict[str, Any]:
-    """Resolve the JSON response schema for an HTTP status."""
-    responses = operation.document.get("responses", {})
-    if not isinstance(responses, dict):
-        raise AssertionError(f"{operation.operation_id} has no response map")
-    status_key = str(status)
-    candidate_keys = (status_key, f"{status // 100}XX", "default")
-    response: Any = None
-    for key in candidate_keys:
-        if key in responses:
-            response = responses[key]
-            break
-    if response is None:
-        raise AssertionError(
-            f"{operation.operation_id} does not advertise a response for HTTP {status}"
-        )
-    if isinstance(response, dict) and "$ref" in response:
-        response = _json_pointer(operation.root, response["$ref"])
-    if not isinstance(response, dict):
-        raise AssertionError(f"Invalid response object for {operation.operation_id}: {response!r}")
-    content = response.get("content", {})
-    if not isinstance(content, dict) or "application/json" not in content:
-        raise AssertionError(f"{operation.operation_id} response {status} lacks application/json")
-    media_type = content["application/json"]
-    if not isinstance(media_type, dict) or not isinstance(media_type.get("schema"), dict):
-        raise AssertionError(f"{operation.operation_id} response {status} lacks a JSON schema")
-    schema = media_type["schema"]
-    if "$ref" in schema:
-        return _json_pointer(operation.root, schema["$ref"])
-    return schema
-
-
 def _schema_for_operation(operation: Operation, status: int) -> dict[str, Any]:
     """Resolve a response schema while retaining the document root privately."""
     responses = operation.document.get("responses", {})
@@ -210,11 +180,17 @@ def request_schema(operation: Operation) -> dict[str, Any]:
 
 def schema_validator(document: dict[str, Any], schema: dict[str, Any]) -> Draft202012Validator:
     """Build a JSON Schema 2020-12 validator with local OpenAPI references."""
-    return Draft202012Validator(
-        schema,
-        resolver=RefResolver.from_schema(document),
+    root_uri = "urn:agt:studio:engine-api"
+    registry = Registry().with_resource(
+        root_uri,
+        Resource.from_contents(document, default_specification=DRAFT202012),
+    )
+    root_validator = Draft202012Validator(
+        document,
+        registry=registry,
         format_checker=FormatChecker(),
     )
+    return root_validator.evolve(schema={"$id": root_uri, **schema})
 
 
 def validate_payload(

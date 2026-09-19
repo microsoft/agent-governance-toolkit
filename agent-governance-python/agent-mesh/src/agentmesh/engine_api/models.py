@@ -55,8 +55,8 @@ class PolicyDetail(PolicySummary):
 
 # ── Policy validate (section 7.4) ────────────────────────────────────────────
 class PolicyValidationError(BaseModel):
-    line: int = Field(..., ge=1, description="1-based line of the error")
-    col: int = Field(..., ge=1, description="1-based column of the error")
+    line: int | None = Field(None, ge=1, description="1-based line of the error")
+    col: int | None = Field(None, ge=1, description="1-based column of the error")
     message: str = Field(..., description="Parse or lint error message")
 
 

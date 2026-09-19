@@ -181,14 +181,17 @@ class TestMalformedTolerance:
     def test_file_with_unreadable_metadata_is_skipped(self, tmp_path, monkeypatch):
         (tmp_path / "good.yaml").write_text(_YAML_POLICY, encoding="utf-8")
         (tmp_path / "bad.yaml").write_text(_YAML_POLICY, encoding="utf-8")
-        original = Path.stat
+        original = os.stat
 
-        def _raise_for_bad(self, *args, **kwargs):
-            if self.name == "bad.yaml":
+        def _raise_for_bad(path, *args, **kwargs):
+            if Path(path).name == "bad.yaml":
                 raise OSError("metadata unavailable")
-            return original(self, *args, **kwargs)
+            return original(path, *args, **kwargs)
 
-        monkeypatch.setattr(Path, "stat", _raise_for_bad)
+        # Patch the OS boundary used by Path.is_file on Python 3.13 as well as
+        # Path.stat on earlier versions so every supported matrix version exercises
+        # the unreadable-metadata branch.
+        monkeypatch.setattr(os, "stat", _raise_for_bad)
         reg = PolicyRegistry(tmp_path)
 
         assert [summary.id for summary in reg.list_summaries()] == ["good"]

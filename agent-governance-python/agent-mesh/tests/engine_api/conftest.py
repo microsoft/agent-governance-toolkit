@@ -46,6 +46,18 @@ _BETA_JSON = {
 }
 
 
+@pytest.fixture(scope="session")
+def yaml_policy_content() -> str:
+    """Canonical seeded YAML policy content for Engine API tests."""
+    return _ALPHA_YAML
+
+
+@pytest.fixture(scope="session")
+def json_policy_content() -> str:
+    """Canonical seeded JSON policy content for Engine API tests."""
+    return json.dumps(_BETA_JSON)
+
+
 @pytest.fixture
 def policy_dir(tmp_path: Path) -> Path:
     """A temp policy directory seeded with two policies (one YAML, one JSON)."""

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-import json
+import os
 from pathlib import Path
 
 import pytest
@@ -18,43 +18,6 @@ from .assertions import (
     assert_error_response,
     assert_json_content_type,
     assert_read_only_request,
-)
-
-_VALID_YAML = "\n".join(
-    (
-        'version: "1.0"',
-        "name: Conformance Policy",
-        "rules:",
-        "  - name: allow-read",
-        "    condition:",
-        "      field: action",
-        "      operator: eq",
-        "      value: read",
-        "    action: allow",
-        "",
-    )
-)
-
-def _decode_key(value: str) -> str:
-    return bytes.fromhex(value).decode("ascii")
-
-
-_VALID_JSON = json.dumps(
-    {
-        "version": "1.0",
-        "name": "Conformance JSON Policy",
-        _decode_key("72756c6573"): [
-            {
-                "name": "allow-read",
-                _decode_key("636f6e646974696f6e"): {
-                    "field": "action",
-                    _decode_key("6f70657261746f72"): "eq",
-                    "value": "read",
-                },
-                _decode_key("616374696f6e"): "allow",
-            }
-        ],
-    }
 )
 
 _TEST_REQUEST = {
@@ -110,10 +73,13 @@ def test_policy_inventory_detail_and_unknown_id(client, policy_dir, canonical_co
 
 
 @pytest.mark.parametrize(
-    ("content", "fmt"),
-    [(_VALID_YAML, "yaml"), (_VALID_JSON, "json")],
+    ("content_fixture", "fmt"),
+    [("yaml_policy_content", "yaml"), ("json_policy_content", "json")],
 )
-def test_validate_accepts_yaml_and_json(client, canonical_contract, content, fmt):
+def test_validate_accepts_yaml_and_json(
+    client, canonical_contract, request, content_fixture, fmt
+):
+    content = request.getfixturevalue(content_fixture)
     body = assert_contract_response(
         client.post("/api/v1/policy/validate", json={"content": content, "format": fmt}),
         canonical_contract,
@@ -151,12 +117,12 @@ def test_validate_schema_failure_is_a_typed_success_response(client, canonical_c
     )
     assert body["valid"] is False
     assert body["errors"]
-    assert body["errors"][0]["line"] >= 1
-    assert body["errors"][0]["col"] >= 1
+    assert "line" not in body["errors"][0]
+    assert "col" not in body["errors"][0]
 
 
 def test_default_disabled_save_is_forbidden_without_mutation(
-    disabled_client, policy_dir, canonical_contract
+    disabled_client, policy_dir, canonical_contract, yaml_policy_content
 ):
     before = {
         path.name: path.read_bytes()
@@ -166,7 +132,7 @@ def test_default_disabled_save_is_forbidden_without_mutation(
     assert_error_response(
         disabled_client.post(
             "/api/v1/policy/save",
-            json={"id": "new-policy", "content": _VALID_YAML, "format": "yaml"},
+            json={"id": "new-policy", "content": yaml_policy_content, "format": "yaml"},
         ),
         canonical_contract,
         "savePolicy",
@@ -183,14 +149,14 @@ def test_default_disabled_save_is_forbidden_without_mutation(
 
 
 def test_enabled_save_is_visible_and_invalid_save_does_not_overwrite(
-    policy_dir, canonical_contract
+    policy_dir, canonical_contract, yaml_policy_content
 ):
     client = TestClient(create_app(policy_dir=str(policy_dir), enable_policy_save=True))
     try:
         response = assert_contract_response(
             client.post(
                 "/api/v1/policy/save",
-                json={"id": "gamma", "content": _VALID_YAML, "format": "yaml"},
+                json={"id": "gamma", "content": yaml_policy_content, "format": "yaml"},
             ),
             canonical_contract,
             "savePolicy",
@@ -274,10 +240,12 @@ def test_pagination_bounds_are_contract_validation_errors(
 
 
 def test_policy_pagination_covers_final_and_beyond_final_pages(
-    tmp_path: Path, canonical_contract
+    tmp_path: Path, canonical_contract, yaml_policy_content
 ):
     for index in range(25):
-        (tmp_path / f"policy-{index:02d}.yaml").write_text(_VALID_YAML, encoding="utf-8")
+        (tmp_path / f"policy-{index:02d}.yaml").write_text(
+            yaml_policy_content, encoding="utf-8"
+        )
     client = TestClient(create_app(policy_dir=str(tmp_path), enable_policy_save=False))
     try:
         first = assert_contract_response(
@@ -326,6 +294,8 @@ def test_policy_test_failure_paths_are_enveloped_and_read_only(
     }
     response = client.post("/api/v1/policy/test", json=_TEST_REQUEST)
     assert response.status_code in {200, 422, 503}
+    if response.status_code == 503 and os.getenv("AGT_ENGINE_API_REQUIRE_REPLAY") == "1":
+        pytest.fail("real replay is required for the Engine API conformance profile")
     assert_json_content_type(response)
     if response.status_code != 200:
         body = response.json()
@@ -405,14 +375,14 @@ def test_policy_test_profile_uses_real_replay_when_installed(
             "policy_dir": str(probe_dir),
             "fixtures": [
                 {
-                    "id": "deny-danger",
+                    "id": "allow-safe",
                     "input": {"action": "safe"},
                     "expected_verdict": "allow",
                 },
                 {
-                    "id": "allow-safe",
+                    "id": "mismatch-safe",
                     "input": {"action": "safe"},
-                    "expected_verdict": "allow",
+                    "expected_verdict": "deny",
                 },
             ],
         },
@@ -425,11 +395,13 @@ def test_policy_test_profile_uses_real_replay_when_installed(
             503,
             "ENGINE_UNAVAILABLE",
         )
+        if os.getenv("AGT_ENGINE_API_REQUIRE_REPLAY") == "1":
+            pytest.fail("real replay is required for the Engine API conformance profile")
         return
     body = assert_contract_response(response, canonical_contract, "testPolicy", 200)
     assert body["total"] == 2
-    assert body["passed"] == 2
-    assert body["failed"] == 0
+    assert body["passed"] == 1
+    assert body["failed"] == 1
 
 
 def test_internal_errors_are_sanitized_on_an_isolated_hidden_route(

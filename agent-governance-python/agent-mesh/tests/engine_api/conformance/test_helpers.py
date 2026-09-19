@@ -22,7 +22,6 @@ from .contract import (
     normalize_path,
     operation_map,
     required_fields,
-    response_schema,
     request_schema,
     schema_validator,
     validate_request_payload,
@@ -32,7 +31,6 @@ from . import target as target_module
 from .target import (
     EngineTarget,
     external_target_from_environment,
-    load_metadata_document,
     metadata_to_openapi,
 )
 
@@ -170,7 +168,7 @@ def test_capability_flag_validation_rejects_drift(flags, message):
         capability_flags(operation)
 
 
-def test_response_schema_resolves_exact_wildcard_default_and_inline_schemas():
+def test_schema_resolution_uses_exact_wildcard_default_and_inline_schemas():
     document = _document(
         response={
             "200": {"$ref": "#/components/responses/Error"},
@@ -184,7 +182,7 @@ def test_response_schema_resolves_exact_wildcard_default_and_inline_schemas():
         }
     )
     operation = next(iter_operations(document))
-    assert response_schema(operation, 200)["required"] == ["ok"]
+    assert _schema_for_operation(operation, 200)["required"] == ["ok"]
     assert _schema_for_operation(operation, 404)["required"] == ["error"]
 
     default_document = _document(
@@ -213,13 +211,13 @@ def test_response_schema_resolves_exact_wildcard_default_and_inline_schemas():
         {"200": {"content": {"application/json": {"schema": "not-a-schema"}}}},
     ],
 )
-def test_response_schema_rejects_incomplete_metadata(response):
+def test_schema_resolution_rejects_incomplete_metadata(response):
     operation = next(iter_operations(_document(response=response)))
     with pytest.raises(AssertionError):
-        response_schema(operation, 200)
+        _schema_for_operation(operation, 200)
 
 
-def test_response_schema_rejects_non_local_refs_and_missing_status():
+def test_schema_resolution_rejects_non_local_refs_and_missing_status():
     document = _document(
         response={
             "200": {
@@ -233,9 +231,9 @@ def test_response_schema_rejects_non_local_refs_and_missing_status():
     )
     operation = next(iter_operations(document))
     with pytest.raises(ValueError, match="Only local"):
-        response_schema(operation, 200)
-    with pytest.raises(AssertionError, match="does not advertise"):
-        response_schema(operation, 404)
+        _schema_for_operation(operation, 200)
+    with pytest.raises(AssertionError, match="lacks a JSON schema"):
+        _schema_for_operation(operation, 404)
 
 
 def test_schema_validation_and_required_all_of_resolution():
@@ -282,7 +280,6 @@ def test_contract_assertion_reports_missing_and_misplaced_operations(canonical_c
 def test_target_transport_and_metadata_helpers(tmp_path: Path, monkeypatch):
     metadata_path = tmp_path / "metadata.json"
     metadata_path.write_text(json.dumps({"operations": []}), encoding="utf-8")
-    assert load_metadata_document(metadata_path) == {"operations": []}
 
     class Response:
         def raise_for_status(self):

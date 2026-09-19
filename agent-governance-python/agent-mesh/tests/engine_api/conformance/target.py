@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,15 +104,6 @@ def external_target_from_environment() -> EngineTarget:
         origin=origin,
         allow_writes=os.getenv("AGT_ENGINE_API_ALLOW_WRITES") == "1",
     )
-
-
-def load_metadata_document(path: Path) -> dict[str, Any]:
-    """Load a machine-readable metadata document for adapters without OpenAPI."""
-    with path.open("r", encoding="utf-8") as handle:
-        document = json.load(handle)
-    if not isinstance(document, dict):
-        raise ValueError(f"Metadata document must be an object: {path}")
-    return document
 
 
 def metadata_to_openapi(metadata: dict[str, Any]) -> dict[str, Any]:

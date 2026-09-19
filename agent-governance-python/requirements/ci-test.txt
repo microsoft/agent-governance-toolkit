@@ -22,6 +22,10 @@ pygments==2.20.0 \
 # package install and breaks every agent-os/agent-mesh test collection.
 typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+# OpenAPI 3.1 / JSON Schema 2020-12 validation for the Engine API conformance suite.
+jsonschema==4.25.1 \
+    --hash=sha256:3fba0169e345c7175110351d456342c364814cfcf3b964ba4587f22915230a63 \
+    --hash=sha256:e4a9655ce0da0c0b67a085847e00a3a51449e1157f4f75e9fb5aa545e122eb85
 # PyYAML — imported by tests/ci/test_regression_a2_toolkit_regex.py
 # (introduced in PR #2654). Workflow-lint job runs `pytest tests/ci/ -v`
 # after installing only this requirements file. Without PyYAML pinned

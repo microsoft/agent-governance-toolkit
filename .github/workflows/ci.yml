@@ -483,7 +483,7 @@ jobs:
     if: needs.changes.outputs.engine-api-conformance == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -498,27 +498,6 @@ jobs:
           pip install --no-cache-dir --no-deps -e agent-governance-python/agt-policies
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-hypervisor
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-compliance
-          pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-mesh[dev]"
-          pip install --no-cache-dir \
-            "pytest>=9.1.1,<10.0" \
-            "pytest-asyncio>=1.4.0,<2.0" \
-            "pytest-cov>=7.1.0,<8.0" \
-            "fastapi>=0.141.1,<1.0" \
-            "httpx>=0.28.1,<1.0" \
-            "jsonschema>=4.25.1,<5.0" \
-            "uvicorn[standard]>=0.52.4,<1.0" \
-            "pydantic[email]>=2.13.5,<3.0" \
-            "cryptography>=50.0.1,<51.0" \
-            "PyNaCl>=1.6.2,<2.0" \
-            "pyyaml>=6.0.3,<7.0" \
-            "rich>=15.0.0,<16.0" \
-            "click>=8.5.0,<9.0" \
-            "python-dateutil>=2.9.0.post0,<3.0" \
-            "structlog>=26.1.0,<27.0" \
-            "prometheus-client>=0.26.0,<1.0" \
-            "websockets>=17.1,<18.0" \
-            "aiohttp>=3.13.4,<4.0" \
-            "agentrust-trace>=0.5.1,<0.6.0"
       - name: Install OPA for the real policy replay engine
         run: |
           set -euo pipefail
@@ -534,11 +513,25 @@ jobs:
           set -euo pipefail
           pip install --no-cache-dir maturin==1.8.7
           pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
-      - name: Run Engine API conformance profile
+      - name: Install agent-mesh conformance dependencies
+        working-directory: agent-governance-python/agent-mesh
         run: |
           set -euo pipefail
-          python -m pytest agent-governance-python/agent-mesh/tests/engine_api/conformance/ -q \
-            --cov=agent-governance-python/agent-mesh/tests/engine_api/conformance \
+          pip install --no-cache-dir -e ".[dev]"
+          pip install --no-cache-dir --require-hashes \
+            -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          pip install --no-cache-dir pytest-cov==7.1.0
+      - name: Run Engine API conformance profile
+        working-directory: agent-governance-python/agent-mesh
+        env:
+          AGT_ENGINE_API_REQUIRE_REPLAY: "1"
+        run: |
+          set -euo pipefail
+          python -m pytest tests/engine_api/conformance/ -q \
+            --cov=tests.engine_api.conformance.assertions \
+            --cov=tests.engine_api.conformance.conftest \
+            --cov=tests.engine_api.conformance.contract \
+            --cov=tests.engine_api.conformance.target \
             --cov-report=term-missing \
             --cov-fail-under=95
 
@@ -1393,6 +1386,7 @@ jobs:
         build-rust,
         build-go,
         docker-compose-test,
+        engine-api-conformance,
         markdown-link-check,
       ]
     runs-on: ubuntu-latest

@@ -125,6 +125,7 @@ def _replay_target(policy_dir: str) -> str:
     operation_id="validatePolicy",
     tags=["policy"],
     response_model=ValidateResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def validate_policy(body: ValidateRequest) -> ValidateResponse:
@@ -152,7 +153,7 @@ async def validate_policy(body: ValidateRequest) -> ValidateResponse:
     lint_errors = validate_policy_schema(body.content)
     return ValidateResponse(
         valid=not lint_errors,
-        errors=[PolicyValidationError(line=1, col=1, message=msg) for msg in lint_errors],
+        errors=[PolicyValidationError(message=msg) for msg in lint_errors],
     )
 
 

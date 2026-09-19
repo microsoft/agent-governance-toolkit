@@ -31,7 +31,8 @@ save-disabled.
 The suite uses a real JSON Schema 2020-12 validator for local `$ref` resolution. CI also
 installs the local `agent-compliance` replay implementation, the native policy runtime, and
 OPA so a successful `POST /api/v1/policy/test` path is exercised rather than treated as proof
-when the dependency is absent.
+when the dependency is absent. Set `AGT_ENGINE_API_REQUIRE_REPLAY=1` to make a missing replay
+runtime fail the profile instead of reporting the profile as partial; CI always enables it.
 
 ## External engines
 
@@ -63,6 +64,10 @@ The profile derives the baseline operation set and flags from the checked-in can
 document; it does not copy the reference route catalog. Target OpenAPI documents may contain
 additive operations, but those extensions are validated separately and are never silently
 added to the baseline Studio allowlist.
+
+The CI coverage gate measures the reusable helper modules only:
+`assertions.py`, `conftest.py`, `contract.py`, and `target.py`. Test modules are excluded from
+the measured scope, and the helper total must remain at least 95%.
 
 The following are explicit Epic 0 profile boundaries:
 
