@@ -1225,3 +1225,6 @@ fileno
 fromhex
 fstat
 serialisation
+
+EBADENGINE
+hono
