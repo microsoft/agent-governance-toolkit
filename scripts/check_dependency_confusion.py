@@ -118,7 +118,8 @@ REGISTERED_PACKAGES = {
     "agentmesh", "pydantic-ai", "haystack", "haystack-ai", "respx",
     "langfuse", "arize", "arize-phoenix", "llamaindex", "braintrust", "helicone",
     "datadog", "langsmith", "wandb", "mlflow", "agentops",
-    "typer", "jsonschema", "anyio", "pre-commit", "import-linter",
+    "typer", "jsonschema", "jsonschema-specifications", "referencing", "attrs",
+    "rpds-py", "anyio", "pre-commit", "import-linter",
     "mkdocs", "mkdocs-material", "mkdocs-minify-plugin", "mkdocstrings", "datasets", "sqlglot",
     "aio-pika", "aiokafka",
     # Cedar/OPA policy backends
