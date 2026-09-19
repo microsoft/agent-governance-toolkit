@@ -1,6 +1,6 @@
 ---
 title: "Contributing to Agent Governance Toolkit"
-last_reviewed: 2026-07-01
+last_reviewed: 2026-09-19
 owner: agt-maintainers
 ---
 
@@ -134,6 +134,9 @@ cd agent-governance-toolkit
 pip install -e "agent-governance-python/agent-primitives[dev]"
 pip install -e "agent-governance-python/agent-mcp-governance[dev]"
 pip install -e "agent-os[dev]"
+# agent-mesh[dev] requires the local 5.x agent_hypervisor stub; install it
+# before the dev extra so pip does not select the conflicting PyPI package.
+pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-hypervisor"
 pip install -e "agent-mesh[dev]"
 pip install -e "agent-runtime[dev]"
 pip install -e "agent-sre[dev]"

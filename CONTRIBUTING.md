@@ -53,6 +53,11 @@ pip install --no-cache-dir --no-deps -e agent-governance-toolkit-core
 
 # Install the package you are working on in editable mode
 pip install -e "agent-os[dev]"       # Policy engine
+# agent-mesh's dev extra requires the monorepo-only agent_hypervisor 5.x stub.
+# Install it locally first so pip does not fall back to the pre-consolidation
+# 3.7.0 PyPI package, whose hypervisor code conflicts with the package supplied
+# by agent-governance-toolkit-core.
+pip install --no-cache-dir --no-deps -e agent-hypervisor
 pip install -e "agent-mesh[dev]"     # Identity/trust layer
 pip install -e "agent-compliance[dev]"  # Compliance tooling
 
@@ -303,6 +308,9 @@ pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-governanc
 pip install -e "agent-governance-python/agent-primitives[dev]"
 pip install -e "agent-governance-python/agent-mcp-governance[dev]"
 pip install -e "agent-governance-python/agent-os[dev]"
+# agent-mesh[dev] requires the local 5.x agent_hypervisor stub; install it
+# before the dev extra so pip does not select the conflicting PyPI package.
+pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-hypervisor"
 pip install -e "agent-governance-python/agent-mesh[dev]"
 pip install -e "agent-governance-python/agent-runtime[dev]"
 pip install -e "agent-governance-python/agent-sre[dev]"
