@@ -5,7 +5,7 @@
 
 use agent_control_specification::ffi::{
     acs_builder_build, acs_builder_enable_default_annotator_dispatcher,
-    acs_builder_enable_default_policy_dispatcher, acs_builder_from_yaml,
+    acs_builder_enable_default_policy_dispatcher, acs_builder_free, acs_builder_from_yaml,
     acs_builder_set_url_fetch_limits, acs_free_string, acs_runtime_evaluate, acs_runtime_free,
 };
 use serde_json::{json, Value};
@@ -196,14 +196,17 @@ fn build_without_enabling_defaults_still_requires_a_policy_dispatcher() {
 }
 
 #[test]
-fn set_url_fetch_limits_validates_and_threads_through_build() {
+fn set_url_fetch_limits_rejects_unavailable_configuration() {
     let mut err: *mut c_char = ptr::null_mut();
     assert_eq!(
         unsafe { acs_builder_set_url_fetch_limits(ptr::null_mut(), 4096, 1000, 0, &mut err) },
         -1,
         "null builder must fail closed"
     );
-    let _ = take_err(err);
+    assert!(
+        take_err(err).contains("null builder"),
+        "null-builder error should be explicit"
+    );
 
     let yaml = CString::new(REGO_MANIFEST).unwrap();
     let mut err: *mut c_char = ptr::null_mut();
@@ -211,24 +214,14 @@ fn set_url_fetch_limits_validates_and_threads_through_build() {
     assert!(!builder.is_null(), "builder construction failed");
     assert_eq!(
         unsafe { acs_builder_set_url_fetch_limits(builder, 4096, 1000, 2, &mut err) },
-        0,
-        "setting url fetch limits must succeed"
+        -1,
+        "unavailable URL fetch limits must fail closed"
     );
-    assert_eq!(
-        unsafe { acs_builder_enable_default_policy_dispatcher(builder, &mut err) },
-        0
-    );
-    assert_eq!(
-        unsafe { acs_builder_enable_default_annotator_dispatcher(builder, &mut err) },
-        0
-    );
-    let runtime = unsafe { acs_builder_build(builder, &mut err) };
     assert!(
-        !runtime.is_null(),
-        "build with url fetch limits must succeed, got {}",
-        take_err(err)
+        take_err(err).contains("URL fetch limits are unavailable"),
+        "unavailable-limit error should explain the pinned upstream limitation"
     );
-    unsafe { acs_runtime_free(runtime) };
+    unsafe { acs_builder_free(builder) };
 }
 
 fn opa_env_lock() -> &'static Mutex<()> {

@@ -77,6 +77,10 @@ jsonschema = { version = "=0.17.1", default-features = false }
 name = "artifact_validation"
 required-features = ["opa"]
 
+[[test]]
+name = "ffi_default_dispatchers"
+required-features = ["bundled-dispatchers", "opa"]
+
 [[example]]
 name = "basic_host"
 path = "../../examples/basic_host.rs"
