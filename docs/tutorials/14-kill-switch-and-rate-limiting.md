@@ -150,7 +150,8 @@ print(list(KillReason))
 ### 3.2 Kill with In-Flight Saga Steps
 
 When you kill an agent that has in-flight saga steps (partially completed
-multi-step workflows), the kill switch compensates each step automatically:
+multi-step workflows), the kill switch compensates each step automatically
+when no substitute is registered for the session:
 
 ```python
 from hypervisor.security.kill_switch import (
@@ -199,7 +200,7 @@ Each `StepHandoff` tracks the status of a saga step during termination:
 | Status | Value | Meaning |
 |--------|-------|---------|
 | `PENDING` | `"pending"` | Handoff initiated, not yet processed |
-| `HANDED_OFF` | `"handed_off"` | Step transferred to substitute agent (enterprise) |
+| `HANDED_OFF` | `"handed_off"` | Step transferred to a registered substitute agent |
 | `FAILED` | `"failed"` | Handoff attempt failed |
 | `COMPENSATED` | `"compensated"` | Step rolled back via compensation action |
 
