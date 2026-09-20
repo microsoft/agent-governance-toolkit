@@ -122,7 +122,8 @@
     "jsonify",
     "undecoded",
     "webmcp",
-    "webmachinelearning"
+    "webmachinelearning",
+    "clusterfuzzlite"
   ],
   "ignorePaths": [
     "**/node_modules/**",
