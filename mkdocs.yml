@@ -283,6 +283,7 @@ nav:
   - Conformance: conformance.md
   - Studio:
     - Engine API Contract: studio/engine-api-contract.md
+    - Engine API Conformance: studio/engine-api-conformance.md
   - Specifications:
     - "Agent OS Policy Engine": specs/AGENT-OS-POLICY-ENGINE-1.0.md
     - "Framework Adapter Contract": specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md

@@ -28,6 +28,7 @@ router = APIRouter()
     operation_id="getTrustScores",
     tags=["trust"],
     response_model=TrustScoreListResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def get_trust_scores(
@@ -47,6 +48,7 @@ async def get_trust_scores(
     operation_id="getTrustGraph",
     tags=["trust"],
     response_model=TrustGraph,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def get_trust_graph(request: Request, response: Response) -> TrustGraph:
