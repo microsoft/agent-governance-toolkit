@@ -31,6 +31,7 @@ def _registry(request: Request) -> PolicyRegistry:
     operation_id="listPolicies",
     tags=["policy"],
     response_model=PolicyListResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def list_policies(
@@ -49,6 +50,7 @@ async def list_policies(
     tags=["policy"],
     response_model=PolicyDetail,
     responses={404: {"model": ErrorEnvelope, "description": "Policy not found"}},
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def get_policy(request: Request, id: str) -> PolicyDetail:

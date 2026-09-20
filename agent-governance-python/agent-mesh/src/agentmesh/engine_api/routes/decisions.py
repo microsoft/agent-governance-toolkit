@@ -26,6 +26,7 @@ router = APIRouter()
     operation_id="listDecisions",
     tags=["decisions"],
     response_model=DecisionListResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def list_decisions(

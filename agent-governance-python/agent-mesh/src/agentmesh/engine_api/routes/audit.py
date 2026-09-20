@@ -30,6 +30,7 @@ router = APIRouter()
     operation_id="getAuditLog",
     tags=["audit"],
     response_model=AuditLogResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def get_audit_log(

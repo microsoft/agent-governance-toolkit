@@ -29,6 +29,7 @@ jobs:
       workflows: ${{ steps.filter.outputs.workflows }}
       docs-only: ${{ steps.filter.outputs.docs-only }}
       docker: ${{ steps.filter.outputs.docker }}
+      engine-api-conformance: ${{ steps.filter.outputs.engine-api-conformance }}
       changed-py-pkgs: ${{ steps.py-pkgs.outputs.list }}
       changed-ts-pkgs: ${{ steps.ts-pkgs.outputs.list }}
     steps:
@@ -85,6 +86,16 @@ jobs:
               - '**/*.md'
               - 'agent-governance-python/notebooks/**'
               - 'docs/**'
+            engine-api-conformance:
+              - 'agent-governance-python/agent-mesh/**'
+              - 'agent-governance-python/agent-compliance/**'
+              - 'agent-governance-python/agent-governance-toolkit-core/**'
+              - 'agent-governance-python/agent-hypervisor/**'
+              - 'policy-engine/sdk/python/**'
+              - 'docs/studio/openapi.yaml'
+              - 'docs/studio/engine-api-contract.md'
+              - 'docs/studio/engine-api-conformance.md'
+              - '.github/workflows/ci.yml'
             docker:
               - 'Dockerfile'
               - 'docker-compose*.yml'
@@ -465,6 +476,64 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ── Engine API conformance (implementation and contract changes) ─────
+  engine-api-conformance:
+    needs: changes
+    if: needs.changes.outputs.engine-api-conformance == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install local Engine API runtime siblings
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-core
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-integrations
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-cli
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-protocols
+          pip install --no-cache-dir "pydantic>=2.5.0,<3.0" "pyyaml>=6.0,<7.0"
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agt-policies
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-hypervisor
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-compliance
+      - name: Install OPA for the real policy replay engine
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
+            --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/opa"
+          echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Build native policy runtime for replay
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir maturin==1.8.7
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
+      - name: Install agent-mesh conformance dependencies
+        working-directory: agent-governance-python/agent-mesh
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir -e ".[dev]"
+          pip install --no-cache-dir --require-hashes \
+            -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          pip install --no-cache-dir pytest-cov==7.1.0
+      - name: Run Engine API conformance profile
+        working-directory: agent-governance-python/agent-mesh
+        env:
+          AGT_ENGINE_API_REQUIRE_REPLAY: "1"
+        run: |
+          set -euo pipefail
+          python -m pytest tests/engine_api/conformance/ -q \
+            --cov=tests.engine_api.conformance.assertions \
+            --cov=tests.engine_api.conformance.conftest \
+            --cov=tests.engine_api.conformance.contract \
+            --cov=tests.engine_api.conformance.target \
+            --cov-report=term-missing \
+            --cov-fail-under=95
 
   # ── PyPI package build (only when Python files change) ────────────────
   build-pypi:
@@ -1317,6 +1386,7 @@ jobs:
         build-rust,
         build-go,
         docker-compose-test,
+        engine-api-conformance,
         markdown-link-check,
       ]
     runs-on: ubuntu-latest
