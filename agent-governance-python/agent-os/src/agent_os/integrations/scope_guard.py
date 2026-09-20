@@ -99,6 +99,11 @@ def _get_diff_stats(
         Tuple of (file paths, total insertions, total deletions, error).
         ``error`` is ``None`` when the diff was measured successfully.
     """
+    if not base_branch or base_branch.startswith("-"):
+        error = f"invalid base_branch {base_branch!r}"
+        logger.warning("_get_diff_stats failed: %s", error)
+        return [], 0, 0, error
+
     try:
         result = subprocess.run(  # noqa: S603 — trusted subprocess in scope guard
             [
@@ -300,10 +305,20 @@ class ScopeGuard:
             ``config.mode="off"`` to explicitly skip measurement and scope
             checks, including first-run or no-baseline flows.
         """
+        if config.mode == "off":
+            return self.evaluate(
+                agent_id=agent_id,
+                config=config,
+                changed_files=[],
+                insertions=0,
+                deletions=0,
+                drift_indicators=drift_indicators,
+            )
+
         changed_files, insertions, deletions, error = _get_diff_stats(
             repo_path, base_branch
         )
-        if error is not None and config.mode != "off":
+        if error is not None:
             evaluation = ScopeEvaluation(
                 decision="HARD_FAIL",
                 files_changed=0,

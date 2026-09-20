@@ -258,6 +258,7 @@ class TestEvaluateFromGit:
         assert result.decision == "PASS"
         assert result.error is None
         assert "disabled" in result.reason.lower()
+        mock_stats.assert_not_called()
 
     @patch("agent_os.integrations.scope_guard._get_diff_stats")
     def test_measurement_error_is_recorded(self, mock_stats):
@@ -286,14 +287,27 @@ class TestEvaluateFromGit:
         result = guard.evaluate_from_git("agent-1", cfg, "/repo", base_branch)
 
         assert result.decision == "HARD_FAIL"
-        assert mock_run.call_args.args[0] == [
-            "git",
-            "diff",
-            "--numstat",
-            "--end-of-options",
-            base_branch,
-            "--",
-        ]
+        if base_branch.startswith("-"):
+            mock_run.assert_not_called()
+        else:
+            assert mock_run.call_args.args[0] == [
+                "git",
+                "diff",
+                "--numstat",
+                "--end-of-options",
+                base_branch,
+                "--",
+            ]
+
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_sentinel_base_branch_hard_fails_before_git(self, mock_run):
+        files, insertions, deletions, error = _get_diff_stats("/repo", "--")
+
+        assert files == []
+        assert insertions == 0
+        assert deletions == 0
+        assert error == "invalid base_branch '--'"
+        mock_run.assert_not_called()
 
 # ── _get_diff_stats ───────────────────────────────────────────
 
