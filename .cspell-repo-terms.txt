@@ -1284,6 +1284,7 @@ fromhex
 EBADENGINE
 hono
 # --- rmcp 2.0.0 dependency audit (docs/dependency-audits) ---
+# --- rmcp 2.1.0 dependency audit (docs/dependency-audits) ---
 Abuomar
 Haroon
 alexhancock

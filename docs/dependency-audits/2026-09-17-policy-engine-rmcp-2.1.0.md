@@ -1,10 +1,10 @@
 ---
-title: "Dependency audit: rmcp 1.7.0 to 2.0.0 in policy-engine"
+title: "Dependency audit: rmcp 1.7.0 to 2.1.0 in policy-engine"
 last_reviewed: 2026-09-17
 owner: MohammadHaroonAbuomar
 ---
 
-# 2026-09-17 - rmcp 1.7.0 to 2.0.0 in `policy-engine/integrations/mcp`
+# 2026-09-17 - rmcp 1.7.0 to 2.1.0 in `policy-engine/integrations/mcp`
 
 Supersedes Dependabot PR #4013, which could not carry this document.
 
@@ -12,7 +12,7 @@ Supersedes Dependabot PR #4013, which could not carry this document.
 
 | Package | From | To | Manifest |
 |---|---|---|---|
-| `rmcp` | 1.7.0 | 2.0.0 | `policy-engine/integrations/mcp/Cargo.toml`, `policy-engine/Cargo.lock` |
+| `rmcp` | 1.7.0 | 2.1.0 | `policy-engine/integrations/mcp/Cargo.toml`, `policy-engine/Cargo.lock` |
 | `rmcp-macros` | 1.7.0 | 2.2.0 | `policy-engine/Cargo.lock` (transitive, pulled by `rmcp`) |
 
 The requirement in `Cargo.toml` moves from `"1.7"` to `"2.0"`, matching the
@@ -22,11 +22,13 @@ entries (version and checksum); no other package moves.
 
 Reason: GitHub published two high-severity advisories against `rmcp <
 2.0.0` on 2026-09-16, and Dependabot opened alerts #553 to #556 on the two
-manifests above. 2.0.0 is the first patched release. Newer 2.x and 3.x
+manifests above. 2.0.0 is the first release patched for those two advisories; this change pins 2.1.0 because of the third advisory below. Newer 2.x and 3.x
 releases exist; this change takes the smallest step that clears the
 advisories.
 
 ## Security advisory relevance
+
+- GHSA-9g45-5xwm-f3wc (moderate, published 2026-09-17): custom HTTP headers leaked to cross-origin redirect targets in `rmcp < 2.1.0`. The previous target of this audit, 2.0.0, is affected; 2.1.0 (released 2026-07-02) is the first patched version and is what this change pins.
 
 Both advisories are fixed in 2.0.0 and closed by this change.
 
@@ -46,7 +48,7 @@ Both advisories are fixed in 2.0.0 and closed by this change.
   rust-sdk #937 (with a related SSRF guard in #935).
 
 Reachability in this repository: neither vulnerable module is compiled.
-`policy-engine/integrations/mcp/Cargo.toml` declares `rmcp = "2.0"` with no
+`policy-engine/integrations/mcp/Cargo.toml` declares `rmcp = "2.1"` with no
 feature list, so only the default features `base64`, `macros` and `server`
 are enabled (`cargo tree -e features` shows the single edge
 `rmcp feature "default"`). The Streamable HTTP server sits behind
@@ -62,7 +64,7 @@ live exposure, but it also keeps the crate on a supported line.
 
 ## Provenance and version
 
-`rmcp` 2.0.0 was published to crates.io on 2026-06-29 (80 days before this
+`rmcp` 2.1.0 was published to crates.io on 2026-07-02, and 2.0.0 on 2026-06-29 (80 days before this
 change) by `alexhancock`, whose crates.io login matches the GitHub account,
 from https://github.com/modelcontextprotocol/rust-sdk (tag `rmcp-v2.0.0`).
 It is not yanked. The lockfile checksum
