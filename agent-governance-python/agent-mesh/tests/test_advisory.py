@@ -5,6 +5,7 @@
 import pytest
 from agentmesh.governance.advisory import (
     AdvisoryDecision,
+    AdvisoryMisconfigured,
     CallbackAdvisory,
     HttpAdvisory,
     PatternAdvisory,
@@ -286,6 +287,21 @@ class TestAdvisoryWithGovern:
         result = safe(action="read")
         assert result["status"] == "executed"
 
+    def test_advisory_misconfigured_propagates_through_call(self):
+        """An async callback wired to the sync __call__ path must not be
+        silently degraded to allow by _run_advisory()'s ordinary fail-open
+        handling - AdvisoryMisconfigured must propagate all the way out of
+        __call__, exactly like a caller bug should, not be treated as a
+        transient classifier failure indistinguishable from a flaky model."""
+        async def classifier(ctx):
+            return AdvisoryDecision(action="allow")
+
+        advisory = CallbackAdvisory(classifier)
+        safe = govern(dummy_tool, policy=ALLOW_ALL, advisory=advisory)
+
+        with pytest.raises(AdvisoryMisconfigured):
+            safe(action="read")
+
     def test_advisory_audit_trail(self):
         """Advisory decisions are logged with deterministic=false."""
         advisory = CallbackAdvisory(
@@ -391,8 +407,27 @@ class TestCallbackAdvisoryAsync:
 
         advisory = CallbackAdvisory(classifier, on_error="allow")
 
-        with pytest.raises(TypeError, match="acheck\\(\\)"):
+        with pytest.raises(AdvisoryMisconfigured, match="acheck\\(\\)"):
             advisory.check({})
+
+    def test_check_with_malformed_callback_return_raises(self):
+        """A callback returning something that isn't an AdvisoryDecision
+        (missing .classifier) is the same class of caller bug as the
+        awaitable case above - it should raise, not fail open."""
+        advisory = CallbackAdvisory(lambda ctx: "not a decision", on_error="allow")
+
+        with pytest.raises(AttributeError):
+            advisory.check({})
+
+    async def test_acheck_with_malformed_callback_return_raises(self):
+        """acheck() must behave the same way as check() for a malformed
+        return value - previously it fail-opened here while check() (after
+        the async-callback fix) raised, an inconsistency for the identical
+        mistake depending on which entry point was used."""
+        advisory = CallbackAdvisory(lambda ctx: "not a decision", on_error="allow")
+
+        with pytest.raises(AttributeError):
+            await advisory.acheck({})
 
 
 class TestHttpAdvisoryAsync:
@@ -519,3 +554,21 @@ class TestGovernAcall:
         assert len(entries) >= 1
         assert entries[0].data.get("deterministic") is False
         assert entries[0].data.get("classifier") == "async-test-classifier"
+
+    async def test_acall_malformed_callback_return_still_fails_open(self):
+        """Unlike AdvisoryMisconfigured (the one specific, unambiguous
+        wiring mistake that's deliberately exempted from fail-open), a
+        malformed return value from an otherwise-correctly-wired callback
+        is still caught by _run_advisory_async()'s ordinary fail-open
+        handling, same as any other classifier runtime error - both
+        check() and acheck() raise AttributeError when called directly
+        (see TestCallbackAdvisoryAsync), but going through acall() still
+        fails open rather than crashing the request. This is a deliberate
+        scope boundary, not an oversight: carving out every possible
+        malformed-return shape as a hard failure would erode the fail-open
+        safety net for classifiers doing real I/O."""
+        advisory = CallbackAdvisory(lambda ctx: "not a decision", on_error="allow")
+        safe = govern(dummy_tool, policy=ALLOW_ALL, advisory=advisory)
+
+        result = await safe.acall(action="read")
+        assert result["status"] == "executed"

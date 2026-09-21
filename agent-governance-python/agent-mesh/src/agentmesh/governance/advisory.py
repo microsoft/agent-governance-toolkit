@@ -49,6 +49,18 @@ from typing import Any, Awaitable, Callable, Optional, Union
 logger = logging.getLogger(__name__)
 
 
+class AdvisoryMisconfigured(TypeError):
+    """Raised when an ``AdvisoryCheck`` is wired up incorrectly - e.g. an
+    async callback handed to the sync ``check()`` path instead of
+    ``acheck()``. Deliberately a distinct type from a classifier's own
+    runtime failures: ``govern.py``'s ``_run_advisory()``/
+    ``_run_advisory_async()`` let this propagate rather than converting it
+    to fail-open the way an ordinary classifier error is, since this is a
+    caller wiring bug that should surface immediately rather than being
+    silently degraded to "allow" on every call.
+    """
+
+
 _BLOCKED_HOSTS = frozenset({
     "169.254.169.254",       # cloud metadata (AWS/Azure)
     "metadata.google.internal",
@@ -129,9 +141,14 @@ class CallbackAdvisory(AdvisoryCheck):
             ``Awaitable[AdvisoryDecision]`` (an ``async def`` callback, or
             a sync function returning one) for use via ``acheck()``/
             ``GovernedCallable.acall()``. A coroutine-returning callback
-            passed to the sync ``check()`` raises a clear ``TypeError``
+            passed to the sync ``check()`` raises ``AdvisoryMisconfigured``
             instead of silently returning the coroutine object as if it
-            were a decision.
+            were a decision - and, since that's a caller wiring bug rather
+            than a transient failure, ``govern()`` lets it propagate rather
+            than converting it to fail-open the way an ordinary classifier
+            error is (see ``AdvisoryMisconfigured``'s own docstring). The
+            same applies to a callback returning anything else that isn't
+            a real ``AdvisoryDecision``.
         name: Classifier name for audit trail. Default: "callback".
         on_error: Action when callback fails. Default: "allow" (fail-open).
     """
@@ -168,14 +185,21 @@ class CallbackAdvisory(AdvisoryCheck):
             # wiring bug (an async callback handed to the sync check() path),
             # not a transient classifier failure - it must not be silently
             # converted to fail-open the same way an actual runtime error in
-            # the callback is. Failing loudly here is the whole point.
-            raise TypeError(
+            # the callback is. AdvisoryMisconfigured (not a plain TypeError)
+            # so govern.py's _run_advisory()/_run_advisory_async() can let
+            # this one propagate instead of catching it as an ordinary
+            # Exception - see that class's docstring.
+            raise AdvisoryMisconfigured(
                 f"CallbackAdvisory '{self._name}' callback returned an "
                 "awaitable but check() was called synchronously - use "
                 "acheck() (via GovernedCallable.acall()) for an async "
                 "callback instead."
             )
 
+        # Also outside the try/except: a callback returning something that
+        # isn't an AdvisoryDecision (missing .classifier) is the same class
+        # of caller bug as the awaitable case above, not a transient
+        # failure - it should raise (AttributeError), not fail open.
         decision.classifier = self._name
         return decision
 
@@ -184,8 +208,6 @@ class CallbackAdvisory(AdvisoryCheck):
             decision = self._callback(context)
             if inspect.isawaitable(decision):
                 decision = await decision
-            decision.classifier = self._name
-            return decision
         except Exception as e:
             logger.warning(
                 "Advisory check '%s' failed: %s — defaulting to %s",
@@ -197,6 +219,13 @@ class CallbackAdvisory(AdvisoryCheck):
                 confidence=0.0,
                 classifier=self._name,
             )
+
+        # Outside the try/except, matching check(): a malformed callback
+        # return value (missing .classifier) is a caller bug, not a
+        # transient failure, and should raise rather than fail open - same
+        # reasoning as check()'s own isawaitable/AdvisoryMisconfigured case.
+        decision.classifier = self._name
+        return decision
 
 
 class HttpAdvisory(AdvisoryCheck):

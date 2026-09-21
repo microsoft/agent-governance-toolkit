@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-from .advisory import AdvisoryCheck, AdvisoryDecision
+from .advisory import AdvisoryCheck, AdvisoryDecision, AdvisoryMisconfigured
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
 from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
@@ -604,14 +604,16 @@ class GovernedCallable:
 
     async def _run_advisory_async(self, context: dict) -> Optional[AdvisoryDecision]:
         """Async counterpart of ``_run_advisory()`` - see that docstring
-        for the audit-write-outside-the-try rationale, which applies
-        identically here."""
+        for the audit-write-outside-the-try and AdvisoryMisconfigured
+        rationale, both of which apply identically here."""
         advisory = self._config.advisory
         if not advisory:
             return None
 
         try:
             decision = await advisory.acheck(context)
+        except AdvisoryMisconfigured:
+            raise
         except Exception as e:
             logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
             return AdvisoryDecision(action="allow", reason=f"Error: {e}")
@@ -962,6 +964,13 @@ class GovernedCallable:
         The deterministic policy_evaluation audit write a few lines up
         already fails closed the same way (unguarded, propagates out of
         __call__) - this matches that.
+
+        AdvisoryMisconfigured is deliberately NOT covered by that
+        fail-open: it signals a caller wiring bug (e.g. an async callback
+        passed to the sync check() path), not a transient classifier
+        failure, and converting it to "allow" here would silently degrade
+        every single call through a misconfigured advisory to a no-op
+        check - exactly the kind of bug that should surface immediately.
         """
         advisory = self._config.advisory
         if not advisory:
@@ -969,6 +978,8 @@ class GovernedCallable:
 
         try:
             decision = advisory.check(context)
+        except AdvisoryMisconfigured:
+            raise
         except Exception as e:
             logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
             return AdvisoryDecision(action="allow", reason=f"Error: {e}")
