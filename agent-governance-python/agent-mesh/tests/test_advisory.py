@@ -379,20 +379,20 @@ class TestCallbackAdvisoryAsync:
 
     def test_check_with_async_callback_raises_clear_error(self):
         """Calling the sync check() with an async callback must not
-        silently return the coroutine object as if it were a decision -
-        that would then blow up confusingly (or worse, silently) on
-        `decision.classifier = ...` or `decision.action`."""
+        silently return the coroutine object as if it were a decision, and
+        must not be treated as an ordinary classifier failure either: this
+        is a caller wiring bug (wrong entry point for an async callback),
+        not a transient runtime error, so it must propagate loudly rather
+        than being swallowed by on_error's fail-open path - conflating the
+        two would hide a real bug behind what looks like a flaky
+        classifier."""
         async def classifier(ctx):
             return AdvisoryDecision(action="allow")
 
         advisory = CallbackAdvisory(classifier, on_error="allow")
-        result = advisory.check({})
 
-        # check()'s own try/except catches the TypeError it raises
-        # internally and fails open, same as any other classifier error -
-        # this asserts it doesn't crash the caller or return a coroutine.
-        assert result.action == "allow"
-        assert "acheck()" in result.reason
+        with pytest.raises(TypeError, match="acheck\\(\\)"):
+            advisory.check({})
 
 
 class TestHttpAdvisoryAsync:

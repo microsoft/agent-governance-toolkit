@@ -39,6 +39,7 @@ governed function via ``GovernedCallable.acall()`` instead of ``__call__``::
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from abc import ABC, abstractmethod
@@ -148,17 +149,6 @@ class CallbackAdvisory(AdvisoryCheck):
     def check(self, context: dict) -> AdvisoryDecision:
         try:
             decision = self._callback(context)
-            if inspect.isawaitable(decision):
-                if inspect.iscoroutine(decision):
-                    decision.close()  # avoid a "coroutine was never awaited" warning
-                raise TypeError(
-                    f"CallbackAdvisory '{self._name}' callback returned an "
-                    "awaitable but check() was called synchronously - use "
-                    "acheck() (via GovernedCallable.acall()) for an async "
-                    "callback instead."
-                )
-            decision.classifier = self._name
-            return decision
         except Exception as e:
             logger.warning(
                 "Advisory check '%s' failed: %s — defaulting to %s",
@@ -170,6 +160,24 @@ class CallbackAdvisory(AdvisoryCheck):
                 confidence=0.0,
                 classifier=self._name,
             )
+
+        if inspect.isawaitable(decision):
+            if inspect.iscoroutine(decision):
+                decision.close()  # avoid a "coroutine was never awaited" warning
+            # Deliberately outside the try/except above: this is a caller
+            # wiring bug (an async callback handed to the sync check() path),
+            # not a transient classifier failure - it must not be silently
+            # converted to fail-open the same way an actual runtime error in
+            # the callback is. Failing loudly here is the whole point.
+            raise TypeError(
+                f"CallbackAdvisory '{self._name}' callback returned an "
+                "awaitable but check() was called synchronously - use "
+                "acheck() (via GovernedCallable.acall()) for an async "
+                "callback instead."
+            )
+
+        decision.classifier = self._name
+        return decision
 
     async def acheck(self, context: dict) -> AdvisoryDecision:
         try:
@@ -257,7 +265,6 @@ class HttpAdvisory(AdvisoryCheck):
         # async HTTP client (no new dependency added for this), but it
         # solves the actual problem: GovernedCallable.acall() awaiting
         # this must not block the loop.
-        import asyncio
         return await asyncio.to_thread(self.check, context)
 
 
