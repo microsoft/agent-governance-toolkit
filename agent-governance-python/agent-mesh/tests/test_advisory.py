@@ -429,6 +429,24 @@ class TestCallbackAdvisoryAsync:
         with pytest.raises(AttributeError):
             await advisory.acheck({})
 
+    def test_check_with_none_callback_return_raises(self):
+        """A callback that forgets its return statement (returns None) is
+        the same class of malformed-return mistake as the string case
+        above, and must be caught the same way rather than silently
+        treating None as a decision."""
+        advisory = CallbackAdvisory(lambda ctx: None, on_error="allow")
+
+        with pytest.raises(AttributeError):
+            advisory.check({})
+
+    async def test_acheck_with_none_callback_return_raises(self):
+        """acheck() must match check() for the None-return case too, not
+        just the string-return case already covered above."""
+        advisory = CallbackAdvisory(lambda ctx: None, on_error="allow")
+
+        with pytest.raises(AttributeError):
+            await advisory.acheck({})
+
 
 class TestHttpAdvisoryAsync:
     async def test_acheck_offloads_and_fails_open_on_error(self):
