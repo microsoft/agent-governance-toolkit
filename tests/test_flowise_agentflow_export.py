@@ -23,6 +23,12 @@ def test_flowise_export_uses_agentflow_nodes_and_runtime_references() -> None:
         "customFunctionAgentflow_1",
         "directReplyAgentflow_0",
     }
+    assert {node["data"]["name"] for node in nodes} == {
+        "startAgentflow",
+        "customFunctionAgentflow",
+        "httpAgentflow",
+        "directReplyAgentflow",
+    }
     assert nodes_by_id["startAgentflow_0"]["data"]["version"] == 1.4
     assert nodes_by_id["customFunctionAgentflow_0"]["data"]["version"] == 1.1
     assert nodes_by_id["httpAgentflow_0"]["data"]["version"] == 1.1
