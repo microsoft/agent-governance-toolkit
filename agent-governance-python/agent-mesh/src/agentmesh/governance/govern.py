@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import inspect
 import json
 import logging
 import os
@@ -307,6 +308,12 @@ class GovernedCallable:
     """Wraps any callable with policy enforcement and audit logging.
 
     This is the core primitive — framework-specific wrappers build on it.
+
+    Call it directly (``__call__``) for a synchronous ``fn`` and a
+    synchronous (or no) ``advisory``. Use ``acall()`` instead when either
+    ``fn`` is a coroutine function, or ``advisory`` needs to await real
+    I/O (an LLM call, an HTTP judge) via ``AdvisoryCheck.acheck()`` — see
+    ``acall()``'s own docstring for what is and isn't covered.
     """
 
     def __init__(self, fn: Callable, config: GovernanceConfig):
@@ -496,6 +503,134 @@ class GovernedCallable:
 
         # Allowed — execute the wrapped function
         return self._fn(*args, **kwargs)
+
+    async def acall(self, *args: Any, **kwargs: Any) -> Any:
+        """Async counterpart of ``__call__``.
+
+        Needed for two independent reasons, either of which is enough on
+        its own: (1) ``fn`` is a coroutine function (``__call__`` would
+        return the un-awaited coroutine object rather than its result),
+        or (2) ``advisory`` is configured with a classifier that does real
+        async I/O (an LLM call, an HTTP judge, a second sandbox round
+        trip) via ``AdvisoryCheck.acheck()`` - ``__call__`` calls
+        ``advisory.check()`` synchronously and has no way to await
+        anything.
+
+        Everything else (ring enforcement, deterministic policy
+        evaluation, audit logging, ``on_deny``/``on_flag``) is unchanged
+        from ``__call__`` and stays fully synchronous - those paths do no
+        I/O today, so there is nothing to gain from awaiting them, and
+        keeping them identical between ``__call__`` and ``acall()`` avoids
+        duplicating logic that could drift out of sync. ``on_flag`` may
+        itself be a sync or async callable here; an async ``on_deny`` is
+        not currently supported (approval/deny handling is unchanged from
+        ``__call__``) - out of scope for this change, which is limited to
+        the advisory layer's async support.
+        """
+        context = self._build_context(args, kwargs)
+
+        if self._ring_enforcer is not None and self._config.ring is not None:
+            ring_denial = self._check_ring(context)
+            if ring_denial is not None:
+                if self._config.on_deny:
+                    return self._config.on_deny(ring_denial)
+                raise GovernanceDenied(ring_denial)
+
+        start = time.monotonic()
+        decision = self._engine.evaluate(self._config.agent_id, context)
+        eval_ms = (time.monotonic() - start) * 1000
+
+        if decision.action == "require_approval":
+            decision = self._handle_approval(decision, context)
+
+        if self._audit:
+            self._audit.log(
+                event_type="policy_evaluation",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome=decision.action,
+                policy_decision=decision.action,
+                data={
+                    "rule": decision.matched_rule or "",
+                    "reason": decision.reason or "",
+                    "evaluation_ms": round(eval_ms, 3),
+                },
+            )
+
+        if not decision.allowed:
+            if self._config.on_deny:
+                return self._config.on_deny(decision)
+            raise GovernanceDenied(decision)
+
+        if self._config.advisory and decision.allowed:
+            advisory_result = await self._run_advisory_async(context)
+            if advisory_result and advisory_result.action == "block":
+                blocked = PolicyDecision(
+                    allowed=False,
+                    action="deny",
+                    matched_rule=f"advisory:{advisory_result.classifier}",
+                    reason=f"[Advisory, non-deterministic] {advisory_result.reason}",
+                )
+                if self._config.on_deny:
+                    return self._config.on_deny(blocked)
+                raise GovernanceDenied(blocked)
+            if advisory_result and advisory_result.action == "flag_for_review":
+                if self._config.on_flag:
+                    try:
+                        result = self._config.on_flag(context, advisory_result)
+                        if inspect.isawaitable(result):
+                            await result
+                    except Exception as e:
+                        logger.warning("on_flag callback failed", exc_info=True)
+                        if self._audit:
+                            self._audit.log(
+                                event_type="on_flag_callback_error",
+                                agent_did=self._config.agent_id,
+                                action=context.get("action", {}).get("type", "unknown"),
+                                outcome="error",
+                                data={
+                                    "classifier": advisory_result.classifier,
+                                    "error": str(e),
+                                },
+                            )
+
+        # Allowed — execute the wrapped function, awaiting it if it's a
+        # coroutine function (or if calling it returned an awaitable, e.g.
+        # a sync wrapper that itself returns a coroutine).
+        result = self._fn(*args, **kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
+    async def _run_advisory_async(self, context: dict) -> Optional[AdvisoryDecision]:
+        """Async counterpart of ``_run_advisory()`` - see that docstring
+        for the audit-write-outside-the-try rationale, which applies
+        identically here."""
+        advisory = self._config.advisory
+        if not advisory:
+            return None
+
+        try:
+            decision = await advisory.acheck(context)
+        except Exception as e:
+            logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
+            return AdvisoryDecision(action="allow", reason=f"Error: {e}")
+
+        if self._audit:
+            self._audit.log(
+                event_type="advisory_check",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome=decision.action,
+                data={
+                    "classifier": decision.classifier,
+                    "reason": decision.reason,
+                    "confidence": decision.confidence,
+                    "deterministic": False,
+                },
+            )
+
+        return decision
 
     def _check_ring(self, context: dict) -> Optional[PolicyDecision]:
         """Enforce ring-level resource constraints and inject ring context.

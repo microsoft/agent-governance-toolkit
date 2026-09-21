@@ -6,6 +6,7 @@ import pytest
 from agentmesh.governance.advisory import (
     AdvisoryDecision,
     CallbackAdvisory,
+    HttpAdvisory,
     PatternAdvisory,
     CompositeAdvisory,
 )
@@ -331,3 +332,190 @@ class TestAdvisoryDecision:
         d.deterministic = True  # can set, but init always sets False
         # The field exists but the protocol is clear
         assert isinstance(d.deterministic, bool)
+
+
+async def async_dummy_tool(action="read", **kwargs):
+    return {"action": action, "status": "executed", **kwargs}
+
+
+class TestCallbackAdvisoryAsync:
+    async def test_acheck_with_async_callback_allow(self):
+        async def classifier(ctx):
+            return AdvisoryDecision(action="allow")
+
+        advisory = CallbackAdvisory(classifier, name="async-classifier")
+        result = await advisory.acheck({"action": {"type": "read"}})
+
+        assert result.action == "allow"
+        assert result.classifier == "async-classifier"
+
+    async def test_acheck_with_async_callback_block(self):
+        async def classifier(ctx):
+            return AdvisoryDecision(action="block", reason="Async says no")
+
+        advisory = CallbackAdvisory(classifier)
+        result = await advisory.acheck({})
+
+        assert result.action == "block"
+        assert result.reason == "Async says no"
+
+    async def test_acheck_with_sync_callback_still_works(self):
+        """acheck() works with an ordinary sync callback too - not just
+        async ones - so existing CallbackAdvisory users get acall() for
+        free without changing their classifier."""
+        advisory = CallbackAdvisory(lambda ctx: AdvisoryDecision(action="allow"))
+        result = await advisory.acheck({})
+        assert result.action == "allow"
+
+    async def test_acheck_with_failing_async_callback_fails_open(self):
+        async def classifier(ctx):
+            raise RuntimeError("model unavailable")
+
+        advisory = CallbackAdvisory(classifier, on_error="allow")
+        result = await advisory.acheck({})
+
+        assert result.action == "allow"
+        assert "model unavailable" in result.reason
+
+    def test_check_with_async_callback_raises_clear_error(self):
+        """Calling the sync check() with an async callback must not
+        silently return the coroutine object as if it were a decision -
+        that would then blow up confusingly (or worse, silently) on
+        `decision.classifier = ...` or `decision.action`."""
+        async def classifier(ctx):
+            return AdvisoryDecision(action="allow")
+
+        advisory = CallbackAdvisory(classifier, on_error="allow")
+        result = advisory.check({})
+
+        # check()'s own try/except catches the TypeError it raises
+        # internally and fails open, same as any other classifier error -
+        # this asserts it doesn't crash the caller or return a coroutine.
+        assert result.action == "allow"
+        assert "acheck()" in result.reason
+
+
+class TestHttpAdvisoryAsync:
+    async def test_acheck_offloads_and_fails_open_on_error(self):
+        """No real server needed - an unroutable URL exercises the same
+        fail-open path check() already has, proving acheck() reaches it
+        via asyncio.to_thread rather than hanging the event loop."""
+        advisory = HttpAdvisory(
+            "http://127.0.0.1:1/classify", timeout_seconds=1, on_error="allow",
+        )
+        result = await advisory.acheck({})
+        assert result.action == "allow"
+
+
+class TestCompositeAdvisoryAsync:
+    async def test_acheck_first_non_allow_wins(self):
+        allow = CallbackAdvisory(lambda ctx: AdvisoryDecision(action="allow"))
+
+        async def blocker(ctx):
+            return AdvisoryDecision(action="block", reason="Composite async block")
+
+        block = CallbackAdvisory(blocker)
+        composite = CompositeAdvisory([allow, block])
+
+        result = await composite.acheck({})
+        assert result.action == "block"
+        assert result.reason == "Composite async block"
+
+    async def test_acheck_all_allow(self):
+        a = CallbackAdvisory(lambda ctx: AdvisoryDecision(action="allow"))
+        b = CallbackAdvisory(lambda ctx: AdvisoryDecision(action="allow"))
+        composite = CompositeAdvisory([a, b])
+
+        result = await composite.acheck({})
+        assert result.action == "allow"
+
+
+class TestGovernAcall:
+    async def test_acall_advisory_blocks_after_policy_allow(self):
+        async def classifier(ctx):
+            return AdvisoryDecision(action="block", reason="Async poison detected")
+
+        advisory = CallbackAdvisory(classifier, name="async-poison-detector")
+        safe = govern(dummy_tool, policy=ALLOW_ALL, advisory=advisory)
+
+        with pytest.raises(GovernanceDenied) as exc:
+            await safe.acall(action="read")
+        assert "async poison" in str(exc.value).lower()
+
+    async def test_acall_advisory_allows(self):
+        advisory = CallbackAdvisory(lambda ctx: AdvisoryDecision(action="allow"))
+        safe = govern(dummy_tool, policy=ALLOW_ALL, advisory=advisory)
+
+        result = await safe.acall(action="read")
+        assert result["status"] == "executed"
+
+    async def test_acall_with_async_wrapped_function(self):
+        """acall() awaits fn itself when fn is a coroutine function -
+        __call__ would return the un-awaited coroutine object instead."""
+        advisory = CallbackAdvisory(lambda ctx: AdvisoryDecision(action="allow"))
+        safe = govern(async_dummy_tool, policy=ALLOW_ALL, advisory=advisory)
+
+        result = await safe.acall(action="read")
+        assert result["status"] == "executed"
+
+    async def test_acall_deterministic_deny_still_raises(self):
+        safe = govern(dummy_tool, policy=DENY_DELETE)
+        with pytest.raises(GovernanceDenied):
+            await safe.acall(action="delete")
+
+    async def test_acall_flag_for_review_calls_sync_on_flag(self):
+        seen = []
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="flag_for_review", reason="Borderline"),
+        )
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL, advisory=advisory,
+            on_flag=lambda ctx, decision: seen.append(decision),
+        )
+        result = await safe.acall(action="read")
+
+        assert result["status"] == "executed"
+        assert len(seen) == 1
+        assert seen[0].action == "flag_for_review"
+
+    async def test_acall_flag_for_review_calls_async_on_flag(self):
+        seen = []
+
+        async def on_flag(ctx, decision):
+            seen.append(decision)
+
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="flag_for_review", reason="Borderline"),
+        )
+        safe = govern(dummy_tool, policy=ALLOW_ALL, advisory=advisory, on_flag=on_flag)
+        result = await safe.acall(action="read")
+
+        assert result["status"] == "executed"
+        assert len(seen) == 1
+
+    async def test_acall_survives_on_flag_exception(self):
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="flag_for_review", reason="Borderline"),
+        )
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL, advisory=advisory,
+            on_flag=lambda ctx, decision: (_ for _ in ()).throw(RuntimeError("bug")),
+        )
+        result = await safe.acall(action="read")
+        assert result["status"] == "executed"
+
+    async def test_acall_advisory_audit_trail(self):
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="block", reason="Suspicious"),
+            name="async-test-classifier",
+        )
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL, advisory=advisory,
+            on_deny=lambda d: None,
+        )
+        await safe.acall(action="read")
+
+        entries = safe.audit_log.query(event_type="advisory_check")
+        assert len(entries) >= 1
+        assert entries[0].data.get("deterministic") is False
+        assert entries[0].data.get("classifier") == "async-test-classifier"
