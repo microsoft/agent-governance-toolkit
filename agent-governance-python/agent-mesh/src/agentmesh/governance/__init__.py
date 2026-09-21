@@ -31,6 +31,7 @@ from .otel_observability import (
 from .advisory import (
     AdvisoryCheck,
     AdvisoryDecision,
+    AdvisoryMisconfiguredError,
     CallbackAdvisory,
     HttpAdvisory,
     PatternAdvisory,
@@ -151,6 +152,7 @@ __all__ = [
     # Advisory layer (issue #1377)
     "AdvisoryCheck",
     "AdvisoryDecision",
+    "AdvisoryMisconfiguredError",
     "CallbackAdvisory",
     "HttpAdvisory",
     "PatternAdvisory",

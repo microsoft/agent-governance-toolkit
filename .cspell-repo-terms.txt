@@ -1227,3 +1227,9 @@ fileno
 fromhex
 fstat
 serialisation
+
+# --- advisory.py / govern.py async advisory support terms (PR #4052) ---
+acall
+Acall
+acheck
+unroutable

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-from .advisory import AdvisoryCheck, AdvisoryDecision, AdvisoryMisconfigured
+from .advisory import AdvisoryCheck, AdvisoryDecision, AdvisoryMisconfiguredError
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
 from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
@@ -517,15 +517,15 @@ class GovernedCallable:
         anything.
 
         Everything else (ring enforcement, deterministic policy
-        evaluation, audit logging, ``on_deny``/``on_flag``) is unchanged
-        from ``__call__`` and stays fully synchronous - those paths do no
-        I/O today, so there is nothing to gain from awaiting them, and
-        keeping them identical between ``__call__`` and ``acall()`` avoids
-        duplicating logic that could drift out of sync. ``on_flag`` may
-        itself be a sync or async callable here; an async ``on_deny`` is
-        not currently supported (approval/deny handling is unchanged from
-        ``__call__``) - out of scope for this change, which is limited to
-        the advisory layer's async support.
+        evaluation, audit logging) is unchanged from ``__call__`` and
+        stays fully synchronous - those paths do no I/O today, so there
+        is nothing to gain from awaiting them, and keeping them identical
+        between ``__call__`` and ``acall()`` avoids duplicating logic
+        that could drift out of sync. Both ``on_flag`` and ``on_deny``
+        may be a sync or async callable here; an async result is awaited
+        before being returned, the same way ``on_flag``'s result already
+        is - a caller-supplied async ``on_deny`` that isn't awaited would
+        otherwise make ``acall()`` return a bare, never-awaited coroutine.
         """
         context = self._build_context(args, kwargs)
 
@@ -533,7 +533,7 @@ class GovernedCallable:
             ring_denial = self._check_ring(context)
             if ring_denial is not None:
                 if self._config.on_deny:
-                    return self._config.on_deny(ring_denial)
+                    return await self._invoke_on_deny_async(ring_denial)
                 raise GovernanceDenied(ring_denial)
 
         start = time.monotonic()
@@ -559,7 +559,7 @@ class GovernedCallable:
 
         if not decision.allowed:
             if self._config.on_deny:
-                return self._config.on_deny(decision)
+                return await self._invoke_on_deny_async(decision)
             raise GovernanceDenied(decision)
 
         if self._config.advisory and decision.allowed:
@@ -572,7 +572,7 @@ class GovernedCallable:
                     reason=f"[Advisory, non-deterministic] {advisory_result.reason}",
                 )
                 if self._config.on_deny:
-                    return self._config.on_deny(blocked)
+                    return await self._invoke_on_deny_async(blocked)
                 raise GovernanceDenied(blocked)
             if advisory_result and advisory_result.action == "flag_for_review":
                 if self._config.on_flag:
@@ -602,9 +602,19 @@ class GovernedCallable:
             result = await result
         return result
 
+    async def _invoke_on_deny_async(self, decision: PolicyDecision) -> Any:
+        """Call ``on_deny`` from ``acall()`` and await the result if it's
+        awaitable, mirroring how ``on_flag`` is already handled - without
+        this, a caller-supplied async ``on_deny`` would make ``acall()``
+        return a bare, never-awaited coroutine instead of its result."""
+        result = self._config.on_deny(decision)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
     async def _run_advisory_async(self, context: dict) -> Optional[AdvisoryDecision]:
         """Async counterpart of ``_run_advisory()`` - see that docstring
-        for the audit-write-outside-the-try and AdvisoryMisconfigured
+        for the audit-write-outside-the-try and AdvisoryMisconfiguredError
         rationale, both of which apply identically here."""
         advisory = self._config.advisory
         if not advisory:
@@ -612,7 +622,7 @@ class GovernedCallable:
 
         try:
             decision = await advisory.acheck(context)
-        except AdvisoryMisconfigured:
+        except AdvisoryMisconfiguredError:
             raise
         except Exception as e:
             logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
@@ -965,7 +975,7 @@ class GovernedCallable:
         already fails closed the same way (unguarded, propagates out of
         __call__) - this matches that.
 
-        AdvisoryMisconfigured is deliberately NOT covered by that
+        AdvisoryMisconfiguredError is deliberately NOT covered by that
         fail-open: it signals a caller wiring bug (e.g. an async callback
         passed to the sync check() path), not a transient classifier
         failure, and converting it to "allow" here would silently degrade
@@ -978,7 +988,7 @@ class GovernedCallable:
 
         try:
             decision = advisory.check(context)
-        except AdvisoryMisconfigured:
+        except AdvisoryMisconfiguredError:
             raise
         except Exception as e:
             logger.warning("Advisory check failed: %s — allowing (fail-open)", e)

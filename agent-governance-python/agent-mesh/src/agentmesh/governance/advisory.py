@@ -49,7 +49,7 @@ from typing import Any, Awaitable, Callable, Optional, Union
 logger = logging.getLogger(__name__)
 
 
-class AdvisoryMisconfigured(TypeError):
+class AdvisoryMisconfiguredError(TypeError):
     """Raised when an ``AdvisoryCheck`` is wired up incorrectly - e.g. an
     async callback handed to the sync ``check()`` path instead of
     ``acheck()``. Deliberately a distinct type from a classifier's own
@@ -141,12 +141,12 @@ class CallbackAdvisory(AdvisoryCheck):
             ``Awaitable[AdvisoryDecision]`` (an ``async def`` callback, or
             a sync function returning one) for use via ``acheck()``/
             ``GovernedCallable.acall()``. A coroutine-returning callback
-            passed to the sync ``check()`` raises ``AdvisoryMisconfigured``
+            passed to the sync ``check()`` raises ``AdvisoryMisconfiguredError``
             instead of silently returning the coroutine object as if it
             were a decision - and, since that's a caller wiring bug rather
             than a transient failure, ``govern()`` lets it propagate rather
             than converting it to fail-open the way an ordinary classifier
-            error is (see ``AdvisoryMisconfigured``'s own docstring). The
+            error is (see ``AdvisoryMisconfiguredError``'s own docstring). The
             same applies to a callback returning anything else that isn't
             a real ``AdvisoryDecision``.
         name: Classifier name for audit trail. Default: "callback".
@@ -185,11 +185,11 @@ class CallbackAdvisory(AdvisoryCheck):
             # wiring bug (an async callback handed to the sync check() path),
             # not a transient classifier failure - it must not be silently
             # converted to fail-open the same way an actual runtime error in
-            # the callback is. AdvisoryMisconfigured (not a plain TypeError)
+            # the callback is. AdvisoryMisconfiguredError (not a plain TypeError)
             # so govern.py's _run_advisory()/_run_advisory_async() can let
             # this one propagate instead of catching it as an ordinary
             # Exception - see that class's docstring.
-            raise AdvisoryMisconfigured(
+            raise AdvisoryMisconfiguredError(
                 f"CallbackAdvisory '{self._name}' callback returned an "
                 "awaitable but check() was called synchronously - use "
                 "acheck() (via GovernedCallable.acall()) for an async "
@@ -223,7 +223,7 @@ class CallbackAdvisory(AdvisoryCheck):
         # Outside the try/except, matching check(): a malformed callback
         # return value (missing .classifier) is a caller bug, not a
         # transient failure, and should raise rather than fail open - same
-        # reasoning as check()'s own isawaitable/AdvisoryMisconfigured case.
+        # reasoning as check()'s own isawaitable/AdvisoryMisconfiguredError case.
         decision.classifier = self._name
         return decision
 

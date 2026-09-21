@@ -2,17 +2,20 @@
 # Licensed under the MIT License.
 """Tests for optional advisory layer (classifier-based defense-in-depth)."""
 
+import asyncio
+import time
+
 import pytest
+
 from agentmesh.governance.advisory import (
     AdvisoryDecision,
-    AdvisoryMisconfigured,
+    AdvisoryMisconfiguredError,
     CallbackAdvisory,
+    CompositeAdvisory,
     HttpAdvisory,
     PatternAdvisory,
-    CompositeAdvisory,
 )
-from agentmesh.governance.govern import govern, GovernanceDenied
-
+from agentmesh.governance.govern import GovernanceDenied, govern
 
 ALLOW_ALL = """
 apiVersion: governance.toolkit/v1
@@ -290,7 +293,7 @@ class TestAdvisoryWithGovern:
     def test_advisory_misconfigured_propagates_through_call(self):
         """An async callback wired to the sync __call__ path must not be
         silently degraded to allow by _run_advisory()'s ordinary fail-open
-        handling - AdvisoryMisconfigured must propagate all the way out of
+        handling - AdvisoryMisconfiguredError must propagate all the way out of
         __call__, exactly like a caller bug should, not be treated as a
         transient classifier failure indistinguishable from a flaky model."""
         async def classifier(ctx):
@@ -299,7 +302,7 @@ class TestAdvisoryWithGovern:
         advisory = CallbackAdvisory(classifier)
         safe = govern(dummy_tool, policy=ALLOW_ALL, advisory=advisory)
 
-        with pytest.raises(AdvisoryMisconfigured):
+        with pytest.raises(AdvisoryMisconfiguredError):
             safe(action="read")
 
     def test_advisory_audit_trail(self):
@@ -407,7 +410,7 @@ class TestCallbackAdvisoryAsync:
 
         advisory = CallbackAdvisory(classifier, on_error="allow")
 
-        with pytest.raises(AdvisoryMisconfigured, match="acheck\\(\\)"):
+        with pytest.raises(AdvisoryMisconfiguredError, match="acheck\\(\\)"):
             advisory.check({})
 
     def test_check_with_malformed_callback_return_raises(self):
@@ -458,6 +461,31 @@ class TestHttpAdvisoryAsync:
         )
         result = await advisory.acheck({})
         assert result.action == "allow"
+
+    async def test_acheck_offload_does_not_block_event_loop(self):
+        """Prove acheck() actually offloads the blocking check() call to a
+        worker thread rather than running it inline on the event loop -
+        replacing the asyncio.to_thread call with a direct self.check()
+        call would still pass every other test in this file, but would
+        block the loop for the full duration of the "request" below,
+        starving the concurrently-scheduled ticker task."""
+        advisory = HttpAdvisory(
+            "http://127.0.0.1:1/classify", timeout_seconds=1, on_error="allow",
+        )
+        advisory.check = lambda ctx: (time.sleep(0.2), AdvisoryDecision(action="allow"))[1]
+
+        ticks = []
+
+        async def ticker():
+            while True:
+                ticks.append(time.monotonic())
+                await asyncio.sleep(0.01)
+
+        ticker_task = asyncio.ensure_future(ticker())
+        await advisory.acheck({})
+        ticker_task.cancel()
+
+        assert len(ticks) >= 5
 
 
 class TestCompositeAdvisoryAsync:
@@ -515,6 +543,54 @@ class TestGovernAcall:
         safe = govern(dummy_tool, policy=DENY_DELETE)
         with pytest.raises(GovernanceDenied):
             await safe.acall(action="delete")
+
+    async def test_acall_awaits_async_on_deny(self):
+        """An async on_deny must actually be awaited by acall() - without
+        this, acall() would return a bare, never-awaited coroutine object
+        instead of on_deny's real result, exactly the bug __call__ never
+        has since it never sees an async on_deny at all."""
+        seen = []
+
+        async def on_deny(decision):
+            seen.append(decision)
+            return "denied-async"
+
+        safe = govern(dummy_tool, policy=DENY_DELETE, on_deny=on_deny)
+        result = await safe.acall(action="delete")
+
+        assert result == "denied-async"
+        assert len(seen) == 1
+
+    async def test_acall_awaits_async_on_deny_for_ring_denial(self):
+        """Same as above, but through the ring-enforcement on_deny call
+        site rather than the deterministic-policy one."""
+        from hypervisor.models import ExecutionRing
+
+        async def on_deny(decision):
+            return "ring-denied-async"
+
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL, ring=ExecutionRing.RING_3_SANDBOX,
+            on_deny=on_deny,
+        )
+        result = await safe.acall(action="subprocess_exec")
+
+        assert result == "ring-denied-async"
+
+    async def test_acall_awaits_async_on_deny_for_advisory_block(self):
+        """Same as above, but through the advisory-block on_deny call
+        site (the third of the three sites in acall())."""
+        advisory = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="block", reason="Async poison detected"),
+        )
+
+        async def on_deny(decision):
+            return "advisory-denied-async"
+
+        safe = govern(dummy_tool, policy=ALLOW_ALL, advisory=advisory, on_deny=on_deny)
+        result = await safe.acall(action="read")
+
+        assert result == "advisory-denied-async"
 
     async def test_acall_flag_for_review_calls_sync_on_flag(self):
         seen = []
@@ -574,7 +650,7 @@ class TestGovernAcall:
         assert entries[0].data.get("classifier") == "async-test-classifier"
 
     async def test_acall_malformed_callback_return_still_fails_open(self):
-        """Unlike AdvisoryMisconfigured (the one specific, unambiguous
+        """Unlike AdvisoryMisconfiguredError (the one specific, unambiguous
         wiring mistake that's deliberately exempted from fail-open), a
         malformed return value from an otherwise-correctly-wired callback
         is still caught by _run_advisory_async()'s ordinary fail-open
@@ -590,3 +666,58 @@ class TestGovernAcall:
 
         result = await safe.acall(action="read")
         assert result["status"] == "executed"
+
+    async def test_acall_cancellation_propagates_before_fn_runs(self):
+        """Cancelling the acall() task while an async classifier is still
+        awaiting must propagate CancelledError out to the caller, not be
+        swallowed by _run_advisory_async()'s fail-open handling.
+        CancelledError is a BaseException (not Exception) since Python
+        3.8, so `except Exception` already lets it through - this test
+        pins that down instead of relying on it silently, since swapping
+        the handler to `except BaseException` (which would swallow it)
+        still passes every other test in this file."""
+        fn_called = []
+
+        def fn(**kwargs):
+            fn_called.append(True)
+            return {"status": "executed"}
+
+        async def slow_classifier(ctx):
+            await asyncio.sleep(10)
+            return AdvisoryDecision(action="allow")
+
+        advisory = CallbackAdvisory(slow_classifier)
+        safe = govern(fn, policy=ALLOW_ALL, advisory=advisory)
+
+        task = asyncio.ensure_future(safe.acall(action="read"))
+        await asyncio.sleep(0)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert fn_called == []
+        assert safe.audit_log.query(event_type="advisory_check") == []
+
+    async def test_acall_timeout_stops_before_fn_runs(self):
+        """asyncio.wait_for() timing out on acall() while an async
+        classifier is still running must raise TimeoutError and must not
+        have executed fn - proving the timeout actually interrupts the
+        advisory wait rather than racing past it."""
+        fn_called = []
+
+        def fn(**kwargs):
+            fn_called.append(True)
+            return {"status": "executed"}
+
+        async def slow_classifier(ctx):
+            await asyncio.sleep(10)
+            return AdvisoryDecision(action="allow")
+
+        advisory = CallbackAdvisory(slow_classifier)
+        safe = govern(fn, policy=ALLOW_ALL, advisory=advisory)
+
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(safe.acall(action="read"), timeout=0.05)
+
+        assert fn_called == []
