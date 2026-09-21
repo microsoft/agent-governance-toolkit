@@ -264,6 +264,7 @@ impl PolicyDispatcher for PyPolicyDispatcher {
 struct NativeRuntime {
     runtime: Runtime,
     policy_labels: JsonValue,
+    approval: JsonValue,
 }
 
 #[pymethods]
@@ -394,6 +395,14 @@ impl NativeRuntime {
     fn policy_labels(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(py, &self.policy_labels)
     }
+
+    /// The merged manifest's optional top-level `approval` section, or `None`
+    /// when the manifest declares none. The core validates its shape and
+    /// otherwise treats it as opaque host configuration, so the host SDK reads
+    /// it here to drive its own approval path.
+    fn approval_config(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(py, &self.approval)
+    }
 }
 
 impl NativeRuntime {
@@ -416,6 +425,8 @@ impl NativeRuntime {
             None => default_host_policy_dispatcher(&manifest).map_err(runtime_error)?,
         };
         let labels = policy_labels(&manifest);
+        let approval = serde_json::to_value(&manifest.approval)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         let runtime = Runtime::with_telemetry_perf_and_limits(
             manifest,
             annotations,
@@ -428,6 +439,7 @@ impl NativeRuntime {
         Ok(Self {
             runtime,
             policy_labels: labels,
+            approval,
         })
     }
 }

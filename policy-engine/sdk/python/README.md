@@ -172,4 +172,6 @@ In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` ver
 
 The resolver is consulted only for `escalate` and only in enforce mode. A `deny` never consults it. Framework adapters use the instance resolver. Resumption after a suspension is owned by the host. For a post action point such as `post_tool_call` the action already ran, so a resuming host delivers the produced result instead of running it again. `mcp_approval_resolver(elicit)` adapts an MCP elicitation callback into a resolver.
 
+The manifest's optional top-level `approval` section is exposed unchanged as `AgentControl.approval_config`, read from the fully merged manifest by the native core on every constructor. `HostSession` bounds its synchronous approval wait with that section's `timeout_seconds` when declared and with `DEFAULT_APPROVAL_TIMEOUT_SECONDS` otherwise; an explicit `approval_timeout_seconds=` argument wins over both. The section's `on_timeout` is not applied: on expiry the session uses its own `approval_on_timeout` argument, which defaults to `deny`.
+
 In artifact kits, install the Python wheel into a temporary virtual environment and run a host smoke test that loads a manifest with `NativeRuntimeClient.from_path`. In repository checkouts, run the Python SDK test suite through the project build instructions.

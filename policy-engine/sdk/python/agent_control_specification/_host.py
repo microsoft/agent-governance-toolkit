@@ -27,7 +27,7 @@ import math
 import threading
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Any, Awaitable
+from typing import Any, Awaitable, Mapping
 
 from ._types import (
     AgentControlBlocked,
@@ -77,18 +77,31 @@ def run_sync(coro: Awaitable[Any], *, timeout: float | None = None) -> Any:
     return outcome.get("value")
 
 DEFAULT_APPROVAL_TIMEOUT_SECONDS = 300.0
-"""Bound on the approval wait when the caller does not set one.
+"""Bound on the approval wait when neither the caller nor the manifest sets one.
 
 An unbounded wait is a fail-open: CPython cannot interrupt a resolver blocked
 in synchronous code, so a hung approval would hold the calling agent forever
 instead of denying.
 
-The manifest's ``approval.timeout_seconds`` does not drive this yet. The core
-treats that section as opaque host configuration (SPECIFICATION §17.1), and
-:class:`AgentControl` does not surface it, so a session cannot read it without
-a new accessor across the native boundary. Pass ``approval_timeout_seconds``
-to honour a manifest value in the meantime.
+A manifest that declares ``approval.timeout_seconds`` (SPECIFICATION §24)
+replaces this default through :attr:`AgentControl.approval_config`. An
+explicit ``approval_timeout_seconds`` argument wins over both.
 """
+
+
+def _manifest_approval_timeout(control: Any) -> float | None:
+    """Return the control manifest's ``approval.timeout_seconds``, if declared.
+
+    The native runtime validates the field as a positive integer, so
+    anything else can only come from a custom control and is ignored.
+    """
+    approval = getattr(control, "approval_config", None)
+    if not isinstance(approval, Mapping):
+        return None
+    timeout = approval.get("timeout_seconds")
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+        return None
+    return float(timeout)
 
 
 def _utcnow_iso() -> str:
@@ -256,10 +269,14 @@ class HostSession:
     ) -> None:
         self._control = control
         self._mode = EnforcementMode(mode)
-        self._approval_timeout_seconds = (
-            DEFAULT_APPROVAL_TIMEOUT_SECONDS
-            if approval_timeout_seconds is None
-            else approval_timeout_seconds
+        if approval_timeout_seconds is None:
+            approval_timeout_seconds = _manifest_approval_timeout(control)
+        if approval_timeout_seconds is None:
+            approval_timeout_seconds = DEFAULT_APPROVAL_TIMEOUT_SECONDS
+        # The core accepts any u64, but a float past this bound makes
+        # ``Thread.join`` raise OverflowError instead of waiting.
+        self._approval_timeout_seconds = min(
+            float(approval_timeout_seconds), threading.TIMEOUT_MAX
         )
         self._approval_on_timeout = approval_on_timeout
         self.builder = builder or SnapshotBuilder(

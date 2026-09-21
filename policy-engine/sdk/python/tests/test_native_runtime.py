@@ -5,9 +5,11 @@ import unittest
 from pathlib import Path
 
 from agent_control_specification import (
+    DEFAULT_APPROVAL_TIMEOUT_SECONDS,
     AgentControl,
     Decision,
     EnforcementMode,
+    HostSession,
     InterventionPoint,
     PerfTelemetry,
     action_identity,
@@ -44,6 +46,19 @@ annotators:
   prompt_classifier:
     type: classifier
 """
+
+MANIFEST_WITH_APPROVAL_YAML = (
+    MANIFEST_YAML
+    + """approval:
+  default_resolver: webhook
+  timeout_seconds: 120
+  on_timeout: deny
+  resolvers:
+    webhook:
+      type: webhook
+      url: https://example.com/approve
+"""
+)
 
 
 class MockAnnotator:
@@ -99,6 +114,23 @@ class NativeRuntimeTests(unittest.TestCase):
                 self.assertEqual(result.verdict.decision, Decision.DENY)
                 self.assertEqual(result.verdict.reason, "host_error:transform_invalid")
                 self.assertIsNone(result.transformed_policy_target)
+
+    def test_manifest_approval_section_drives_the_host_session_timeout(self):
+        control = AgentControl.from_native(MANIFEST_WITH_APPROVAL_YAML, MockAnnotator(), MockPolicy())
+
+        self.assertEqual(control.approval_config["timeout_seconds"], 120)
+        self.assertEqual(control.approval_config["on_timeout"], "deny")
+        self.assertEqual(control.approval_config["resolvers"]["webhook"]["type"], "webhook")
+        self.assertEqual(HostSession(control)._approval_timeout_seconds, 120.0)
+        self.assertEqual(
+            HostSession(control, approval_timeout_seconds=7)._approval_timeout_seconds, 7
+        )
+
+    def test_manifest_without_approval_section_keeps_the_default_timeout(self):
+        control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), MockPolicy())
+
+        self.assertEqual(dict(control.approval_config), {})
+        self.assertEqual(HostSession(control)._approval_timeout_seconds, DEFAULT_APPROVAL_TIMEOUT_SECONDS)
 
     def test_parse_manifest_uses_native_yaml_semantics(self):
         parsed = parse_manifest(

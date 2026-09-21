@@ -6,6 +6,7 @@ import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
+from types import MappingProxyType
 
 from ._client import AnnotatorDispatcher, NativeRuntimeClient, PolicyDispatcher, RuntimeClient
 from ._telemetry import TelemetryEvent, TelemetrySink, _coerce_sink
@@ -56,6 +57,7 @@ class AgentControl:
         # which case policy_id is None and annotators fall back to the executed
         # annotation keys on the result.
         self._policy_id_index, self._annotator_index = _labels_from_client(runtime_client)
+        self._approval_config = _approval_config_from_client(runtime_client)
 
     @classmethod
     def from_native(
@@ -142,6 +144,17 @@ class AgentControl:
             approval_resolver=approval_resolver,
             telemetry_sink=telemetry_sink,
         )
+
+    @property
+    def approval_config(self) -> Mapping[str, JsonValue]:
+        """The manifest's top-level ``approval`` section, empty when undeclared.
+
+        Read-only. Populated from the runtime client's ``approval_config`` for
+        every native-backed constructor; a custom client without it yields an
+        empty mapping.
+        """
+
+        return self._approval_config
 
     async def evaluate_intervention_point(
         self,
@@ -685,6 +698,25 @@ def _tool_call(tool_name: str, args: JsonValue, tool_call_id: str | None) -> dic
     if tool_call_id is not None:
         tool_call["id"] = tool_call_id
     return tool_call
+
+
+def _approval_config_from_client(runtime_client: RuntimeClient) -> Mapping[str, JsonValue]:
+    """Read the client's ``approval_config`` mapping, empty when it has none.
+
+    Never raises: like the telemetry labels, a missing or broken accessor must
+    not block construction.
+    """
+
+    try:
+        getter = getattr(runtime_client, "approval_config", None)
+        if not callable(getter):
+            return MappingProxyType({})
+        approval = getter()
+    except Exception:  # noqa: BLE001 - best effort, must not break construction
+        return MappingProxyType({})
+    if not isinstance(approval, Mapping):
+        return MappingProxyType({})
+    return MappingProxyType(dict(approval))
 
 
 def _labels_from_client(

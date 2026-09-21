@@ -473,12 +473,13 @@ The following public symbols are removed:
    updating.
 2. `agt validate` now applies the runtime's own contract, so a manifest with no
    intervention points is an error rather than a warning.
-3. The approval timeout moved onto the session. `HostSession` defaults to 300
-   seconds and denies on expiry; pass `approval_timeout_seconds` to change it.
-   The manifest's `approval.timeout_seconds` does not drive this. The core
-   treats that section as opaque host configuration and `AgentControl` does not
-   surface it, so a host that declares it in the manifest must pass the same
-   value to the session until the SDK exposes an accessor.
+3. The approval timeout moved onto the session. `HostSession` denies on
+   expiry and bounds the wait by, in order: an explicit
+   `approval_timeout_seconds` argument, the manifest's
+   `approval.timeout_seconds` (read through `AgentControl.approval_config`),
+   then a 300-second default. The manifest's `on_timeout` is not applied; the
+   session's own `approval_on_timeout` (default `deny`) decides what happens
+   on expiry.
 
 ---
 

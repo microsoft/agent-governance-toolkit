@@ -356,6 +356,79 @@ def test_explicit_timeout_overrides_the_default() -> None:
     assert session._approval_timeout_seconds == 3
 
 
+class _ManifestControl(_EscalatingControl):
+    """An escalating control whose manifest declares an ``approval`` section."""
+
+    def __init__(self, approval, on_enforce: BaseException | None = None) -> None:
+        super().__init__(on_enforce)
+        self.approval_config = approval
+
+
+def test_manifest_timeout_replaces_the_default() -> None:
+    """``approval.timeout_seconds`` from the manifest bounds the wait."""
+    session = HostSession(_ManifestControl({"timeout_seconds": 42, "on_timeout": "deny"}))
+
+    assert session._approval_timeout_seconds == 42.0
+
+
+def test_explicit_timeout_overrides_the_manifest() -> None:
+    """A caller-supplied timeout still wins over the manifest's."""
+    session = HostSession(_ManifestControl({"timeout_seconds": 42}), approval_timeout_seconds=3)
+
+    assert session._approval_timeout_seconds == 3
+
+
+@pytest.mark.parametrize(
+    "approval",
+    [
+        {},
+        {"default_resolver": "webhook"},
+        {"timeout_seconds": "soon"},
+        {"timeout_seconds": True},
+        {"timeout_seconds": 0},
+        {"timeout_seconds": -1},
+        "not-a-mapping",
+    ],
+)
+def test_manifest_without_a_usable_timeout_keeps_the_default(approval) -> None:
+    """A manifest that declares no usable timeout leaves the default in place."""
+    session = HostSession(_ManifestControl(approval))
+
+    assert session._approval_timeout_seconds == DEFAULT_APPROVAL_TIMEOUT_SECONDS
+
+
+@pytest.mark.parametrize("path", ["manifest", "argument"])
+def test_oversized_timeout_is_clamped_to_what_join_accepts(path) -> None:
+    """A u64 the core accepts must not turn every escalation into OverflowError."""
+    import threading
+
+    huge = 2**64 - 1
+    if path == "manifest":
+        session = HostSession(_ManifestControl({"timeout_seconds": huge}))
+    else:
+        session = HostSession(_ManifestControl({}), approval_timeout_seconds=huge)
+
+    assert session._approval_timeout_seconds == threading.TIMEOUT_MAX
+
+
+def test_manifest_timeout_bounds_a_hung_resolver() -> None:
+    """The manifest bound is enforced, not just recorded."""
+    import time
+
+    class _HangingManifestControl(_ManifestControl):
+        async def enforce(self, intervention_point, result, mode):
+            time.sleep(30)
+            return result
+
+    started = time.monotonic()
+    result = HostSession(_HangingManifestControl({"timeout_seconds": 1})).input("x")
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 5
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.reason == "host_error:approval_unresolved"
+
+
 def test_a_hung_resolver_denies_rather_than_blocking() -> None:
     """The bound is real: a resolver that never returns still yields a deny."""
     import time
