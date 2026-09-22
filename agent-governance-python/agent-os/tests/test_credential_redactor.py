@@ -813,4 +813,3 @@ def test_pii_scan_handles_separator_dense_input_quickly(text: str):
     elapsed = time.perf_counter() - start
     assert not any(match.name == "Email address" for match in matches)
     assert elapsed < 1.0
-    assert elapsed < 1.0
