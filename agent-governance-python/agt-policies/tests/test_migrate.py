@@ -590,6 +590,12 @@ def test_every_adapter_point_is_bound(tmp_path: Path) -> None:
         "agent_startup",
         "agent_shutdown",
     }
+    # The model and output points bind the snapshot contract's keys, which
+    # HostSession and the agent_os adapter runtime both send.
+    points = manifest["intervention_points"]
+    assert points["pre_model_call"]["policy_target"] == "$.model_request.messages"
+    assert points["post_model_call"]["policy_target"] == "$.model_response"
+    assert points["output"]["policy_target"] == "$.output"
 
 
 def _assert_denies(
@@ -597,7 +603,7 @@ def _assert_denies(
     patterns: list[Any],
     cases: list[tuple[str, Any]],
 ) -> None:
-    """Evaluate a migrated policy against the real engine at post_model_call.
+    """Evaluate a migrated policy against the real engine at post_model_call and output.
 
     The generated Rego is only correct if the engine agrees, so assert verdicts
     rather than grepping the emitted text.
@@ -627,9 +633,13 @@ def _assert_denies(
         AgentControl.from_path(str(path)), agent_id="a", session_id="s"
     )
     for label, payload in cases:
-        verdict = session.post_model_call(payload).verdict
-        assert verdict.decision.value == "deny", f"{label}: {verdict.decision}"
-        assert verdict.reason == "blocked_pattern_input", f"{label}: {verdict.reason}"
+        for point, evaluate in (
+            ("post_model_call", session.post_model_call),
+            ("output", session.output),
+        ):
+            verdict = evaluate(payload).verdict
+            assert verdict.decision.value == "deny", f"{label} at {point}: {verdict.decision}"
+            assert verdict.reason == "blocked_pattern_input", f"{label} at {point}: {verdict.reason}"
 
 
 def test_object_targets_match_without_json_escaping(tmp_path: Path) -> None:

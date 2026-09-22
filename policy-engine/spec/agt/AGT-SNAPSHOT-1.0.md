@@ -78,31 +78,39 @@ intervention point.
 ```
 
 The `input.ifc.source_labels` field is the IFC label-flow source labels per
-ACS §11. Note the path: AGT stock IFC rules read `input.ifc.source_labels`
-(at `input`) and `response.ifc.result_labels` (at `output`), not
-`snapshot.ifc.*`. The AGT-correct IFC library is shipped as
-`policy/lib/agt_ifc.rego` (package `data.agt.ifc`) and is the one AGT manifest
-authors MUST import; the upstream `policy/lib/ifc.rego` (package
-`agent_control_specification.lib.ifc`) is retained for callers that supply
-the upstream snapshot shape.
+ACS §11. Note the paths: AGT stock IFC rules read `input.ifc.source_labels`
+at `input` and the top-level `ifc.result_labels` at `output` (§2.7). The AGT
+IFC library is shipped as `policy/lib/agt_ifc.rego` (package `data.agt.ifc`)
+and carries the readers for both paths; the upstream `policy/lib/ifc.rego`
+(package `agent_control_specification.lib.ifc`) takes the label array as an
+argument instead.
 
 ### 2.3 `pre_model_call`
 
 ```jsonc
 {
   "envelope": { ... },
-  "model": {
-    "name": "string",
-    "vendor": "string",
-    "params": { "temperature": 0.0, "max_tokens": 0 }
+  "model_request": {
+    "model": {
+      "name": "string",
+      "vendor": "string",
+      "params": { "temperature": 0.0, "max_tokens": 0 }
+    },
+    "messages": [
+      { "role": "system|user|assistant|tool", "content": "string|object" }
+    ],
+    "tools": [{ "name": "string", "description": "string", "schema": {} }]
   },
-  "messages": [
-    { "role": "system|user|assistant|tool", "content": "string|object" }
-  ],
-  "tools": [{ "name": "string", "description": "string", "schema": {} }],
   "request_id": "string"
 }
 ```
+
+`model_request` is the request the host is about to send, under the key the
+ACS snapshot contract (`policy-engine/docs/snapshot-contract.md`) and the
+framework adapters use. The AGT adapter runtime emits the members shown;
+`HostSession.pre_model_call` forwards the caller's request unchanged, so a
+provider-shaped request (Anthropic `system`, Gemini `contents`) keeps its own
+members under `model_request`.
 
 ### 2.4 `post_model_call`
 
@@ -111,7 +119,7 @@ the upstream snapshot shape.
   "envelope": { ... },
   "model": { "name": "string", "vendor": "string" },
   "request_id": "string",
-  "response": {
+  "model_response": {
     "content": "string|object",
     "tool_calls": [{ "name": "string", "args": {} }],
     "finish_reason": "stop|length|tool_calls|content_filter|other"
@@ -160,13 +168,16 @@ in the manifest.
 ```jsonc
 {
   "envelope": { ... },
-  "response": {
-    "content": "string|object",
-    "ifc": { "result_labels": ["string"] }
-  },
+  "output": "string|object",
+  "ifc": { "result_labels": ["string"] },
   "message_chain": [{ "role": "...", "content": "..." }]
 }
 ```
+
+`output` is the final content itself, as the contract and the adapters send
+it. The IFC result labels sit beside it at the top level (the `snapshot.ifc.*`
+convention of SPECIFICATION.md §11) because a bare string has nowhere to nest
+them.
 
 ### 2.8 `agent_shutdown`
 
