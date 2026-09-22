@@ -636,8 +636,13 @@
         ],
         "inputAnchors": [],
         "inputs": {
-          "customFunctionInputVariables": "",
-          "customFunctionJavascriptFunction": "const raw = typeof $input !== 'undefined' ? $input : '{}';\nconst res = typeof raw === 'string' ? JSON.parse(raw) : raw;\nif (!res.allowed) {\n  return '[BLOCKED] ' + (res.reason || 'Request denied by governance policy.');\n}\nreturn '[ALLOWED] Tool: ' + (res.tool || 'unknown') + ' - governance check passed.';",
+          "customFunctionInputVariables": [
+            {
+              "variableName": "httpResponse",
+              "variableValue": "{{ httpAgentflow_0.output.http.data }}"
+            }
+          ],
+          "customFunctionJavascriptFunction": "const raw = typeof $httpResponse !== 'undefined' ? $httpResponse : '{}';\nconst res = typeof raw === 'string' ? JSON.parse(raw) : raw;\nif (!res.allowed) {\n  return '[BLOCKED] ' + (res.reason || 'Request denied by governance policy.');\n}\nreturn '[ALLOWED] Tool: ' + (res.tool || 'unknown') + ' - governance check passed.';",
           "customFunctionUpdateState": ""
         },
         "outputAnchors": [

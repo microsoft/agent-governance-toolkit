@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Regression checks for the validated Flowise 3.1.4 Agentflow export."""
+"""Regression checks for the Flowise 3.1.4 Agentflow template."""
 
 import json
 from pathlib import Path
@@ -39,6 +39,15 @@ def test_flowise_export_uses_agentflow_nodes_and_runtime_references() -> None:
     http_inputs = nodes_by_id["httpAgentflow_0"]["data"]["inputs"]
     assert http_inputs["body"] == "{{ customFunctionAgentflow_0.output.content }}"
     assert http_inputs["bodyType"] == "json"
+
+    formatter_inputs = nodes_by_id["customFunctionAgentflow_1"]["data"]["inputs"]
+    assert formatter_inputs["customFunctionInputVariables"] == [
+        {
+            "variableName": "httpResponse",
+            "variableValue": "{{ httpAgentflow_0.output.http.data }}",
+        }
+    ]
+    assert "$httpResponse" in formatter_inputs["customFunctionJavascriptFunction"]
 
     reply_inputs = nodes_by_id["directReplyAgentflow_0"]["data"]["inputs"]
     assert reply_inputs["directReplyMessage"] == "{{ customFunctionAgentflow_1.output.content }}"

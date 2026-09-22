@@ -4,7 +4,7 @@ Enforce AGT governance policies inside any Flowise flow. Because Flowise runs in
 
 ## Architecture
 
-The `flowise-flow.json` contains a 5-node Agentflow (built and validated for Flowise 3.1.4):
+The `flowise-flow.json` contains a 5-node Agentflow assembled from the Flowise 3.1.4 Agentflow marketplace node templates:
 
 ```
 [Start]
@@ -72,7 +72,7 @@ curl -s -X POST http://localhost:8000/govern \
 5. The flow loads with five nodes already connected.
 6. Click **Save** and then **Deploy**.
 
-### 3. Test the full flow (Validated on Flowise 3.1.4)
+### 3. Test the full flow (Flowise 3.1.4 Agentflow template)
 
 Send a message through the Flowise chat UI.
 
@@ -82,7 +82,7 @@ Send a message through the Flowise chat UI.
 
 ### Export validation
 
-The checked-in JSON was produced from a running Flowise 3.1.4 Agentflow rather than authored against the schema:
+The checked-in JSON is assembled from the Flowise 3.1.4 Agentflow marketplace node templates. To produce and verify a raw export for a specific running instance:
 
 1. Create the five-node flow shown above in a new Agentflow.
 2. Configure the HTTP node to call `http://localhost:8000/govern` with the custom-function output as its JSON body.
