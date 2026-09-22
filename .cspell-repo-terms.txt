@@ -964,6 +964,7 @@ sarif
 sboms
 sbyte
 scak
+scandir
 schemaversion
 scikit
 scipy
