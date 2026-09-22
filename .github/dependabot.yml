@@ -136,6 +136,19 @@ updates:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
 
+  - package-ecosystem: "npm"
+    directory: "/agent-governance-codex-cli"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+
   # .NET
   - package-ecosystem: "nuget"
     directory: "/agent-governance-dotnet"
