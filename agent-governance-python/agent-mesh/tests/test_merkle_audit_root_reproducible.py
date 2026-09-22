@@ -159,7 +159,7 @@ class TestMerkleRootReproducible:
         assert _textbook_merkle_root([e.entry_hash for e in chain._entries]) != recorded
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def large_audit_log():
     log = AuditLog()
     entries = [
@@ -217,6 +217,43 @@ class TestAuditLogExport:
 
         assert log.query() == entries[-100:]
         assert log.query(limit=5) == entries[-5:]
+
+    def test_query_without_limit_returns_all_entries(self, large_audit_log):
+        log, entries = large_audit_log
+
+        results = log.query(limit=None)
+
+        assert results == entries
+        results.clear()
+        assert log.query(limit=None) == entries
+
+    @pytest.mark.parametrize("export_method", ["export", "export_cloudevents"])
+    def test_export_includes_entry_appended_before_query(self, monkeypatch, export_method):
+        log = AuditLog()
+        entries = [
+            log.log("tool_invocation", "did:mesh:test-agent", f"action-{i}")
+            for i in range(5)
+        ]
+        query = log.query
+
+        def append_before_query(**kwargs):
+            entries.append(log.log("tool_invocation", "did:mesh:test-agent", "appended"))
+            return query(**kwargs)
+
+        monkeypatch.setattr(log, "query", append_before_query)
+
+        exported = getattr(log, export_method)()
+
+        if export_method == "export":
+            assert exported["entry_count"] == len(entries)
+            assert exported["entries"] == [entry.model_dump() for entry in entries]
+            root = _textbook_merkle_root([entry["entry_hash"] for entry in exported["entries"]])
+            assert exported["merkle_root"] == exported["chain_root"] == root
+        else:
+            assert exported == [entry.to_cloudevent() for entry in entries]
+            root = _textbook_merkle_root([event["agentmeshentryhash"] for event in exported])
+            assert root == _textbook_merkle_root([entry.entry_hash for entry in entries])
+        assert log.verify_integrity() == (True, None)
 
     def test_empty_exports(self):
         log = AuditLog()

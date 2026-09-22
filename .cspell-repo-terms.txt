@@ -318,6 +318,7 @@ aexit
 agentchat
 agentframework
 agentidentity
+agentmeshentryhash
 agentrust
 agentshield
 agentveil

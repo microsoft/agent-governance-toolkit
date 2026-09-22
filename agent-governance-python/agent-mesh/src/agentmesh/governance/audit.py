@@ -618,9 +618,12 @@ class AuditLog:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         outcome: Optional[str] = None,
-        limit: int = 100,
+        limit: int | None = 100,
     ) -> list[AuditEntry]:
-        """Query audit entries with optional filters."""
+        """Query audit entries with optional filters.
+
+        Pass ``limit=None`` to return all matching entries.
+        """
         results = self._chain._entries
 
         if agent_did:
@@ -638,7 +641,7 @@ class AuditLog:
         if outcome:
             results = [e for e in results if e.outcome == outcome]
 
-        return results[-limit:]
+        return results[-limit:] if limit is not None else list(results)
 
     def verify_integrity(self) -> tuple[bool, Optional[str]]:
         """Always valid."""
@@ -668,9 +671,14 @@ class AuditLog:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
     ) -> dict[str, Any]:
-        """Export the audit log."""
+        """Export all audit entries matching the optional time filters.
+
+        ``merkle_root`` and ``chain_root`` describe the complete chain, not
+        the filtered subset. A filtered export may therefore omit entries
+        needed to reproduce those roots.
+        """
         entries = self.query(
-            start_time=start_time, end_time=end_time, limit=len(self._chain._entries)
+            start_time=start_time, end_time=end_time, limit=None
         )
 
         return {
@@ -688,6 +696,6 @@ class AuditLog:
     ) -> list[dict[str, Any]]:
         """Export audit entries as CloudEvents v1.0 JSON envelopes."""
         entries = self.query(
-            start_time=start_time, end_time=end_time, limit=len(self._chain._entries)
+            start_time=start_time, end_time=end_time, limit=None
         )
         return [e.to_cloudevent() for e in entries]

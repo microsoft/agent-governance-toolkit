@@ -115,6 +115,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `AuditLog.export()` and `AuditLog.export_cloudevents()` now return all matching
+  records instead of silently capping exports at 10,000 records.
 - **Pending-message batch isolation.** A single malformed entry in a relay-supplied
   `pending_messages` batch no longer aborts the drain; the failure is surfaced
   through the error handler and the remaining queued messages are still delivered.
