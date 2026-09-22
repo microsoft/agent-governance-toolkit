@@ -5,6 +5,28 @@ entries appear first.
 
 ---
 
+## Python `Decision.applies_effects` is removed
+
+**Date:** TBD
+
+**Affected**
+
+- Python hosts still reading `Decision.applies_effects`
+
+**What changed**
+
+`Decision.applies_effects` was deprecated when AGT D1 removed the `effects[]`
+surface; it returned `applies_transform` and emitted a `DeprecationWarning`
+on every access, which fails any suite run with `-W error` on code paths the
+host does not control. The property is gone.
+
+**How to update**
+
+Use `Decision.applies_transform` to ask whether the verdict mutates the
+policy target, or `Decision.permits` to ask whether execution proceeds.
+
+---
+
 ## `acs_builder_set_url_fetch_limits` returns 0 on success; `bundle_url` and `system_prompt_url` are accepted again
 
 **Date:** 2026-10-08 (agent-control-spec 0.4.0-alpha.4, #4224)
