@@ -657,8 +657,7 @@ def _transformed_or(
     ``Decision.TRANSFORM`` in enforce mode, otherwise the fallback.
 
     Per AGT D1 only ``Decision.TRANSFORM`` is allowed to mutate the policy
-    target; ``allow``, ``warn`` and ``escalate`` never do.
-    is moved to the canonical ``applies_transform`` predicate. An explicit
+    target; ``allow``, ``warn`` and ``escalate`` never do. An explicit
     ``transformed_policy_target_applied`` flag preserves upstream support for
     a transform whose replacement value is JSON null.
     """
