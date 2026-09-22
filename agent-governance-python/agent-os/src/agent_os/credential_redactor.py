@@ -54,6 +54,12 @@ class CredentialRedactor:
     deliberate: PII handling is often policy-driven (report vs. block vs.
     scrub), so callers choose when to strip it rather than having it removed
     silently.
+
+    .. note::
+        ``redact()`` and the nested helpers leave PII unchanged by default. Pass
+        ``redact_pii=True`` when output must not contain PII; use
+        :meth:`find_pii_matches` / :meth:`contains_pii` for detection without
+        removal.
     """
 
     # Python's stdlib ``re`` does not support per-pattern timeouts. These
