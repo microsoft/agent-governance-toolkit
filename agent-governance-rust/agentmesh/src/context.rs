@@ -313,11 +313,16 @@ pub fn decide_next(
         } else {
             format!("action '{action}' gated by sensitivity floor")
         };
+        let mut obligation_keys = aggregation.restrictions;
+        if floor_triggered {
+            if let Some(restriction) = gating_restriction {
+                obligation_keys.insert(restriction.to_string());
+            }
+        }
         return ContextDecision {
             outcome: ContextOutcome::Constrain,
             obligations: ObligationSet {
-                obligations: aggregation
-                    .restrictions
+                obligations: obligation_keys
                     .iter()
                     .map(|restriction| Obligation {
                         key: restriction.clone(),
@@ -546,6 +551,28 @@ mod tests {
     }
 
     #[test]
+    fn sensitivity_floor_adds_the_action_obligation() {
+        let envelope = ContextEnvelope::new("env-1", "workflow-1")
+            .fold(["pii"], DataClassification::Restricted);
+
+        let decision = decide_next(&envelope, "export", &[], 99, DataClassification::Restricted);
+
+        assert_eq!(decision.outcome, ContextOutcome::Constrain);
+        assert_eq!(
+            decision.obligations.obligations,
+            vec![Obligation {
+                key: "no_external_export".to_string(),
+                satisfied: false,
+            }]
+        );
+        assert_eq!(to_policy_decision(&decision, true), PolicyDecision::Allow);
+        assert!(matches!(
+            to_policy_decision(&decision, false),
+            PolicyDecision::Deny(_)
+        ));
+    }
+
+    #[test]
     fn rule_implied_restrictions_gate_without_prior_accumulation() {
         let rules = [aggregation_rule()];
         let envelope = ContextEnvelope::new("env-1", "workflow-1")
@@ -562,6 +589,40 @@ mod tests {
         );
 
         assert_eq!(decision.outcome, ContextOutcome::Constrain);
+        assert_eq!(
+            decision.obligations.obligations,
+            vec![Obligation {
+                key: "no_external_export".to_string(),
+                satisfied: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn rule_restriction_gates_below_the_sensitivity_floor() {
+        let rules = [AggregationRule::new(
+            "pii_location_no_export",
+            ["pii", "location"],
+            DataClassification::Confidential,
+        )
+        .expect("fixture rule has labels")
+        .with_restrictions(["no_external_export"])];
+        let envelope = ContextEnvelope::new("env-1", "workflow-1")
+            .fold(["pii", "location"], DataClassification::Internal);
+
+        let decision = decide_next(
+            &envelope,
+            "export",
+            &rules,
+            99,
+            DataClassification::Restricted,
+        );
+
+        assert_eq!(decision.outcome, ContextOutcome::Constrain);
+        assert_eq!(
+            decision.aggregate_sensitivity,
+            DataClassification::Confidential
+        );
         assert_eq!(
             decision.obligations.obligations,
             vec![Obligation {
