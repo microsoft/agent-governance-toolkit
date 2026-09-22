@@ -286,14 +286,17 @@ def _render_rego(
 # (``runtime_error:intervention_point_unknown``), so a migrated manifest has to
 # bind every point an adapter evaluates or the agent stops working the moment it
 # produces output or calls a tool. Each target below is the JSONPath for the
-# envelope the adapter runtime actually sends for that point; the generated Rego
-# carries ``default verdict := {"decision": "allow"}``, so binding a point the v4
-# policy said nothing about permits it rather than inventing a new rule.
+# envelope the adapter runtime actually sends for that point; the model and
+# output points use the snapshot contract's keys (``model_request``,
+# ``model_response``, ``output``), which ``HostSession`` sends as well. The
+# generated Rego carries ``default verdict := {"decision": "allow"}``, so
+# binding a point the v4 policy said nothing about permits it rather than
+# inventing a new rule.
 _POINT_TARGETS: dict[str, tuple[str, str]] = {
     "input": ("$.input.body", "user_input"),
-    "output": ("$.response.content", "assistant_output"),
-    "pre_model_call": ("$.messages", "model_request"),
-    "post_model_call": ("$.response", "assistant_output"),
+    "output": ("$.output", "assistant_output"),
+    "pre_model_call": ("$.model_request.messages", "model_request"),
+    "post_model_call": ("$.model_response", "assistant_output"),
     "pre_tool_call": ("$.tool_call.args", "tool_args"),
     "post_tool_call": ("$.tool_result.value", "tool_result"),
     # AGT-SNAPSHOT-1.0 §2.1 names this field `agent_init`, but both SDK seams
