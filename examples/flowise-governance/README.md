@@ -63,6 +63,16 @@ curl -s -X POST http://localhost:8000/govern \
   -d '{"tool": "execute_shell", "content": "ls /", "agent_id": "flowise-agent"}' | python -m json.tool
 ```
 
+### Flowise local HTTP security
+
+Flowise 3.1.4 protects the HTTP Agentflow node with an SSRF deny list. The default policy rejects `localhost`, loopback, and private-network addresses, so the local sidecar URL in this example will be refused unless the guard is explicitly disabled for the Flowise process:
+
+```bash
+export HTTP_SECURITY_CHECK=false
+```
+
+On PowerShell, use `$env:HTTP_SECURITY_CHECK = "false"` before starting Flowise. This disables the SSRF guard for the entire Flowise instance; use it only for this local demonstration and prefer a permitted, network-reachable sidecar address in any shared or production deployment.
+
 ### 2. Import the flow into Flowise
 
 1. Open your Flowise 3.1.4 instance.

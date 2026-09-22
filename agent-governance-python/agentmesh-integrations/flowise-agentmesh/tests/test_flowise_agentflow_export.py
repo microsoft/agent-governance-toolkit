@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 
-FLOW_PATH = Path(__file__).resolve().parents[1] / "examples" / "flowise-governance" / "flowise-flow.json"
+FLOW_PATH = Path(__file__).resolve().parents[4] / "examples" / "flowise-governance" / "flowise-flow.json"
 
 
 def test_flowise_export_uses_agentflow_nodes_and_runtime_references() -> None:
@@ -44,10 +44,11 @@ def test_flowise_export_uses_agentflow_nodes_and_runtime_references() -> None:
     assert formatter_inputs["customFunctionInputVariables"] == [
         {
             "variableName": "httpResponse",
-            "variableValue": "{{ httpAgentflow_0.output.http.data }}",
+            "variableValue": "{{ httpAgentflow_0.output.http }}",
         }
     ]
     assert "$httpResponse" in formatter_inputs["customFunctionJavascriptFunction"]
+    assert "response.status" in formatter_inputs["customFunctionJavascriptFunction"]
 
     reply_inputs = nodes_by_id["directReplyAgentflow_0"]["data"]["inputs"]
     assert reply_inputs["directReplyMessage"] == "{{ customFunctionAgentflow_1.output.content }}"

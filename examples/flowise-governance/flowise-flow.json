@@ -639,10 +639,10 @@
           "customFunctionInputVariables": [
             {
               "variableName": "httpResponse",
-              "variableValue": "{{ httpAgentflow_0.output.http.data }}"
+              "variableValue": "{{ httpAgentflow_0.output.http }}"
             }
           ],
-          "customFunctionJavascriptFunction": "const raw = typeof $httpResponse !== 'undefined' ? $httpResponse : '{}';\nconst res = typeof raw === 'string' ? JSON.parse(raw) : raw;\nif (!res.allowed) {\n  return '[BLOCKED] ' + (res.reason || 'Request denied by governance policy.');\n}\nreturn '[ALLOWED] Tool: ' + (res.tool || 'unknown') + ' - governance check passed.';",
+          "customFunctionJavascriptFunction": "const raw = typeof $httpResponse !== 'undefined' ? $httpResponse : '{}';\nconst response = typeof raw === 'string' ? JSON.parse(raw) : raw;\nconst status = response && response.status;\nif (typeof status === 'number' && (status < 200 || status >= 300)) {\n  return '[BLOCKED] Governance sidecar returned HTTP ' + status + '.';\n}\nconst res = response && response.data ? response.data : response;\nif (!res.allowed) {\n  return '[BLOCKED] ' + (res.reason || 'Request denied by governance policy.');\n}\nreturn '[ALLOWED] Tool: ' + (res.tool || 'unknown') + ' - governance check passed.';",
           "customFunctionUpdateState": ""
         },
         "outputAnchors": [
