@@ -12,41 +12,19 @@ runtime regression.
 
 from __future__ import annotations
 
-import json
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from agt.cli._migrate_resolution.build import _render_rego
 
+from conftest import eval_verdict
+
 pytestmark = pytest.mark.skipif(
     shutil.which("opa") is None,
     reason="opa binary required for scenario tests",
 )
-
-
-def _eval_verdict(tmp_path: Path, rego_source: str, snapshot: dict) -> str:
-    """Write a bundle, evaluate data.agt.legacy.verdict, return decision."""
-    bundle = tmp_path / "bundle"
-    bundle.mkdir(exist_ok=True)
-    (bundle / "agt_legacy.rego").write_text(rego_source, encoding="utf-8")
-    proc = subprocess.run(  # noqa: S603
-        [
-            "opa", "eval",
-            "--format", "raw",
-            "--stdin-input",
-            "--data", str(bundle),
-            "data.agt.legacy.verdict.decision",
-        ],
-        input=json.dumps({"snapshot": snapshot}),
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    assert proc.returncode == 0, f"opa stderr: {proc.stderr}"
-    return proc.stdout.strip().strip('"')
 
 
 def _deny_ne_rego() -> str:
@@ -82,22 +60,22 @@ def _deny_not_in_rego() -> str:
 class TestDenyNeFailClosed:
     def test_intermediate_absent_denies(self, tmp_path: Path) -> None:
         """Omitting tool_call entirely must not bypass the deny rule."""
-        verdict = _eval_verdict(tmp_path, _deny_ne_rego(), {})
+        verdict = eval_verdict(tmp_path, _deny_ne_rego(), {})
         assert verdict == "deny", "intermediate absent should deny, got allow (bypass)"
 
     def test_leaf_absent_denies(self, tmp_path: Path) -> None:
         """tool_call present but content_hash omitted must deny."""
-        verdict = _eval_verdict(tmp_path, _deny_ne_rego(), {"tool_call": {"args": "x"}})
+        verdict = eval_verdict(tmp_path, _deny_ne_rego(), {"tool_call": {"args": "x"}})
         assert verdict == "deny", "leaf absent should deny, got allow (bypass)"
 
     def test_field_explicitly_null_denies(self, tmp_path: Path) -> None:
         """Explicitly null content_hash must deny."""
-        verdict = _eval_verdict(tmp_path, _deny_ne_rego(), {"tool_call": {"content_hash": None}})
+        verdict = eval_verdict(tmp_path, _deny_ne_rego(), {"tool_call": {"content_hash": None}})
         assert verdict == "deny", "explicit null should deny, got allow (bypass)"
 
     def test_wrong_value_denies(self, tmp_path: Path) -> None:
         """An unregistered hash must deny."""
-        verdict = _eval_verdict(
+        verdict = eval_verdict(
             tmp_path, _deny_ne_rego(),
             {"tool_call": {"content_hash": "sha256:ATTACKER"}},
         )
@@ -105,7 +83,7 @@ class TestDenyNeFailClosed:
 
     def test_correct_pin_allows(self, tmp_path: Path) -> None:
         """The registered hash must allow."""
-        verdict = _eval_verdict(
+        verdict = eval_verdict(
             tmp_path, _deny_ne_rego(),
             {"tool_call": {"content_hash": "sha256:REGISTERED"}},
         )
@@ -117,26 +95,26 @@ class TestDenyNeFailClosed:
 class TestDenyNotInFailClosed:
     def test_field_absent_denies(self, tmp_path: Path) -> None:
         """Omitting region entirely must not bypass the deny rule."""
-        verdict = _eval_verdict(tmp_path, _deny_not_in_rego(), {})
+        verdict = eval_verdict(tmp_path, _deny_not_in_rego(), {})
         assert verdict == "deny", "absent field should deny, got allow (bypass)"
 
     def test_field_explicitly_null_denies(self, tmp_path: Path) -> None:
         """Explicitly null region must deny."""
-        verdict = _eval_verdict(tmp_path, _deny_not_in_rego(), {"region": None})
+        verdict = eval_verdict(tmp_path, _deny_not_in_rego(), {"region": None})
         assert verdict == "deny", "explicit null should deny, got allow (bypass)"
 
     def test_unlisted_region_denies(self, tmp_path: Path) -> None:
         """A region outside the allowlist must deny."""
-        verdict = _eval_verdict(tmp_path, _deny_not_in_rego(), {"region": "CN"})
+        verdict = eval_verdict(tmp_path, _deny_not_in_rego(), {"region": "CN"})
         assert verdict == "deny"
 
     def test_listed_region_allows(self, tmp_path: Path) -> None:
         """A region inside the allowlist must allow."""
-        verdict = _eval_verdict(tmp_path, _deny_not_in_rego(), {"region": "US"})
+        verdict = eval_verdict(tmp_path, _deny_not_in_rego(), {"region": "US"})
         assert verdict == "allow"
 
     def test_second_listed_region_allows(self, tmp_path: Path) -> None:
-        verdict = _eval_verdict(tmp_path, _deny_not_in_rego(), {"region": "EU"})
+        verdict = eval_verdict(tmp_path, _deny_not_in_rego(), {"region": "EU"})
         assert verdict == "allow"
 
 
@@ -187,7 +165,7 @@ def _allow_not_in_then_deny_rego() -> str:
 class TestAllowPolarityGuardRetained:
     def test_allow_ne_null_field_does_not_fire(self, tmp_path: Path) -> None:
         """allow ne must NOT fire when field is explicitly null (guard must stay)."""
-        verdict = _eval_verdict(
+        verdict = eval_verdict(
             tmp_path, _allow_ne_then_deny_rego(),
             {"tool_name": "transfer", "region": None},
         )
@@ -197,7 +175,7 @@ class TestAllowPolarityGuardRetained:
 
     def test_allow_ne_absent_field_does_not_fire(self, tmp_path: Path) -> None:
         """allow ne must NOT fire when the field key is omitted entirely."""
-        verdict = _eval_verdict(
+        verdict = eval_verdict(
             tmp_path, _allow_ne_then_deny_rego(),
             {"tool_name": "transfer"},
         )
@@ -207,7 +185,7 @@ class TestAllowPolarityGuardRetained:
 
     def test_allow_ne_fires_on_non_matching_present_field(self, tmp_path: Path) -> None:
         """allow ne fires correctly when field is present and != value."""
-        verdict = _eval_verdict(
+        verdict = eval_verdict(
             tmp_path, _allow_ne_then_deny_rego(),
             {"tool_name": "transfer", "region": "EU"},
         )
@@ -215,7 +193,7 @@ class TestAllowPolarityGuardRetained:
 
     def test_allow_not_in_null_field_does_not_fire(self, tmp_path: Path) -> None:
         """allow not_in must NOT fire when field is explicitly null (guard must stay)."""
-        verdict = _eval_verdict(
+        verdict = eval_verdict(
             tmp_path, _allow_not_in_then_deny_rego(),
             {"tool_name": "transfer", "region": None},
         )
@@ -225,7 +203,7 @@ class TestAllowPolarityGuardRetained:
 
     def test_allow_not_in_absent_field_does_not_fire(self, tmp_path: Path) -> None:
         """allow not_in must NOT fire when the field key is omitted entirely."""
-        verdict = _eval_verdict(
+        verdict = eval_verdict(
             tmp_path, _allow_not_in_then_deny_rego(),
             {"tool_name": "transfer"},
         )
@@ -235,7 +213,7 @@ class TestAllowPolarityGuardRetained:
 
     def test_allow_not_in_fires_on_non_restricted_region(self, tmp_path: Path) -> None:
         """allow not_in fires correctly when field is present and not in the set."""
-        verdict = _eval_verdict(
+        verdict = eval_verdict(
             tmp_path, _allow_not_in_then_deny_rego(),
             {"tool_name": "transfer", "region": "US"},
         )

@@ -29,27 +29,12 @@ import pytest
 
 from agt.cli._migrate_resolution.build import _render_rego
 
+from conftest import eval_verdict
+
 pytestmark = pytest.mark.skipif(
     shutil.which("opa") is None,
     reason="opa binary required for scenario tests",
 )
-
-
-def _eval_verdict(tmp_path: Path, rego_source: str, snapshot: dict) -> str:
-    bundle = tmp_path / "bundle"
-    bundle.mkdir(exist_ok=True)
-    (bundle / "agt_legacy.rego").write_text(rego_source, encoding="utf-8")
-    proc = subprocess.run(  # noqa: S603
-        [
-            "opa", "eval", "--format", "raw", "--stdin-input",
-            "--data", str(bundle),
-            "data.agt.legacy.verdict.decision",
-        ],
-        input=json.dumps({"snapshot": snapshot}),
-        capture_output=True, text=True, timeout=10,
-    )
-    assert proc.returncode == 0, f"opa stderr: {proc.stderr}"
-    return proc.stdout.strip().strip('"')
 
 
 def _eval_returncode(tmp_path: Path, rego_source: str, snapshot: dict) -> int:
@@ -57,7 +42,7 @@ def _eval_returncode(tmp_path: Path, rego_source: str, snapshot: dict) -> int:
     bundle = tmp_path / "bundle"
     bundle.mkdir(exist_ok=True)
     (bundle / "agt_legacy.rego").write_text(rego_source, encoding="utf-8")
-    proc = subprocess.run(  # noqa: S603
+    proc = subprocess.run(
         [
             "opa", "eval", "--format", "raw", "--stdin-input",
             "--strict-builtin-errors",
@@ -66,6 +51,7 @@ def _eval_returncode(tmp_path: Path, rego_source: str, snapshot: dict) -> int:
         ],
         input=json.dumps({"snapshot": snapshot}),
         capture_output=True, text=True, timeout=10,
+        check=False,
     )
     return proc.returncode
 
@@ -92,19 +78,19 @@ def _allow_eq_null_then_default_deny() -> str:
 def test_allow_eq_null_leaf_absent_fails_closed(tmp_path):
     # BUG (pre-fix): absent leaf -> allow eq null fires -> "allow" (fail open).
     rego = _allow_eq_null_then_default_deny()
-    assert _eval_verdict(tmp_path, rego, {"tool_call": {"args": "x"}}) == "deny"
+    assert eval_verdict(tmp_path, rego, {"tool_call": {"args": "x"}}) == "deny"
 
 
 def test_allow_eq_null_intermediate_absent_fails_closed(tmp_path):
     # BUG (pre-fix): absent intermediate segment -> allow eq null fires.
     rego = _allow_eq_null_then_default_deny()
-    assert _eval_verdict(tmp_path, rego, {}) == "deny"
+    assert eval_verdict(tmp_path, rego, {}) == "deny"
 
 
 def test_allow_eq_null_present_null_still_allows(tmp_path):
     # CONTROL: a genuinely present null must still match allow (both ways).
     rego = _allow_eq_null_then_default_deny()
-    assert _eval_verdict(tmp_path, rego, {"tool_call": {"region": None}}) == "allow"
+    assert eval_verdict(tmp_path, rego, {"tool_call": {"region": None}}) == "allow"
 
 
 # --- Issue 2a: string predicate on a non-string value must not type-error ----
@@ -130,7 +116,7 @@ def test_string_predicate_non_string_no_builtin_error(tmp_path):
 def test_string_predicate_string_value_still_denies(tmp_path):
     # CONTROL: a matching string value still denies (both ways).
     rego = _deny_contains_rego()
-    assert _eval_verdict(tmp_path, rego, {"tool_call": {"amount": "top-secret"}}) == "deny"
+    assert eval_verdict(tmp_path, rego, {"tool_call": {"amount": "top-secret"}}) == "deny"
 
 
 # --- Issue 2b: uncompilable / non-string regex pattern must fail closed ------
@@ -147,7 +133,7 @@ def test_invalid_regex_pattern_fails_closed(tmp_path):
             "message": "region pattern deny",
         },
     ])
-    assert _eval_verdict(tmp_path, rego, {"region": "CN"}) == "deny"
+    assert eval_verdict(tmp_path, rego, {"region": "CN"}) == "deny"
 
 
 def test_non_string_regex_pattern_fails_closed(tmp_path):
@@ -160,7 +146,7 @@ def test_non_string_regex_pattern_fails_closed(tmp_path):
             "message": "region pattern deny",
         },
     ])
-    assert _eval_verdict(tmp_path, rego, {"region": "CN"}) == "deny"
+    assert eval_verdict(tmp_path, rego, {"region": "CN"}) == "deny"
 
 
 def test_valid_regex_pattern_still_matches(tmp_path):
@@ -173,4 +159,4 @@ def test_valid_regex_pattern_still_matches(tmp_path):
             "message": "CN region deny",
         },
     ])
-    assert _eval_verdict(tmp_path, rego, {"region": "CN"}) == "deny"
+    assert eval_verdict(tmp_path, rego, {"region": "CN"}) == "deny"

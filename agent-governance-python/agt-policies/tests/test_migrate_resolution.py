@@ -5,6 +5,8 @@
 Cover the contract documented in
 the private migration ``AGT-RESOLUTION-1.0.md`` contract and the reserved
 resolution reasons in ``policy-engine/spec/SPECIFICATION.md`` §16.
+The render-level regressions below complement the OPA-backed scenarios under
+``tests/scenarios``.
 """
 
 from __future__ import annotations
@@ -1240,15 +1242,6 @@ def test_resolution_error_message_includes_reason_string() -> None:
     assert "detail-x" in str(err)
 
 
-# ── _rego_field_accessor and _rego_op_clause fail-closed regression ──
-# Regression for the fail-open vulnerability re-introduced by the v4-removal
-# migration (PR #3451). Both root causes from #3297 were reproduced in
-# _migrate_resolution/build.py: chained object.get and the unconditional
-# _v != null guard on ne/not_in. Tests mirror the OPA 1.18.2 live
-# confirmation run on 2026-07-30.
-
-
-
 # ── array-path accessor shape ────────────────────────────────────────
 
 def test_accessor_single_segment_uses_array_path() -> None:
@@ -1300,6 +1293,55 @@ def test_not_in_allow_keeps_null_guard() -> None:
     acc = _rego_field_accessor("region")
     clause = _rego_op_clause("not_in", acc, ["US", "EU"], action="allow")
     assert "_v != null" in clause
+
+
+@pytest.mark.parametrize(
+    ("operator", "value"),
+    [
+        ("in", "US"),
+        ("not_in", "US"),
+        ("contains", ["secret"]),
+        ("startswith", ["sec"]),
+        ("endswith", ["ret"]),
+    ],
+)
+def test_invalid_predicate_literals_fail_closed(
+    operator: str, value: object
+) -> None:
+    acc = _rego_field_accessor("region")
+    assert acc is not None
+    assert _rego_op_clause(operator, acc, value, action="deny") is None
+
+
+@pytest.mark.parametrize(
+    ("operator", "value"),
+    [
+        ("in", "US"),
+        ("not_in", "US"),
+        ("contains", ["secret"]),
+        ("startswith", ["sec"]),
+        ("endswith", ["ret"]),
+    ],
+)
+def test_invalid_predicate_literals_render_fail_closed(
+    operator: str, value: object
+) -> None:
+    rego = _render_rego(
+        [
+            {
+                "name": "invalid_predicate",
+                "condition": {
+                    "field": "region",
+                    "operator": operator,
+                    "value": value,
+                },
+                "action": "deny",
+                "priority": 10,
+                "message": "",
+            }
+        ]
+    )
+    assert "runtime_error:manifest_invalid" in rego
 
 
 def test_positive_operators_unchanged_by_action() -> None:

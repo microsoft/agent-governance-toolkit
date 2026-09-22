@@ -438,8 +438,12 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
     if operator == "lte":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v <= {literal}"
     if operator == "in":
+        if not isinstance(value, list):
+            return None
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
     if operator == "not_in":
+        if not isinstance(value, list):
+            return None
         if action == "deny":
             # Drop the null guard: absent field is not in the allowlist, so deny must fire.
             return f"{indent}_v := {accessor}\n{indent}not _v in {literal}"
@@ -447,6 +451,8 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
     if operator == "exists":
         return f"{indent}{accessor} != null"
     if operator == "contains":
+        if not isinstance(value, str):
+            return None
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
@@ -454,6 +460,8 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
             f"{indent}contains(_v, {literal})"
         )
     if operator == "startswith":
+        if not isinstance(value, str):
+            return None
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
@@ -461,6 +469,8 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
             f"{indent}startswith(_v, {literal})"
         )
     if operator == "endswith":
+        if not isinstance(value, str):
+            return None
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
