@@ -18,7 +18,9 @@ from __future__ import annotations
 import copy
 import hashlib
 
-from agentmesh.governance.audit import AuditEntry, MerkleAuditChain
+import pytest
+
+from agentmesh.governance.audit import AuditEntry, AuditLog, MerkleAuditChain
 
 
 def _entry(i: int) -> AuditEntry:
@@ -155,3 +157,74 @@ class TestMerkleRootReproducible:
         # observe a different value, i.e. tampering remains detectable.
         chain._entries[1].entry_hash = hashlib.sha256(b"tampered").hexdigest()
         assert _textbook_merkle_root([e.entry_hash for e in chain._entries]) != recorded
+
+
+@pytest.fixture
+def large_audit_log():
+    log = AuditLog()
+    entries = [
+        log.log("tool_invocation", "did:mesh:test-agent", f"action-{i}")
+        for i in range(10001)
+    ]
+    return log, entries
+
+
+class TestAuditLogExport:
+    def test_export_includes_all_entries_and_reproducible_root(self, large_audit_log):
+        log, entries = large_audit_log
+
+        exported = log.export()
+
+        assert exported["entry_count"] == 10001
+        assert exported["entries"] == [entry.model_dump() for entry in entries]
+        root = _textbook_merkle_root([entry["entry_hash"] for entry in exported["entries"]])
+        assert exported["merkle_root"] == exported["chain_root"] == root
+        assert log.verify_integrity() == (True, None)
+
+    def test_cloudevents_export_includes_all_entries_and_hashes(self, large_audit_log):
+        log, entries = large_audit_log
+
+        events = log.export_cloudevents()
+
+        assert len(events) == 10001
+        assert events == [entry.to_cloudevent() for entry in entries]
+        root = _textbook_merkle_root([event["agentmeshentryhash"] for event in events])
+        assert root == _textbook_merkle_root([entry.entry_hash for entry in entries])
+        assert root == log.export()["merkle_root"]
+
+    @pytest.mark.parametrize("bounds", ["start", "end", "both"])
+    def test_export_time_filters_preserve_full_chain_root(self, large_audit_log, bounds):
+        log, entries = large_audit_log
+        start = entries[2500].timestamp if bounds in ("start", "both") else None
+        end = entries[7500].timestamp if bounds in ("end", "both") else None
+        expected = [
+            entry for entry in entries
+            if (start is None or entry.timestamp >= start)
+            and (end is None or entry.timestamp <= end)
+        ]
+
+        exported = log.export(start_time=start, end_time=end)
+        events = log.export_cloudevents(start_time=start, end_time=end)
+
+        assert exported["entry_count"] == len(expected)
+        assert exported["entries"] == [entry.model_dump() for entry in expected]
+        assert events == [entry.to_cloudevent() for entry in expected]
+        root = _textbook_merkle_root([entry.entry_hash for entry in entries])
+        assert exported["merkle_root"] == exported["chain_root"] == root
+
+    def test_query_remains_bounded(self, large_audit_log):
+        log, entries = large_audit_log
+
+        assert log.query() == entries[-100:]
+        assert log.query(limit=5) == entries[-5:]
+
+    def test_empty_exports(self):
+        log = AuditLog()
+
+        exported = log.export()
+
+        assert exported["entry_count"] == 0
+        assert exported["entries"] == []
+        assert exported["merkle_root"] is None
+        assert exported["chain_root"] is None
+        assert log.export_cloudevents() == []

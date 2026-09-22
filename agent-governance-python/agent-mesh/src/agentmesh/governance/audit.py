@@ -669,7 +669,9 @@ class AuditLog:
         end_time: Optional[datetime] = None,
     ) -> dict[str, Any]:
         """Export the audit log."""
-        entries = self.query(start_time=start_time, end_time=end_time, limit=10000)
+        entries = self.query(
+            start_time=start_time, end_time=end_time, limit=len(self._chain._entries)
+        )
 
         return {
             "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -685,5 +687,7 @@ class AuditLog:
         end_time: Optional[datetime] = None,
     ) -> list[dict[str, Any]]:
         """Export audit entries as CloudEvents v1.0 JSON envelopes."""
-        entries = self.query(start_time=start_time, end_time=end_time, limit=10000)
+        entries = self.query(
+            start_time=start_time, end_time=end_time, limit=len(self._chain._entries)
+        )
         return [e.to_cloudevent() for e in entries]
