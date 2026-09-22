@@ -202,6 +202,9 @@ class CredentialRedactor:
             # fail-closed egress detector, not an RFC validator: if untrusted
             # output pads a readable address with uninterrupted word characters,
             # the engine must report a bounded match instead of missing it.
+            # With redact_pii=True, only the final 64 local-part characters and
+            # domain are redacted; an overlong local-part prefix stays visible.
+            # Version strings such as pkg@1.0.0.dev1 may also match intentionally.
             pattern=re.compile(
                 r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
             ),

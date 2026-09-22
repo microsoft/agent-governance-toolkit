@@ -644,6 +644,33 @@ def test_email_detection_prefers_bounded_suffix_match_to_punctuation_bypass():
     )
 
 
+def test_email_redaction_leaves_overlong_local_part_prefix_visible():
+    text = f"{'a' * 300}@example.com"
+
+    redacted = CredentialRedactor.redact(text, redact_pii=True)
+
+    assert redacted == ("a" * 236) + REDACTED_PLACEHOLDER
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_match"),
+    [
+        ("pkg@1.0.0.dev1", "pkg@1.0.0.dev"),
+        ("pkg@1.2.3.rc1", "pkg@1.2.3.rc"),
+    ],
+)
+def test_email_detection_intentionally_matches_package_prerelease_versions(
+    text: str, expected_match: str
+):
+    assert CredentialRedactor.contains_pii(text)
+    matches = CredentialRedactor.find_pii_matches(text)
+
+    assert any(
+        match.name == "Email address" and match.matched_text == expected_match
+        for match in matches
+    )
+
+
 @pytest.mark.parametrize(
     "text",
     [

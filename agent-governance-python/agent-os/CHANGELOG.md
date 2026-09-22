@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- Bound email local-part and Basic-auth URI scheme scans to prevent quadratic scanning on separator-dense input (#3566), based on dev404ai's implementation in #3575. Fail-closed detection may match package prerelease versions; with `redact_pii=True`, an overlong email local part retains its prefix before the final 64 characters.
 - **Agent OS security & integrity hardening** ([#3247](https://github.com/microsoft/agent-governance-toolkit/pull/3247)) — five governance gaps closed so `agent_os` fails closed when gating and recording untrusted activity:
   - `MCPMessageSigner` / `InMemoryNonceStore` no longer evict in-window nonces by count. The nonce store keeps every nonce for its full replay window and, when saturated with live nonces, raises `NonceStoreCapacityError` so verification fails closed instead of re-opening the replay window. (New public export: `NonceStoreCapacityError`.)
   - `MemoryGuard.validate_write` now detects markup-wrapped tool poisoning — hidden-instruction tags paired with destructive shell commands (`rm -rf`, fork bombs, `dd if=`, …), pipe-to-shell exfiltration, or a covert standing instruction (concealment such as "do not mention"/"silently", or an always-on directive such as "when asked …"/"always respond …") — via a new `AlertType.TOOL_POISONING`. Bare tool tags and plain `curl` mentions stay allowed to avoid false positives on benign runbooks.
