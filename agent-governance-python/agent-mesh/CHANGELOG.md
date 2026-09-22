@@ -130,6 +130,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Policy directory loading now fails closed on invalid input.** The policy
+  server rejects missing directories, malformed files, and governance-shaped
+  documents that would otherwise be silently accepted by the trust-policy
+  fallback; rejected reloads retain the last complete policy set and return
+  `409`. The sidecar denies evaluations when a policy file fails or its
+  directory is unavailable. The bundled Helm and container examples now use
+  the flat policy schema and explicitly target all agents. Closes #3538.
 - **Displaced connections now close with a distinct WebSocket code.** When a second
   connection authenticates for a DID, the relay closes the displaced socket with
   `4006` (`WS_CLOSE_SESSION_REPLACED`) instead of `1000`. `1000` was reported by

@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+import yaml
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
@@ -44,38 +45,55 @@ def _load_policies() -> None:
     global _engine, _trust_policies, _trust_evaluator, _loaded_count
 
     policy_path = Path(POLICY_DIR)
-    if not policy_path.exists():
-        logger.warning("Policy directory %s does not exist", POLICY_DIR)
-        return
+    if not policy_path.is_dir():
+        raise RuntimeError(
+            f"Policy directory {POLICY_DIR} does not exist or is not a directory; "
+            "refusing to load an undefined policy set"
+        )
 
     # Load into locals first; assign globals only after all files succeed.
     # A failed reload (POST /api/v1/policy/reload) must not leave a
     # partially loaded engine live (#3536 review feedback).
     local_engine = PolicyEngine()
-    local_trust: list = []
+    local_trust: list[TrustPolicy] = []
     governance_count = 0
     errors: list[tuple[str, Exception]] = []
 
     for f in sorted(policy_path.glob("*.yaml")):
-        gov_exc = None
+        content = f.read_text(encoding="utf-8")
         try:
-            local_engine.load_yaml(f.read_text())
+            local_engine.load_yaml(content)
             governance_count += 1
             logger.info("Loaded governance policy: %s", f.name)
         except Exception as ge:
-            gov_exc = ge
             try:
-                tp = TrustPolicy.from_yaml(f.read_text())
+                raw = yaml.safe_load(content)
+                if not isinstance(raw, dict):
+                    raise ValueError("policy document must be a mapping")
+                if "kind" in raw or "apiVersion" in raw:
+                    raise ValueError(
+                        "governance-shaped document was not accepted by the "
+                        "governance policy parser"
+                    )
+                tp = TrustPolicy.from_yaml(f)
+                if not tp.rules:
+                    raise ValueError("trust policy must contain at least one rule")
                 local_trust.append(tp)
                 logger.info("Loaded trust policy: %s", f.name)
-            except Exception:
-                # Log the governance exception (the real cause), not the
-                # TrustPolicy fallback's misleading error.
-                errors.append((f.name, gov_exc))
+            except Exception as trust_exc:
+                errors.append(
+                    (
+                        f.name,
+                        RuntimeError(
+                            f"not a governance policy ({type(ge).__name__}: {ge}); "
+                            f"not a trust policy ({type(trust_exc).__name__}: {trust_exc})"
+                        ),
+                    )
+                )
 
     for f in sorted(policy_path.glob("*.json")):
         try:
-            local_engine.load_json(f.read_text())
+            local_engine.load_json(f.read_text(encoding="utf-8"))
             governance_count += 1
         except Exception as exc:
             errors.append((f.name, exc))
@@ -84,8 +102,7 @@ def _load_policies() -> None:
         for name, exc in errors:
             logger.error("Policy load failed for %s: %s", name, exc)
         raise RuntimeError(
-            f"{len(errors)} policy file(s) failed to load: "
-            + ", ".join(name for name, _ in errors)
+            f"{len(errors)} policy file(s) failed to load: " + ", ".join(name for name, _ in errors)
         )
 
     # All loaded successfully -- swap globals atomically.
@@ -199,7 +216,14 @@ async def list_policies() -> dict[str, Any]:
 @app.post("/api/v1/policy/reload", tags=["policy"])
 async def reload_policies() -> dict[str, Any]:
     """Reload policies from disk."""
-    _load_policies()
+    try:
+        _load_policies()
+    except RuntimeError as exc:
+        logger.error("Policy reload rejected, keeping previous set: %s", exc)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Policy reload rejected; previous policy set retained. {exc}",
+        ) from exc
     return {
         "status": "reloaded",
         "total_loaded": _loaded_count,

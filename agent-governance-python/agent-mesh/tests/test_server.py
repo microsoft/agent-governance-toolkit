@@ -224,10 +224,15 @@ class TestPolicyServer:
     """Tests for the policy-server HTTP server."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
-        from agentmesh.server.policy_server import app
+    def setup(self, tmp_path, monkeypatch):
+        import agentmesh.server.policy_server as policy_server
 
-        self.client = TestClient(app)
+        monkeypatch.setattr(policy_server, "POLICY_DIR", str(tmp_path))
+        monkeypatch.setattr(policy_server, "_engine", policy_server.PolicyEngine())
+        monkeypatch.setattr(policy_server, "_trust_policies", [])
+        monkeypatch.setattr(policy_server, "_trust_evaluator", None)
+        monkeypatch.setattr(policy_server, "_loaded_count", 0)
+        self.client = TestClient(policy_server.app)
 
     def test_healthz(self):
         resp = self.client.get("/healthz")

@@ -127,13 +127,19 @@ def create_sidecar_app() -> FastAPI:
         }
         engine, generation = _policy_state
 
-        # Fail-closed (#3536): if any policy file failed to load, deny all
-        # actions so a broken deny policy is not silently bypassed.
-        if generation.policies_failed > 0:
+        # Fail-closed (#3536): if any policy file failed to load, or the policy
+        # directory is unavailable, deny all actions so a broken deny policy is
+        # not silently bypassed by an empty or partial policy set.
+        if generation.policies_failed > 0 or generation.directory_status != "available":
+            reason = (
+                f"Policy set degraded: {generation.policies_failed} file(s) failed to load"
+                if generation.policies_failed > 0
+                else "Policy set degraded: policy directory is unavailable"
+            )
             return EvaluateResponse(
                 decision="deny",
                 matched_rule=None,
-                reason=f"Policy set degraded: {generation.policies_failed} file(s) failed to load",
+                reason=reason,
                 policy_name=None,
                 policy_set_id=generation.policy_set_id,
                 policy_set_status=generation.policy_set_status,
@@ -288,7 +294,8 @@ def _load_policies() -> PolicyLoadGeneration:
         failed_names = [e.name for e in files if e.status == "failed"]
         logger.error(
             "Policy load generation degraded: %d file(s) failed: %s",
-            failed, ", ".join(failed_names),
+            failed,
+            ", ".join(failed_names),
         )
 
     policy_set_status = "complete"
