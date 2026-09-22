@@ -84,6 +84,8 @@ impl ContextEnvelope {
     }
 
     /// Return the next envelope after joining actual result labels and sensitivity.
+    ///
+    /// Hosts should bound caller-supplied label collections before folding untrusted results.
     pub fn fold<I, S>(&self, new_labels: I, new_sensitivity: DataClassification) -> ContextEnvelope
     where
         I: IntoIterator<Item = S>,
@@ -92,10 +94,7 @@ impl ContextEnvelope {
         let mut next = self.clone();
         next.labels.extend(new_labels.into_iter().map(Into::into));
         next.aggregate_sensitivity = next.aggregate_sensitivity.max(new_sensitivity);
-        next.version = next
-            .version
-            .checked_add(1)
-            .expect("context envelope version overflow");
+        next.version = next.version.saturating_add(1);
         next
     }
 
@@ -108,10 +107,7 @@ impl ContextEnvelope {
         let mut next = self.clone();
         next.restrictions
             .extend(restrictions.into_iter().map(Into::into));
-        next.version = next
-            .version
-            .checked_add(1)
-            .expect("context envelope version overflow");
+        next.version = next.version.saturating_add(1);
         next
     }
 
@@ -347,7 +343,11 @@ pub fn decide_next(
     }
 }
 
-/// Map a context outcome to the SDK policy decision without failing open.
+/// Map a context outcome to the SDK policy decision surface.
+///
+/// `PolicyDecision::Allow` cannot carry obligations. Set `has_obligation_channel` only when the
+/// caller will enforce `decision.obligations` out of band; otherwise constrained decisions are
+/// allowed only when every obligation is already satisfied.
 pub fn to_policy_decision(
     decision: &ContextDecision,
     has_obligation_channel: bool,
@@ -439,6 +439,25 @@ mod tests {
         assert!(restricted.restrictions().contains("no_external_export"));
         assert_eq!(restricted.version(), 4);
         assert_eq!(restricted.parent_envelope_id(), Some("parent-1"));
+    }
+
+    #[test]
+    fn version_saturates_without_panicking() {
+        let mut envelope = ContextEnvelope::new("env-1", "workflow-1");
+        envelope.version = u64::MAX;
+
+        assert_eq!(
+            envelope
+                .fold(["pii"], DataClassification::Internal)
+                .version(),
+            u64::MAX
+        );
+        assert_eq!(
+            envelope
+                .apply_restrictions(["no_external_export"])
+                .version(),
+            u64::MAX
+        );
     }
 
     #[test]

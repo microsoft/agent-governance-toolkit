@@ -423,6 +423,10 @@ assert!(matches!(
     to_policy_decision(&decision, false),
     PolicyDecision::Deny(_)
 ));
+
+// A host with an obligation channel must enforce `decision.obligations` out of band
+// before treating the mapped Allow as permission to proceed.
+assert_eq!(to_policy_decision(&decision, true), PolicyDecision::Allow);
 ```
 
 ### Trust (`trust.rs`)
