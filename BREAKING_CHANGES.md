@@ -52,6 +52,37 @@ manifest.
 
 ---
 
+## Python `HostSession` snapshots use the contract keys
+
+**Date:** TBD
+
+**Affected**
+
+- Python hosts evaluating `pre_model_call`, `post_model_call` or `output`
+  through `HostSession`, and manifests whose policy targets were written
+  against the keys it used to send
+
+**What changed**
+
+`HostSession.pre_model_call` sent the request spread over top-level `model`,
+`messages` and `tools`, `post_model_call` sent `response`, and `output` sent
+`response.content`. The snapshot contract, the wire schema and the framework
+adapters use `model_request`, `model_response` and `output`, so a manifest
+written from the contract failed closed with `runtime_error:path_missing`
+when driven through `HostSession`. `HostSession` now sends the contract keys:
+the whole request under `model_request`, the response under `model_response`
+and the final content under `output`.
+
+**How to update**
+
+Rewrite `HostSession`-specific policy targets: `$snap.messages` →
+`$snap.model_request.messages`, `$snap.model` → `$snap.model_request.model`,
+`$snap.response` → `$snap.model_response`, `$snap.response.content` →
+`$snap.output`. Manifests already written against the adapters or the
+contract need no change.
+
+---
+
 ## Python manifests declaring annotators require an explicit dispatcher
 
 **Date:** TBD
