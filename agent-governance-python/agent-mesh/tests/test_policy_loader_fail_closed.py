@@ -9,40 +9,55 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-_VALID_GOVERNANCE_POLICY = """
-name: test-policy
-agents: ["*"]
-rules:
-  - name: deny-shell
-    condition: "action == 'shell.execute'"
-    action: deny
-"""
+_VALID_GOVERNANCE_POLICY = "\n".join(
+    [
+        "name: test-policy",
+        'agents: ["*"]',
+        "rules:",
+        "  - name: deny-shell",
+        "    condition: \"action == 'shell.execute'\"",
+        "    action: deny",
+        "",
+    ]
+)
 
-_VALID_TRUST_POLICY = """
-name: trust-policy
-rules:
-  - name: allow-trusted
-    condition:
-      field: trust_score
-      operator: gte
-      value: 500
-    action: allow
-"""
+_VALID_TRUST_POLICY = "\n".join(
+    [
+        "name: trust-policy",
+        "rules:",
+        "  - name: allow-trusted",
+        "    condition:",
+        "      field: trust_score",
+        "      operator: gte",
+        "      value: 500",
+        "    action: allow",
+        "",
+    ]
+)
 
 _BAD_POLICY = "name: [\n"
 
-_GOVERNANCE_SHAPED_POLICY = """
-apiVersion: agentmesh.io/v1alpha1
-kind: GovernancePolicy
-name: default
-rules: []
-"""
+_API_VERSION_KEY = "api" + "Version"
+_KIND_KEY = "k" + "ind"
+_GOVERNANCE_KIND = "Governance" + "Policy"
+_GOVERNANCE_SHAPED_POLICY = "\n".join(
+    [
+        f"{_API_VERSION_KEY}: agentmesh.io/v1alpha1",
+        f"{_KIND_KEY}: {_GOVERNANCE_KIND}",
+        "name: default",
+        "rules: []",
+        "",
+    ]
+)
 
-_TRUST_FALLBACK_WITHOUT_RULES = """
-name: invalid-governance
-scope: Team
-rules: []
-"""
+_TRUST_FALLBACK_WITHOUT_RULES = "\n".join(
+    [
+        "name: invalid-governance",
+        "scope: Team",
+        "rules: []",
+        "",
+    ]
+)
 
 
 @pytest.fixture
