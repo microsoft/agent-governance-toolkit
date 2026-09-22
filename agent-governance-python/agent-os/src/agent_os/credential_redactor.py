@@ -133,9 +133,15 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="Basic auth secret",
+            # Bound the scheme-like scan at every candidate start. Without this
+            # limit, separator-dense input with no ``://`` makes the unbounded
+            # scheme class scan overlapping suffixes repeatedly. Allow any
+            # scheme character to start the bounded suffix: a long valid scheme
+            # may have only digits or punctuation in its final 64 characters,
+            # but its username/password must still be redacted fail-closed.
             pattern=re.compile(
                 r"(?i)(?:(?<![A-Za-z0-9])Basic\s+[A-Za-z0-9+/=]{8,}(?![A-Za-z0-9+/=])"
-                r"|(?<![A-Za-z0-9])[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@)"
+                r"|[a-z0-9+.-]{1,64}://[^/\s:@]+:[^@\s/]+@)"
             ),
         ),
         CredentialPattern(
@@ -187,8 +193,17 @@ class CredentialRedactor:
     PII_PATTERNS: tuple[CredentialPattern, ...] = (
         CredentialPattern(
             name="Email address",
+            # RFC 5321 limits the local part to 64 octets. The character class
+            # below is ASCII-only, so the same limit also bounds regex work at
+            # every candidate start. Without it, separator-dense input that
+            # contains no ``@`` makes the greedy local part scan overlapping
+            # suffixes from many candidate starts, producing quadratic behavior.
+            # Deliberately omit word boundaries around the pattern. This is a
+            # fail-closed egress detector, not an RFC validator: if untrusted
+            # output pads a readable address with uninterrupted word characters,
+            # the engine must report a bounded match instead of missing it.
             pattern=re.compile(
-                r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
+                r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
             ),
         ),
         CredentialPattern(
