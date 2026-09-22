@@ -76,6 +76,7 @@ jobs:
               - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
             integrations:
               - 'agent-governance-python/agentmesh-integrations/**'
+              - 'examples/flowise-governance/**'
             workflows:
               - '.github/workflows/**'
             rust:
