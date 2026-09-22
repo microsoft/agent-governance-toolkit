@@ -38,6 +38,7 @@ _engine: PolicyEngine = PolicyEngine()
 _trust_policies: list[TrustPolicy] = []
 _trust_evaluator: PolicyEvaluator | None = None
 _loaded_count: int = 0
+_GOVERNANCE_ONLY_KEYS = frozenset({"agent", "agents", "default_action", "extends", "scope"})
 
 
 def _load_policies() -> None:
@@ -59,8 +60,25 @@ def _load_policies() -> None:
     governance_count = 0
     errors: list[tuple[str, Exception]] = []
 
-    for f in sorted(policy_path.glob("*.yaml")):
-        content = f.read_text(encoding="utf-8")
+    try:
+        with os.scandir(policy_path) as entries:
+            discovered = sorted(
+                (Path(entry.path) for entry in entries),
+                key=lambda path: path.name,
+            )
+    except OSError as exc:
+        raise RuntimeError(
+            f"Policy directory {POLICY_DIR} cannot be read; "
+            "refusing to load an undefined policy set"
+        ) from exc
+
+    for f in (path for path in discovered if path.suffix == ".yaml"):
+        try:
+            content = f.read_text(encoding="utf-8")
+        except Exception as exc:
+            errors.append((f.name, exc))
+            continue
+
         try:
             local_engine.load_yaml(content)
             governance_count += 1
@@ -75,7 +93,13 @@ def _load_policies() -> None:
                         "governance-shaped document was not accepted by the "
                         "governance policy parser"
                     )
-                tp = TrustPolicy.from_yaml(f)
+                governance_keys = sorted(_GOVERNANCE_ONLY_KEYS.intersection(raw))
+                if governance_keys:
+                    raise ValueError(
+                        "governance-only fields are not valid in a trust policy: "
+                        + ", ".join(governance_keys)
+                    )
+                tp = TrustPolicy(**raw)
                 if not tp.rules:
                     raise ValueError("trust policy must contain at least one rule")
                 local_trust.append(tp)
@@ -91,7 +115,7 @@ def _load_policies() -> None:
                     )
                 )
 
-    for f in sorted(policy_path.glob("*.json")):
+    for f in (path for path in discovered if path.suffix == ".json"):
         try:
             local_engine.load_json(f.read_text(encoding="utf-8"))
             governance_count += 1

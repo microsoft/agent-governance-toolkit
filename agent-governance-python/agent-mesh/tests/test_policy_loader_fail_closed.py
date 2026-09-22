@@ -59,6 +59,21 @@ _TRUST_FALLBACK_WITHOUT_RULES = "\n".join(
     ]
 )
 
+_LEGACY_GOVERNANCE_POLICY = "\n".join(
+    [
+        "name: legacy-governance",
+        'agents: ["*"]',
+        "rules:",
+        "  - name: deny-shell",
+        "    condition:",
+        "      field: action",
+        "      operator: eq",
+        "      value: shell.execute",
+        "    action: deny",
+        "",
+    ]
+)
+
 
 @pytest.fixture
 def policy_server(monkeypatch):
@@ -101,8 +116,8 @@ def test_policy_server_loads_trust_policy_from_path(policy_server, tmp_path, mon
 
 @pytest.mark.parametrize(
     "content",
-    [_GOVERNANCE_SHAPED_POLICY, _TRUST_FALLBACK_WITHOUT_RULES],
-    ids=["governance-shaped", "without-rules"],
+    [_GOVERNANCE_SHAPED_POLICY, _TRUST_FALLBACK_WITHOUT_RULES, _LEGACY_GOVERNANCE_POLICY],
+    ids=["governance-shaped", "without-rules", "governance-only-fields"],
 )
 def test_policy_server_rejects_silent_trust_fallback(policy_server, tmp_path, monkeypatch, content):
     _write(tmp_path / "invalid.yaml", content)
@@ -120,6 +135,25 @@ def test_policy_server_rejects_missing_directory(policy_server, tmp_path, monkey
 
     with pytest.raises(RuntimeError, match="does not exist"):
         policy_server._load_policies()
+
+
+def test_policy_server_rejects_unreadable_directory(policy_server, tmp_path, monkeypatch):
+    _write(tmp_path / "good.yaml", _VALID_GOVERNANCE_POLICY)
+    monkeypatch.setattr(policy_server, "POLICY_DIR", str(tmp_path))
+    policy_server._load_policies()
+    previous_engine = policy_server._engine
+    previous_count = policy_server._loaded_count
+
+    def fail_scandir(_path):
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(policy_server.os, "scandir", fail_scandir)
+
+    with pytest.raises(RuntimeError, match="cannot be read"):
+        policy_server._load_policies()
+
+    assert policy_server._engine is previous_engine
+    assert policy_server._loaded_count == previous_count
 
 
 def test_policy_server_failed_reload_preserves_previous_state(policy_server, tmp_path, monkeypatch):
@@ -148,6 +182,36 @@ def test_policy_server_reload_endpoint_rejects_failed_load(policy_server, tmp_pa
 
     assert response.status_code == 409
     assert "previous policy set retained" in response.json()["detail"]
+    assert policy_server._engine is previous_engine
+
+
+@pytest.mark.parametrize("read_error", ["unreadable", "non-utf8"])
+def test_policy_server_reload_endpoint_rejects_read_errors(
+    policy_server, tmp_path, monkeypatch, read_error
+):
+    _write(tmp_path / "good.yaml", _VALID_GOVERNANCE_POLICY)
+    monkeypatch.setattr(policy_server, "POLICY_DIR", str(tmp_path))
+    policy_server._load_policies()
+    previous_engine = policy_server._engine
+
+    bad_path = tmp_path / "bad.yaml"
+    if read_error == "unreadable":
+        _write(bad_path, _VALID_GOVERNANCE_POLICY)
+        original_read_text = Path.read_text
+
+        def fail_read_text(path, *args, **kwargs):
+            if path == bad_path:
+                raise OSError("permission denied")
+            return original_read_text(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", fail_read_text)
+    else:
+        bad_path.write_bytes(b"\xff\xfe")
+
+    response = TestClient(policy_server.app).post("/api/v1/policy/reload")
+
+    assert response.status_code == 409
+    assert "bad.yaml" in response.json()["detail"]
     assert policy_server._engine is previous_engine
 
 
