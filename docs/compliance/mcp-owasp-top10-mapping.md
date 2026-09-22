@@ -1,10 +1,10 @@
 ---
 title: "🛡️ OWASP MCP Top 10 — Compliance Mapping"
-last_reviewed: 2026-08-14
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 # 🛡️ OWASP MCP Top 10 — Compliance Mapping
 
@@ -403,10 +403,10 @@ Three MCP risks have partial coverage today with planned enhancements targeting 
 
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 *Last updated: April 2026 · OWASP MCP Top 10 v0.1 (Phase 3 Beta)*
 
-**[⬅ Back to README](../../README.md)** · **[🛡️ Agentic Top 10 Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)**
+**[⬅ Back to README](../index.md)** · **[🛡️ Agentic Top 10 Mapping](owasp-agentic-top10-architecture.md)**
 
 </div>

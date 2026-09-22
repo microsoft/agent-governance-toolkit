@@ -1,10 +1,10 @@
 ---
 title: "NSA MCP Security Considerations — Compliance Mapping"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 # NSA MCP Security Considerations — Compliance Mapping
 

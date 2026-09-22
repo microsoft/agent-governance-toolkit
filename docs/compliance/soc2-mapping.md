@@ -1,12 +1,12 @@
 ---
 title: "🔒 SOC 2 Type II — Trust Service Criteria Mapping"
-last_reviewed: 2026-05-25
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
-<div align="center">
+<div align="center" markdown="1">
 
 # 🔒 SOC 2 Type II — Trust Service Criteria Mapping
 
@@ -503,10 +503,10 @@ All gaps consolidated and rated by severity for remediation prioritization.
 
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 *Last updated: April 2026 · Toolkit version: v2.3.0*
 
-**[⬅ Back to README](../../README.md)** · **[OWASP Agentic Mapping](./owasp-agentic-top10-architecture.md)** · **[EU AI Act Checklist](eu-ai-act-checklist.md)**
+**[⬅ Back to README](../index.md)** · **[OWASP Agentic Mapping](owasp-agentic-top10-architecture.md)** · **[EU AI Act Checklist](eu-ai-act-checklist.md)**
 
 </div>
