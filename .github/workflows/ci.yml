@@ -865,6 +865,8 @@ jobs:
             import-module: llama_index.agent.agentmesh
           - package: mcp-trust-proxy
             import-module: mcp_trust_proxy
+          - package: mcp-receipt-governed
+            import-module: mcp_receipt_governed
           - package: nostr-wot
             import-module: agentmesh_nostr_wot
           - package: openai-agents-agentmesh

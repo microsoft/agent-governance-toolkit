@@ -75,6 +75,7 @@ AgentOS
 AgentRateLimiter
 Amol
 Anambra
+Artzain
 Assn
 Authenticode
 BFBFBF
@@ -241,6 +242,7 @@ Printf
 Println
 Pseudonymisation
 Pydantic
+Quantumskipper
 REALPKG
 RISA
 RUBYOPT

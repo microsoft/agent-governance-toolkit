@@ -19,6 +19,7 @@ momentum and credibility. Submit a PR editing this file — see
 | Microsoft (internal AI agent platform) | AI / Developer Tools | Policy enforcement and governance workflows for multi-agent orchestration | Mar 2026 | [@imran-siddique](https://github.com/imran-siddique) |
 | Microsoft (internal engineering tools) | Engineering Productivity | Agent SRE integration for incident management and reliability monitoring | Apr 2026 | [@imran-siddique](https://github.com/imran-siddique) |
 | [Dayos](https://dayos.com) | Enterprise AI / ERP Automation | Policy enforcement and prompt-injection detection for a multi-agent system built on Google ADK -- Cedar-based tool-dispatch governance across finance and operations workflows | May 2026 | [@miyannishar](https://github.com/miyannishar) |
+| [CogNEXUS Labs](https://cognexuslabs.ai) | Enterprise AI Solutions | Python guards in [Artzain](https://artzain.ai) are derived from this repository's guard code and enforce local tool-call decisions | Aug 2026 | [@Quantumskipper](https://github.com/Quantumskipper) |
 
 ## Evaluation / Pilot
 
