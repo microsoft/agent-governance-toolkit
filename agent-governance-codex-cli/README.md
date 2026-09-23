@@ -113,6 +113,13 @@ node bin/agt-codex.mjs uninstall  [--codex-home <dir>]   # remove the plugin and
   has already run. Enforcement is preventive (before execution), not output-filtering.
 - **`PreToolUse` fires before shell and other tool calls**, so command-level governance
   covers the highest-risk surface. Tool coverage tracks Codex's own hook matcher support.
+- **Recursive-delete matching is command-position based.** The shipped rule recognizes
+  multiline and control-flow command positions, relative/path-qualified `rm` and `find`,
+  `find -delete`/`-exec`/`-execdir`, assignment prefixes, and the documented wrapper
+  commands (`sudo`, `doas`, `command`, `exec`, `eval`, `nohup`, `busybox`, `nice`, `time`,
+  `timeout`, `env`, `xargs`, and `strace`). It is not a shell sandbox and does not promise
+  coverage for arbitrary nested interpreters such as `bash -c`, `chroot`, `ionice`,
+  `setsid`, `unshare`, or quoted/escaped command names.
 - **Hooks are trust-gated.** A fresh install applies no governance until the one-time
   trust step above. `node bin/agt-codex.mjs status` reports whether the audit chain is growing so this
   gap is observable, not silent.

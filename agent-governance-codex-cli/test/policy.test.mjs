@@ -376,6 +376,8 @@ test("recursive-delete hardening matches PowerShell and shell-quoted invocations
     "env -i rm -rf ./important",                 // Command wrapper
     "command -p rm -rf ./important",             // Command wrapper
     "xargs -0 rm -rf ./important",               // Command wrapper
+    "FOO=1 rm -rf ./important",                  // Assignment prefix
+    "find . -execdir rm -rf {} +",               // Find execdir deletion
     "echo `rm -rf /tmp/x`",                      // backtick invocation
     "{ rm -rf /tmp/x; }",                        // brace group
     "(rm -rf /tmp/x)",                           // subshell
