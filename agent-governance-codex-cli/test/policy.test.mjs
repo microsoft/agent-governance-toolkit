@@ -354,6 +354,28 @@ test("recursive-delete hardening matches PowerShell and shell-quoted invocations
     "rmdir /s /q important",                     // Windows recursive directory delete
     "find . -type f -delete",                    // Find-based deletion
     "/usr/bin/find . -delete",                   // Path-qualified find command
+    "./rm -rf /tmp/important",                  // Relative path-qualified rm
+    "find . -exec rm -rf {} +",                  // Find exec deletion
+    "set -e\nrm -rf ./important",                // Multiline shell script
+    "cd /tmp/x\nrm -rf ./important",             // Multiline shell script
+    "echo hi\nfind . -delete",                   // Multiline find deletion
+    "  rm -rf ./important",                      // Leading indentation
+    "\trm -rf ./important",                      // Leading tab
+    "if true; then rm -rf ./important; fi",      // Shell conditional
+    "for f in x; do rm -rf $f; done",            // Shell loop
+    "nice rm -rf ./important",                   // Command wrapper
+    "time rm -rf ./important",                   // Command wrapper
+    "nohup rm -rf ./important",                  // Command wrapper
+    "exec rm -rf ./important",                   // Command wrapper
+    "eval rm -rf ./important",                   // Command wrapper
+    "timeout 5 rm -rf ./important",              // Command wrapper
+    "doas rm -rf ./important",                   // Command wrapper
+    "busybox rm -rf ./important",                // Command wrapper
+    "strace rm -rf ./important",                 // Command wrapper
+    "sudo -u root rm -rf ./important",           // Command wrapper
+    "env -i rm -rf ./important",                 // Command wrapper
+    "command -p rm -rf ./important",             // Command wrapper
+    "xargs -0 rm -rf ./important",               // Command wrapper
     "echo `rm -rf /tmp/x`",                      // backtick invocation
     "{ rm -rf /tmp/x; }",                        // brace group
     "(rm -rf /tmp/x)",                           // subshell

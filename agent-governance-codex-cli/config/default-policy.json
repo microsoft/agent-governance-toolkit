@@ -27,7 +27,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "(^|[;&|(){`]\\s*)(?:(?:(?:sudo|command)\\s+|env(?:\\s+[A-Za-z_][A-Za-z0-9_]*=\\S+)*\\s+|xargs(?:\\s+-\\S+)*\\s+)*(?:\\\\|/(?:usr/(?:local/)?)?s?bin/)?(?:rm|remove-item|ri|rd|del|rmdir)\\b|(?:(?:sudo|command)\\s+|env(?:\\s+[A-Za-z_][A-Za-z0-9_]*=\\S+)*\\s+|xargs(?:\\s+-\\S+)*\\s+)*(?:\\\\|/(?:usr/(?:local/)?)?s?bin/)?find\\b[^\\n\\r;&|(){}]*\\s-delete\\b)",
+          "source": "(^|[;&|(){\\x60\\r\\n])\\s*(?:(?:then|do|else|elif|while|until|in)\\s+)*(?:(?:sudo|doas)(?:\\s+-\\S+(?:\\s+\\S+)?)*\\s+|(?:command|exec|eval|nohup|busybox)(?:\\s+-\\S+)*\\s+|(?:nice|time|timeout)(?:\\s+-\\S+|\\s+\\d+)*\\s+|env(?:\\s+-\\S+|\\s+[A-Za-z_][A-Za-z0-9_]*=\\S+)*\\s+|xargs(?:\\s+-\\S+)*\\s+|strace(?:\\s+-\\S+(?:\\s+\\S+)?)*\\s+)*(?:(?:\\\\|(?:\\S*/)?)(?:rm|remove-item|ri|rd|del|rmdir)(?=[\\s;&|(){\\x60]|$)|(?:\\\\|(?:\\S*/)?find)(?=[\\s;&|(){\\x60]|$)[^\\n\\r;&|(){}]*\\s(?:-delete\\b|-exec\\s+(?:\\\\|(?:\\S*/)?)(?:rm|rmdir)(?=[\\s;&|(){\\x60]|$)))",
           "flags": "i"
         }
       ]

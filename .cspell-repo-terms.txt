@@ -153,6 +153,9 @@ Gazetted
 Ghanaian
 GitHub
 thatjosh
+xargs
+strace
+busybox
 Governorate
 HEALTHCHECK
 HKDF
