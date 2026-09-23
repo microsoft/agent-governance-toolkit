@@ -143,19 +143,6 @@ def has_iptables() -> bool:
     return shutil.which("iptables") is not None
 
 
-def _apparmor_profile_loaded(name: str) -> bool:
-    """Whether the local host reports a loaded AppArmor profile in enforce mode."""
-    try:
-        with open("/sys/kernel/security/apparmor/profiles", encoding="utf-8") as profiles:
-            for line in profiles:
-                parts = line.split()
-                if len(parts) >= 2 and parts[0] == name and parts[1] == "(enforce)":
-                    return True
-    except OSError as exc:
-        logger.debug("Could not inspect local AppArmor profiles: %s", exc)
-    return False
-
-
 _fallback_apparmor_warned = False
 _fallback_apparmor_lock = threading.Lock()
 
@@ -165,8 +152,9 @@ def _fallback_apparmor_profile() -> str:
     with _fallback_apparmor_lock:
         if not _fallback_apparmor_warned:
             logger.warning(
-                "agt-sandbox AppArmor profile not detected in enforce mode on the local host; "
-                "falling back to docker-default. On a Linux Docker host, install with "
+                "Docker daemon does not report AppArmor support; falling back to "
+                "docker-default. To enable the agt-sandbox profile on an AppArmor "
+                "Docker host, install with "
                 "'sudo apparmor_parser -r -W "
                 "agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox'. "
                 "Set require_apparmor_profile=True to fail closed."
@@ -188,8 +176,8 @@ class DockerSandboxProvider(SandboxProvider):
         When ``True``, require the local hardened image and fail instead of
         falling back to the legacy image. Cannot be combined with ``image``.
     require_apparmor_profile:
-        When ``True``, refuse to create containers unless the local host
-        reports the ``agt-sandbox`` profile loaded in enforce mode.
+        When ``True``, require the Docker daemon to support AppArmor and
+        verify that the container uses ``agt-sandbox`` in enforce mode.
     docker_url:
         Docker daemon URL (default: auto-detect via env).
     runtime:
@@ -1048,16 +1036,34 @@ class DockerSandboxProvider(SandboxProvider):
     # ------------------------------------------------------------------
 
     def _select_apparmor_profile(self) -> str:
-        if _apparmor_profile_loaded(self._APPARMOR_PROFILE_NAME):
+        security_options = self._client.info().get("SecurityOptions", [])
+        if "name=apparmor" in security_options:
             return self._APPARMOR_PROFILE_NAME
         if self._require_apparmor_profile:
             raise RuntimeError(
-                "agt-sandbox AppArmor profile is required in enforce mode on the "
-                "Docker host. Install it with 'sudo apparmor_parser -r -W "
-                "agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox' "
-                "and ensure the provider can detect it on the local host."
+                "agt-sandbox AppArmor profile is required, but the Docker daemon "
+                "does not report AppArmor support in SecurityOptions"
             )
         return _fallback_apparmor_profile()
+
+    def _verify_apparmor_profile(self, container: Any) -> None:
+        result = container.exec_run(
+            [
+                "python3",
+                "-c",
+                "from pathlib import Path; "
+                "print(Path('/proc/self/attr/current').read_text(encoding='utf-8'), end='')",
+            ]
+        )
+        if (
+            result.exit_code != 0
+            or not isinstance(result.output, bytes)
+            or result.output.strip() != b"agt-sandbox (enforce)"
+        ):
+            raise RuntimeError(
+                "Docker container did not report agt-sandbox in enforce mode; "
+                "refusing to use an unverified AppArmor profile"
+            )
 
     def _create_container(
         self,
@@ -1129,8 +1135,8 @@ class DockerSandboxProvider(SandboxProvider):
             "network_disabled": not config.network_enabled,
             "read_only": config.read_only_fs,
             "tmpfs": tmpfs,
-            # Prefer the custom profile when loaded locally in enforce mode;
-            # otherwise warn and retain the existing docker-default behavior.
+            # Docker daemon capability is authoritative for remote Docker and
+            # non-root clients; verify the selected profile inside the container.
             # Install on the Docker host with apparmor_parser -r -W
             # agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox.
             "security_opt": [
@@ -1158,6 +1164,15 @@ class DockerSandboxProvider(SandboxProvider):
             run_kwargs["runtime"] = runtime_value
 
         container = self._client.containers.run(**run_kwargs)
+        if apparmor_profile == self._APPARMOR_PROFILE_NAME:
+            try:
+                self._verify_apparmor_profile(container)
+            except Exception:
+                try:
+                    container.remove(force=True)
+                except Exception:
+                    logger.exception("Failed to remove container with unverified AppArmor profile")
+                raise
         logger.info(
             "Created container '%s' for agent '%s' session '%s'",
             container_name,

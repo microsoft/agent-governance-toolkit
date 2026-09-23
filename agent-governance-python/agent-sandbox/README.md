@@ -441,10 +441,14 @@ remote client):
 sudo apparmor_parser -r -W agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox
 ```
 
-`DockerSandboxProvider` uses `apparmor=agt-sandbox` only when the local host
-reports that profile in **enforce** mode. Otherwise it warns once per process
-and retains `apparmor=docker-default`, including on hosts without AppArmor.
-For deployments that require this layer, opt into fail-closed selection:
+`DockerSandboxProvider` checks the **Docker daemon's** `SecurityOptions`,
+not the client host's kernel files. When the daemon supports AppArmor it
+requests `apparmor=agt-sandbox`, verifies **enforce** mode inside the running
+container before returning it, and fails if the profile is missing or not
+enforcing. Install the profile on the daemon before creating sessions.
+On daemons without AppArmor it warns once per process and retains
+`apparmor=docker-default`. For deployments that require this layer, opt
+into fail-closed selection even when the daemon lacks AppArmor:
 
 ```python
 provider = DockerSandboxProvider(
@@ -454,8 +458,12 @@ provider = DockerSandboxProvider(
 ```
 
 The profile denies executable loading of selected network, cloud, package and
-infrastructure CLIs at their listed paths, and denies execution from the
-default writable sandbox paths (`/tmp`, `/workspace`, `/dev/shm`, `/output`).
+infrastructure CLIs at their listed paths when those paths still point to the
+original binaries. In the hardened image, the listed CLI paths are symlinks
+to the logging shim: AppArmor mediates the resolved shim path, so these CLI
+path rules do **not** fire there. The additional enforcement in that image
+is the deny on execution from writable sandbox paths (`/tmp`, `/var/tmp`,
+`/workspace`, `/dev/shm`, `/output`).
 It does **not** prevent in-process network access, execution via
 `memfd_create` and `/proc/self/fd`, or execution from other writable mounts
 and a writable root filesystem. Keep the container's network disabled unless

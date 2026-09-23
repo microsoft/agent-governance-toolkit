@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from agent_control_specification import Decision, InterventionPointResult, Verdict
@@ -549,8 +549,7 @@ class TestContainerCreationHardening:
 
     def test_hardening_flags(self):
         p, client = self._make_raw_provider()
-        with patch('agent_sandbox.docker_provider.provider._apparmor_profile_loaded', return_value=False):
-            p._create_container('a1', 's1', SandboxConfig())
+        p._create_container('a1', 's1', SandboxConfig())
         kw = client.containers.run.call_args[1]
         assert kw['security_opt'] == ['no-new-privileges', 'seccomp=default', 'apparmor=docker-default']
         assert kw['cap_drop'] == ['ALL']
@@ -1426,8 +1425,7 @@ class TestHardeningAdditions:
             client.images.get.return_value = MagicMock()
             client.containers.run.return_value = MagicMock()
             p._client = client
-        with patch('agent_sandbox.docker_provider.provider._apparmor_profile_loaded', return_value=False):
-            p._create_container('a1', 's1', SandboxConfig())
+        p._create_container('a1', 's1', SandboxConfig())
         kw = client.containers.run.call_args[1]
         assert 'seccomp=default' in kw['security_opt']
         assert 'apparmor=docker-default' in kw['security_opt']
@@ -1573,36 +1571,6 @@ class TestDefaultImageSelection:
         assert DockerSandboxProvider.HARDENED_IMAGE_TAG == 'agt-sandbox/python-minimal-path:3.11'
 
 
-class TestAppArmorProfileLoaded:
-    @pytest.mark.parametrize(
-        ('content', 'loaded'),
-        [
-            ('agt-sandbox (enforce)\n', True),
-            ('docker-default (enforce)\n' 'agt-sandbox (enforce)\n', True),
-            ('docker-default (enforce)\n', False),
-            ('agt-sandbox-extra (enforce)\n', False),
-            ('agt-sandbox (complain)\n', False),
-            ('agt-sandbox\n', False),
-        ],
-    )
-    def test_matches_exact_enforcing_profile(self, content, loaded):
-        from agent_sandbox.docker_provider.provider import _apparmor_profile_loaded
-
-        with patch('builtins.open', mock_open(read_data=content)) as profiles:
-            assert _apparmor_profile_loaded('agt-sandbox') == loaded
-        profiles.assert_called_once_with(
-            '/sys/kernel/security/apparmor/profiles', encoding='utf-8'
-        )
-
-    def test_unavailable_profile_file(self, caplog):
-        from agent_sandbox.docker_provider.provider import _apparmor_profile_loaded
-
-        with patch('builtins.open', side_effect=OSError('no AppArmor')):
-            with caplog.at_level('DEBUG', logger='agent_sandbox.docker_provider.provider'):
-                assert not _apparmor_profile_loaded('agt-sandbox')
-        assert 'Could not inspect local AppArmor profiles' in caplog.text
-
-
 class TestAppArmorProfileSelection:
     @pytest.fixture(autouse=True)
     def reset_fallback_warning(self, monkeypatch):
@@ -1616,42 +1584,99 @@ class TestAppArmorProfileSelection:
             provider._image = 'python:3.11-slim'
             provider._runtime = IsolationRuntime.RUNC
             provider._client = MagicMock()
+            provider._client.info.return_value = {'SecurityOptions': []}
+            provider._client.containers.run.return_value.exec_run.return_value = MagicMock(
+                exit_code=0, output=b'agt-sandbox (enforce)\n'
+            )
             return provider
 
-    def test_uses_enforcing_profile(self):
+    def test_uses_daemon_profile_as_non_root_client(self):
         provider = self._make_raw_provider()
-        with patch('agent_sandbox.docker_provider.provider._apparmor_profile_loaded', return_value=True):
+        provider._client.info.return_value = {
+            'SecurityOptions': ['name=seccomp,profile=default', 'name=apparmor']
+        }
+        with patch('builtins.open', side_effect=PermissionError('client cannot read profiles')) as local_open:
             provider._create_container('a1', 's1', SandboxConfig())
         options = provider._client.containers.run.call_args.kwargs['security_opt']
         assert options == ['no-new-privileges', 'seccomp=default', 'apparmor=agt-sandbox']
+        exec_call = provider._client.containers.run.return_value.exec_run.call_args
+        assert exec_call.args[0][:2] == ['python3', '-c']
+        assert "/proc/self/attr/current" in exec_call.args[0][2]
+        local_open.assert_not_called()
 
-    def test_fallback_warns_only_once_with_install_path(self, caplog):
+    def test_remote_daemon_profile_is_used(self):
+        client = self._make_raw_provider()._client
+        client.info.return_value = {'SecurityOptions': ['name=apparmor']}
+        docker_module = MagicMock()
+        docker_module.DockerClient.return_value = client
+        with patch.dict('sys.modules', {'docker': docker_module}):
+            provider = DockerSandboxProvider(image='python:3.11-slim', docker_url='tcp://docker.example:2376')
+        provider._create_container('a1', 's1', SandboxConfig())
+        docker_module.DockerClient.assert_called_once_with(base_url='tcp://docker.example:2376')
+        assert 'apparmor=agt-sandbox' in client.containers.run.call_args.kwargs['security_opt']
+
+    def test_fallback_warns_only_once_without_daemon_support(self, caplog):
         provider = self._make_raw_provider()
-        with patch('agent_sandbox.docker_provider.provider._apparmor_profile_loaded', return_value=False):
-            with caplog.at_level('WARNING', logger='agent_sandbox.docker_provider.provider'):
-                provider._create_container('a1', 's1', SandboxConfig())
-                provider._create_container('a1', 's2', SandboxConfig())
+        with caplog.at_level('WARNING', logger='agent_sandbox.docker_provider.provider'):
+            provider._create_container('a1', 's1', SandboxConfig())
+            provider._create_container('a1', 's2', SandboxConfig())
         options = provider._client.containers.run.call_args.kwargs['security_opt']
         assert 'apparmor=docker-default' in options
+        provider._client.containers.run.return_value.exec_run.assert_not_called()
         warnings = [record.message for record in caplog.records if 'falling back to docker-default' in record.message]
         assert len(warnings) == 1
-        assert 'agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox' in warnings[0]
+        assert 'Docker daemon does not report AppArmor support' in warnings[0]
 
     def test_required_profile_fails_closed(self):
         provider = self._make_raw_provider()
         provider._require_apparmor_profile = True
-        with patch('agent_sandbox.docker_provider.provider._apparmor_profile_loaded', return_value=False):
-            with pytest.raises(RuntimeError, match='required in enforce mode'):
-                provider._create_container('a1', 's1', SandboxConfig())
+        with pytest.raises(RuntimeError, match='does not report AppArmor support'):
+            provider._create_container('a1', 's1', SandboxConfig())
         provider._client.images.get.assert_not_called()
         provider._client.containers.run.assert_not_called()
 
     def test_required_profile_accepts_enforcing_profile(self):
         provider = self._make_raw_provider()
         provider._require_apparmor_profile = True
-        with patch('agent_sandbox.docker_provider.provider._apparmor_profile_loaded', return_value=True):
-            provider._create_container('a1', 's1', SandboxConfig())
+        provider._client.info.return_value = {'SecurityOptions': ['name=apparmor']}
+        provider._create_container('a1', 's1', SandboxConfig())
         assert 'apparmor=agt-sandbox' in provider._client.containers.run.call_args.kwargs['security_opt']
+
+    @pytest.mark.parametrize('require_profile', [False, True])
+    @pytest.mark.parametrize(
+        ('exit_code', 'output'),
+        [
+            (0, b'agt-sandbox (complain)\n'),
+            (0, b'unconfined\n'),
+            (1, b''),
+            (0, b''),
+        ],
+    )
+    def test_unverified_profile_removes_container(self, exit_code, output, require_profile):
+        provider = self._make_raw_provider()
+        provider._require_apparmor_profile = require_profile
+        provider._client.info.return_value = {'SecurityOptions': ['name=apparmor']}
+        container = provider._client.containers.run.return_value
+        container.exec_run.return_value = MagicMock(exit_code=exit_code, output=output)
+        with pytest.raises(RuntimeError, match='did not report agt-sandbox in enforce mode'):
+            provider._create_container('a1', 's1', SandboxConfig())
+        container.remove.assert_called_once_with(force=True)
+
+    def test_daemon_rejects_missing_profile_without_downgrade(self):
+        provider = self._make_raw_provider()
+        provider._client.info.return_value = {'SecurityOptions': ['name=apparmor']}
+        provider._client.containers.run.side_effect = RuntimeError('profile not loaded')
+        with pytest.raises(RuntimeError, match='profile not loaded'):
+            provider._create_container('a1', 's1', SandboxConfig())
+        provider._client.containers.run.assert_called_once()
+        assert 'apparmor=agt-sandbox' in provider._client.containers.run.call_args.kwargs['security_opt']
+
+    def test_daemon_info_error_is_not_treated_as_no_apparmor(self):
+        provider = self._make_raw_provider()
+        provider._client.info.side_effect = OSError('Docker info unavailable')
+        with pytest.raises(OSError, match='Docker info unavailable'):
+            provider._create_container('a1', 's1', SandboxConfig())
+        provider._client.containers.run.assert_not_called()
 
     def test_constructor_records_strict_requirement(self):
         with patch.object(DockerSandboxProvider, '_select_default_image', return_value='python:3.11-slim'):
