@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Regression tests for supervisor hierarchy validation."""
+"""Regression tests for supervisor hierarchy registration and validation."""
 
 from __future__ import annotations
 
@@ -19,24 +19,22 @@ def _hierarchy() -> SupervisorHierarchy:
 
 
 @pytest.mark.parametrize("level", ["1", 1.0, None, True, False])
-def test_validate_hierarchy_reports_non_integer_level_without_crashing(level: Any) -> None:
+def test_register_supervisor_rejects_non_integer_levels(level: Any) -> None:
     hierarchy = _hierarchy()
-    hierarchy.register_supervisor("trust-root", level=0, is_agent=False)
-    hierarchy.register_supervisor("invalid", level=level, is_agent=True)
 
-    violations = hierarchy.validate_hierarchy()
+    with pytest.raises(TypeError, match="level must be an integer"):
+        hierarchy.register_supervisor("invalid", level=level, is_agent=True)
 
-    assert any("invalid" in violation and "non-integer level" in violation for violation in violations)
+    assert hierarchy.get_authority_chain({}) == []
 
 
-def test_invalid_false_level_does_not_satisfy_root_requirement() -> None:
+def test_register_supervisor_rejects_agent_root() -> None:
     hierarchy = _hierarchy()
-    hierarchy.register_supervisor("boolean-root", level=False, is_agent=False)
 
-    violations = hierarchy.validate_hierarchy()
+    with pytest.raises(ValueError, match="must be deterministic"):
+        hierarchy.register_supervisor("agent-root", level=0, is_agent=True)
 
-    assert any("non-integer level" in violation for violation in violations)
-    assert "Level 0 (root) has no registered supervisor" in violations
+    assert hierarchy.get_authority_chain({}) == []
 
 
 def test_valid_integer_hierarchy_contract_is_unchanged() -> None:

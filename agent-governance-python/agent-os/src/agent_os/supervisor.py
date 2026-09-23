@@ -50,7 +50,17 @@ class SupervisorHierarchy:
             name: Unique supervisor name.
             level: Hierarchy level (0 = root, higher = closer to workers).
             is_agent: Whether this supervisor is an LLM-based agent.
+
+        Raises:
+            TypeError: If ``level`` is not an integer or is a boolean.
+            ValueError: If ``level`` is negative or an agent is registered at level 0.
         """
+        if isinstance(level, bool) or not isinstance(level, int):
+            raise TypeError("Supervisor level must be an integer; bool is not allowed")
+        if level < 0:
+            raise ValueError("Supervisor level must be non-negative; level 0 is the root")
+        if level == 0 and is_agent:
+            raise ValueError("Level 0 supervisor must be deterministic, not an LLM agent")
         self._supervisors.append(_Supervisor(name=name, level=level, is_agent=is_agent))
 
     # ------------------------------------------------------------------
