@@ -53,7 +53,7 @@ dev = [
     "cryptography>=50.0.1,<51.0",
     "pynacl>=1.6.2,<2.0",
     "eval_type_backport>=0.2.0; python_version < '3.10'",
-    "tzdata>=2024.1,<2027.0",
+    "tzdata>=2026.4,<2027.0",
 ]
 # Optional local backend for the (default-off) embedding evidence signal in
 # `agent_os.prompt_injection_embedding`. Never required: the module is inert
