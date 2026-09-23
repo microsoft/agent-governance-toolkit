@@ -7,13 +7,17 @@ Verifies offline and live-style behavior using a mock client.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from agent_sre.integrations.sentry import SentryExporter
 from agent_sre.slo.indicators import CostPerTask, TaskSuccessRate
-from agent_sre.slo.objectives import ErrorBudget, SLO
+from agent_sre.slo.objectives import SLO, ErrorBudget
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 @pytest.fixture
@@ -133,7 +137,7 @@ class TestSentryExporterLive:
             "Canary rollback triggered",
             level="warning",
             tags={"env": "prod"},
-            context={"rollout": "support-bot-v4"},
+            contexts={"agent_sre": {"rollout": "support-bot-v4"}},
         )
 
     def test_capture_exception_calls_client(
@@ -147,7 +151,7 @@ class TestSentryExporterLive:
         mock_client.capture_exception.assert_called_once_with(
             error,
             tags={"agent_id": "bot-1"},
-            context={},
+            contexts=None,
         )
 
     def test_client_errors_are_swallowed(
@@ -163,6 +167,50 @@ class TestSentryExporterLive:
 
         # Events are still recorded locally
         assert len(live_exporter.events) == 2
+
+
+class TestSentryExporterRealSdk:
+    """Send through the real sentry-sdk so kwarg drift fails loudly."""
+
+    @pytest.fixture
+    def captured(self) -> Iterator[list[dict[str, Any]]]:
+        sentry_sdk = pytest.importorskip("sentry_sdk")
+        from sentry_sdk.transport import Transport
+
+        events: list[dict[str, Any]] = []
+
+        class _MemoryTransport(Transport):
+            def capture_envelope(self, envelope: Any) -> None:
+                event = envelope.get_event()
+                if event is not None:
+                    events.append(event)
+
+        sentry_sdk.init(dsn="https://public@example.invalid/1", transport=_MemoryTransport())
+        yield events
+        sentry_sdk.init()
+
+    def test_incident_delivered_with_tags_and_context(self, captured: list[dict[str, Any]]) -> None:
+        import sentry_sdk
+
+        SentryExporter(client=sentry_sdk).capture_incident(
+            "budget exhausted", tags={"agent_id": "bot-1"}, context={"burn_rate": 9.1}
+        )
+
+        assert len(captured) == 1
+        assert captured[0]["message"] == "budget exhausted"
+        assert captured[0]["tags"]["agent_id"] == "bot-1"
+        assert captured[0]["contexts"]["agent_sre"] == {"burn_rate": 9.1}
+
+    def test_exception_delivered_with_context(self, captured: list[dict[str, Any]]) -> None:
+        import sentry_sdk
+
+        SentryExporter(client=sentry_sdk).capture_exception(
+            RuntimeError("db timeout"), context={"tool": "search"}
+        )
+
+        assert len(captured) == 1
+        assert captured[0]["exception"]["values"][0]["value"] == "db timeout"
+        assert captured[0]["contexts"]["agent_sre"] == {"tool": "search"}
 
 
 class TestSentryIntegration:
