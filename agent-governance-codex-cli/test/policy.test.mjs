@@ -350,8 +350,10 @@ test("recursive-delete hardening matches PowerShell and shell-quoted invocations
     "Remove-Item -Recurse -Force /tmp/build",   // PowerShell recursive delete
     "ri -r -fo /tmp/build",                      // PowerShell ri alias, clustered flags
     "/bin/rm -rf /tmp/build",                    // Path-qualified Unix command
+    "\\rm -rf /tmp/build",                       // Backslash-prefixed Unix alias
     "rmdir /s /q important",                     // Windows recursive directory delete
     "find . -type f -delete",                    // Find-based deletion
+    "/usr/bin/find . -delete",                   // Path-qualified find command
     "echo `rm -rf /tmp/x`",                      // backtick invocation
     "{ rm -rf /tmp/x; }",                        // brace group
     "(rm -rf /tmp/x)",                           // subshell
@@ -365,6 +367,37 @@ test("recursive-delete hardening matches PowerShell and shell-quoted invocations
       result.hookSpecificOutput?.permissionDecision,
       "deny",
       `expected deny for: ${command}`,
+    );
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("recursive-delete matching stays scoped to command position", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-codex-rm-command-position-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json"), policyPath: isolatedPolicy(root) });
+
+  for (const command of [
+    "cat docs/rm.md",
+    "ls ./rm",
+    "git checkout -- src/rm.ts",
+    "go test ./internal/rm/...",
+    "npm test -- packages/rm",
+    "vim lib/rm.js",
+    "curl -o /tmp/rm.log https://x",
+    "echo hi > out/rm.txt",
+    "grep -r foo src/rm/",
+    "bash scripts/rm-cache.sh",
+  ]) {
+    const result = await evaluatePreToolUse(state, {
+      tool_name: "Bash",
+      tool_input: { command },
+      session_id: "rm-command-position",
+    });
+    assert.notEqual(
+      result.hookSpecificOutput?.permissionDecision,
+      "deny",
+      `unexpected recursive-delete deny for: ${command}`,
     );
   }
 

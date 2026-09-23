@@ -141,3 +141,7 @@ OpenCode package was derived from it. Codex-specific behavior includes the suppo
 `permissionDecision` mapping, fail-closed review handling, Codex config paths, Windows
 installer invocation, and patch-target extraction; these differences are covered by the
 Codex tests rather than being treated as a byte-identical copy.
+
+The Windows installer regression covers package paths containing command-shell
+metacharacters. The repository's current CI matrix is Linux-only, so that path is
+verified locally on Windows rather than by hosted CI.

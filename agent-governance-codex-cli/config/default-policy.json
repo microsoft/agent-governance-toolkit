@@ -27,7 +27,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "(^|[\\s;&|(){`])(?:(?:\\S*/)?rm|remove-item|ri|rd|del|rmdir)\\b|(?:^|[\\s;&|(){`])find\\b[^\\n\\r;&|(){}]*\\s-delete\\b",
+          "source": "(^|[;&|(){`]\\s*)(?:(?:(?:sudo|command)\\s+|env(?:\\s+[A-Za-z_][A-Za-z0-9_]*=\\S+)*\\s+|xargs(?:\\s+-\\S+)*\\s+)*(?:\\\\|/(?:usr/(?:local/)?)?s?bin/)?(?:rm|remove-item|ri|rd|del|rmdir)\\b|(?:(?:sudo|command)\\s+|env(?:\\s+[A-Za-z_][A-Za-z0-9_]*=\\S+)*\\s+|xargs(?:\\s+-\\S+)*\\s+)*(?:\\\\|/(?:usr/(?:local/)?)?s?bin/)?find\\b[^\\n\\r;&|(){}]*\\s-delete\\b)",
           "flags": "i"
         }
       ]
