@@ -274,6 +274,14 @@ class TestContextCuedSSN:
             "SSN: ７４５１０２３８６",
             "ＳＳＮ:\u200b745102386",
             "SSN" + " " * 10 + "745102386",
+            '{"ssn": "745102386"}',
+            "ssn='745102386'",
+            "**SSN**: 745102386",
+            "| SSN | 745102386 |",
+            "SSN# 745102386",
+            "SSN: (745102386)",
+            "<ssn>745102386</ssn>",
+            "SSN: -- 745102386",
         ],
     )
     def test_cued_bare_ssn_blocked(self, text):
@@ -293,6 +301,7 @@ class TestContextCuedSSN:
             "ssn_lookup_id=745102386",
             "no ssn on file; case 745102386",
             "SSN" + " " * 11 + "745102386",
+            'SSN: "' + " " * 9 + "745102386",
             "SSN: a745102386",
             "SSN: 745102386a",
         ],

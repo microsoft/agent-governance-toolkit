@@ -90,11 +90,12 @@ _PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
     (
         # A bare nine-digit run is blocked only after an explicit SSN cue.
-        # Bound the gap to avoid treating a later, unrelated ID as an SSN.
+        # Bound the punctuation gap to avoid treating a later, unrelated ID
+        # as an SSN, while accepting quotes and markup around the cue.
         re.compile(
             r"(?<![A-Za-z0-9])"
             r"(?:social\s+security(?:\s+(?:number|num|no|#))?|soc(?:ial)?\s*sec|ssn)"
-            r"[\s:=]{0,10}\d{9}(?![A-Za-z0-9])",
+            r"[^A-Za-z0-9]{0,10}\d{9}(?![A-Za-z0-9])",
             re.IGNORECASE,
         ),
         "SSN",
