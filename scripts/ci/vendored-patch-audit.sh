@@ -63,15 +63,50 @@ fi
 # Check for an audit doc
 AUDIT_DOC=$(grep -E '^docs/dependency-audits/[0-9]{4}-[0-9]{2}-[0-9]{2}-.+\.md$' <<< "$CHANGED_FILES" || true)
 
+emit_audit_template() {
+  local audit_path audit_date template
+  audit_date=$(date +%Y-%m-%d)
+  audit_path="docs/dependency-audits/${audit_date}-<description>.md"
+  template=$(cat <<EOF
+## Dependency audit template
+
+Create \`${audit_path}\` with:
+
+\`\`\`markdown
+---
+title: <dependency change summary>
+last_reviewed: ${audit_date}
+owner: <github-handle>
+---
+
+# <dependency change summary>
+
+## Which dependencies changed and why
+
+- <dependency>: <old version> -> <new version>
+- Reason: <why this update is needed>
+
+## Security advisory relevance
+
+- <CVE / advisory relevance, or "No known advisory addressed">
+
+## Breaking change risk assessment
+
+- <compatibility risk and validation performed>
+\`\`\`
+EOF
+)
+
+  printf '%s\n' "$template"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    printf '%s\n' "$template" >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
+
 if [ -z "$AUDIT_DOC" ]; then
   echo "❌ vendored-patch-audit: lockfiles changed but no dependency audit doc found."
   echo ""
-  echo "Please add: docs/dependency-audits/$(date +%Y-%m-%d)-<description>.md"
-  echo ""
-  echo "The audit doc should cover:"
-  echo "  - Which dependencies changed and why"
-  echo "  - Security advisory relevance (CVE numbers if applicable)"
-  echo "  - Breaking change risk assessment"
+  emit_audit_template
   exit 1
 fi
 

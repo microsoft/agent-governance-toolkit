@@ -196,7 +196,7 @@ def compile_patterns(
     )
     policy_id = name.replace("-", "_")
     manifest = {
-        "agent_control_specification_version": "0.3.1-beta",
+        "agent_control_specification_version": "0.4.0-alpha.1",
         "metadata": {"name": name, "version": "1.0"},
         "extends": [],
         "policies": {

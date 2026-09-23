@@ -53,13 +53,16 @@ class SupervisorHierarchy:
             is_agent: Whether this supervisor is an LLM-based agent.
 
         Raises:
-            ValueError: If *level* exceeds ``MAX_SUPERVISOR_LEVEL``.  Python
-                ints are unbounded, so without a check a pathologically large
-                level (e.g. ``10**100``) makes ``validate_hierarchy`` hang —
-                even after the gap scan itself is safe, the sorted set of
-                levels is meaningless when the level is not a realistic
-                hierarchy position.
+            TypeError: If ``level`` is not an integer or is a boolean.
+            ValueError: If ``level`` is negative, exceeds ``MAX_SUPERVISOR_LEVEL``,
+                or an agent is registered at level 0.
         """
+        if isinstance(level, bool) or not isinstance(level, int):
+            raise TypeError(f"Supervisor level must be an int, got {level!r}")
+        if level < 0:
+            raise ValueError("Supervisor level must be non-negative; level 0 is the root")
+        if level == 0 and is_agent:
+            raise ValueError("Level 0 supervisor must be deterministic, not an LLM agent")
         if level > MAX_SUPERVISOR_LEVEL:
             raise ValueError(
                 f"Supervisor '{name}' has level {level}, which exceeds the "
@@ -75,12 +78,23 @@ class SupervisorHierarchy:
         """Check hierarchy rules and return a list of violations (empty = valid).
 
         Rules:
+        - Supervisor levels must be integers (``bool`` is not accepted as a level).
         - No supervisor may sit above the root: levels MUST NOT be negative.
         - Level 0 MUST exist and MUST be deterministic (not an LLM agent).
         - Middle levels (1–N) may be agent-based.
         - Each level present must have at least one supervisor.
         """
         violations: list[str] = []
+
+        valid_supervisors: list[_Supervisor] = []
+        for s in self._supervisors:
+            if not isinstance(s.level, int) or isinstance(s.level, bool):
+                violations.append(
+                    f"Supervisor '{s.name}' has non-integer level {s.level!r}; "
+                    "levels must be integers"
+                )
+                continue
+            valid_supervisors.append(s)
 
         # Checked before anything else: level 0 is the root, so a negative level
         # places a supervisor *above* the deterministic authority. The
@@ -89,14 +103,14 @@ class SupervisorHierarchy:
         # negative level was invisible to both — an agent registered at level -1
         # produced no violations at all while ranking ahead of the trust root in
         # ``get_authority_chain``.
-        for s in self._supervisors:
+        for s in valid_supervisors:
             if s.level < 0:
                 violations.append(
                     f"Supervisor '{s.name}' has negative level {s.level}; level 0 is the "
                     "root and nothing may sit above it"
                 )
 
-        level_0 = [s for s in self._supervisors if s.level == 0]
+        level_0 = [s for s in valid_supervisors if s.level == 0]
         if not level_0:
             violations.append("Level 0 (root) has no registered supervisor")
         else:
@@ -106,17 +120,10 @@ class SupervisorHierarchy:
                         f"Level 0 supervisor '{s.name}' must be deterministic, not an LLM agent"
                     )
 
-        # Ensure no gaps in levels (every level between 0 and max has a supervisor).
-        #
-        # The previous implementation iterated ``range(1, max_level + 1)``, which is
-        # O(max_level) — proportional to the *numeric value* of the highest level, not
-        # to the number of supervisors. A pathologically large level (e.g. ``10**100``,
-        # legal since Python ints are unbounded) made this loop hang. The sorted-set
-        # approach below is O(n log n) in the number of registered supervisors: it
-        # sorts the unique non-negative levels and walks adjacent pairs to find gaps,
-        # regardless of how large the numeric values are.
-        if self._supervisors:
-            occupied = sorted({s.level for s in self._supervisors if s.level >= 0})
+        # Sorting costs O(n log n); reporting each missing level also costs O(g),
+        # where g is the number of gaps. Registration bounds the highest level.
+        if valid_supervisors:
+            occupied = sorted({s.level for s in valid_supervisors if s.level >= 0})
             # Anchor at 0 so gaps below the minimum occupied level are reported
             # (e.g. levels=[3] must report 1 and 2 missing, not nothing).
             anchored = [0, *occupied] if occupied and occupied[0] != 0 else occupied
@@ -169,8 +176,9 @@ class SupervisorHierarchy:
                 return TrustDecision(
                     allowed=False,
                     reason="Max escalation depth exceeded",
-                    policy_name="escalation_limit",
+                    authority="supervisor",
                 )
 
-        # Final decision always comes from the deterministic trust root
+        # Below the escalation-depth cap, the final decision comes from the
+        # deterministic trust root
         return self.trust_root.validate_action(action)

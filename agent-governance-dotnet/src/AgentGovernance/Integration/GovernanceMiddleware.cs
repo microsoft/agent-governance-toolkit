@@ -114,14 +114,18 @@ public sealed class GovernanceMiddleware
     /// <param name="agentId">The DID of the agent requesting the tool call.</param>
     /// <param name="toolName">The name of the tool being called (e.g., "file_write", "http_request").</param>
     /// <param name="arguments">Optional arguments to the tool call, exposed to policy conditions.</param>
+    /// <param name="trustedSkillMetadata">Optional skill metadata sourced from framework-owned state.</param>
     /// <returns>A <see cref="ToolCallResult"/> indicating whether the call is allowed and why.</returns>
     public ToolCallResult EvaluateToolCall(
         string agentId,
         string toolName,
-        Dictionary<string, object>? arguments = null)
+        Dictionary<string, object>? arguments = null,
+        TrustedSkillMetadataSource? trustedSkillMetadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
+
+        var skillAuditMetadata = SkillAuditMetadataBuilder.Build(trustedSkillMetadata, arguments);
 
         // Build the evaluation context from the tool call parameters.
         var context = BuildContext(agentId, toolName, arguments);
@@ -139,20 +143,22 @@ public sealed class GovernanceMiddleware
                     var detection = _injectionDetector.Detect(strValue);
                     if (detection.IsInjection)
                     {
+                        var injectionAuditData = new Dictionary<string, object>
+                        {
+                            ["tool_name"] = toolName,
+                            ["allowed"] = false,
+                            ["action"] = "deny",
+                            ["reason"] = $"Prompt injection detected in argument '{key}': {detection.InjectionType} ({detection.ThreatLevel})",
+                            ["injection_type"] = detection.InjectionType.ToString(),
+                            ["threat_level"] = detection.ThreatLevel.ToString()
+                        };
+                        AddSkillAuditMetadata(injectionAuditData, skillAuditMetadata);
                         var injectionEvent = new GovernanceEvent
                         {
                             Type = GovernanceEventType.ToolCallBlocked,
                             AgentId = agentId,
                             SessionId = sessionId,
-                            Data = new Dictionary<string, object>
-                            {
-                                ["tool_name"] = toolName,
-                                ["allowed"] = false,
-                                ["action"] = "deny",
-                                ["reason"] = $"Prompt injection detected in argument '{key}': {detection.InjectionType} ({detection.ThreatLevel})",
-                                ["injection_type"] = detection.InjectionType.ToString(),
-                                ["threat_level"] = detection.ThreatLevel.ToString()
-                            }
+                            Data = injectionAuditData
                         };
                         _auditEmitter.Emit(injectionEvent);
                         _metrics?.RecordDecision(false, agentId, toolName, 0, false);
@@ -254,6 +260,7 @@ public sealed class GovernanceMiddleware
         {
             auditEvent.Data["arguments"] = arguments;
         }
+        AddSkillAuditMetadata(auditEvent.Data, skillAuditMetadata);
 
         // Emit the audit event.
         _auditEmitter.Emit(auditEvent);
@@ -261,16 +268,18 @@ public sealed class GovernanceMiddleware
         // If denied, also emit a PolicyViolation event.
         if (!decision.Allowed)
         {
+            var violationData = new Dictionary<string, object>
+            {
+                ["tool_name"] = toolName,
+                ["matched_rule"] = decision.MatchedRule ?? "(default deny)",
+                ["reason"] = decision.Reason
+            };
+            AddSkillAuditMetadata(violationData, skillAuditMetadata);
             _auditEmitter.Emit(
                 GovernanceEventType.PolicyViolation,
                 agentId,
                 sessionId,
-                new Dictionary<string, object>
-                {
-                    ["tool_name"] = toolName,
-                    ["matched_rule"] = decision.MatchedRule ?? "(default deny)",
-                    ["reason"] = decision.Reason
-                },
+                violationData,
                 decision.MatchedRule);
         }
 
@@ -281,6 +290,21 @@ public sealed class GovernanceMiddleware
             AuditEntry = auditEvent,
             PolicyDecision = decision
         };
+    }
+
+    private static void AddSkillAuditMetadata(
+        Dictionary<string, object> auditData,
+        SkillAuditMetadata? skillAuditMetadata)
+    {
+        if (skillAuditMetadata is null)
+        {
+            return;
+        }
+
+        foreach (var (key, value) in skillAuditMetadata.ToAuditData())
+        {
+            auditData[key] = value;
+        }
     }
 
     /// <summary>

@@ -2,13 +2,10 @@
 # Licensed under the MIT License.
 """Tests for the native-runtime trust authority and supervisor hierarchy."""
 from __future__ import annotations
-
 import pytest
 from agent_control_specification import Decision, InterventionPointResult, Verdict
-
 from agent_os.supervisor import MAX_SUPERVISOR_LEVEL, SupervisorHierarchy
 from agent_os.trust_root import TrustRoot
-
 
 class _Runtime:
     manifest = None
@@ -76,63 +73,24 @@ def test_non_integer_supervisor_level_is_rejected(level: object) -> None:
 def test_accepted_supervisor_levels_are_unchanged(level: int, is_agent: bool, expected: bool) -> None:
     assert _root().validate_supervisor({'name': 'sup', 'level': level, 'is_agent': is_agent}) is expected
 
-def _hierarchy_with(name: str, level: int, is_agent: bool) -> SupervisorHierarchy:
+def _hierarchy() -> SupervisorHierarchy:
     hierarchy = SupervisorHierarchy(trust_root=_root())
     hierarchy.register_supervisor('trust-root', level=0, is_agent=False)
     hierarchy.register_supervisor('safety-agent', level=1, is_agent=True)
-    hierarchy.register_supervisor(name, level=level, is_agent=is_agent)
     return hierarchy
 
-def test_agent_registered_above_the_root_is_reported() -> None:
-    """``validate_hierarchy`` had no check that could see a negative level.
-
-    The determinism rule only inspects supervisors whose level is exactly 0, and
-    the gap scan only walks ``range(1, max_level + 1)``. An LLM agent at level -1
-    therefore produced an empty violation list -- the documented "valid" signal.
-    """
-    violations = _hierarchy_with('above-root', -1, True).validate_hierarchy()
-    assert violations != []
-    assert any('above-root' in v and '-1' in v for v in violations)
-
-def test_deterministic_supervisor_above_the_root_is_also_reported() -> None:
-    assert _hierarchy_with('above-root', -1, False).validate_hierarchy() != []
-
-def test_negative_level_outranks_the_root_in_the_authority_chain() -> None:
-    """Why a violation is the right response rather than a warning.
-
-    The chain is ordered by level, so a negative level lands last -- the
-    position the docstring reserves for the trust root as final authority.
-    """
-    assert _hierarchy_with('above-root', -1, True).get_authority_chain({})[-1] == 'above-root'
-
 @pytest.mark.parametrize('level', [-1, -7])
-def test_negative_level_is_reported_even_without_a_level_0(level: int) -> None:
-    # The gap scan walks range(1, max_level + 1), which is empty when the highest
-    # level is negative, so nothing else would fire here either.
-    hierarchy = SupervisorHierarchy(trust_root=_root())
-    hierarchy.register_supervisor('only', level=level, is_agent=True)
-    assert any('negative level' in v for v in hierarchy.validate_hierarchy())
+@pytest.mark.parametrize('is_agent', [True, False])
+def test_hierarchy_rejects_negative_levels_before_they_reach_the_authority_chain(
+    level: int, is_agent: bool
+) -> None:
+    hierarchy = _hierarchy()
 
+    with pytest.raises(ValueError, match='must be non-negative'):
+        hierarchy.register_supervisor('above-root', level=level, is_agent=is_agent)
 
-# =====================================================================
-# Level-bound enforcement  (#3788)
-#
-# ``validate_hierarchy`` previously iterated ``range(1, max_level + 1)`` to
-# find gaps. Python ints are unbounded, so a supervisor at level ``10**100``
-# made that loop hang — a denial-of-service vector whenever levels come from
-# attacker-influenced configuration.
-#
-# Fix: (1) ``register_supervisor`` rejects levels above
-# ``MAX_SUPERVISOR_LEVEL`` at registration time, so the pathological value
-# never enters the hierarchy; (2) the gap scan now walks the *sorted set of
-# registered levels* (O(n log n) in supervisors) instead of the numeric range;
-# (3) ``TrustRoot.validate_supervisor`` mirrors the bound.
-#
-# Tests below:
-#   - 4 on register_supervisor (ValueError on over-limit levels)
-#   - 4 on validate_hierarchy (gap scan correctness with the new algorithm)
-#   - 2 on TrustRoot.validate_supervisor (bound mirrored)
-# =====================================================================
+    assert hierarchy.get_authority_chain({}) == ['safety-agent', 'trust-root']
+
 
 class TestRegisterSupervisorRejectsOverLimitLevel:
     """``register_supervisor`` must reject levels above ``MAX_SUPERVISOR_LEVEL``.
@@ -171,7 +129,7 @@ class TestRegisterSupervisorRejectsOverLimitLevel:
 
 
 class TestGapScanWithSortedSet:
-    """The gap scan must find missing levels without iterating the numeric range.
+    """The gap scan must report every missing level between occupied levels.
 
     Call chain: ``SupervisorHierarchy.validate_hierarchy``
     → builds ``occupied = sorted({s.level for s in self._supervisors if s.level >= 0})``
@@ -179,7 +137,7 @@ class TestGapScanWithSortedSet:
     → reports every integer in the gap as a missing level.
 
     The old implementation was ``for lvl in range(1, max_level + 1)``, which is
-    O(max_level). The new one is O(n log n) in the number of supervisors.
+    O(max_level * n). The new scan costs O(n log n + g), where g counts missing levels.
     """
 
     def test_contiguous_levels_produce_no_gap_violations(self) -> None:
@@ -213,34 +171,16 @@ class TestGapScanWithSortedSet:
         assert missing == {1, 2, 4, 5, 6}
 
     def test_gaps_below_minimum_occupied_level_are_reported(self) -> None:
-        """Counterexample from review: levels=[0,3] must report levels 1 and 2
+        """Counterexample from review: levels=[3] must report levels 1 and 2
         missing.  Without anchoring at 0 the sorted-set walk starts at the
         minimum occupied level and silently drops gaps below it."""
         hierarchy = SupervisorHierarchy(trust_root=_root())
-        hierarchy.register_supervisor('root', level=0, is_agent=False)
         hierarchy.register_supervisor('far', level=3, is_agent=True)
         violations = hierarchy.validate_hierarchy()
         gap_violations = [v for v in violations if 'has no registered supervisor' in v]
         missing = {int(v.split('Level ')[1].split(' ')[0]) for v in gap_violations}
-        assert missing == {1, 2}
+        assert missing == {0, 1, 2}
 
-    def test_gap_scan_ignores_negative_levels(self) -> None:
-        """Negative levels are reported by the separate check, not the gap scan.
-
-        The sorted set filters ``s.level >= 0``, so a negative level never
-        anchors a gap range — without the filter, ``sorted({-1, 0, 2})`` would
-        try to enumerate the gap between -1 and 0 (there is none) but would
-        mask the gap between 0 and 2 if the code expected a contiguous sequence
-        starting from the minimum.
-        """
-        hierarchy = SupervisorHierarchy(trust_root=_root())
-        hierarchy.register_supervisor('neg', level=-1, is_agent=True)
-        hierarchy.register_supervisor('root', level=0, is_agent=False)
-        hierarchy.register_supervisor('leaf', level=2, is_agent=True)
-        violations = hierarchy.validate_hierarchy()
-        gap_violations = [v for v in violations if 'has no registered supervisor' in v]
-        assert len(gap_violations) == 1
-        assert 'Level 1' in gap_violations[0]
 
 
 class TestTrustRootRejectsOverLimitLevel:
@@ -249,11 +189,10 @@ class TestTrustRootRejectsOverLimitLevel:
     Call chain: ``TrustRoot.validate_supervisor``
     → type-checks *level* (bool, non-int)
     → rejects negatives
-    → rejects levels above ``_MAX_SUPERVISOR_LEVEL``
+    → rejects levels above ``MAX_SUPERVISOR_LEVEL``
     → checks root determinism.
 
-    The bound is mirrored from ``supervisor.MAX_SUPERVISOR_LEVEL`` (not
-    imported, to avoid a circular dependency) so callers that validate a
+    Both modules import the same bound from ``_supervisor_constants`` so callers that validate a
     supervisor config through the trust root before registering it get the same
     protection.
     """

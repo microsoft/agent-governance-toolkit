@@ -398,18 +398,18 @@ binary in both.
 ```bash
 # Build with the default allow-list (python3, cat, echo, ls, sleep).
 docker build \
-  -f agent-sandbox/docker/Dockerfile.sandbox \
+  -f agent-governance-python/agent-sandbox/docker/Dockerfile.sandbox \
   -t agt-sandbox/python-minimal-path:3.11 \
-  agent-sandbox/docker
+  agent-governance-python/agent-sandbox/docker
 
 # Build with a custom allow-list — add only what the sandboxed workload
 # actually needs. The full allow-list IS the new PATH; any binary not listed
 # here is unreachable.
 docker build \
   --build-arg ALLOWED_BIN_NAMES="python3 cat echo ls sleep grep sort uniq" \
-  -f agent-sandbox/docker/Dockerfile.sandbox \
+  -f agent-governance-python/agent-sandbox/docker/Dockerfile.sandbox \
   -t agt-sandbox/python-minimal-path:3.11 \
-  agent-sandbox/docker
+  agent-governance-python/agent-sandbox/docker
 ```
 
 Wire the image into `DockerSandboxProvider` via the existing `image` argument:
@@ -428,6 +428,50 @@ provider = DockerSandboxProvider(require_hardened_image=True)
 
 Build the image before creating the provider. `require_hardened_image=True`
 cannot be combined with a custom `image=`.
+
+<!-- cspell:ignore memfd -->
+
+### AppArmor command-denylist profile (#3068 option 3)
+
+On a Linux Docker host with AppArmor, install the profile from the repository
+root (the file must be present on the **Docker daemon host**, not just a
+remote client):
+
+```bash
+sudo apparmor_parser -r -W agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox
+```
+
+`DockerSandboxProvider` checks the **Docker daemon's** `SecurityOptions`,
+not the client host's kernel files. When the daemon supports AppArmor it
+requests `apparmor=agt-sandbox`, verifies **enforce** mode inside the running
+container before returning it, and fails if the profile is missing or not
+enforcing. Install the profile on the daemon before creating sessions.
+On daemons without AppArmor it warns once per process and retains
+`apparmor=docker-default`. For deployments that require this layer, opt
+into fail-closed selection even when the daemon lacks AppArmor:
+
+```python
+provider = DockerSandboxProvider(
+    require_hardened_image=True,
+    require_apparmor_profile=True,
+)
+```
+
+The profile denies executable loading of selected network, cloud, package and
+infrastructure CLIs at their listed paths when those paths still point to the
+original binaries. In the hardened image, the listed CLI paths are symlinks
+to the logging shim: AppArmor mediates the resolved shim path, so these CLI
+path rules do **not** fire there. The additional enforcement in that image
+is the deny on execution from writable sandbox paths (`/tmp`, `/var/tmp`,
+`/workspace`, `/dev/shm`, `/output`).
+It does **not** prevent in-process network access, execution via
+`memfd_create` and `/proc/self/fd`, or execution from other writable mounts
+and a writable root filesystem. Keep the container's network disabled unless
+needed, use the hardened image and shim for additional coverage, and add
+separate seccomp/mount controls if those bypasses are in scope. No SELinux
+policy is supplied; on SELinux-only hosts the provider keeps its existing
+Docker security options and does not claim this denylist is enforced.
+The profile does not replace Docker's default seccomp policy.
 
 To extend the allow-list permanently (rather than at `docker build` time),
 edit the `ARG ALLOWED_BIN_NAMES=` line in `Dockerfile.sandbox` and rebuild.

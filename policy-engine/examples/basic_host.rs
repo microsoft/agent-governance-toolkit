@@ -1,7 +1,7 @@
 use agent_control_specification::{
-    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, JsonValue, Manifest, PolicyDispatcher, PreparedPolicyInvocation,
-    Runtime, RuntimeError,
+    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, HostEvaluation,
+    InterceptionPoint, JsonValue, Manifest, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
+    RuntimeError,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -46,7 +46,7 @@ impl PolicyDispatcher for MockPolicy {
                 "reason": "account_number_redacted",
                 "message": "Account number was redacted before continuing.",
                 "transform": {
-                    "path": "$policy_target.text",
+                    "path": "$target.text",
                     "value": "Please summarize account [REDACTED]."
                 }
             }))
@@ -58,7 +58,7 @@ impl PolicyDispatcher for MockPolicy {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: basic-host-example
 policies:
@@ -80,17 +80,24 @@ annotators:
     )?;
 
     let runtime = Runtime::new(manifest, Arc::new(MockAnnotator), Arc::new(MockPolicy))?;
-    let result = runtime.evaluate_intervention_point(InterventionPointRequest {
-        intervention_point: InterventionPoint::Input,
-        snapshot: json!({
+    let engine_result = runtime.evaluate_point(
+        InterceptionPoint::Input,
+        json!({
             "input": {"text": "Please summarize account 1234."},
             "actor": {"id": "user-123"},
             "transport": {"kind": "api_gateway", "route": "/chat"}
         }),
-        mode: EnforcementMode::Enforce,
-    });
+    );
+    // AGENT-HOOKS-0.1 sections 8 to 10: transform application, evaluate_only
+    // and identity are host obligations, so the host derives them here.
+    let result = HostEvaluation::from_engine(
+        InterceptionPoint::Input,
+        engine_result,
+        EnforcementMode::Enforce,
+    )
+    .map_err(|(error, detail)| format!("{error}: {detail}"))?;
 
-    println!("decision: {}", result.verdict.decision);
+    println!("decision: {}", result.verdict.decision.as_str());
     if let Some(reason) = &result.verdict.reason {
         println!("reason: {reason}");
     }

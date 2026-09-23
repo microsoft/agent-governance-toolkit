@@ -40,20 +40,20 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "uuid": "14.0.1",
+    "uuid": "14.0.2",
     "winston": "3.19.0",
-    "yaml": "2.9.0",
-    "zod": "4.4.3"
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/node": "26.2.0",
+    "@types/node": "26.6.1",
     "@types/uuid": "11.0.0",
-    "@typescript-eslint/eslint-plugin": "8.67.0",
-    "@typescript-eslint/parser": "8.67.0",
+    "@typescript-eslint/eslint-plugin": "8.70.0",
+    "@typescript-eslint/parser": "8.70.0",
     "@vitest/coverage-v8": "4.1.10",
-    "eslint": "10.8.0",
+    "eslint": "10.10.0",
     "typescript": "6.0.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "files": [
     "dist",

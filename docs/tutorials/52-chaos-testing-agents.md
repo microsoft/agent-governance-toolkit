@@ -58,7 +58,7 @@ them.
 
 Use a manifest that can return `escalate`. Exercise approval success, denial,
 timeout, suspension, and enforced-identity mismatch. The mismatch must fail
-closed with `runtime_error:approval_action_mismatch`.
+closed with `host_error:approval_identity_mismatch`.
 
 ## Transform validation
 

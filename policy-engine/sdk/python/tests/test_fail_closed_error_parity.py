@@ -62,6 +62,7 @@ class FailClosedErrorParityTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError) as raised:
                         control_for_case(case)
                     self.assertEqual(reason_from_error(raised.exception), case["expected_reason"])
+                    self.assertEqual(raised.exception.reason, case["expected_reason"])
                     continue
 
                 result = asyncio.run(

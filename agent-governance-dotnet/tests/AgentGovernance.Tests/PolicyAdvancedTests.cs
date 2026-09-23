@@ -468,4 +468,72 @@ rules:
         }
         finally { File.Delete(tempFile); }
     }
+
+    // ── Scope validation (#3536) ────────────────────────────────────
+
+    [Theory]
+    [InlineData("global")]
+    [InlineData("tenant")]
+    [InlineData("organization")]
+    [InlineData("agent")]
+    public void FromYaml_ValidScope_Accepted(string scope)
+    {
+        var yaml = $@"
+apiVersion: governance.toolkit/v1
+name: scope-test
+scope: {scope}
+rules:
+  - name: r1
+    condition: ""true""
+    action: deny
+";
+        var policy = AgentGovernance.Policy.Policy.FromYaml(yaml);
+        Assert.Equal(scope switch
+        {
+            "global" => PolicyScope.Global,
+            "tenant" => PolicyScope.Tenant,
+            "organization" => PolicyScope.Organization,
+            "agent" => PolicyScope.Agent,
+            _ => PolicyScope.Global,
+        }, policy.Scope);
+    }
+
+    [Theory]
+    [InlineData("organisation")]
+    [InlineData("Agent")]
+    [InlineData("GLOBAL")]
+    [InlineData("team")]
+    [InlineData("")]
+    public void FromYaml_InvalidScope_Throws(string scope)
+    {
+        var yaml = $@"
+apiVersion: governance.toolkit/v1
+name: bad-scope
+scope: ""{scope}""
+rules:
+  - name: r1
+    condition: ""true""
+    action: deny
+";
+        var ex = Assert.Throws<ArgumentException>(
+            () => AgentGovernance.Policy.Policy.FromYaml(yaml));
+        Assert.Contains("scope", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidScopes_ContainsAllFourValues()
+    {
+        Assert.Contains("global", PolicyConflictResolver.ValidScopes);
+        Assert.Contains("tenant", PolicyConflictResolver.ValidScopes);
+        Assert.Contains("organization", PolicyConflictResolver.ValidScopes);
+        Assert.Contains("agent", PolicyConflictResolver.ValidScopes);
+        Assert.Equal(4, PolicyConflictResolver.ValidScopes.Count);
+    }
+
+    [Fact]
+    public void Organization_RanksBetweenTenantAndAgent()
+    {
+        Assert.True((int)PolicyScope.Tenant < (int)PolicyScope.Organization);
+        Assert.True((int)PolicyScope.Organization < (int)PolicyScope.Agent);
+    }
 }

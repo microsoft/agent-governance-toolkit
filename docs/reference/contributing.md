@@ -1,6 +1,6 @@
 ---
 title: "Contributing to Agent Governance Toolkit"
-last_reviewed: 2026-07-01
+last_reviewed: 2026-09-20
 owner: agt-maintainers
 ---
 
@@ -131,17 +131,28 @@ git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-governance-toolkit
 
 # Install in development mode
+# Install the core package from the local source to avoid dependency conflicts
+pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-governance-toolkit-core"
+
+# Build the local ACS SDK required by the consolidated core package. The
+# required 0.4.0b0 release is not available from PyPI yet.
+pip install --no-cache-dir maturin==1.8.7
+pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
+
 pip install -e "agent-governance-python/agent-primitives[dev]"
 pip install -e "agent-governance-python/agent-mcp-governance[dev]"
-pip install -e "agent-os[dev]"
-pip install -e "agent-mesh[dev]"
-pip install -e "agent-runtime[dev]"
-pip install -e "agent-sre[dev]"
-pip install -e "agent-compliance[dev]"
-pip install -e "agent-marketplace[dev]"  # installs agentmesh-marketplace
-pip install -e "agent-lightning[dev]"
-pip install -e "agent-hypervisor[dev]"
-pip install -e "agentmesh-integrations[dev]"
+pip install -e "agent-governance-python/agent-os[dev]"
+# agent-mesh[dev] requires the local 5.x agent_hypervisor stub; install it
+# before the dev extra so pip does not select the conflicting PyPI package.
+pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-hypervisor"
+pip install -e "agent-governance-python/agent-mesh[dev]"
+pip install -e "agent-governance-python/agent-runtime[dev]"
+pip install -e "agent-governance-python/agent-sre[dev]"
+pip install -e "agent-governance-python/agent-compliance[dev]"
+pip install -e "agent-governance-python/agent-marketplace[dev]"  # installs agentmesh-marketplace
+pip install -e "agent-governance-python/agent-lightning[dev]"
+pip install -e "agent-governance-python/agent-hypervisor[dev]"
+pip install -e "agent-governance-python/agentmesh-integrations[dev]"
 
 # Restore the standalone .NET SDK when working in that path
 dotnet restore agent-governance-dotnet/AgentGovernance.sln

@@ -90,7 +90,7 @@ class TrustRoot:
         # An absurdly large level is a denial-of-service vector: the gap scan
         # in ``SupervisorHierarchy.validate_hierarchy`` was previously O(max_level),
         # so a level of ``10**100`` made validation hang. Even after the scan
-        # itself is safe (O(n log n) in supervisors), a level that could never
+        # itself reports gaps between sorted occupied levels, a level that could never
         # be a realistic hierarchy position is rejected early.
         if level > MAX_SUPERVISOR_LEVEL:
             return False

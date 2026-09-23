@@ -10,6 +10,7 @@ Sequential step execution with reverse-order compensation on failure.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -124,8 +125,26 @@ class SagaOrchestrator:
             step.retry_count = attempt
             step.transition(StepState.EXECUTING)
             try:
+                execution = executor()
+            except Exception as e:
+                last_error = e
+                step.error = str(e)
+                step.transition(StepState.FAILED)
+                if attempt < attempts - 1:
+                    step.reset_for_retry()
+                    await asyncio.sleep(self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1))
+                continue
+
+            try:
+                self._ensure_awaitable(execution, "executor")
+            except TypeError as e:
+                step.error = str(e)
+                step.transition(StepState.FAILED)
+                raise
+
+            try:
                 result = await asyncio.wait_for(
-                    executor(),
+                    execution,
                     timeout=step.timeout_seconds,
                 )
                 step.execute_result = result
@@ -190,8 +209,10 @@ class SagaOrchestrator:
 
             step.transition(StepState.COMPENSATING)
             try:
+                compensation = compensator(step)
+                self._ensure_awaitable(compensation, "compensator")
                 result = await asyncio.wait_for(
-                    compensator(step),
+                    compensation,
                     timeout=step.timeout_seconds,
                 )
                 step.compensation_result = result
@@ -228,6 +249,10 @@ class SagaOrchestrator:
             for s in self._sagas.values()
             if s.state in (SagaState.RUNNING, SagaState.COMPENSATING)
         ]
+
+    def _ensure_awaitable(self, result: Any, name: str) -> None:
+        if not inspect.isawaitable(result):
+            raise TypeError(f"{name} must return an awaitable")
 
     def _get_saga(self, saga_id: str) -> Saga:
         saga = self._sagas.get(saga_id)

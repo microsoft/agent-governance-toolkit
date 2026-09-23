@@ -25,17 +25,16 @@ fn main() {
         .or_else(|| std::env::var("AACS_SUBJECT").ok())
         .unwrap_or_else(|| "Summarize the standup notes.".to_string());
 
-    let annotator = AnnotatorInvocation {
-        fields: fields(&[
-            ("type", json!("classifier")),
-            ("provider", json!("aacs")),
-            ("from", json!("$.input.text")),
-            ("endpoint", json!(endpoint)),
-            ("api_key_env", json!("AZURE_CONTENT_SAFETY_KEY")),
-            ("threshold", json!(0.5)),
-            ("provider_config", json!({"api_version": "2024-09-01"})),
-        ]),
-    };
+    let mut annotator = AnnotatorInvocation::default();
+    annotator.fields.extend(fields(&[
+        ("type", json!("classifier")),
+        ("provider", json!("aacs")),
+        ("from", json!("$.input.text")),
+        ("endpoint", json!(endpoint)),
+        ("api_key_env", json!("AZURE_CONTENT_SAFETY_KEY")),
+        ("threshold", json!(0.5)),
+        ("provider_config", json!({"api_version": "2024-09-01"})),
+    ]));
     let policy_input = json!({"snapshot": {"input": {"text": subject}}});
 
     match ClassifierAnnotator::new().dispatch("aacs", &annotator, &policy_input) {

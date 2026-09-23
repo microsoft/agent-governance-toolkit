@@ -29,10 +29,12 @@ jobs:
       workflows: ${{ steps.filter.outputs.workflows }}
       docs-only: ${{ steps.filter.outputs.docs-only }}
       docker: ${{ steps.filter.outputs.docker }}
+      terraform-examples: ${{ steps.filter.outputs.terraform-examples }}
+      engine-api-conformance: ${{ steps.filter.outputs.engine-api-conformance }}
       changed-py-pkgs: ${{ steps.py-pkgs.outputs.list }}
       changed-ts-pkgs: ${{ steps.ts-pkgs.outputs.list }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
@@ -47,6 +49,7 @@ jobs:
               - 'agent-governance-python/agent-compliance/**'
               - 'agent-governance-python/agent-runtime/**'
               - 'agent-governance-python/agent-lightning/**'
+              - 'agent-governance-python/agent-learning/**'
               - 'agent-governance-python/agent-primitives/**'
               - 'agent-governance-python/agent-mcp-governance/**'
               - 'agent-governance-python/agent-marketplace/**'
@@ -69,11 +72,17 @@ jobs:
               - 'agent-governance-typescript/**'
               - 'agent-governance-antigravity-cli/**'
               - 'agent-governance-opencode/**'
+              - 'agent-governance-codex-cli/**'
               - 'agent-governance-python/agent-os/extensions/**'
               - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
               - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
             integrations:
               - 'agent-governance-python/agentmesh-integrations/**'
+              - 'examples/flowise-governance/**'
+            terraform-examples:
+              - 'examples/terraform-aws/**'
+              - 'examples/terraform-azure/**'
+              - 'examples/terraform-test-requirements.txt'
             workflows:
               - '.github/workflows/**'
             rust:
@@ -84,6 +93,16 @@ jobs:
               - '**/*.md'
               - 'agent-governance-python/notebooks/**'
               - 'docs/**'
+            engine-api-conformance:
+              - 'agent-governance-python/agent-mesh/**'
+              - 'agent-governance-python/agent-compliance/**'
+              - 'agent-governance-python/agent-governance-toolkit-core/**'
+              - 'agent-governance-python/agent-hypervisor/**'
+              - 'policy-engine/sdk/python/**'
+              - 'docs/studio/openapi.yaml'
+              - 'docs/studio/engine-api-contract.md'
+              - 'docs/studio/engine-api-conformance.md'
+              - '.github/workflows/ci.yml'
             docker:
               - 'Dockerfile'
               - 'docker-compose*.yml'
@@ -109,6 +128,8 @@ jobs:
               - 'agent-governance-python/agent-runtime/**'
             pkg-agent-lightning:
               - 'agent-governance-python/agent-lightning/**'
+            pkg-agent-learning:
+              - 'agent-governance-python/agent-learning/**'
             pkg-agent-primitives:
               - 'agent-governance-python/agent-primitives/**'
             pkg-agent-mcp-governance:
@@ -131,6 +152,8 @@ jobs:
               - 'agent-governance-claude-code/**'
             pkg-agent-governance-opencode:
               - 'agent-governance-opencode/**'
+            pkg-agent-governance-codex-cli:
+              - 'agent-governance-codex-cli/**'
             pkg-agent-governance-sdk:
               - 'agent-governance-typescript/**'
             pkg-agentmesh-api:
@@ -150,6 +173,7 @@ jobs:
           AC: ${{ steps.filter.outputs.pkg-agent-compliance }}
           AR: ${{ steps.filter.outputs.pkg-agent-runtime }}
           AL: ${{ steps.filter.outputs.pkg-agent-lightning }}
+          ALE: ${{ steps.filter.outputs.pkg-agent-learning }}
           AP: ${{ steps.filter.outputs.pkg-agent-primitives }}
           AMG: ${{ steps.filter.outputs.pkg-agent-mcp-governance }}
           AMP: ${{ steps.filter.outputs.pkg-agent-marketplace }}
@@ -167,6 +191,7 @@ jobs:
           [ "$AC" = "true" ] && pkgs+=('"agent-compliance"')
           [ "$AR" = "true" ] && pkgs+=('"agent-runtime"')
           [ "$AL" = "true" ] && pkgs+=('"agent-lightning"')
+          [ "$ALE" = "true" ] && pkgs+=('"agent-learning"')
           [ "$AP" = "true" ] && pkgs+=('"agent-primitives"')
           [ "$AMG" = "true" ] && pkgs+=('"agent-mcp-governance"')
           [ "$AMP" = "true" ] && pkgs+=('"agent-marketplace"')
@@ -183,6 +208,7 @@ jobs:
           COPILOT: ${{ steps.filter.outputs.pkg-agent-governance-copilot-cli }}
           CLAUDE: ${{ steps.filter.outputs.pkg-agent-governance-claude-code }}
           OPENCODE: ${{ steps.filter.outputs.pkg-agent-governance-opencode }}
+          CODEX: ${{ steps.filter.outputs.pkg-agent-governance-codex-cli }}
           SDK: ${{ steps.filter.outputs.pkg-agent-governance-sdk }}
           API: ${{ steps.filter.outputs.pkg-agentmesh-api }}
           EXT: ${{ steps.filter.outputs.pkg-agent-os-copilot-extension }}
@@ -194,6 +220,7 @@ jobs:
           [ "$COPILOT" = "true" ] && pkgs+=('"agent-governance-copilot-cli"')
           [ "$CLAUDE" = "true" ] && pkgs+=('"agent-governance-claude-code"')
           [ "$OPENCODE" = "true" ] && pkgs+=('"agent-governance-opencode"')
+          [ "$CODEX" = "true" ] && pkgs+=('"agent-governance-codex-cli"')
           [ "$SDK" = "true" ] && pkgs+=('"agent-governance-sdk"')
           [ "$API" = "true" ] && pkgs+=('"agentmesh-api"')
           [ "$EXT" = "true" ] && pkgs+=('"agent-os-copilot-extension"')
@@ -219,6 +246,7 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-learning,
             agent-primitives,
             agent-mcp-governance,
             agent-marketplace,
@@ -244,7 +272,7 @@ jobs:
             echo "::notice::Package $PKG unchanged on this PR — skipping lint."
           fi
       - if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - if: steps.gate.outputs.run == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -281,6 +309,7 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-learning,
             agent-primitives,
             agent-mcp-governance,
             agent-marketplace,
@@ -303,6 +332,8 @@ jobs:
           - package: agent-runtime
             python-version: "3.10"
           - package: agent-lightning
+            python-version: "3.10"
+          - package: agent-learning
             python-version: "3.10"
           - package: agent-primitives
             python-version: "3.10"
@@ -338,7 +369,7 @@ jobs:
       - name: Skip (unchanged package)
         if: steps.gate.outputs.run != 'true'
         run: echo "Package ${{ matrix.package }} unchanged — skipping tests"
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: steps.gate.outputs.run == 'true'
@@ -372,7 +403,11 @@ jobs:
         # The native ACS runtime evaluates policy via OPA; without it the
         # runtime fails closed (runtime_error:policy_invocation_failed) and
         # denies everything. Same pinned binary the policy-engine CI uses.
-        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox')
+        # agent-mesh also needs it: PolicyEngine.load_rego()/OPAEvaluator
+        # shell out to the opa CLI, and every test that exercises that path
+        # is marked @requires_opa and skips without it — so this job was
+        # giving those tests zero real coverage.
+        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox' || matrix.package == 'agent-mesh')
         run: |
           set -euo pipefail
           curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
@@ -384,13 +419,12 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/opa" version
       - name: Build native ACS SDK (ACS-backed Python policy runtime)
-        # agent-os, agt-policies, agent-compliance, agent-marketplace and
-        # agent-sandbox route evaluations through the native
-        # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
-        # it from the vendored policy-engine so native-runtime tests run.
+        # Every selected package resolves the local agt-policies dependency.
+        # Its retargeted SDK is not on PyPI yet, so build it from this checkout
+        # rather than letting pip resolve an incompatible registry version.
         # The wheel is abi3-py311, so one build serves all agent-os matrix
         # Python versions (3.11-3.13). ubuntu-latest ships Rust + a C toolchain.
-        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies' || matrix.package == 'agent-compliance' || matrix.package == 'agent-marketplace' || matrix.package == 'agent-sandbox')
+        if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
@@ -410,7 +444,7 @@ jobs:
             agent-compliance|agent-runtime|agent-mcp-governance)
               pip install --no-cache-dir -e .
               ;;
-            agent-os|agt-policies|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
+            agent-os|agt-policies|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-learning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
               pip install --no-cache-dir -e ".[dev]"
               ;;
             *)
@@ -446,13 +480,71 @@ jobs:
           fi
       - name: Upload coverage
         if: steps.gate.outputs.run == 'true'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
         with:
           files: agent-governance-python/${{ matrix.package }}/coverage.xml
           flags: ${{ matrix.package }}
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ── Engine API conformance (implementation and contract changes) ─────
+  engine-api-conformance:
+    needs: changes
+    if: needs.changes.outputs.engine-api-conformance == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install local Engine API runtime siblings
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-core
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-integrations
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-cli
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-protocols
+          pip install --no-cache-dir "pydantic>=2.5.0,<3.0" "pyyaml>=6.0,<7.0"
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agt-policies
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-hypervisor
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-compliance
+      - name: Install OPA for the real policy replay engine
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
+            --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/opa"
+          echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Build native policy runtime for replay
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir maturin==1.8.7
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
+      - name: Install agent-mesh conformance dependencies
+        working-directory: agent-governance-python/agent-mesh
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir -e ".[dev]"
+          pip install --no-cache-dir --require-hashes \
+            -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          pip install --no-cache-dir pytest-cov==7.1.0
+      - name: Run Engine API conformance profile
+        working-directory: agent-governance-python/agent-mesh
+        env:
+          AGT_ENGINE_API_REQUIRE_REPLAY: "1"
+        run: |
+          set -euo pipefail
+          python -m pytest tests/engine_api/conformance/ -q \
+            --cov=tests.engine_api.conformance.assertions \
+            --cov=tests.engine_api.conformance.conftest \
+            --cov=tests.engine_api.conformance.contract \
+            --cov=tests.engine_api.conformance.target \
+            --cov-report=term-missing \
+            --cov-fail-under=95
 
   # ── PyPI package build (only when Python files change) ────────────────
   build-pypi:
@@ -494,7 +586,7 @@ jobs:
       - name: Skip (unchanged package)
         if: steps.gate.outputs.run != 'true'
         run: echo "Package ${{ matrix.package }} unchanged — skipping wheel build"
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: steps.gate.outputs.run == 'true'
@@ -532,7 +624,7 @@ jobs:
     if: needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -542,13 +634,16 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf dist-coherence && mkdir -p dist-coherence
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          python -m pip wheel --no-deps --no-build-isolation \
+            ./policy-engine/sdk/python --wheel-dir dist-coherence
           # The umbrellas own the source; the sibling stubs are dep-only. Build
           # them all with --wheel because the umbrellas force-include sibling
           # source, which only resolves when building directly from the source
           # tree. -core's set is the five renamed stubs; -cli's set adds
           # agent-sre; -protocols' set adds agent-mcp-governance.
           for pkg in \
-            agent-governance-toolkit-core \
+            agt-policies agent-governance-toolkit-core \
             agent-hypervisor agent-mesh agent-os agent-runtime agent-primitives \
             agent-governance-toolkit-cli agent-sre \
             agent-governance-toolkit-protocols agent-mcp-governance; do
@@ -561,7 +656,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m venv /tmp/venv-core
-          /tmp/venv-core/bin/pip install --no-cache-dir \
+          /tmp/venv-core/bin/pip install --no-cache-dir --find-links dist-coherence \
             dist-coherence/agent_governance_toolkit_core-*.whl
           /tmp/venv-core/bin/python -W ignore \
             -c "import hypervisor, agentmesh, agent_os, agent_runtime, agent_primitives; print('meta import OK')"
@@ -597,7 +692,7 @@ jobs:
     if: needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -606,6 +701,11 @@ jobs:
           pip install --no-cache-dir --require-hashes --no-deps -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
           pip install --no-cache-dir typer==0.14.0 marshmallow==3.21.3  # Scorecard: version-pinned (safety transitive deps)
           pip install --no-cache-dir safety==3.2.1  # Scorecard: version-pinned, hash-verified via ci-safety.txt
+      - name: Install local policy dependencies
+        run: |
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
+          pip install --no-cache-dir ./agent-governance-python/agt-policies
       - name: Check dependencies
         env:
           GIT_TERMINAL_PROMPT: "0"
@@ -669,7 +769,7 @@ jobs:
     if: needs.changes.outputs.dotnet == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "8.0.x"
@@ -730,7 +830,7 @@ jobs:
             --output binskim-results.sarif
       - name: Upload BinSkim SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: agent-governance-dotnet/binskim-results.sarif
           category: binskim
@@ -775,6 +875,8 @@ jobs:
             import-module: llama_index.agent.agentmesh
           - package: mcp-trust-proxy
             import-module: mcp_trust_proxy
+          - package: mcp-receipt-governed
+            import-module: mcp_receipt_governed
           - package: nostr-wot
             import-module: agentmesh_nostr_wot
           - package: openai-agents-agentmesh
@@ -784,7 +886,7 @@ jobs:
           - package: pydantic-ai-governance
             import-module: pydantic_ai_governance
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -804,13 +906,10 @@ jobs:
           # the latest published wheels.
           pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-core"
           pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-integrations"
+          pip install --no-cache-dir -e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"
           # All agentmesh-integrations packages declare a [dev] extra (audited
           # 2026-05). Deterministic install — no error-swallowing fallback.
           pip install --no-cache-dir -e ".[dev]"
-          # `.[dev]` resolves agt-policies from PyPI. Reinstall the local
-          # checkout afterwards so the integrations test against this commit's
-          # ACS policy API rather than the last published wheel.
-          pip install --no-cache-dir --no-deps --force-reinstall -e "$GITHUB_WORKSPACE/agent-governance-python/agt-policies"
           CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
           if [ -f "$CI_TEST_REQS" ]; then
             # Hash-pinned shared test deps. Previously swallowed errors with
@@ -906,7 +1005,7 @@ jobs:
   version-sync-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -917,7 +1016,7 @@ jobs:
   dep-confusion-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -928,7 +1027,7 @@ jobs:
   notebook-pip-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -989,7 +1088,7 @@ jobs:
     if: github.event_name == 'schedule' || needs.changes.outputs['docs-only'] == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Markdown link check
@@ -1009,7 +1108,7 @@ jobs:
     if: needs.changes.outputs.workflows == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Audit pull_request_target workflows
         run: |
           echo "=== Checking pull_request_target safety ==="
@@ -1035,7 +1134,7 @@ jobs:
       'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
@@ -1079,6 +1178,9 @@ jobs:
           - name: agent-governance-opencode
             path: agent-governance-opencode
             node-version: "22"
+          - name: agent-governance-codex-cli
+            path: agent-governance-codex-cli
+            node-version: "22"
           - name: agent-governance-copilot-cli
             path: agent-governance-copilot-cli
             node-version: "22"
@@ -1116,7 +1218,7 @@ jobs:
       - name: Skip (unchanged package)
         if: steps.gate.outputs.run != 'true'
         run: echo "Package ${{ matrix.name }} unchanged — skipping npm build"
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: steps.gate.outputs.run == 'true'
@@ -1162,7 +1264,7 @@ jobs:
     if: needs.changes.outputs.rust == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - name: Build
         working-directory: agent-governance-rust
@@ -1177,7 +1279,7 @@ jobs:
     if: needs.changes.outputs.go == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.25"
@@ -1207,7 +1309,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Diagnostic — Docker / Compose / Buildx versions
         run: |
@@ -1216,7 +1318,7 @@ jobs:
           docker buildx version
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
         with:
           # Use the daemon's built-in BuildKit (docker driver) instead of the
           # default docker-container driver. The container driver boots a
@@ -1275,6 +1377,52 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  # ── Terraform examples validation ────────────────────────────────────
+  terraform-examples:
+    needs: changes
+    if: needs.changes.outputs.terraform-examples == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install Terraform example test dependencies
+        run: python -m pip install --disable-pip-version-check -r examples/terraform-test-requirements.txt
+
+      - name: Run Terraform example structural tests
+        run: python -m pytest -q examples/terraform-aws/test_terraform_aws.py examples/terraform-azure/test_terraform_azure.py
+
+      - name: Install Terraform CLI
+        env:
+          TERRAFORM_VERSION: "1.16.2"
+          TERRAFORM_LINUX_AMD64_SHA256: "0d17011f0c4664539b164b044903d04e296c86c13cb9f28040076c65cfb3985a"
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/terraform.zip"
+          curl --proto '=https' --tlsv1.2 -fSLo "$archive" \
+            --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_LINUX_AMD64_SHA256}  ${archive}" | sha256sum --check -
+          unzip -q "$archive" -d "$RUNNER_TEMP"
+          chmod +x "$RUNNER_TEMP/terraform"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/terraform" version
+
+      - name: Format, initialize, and validate both Terraform roots
+        run: |
+          set -euo pipefail
+          for directory in examples/terraform-aws examples/terraform-azure; do
+            terraform -chdir="$directory" fmt -check -recursive
+            terraform -chdir="$directory" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$directory" validate -no-color
+          done
+
   # ── CI Gate — required status check that handles skipped jobs ────────
   # When path-filters skip jobs (e.g. docs-only PRs skip tests), those
   # jobs report "skipped" which doesn't satisfy required status checks.
@@ -1300,11 +1448,13 @@ jobs:
         build-rust,
         build-go,
         docker-compose-test,
+        terraform-examples,
+        engine-api-conformance,
         markdown-link-check,
       ]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check job results
         env:
           NEEDS: ${{ toJSON(needs) }}

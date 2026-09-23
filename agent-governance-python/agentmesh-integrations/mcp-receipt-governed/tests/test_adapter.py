@@ -7,9 +7,12 @@ They validate the governance adapter logic in isolation — policy evaluation,
 receipt creation, signing, and the govern-and-execute lifecycle.
 """
 
+import time
+
 import pytest
 
 from mcp_receipt_governed.adapter import McpReceiptAdapter
+from mcp_receipt_governed.receipt import ReceiptAuthorizationError, authorize_receipt, sign_receipt
 
 
 # ── Policy Evaluation ──
@@ -149,6 +152,16 @@ class TestSigning:
         except ImportError:
             pytest.skip("cryptography not installed")
 
+    @pytest.fixture()
+    def authorizer_key(self):
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+            key = Ed25519PrivateKey.generate()
+            return key.private_bytes_raw().hex(), key.public_key().public_bytes_raw().hex()
+        except ImportError as exc:
+            raise pytest.skip.Exception("cryptography not installed") from exc
+
     def test_signed_receipt(self, signing_key):
         adapter = McpReceiptAdapter(
             cedar_policy=self.POLICY,
@@ -192,6 +205,110 @@ class TestSigning:
             adapter.govern_tool_call(
                 agent_did="did:mesh:a1",
                 tool_name="ReadData",
+            )
+
+    def test_external_authorizer_marks_receipt_and_is_trusted(self, signing_key, authorizer_key):
+        authorizer_seed, authorizer_public_key = authorizer_key
+
+        def external_authorizer(receipt):
+            return authorize_receipt(
+                receipt,
+                authorizer_seed,
+                authorizer_id="did:example:authorizer",
+                expires_at=time.time() + 60,
+            )
+
+        adapter = McpReceiptAdapter(
+            cedar_policy=self.POLICY,
+            signing_key_hex=signing_key,
+            external_authorizer=external_authorizer,
+            trusted_authorizer_keys=[authorizer_public_key],
+        )
+        receipt = adapter.govern_tool_call(agent_did="did:mesh:a1", tool_name="ReadData")
+
+        assert receipt.assurance_level == "externally_authorized"
+        assert receipt.authorizer_id == "did:example:authorizer"
+
+    def test_invalid_external_authorization_fails_closed(self, signing_key, authorizer_key):
+        tool_was_called = False
+
+        def no_op_authorizer(receipt):
+            return receipt
+
+        def tool():
+            nonlocal tool_was_called
+            tool_was_called = True
+
+        adapter = McpReceiptAdapter(
+            cedar_policy=self.POLICY,
+            signing_key_hex=signing_key,
+            external_authorizer=no_op_authorizer,
+            trusted_authorizer_keys=[authorizer_key[1]],
+        )
+
+        with pytest.raises(ReceiptAuthorizationError, match="External authorization failed"):
+            adapter.govern_and_execute(
+                agent_did="did:mesh:a1",
+                tool_name="ReadData",
+                tool_fn=tool,
+            )
+        assert tool_was_called is False
+
+    def test_authorizer_cannot_modify_signed_receipt(self, signing_key, authorizer_key):
+        authorizer_seed, authorizer_public_key = authorizer_key
+
+        def modifying_authorizer(receipt):
+            receipt.tool_name = "DeleteFile"
+            sign_receipt(receipt, signing_key)
+            return authorize_receipt(
+                receipt,
+                authorizer_seed,
+                authorizer_id="did:example:authorizer",
+                expires_at=time.time() + 60,
+            )
+
+        adapter = McpReceiptAdapter(
+            cedar_policy=self.POLICY,
+            signing_key_hex=signing_key,
+            external_authorizer=modifying_authorizer,
+            trusted_authorizer_keys=[authorizer_public_key],
+        )
+
+        with pytest.raises(ReceiptAuthorizationError, match="modified the signed receipt"):
+            adapter.govern_tool_call(agent_did="did:mesh:a1", tool_name="ReadData")
+
+    def test_receipt_signer_cannot_be_a_trusted_authorizer(self, signing_key):
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        def external_authorizer(receipt):
+            return receipt
+
+        signer_public_key = (
+            Ed25519PrivateKey.from_private_bytes(bytes.fromhex(signing_key))
+            .public_key()
+            .public_bytes_raw()
+            .hex()
+        )
+        adapter = McpReceiptAdapter(
+            cedar_policy=self.POLICY,
+            signing_key_hex=signing_key,
+            external_authorizer=external_authorizer,
+            trusted_authorizer_keys=[signer_public_key],
+        )
+
+        with pytest.raises(ReceiptAuthorizationError, match="must not contain"):
+            adapter.govern_tool_call(agent_did="did:mesh:a1", tool_name="ReadData")
+
+    def test_external_authorizer_requires_signing_and_trust_configuration(self, authorizer_key):
+        def external_authorizer(receipt):
+            return receipt
+
+        with pytest.raises(ValueError, match="signing_key_hex"):
+            McpReceiptAdapter(external_authorizer=external_authorizer)
+        with pytest.raises(ValueError, match="trusted_authorizer_keys"):
+            McpReceiptAdapter(
+                signing_key_hex=authorizer_key[0],
+                external_authorizer=external_authorizer,
             )
 
 # ── Govern and Execute ──
