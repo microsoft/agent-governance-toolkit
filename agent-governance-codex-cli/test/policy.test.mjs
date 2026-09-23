@@ -63,7 +63,7 @@ test("evaluatePreToolUse denies dangerous bootstrap and persistence writes", asy
   });
 
   assert.equal(reviewResult.hookSpecificOutput.permissionDecision, "deny");
-  assert.match(reviewResult.hookSpecificOutput.permissionDecisionReason, /does not support interactive review/i);
+  assert.match(reviewResult.hookSpecificOutput.permissionDecisionReason, /interactive review/i);
 
   const mcpReviewResult = await evaluatePreToolUse(state, {
     tool_name: "mcp__third_party__dangerous_tool",
@@ -349,6 +349,9 @@ test("recursive-delete hardening matches PowerShell and shell-quoted invocations
   for (const command of [
     "Remove-Item -Recurse -Force /tmp/build",   // PowerShell recursive delete
     "ri -r -fo /tmp/build",                      // PowerShell ri alias, clustered flags
+    "/bin/rm -rf /tmp/build",                    // Path-qualified Unix command
+    "rmdir /s /q important",                     // Windows recursive directory delete
+    "find . -type f -delete",                    // Find-based deletion
     "echo `rm -rf /tmp/x`",                      // backtick invocation
     "{ rm -rf /tmp/x; }",                        // brace group
     "(rm -rf /tmp/x)",                           // subshell
@@ -444,6 +447,18 @@ test("apply_patch path targets inherit persistence-write policy", async () => {
 
   assert.equal(result.hookSpecificOutput.permissionDecision, "deny");
   assert.match(result.hookSpecificOutput.permissionDecisionReason, /persistence|\.bashrc/i);
+
+  const packagePatch = await evaluatePreToolUse(state, {
+    tool_name: "apply_patch",
+    tool_input: {
+      input: "*** Begin Patch\n*** Update File: package.json\n@@\n+{\"name\":\"changed\"}\n*** End Patch",
+    },
+    session_id: "package-patch-path-session",
+    cwd: root,
+  });
+
+  assert.equal(packagePatch.hookSpecificOutput.permissionDecision, "deny");
+  assert.match(packagePatch.hookSpecificOutput.permissionDecisionReason, /Codex|package\.json/i);
 
   await rm(root, { recursive: true, force: true });
 });

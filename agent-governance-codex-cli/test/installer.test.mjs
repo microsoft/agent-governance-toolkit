@@ -8,7 +8,7 @@
 // real Codex install can't produce on demand.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmod, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, sep } from "node:path";
@@ -30,9 +30,16 @@ const INSTALLED_LINE = "agt-governance@agt  installed, enabled";
 //                     FAKE_CODEX_REMOVE=fail exits 1 with stderr (one that doesn't).
 //   everything else — exits 0.
 const FAKE_CODEX_SOURCE = `#!/usr/bin/env node
-const { existsSync, unlinkSync } = require("node:fs");
-const args = process.argv.slice(2).join(" ");
+const { existsSync, unlinkSync, writeFileSync } = require("node:fs");
+const argv = process.argv.slice(2);
+const args = argv.join(" ");
 const marker = process.env.FAKE_CODEX_MARKER;
+if (argv[0] === "plugin" && argv[1] === "marketplace" && argv[2] === "add") {
+  if (process.env.FAKE_CODEX_CAPTURE) {
+    writeFileSync(process.env.FAKE_CODEX_CAPTURE, argv[3] ?? "", "utf8");
+  }
+  process.exit(0);
+}
 if (args === "plugin list") {
   const installed = marker ? existsSync(marker) : true;
   const line = installed
@@ -170,11 +177,18 @@ test(
         "install",
         codexHome,
         shimDir,
-        { FAKE_CODEX_LIST_LINE: INSTALLED_LINE },
+        {
+          FAKE_CODEX_LIST_LINE: INSTALLED_LINE,
+          FAKE_CODEX_CAPTURE: join(root, "marketplace-path.txt"),
+        },
         join(specialPackageRoot, "bin", "agt-codex.mjs"),
       );
 
       assert.equal(code, 0, stderr);
+      assert.equal(
+        await readFile(join(root, "marketplace-path.txt"), "utf8"),
+        specialPackageRoot,
+      );
     });
   },
 );

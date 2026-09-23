@@ -27,7 +27,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "(^|[\\s;&|(){`])(?:rm|remove-item|ri|rd|del)\\b",
+          "source": "(^|[\\s;&|(){`])(?:(?:\\S*/)?rm|remove-item|ri|rd|del|rmdir)\\b|(?:^|[\\s;&|(){`])find\\b[^\\n\\r;&|(){}]*\\s-delete\\b",
           "flags": "i"
         }
       ]
@@ -116,8 +116,8 @@
       {
         "id": "persistence-write-paths",
         "operation": "write",
-        "effect": "review",
-        "reason": "Writes to persistence and task-runner paths require review.",
+        "effect": "deny",
+        "reason": "Writes to persistence and task-runner paths are blocked by AGT policy because Codex hooks do not support interactive review.",
         "pathPatterns": [
           {
             "source": "(^|/)(?:\\.bashrc|\\.zshrc|\\.profile|\\.gitconfig|package\\.json)$",

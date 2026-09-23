@@ -27,7 +27,7 @@ This PR introduces the `agent-governance-codex-cli` package and therefore a new
 |---|---|---|---|
 | `@microsoft/agent-governance-sdk` | 5.0.0 | production (direct) | Governance policy/audit runtime, matching the Claude Code, Copilot CLI, and Antigravity CLI packages |
 | `@noble/ciphers`, `@noble/curves`, `@noble/ed25519`, `@noble/hashes` | 2.2.0 / 2.2.0 / 3.1.0 / 2.2.0 | production (transitive via SDK) | Audit-chain signing and hashing |
-| `js-yaml` | 4.3.2 (transitive, via npm `overrides`) | production | SDK requests an older version; the override addresses the current dependency-review advisories |
+| `js-yaml` | 4.3.2 (transitive, via npm `overrides`) | production | SDK 5.0.0 requests 5.2.1; the override intentionally resolves the audited 4.3.2 version used by the CLI family to address the current dependency-review advisories |
 | `argparse` | 2.0.1 | production (transitive via js-yaml) | Unchanged js-yaml dependency |
 
 The OpenCode package remains on its existing SDK 3.7.0 dependency. Regenerating
@@ -49,9 +49,10 @@ Dependabot PR #3433.
 Practical exposure in this package is nil: js-yaml is loaded whenever the SDK
 is imported, but no code path here invokes YAML parsing. Policy and audit files
 are JSON/JSONL, and `PolicyEngine.loadYaml()`/`loadFromYAML()`/`GovernanceVerifier`
-are never called, so no input reaches YAML parsing. The bump is defense-in-depth
-and compliance with the dependency-review gate, which flags vulnerable lockfile
-versions regardless of reachability.
+are never called, so no input reaches YAML parsing. The override is a deliberate
+4.3.2 resolution from the SDK's requested 5.2.1 because the CLI family is
+standardized on the audited 4.3.2 package and this adapter does not use YAML APIs;
+the dependency-review gate also requires the lockfile to avoid vulnerable versions.
 
 ## Breaking Change Risk Assessment
 

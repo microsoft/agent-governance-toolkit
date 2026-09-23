@@ -840,13 +840,17 @@ function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
 function getRmCommandDetails(commandText, toolName) {
   const tokens = tokenizeCommand(commandText);
   const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|ri|rd|del)$/i.test(normalizeCommandNameToken(token)),
+    /^(rm|remove-item|ri|rd|del|rmdir)$/i.test(
+      getLastPathSegment(normalizeCommandNameToken(token)),
+    ),
   );
   if (commandIndex === -1) {
     return undefined;
   }
 
-  const commandName = normalizeCommandNameToken(tokens[commandIndex]).toLowerCase();
+  const commandName = getLastPathSegment(
+    normalizeCommandNameToken(tokens[commandIndex]),
+  ).toLowerCase();
   const parsesUnixShortOptions = commandName === "rm" && !isPowerShellTool(toolName);
   let unsafeOptions = false;
   const candidateTargets = [];

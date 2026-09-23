@@ -87,6 +87,7 @@ function codex(args, codexHome) {
       env,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      windowsVerbatimArguments: IS_WINDOWS,
     });
     return { ok: true, stdout, stderr: "" };
   } catch (error) {
