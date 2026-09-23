@@ -56,7 +56,7 @@ class SupervisorHierarchy:
             ValueError: If ``level`` is negative or an agent is registered at level 0.
         """
         if isinstance(level, bool) or not isinstance(level, int):
-            raise TypeError("Supervisor level must be an integer; bool is not allowed")
+            raise TypeError(f"Supervisor level must be an int, got {level!r}")
         if level < 0:
             raise ValueError("Supervisor level must be non-negative; level 0 is the root")
         if level == 0 and is_agent:

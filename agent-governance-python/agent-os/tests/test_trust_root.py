@@ -2,13 +2,10 @@
 # Licensed under the MIT License.
 """Tests for the native-runtime trust authority and supervisor hierarchy."""
 from __future__ import annotations
-
 import pytest
 from agent_control_specification import Decision, InterventionPointResult, Verdict
-
 from agent_os.supervisor import SupervisorHierarchy
 from agent_os.trust_root import TrustRoot
-
 
 class _Runtime:
     manifest = None
