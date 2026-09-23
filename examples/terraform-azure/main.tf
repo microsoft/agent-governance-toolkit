@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# cspell:ignore appconfig appconfiguration passwordless myagent myagentprodsa
 #
 # Example: governed agent infrastructure on Azure
 #
@@ -33,6 +32,10 @@ terraform {
     random = {
       source  = "hashicorp/random"
       version = "= 3.9.1"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = "= 0.14.2"
     }
   }
 }
@@ -226,7 +229,7 @@ resource "azurerm_storage_container" "audit_logs" {
   storage_account_id    = azurerm_storage_account.audit_logs.id
   container_access_type = "private"
 
-  depends_on = [azurerm_role_assignment.terraform_storage]
+  depends_on = [time_sleep.terraform_rbac_propagation]
 }
 
 resource "azurerm_storage_management_policy" "audit_logs" {
@@ -261,6 +264,21 @@ resource "azurerm_role_assignment" "terraform_storage" {
   scope                = azurerm_storage_account.audit_logs.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "time_sleep" "terraform_rbac_propagation" {
+  create_duration = "120s"
+  triggers = {
+    key_vault = azurerm_role_assignment.terraform_kv_secrets.id
+    storage   = azurerm_role_assignment.terraform_storage.id
+    appconfig = azurerm_role_assignment.terraform_appconfig.id
+  }
+
+  depends_on = [
+    azurerm_role_assignment.terraform_kv_secrets,
+    azurerm_role_assignment.terraform_storage,
+    azurerm_role_assignment.terraform_appconfig,
+  ]
 }
 
 # ── App Configuration — AGT governance parameters ────────────────────────────
@@ -339,7 +357,7 @@ resource "azurerm_app_configuration_key" "trust_level" {
   value                  = var.trust_level
   label                  = var.environment
   depends_on = [
-    azurerm_role_assignment.terraform_appconfig,
+    time_sleep.terraform_rbac_propagation,
     azurerm_private_endpoint.app_configuration,
     azurerm_private_dns_zone_virtual_network_link.app_configuration,
   ]
@@ -351,7 +369,7 @@ resource "azurerm_app_configuration_key" "max_tool_calls" {
   value                  = tostring(var.max_tool_calls)
   label                  = var.environment
   depends_on = [
-    azurerm_role_assignment.terraform_appconfig,
+    time_sleep.terraform_rbac_propagation,
     azurerm_private_endpoint.app_configuration,
     azurerm_private_dns_zone_virtual_network_link.app_configuration,
   ]
@@ -363,7 +381,7 @@ resource "azurerm_app_configuration_key" "rate_limit_rpm" {
   value                  = tostring(var.rate_limit_rpm)
   label                  = var.environment
   depends_on = [
-    azurerm_role_assignment.terraform_appconfig,
+    time_sleep.terraform_rbac_propagation,
     azurerm_private_endpoint.app_configuration,
     azurerm_private_dns_zone_virtual_network_link.app_configuration,
   ]
@@ -375,7 +393,7 @@ resource "azurerm_app_configuration_key" "audit_enabled" {
   value                  = tostring(var.audit_enabled)
   label                  = var.environment
   depends_on = [
-    azurerm_role_assignment.terraform_appconfig,
+    time_sleep.terraform_rbac_propagation,
     azurerm_private_endpoint.app_configuration,
     azurerm_private_dns_zone_virtual_network_link.app_configuration,
   ]
@@ -387,7 +405,7 @@ resource "azurerm_app_configuration_key" "kill_switch_enabled" {
   value                  = tostring(var.kill_switch_enabled)
   label                  = var.environment
   depends_on = [
-    azurerm_role_assignment.terraform_appconfig,
+    time_sleep.terraform_rbac_propagation,
     azurerm_private_endpoint.app_configuration,
     azurerm_private_dns_zone_virtual_network_link.app_configuration,
   ]
@@ -399,7 +417,7 @@ resource "azurerm_app_configuration_key" "retention_days" {
   value                  = tostring(var.retention_days)
   label                  = var.environment
   depends_on = [
-    azurerm_role_assignment.terraform_appconfig,
+    time_sleep.terraform_rbac_propagation,
     azurerm_private_endpoint.app_configuration,
     azurerm_private_dns_zone_virtual_network_link.app_configuration,
   ]
@@ -411,7 +429,7 @@ resource "azurerm_app_configuration_key" "audit_container" {
   value                  = "${azurerm_storage_account.audit_logs.name}/${azurerm_storage_container.audit_logs.name}"
   label                  = var.environment
   depends_on = [
-    azurerm_role_assignment.terraform_appconfig,
+    time_sleep.terraform_rbac_propagation,
     azurerm_private_endpoint.app_configuration,
     azurerm_private_dns_zone_virtual_network_link.app_configuration,
   ]

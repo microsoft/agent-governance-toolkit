@@ -29,6 +29,7 @@ jobs:
       workflows: ${{ steps.filter.outputs.workflows }}
       docs-only: ${{ steps.filter.outputs.docs-only }}
       docker: ${{ steps.filter.outputs.docker }}
+      terraform-examples: ${{ steps.filter.outputs.terraform-examples }}
       engine-api-conformance: ${{ steps.filter.outputs.engine-api-conformance }}
       changed-py-pkgs: ${{ steps.py-pkgs.outputs.list }}
       changed-ts-pkgs: ${{ steps.ts-pkgs.outputs.list }}
@@ -77,6 +78,10 @@ jobs:
             integrations:
               - 'agent-governance-python/agentmesh-integrations/**'
               - 'examples/flowise-governance/**'
+            terraform-examples:
+              - 'examples/terraform-aws/**'
+              - 'examples/terraform-azure/**'
+              - 'examples/terraform-test-requirements.txt'
             workflows:
               - '.github/workflows/**'
             rust:
@@ -1362,6 +1367,52 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  # ── Terraform examples validation ────────────────────────────────────
+  terraform-examples:
+    needs: changes
+    if: needs.changes.outputs.terraform-examples == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install Terraform example test dependencies
+        run: python -m pip install --disable-pip-version-check -r examples/terraform-test-requirements.txt
+
+      - name: Run Terraform example structural tests
+        run: python -m pytest -q examples/terraform-aws/test_terraform_aws.py examples/terraform-azure/test_terraform_azure.py
+
+      - name: Install Terraform CLI
+        env:
+          TERRAFORM_VERSION: "1.16.2"
+          TERRAFORM_LINUX_AMD64_SHA256: "0d17011f0c4664539b164b044903d04e296c86c13cb9f28040076c65cfb3985a"
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/terraform.zip"
+          curl --proto '=https' --tlsv1.2 -fSLo "$archive" \
+            --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_LINUX_AMD64_SHA256}  ${archive}" | sha256sum --check -
+          unzip -q "$archive" -d "$RUNNER_TEMP"
+          chmod +x "$RUNNER_TEMP/terraform"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/terraform" version
+
+      - name: Format, initialize, and validate both Terraform roots
+        run: |
+          set -euo pipefail
+          for directory in examples/terraform-aws examples/terraform-azure; do
+            terraform -chdir="$directory" fmt -check -recursive
+            terraform -chdir="$directory" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$directory" validate -no-color
+          done
+
   # ── CI Gate — required status check that handles skipped jobs ────────
   # When path-filters skip jobs (e.g. docs-only PRs skip tests), those
   # jobs report "skipped" which doesn't satisfy required status checks.
@@ -1387,6 +1438,7 @@ jobs:
         build-rust,
         build-go,
         docker-compose-test,
+        terraform-examples,
         engine-api-conformance,
         markdown-link-check,
       ]

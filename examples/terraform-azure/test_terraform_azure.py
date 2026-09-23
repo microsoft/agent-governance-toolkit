@@ -72,6 +72,11 @@ class TestTerraformBlock:
         providers = main_tf.get("terraform", [{}])[0].get("required_providers", [{}])[0]
         assert "random" in providers, "random provider missing from required_providers"
 
+    def test_time_provider_declared(self, main_tf):
+        providers = main_tf.get("terraform", [{}])[0].get("required_providers", [{}])[0]
+        assert "time" in providers, "time provider missing for RBAC propagation wait"
+        assert str(providers["time"].get("version", "")).strip('"') == "= 0.14.2"
+
     def test_azurerm_provider_version_constraint(self, main_tf):
         providers = main_tf["terraform"][0]["required_providers"][0]
         version = providers["azurerm"].get("version", "")
@@ -164,6 +169,25 @@ class TestRequiredResources:
         assert self._resource_names(main_tf, "azurerm_private_dns_zone"), (
             "Production App Configuration private link must have private DNS"
         )
+
+    def test_rbac_propagation_wait_precedes_data_plane_writes(self, main_tf):
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
+        sleep_resource = next(
+            resource
+            for block in main_tf.get("resource", [])
+            if '"time_sleep"' in block
+            for resource in block['"time_sleep"'].values()
+        )
+        assert sleep_resource.get("create_duration") == '"120s"'
+        dependencies = sleep_resource.get("depends_on", [])
+        assert any("terraform_kv_secrets" in str(item) for item in dependencies)
+        assert any("terraform_storage" in str(item) for item in dependencies)
+        assert any("terraform_appconfig" in str(item) for item in dependencies)
+        triggers = sleep_resource.get("triggers", {})
+        assert "key_vault" in triggers
+        assert "storage" in triggers
+        assert "appconfig" in triggers
+        assert raw.count("time_sleep.terraform_rbac_propagation") >= 8
 
     def test_log_analytics_workspace_present(self, main_tf):
         assert self._resource_names(main_tf, "azurerm_log_analytics_workspace"), (
@@ -440,6 +464,20 @@ class TestVariables:
         missing = self.EXPECTED_VARS - declared
         assert not missing, f"Variables missing from variables.tf: {missing}"
 
+    def test_deployment_ip_ranges_explains_storage_address_format(self, variables_tf):
+        variable = next(
+            block['"deployment_ip_ranges"']
+            for block in variables_tf.get("variable", [])
+            if '"deployment_ip_ranges"' in block
+        )
+        description = str(variable.get("description", "")).lower()
+        assert "key vault accepts cidrs" in description
+        assert "individual addresses" in description
+        assert "storage does not accept cidrs" in description
+        validation = variable.get("validation", [{}])[0]
+        assert "alltrue" in str(validation.get("condition", ""))
+        assert 'cidrhost("${address}/32", 0)' in str(validation.get("condition", ""))
+
     def test_trust_level_has_validation(self, variables_tf):
         raw = (EXAMPLE_DIR / "variables.tf").read_text(encoding="utf-8")
         assert "validation" in raw, "trust_level must have a validation block"
@@ -558,6 +596,16 @@ class TestREADME:
         assert "private endpoint" in readme.lower()
         assert "deployment_ip_ranges" in readme
         assert "Key Vault Secrets Officer" in readme
+        assert "DNS resolution" in readme
+        assert "rerun" in readme.lower()
+
+    def test_production_firewall_example_uses_bare_ipv4(self, readme):
+        assert 'deployment_ip_ranges = ["203.0.113.10"]' in readme
+        assert 'deployment_ip_ranges = ["203.0.113.10/32"]' not in readme
+
+    def test_cost_and_teardown_documented(self, readme):
+        assert "Cost and Teardown" in readme
+        assert "terraform destroy" in readme
 
     def test_known_limitations_documented(self, readme):
         assert "limitation" in readme.lower() or "Known" in readme

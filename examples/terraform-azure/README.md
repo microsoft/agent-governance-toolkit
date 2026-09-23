@@ -40,7 +40,12 @@ The identity running Terraform needs permission to create role assignments
 (typically Owner or User Access Administrator) and the App Configuration / Storage
 data-plane roles declared below. For production, pass the runner's public IPv4
 addresses in `deployment_ip_ranges` for Key Vault and Storage, and run Terraform
-from a host with network access to the App Configuration private endpoint.
+from a host with network access and DNS resolution for the App Configuration
+private endpoint. The `privatelink.azconfig.io` DNS zone is linked only to the agent
+VNet; a runner outside that VNet needs connected DNS forwarding or an Azure DNS
+Private Resolver configured for the private zone. `deployment_ip_ranges` accepts
+CIDRs for Key Vault, but Storage requires individual IPv4 addresses (no CIDR
+prefixes).
 
 ## Governance Config Variables
 
@@ -74,7 +79,7 @@ max_tool_calls       = 50
 rate_limit_rpm       = 30
 retention_days       = 365
 kill_switch_enabled  = true
-deployment_ip_ranges = ["203.0.113.10/32"]
+deployment_ip_ranges = ["203.0.113.10"] # Replace with the runner's public IPv4 address.
 ```
 
 App Configuration public access is disabled in production and a private endpoint
@@ -83,6 +88,9 @@ network so Terraform can write the App Configuration keys over the private link.
 The Terraform identity is granted `App Configuration Data Owner`,
 `Storage Blob Data Contributor`, and `Key Vault Secrets Officer` at the narrow
 resource scopes needed to manage data-plane settings and bootstrap the signing key.
+The configuration waits 120 seconds after creating data-plane role assignments
+for RBAC propagation. If Azure still returns a 403, wait a few minutes and rerun
+the full apply.
 
 For a first production rollout, bootstrap the VNet and private link before running
 the full apply from a connected Terraform runner:
@@ -163,6 +171,19 @@ This example adjusts several settings automatically based on `environment`:
 | Key Vault and Storage firewall | Allow (RBAC required) | Deny by default; allow configured runner IPs and agent subnet |
 | App Configuration endpoint | Public; Entra auth only | Private endpoint; public access disabled |
 
+## Cost and Teardown
+
+The Standard App Configuration store is billable in both `dev` and `prod`.
+Production also uses Premium Key Vault and GRS storage; App Configuration private
+endpoints, storage transactions, and Log Analytics ingestion add further charges.
+Review current regional prices and your expected log volume before applying.
+
+After retention and audit-export requirements are satisfied, run
+`terraform destroy` from a network with access to production data-plane endpoints.
+Production Key Vault has purge protection and remains soft-deleted for its
+configured retention period; its randomized name avoids blocking a later
+re-creation. Remove any separately managed data before deleting its storage.
+
 ## Known Limitations
 
 - `AGT_POLICY_PATH` (the Cedar/YAML policy file) is a runtime container mount and
@@ -181,6 +202,7 @@ This example adjusts several settings automatically based on `environment`:
 | Terraform / OpenTofu | >= 1.5.0 |
 | AzureRM provider | 4.81.0 |
 | Random provider | 3.9.1 |
+| Time provider | 0.14.2 |
 | Azure CLI | >= 2.x (for `az login` and runtime config reads) |
 
 ## Structural Tests

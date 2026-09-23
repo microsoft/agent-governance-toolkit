@@ -125,6 +125,18 @@ automatically.
 - S3 versioning and retention are configured, but S3 Object Lock (WORM) is not;
   add it separately if a regulatory requirement mandates immutable retention.
 
+## Cost and Teardown
+
+The default network provisions two NAT gateways and two Elastic IPs, which incur
+hourly and data-processing charges even when agent traffic is low. KMS keys,
+CloudWatch ingestion/retention, and S3 storage and requests add usage-based costs.
+Review current regional pricing and expected traffic/log volume before applying.
+
+After retention and audit-export obligations are met, empty the S3 audit bucket,
+including all object versions and delete markers, before running
+`terraform destroy`. Production sets `force_destroy = false` intentionally so
+Terraform cannot silently erase a non-empty audit bucket.
+
 ## Requirements
 
 | Tool | Version |

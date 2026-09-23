@@ -1251,3 +1251,10 @@ appconfiguration
 boto
 hostnames
 tfvars
+amd64
+cidrhost
+CIDRs
+propagation
+readonly
+resolver
+sha256sum

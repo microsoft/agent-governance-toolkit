@@ -83,9 +83,16 @@ variable "retention_days" {
 }
 
 variable "deployment_ip_ranges" {
-  description = "Public IPv4 addresses or CIDRs allowed to provision Key Vault and Storage resources in prod."
+  description = "Public IPv4 addresses allowed in production. Key Vault accepts CIDRs, but this shared variable restricts entries to individual addresses because Storage does not accept CIDRs."
   type        = list(string)
   default     = []
+
+  validation {
+    condition = alltrue([
+      for address in var.deployment_ip_ranges : can(cidrhost("${address}/32", 0))
+    ])
+    error_message = "deployment_ip_ranges must contain bare IPv4 addresses without CIDR prefixes."
+  }
 }
 
 # ── Networking ────────────────────────────────────────────────────────────────

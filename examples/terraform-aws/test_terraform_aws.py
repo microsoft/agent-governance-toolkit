@@ -415,6 +415,11 @@ class TestREADME:
     def test_remote_state_guidance_present(self, readme):
         assert "remote backend" in readme.lower()
 
+    def test_cost_and_teardown_documented(self, readme):
+        assert "Cost and Teardown" in readme
+        assert "terraform destroy" in readme
+        assert "delete markers" in readme
+
     def test_documented_as_root_configuration(self, readme):
         assert "not a published child" in readme
         assert "../../infra/terraform" not in readme
