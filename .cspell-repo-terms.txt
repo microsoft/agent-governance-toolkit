@@ -1248,10 +1248,12 @@ myagentprodsa
 passwordless
 appconfig
 appconfiguration
+azconfig
 boto
 hostnames
 tfvars
 amd64
+alltrue
 cidrhost
 CIDRs
 propagation
