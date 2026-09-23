@@ -340,7 +340,8 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
     /// Evaluate a request with optional trusted skill provenance.
     ///
     /// The request payload is hashed as context, but its contents are never
-    /// inspected for skill names or origins.
+    /// inspected for skill names or origins. Valid JSON is hashed structurally;
+    /// other payloads are hashed as strings.
     pub fn evaluate_request_with_skill_audit(
         &self,
         request: ExecutionRequest,
@@ -348,10 +349,12 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
         confidence: Option<f64>,
         trusted_source: Option<&TrustedSkillMetadataSource>,
     ) -> FrameworkExecutionResult {
-        let context_before = request
-            .payload
-            .as_ref()
-            .map(|payload| serde_json::Value::String(payload.clone()));
+        let context_before = request.payload.as_ref().map(|payload| {
+            match serde_json::from_str::<serde_json::Value>(payload) {
+                Ok(value) => value,
+                Err(_) => serde_json::Value::String(payload.clone()),
+            }
+        });
         let skill_audit_metadata =
             build_skill_audit_metadata(trusted_source, context_before.as_ref(), None);
         self.evaluate_request_with_metadata(request, tool_name, confidence, skill_audit_metadata)
@@ -1608,7 +1611,7 @@ intervention_points:
             ExecutionRequest {
                 actor: "agent".into(),
                 action: "tools.call".into(),
-                payload: Some(r#"{"skill_name":"spoofed_skill"}"#.into()),
+                payload: Some(r#"{"skill_name":"spoofed_skill","value":1}"#.into()),
             },
             Some("read_file"),
             None,
@@ -1624,11 +1627,30 @@ intervention_points:
         assert!(metadata.context_hash_before.is_some());
         assert!(metadata.context_hash_after.is_none());
 
+        let reordered_result = adapter.evaluate_request_with_skill_audit(
+            ExecutionRequest {
+                actor: "agent".into(),
+                action: "tools.call".into(),
+                payload: Some(r#"{"value":1,"skill_name":"spoofed_skill"}"#.into()),
+            },
+            Some("read_file"),
+            None,
+            Some(&trusted),
+        );
+        let reordered_metadata = reordered_result.events[0]
+            .skill_audit_metadata
+            .as_ref()
+            .expect("reordered skill audit metadata");
+        assert_eq!(
+            metadata.context_hash_before,
+            reordered_metadata.context_hash_before
+        );
+
         let untrusted_result = adapter.evaluate_request(
             ExecutionRequest {
                 actor: "agent".into(),
                 action: "tools.call".into(),
-                payload: Some(r#"{"skill_name":"spoofed_skill"}"#.into()),
+                payload: Some(r#"{"skill_name":"spoofed_skill","value":1}"#.into()),
             },
             Some("read_file"),
             None,

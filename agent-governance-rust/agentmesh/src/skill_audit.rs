@@ -179,6 +179,16 @@ mod tests {
     }
 
     #[test]
+    fn context_hash_matches_shared_canonical_utf8_json() {
+        let context = serde_json::json!({"text": "<&>+ café"});
+
+        assert_eq!(
+            hash_context(&context).as_deref(),
+            Some("64fc8ac088af1d1df47ae20c50f35b46a0037eb05a13c2cd6745da93e03ad9e9")
+        );
+    }
+
+    #[test]
     fn context_hash_fails_safely_for_null_or_unserializable_context() {
         struct UnsupportedContext;
 

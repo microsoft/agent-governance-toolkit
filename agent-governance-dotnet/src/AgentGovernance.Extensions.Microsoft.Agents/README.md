@@ -114,6 +114,14 @@ arguments are never promoted to trusted metadata. Function arguments are
 canonicalized and recorded only as `context_hash_before`, and unsupported
 context values omit the hash without blocking governance.
 
+The .NET adapter emits these fields as flat snake_case keys in
+`GovernanceEvent.Data`. Context hashing is on by default for function calls with
+arguments, even when no trusted metadata resolver is configured; the resolver
+controls only skill identity and provenance fields. This adds JSON-serialization
+and hashing work and changes the default event shape. `GovernanceEvent` is not
+hash-chained, so these metadata fields are not covered by a tamper-evident audit
+chain.
+
 ## Important constraint
 
 `EnableFunctionMiddleware = true` only works for MAF agents backed by a function-calling pipeline that supports function invocation middleware (for example agents using a `FunctionInvokingChatClient`-compatible stack).

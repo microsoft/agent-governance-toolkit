@@ -78,6 +78,16 @@ public sealed class SkillAuditMetadataTests
     }
 
     [Fact]
+    public void HashContext_UsesSharedCanonicalUtf8JsonEncoding()
+    {
+        var context = new Dictionary<string, object> { ["text"] = "<&>+ café" };
+
+        Assert.Equal(
+            "64fc8ac088af1d1df47ae20c50f35b46a0037eb05a13c2cd6745da93e03ad9e9",
+            SkillAuditMetadataBuilder.HashContext(context));
+    }
+
+    [Fact]
     public void HashContext_ReturnsNullForUnsupportedContext()
     {
         Assert.Null(SkillAuditMetadataBuilder.HashContext(new Action(static () => { })));

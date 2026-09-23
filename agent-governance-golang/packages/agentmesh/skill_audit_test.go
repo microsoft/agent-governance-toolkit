@@ -30,6 +30,16 @@ func TestHashContextStableForNestedMapKeyOrdering(t *testing.T) {
 	}
 }
 
+func TestHashContextMatchesSharedCanonicalUTF8JSON(t *testing.T) {
+	hash, ok := HashContext(map[string]any{"text": "<&>+ café"})
+	if !ok {
+		t.Fatal("expected context to be hashable")
+	}
+	if hash != "64fc8ac088af1d1df47ae20c50f35b46a0037eb05a13c2cd6745da93e03ad9e9" {
+		t.Fatalf("hash = %q, want shared canonical JSON hash", hash)
+	}
+}
+
 func TestHashContextFailsSafelyForUnsupportedValues(t *testing.T) {
 	if hash, ok := HashContext(make(chan int)); ok || hash != "" {
 		t.Fatalf("unsupported context returned hash %q", hash)
@@ -117,7 +127,7 @@ func TestSkillAuditMetadataTamperingBreaksHashChain(t *testing.T) {
 	}
 }
 
-func TestBuildSkillAuditMetadataOmitsOnlyUnhashableContexts(t *testing.T) {
+func TestBuildSkillAuditMetadataOmitsOnlyUnsupportedContexts(t *testing.T) {
 	metadata := BuildSkillAuditMetadata(
 		NewTrustedSkillMetadataSource("search_skill", ""),
 		make(chan int),
@@ -130,7 +140,7 @@ func TestBuildSkillAuditMetadataOmitsOnlyUnhashableContexts(t *testing.T) {
 		t.Fatalf("trusted source was lost: %#v", metadata)
 	}
 	if metadata.ContextHashBefore != "" || metadata.ContextHashAfter != "" {
-		t.Fatalf("unhashable contexts should not produce hashes: %#v", metadata)
+		t.Fatalf("unsupported contexts should not produce hashes: %#v", metadata)
 	}
 }
 

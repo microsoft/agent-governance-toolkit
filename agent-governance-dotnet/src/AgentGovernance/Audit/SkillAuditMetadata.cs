@@ -3,6 +3,7 @@
 
 using System.Buffers;
 using System.Security.Cryptography;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace AgentGovernance.Audit;
@@ -146,8 +147,8 @@ public static class SkillAuditMetadataBuilder
     }
 
     /// <summary>
-    /// Returns a deterministic SHA-256 hash, or <see langword="null"/> when the context
-    /// cannot be represented as canonical JSON.
+    /// Returns a deterministic SHA-256 hash, or no hash when the context cannot be
+    /// represented as canonical JSON.
     /// </summary>
     public static string? HashContext(object? context)
     {
@@ -173,7 +174,9 @@ public static class SkillAuditMetadataBuilder
         }
 
         var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
+        using (var writer = new Utf8JsonWriter(
+                   buffer,
+                   new JsonWriterOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
             WriteCanonicalJson(writer, value);
             writer.Flush();
