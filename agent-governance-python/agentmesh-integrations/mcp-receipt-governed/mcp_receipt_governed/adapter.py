@@ -34,7 +34,6 @@ from mcp_receipt_governed.receipt import (
     ReceiptStore,
     hash_tool_args,
     sign_receipt,
-    verify_receipt,
     verify_receipt_authorization,
 )
 
