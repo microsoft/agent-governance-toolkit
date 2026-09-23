@@ -16,8 +16,8 @@ It installs AGT governance into Codex's lifecycle hooks and uses:
 > following the same copy-and-adapt derivation used for the OpenCode integration
 > ([#2658](https://github.com/microsoft/agent-governance-toolkit/pull/2658)), and originated from
 > [RFC #3408: Codex Integration](https://github.com/microsoft/agent-governance-toolkit/issues/3408).
-> The design below (enforcement surface, decision mapping, and security model) is verified in a
-> sandboxed `CODEX_HOME` and live against Codex 0.144.6.
+> The design below (enforcement surface, decision mapping, and security model) is covered by the
+> package's process-boundary tests and sandboxed `CODEX_HOME` reproduction.
 
 ## What this package is
 
@@ -39,12 +39,13 @@ This package enforces three Codex lifecycle events:
 
 - `SessionStart`: governance context injection
 - `UserPromptSubmit`: prompt inspection with fail-closed blocking
-- `PreToolUse`: tool-call inspection with allow, deny, or ask (review) decisions
+- `PreToolUse`: tool-call inspection with allow or deny decisions
 
-Decisions map onto Codex's hook response schema: a policy deny returns
-`permissionDecision: "deny"` with a reason; a review returns `permissionDecision: "ask"`;
-an allow returns no decision. Every decision is appended to a tamper-evident,
-hash-chained audit log under `<CODEX_HOME>/agt/audit-log.json`.
+Decisions map onto Codex's supported hook response schema: a policy deny returns
+`permissionDecision: "deny"` with a reason, and an allow returns no decision. AGT policy
+reviews are also denied because Codex does not support an interactive `ask` decision in
+`PreToolUse`. Every decision is appended to a tamper-evident, hash-chained audit log under
+`<CODEX_HOME>/agt/audit-log.json`.
 
 ## Install
 
@@ -115,6 +116,16 @@ node bin/agt-codex.mjs uninstall  [--codex-home <dir>]   # remove the plugin and
 - **Hooks are trust-gated.** A fresh install applies no governance until the one-time
   trust step above. `node bin/agt-codex.mjs status` reports whether the audit chain is growing so this
   gap is observable, not silent.
+- **The host can fail open.** Codex proceeds when a hook exceeds its 30-second timeout or
+  exits with a status other than the hook-blocking exit code. Keep hook startup and policy
+  evaluation deterministic; this package cannot override Codex's timeout and exit handling.
+- **Audit corruption is fail closed.** A malformed or hand-edited `audit-log.json` causes
+  prompt and tool evaluation to deny until the file is repaired or removed. Check
+  `agt-codex status` before deleting it so the incident is recorded and investigated.
+- **Concurrent audit writes are not serialized.** Parallel `PreToolUse` processes can race
+  during the read/verify/write cycle and lose an entry even though each individual write is
+  atomically renamed. Use a serialized hook runner or managed deployment when retaining a
+  complete audit history is required.
 
 ## Development
 
@@ -126,6 +137,7 @@ npm test
 
 The governance core (`lib/policy.mjs`, `lib/audit.mjs`, `lib/poisoning.mjs`) is
 adapted from `agent-governance-claude-code`, mirroring how the
-OpenCode package was derived from it. Only host identity (surface name, agent id, config
-paths, and the `AGT_CODEX_*` environment variables) is rebranded for Codex; the
-governance logic is unchanged.
+OpenCode package was derived from it. Codex-specific behavior includes the supported
+`permissionDecision` mapping, fail-closed review handling, Codex config paths, Windows
+installer invocation, and patch-target extraction; these differences are covered by the
+Codex tests rather than being treated as a byte-identical copy.

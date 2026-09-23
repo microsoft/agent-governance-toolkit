@@ -9,12 +9,8 @@
       "view_image"
     ],
     "blockedTools": [],
-    "defaultEffect": "review",
-    "reviewTools": [
-      "Bash",
-      "apply_patch",
-      "webrun"
-    ]
+    "defaultEffect": "allow",
+    "reviewTools": []
   },
   "additionalContext": [
     "AGT developer protection policy is active for this Codex session.",

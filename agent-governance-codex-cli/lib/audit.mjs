@@ -9,7 +9,14 @@ import { dirname } from "node:path";
 const GENESIS_HASH = "0".repeat(64);
 export const MAX_ENTRIES = 10000;
 
-export async function appendAuditEntry(auditPath, entry, { limit = MAX_ENTRIES } = {}) {
+export async function appendAuditEntry(auditPath, entry, options = {}) {
+  const { limit = MAX_ENTRIES } = options ?? {};
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new TypeError(
+      `Audit entry limit must be a positive integer, received ${String(limit)}.`,
+    );
+  }
+
   const { seamHash, entries } = await loadAuditFile(auditPath);
   if (!verifyAuditEntries(entries, seamHash)) {
     throw new Error(`Audit log at ${auditPath} failed hash-chain verification.`);
@@ -73,12 +80,6 @@ export async function getAuditStatus(auditPath) {
   }
 }
 
-// Read the audit file, returning the surviving entries and the seam hash the
-// chain is anchored to. Supports the legacy bare-array format and the
-// { seamHash, entries } format written once the log has rolled over. A legacy
-// array whose head is not GENESIS-anchored (i.e. it was already truncated by a
-// prior version) adopts its head's previousHash as the seam so the surviving
-// chain still verifies rather than remaining permanently broken.
 export async function loadAuditFile(auditPath) {
   if (!auditPath || !existsSync(auditPath)) {
     return { seamHash: null, entries: [] };
@@ -88,18 +89,10 @@ export async function loadAuditFile(auditPath) {
     const text = await readFile(auditPath, "utf8");
     const value = JSON.parse(text);
     if (Array.isArray(value)) {
-      // Legacy recovery: a non-GENESIS head means a prior version front-truncated
-      // this log without a seam; adopt the head's previousHash as the seam so it
-      // verifies instead of staying bricked. Trade-off: the seam is derived from
-      // (not authenticating) the head, so a malicious prefix deletion of a legacy
-      // log is indistinguishable from a real rollover — unavoidable once GENESIS
-      // anchoring is relaxed, and in-place tamper detection is unaffected.
-      const head = value[0];
-      const seamHash =
-        head && typeof head.previousHash === "string" && head.previousHash !== GENESIS_HASH
-          ? head.previousHash
-          : null;
-      return { seamHash, entries: value };
+      // A bare array is always anchored to GENESIS. Deriving a seam from the
+      // surviving head instead would let anyone delete a prefix of the log
+      // without failing verification.
+      return { seamHash: null, entries: value };
     }
     if (value && typeof value === "object" && Array.isArray(value.entries)) {
       return {

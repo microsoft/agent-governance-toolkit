@@ -8,10 +8,10 @@
 // real Codex install can't produce on demand.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, sep } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -52,9 +52,9 @@ if (args.startsWith("plugin remove")) {
 process.exit(0);
 `;
 
-function runInstaller(command, codexHome, shimDir, env) {
+function runInstaller(command, codexHome, shimDir, env, script = binScript) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [binScript, command, "--codex-home", codexHome], {
+    const child = spawn(process.execPath, [script, command, "--codex-home", codexHome], {
       env: { ...process.env, PATH: `${shimDir}${delimiter}${process.env.PATH}`, ...env },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -80,7 +80,7 @@ async function withFakeCodex(run) {
     await writeFile(shimPath, FAKE_CODEX_SOURCE);
     await writeFile(`${shimPath}.cmd`, `@echo off\r\nnode "%~dp0codex.cjs" %*\r\n`);
     await chmod(shimPath, 0o755);
-    return await run({ shimDir, codexHome, marker: join(root, "marker") });
+    return await run({ shimDir, codexHome, marker: join(root, "marker"), root });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -154,3 +154,27 @@ test("install's read-back rejects a similarly named plugin", async () => {
     assert.match(stderr, /did not register as installed\+enabled/);
   });
 });
+
+test(
+  "install handles Windows cmd metacharacters in the package path",
+  { skip: process.platform !== "win32" },
+  async () => {
+    await withFakeCodex(async ({ shimDir, codexHome, root }) => {
+      const specialPackageRoot = join(root, "A&B^%!", "codex-package");
+      await cp(join(here, ".."), specialPackageRoot, {
+        recursive: true,
+        filter: (source) => !source.includes(`${sep}node_modules${sep}`),
+      });
+
+      const { code, stderr } = await runInstaller(
+        "install",
+        codexHome,
+        shimDir,
+        { FAKE_CODEX_LIST_LINE: INSTALLED_LINE },
+        join(specialPackageRoot, "bin", "agt-codex.mjs"),
+      );
+
+      assert.equal(code, 0, stderr);
+    });
+  },
+);

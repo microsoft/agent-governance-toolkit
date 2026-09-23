@@ -15,11 +15,11 @@ import {
   PromptDefenseEvaluator,
 } from "@microsoft/agent-governance-sdk";
 
-import { appendAuditEntry, getAuditStatus } from "./audit.mjs";
+import { appendAuditEntry } from "./audit.mjs";
 import { safeJsonStringify, summarizeText } from "./poisoning.mjs";
 
-export const USER_POLICY_ENV = "AGT_CODEX_POLICY_PATH";
-export const AUDIT_PATH_ENV = "AGT_CODEX_AUDIT_PATH";
+const USER_POLICY_ENV = "AGT_CODEX_POLICY_PATH";
+const AUDIT_PATH_ENV = "AGT_CODEX_AUDIT_PATH";
 
 const USER_POLICY_RELATIVE_PATH = [".codex", "agt", "policy.json"];
 const USER_AUDIT_RELATIVE_PATH = [".codex", "agt", "audit-log.json"];
@@ -101,8 +101,6 @@ export async function loadPolicy({
     configuredPolicyPath,
     path: source === "bundled-default" ? bundledDefaultPath : configuredPolicyPath,
     policy: compiledPolicy,
-    sdkPath: "@microsoft/agent-governance-sdk",
-    sdkSource: "package",
     source,
     ...runtime,
   };
@@ -265,8 +263,10 @@ export async function evaluatePreToolUse(state, input = {}) {
       return {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
-          permissionDecision: "ask",
-          permissionDecisionReason: reason || `AGT policy requested review for tool.${toolName}.`,
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            `${reason || `AGT policy requested review for tool.${toolName}.`} ` +
+            "Codex does not support interactive review hooks, so AGT denied this action.",
         },
       };
     }
@@ -301,63 +301,6 @@ export async function evaluatePreToolUse(state, input = {}) {
       },
     };
   }
-}
-
-export function checkArbitraryText(state, text, sessionId = "adhoc-check") {
-  const detector = createContextDetector(state.policy);
-  const entry = buildContextEntry({
-    agentId: DEFAULT_AGENT_ID,
-    content: String(text ?? ""),
-    role: "user",
-    sessionId,
-  });
-  detector.addEntry(entry);
-  const promptFindings = detector.scanEntry(entry);
-  const mcpScan = state.mcpScanner.scan({
-    name: "adhoc_text",
-    description: String(text ?? ""),
-  });
-
-  return {
-    mcpScan,
-    promptDefense: {
-      coverage: state.promptDefenseReport.coverage,
-      grade: state.promptDefenseReport.grade,
-      missing: state.promptDefenseReport.missing,
-    },
-    promptPoisoning: {
-      findings: promptFindings,
-      suspicious: promptFindings.length > 0,
-    },
-  };
-}
-
-export async function getPolicyStatus(state) {
-  const auditStatus = await getAuditStatus(state.auditPath);
-  return {
-    auditEntries: auditStatus.count,
-    auditError: auditStatus.error,
-    auditPath: state.auditPath,
-    auditValid: auditStatus.valid,
-    bundledDefaultError: state.bundledDefaultError?.message,
-    configuredPolicyError: state.configuredPolicyError?.message,
-    configuredPolicyPath: state.configuredPolicyPath,
-    denyOnPolicyError: state.policy.denyOnPolicyError,
-    minimumPromptDefenseGrade: state.policy.minimumPromptDefenseGrade,
-    mode: state.policy.mode,
-    path: state.path,
-    promptDefenseCoverage: state.promptDefenseReport.coverage,
-    promptDefenseGrade: state.promptDefenseReport.grade,
-    promptDefenseBlocking: state.promptDefenseReport.isBlocking(
-      state.policy.minimumPromptDefenseGrade,
-    ),
-    promptDefenseMissing: state.promptDefenseReport.missing,
-    schemaVersion: state.policy.schemaVersion,
-    sdkPath: state.sdkPath,
-    sdkSource: state.sdkSource,
-    source: state.source,
-    version: state.policy.version,
-  };
 }
 
 function createGovernanceRuntime(policy) {
@@ -635,10 +578,9 @@ async function recordFailureAudit(state, payload) {
 }
 
 function toAuditDecision(decision) {
-  if (decision === "review") {
-    return "review";
-  }
-  return decision === "deny" ? "deny" : "allow";
+  // Codex has no supported interactive review response. A policy review is
+  // therefore enforced as a deny at the host boundary and recorded as denied.
+  return decision === "deny" || decision === "review" ? "deny" : "allow";
 }
 
 function summarizeBackendReasons(backendResults) {
@@ -648,7 +590,7 @@ function summarizeBackendReasons(backendResults) {
     .join(" ");
 }
 
-export function compilePolicy(raw) {
+function compilePolicy(raw) {
   const mode = raw?.mode === "advisory" ? "advisory" : "enforce";
   const allowedTools = toStringArray(raw?.toolPolicies?.allowedTools).filter((tool) => tool !== "*");
   return {
@@ -682,7 +624,7 @@ export function compilePolicy(raw) {
   };
 }
 
-export function extractCommandText(toolArgs) {
+function extractCommandText(toolArgs) {
   if (!toolArgs || typeof toolArgs !== "object") {
     return "";
   }
@@ -887,7 +829,7 @@ function createMinimalFallbackPolicy() {
 
 function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
   if (rule.id === "recursive-delete") {
-    return !hasRecursiveDelete(commandText, toolName) || isSafeCleanupCommand(commandText, toolName);
+    return isSafeCleanupCommand(commandText, toolName);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);
@@ -906,8 +848,7 @@ function getRmCommandDetails(commandText, toolName) {
 
   const commandName = normalizeCommandNameToken(tokens[commandIndex]).toLowerCase();
   const parsesUnixShortOptions = commandName === "rm" && !isPowerShellTool(toolName);
-  let recursive = false;
-  let force = false;
+  let unsafeOptions = false;
   const candidateTargets = [];
   for (const token of tokens.slice(commandIndex + 1)) {
     const normalizedToken = stripCommandToken(token);
@@ -916,22 +857,21 @@ function getRmCommandDetails(commandText, toolName) {
     }
     if (normalizedToken.startsWith("-")) {
       const normalizedFlag = normalizedToken.toLowerCase();
-      if (
-        normalizedFlag === "--recursive" ||
-        isPowerShellRecursiveParameter(normalizedFlag)
-      ) {
-        recursive = true;
-      } else if (normalizedFlag === "--force" || isPowerShellForceParameter(normalizedFlag)) {
-        force = true;
-      } else if (parsesUnixShortOptions && isUnixRmShortOptionCluster(normalizedFlag)) {
-        recursive ||= /r/i.test(normalizedFlag);
-        force ||= /f/i.test(normalizedFlag);
+      if (isQuotedCommandToken(token)) {
+        unsafeOptions = true;
+      } else if (parsesUnixShortOptions && isUnixRmOption(normalizedFlag)) {
+        continue;
+      } else if (!parsesUnixShortOptions && isPowerShellDeleteOption(normalizedFlag)) {
+        continue;
+      } else {
+        unsafeOptions = true;
       }
       continue;
     }
-    if (/^\/[a-z]+$/i.test(normalizedToken)) {
-      recursive ||= /s/i.test(normalizedToken);
-      force ||= /[fq]/i.test(normalizedToken);
+    if (commandName !== "rm" && /^\/[a-z]+$/i.test(normalizedToken)) {
+      if (!/^[\/][sqf]+$/i.test(normalizedToken)) {
+        unsafeOptions = true;
+      }
       continue;
     }
 
@@ -944,18 +884,9 @@ function getRmCommandDetails(commandText, toolName) {
   }
 
   return {
-    force,
-    recursive,
+    unsafeOptions,
     targets: candidateTargets,
   };
-}
-
-function hasRecursiveDelete(commandText, toolName) {
-  // A recursive delete is destructive whether or not a force flag is present, so
-  // the deny decision intentionally does not require force. The `force` detail is
-  // still parsed for completeness and future messaging.
-  const details = getRmCommandDetails(commandText, toolName);
-  return Boolean(details?.recursive);
 }
 
 function isSafeCleanupCommand(commandText, toolName) {
@@ -965,36 +896,39 @@ function isSafeCleanupCommand(commandText, toolName) {
 
   const details = getRmCommandDetails(commandText, toolName);
   const candidateTargets = details?.targets ?? [];
-  return candidateTargets.length > 0 && candidateTargets.every(isSafeCleanupTarget);
+  return (
+    details !== undefined &&
+    !details.unsafeOptions &&
+    candidateTargets.length > 0 &&
+    candidateTargets.every(isSafeCleanupTarget)
+  );
 }
 
 function isPowerShellTool(toolName) {
   return /\b(?:powershell|pwsh)\b/i.test(String(toolName ?? ""));
 }
 
-function isPowerShellRecursiveParameter(flag) {
+function isPowerShellDeleteOption(flag) {
   if (!/^-[a-z]+$/i.test(flag) || flag.startsWith("--")) {
     return false;
   }
   const parameterName = flag.slice(1).toLowerCase();
-  return parameterName === "recursive" || "recurse".startsWith(parameterName);
+  return (
+    (parameterName === "recursive" || "recurse".startsWith(parameterName)) ||
+    (parameterName.length >= 2 && "force".startsWith(parameterName))
+  );
 }
 
-function isPowerShellForceParameter(flag) {
-  if (!/^-[a-z]+$/i.test(flag) || flag.startsWith("--")) {
-    return false;
-  }
-  const parameterName = flag.slice(1).toLowerCase();
-  return parameterName.length >= 2 && "force".startsWith(parameterName);
+function isUnixRmOption(flag) {
+  return flag === "--recursive" || flag === "--force" || /^-[rf]+$/i.test(flag);
 }
 
-function isUnixRmShortOptionCluster(flag) {
-  // Match any single-dash short-option cluster (letters only) rather than an
-  // allow-list of known letters. An allow-list fails open: an unrecognized letter
-  // such as the `x` in `rm -rfx foo` would discard the
-  // whole cluster and hide the recursive/force flags it contains. Matching all
-  // letter clusters fails safe instead.
-  return /^-[a-z]+$/i.test(flag);
+function isQuotedCommandToken(token) {
+  const value = String(token ?? "");
+  return (
+    (value.startsWith("'") && value.endsWith("'")) ||
+    (value.startsWith('"') && value.endsWith('"'))
+  );
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
@@ -1033,7 +967,7 @@ function dropCopyDestinationToken(tokens) {
   return lastPathIndex < 0 ? tokens : tokens.filter((_, index) => index !== lastPathIndex);
 }
 
-export function evaluateDirectResourceAccess(policy, context) {
+function evaluateDirectResourceAccess(policy, context) {
   const candidates = collectDirectResourceCandidates({
     cwd: context.cwd,
     toolArgs: context.rawToolArgs,
@@ -1098,6 +1032,19 @@ function collectDirectResourceCandidates({ toolArgs, toolName, cwd }) {
       return;
     }
 
+    if (isPatchTool(toolName)) {
+      for (const patchPath of extractPatchPaths(value)) {
+        const normalizedPath = normalizePathValue(patchPath, cwd);
+        if (normalizedPath) {
+          paths.push({
+            displayPath: patchPath,
+            normalizedPath,
+            operation: "write",
+          });
+        }
+      }
+    }
+
     if (!looksLikePathField(lastKey)) {
       return;
     }
@@ -1119,6 +1066,23 @@ function collectDirectResourceCandidates({ toolArgs, toolName, cwd }) {
     paths: dedupeBy(paths, (candidate) => `${candidate.operation}:${candidate.normalizedPath}`),
     urls: dedupeBy(urls, (candidate) => candidate.normalizedUrl),
   };
+}
+
+function isPatchTool(toolName) {
+  return /^(?:apply[_-]?patch|patch)$/i.test(String(toolName ?? ""));
+}
+
+function extractPatchPaths(patchText) {
+  const paths = [];
+  for (const line of String(patchText).split(/\r?\n/)) {
+    const match = line.match(
+      /^\*\*\* (?:(?:Update|Add|Delete) File|Move to):\s+(.+?)\s*$/,
+    );
+    if (match) {
+      paths.push(match[1]);
+    }
+  }
+  return paths;
 }
 
 function matchesDirectPathRule(rule, candidate) {
@@ -1226,9 +1190,13 @@ function normalizeCommandNameToken(token) {
 }
 
 function normalizeCommandPathToken(token) {
-  const cleaned = stripCommandToken(token).replace(/[\\]+/g, "/").replace(/\/+$/, "");
-  if (!cleaned || /^[|&]/.test(cleaned) || cleaned.includes("*")) {
+  const stripped = stripCommandToken(token);
+  const cleaned = stripped.replace(/[\\]+/g, "/");
+  if (!cleaned || /^[|&]/.test(cleaned)) {
     return "";
+  }
+  if (cleaned !== "/" && !/^[a-z]:\/?$/i.test(cleaned)) {
+    return cleaned.replace(/\/+$/, "");
   }
   return cleaned;
 }

@@ -115,23 +115,43 @@ test("rolled-over log (seam-anchored head) still verifies and accepts appends", 
   }
 });
 
-test("legacy truncated bare-array log (non-GENESIS head) is recovered, not bricked", async () => {
+test("legacy truncated bare-array log (non-GENESIS head) is invalid", async () => {
   const { dir, path } = await tmp();
   try {
     const entries = await chain(path, 4);
-    // A prior version wrote a bare array truncated to a non-GENESIS head, with
-    // no seam persisted.
+    // A bare array has no authenticated seam. Treating its surviving head as
+    // the anchor would let an attacker delete a prefix without detection.
     const truncated = entries.slice(1);
     await writeFile(path, JSON.stringify(truncated, null, 2) + "\n", "utf8");
 
     assert.notEqual(truncated[0].previousHash, GENESIS);
-    assert.equal((await getAuditStatus(path)).valid, true);
-    await appendAuditEntry(path, {
-      agentId: "a",
-      action: "tool.after-recovery",
-      decision: "allow",
-    });
-    assert.equal((await getAuditStatus(path)).valid, true);
+    assert.equal((await getAuditStatus(path)).valid, false);
+    await assert.rejects(
+      () =>
+        appendAuditEntry(path, {
+          agentId: "a",
+          action: "tool.after-truncation",
+          decision: "allow",
+        }),
+      /failed hash-chain verification/,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("append rejects invalid entry limits", async () => {
+  const { dir, path } = await tmp();
+  try {
+    await assert.rejects(
+      () =>
+        appendAuditEntry(
+          path,
+          { agentId: "a", action: "tool.invalid-limit", decision: "allow" },
+          { limit: 0 },
+        ),
+      /positive integer/,
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

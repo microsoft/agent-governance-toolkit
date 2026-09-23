@@ -1,8 +1,9 @@
 # Reproduce
 
 Show AGT governing a real headless Codex run: the plugin **blocks a policy-denied command
-before it executes** and records the decision in a tamper-evident audit log. Verified on
-Codex `0.144.6`.
+before it executes** and records the decision in a tamper-evident audit log. The process-boundary
+tests cover the same hook payload and response contract; verify the installed Codex version before
+running the live reproduction.
 
 ## 1. Install
 
@@ -53,10 +54,10 @@ hook: PreToolUse Blocked
 
 Two lines that are easy to misread:
 
-- **`hook: PreToolUse Failed` on a benign command** (e.g. the model first checking that
-  `./scratch` exists): AGT answered `ask` (audited as `review`), and this headless mode
-  (`approval policy: never`) cannot prompt, so Codex reports the hook as failed and runs the
-  command. It is not an AGT error; the decision is in the audit log.
+- **`hook: PreToolUse Blocked` on a benign command** (e.g. the model first checking that
+  `./scratch` exists): a policy review is mapped to `permissionDecision: "deny"` because
+  Codex does not support an interactive `ask` response. The decision is intentional and is
+  recorded as `deny` in the audit log.
 - **A block naming anything other than `agt-command-patterns`** (`rm -f style commands are
   not permitted`, read-only sandbox): that is Codex's *own* guard, meaning the AGT hooks did
   not run; check `codex plugin list` and the trust/bypass flags.
@@ -69,5 +70,6 @@ grep -o '"decision":[^,]*' "$SB/agt/audit-log.json"
 ```
 
 Expect `AGT plugin: agt-governance@agt  installed, enabled`, `Audit log: N entries, chain valid`,
-and decisions `allow` (prompt.submit), `review` (any benign tool calls), and `deny`: the
-blocked command is recorded as `"action": "tool.Bash", "decision": "deny"`.
+and decisions `allow` (prompt.submit) and `deny`: the blocked command is recorded as
+`"action": "tool.Bash", "decision": "deny"`. Policy reviews are also recorded as `deny`
+because Codex has no supported interactive review response.

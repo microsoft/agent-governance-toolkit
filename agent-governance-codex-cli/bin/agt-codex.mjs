@@ -28,8 +28,8 @@ const PLUGIN_NAME = "agt-governance";
 const MARKETPLACE_NAME = "agt";
 const PLUGIN_SELECTOR = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const CODEX_COMMAND = process.platform === "win32" ? process.env.ComSpec ?? "cmd.exe" : "codex";
-const CODEX_PREFIX_ARGS = process.platform === "win32" ? ["/d", "/s", "/c", "codex"] : [];
+const IS_WINDOWS = process.platform === "win32";
+const CODEX_COMMAND = IS_WINDOWS ? process.env.ComSpec ?? "cmd.exe" : "codex";
 
 /**
  * Resolve the target Codex home directory.
@@ -58,8 +58,33 @@ function resolveCodexHome(args) {
  */
 function codex(args, codexHome) {
   try {
-    const stdout = execFileSync(CODEX_COMMAND, [...CODEX_PREFIX_ARGS, ...args], {
-      env: { ...process.env, CODEX_HOME: codexHome },
+    const env = { ...process.env, CODEX_HOME: codexHome };
+    let commandArgs = args;
+    if (IS_WINDOWS) {
+      // `codex` is commonly installed as a `.cmd` shim on Windows. Passing
+      // user-controlled paths as separate cmd.exe arguments lets metacharacters
+      // such as `&` or `%TEMP%` change the command. Expand each argument from
+      // an environment variable exactly once, inside quotes, so cmd.exe cannot
+      // reinterpret its contents.
+      const argumentReferences = args.map((arg, index) => {
+        const value = String(arg);
+        if (/^[a-z0-9_@.+:/\\-]+$/i.test(value)) {
+          return value;
+        }
+        const variable = `AGT_CODEX_ARG_${process.pid}_${index}`;
+        env[variable] = value;
+        return `"%${variable}%"`;
+      });
+      commandArgs = [
+        "/d",
+        "/v:off",
+        "/s",
+        "/c",
+        `codex ${argumentReferences.join(" ")}`,
+      ];
+    }
+    const stdout = execFileSync(CODEX_COMMAND, commandArgs, {
+      env,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
