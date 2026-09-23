@@ -51,6 +51,9 @@ useDefault = true
     '''^ghp_secret123$''',
     '''^finalSecret42$''',
 
+    # Public AWS KMS key-spec enum flagged by the generic key detector.
+    '''^ECC_NIST_EDWARDS25519$''',
+
     # Canary-token example in the .NET SDK tutorial (docs/tutorials/19-dotnet-sdk.md)
     '''^SECRET-MARKER-xyz789$''',
   ]

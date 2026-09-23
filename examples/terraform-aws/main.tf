@@ -176,7 +176,7 @@ resource "aws_security_group" "agents" {
 
 resource "aws_kms_key" "receipt_signing" {
   description              = "AGT Ed25519 receipt signing key for ${local.name_prefix}"
-  customer_master_key_spec = "ECC_NIST_EDWARDS25519" #gitleaks:allow — AWS KMS key-spec enum, not a credential
+  customer_master_key_spec = "ECC_NIST_EDWARDS25519"
   key_usage                = "SIGN_VERIFY"
   deletion_window_in_days  = 30
 
