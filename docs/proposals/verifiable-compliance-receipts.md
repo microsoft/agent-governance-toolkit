@@ -46,6 +46,9 @@ the exact receipt payload before execution and cryptographically identifies the
 authorizer key. A verifier accepts this profile only when the authorizer key is
 configured as trusted and differs from the receipt signer key.
 
+The nonce is an auditable correlation value. Deployments that require replay
+prevention across receipt chains or sessions must maintain replay state.
+
 previousReceiptHash: Links to the previous receipt. Change any receipt and every receipt after it breaks.
 
 decision: permit or deny. If deny, the action never executed and the receipt proves the block happened.
@@ -59,6 +62,10 @@ A verifier checks three things:
 4. When required, external authorization validity. The authorization is unexpired,
    binds the exact receipt payload and nonce, and is signed by a configured trusted
    authorizer key distinct from the receipt signer.
+
+Offline verification evaluates expiration at the signed receipt timestamp. A live
+adapter evaluates expiration at execution time and fails closed when authorization
+has expired.
 
 No access to the operator's infrastructure is needed to validate the cryptographic
 claims. Whether an authorizer is operationally independent remains a deployment

@@ -12,7 +12,7 @@ import time
 import pytest
 
 from mcp_receipt_governed.adapter import McpReceiptAdapter
-from mcp_receipt_governed.receipt import ReceiptAuthorizationError, authorize_receipt
+from mcp_receipt_governed.receipt import ReceiptAuthorizationError, authorize_receipt, sign_receipt
 
 
 # ── Policy Evaluation ──
@@ -259,6 +259,7 @@ class TestSigning:
 
         def modifying_authorizer(receipt):
             receipt.tool_name = "DeleteFile"
+            sign_receipt(receipt, signing_key)
             return authorize_receipt(
                 receipt,
                 authorizer_seed,
@@ -273,7 +274,29 @@ class TestSigning:
             trusted_authorizer_keys=[authorizer_public_key],
         )
 
-        with pytest.raises(ReceiptAuthorizationError, match="modified the receipt payload"):
+        with pytest.raises(ReceiptAuthorizationError, match="modified the signed receipt"):
+            adapter.govern_tool_call(agent_did="did:mesh:a1", tool_name="ReadData")
+
+    def test_receipt_signer_cannot_be_a_trusted_authorizer(self, signing_key):
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        def external_authorizer(receipt):
+            return receipt
+
+        signer_public_key = (
+            Ed25519PrivateKey.from_private_bytes(bytes.fromhex(signing_key))
+            .public_key()
+            .public_bytes_raw()
+            .hex()
+        )
+        adapter = McpReceiptAdapter(
+            cedar_policy=self.POLICY,
+            signing_key_hex=signing_key,
+            external_authorizer=external_authorizer,
+            trusted_authorizer_keys=[signer_public_key],
+        )
+
+        with pytest.raises(ReceiptAuthorizationError, match="must not contain"):
             adapter.govern_tool_call(agent_did="did:mesh:a1", tool_name="ReadData")
 
     def test_external_authorizer_requires_signing_and_trust_configuration(self, authorizer_key):

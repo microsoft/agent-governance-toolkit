@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
@@ -141,18 +142,37 @@ class McpReceiptAdapter:
                 ) from exc
 
         if self._external_authorizer is not None:
+            original_receipt = (
+                receipt.payload_hash(),
+                receipt.signature,
+                receipt.signer_public_key,
+            )
+            signer_public_key = receipt.signer_public_key.lower()
+            trusted_authorizer_keys = {
+                key.lower() for key in self._trusted_authorizer_keys if isinstance(key, str)
+            }
+            if signer_public_key in trusted_authorizer_keys:
+                raise ReceiptAuthorizationError(
+                    "trusted_authorizer_keys must not contain the receipt signer key."
+                )
+
             authorized_receipt = self._external_authorizer(receipt)
             if authorized_receipt is not receipt:
                 raise ReceiptAuthorizationError(
                     "External authorizer must return the original receipt after authorizing it."
                 )
-            if not verify_receipt(receipt):
+            if original_receipt != (
+                receipt.payload_hash(),
+                receipt.signature,
+                receipt.signer_public_key,
+            ):
                 raise ReceiptAuthorizationError(
-                    "External authorizer modified the receipt payload or invalidated its signature."
+                    "External authorizer modified the signed receipt or replaced its signer."
                 )
             authorization_errors = verify_receipt_authorization(
                 receipt,
                 trusted_authorizer_keys=list(self._trusted_authorizer_keys),
+                now=time.time(),
             )
             if authorization_errors:
                 raise ReceiptAuthorizationError(

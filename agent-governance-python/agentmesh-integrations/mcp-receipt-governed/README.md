@@ -100,12 +100,15 @@ the authorization:
 
 Keep the authorizer signing key in an independently operated service or hardware
 boundary. Different keys alone cannot prove organizational independence.
+The nonce is an auditable correlation value; deployments need durable replay
+tracking if they require replay prevention across receipt chains or sessions.
 
 Offline consumers can require this profile with
 `verify_receipt_chain(..., trusted_authorizer_keys=[...],
 require_external_authorization=True)`. The command-line verifier accepts the
 equivalent `--trusted-authorizer-key` and `--require-external-authorization`
-options.
+options. Offline verification evaluates expiration against the signed receipt
+timestamp; a live adapter evaluates it against the current time before execution.
 
 ## License
 

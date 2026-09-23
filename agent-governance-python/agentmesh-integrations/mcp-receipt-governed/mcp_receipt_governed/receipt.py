@@ -209,9 +209,12 @@ def authorize_receipt(
     """Attach an external pre-execution authorization to a signed receipt.
 
     The authorizer signature is over the receipt payload hash, authorizer identity
-    and key, expiration, and nonce. The authorizer key must differ from the receipt
-    signer key; independent custody of that key remains a deployment requirement.
+    expiration, and nonce. The authorizer key is identified by signature
+    verification and must differ from the receipt signer key; independent custody
+    of that key remains a deployment requirement.
     """
+    if not verify_receipt(receipt):
+        raise ReceiptAuthorizationError("External authorization requires a valid signed receipt.")
     if not authorizer_id:
         raise ReceiptAuthorizationError("External authorization requires a non-empty authorizer_id.")
     if (
@@ -237,14 +240,27 @@ def authorize_receipt(
     receipt.authorizer_id = authorizer_id
     receipt.authorization_expires_at = expires_at
     receipt.authorization_nonce = nonce or str(uuid.uuid4())
-    sign_receipt(
-        receipt,
-        private_key_hex,
-        payload=receipt.canonical_authorization_payload().encode(),
-        signature_field="authorization_signature",
-        public_key_field="authorizer_public_key",
-    )
-    if receipt.authorizer_public_key == receipt.signer_public_key:
+    try:
+        sign_receipt(
+            receipt,
+            private_key_hex,
+            payload=receipt.canonical_authorization_payload().encode(),
+            signature_field="authorization_signature",
+            public_key_field="authorizer_public_key",
+        )
+    except Exception:
+        (
+            receipt.assurance_level,
+            receipt.authorizer_id,
+            receipt.authorization_expires_at,
+            receipt.authorization_nonce,
+            receipt.authorization_signature,
+            receipt.authorizer_public_key,
+        ) = original_authorization
+        raise
+    if _normalize_public_key(receipt.authorizer_public_key) == _normalize_public_key(
+        receipt.signer_public_key
+    ):
         (
             receipt.assurance_level,
             receipt.authorizer_id,
@@ -264,6 +280,11 @@ def _is_hex(value: object, expected_length: int) -> bool:
         and len(value) == expected_length
         and all(char in "0123456789abcdefABCDEF" for char in value)
     )
+
+
+def _normalize_public_key(value: object) -> Optional[str]:
+    """Return an Ed25519 public key in canonical hexadecimal form."""
+    return value.lower() if _is_hex(value, 64) else None
 
 
 def _has_authorization_metadata(receipt: GovernanceReceipt) -> bool:
@@ -319,23 +340,40 @@ def verify_receipt_authorization(
         errors.append("External authorization has a malformed authorizer_public_key.")
     if not _is_hex(receipt.authorization_signature, 128):
         errors.append("External authorization has a malformed authorization_signature.")
-    if receipt.authorizer_public_key == receipt.signer_public_key:
+    authorizer_public_key = _normalize_public_key(receipt.authorizer_public_key)
+    signer_public_key = _normalize_public_key(receipt.signer_public_key)
+    if authorizer_public_key is not None and authorizer_public_key == signer_public_key:
         errors.append("External authorizer key must differ from the receipt signer key.")
-    verification_time = time.time() if now is None else now
+    if not verify_receipt(receipt):
+        errors.append("External authorization requires a valid receipt signature.")
+    verification_time = receipt.timestamp if now is None else now
+    if isinstance(verification_time, bool) or not isinstance(verification_time, (int, float)):
+        errors.append("External authorization has a malformed verification timestamp.")
+    elif not math.isfinite(verification_time):
+        errors.append("External authorization has a malformed verification timestamp.")
     if (
         isinstance(receipt.authorization_expires_at, (int, float))
         and not isinstance(receipt.authorization_expires_at, bool)
         and math.isfinite(receipt.authorization_expires_at)
+        and isinstance(verification_time, (int, float))
+        and not isinstance(verification_time, bool)
+        and math.isfinite(verification_time)
         and receipt.authorization_expires_at <= verification_time
     ):
         errors.append("External authorization has expired.")
 
     if not trusted_authorizer_keys:
         errors.append("No trusted authorizer keys are configured.")
-    elif _is_hex(receipt.authorizer_public_key, 64) and receipt.authorizer_public_key not in set(
-        trusted_authorizer_keys
-    ):
-        errors.append(f"Untrusted external authorizer {receipt.authorizer_public_key[:16]}… — receipt rejected.")
+    else:
+        trusted_keys = {
+            normalized
+            for key in trusted_authorizer_keys
+            if (normalized := _normalize_public_key(key)) is not None
+        }
+        if authorizer_public_key is not None and authorizer_public_key not in trusted_keys:
+            errors.append(
+                f"Untrusted external authorizer {authorizer_public_key[:16]}... - receipt rejected."
+            )
 
     if errors:
         return errors
