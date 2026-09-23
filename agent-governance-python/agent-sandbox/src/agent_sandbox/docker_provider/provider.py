@@ -1051,8 +1051,7 @@ class DockerSandboxProvider(SandboxProvider):
             [
                 "python3",
                 "-c",
-                "from pathlib import Path; "
-                "print(Path('/proc/self/attr/current').read_text(encoding='utf-8'), end='')",
+                "from pathlib import Path; print(Path('/proc/self/attr/current').read_text(encoding='utf-8'), end='')",
             ]
         )
         if (
