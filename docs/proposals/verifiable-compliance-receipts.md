@@ -42,9 +42,9 @@ the action.
 
 The optional **external-authorization** profile adds an authorizer identity and
 public key, expiration, nonce, and a second Ed25519 signature. That signature binds
-the exact receipt payload before execution. A verifier accepts this profile only
-when the authorizer key is configured as trusted and differs from the receipt
-signer key.
+the exact receipt payload before execution and cryptographically identifies the
+authorizer key. A verifier accepts this profile only when the authorizer key is
+configured as trusted and differs from the receipt signer key.
 
 previousReceiptHash: Links to the previous receipt. Change any receipt and every receipt after it breaks.
 

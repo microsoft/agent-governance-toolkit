@@ -79,13 +79,11 @@ class GovernanceReceipt:
             self.authorizer_id is None
             or self.authorization_expires_at is None
             or self.authorization_nonce is None
-            or self.authorizer_public_key is None
         ):
             raise ReceiptAuthorizationError("External authorization metadata is incomplete.")
 
         data = {
             "authorizer_id": self.authorizer_id,
-            "authorizer_public_key": self.authorizer_public_key,
             "authorization_expires_at": self.authorization_expires_at,
             "authorization_nonce": self.authorization_nonce,
             "receipt_payload_hash": self.payload_hash(),
@@ -157,26 +155,42 @@ def hash_tool_args(tool_args: Optional[Dict[str, Any]]) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def sign_receipt(receipt: GovernanceReceipt, private_key_hex: str) -> GovernanceReceipt:
+def sign_receipt(
+    receipt: GovernanceReceipt,
+    private_key_hex: str,
+    *,
+    payload: Optional[bytes] = None,
+    signature_field: str = "signature",
+    public_key_field: str = "signer_public_key",
+) -> GovernanceReceipt:
     """Sign a receipt with an Ed25519 private key (hex-encoded 32-byte seed)."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
     private_key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_key_hex))
-    payload = receipt.canonical_payload().encode()
-    receipt.signature = private_key.sign(payload).hex()
-    receipt.signer_public_key = private_key.public_key().public_bytes_raw().hex()
+    signed_payload = receipt.canonical_payload().encode() if payload is None else payload
+    setattr(receipt, signature_field, private_key.sign(signed_payload).hex())
+    setattr(receipt, public_key_field, private_key.public_key().public_bytes_raw().hex())
     return receipt
 
 
-def verify_receipt(receipt: GovernanceReceipt) -> bool:
+def verify_receipt(
+    receipt: GovernanceReceipt,
+    *,
+    payload: Optional[bytes] = None,
+    signature: Optional[str] = None,
+    signer_public_key: Optional[str] = None,
+) -> bool:
     """Verify the Ed25519 signature on a receipt. Returns ``False`` if unsigned or invalid."""
-    if not receipt.signature or not receipt.signer_public_key:
+    signature_value = receipt.signature if signature is None else signature
+    public_key_value = receipt.signer_public_key if signer_public_key is None else signer_public_key
+    if not signature_value or not public_key_value:
         return False
     try:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-        public_key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(receipt.signer_public_key))
-        public_key.verify(bytes.fromhex(receipt.signature), receipt.canonical_payload().encode())
+        public_key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key_value))
+        signed_payload = receipt.canonical_payload().encode() if payload is None else payload
+        public_key.verify(bytes.fromhex(signature_value), signed_payload)
         return True
     except ImportError as exc:
         raise ImportError("The 'cryptography' library is required for Ed25519 signature verification.") from exc
@@ -198,8 +212,6 @@ def authorize_receipt(
     and key, expiration, and nonce. The authorizer key must differ from the receipt
     signer key; independent custody of that key remains a deployment requirement.
     """
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
     if not authorizer_id:
         raise ReceiptAuthorizationError("External authorization requires a non-empty authorizer_id.")
     if (
@@ -212,17 +224,37 @@ def authorize_receipt(
             "External authorization expiration must be a finite timestamp in the future."
         )
 
-    private_key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_key_hex))
-    authorizer_public_key = private_key.public_key().public_bytes_raw().hex()
-    if authorizer_public_key == receipt.signer_public_key:
-        raise ReceiptAuthorizationError("External authorizer key must differ from the receipt signer key.")
+    original_authorization = (
+        receipt.assurance_level,
+        receipt.authorizer_id,
+        receipt.authorization_expires_at,
+        receipt.authorization_nonce,
+        receipt.authorization_signature,
+        receipt.authorizer_public_key,
+    )
 
     receipt.assurance_level = "externally_authorized"
     receipt.authorizer_id = authorizer_id
     receipt.authorization_expires_at = expires_at
     receipt.authorization_nonce = nonce or str(uuid.uuid4())
-    receipt.authorizer_public_key = authorizer_public_key
-    receipt.authorization_signature = private_key.sign(receipt.canonical_authorization_payload().encode()).hex()
+    sign_receipt(
+        receipt,
+        private_key_hex,
+        payload=receipt.canonical_authorization_payload().encode(),
+        signature_field="authorization_signature",
+        public_key_field="authorizer_public_key",
+    )
+    if receipt.authorizer_public_key == receipt.signer_public_key:
+        (
+            receipt.assurance_level,
+            receipt.authorizer_id,
+            receipt.authorization_expires_at,
+            receipt.authorization_nonce,
+            receipt.authorization_signature,
+            receipt.authorizer_public_key,
+        ) = original_authorization
+        raise ReceiptAuthorizationError("External authorizer key must differ from the receipt signer key.")
+
     return receipt
 
 
@@ -310,18 +342,12 @@ def verify_receipt_authorization(
 
     assert isinstance(receipt.authorizer_public_key, str)
     assert isinstance(receipt.authorization_signature, str)
-    try:
-        from cryptography.exceptions import InvalidSignature
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
-        public_key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(receipt.authorizer_public_key))
-        public_key.verify(
-            bytes.fromhex(receipt.authorization_signature),
-            receipt.canonical_authorization_payload().encode(),
-        )
-    except ImportError as exc:
-        raise ImportError("The 'cryptography' library is required for authorization verification.") from exc
-    except InvalidSignature:
+    if not verify_receipt(
+        receipt,
+        payload=receipt.canonical_authorization_payload().encode(),
+        signature=receipt.authorization_signature,
+        signer_public_key=receipt.authorizer_public_key,
+    ):
         return ["External authorization signature is invalid."]
 
     return []

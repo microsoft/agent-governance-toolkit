@@ -46,8 +46,8 @@ def authorizer_key():
 
         key = Ed25519PrivateKey.generate()
         return key.private_bytes_raw().hex(), key.public_key().public_bytes_raw().hex()
-    except ImportError:
-        pytest.skip("cryptography not installed")
+    except ImportError as exc:
+        raise pytest.skip.Exception("cryptography not installed") from exc
 
 
 def _make_chain(*receipt_ids, sign_with=None):

@@ -26,8 +26,8 @@ def ed25519_keys():
             authorizer.private_bytes_raw().hex(),
             authorizer.public_key().public_bytes_raw().hex(),
         )
-    except ImportError:
-        pytest.skip("cryptography not installed")
+    except ImportError as exc:
+        raise pytest.skip.Exception("cryptography not installed") from exc
 
 
 def test_verifier_accepts_trusted_external_authorization(tmp_path, ed25519_keys):
