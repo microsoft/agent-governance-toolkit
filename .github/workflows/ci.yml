@@ -77,6 +77,7 @@ jobs:
               - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
             integrations:
               - 'agent-governance-python/agentmesh-integrations/**'
+              - 'examples/flowise-governance/**'
             workflows:
               - '.github/workflows/**'
             rust:
@@ -474,7 +475,7 @@ jobs:
           fi
       - name: Upload coverage
         if: steps.gate.outputs.run == 'true'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
         with:
           files: agent-governance-python/${{ matrix.package }}/coverage.xml
           flags: ${{ matrix.package }}
@@ -1310,7 +1311,7 @@ jobs:
           docker buildx version
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
         with:
           # Use the daemon's built-in BuildKit (docker driver) instead of the
           # default docker-container driver. The container driver boots a

@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentmesh.governance.policy import PolicyEngine as _PolicyEngine
@@ -59,24 +59,30 @@ def create_sidecar_app() -> FastAPI:
         """Liveness probe."""
         return {"status": "ok", "component": "governance-sidecar"}
 
-    @app.get("/ready", tags=["health"])
-    async def ready() -> dict[str, Any]:
-        """Readiness probe. Reports loaded policy count."""
-        return {
-            "status": "ready",
+    def _readiness_response() -> JSONResponse:
+        generation = _policy_state[1]
+        payload: dict[str, Any] = {
+            "status": "ready" if generation.effective_rules > 0 else "not-ready",
             "component": "governance-sidecar",
-            **_policy_state[1].model_dump(exclude={"files"}),
+            **generation.model_dump(exclude={"files"}),
         }
+        status_code = 200 if generation.effective_rules > 0 else 503
+        return JSONResponse(status_code=status_code, content=payload)
+
+    @app.get("/ready", tags=["health"], response_model=None)
+    async def ready() -> JSONResponse:
+        """Readiness probe. Reports loaded policy count."""
+        return _readiness_response()
 
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:
         """Kubernetes-style liveness probe."""
         return {"status": "ok", "component": "governance-sidecar"}
 
-    @app.get("/readyz", tags=["health"])
-    async def readyz() -> dict[str, str]:
+    @app.get("/readyz", tags=["health"], response_model=None)
+    async def readyz() -> JSONResponse:
         """Kubernetes-style readiness probe."""
-        return {"status": "ready", "component": "governance-sidecar"}
+        return _readiness_response()
 
     # ── Metrics endpoint ─────────────────────────────────────────────
 
@@ -127,13 +133,19 @@ def create_sidecar_app() -> FastAPI:
         }
         engine, generation = _policy_state
 
-        # Fail-closed (#3536): if any policy file failed to load, deny all
-        # actions so a broken deny policy is not silently bypassed.
-        if generation.policies_failed > 0:
+        # Fail-closed (#3536): if any policy file failed to load, or the policy
+        # directory is unavailable, deny all actions so a broken deny policy is
+        # not silently bypassed by an empty or partial policy set.
+        if generation.policies_failed > 0 or generation.directory_status != "available":
+            reason = (
+                f"Policy set degraded: {generation.policies_failed} file(s) failed to load"
+                if generation.policies_failed > 0
+                else "Policy set degraded: policy directory is unavailable"
+            )
             return EvaluateResponse(
                 decision="deny",
                 matched_rule=None,
-                reason=f"Policy set degraded: {generation.policies_failed} file(s) failed to load",
+                reason=reason,
                 policy_name=None,
                 policy_set_id=generation.policy_set_id,
                 policy_set_status=generation.policy_set_status,
@@ -203,16 +215,18 @@ class PolicyFileLoad(BaseModel):
 
 
 class PolicyLoadGeneration(BaseModel):
-    """Immutable manifest of a completed load; counts refer to files, not unique names."""
+    """Immutable manifest of a completed load."""
 
     model_config = ConfigDict(frozen=True)
     policy_set_id: str
     policy_set_status: Literal["complete", "degraded", "rejected", "not_loaded"]
     policies_discovered: int
     policies_loaded: int
+    effective_rules: int = 0
     policies_failed: int
     directory_status: Literal["available", "unavailable", "not_loaded"]
     files: tuple[PolicyFileLoad, ...]
+    load_warnings: tuple[str, ...] = ()
 
 
 # ── Internal state ───────────────────────────────────────────────────
@@ -225,6 +239,7 @@ _policy_state = (
         policy_set_status="not_loaded",
         policies_discovered=0,
         policies_loaded=0,
+        effective_rules=0,
         policies_failed=0,
         directory_status="not_loaded",
         files=(),
@@ -240,6 +255,7 @@ def _load_policies() -> PolicyLoadGeneration:
 
     _policy_dir = os.getenv("AGT_POLICY_DIR", "/etc/agt/policies")
     engine = PolicyEngine()
+    loaded_policies: dict[str, Any] = {}
 
     policy_path = Path(_policy_dir)
     files = []
@@ -260,7 +276,8 @@ def _load_policies() -> PolicyLoadGeneration:
             try:
                 content = f.read_bytes()
                 digest = hashlib.sha256(content).hexdigest()
-                loader(content.decode("utf-8"))
+                policy = loader(content.decode("utf-8"))
+                loaded_policies[policy.name] = policy
             except Exception as exc:
                 error_type = type(exc).__name__
                 logger.warning("Skipped policy %r: %s", f.name, error_type)
@@ -279,6 +296,10 @@ def _load_policies() -> PolicyLoadGeneration:
     }
     canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
     failed = sum(entry.status == "failed" for entry in files)
+    effective_rules = sum(
+        sum(rule.enabled for rule in policy.rules)
+        for policy in loaded_policies.values()
+    )
 
     # Fail-closed (#3536 review): when files fail, publish the generation
     # as 'degraded' so evaluate_policy can deny based on policies_failed.
@@ -288,21 +309,33 @@ def _load_policies() -> PolicyLoadGeneration:
         failed_names = [e.name for e in files if e.status == "failed"]
         logger.error(
             "Policy load generation degraded: %d file(s) failed: %s",
-            failed, ", ".join(failed_names),
+            failed,
+            ", ".join(failed_names),
         )
 
     policy_set_status = "complete"
     if failed or directory_status == "unavailable":
         policy_set_status = "degraded"
 
+    load_warnings: tuple[str, ...] = ()
+    if effective_rules == 0:
+        warning = (
+            f"Policy load validation: no effective rules loaded from {_policy_dir}; "
+            "readiness remains blocked until an enabled policy rule is loaded."
+        )
+        logger.warning(warning)
+        load_warnings = (warning,)
+
     generation = PolicyLoadGeneration(
         policy_set_id="sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         policy_set_status=policy_set_status,
         policies_discovered=len(files),
         policies_loaded=len(files) - failed,
+        effective_rules=effective_rules,
         policies_failed=failed,
         directory_status=directory_status,
         files=tuple(files),
+        load_warnings=load_warnings,
     )
     serialized = generation.model_dump_json()
     _policy_state = (engine, generation)

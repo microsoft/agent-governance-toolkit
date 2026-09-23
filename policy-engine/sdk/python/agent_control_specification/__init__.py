@@ -39,6 +39,7 @@ from ._client import (
     validate_manifest_overlay,
 )
 from ._orchestration import AgentControl
+from . import schemas
 from ._host import (
     DEFAULT_APPROVAL_TIMEOUT_SECONDS,
     HostSession,
@@ -92,6 +93,7 @@ __all__ = [
     "HostSession",
     "SnapshotBuilder",
     "SnapshotSource",
+    "schemas",
     "run_sync",
     "AdapterUnsupportedError",
     "AgentControlLiteLLMGuardrail",

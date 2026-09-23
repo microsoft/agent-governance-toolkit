@@ -124,7 +124,8 @@
     "undecoded",
     "webmcp",
     "webmachinelearning",
-    "clusterfuzzlite"
+    "clusterfuzzlite",
+    "eqnull"
   ],
   "ignorePaths": [
     "**/node_modules/**",

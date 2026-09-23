@@ -67,7 +67,10 @@ AWSIAM
 Acta
 Actix
 AgentGovernance
+Agentflow
+Agentflows
 AgentMesh
+Agentmetry
 AgentOS
 AgentRateLimiter
 Amol
@@ -318,6 +321,7 @@ aexit
 agentchat
 agentframework
 agentidentity
+agentmeshentryhash
 agentrust
 agentshield
 agentveil
@@ -381,6 +385,7 @@ basenames
 behaviour
 behavioural
 bindgen
+blitzcrieg
 bluebubbles
 bmod
 bubblewrap
@@ -887,6 +892,7 @@ pytest
 pytestmark
 pythonhosted
 pythonstartup
+readyz
 pyupgrade
 pyyaml
 qualname
@@ -964,6 +970,7 @@ sarif
 sboms
 sbyte
 scak
+scandir
 schemaversion
 scikit
 scipy
@@ -1065,6 +1072,7 @@ tzdata
 ufeff
 unaliased
 uncallable
+uncompilable
 unconfigured
 unicodedata
 uninspectable

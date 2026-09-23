@@ -93,6 +93,10 @@ Tool wrappers also accept a `SnapshotBuilder` as `snapshot=` in place of a mappi
 
 Single-tool wrappers accept an optional snapshot-compatible tool call id: pass `tool_call_id=` to `AgentControl.run_tool()` / `protect_tool()`, or `agent_control_tool_call_id=` to adapter helpers such as `guard_tool()` / `guard_mcp_tool()`. When no id is supplied the snapshot omits `tool_call.id`.
 
+## Shipped schemas
+
+The `spec/schema` documents ship inside the package under `agent_control_specification.schemas`: `schemas.names()` lists them (`manifest`, `approval`, `cedar_advice` and the `wire/*` payload schemas), `schemas.text(name)` returns the JSON text and `schemas.load(name)` the parsed document. Validate advice and manifest payloads against these rather than a hand-copied contract; the files are copies of `policy-engine/spec/schema` and the test suite fails if they drift.
+
 ## Telemetry
 
 The Python SDK ships a pure-Python host-side telemetry layer. Pass a `telemetry_sink` to `AgentControl`, `from_native`, `from_path`, or `from_manifest_chain`, and every evaluation emits one redaction-safe `TelemetryEvent` to the sink. `telemetry_sink` accepts a single sink or a list of sinks (a list is fanned out through a `MultiSink`). The default `telemetry_sink=None` preserves the prior behavior with no events and no overhead beyond a `None` check. The native `PerfTelemetry` level is independent and still controls internal timing-detail capture only.
