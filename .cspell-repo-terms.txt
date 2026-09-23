@@ -1021,6 +1021,7 @@ spellcheck
 spellchecking
 spiffesvid
 splitlines
+keepends
 sprintf
 stacklevel
 startswith
