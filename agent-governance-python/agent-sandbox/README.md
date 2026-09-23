@@ -429,6 +429,8 @@ provider = DockerSandboxProvider(require_hardened_image=True)
 Build the image before creating the provider. `require_hardened_image=True`
 cannot be combined with a custom `image=`.
 
+<!-- cspell:ignore memfd -->
+
 ### AppArmor command-denylist profile (#3068 option 3)
 
 On a Linux Docker host with AppArmor, install the profile from the repository

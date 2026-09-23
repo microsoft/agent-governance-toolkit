@@ -1663,7 +1663,7 @@ class TestAppArmorProfileRules:
     _profile = Path(__file__).resolve().parents[1] / 'docker' / 'apparmor' / 'agt-sandbox'
     _dockerfile = Path(__file__).resolve().parents[1] / 'docker' / 'Dockerfile.sandbox'
 
-    def test_logged_binaries_have_exec_and_mmap_denials(self):
+    def test_logged_binaries_have_exec_denials(self):
         profile = self._profile.read_text(encoding='utf-8')
         dockerfile = self._dockerfile.read_text(encoding='utf-8')
         logged = set(re.search(r'^ARG DENIED_LOGGED_BIN_NAMES="([^"]+)"', dockerfile, re.M).group(1).split())

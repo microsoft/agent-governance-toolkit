@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# cspell:ignore memfd
 #
 # AppArmor command-denylist profile for the Docker sandbox (#3068).
 # Base confinement follows Docker's docker-default AppArmor profile
@@ -48,7 +49,7 @@ profile agt-sandbox flags=(attach_disconnected,mediate_deleted) {
   signal (send,receive) peer=@{profile_name},
   ptrace (read,trace) peer=@{profile_name},
 
-  # Deny read, execute and executable mmap of selected binaries even when
+  # Deny read, execute and executable memory mapping of selected binaries even when
   # invoked via the dynamic loader. Keep these names aligned with
   # DENIED_LOGGED_BIN_NAMES in docker/Dockerfile.sandbox. Path-based rules
   # cannot restrict a renamed binary at an arbitrary location.
