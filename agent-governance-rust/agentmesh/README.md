@@ -460,8 +460,13 @@ SHA-256 hash-chained audit log for tamper detection.
 |---|---|
 | `AuditLogger::new()` | Create an audit logger |
 | `logger.log(agent_id, action, decision)` | Append an audit entry |
+| `logger.log_with_skill_audit_metadata(...)` | Append trusted skill provenance and hash-only context snapshots |
 | `logger.verify()` | Verify chain integrity |
 | `logger.get_entries(filter)` | Query entries by filter |
+
+Use `TrustedSkillMetadataSource::new(...)` only with framework-owned skill
+metadata. The framework adapter hashes request payloads as context but never
+parses them for skill identity; unsupported context values omit their hash.
 
 ### Identity (`identity.rs`)
 
