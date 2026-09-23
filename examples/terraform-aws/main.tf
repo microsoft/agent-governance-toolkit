@@ -6,10 +6,9 @@
 # Provisions all AWS resources required to run AGT-governed agents in production:
 #   - VPC with private subnets (agents) and public subnets (NAT gateways)
 #   - Egress-only security group for agent workloads (HTTPS only, no inbound)
-#   - KMS key (auto-rotating) for Ed25519 receipt signing and audit log encryption
+#   - Ed25519 KMS key for receipt signing and a separate rotating key for encryption
 #   - S3 bucket with versioning, KMS encryption, lifecycle tiers, and TLS enforcement
 #   - IAM role + instance profile with least-privilege permissions
-#   - Secrets Manager secret for the Ed25519 signing key PEM
 #   - SSM parameters for all AGT_* governance config values agents read at runtime
 #   - CloudWatch Log Group for structured governance events
 #
@@ -28,11 +27,11 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0, < 6.0"
+      version = "= 6.64.0"
     }
     random = {
       source  = "hashicorp/random"
-      version = ">= 3.5"
+      version = "= 3.9.1"
     }
   }
 }
@@ -136,7 +135,7 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.this[count.index].id
+    nat_gateway_id = aws_nat_gateway.this[count.index % length(aws_nat_gateway.this)].id
   }
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-private-rt-${count.index + 1}" })
 }
@@ -173,14 +172,13 @@ resource "aws_security_group" "agents" {
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-agents-sg" })
 }
 
-# ── KMS key for receipt signing and audit log encryption ─────────────────────
+# ── KMS keys for receipt signing and data encryption ──────────────────────────
 
 resource "aws_kms_key" "receipt_signing" {
-  description             = "AGT governance receipt signing key for ${local.name_prefix}"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-  rotation_period_in_days = var.receipt_signing_key_rotation_days
-  multi_region            = false
+  description              = "AGT Ed25519 receipt signing key for ${local.name_prefix}"
+  customer_master_key_spec = "ECC_NIST_EDWARDS25519"
+  key_usage                = "SIGN_VERIFY"
+  deletion_window_in_days  = 30
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -195,18 +193,16 @@ resource "aws_kms_key" "receipt_signing" {
         Resource = "*"
       },
       {
-        Sid    = "AllowAgentRole"
+        Sid    = "AllowAgentRoleToSignReceipts"
         Effect = "Allow"
         Principal = {
           AWS = aws_iam_role.agent.arn
         }
         Action = [
-          "kms:GenerateDataKeyPair",
+          "kms:DescribeKey",
+          "kms:GetPublicKey",
           "kms:Sign",
           "kms:Verify",
-          "kms:DescribeKey",
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
         ]
         Resource = "*"
       }
@@ -219,6 +215,71 @@ resource "aws_kms_key" "receipt_signing" {
 resource "aws_kms_alias" "receipt_signing" {
   name          = "alias/${local.name_prefix}-receipt-signing"
   target_key_id = aws_kms_key.receipt_signing.key_id
+}
+
+resource "aws_kms_key" "encryption" {
+  description              = "AGT audit data encryption key for ${local.name_prefix}"
+  customer_master_key_spec = "SYMMETRIC_DEFAULT"
+  key_usage                = "ENCRYPT_DECRYPT"
+  deletion_window_in_days  = 30
+  enable_key_rotation      = true
+  rotation_period_in_days  = 365
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowAgentRoleToEncryptAuditData"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.agent.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GenerateDataKey",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudWatchLogsToEncryptLogGroup"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey",
+          "kms:ReEncryptFrom",
+          "kms:ReEncryptTo",
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/agt/${local.name_prefix}/governance"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-encryption" })
+}
+
+resource "aws_kms_alias" "encryption" {
+  name          = "alias/${local.name_prefix}-encryption"
+  target_key_id = aws_kms_key.encryption.key_id
 }
 
 # ── S3 audit log bucket ───────────────────────────────────────────────────────
@@ -246,7 +307,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs" {
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.receipt_signing.arn
+      kms_master_key_id = aws_kms_key.encryption.arn
     }
     bucket_key_enabled = true
   }
@@ -276,7 +337,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
     }
 
     noncurrent_version_expiration {
-      noncurrent_days = 30
+      noncurrent_days = var.retention_days
     }
   }
 }
@@ -349,7 +410,7 @@ data "aws_iam_policy_document" "agent_permissions" {
       "ssm:GetParameters",
       "ssm:GetParametersByPath",
     ]
-    resources = ["arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${local.name_prefix}/agt/*"]
+    resources = ["arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name_prefix}/agt/*"]
   }
 
   statement {
@@ -359,22 +420,23 @@ data "aws_iam_policy_document" "agent_permissions" {
   }
 
   statement {
-    effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.signing_key.arn]
+    effect = "Allow"
+    actions = [
+      "kms:DescribeKey",
+      "kms:GetPublicKey",
+      "kms:Sign",
+      "kms:Verify",
+    ]
+    resources = [aws_kms_key.receipt_signing.arn]
   }
 
   statement {
     effect = "Allow"
     actions = [
-      "kms:GenerateDataKeyPair",
-      "kms:Sign",
-      "kms:Verify",
-      "kms:DescribeKey",
       "kms:Decrypt",
       "kms:GenerateDataKey",
     ]
-    resources = [aws_kms_key.receipt_signing.arn]
+    resources = [aws_kms_key.encryption.arn]
   }
 
   statement {
@@ -403,17 +465,6 @@ resource "aws_iam_instance_profile" "agent" {
   name = "${local.name_prefix}-agent-profile"
   role = aws_iam_role.agent.name
   tags = local.common_tags
-}
-
-# ── Secrets Manager — Ed25519 signing key ────────────────────────────────────
-
-resource "aws_secretsmanager_secret" "signing_key" {
-  name                    = "${local.name_prefix}/agt/signing-key"
-  description             = "Ed25519 private key PEM for AGT governance receipt signing."
-  recovery_window_in_days = var.environment == "prod" ? 30 : 7
-  kms_key_id              = aws_kms_key.receipt_signing.arn
-
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-signing-key" })
 }
 
 # ── SSM parameters — AGT governance config ────────────────────────────────────
@@ -455,6 +506,13 @@ resource "aws_ssm_parameter" "kill_switch_enabled" {
   tags  = local.common_tags
 }
 
+resource "aws_ssm_parameter" "retention_days" {
+  name  = "/${local.name_prefix}/agt/retention-days"
+  type  = "String"
+  value = tostring(var.retention_days)
+  tags  = local.common_tags
+}
+
 resource "aws_ssm_parameter" "audit_bucket" {
   name  = "/${local.name_prefix}/agt/audit-bucket"
   type  = "String"
@@ -466,8 +524,8 @@ resource "aws_ssm_parameter" "audit_bucket" {
 
 resource "aws_cloudwatch_log_group" "governance" {
   name              = "/agt/${local.name_prefix}/governance"
-  retention_in_days = min(var.retention_days, 365)
-  kms_key_id        = aws_kms_key.receipt_signing.arn
+  retention_in_days = var.retention_days
+  kms_key_id        = aws_kms_key.encryption.arn
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-governance-logs" })
 }

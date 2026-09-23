@@ -22,19 +22,19 @@ EXAMPLE_DIR = Path(__file__).parent
 
 @pytest.fixture(scope="module")
 def main_tf() -> dict:
-    with open(EXAMPLE_DIR / "main.tf") as f:
+    with open(EXAMPLE_DIR / "main.tf", encoding="utf-8") as f:
         return hcl2.load(f)
 
 
 @pytest.fixture(scope="module")
 def variables_tf() -> dict:
-    with open(EXAMPLE_DIR / "variables.tf") as f:
+    with open(EXAMPLE_DIR / "variables.tf", encoding="utf-8") as f:
         return hcl2.load(f)
 
 
 @pytest.fixture(scope="module")
 def outputs_tf() -> dict:
-    with open(EXAMPLE_DIR / "outputs.tf") as f:
+    with open(EXAMPLE_DIR / "outputs.tf", encoding="utf-8") as f:
         return hcl2.load(f)
 
 
@@ -75,8 +75,8 @@ class TestTerraformBlock:
     def test_azurerm_provider_version_constraint(self, main_tf):
         providers = main_tf["terraform"][0]["required_providers"][0]
         version = providers["azurerm"].get("version", "")
-        assert ">= 3.85" in version or "~> 3" in version or ">= 4" in version, (
-            f"azurerm provider version constraint too loose: {version}"
+        assert version.strip('"') == "= 4.81.0", (
+            f"azurerm provider should pin to the tested version 4.x release: {version}"
         )
 
     def test_azurerm_provider_features_block_present(self, main_tf):
@@ -127,9 +127,9 @@ class TestRequiredResources:
             "azurerm_key_vault missing — required for Ed25519 signing key"
         )
 
-    def test_key_vault_secret_present(self, main_tf):
-        assert self._resource_names(main_tf, "azurerm_key_vault_secret"), (
-            "azurerm_key_vault_secret missing — Ed25519 signing key must be stored"
+    def test_signing_secret_is_not_managed_by_terraform(self, main_tf):
+        assert not self._resource_names(main_tf, "azurerm_key_vault_secret"), (
+            "Signing-key values must be populated out of band so the private key is not stored in Terraform state"
         )
 
     def test_storage_account_present(self, main_tf):
@@ -152,6 +152,19 @@ class TestRequiredResources:
             "azurerm_app_configuration missing — required for AGT_* governance config"
         )
 
+    def test_app_configuration_name_has_unique_suffix(self, main_tf):
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
+        assert 'resource "random_string" "appconfig_suffix"' in raw
+        assert "random_string.appconfig_suffix.result" in raw
+
+    def test_app_configuration_private_endpoint_present(self, main_tf):
+        assert self._resource_names(main_tf, "azurerm_private_endpoint"), (
+            "Production App Configuration must have a private endpoint"
+        )
+        assert self._resource_names(main_tf, "azurerm_private_dns_zone"), (
+            "Production App Configuration private link must have private DNS"
+        )
+
     def test_log_analytics_workspace_present(self, main_tf):
         assert self._resource_names(main_tf, "azurerm_log_analytics_workspace"), (
             "azurerm_log_analytics_workspace missing — required for governance events"
@@ -170,6 +183,7 @@ class TestAppConfigurationKeys:
         "rate_limit_rpm",
         "audit_enabled",
         "kill_switch_enabled",
+        "retention_days",
         "audit_container",
     }
 
@@ -197,14 +211,30 @@ class TestAppConfigurationKeys:
     def test_kill_switch_key_present(self, main_tf):
         assert "kill_switch_enabled" in self._appconfig_key_names(main_tf)
 
+    def test_retention_days_key_present(self, main_tf):
+        assert "retention_days" in self._appconfig_key_names(main_tf)
+
     def test_audit_container_key_present(self, main_tf):
         assert "audit_container" in self._appconfig_key_names(main_tf)
 
     def test_keys_have_environment_label(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         assert "var.environment" in raw or "${var.environment}" in raw, (
             "App Configuration keys must be labelled with var.environment"
         )
+
+    def test_app_configuration_disables_local_auth_and_locks_prod_network(self, main_tf):
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
+        app_configuration = next(
+            resource
+            for block in main_tf.get("resource", [])
+            if '"azurerm_app_configuration"' in block
+            for resource in block['"azurerm_app_configuration"'].values()
+        )
+        assert app_configuration.get("local_auth_enabled") is False
+        assert "Disabled" in str(app_configuration.get("public_network_access", ""))
+        assert "var.environment" in str(app_configuration.get("public_network_access", ""))
+        assert "App Configuration Data Owner" in raw
 
 
 # ── Key Vault security hardening ──────────────────────────────────────────────
@@ -224,18 +254,19 @@ class TestKeyVaultSecurity:
         for block in main_tf.get("resource", []):
             if '"azurerm_key_vault"' in block:
                 for _name, config in block['"azurerm_key_vault"'].items():
-                    assert config.get("enable_rbac_authorization") is True, (
+                    assert config.get("rbac_authorization_enabled") is True, (
                         "Key Vault must use RBAC authorization (not legacy access policies)"
                     )
 
     def test_key_vault_network_acls_deny_default(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
-        assert "default_action" in raw and "Deny" in raw, (
-            "Key Vault network_acls must set default_action = Deny"
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
+        assert 'var.environment == "prod" ? "Deny" : "Allow"' in raw, (
+            "Key Vault must deny network access by default in prod while allowing initial dev applies"
         )
+        assert "ip_rules                   = var.deployment_ip_ranges" in raw
 
     def test_key_vault_purge_protection_prod_conditional(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         assert "purge_protection_enabled" in raw, (
             "Key Vault must set purge_protection_enabled (true in prod)"
         )
@@ -243,11 +274,11 @@ class TestKeyVaultSecurity:
             "purge_protection_enabled should be conditional on environment == prod"
         )
 
-    def test_signing_key_secret_has_ignore_changes(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
-        assert "ignore_changes" in raw, (
-            "Key Vault signing key secret must have lifecycle ignore_changes = [value] "
-            "so terraform apply does not overwrite a real key with the placeholder"
+    def test_deployer_has_key_vault_secret_writer_role(self, main_tf):
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
+        assert 'role_definition_name = "Key Vault Secrets Officer"' in raw
+        assert "data.azurerm_client_config.current.object_id" in raw, (
+            "The Terraform identity needs Key Vault Secrets Officer to bootstrap the secret out of band"
         )
 
     def test_role_assignments_for_managed_identity(self, main_tf):
@@ -272,6 +303,12 @@ class TestStorageSecurity:
                     assert config.get("https_traffic_only_enabled") is True, (
                         "Storage account must enforce HTTPS-only traffic"
                     )
+                    assert config.get("shared_access_key_enabled") is False, (
+                        "Storage account must disable shared-key authentication"
+                    )
+                    assert config.get("infrastructure_encryption_enabled") is True, (
+                        "Storage account must enable infrastructure encryption"
+                    )
 
     def test_min_tls_version_set(self, main_tf):
         for block in main_tf.get("resource", []):
@@ -291,13 +328,13 @@ class TestStorageSecurity:
                     )
 
     def test_blob_versioning_enabled(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         assert "versioning_enabled" in raw, (
             "Blob versioning must be enabled on audit log storage"
         )
 
     def test_grs_replication_in_prod(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         assert "GRS" in raw, (
             "Storage account must use GRS replication in prod for durability"
         )
@@ -320,13 +357,13 @@ class TestStorageSecurity:
 
 class TestNSGRules:
     def test_deny_all_inbound_rule_present(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         assert "DenyAllInbound" in raw, (
             "NSG must have a DenyAllInbound rule — agent subnets must block all inbound"
         )
 
     def test_https_outbound_rule_present(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         assert "AllowHttpsOutbound" in raw or "443" in raw, (
             "NSG must allow HTTPS outbound (port 443) for LLM API calls"
         )
@@ -366,6 +403,13 @@ class TestManagedIdentityRBAC:
             "No App Configuration role assignment — managed identity needs to read AGT config"
         )
 
+    def test_terraform_identity_has_required_data_plane_roles(self):
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
+        assert 'role_definition_name = "App Configuration Data Owner"' in raw
+        assert 'role_definition_name = "Storage Blob Data Contributor"' in raw
+        assert 'role_definition_name = "Key Vault Secrets Officer"' in raw
+        assert "data.azurerm_client_config.current.object_id" in raw
+
 
 # ── Variables ─────────────────────────────────────────────────────────────────
 
@@ -382,6 +426,7 @@ class TestVariables:
         "audit_enabled",
         "kill_switch_enabled",
         "retention_days",
+        "deployment_ip_ranges",
         "vnet_address_space",
         "private_subnet_prefix",
         "tags",
@@ -396,16 +441,18 @@ class TestVariables:
         assert not missing, f"Variables missing from variables.tf: {missing}"
 
     def test_trust_level_has_validation(self, variables_tf):
-        raw = (EXAMPLE_DIR / "variables.tf").read_text()
+        raw = (EXAMPLE_DIR / "variables.tf").read_text(encoding="utf-8")
         assert "validation" in raw, "trust_level must have a validation block"
         assert "unclassified" in raw and "critical" in raw, (
             "trust_level validation must list all GovernanceTier values"
         )
 
-    def test_retention_days_minimum_enforced(self, variables_tf):
-        raw = (EXAMPLE_DIR / "variables.tf").read_text()
+    def test_retention_days_uses_supported_periods(self, variables_tf):
+        raw = (EXAMPLE_DIR / "variables.tf").read_text(encoding="utf-8")
         assert "retention_days" in raw
-        assert "180" in raw, "retention_days must enforce a minimum of 180 days"
+        assert "contains([180, 365]" in raw, (
+            "retention_days must be constrained to the supported cross-cloud retention periods"
+        )
 
     def test_environment_default_is_dev(self, variables_tf):
         for block in variables_tf.get("variable", []):
@@ -437,10 +484,11 @@ class TestOutputs:
         "managed_identity_id",
         "managed_identity_client_id",
         "key_vault_uri",
-        "signing_key_secret_id",
+        "signing_key_secret_name",
         "audit_storage_account_name",
         "audit_container_name",
         "app_configuration_endpoint",
+        "app_configuration_name",
         "log_analytics_workspace_id",
     }
 
@@ -471,8 +519,9 @@ class TestOutputs:
 
 class TestREADME:
     @pytest.fixture(scope="class")
-    def readme(self) -> str:
-        return (EXAMPLE_DIR / "README.md").read_text()
+    @classmethod
+    def readme(cls) -> str:
+        return (EXAMPLE_DIR / "README.md").read_text(encoding="utf-8")
 
     def test_quick_start_section_present(self, readme):
         assert "Quick Start" in readme or "quick start" in readme.lower()
@@ -487,6 +536,7 @@ class TestREADME:
         assert "AGT_TRUST_LEVEL" in readme
         assert "AGT_MAX_TOOL_CALLS" in readme
         assert "AGT_AUDIT_ENABLED" in readme
+        assert "AGT_RETENTION_DAYS" in readme
 
     def test_prod_vs_dev_differences_documented(self, readme):
         assert "prod" in readme.lower() and "dev" in readme.lower(), (
@@ -503,10 +553,11 @@ class TestREADME:
             "README must show how agents read AGT config from App Configuration at runtime"
         )
 
-    def test_ignore_changes_lifecycle_explained(self, readme):
-        assert "ignore_changes" in readme, (
-            "README must explain the ignore_changes lifecycle rule on the signing key secret"
-        )
+    def test_remote_state_and_production_network_requirements_documented(self, readme):
+        assert "remote backend" in readme.lower()
+        assert "private endpoint" in readme.lower()
+        assert "deployment_ip_ranges" in readme
+        assert "Key Vault Secrets Officer" in readme
 
     def test_known_limitations_documented(self, readme):
         assert "limitation" in readme.lower() or "Known" in readme

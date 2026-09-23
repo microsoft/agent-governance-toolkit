@@ -5,6 +5,9 @@ AGT-governed agents in production. All AGT governance config values are stored i
 App Configuration so agents read them at runtime — no governance config is baked
 into container images.
 
+The Standard App Configuration SKU is used in both environments so production can
+use private endpoints; account for its cost when deploying the dev example.
+
 ## What Gets Provisioned
 
 | Resource | Purpose |
@@ -13,8 +16,8 @@ into container images.
 | VNet + private subnet + NSG | Agents run in private subnet; all inbound denied |
 | User-Assigned Managed Identity | Passwordless agent authentication — no credentials in images |
 | Key Vault (Premium) | Stores the Ed25519 signing key; purge-protected in prod |
-| Storage Account + Blob container | Immutable audit log storage with lifecycle tiers and TLS-only |
-| App Configuration | All `AGT_*` governance config values agents read at startup |
+| Storage Account + Blob container | Versioned audit storage with lifecycle tiers, TLS-only, and shared-key auth disabled |
+| App Configuration (Standard) | Entra-only `AGT_*` settings; private endpoint in prod |
 | Log Analytics Workspace | Governance event ingestion and retention |
 
 ## Quick Start
@@ -26,6 +29,18 @@ terraform init
 terraform plan -var="project=myagent"
 terraform apply -var="project=myagent"
 ```
+
+The default `dev` environment keeps the data-plane endpoints reachable for the
+initial apply while requiring Azure AD authentication. The example uses local
+Terraform state by default. Before team or production use, configure an encrypted
+remote backend with access controls and locking; state contains infrastructure
+metadata and should be treated as sensitive.
+
+The identity running Terraform needs permission to create role assignments
+(typically Owner or User Access Administrator) and the App Configuration / Storage
+data-plane roles declared below. For production, pass the runner's public IPv4
+addresses in `deployment_ip_ranges` for Key Vault and Storage, and run Terraform
+from a host with network access to the App Configuration private endpoint.
 
 ## Governance Config Variables
 
@@ -39,33 +54,47 @@ All variables mirror `GovernanceConfig` in `agent-runtime/deploy.py` and the
 | `rate_limit_rpm` | `60` | `AGT_RATE_LIMIT_RPM` |
 | `audit_enabled` | `true` | `AGT_AUDIT_ENABLED` |
 | `kill_switch_enabled` | `true` | `AGT_KILL_SWITCH` |
-| `retention_days` | `180` | `AGT_RETENTION_DAYS` |
+| `retention_days` | `180` (`180` or `365`) | `AGT_RETENTION_DAYS` |
 
 `trust_level` accepts: `unclassified`, `basic`, `standard`, `elevated`, `critical` —
 matching the `GovernanceTier` enum in `github_enterprise.py`.
 
-## Example: Production Deployment
+## Production Configuration
+
+Run this example as a root Terraform configuration (it is not a published child
+module). Production Key Vault and Storage firewall rules deny traffic by default;
+add the Terraform runner's IPv4 addresses to an ignored `prod.tfvars` file:
 
 ```hcl
-module "governed_agent" {
-  source = "../../infra/terraform/modules/governed-agent-azure"
-
-  project     = "customer-support-agent"
-  environment = "prod"
-  location    = "eastus"
-
-  trust_level         = "elevated"
-  max_tool_calls      = 50
-  rate_limit_rpm      = 30
-  retention_days      = 365
-  kill_switch_enabled = true
-
-  tags = {
-    team    = "ai-platform"
-    contact = "ai-platform@example.com"
-  }
-}
+project              = "customer-support-agent"
+environment          = "prod"
+location             = "eastus"
+trust_level          = "elevated"
+max_tool_calls       = 50
+rate_limit_rpm       = 30
+retention_days       = 365
+kill_switch_enabled  = true
+deployment_ip_ranges = ["203.0.113.10/32"]
 ```
+
+App Configuration public access is disabled in production and a private endpoint
+is created in the agent VNet. Run `terraform apply` from that VNet or a connected
+network so Terraform can write the App Configuration keys over the private link.
+The Terraform identity is granted `App Configuration Data Owner`,
+`Storage Blob Data Contributor`, and `Key Vault Secrets Officer` at the narrow
+resource scopes needed to manage data-plane settings and bootstrap the signing key.
+
+For a first production rollout, bootstrap the VNet and private link before running
+the full apply from a connected Terraform runner:
+
+```bash
+terraform apply -var-file=prod.tfvars \
+  -target=azurerm_private_endpoint.app_configuration \
+  -target=azurerm_private_dns_zone_virtual_network_link.app_configuration
+```
+
+Use this targeted apply only for that initial network bootstrap; run the complete
+configuration on subsequent applies.
 
 ## How Agents Read Config at Runtime
 
@@ -74,7 +103,7 @@ Agents fetch governance config from App Configuration at startup:
 ```bash
 # List all AGT keys for this environment
 az appconfig kv list \
-  --name myagent-prod-appconfig \
+  --name "$(terraform output -raw app_configuration_name)" \
   --label prod
 ```
 
@@ -86,7 +115,7 @@ from azure.identity import ManagedIdentityCredential
 
 credential = ManagedIdentityCredential(client_id="<managed-identity-client-id>")
 client = AzureAppConfigurationClient(
-    base_url="https://myagent-prod-appconfig.azconfig.io",
+    base_url="<app_configuration_endpoint output>",
     credential=credential,
 )
 
@@ -99,8 +128,10 @@ settings = {s.key: s.value for s in client.list_configuration_settings(label_fil
 
 ## Populating the Ed25519 Signing Key
 
-The Key Vault secret is created with a placeholder value. Populate it after
-`terraform apply` via your CI pipeline or a bootstrap script:
+Terraform intentionally does not create or read the secret value: that would put
+the private key in Terraform state. After `terraform apply`, add the key from a
+network location allowed by the Key Vault firewall using the Terraform identity
+or another identity with `Key Vault Secrets Officer`:
 
 ```bash
 # Generate a key (requires cryptography library)
@@ -111,7 +142,7 @@ key = Ed25519PrivateKey.generate()
 print(key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()).decode())
 " > signing_key.pem
 
-# Upload to Key Vault
+# Upload to Key Vault; the private key value is not managed by Terraform.
 az keyvault secret set \
   --vault-name <keyvault-name> \
   --name agt-signing-key \
@@ -119,9 +150,6 @@ az keyvault secret set \
 
 rm signing_key.pem  # never store the PEM on disk in production
 ```
-
-The `ignore_changes = [value]` lifecycle rule on the Key Vault secret ensures
-subsequent `terraform apply` runs do not overwrite the real key with the placeholder.
 
 ## Prod vs Dev Differences
 
@@ -132,7 +160,8 @@ This example adjusts several settings automatically based on `environment`:
 | Key Vault purge protection | Disabled | Enabled |
 | Key Vault soft-delete retention | 7 days | 90 days |
 | Storage replication | LRS | GRS |
-| App Configuration SKU | free | standard |
+| Key Vault and Storage firewall | Allow (RBAC required) | Deny by default; allow configured runner IPs and agent subnet |
+| App Configuration endpoint | Public; Entra auth only | Private endpoint; public access disabled |
 
 ## Known Limitations
 
@@ -141,11 +170,24 @@ This example adjusts several settings automatically based on `environment`:
   storage and wire its path into App Configuration.
 - No AKS Helm chart or Container Apps definition is included — this example
   provisions the supporting infrastructure; the compute layer is left to the caller.
+- Blob versioning, soft-delete retention, and lifecycle management are configured,
+  but Azure immutable storage policies (WORM) are not; add them separately when
+  required by a compliance regime.
 
 ## Requirements
 
 | Tool | Version |
 |---|---|
 | Terraform / OpenTofu | >= 1.5.0 |
-| AzureRM provider | >= 3.85 |
+| AzureRM provider | 4.81.0 |
+| Random provider | 3.9.1 |
 | Azure CLI | >= 2.x (for `az login` and runtime config reads) |
+
+## Structural Tests
+
+From the repository root, install the pinned test dependencies and run the example tests:
+
+```bash
+python -m pip install -r examples/terraform-test-requirements.txt
+python -m pytest examples/terraform-azure/test_terraform_azure.py
+```

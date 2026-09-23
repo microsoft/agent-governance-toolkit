@@ -17,8 +17,13 @@ output "agent_security_group_id" {
 }
 
 output "kms_key_arn" {
-  description = "ARN of the KMS key used for receipt signing and audit log encryption."
+  description = "ARN of the non-exportable Ed25519 KMS key used for receipt signatures."
   value       = aws_kms_key.receipt_signing.arn
+}
+
+output "kms_encryption_key_arn" {
+  description = "ARN of the auto-rotating symmetric KMS key used to encrypt audit logs."
+  value       = aws_kms_key.encryption.arn
 }
 
 output "kms_key_alias" {
@@ -34,11 +39,6 @@ output "audit_log_bucket" {
 output "audit_log_bucket_arn" {
   description = "ARN of the audit log S3 bucket."
   value       = aws_s3_bucket.audit_logs.arn
-}
-
-output "signing_key_secret_arn" {
-  description = "ARN of the Secrets Manager secret holding the Ed25519 signing key PEM."
-  value       = aws_secretsmanager_secret.signing_key.arn
 }
 
 output "agent_iam_role_arn" {

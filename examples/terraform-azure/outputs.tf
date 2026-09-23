@@ -36,9 +36,9 @@ output "key_vault_id" {
   value       = azurerm_key_vault.this.id
 }
 
-output "signing_key_secret_id" {
-  description = "Key Vault secret ID for the Ed25519 governance receipt signing key."
-  value       = azurerm_key_vault_secret.signing_key.id
+output "signing_key_secret_name" {
+  description = "Name to use when adding the Ed25519 signing-key PEM to Key Vault out of band."
+  value       = "agt-signing-key"
 }
 
 output "audit_storage_account_name" {
@@ -54,6 +54,11 @@ output "audit_container_name" {
 output "app_configuration_endpoint" {
   description = "Endpoint of the App Configuration store. Agents read AGT_* config from here."
   value       = azurerm_app_configuration.governance.endpoint
+}
+
+output "app_configuration_name" {
+  description = "Globally unique name of the App Configuration store."
+  value       = azurerm_app_configuration.governance.name
 }
 
 output "log_analytics_workspace_id" {

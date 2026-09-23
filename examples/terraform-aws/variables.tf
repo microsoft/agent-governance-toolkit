@@ -66,13 +66,13 @@ variable "kill_switch_enabled" {
 }
 
 variable "retention_days" {
-  description = "Days to retain audit logs in S3 (AGT_RETENTION_DAYS). Must be >= 180."
+  description = "Days to retain audit logs in S3 and CloudWatch (AGT_RETENTION_DAYS)."
   type        = number
   default     = 180
 
   validation {
-    condition     = var.retention_days >= 180
-    error_message = "retention_days must be at least 180 for compliance."
+    condition     = contains([180, 365], var.retention_days)
+    error_message = "retention_days must be 180 or 365 so both AWS audit destinations use supported retention periods."
   }
 }
 
@@ -88,20 +88,22 @@ variable "private_subnet_cidrs" {
   description = "CIDR blocks for private subnets (one per AZ). Agent workloads run here."
   type        = list(string)
   default     = ["10.10.1.0/24", "10.10.2.0/24"]
+
+  validation {
+    condition     = length(var.private_subnet_cidrs) > 0
+    error_message = "At least one private subnet CIDR is required."
+  }
 }
 
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets hosting NAT gateways."
   type        = list(string)
   default     = ["10.10.101.0/24", "10.10.102.0/24"]
-}
 
-# ── Receipt signing ───────────────────────────────────────────────────────────
-
-variable "receipt_signing_key_rotation_days" {
-  description = "Automatic KMS key rotation period in days for governance receipt signing."
-  type        = number
-  default     = 365
+  validation {
+    condition     = length(var.public_subnet_cidrs) > 0
+    error_message = "At least one public subnet CIDR is required for NAT egress."
+  }
 }
 
 # ── Tags ──────────────────────────────────────────────────────────────────────

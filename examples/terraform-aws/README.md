@@ -11,10 +11,10 @@ container images.
 |---|---|
 | VPC + private/public subnets + NAT | Agents run in private subnets with no inbound access |
 | Security group (egress-only) | HTTPS-out only; blocks all inbound |
-| KMS key (auto-rotating) | Signs Ed25519 governance receipts; encrypts audit logs |
-| S3 bucket | Immutable audit log storage with lifecycle tiers and TLS enforcement |
-| IAM role + instance profile | Least-privilege access to SSM, S3, Secrets Manager, KMS, CloudWatch |
-| Secrets Manager secret | Holds the Ed25519 signing key PEM |
+| Ed25519 KMS key | Signs governance receipts without exporting private key material |
+| Symmetric KMS key (auto-rotating) | Encrypts S3 audit objects and CloudWatch log data |
+| S3 bucket | Versioned audit log storage with lifecycle tiers and TLS enforcement |
+| IAM role + instance profile | Least-privilege access to SSM, S3, KMS, and CloudWatch |
 | SSM parameters | All `AGT_*` governance config values agents read at startup |
 | CloudWatch Log Group | Structured governance event ingestion |
 
@@ -26,6 +26,10 @@ terraform init
 terraform plan -var="project=myagent"
 terraform apply -var="project=myagent"
 ```
+
+The example uses local Terraform state by default. Before team or production use,
+configure an encrypted remote backend with access controls and locking; state contains
+infrastructure metadata and should be treated as sensitive.
 
 ## Governance Config Variables
 
@@ -39,31 +43,25 @@ All variables mirror `GovernanceConfig` in `agent-runtime/deploy.py` and the
 | `rate_limit_rpm` | `60` | `AGT_RATE_LIMIT_RPM` |
 | `audit_enabled` | `true` | `AGT_AUDIT_ENABLED` |
 | `kill_switch_enabled` | `true` | `AGT_KILL_SWITCH` |
-| `retention_days` | `180` | `AGT_RETENTION_DAYS` |
+| `retention_days` | `180` (`180` or `365`) | `AGT_RETENTION_DAYS` |
 
 `trust_level` accepts: `unclassified`, `basic`, `standard`, `elevated`, `critical` —
 matching the `GovernanceTier` enum in `github_enterprise.py`.
 
-## Example: Production Deployment
+## Production Configuration
+
+Run this example as a root Terraform configuration (it is not a published child
+module). Set the production values in a local, ignored `.tfvars` file and pass it
+to `terraform plan` / `terraform apply`, for example:
 
 ```hcl
-module "governed_agent" {
-  source = "../../infra/terraform/modules/governed-agent-aws"
-
-  project     = "customer-support-agent"
-  environment = "prod"
-
-  trust_level         = "elevated"
-  max_tool_calls      = 50
-  rate_limit_rpm      = 30
-  retention_days      = 365
-  kill_switch_enabled = true
-
-  tags = {
-    team    = "ai-platform"
-    contact = "ai-platform@example.com"
-  }
-}
+project             = "customer-support-agent"
+environment         = "prod"
+trust_level         = "elevated"
+max_tool_calls      = 50
+rate_limit_rpm      = 30
+retention_days      = 365
+kill_switch_enabled = true
 ```
 
 ## How Agents Read Config at Runtime
@@ -89,30 +87,33 @@ config = {p["Name"].split("/")[-1]: p["Value"] for p in params["Parameters"]}
 # config["trust-level"]        → "elevated"
 # config["max-tool-calls"]     → "50"
 # config["audit-enabled"]      → "true"
+# config["retention-days"]     → "365"
 # config["audit-bucket"]       → "myagent-prod-audit-a1b2c3d4"
 ```
 
-## Populating the Ed25519 Signing Key
+## Signing Receipts
 
-The Secrets Manager secret is created as a placeholder. Populate it via your CI
-pipeline or a one-time bootstrap script after `terraform apply`:
+The Ed25519 private key is generated and retained by AWS KMS; it is never placed in
+Terraform state or exported as PEM. The agent role can call KMS `Sign` and
+`GetPublicKey`. For example, a caller using boto3 can sign a receipt payload with:
 
-```bash
-# Generate a key (requires PyNaCl or cryptography)
-python -c "
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
-key = Ed25519PrivateKey.generate()
-print(key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()).decode())
-" > signing_key.pem
+```python
+import boto3
 
-# Upload to Secrets Manager
-aws secretsmanager put-secret-value \
-  --secret-id "myagent-prod/agt/signing-key" \
-  --secret-string file://signing_key.pem
-
-rm signing_key.pem  # never store the PEM on disk in production
+kms = boto3.client("kms")
+result = kms.sign(
+    KeyId="<kms_key_arn output>",
+    Message=receipt_bytes,
+    MessageType="RAW",
+    SigningAlgorithm="ED25519_SHA_512",
+)
+signature = result["Signature"]
 ```
+
+AWS KMS does not automatically rotate asymmetric signing keys. Rotate them through
+a reviewed key-versioning procedure and retain the old public keys for verification
+of previously signed receipts. The separate symmetric encryption key rotates
+automatically.
 
 ## Known Limitations
 
@@ -121,11 +122,23 @@ rm signing_key.pem  # never store the PEM on disk in production
   storage and wire its path into SSM.
 - No ECS task definition or Kubernetes manifest is included — this example
   provisions the supporting infrastructure; the compute layer is left to the caller.
+- S3 versioning and retention are configured, but S3 Object Lock (WORM) is not;
+  add it separately if a regulatory requirement mandates immutable retention.
 
 ## Requirements
 
 | Tool | Version |
 |---|---|
 | Terraform / OpenTofu | >= 1.5.0 |
-| AWS provider | >= 5.0 |
+| AWS provider | 6.64.0 |
+| Random provider | 3.9.1 |
 | AWS CLI | >= 2.x (for runtime config reads) |
+
+## Structural Tests
+
+From the repository root, install the pinned test dependencies and run the example tests:
+
+```bash
+python -m pip install -r examples/terraform-test-requirements.txt
+python -m pytest examples/terraform-aws/test_terraform_aws.py
+```

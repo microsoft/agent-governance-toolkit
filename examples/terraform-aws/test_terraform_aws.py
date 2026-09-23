@@ -10,7 +10,6 @@ terraform apply or requiring cloud credentials.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import hcl2
@@ -23,19 +22,19 @@ EXAMPLE_DIR = Path(__file__).parent
 
 @pytest.fixture(scope="module")
 def main_tf() -> dict:
-    with open(EXAMPLE_DIR / "main.tf") as f:
+    with open(EXAMPLE_DIR / "main.tf", encoding="utf-8") as f:
         return hcl2.load(f)
 
 
 @pytest.fixture(scope="module")
 def variables_tf() -> dict:
-    with open(EXAMPLE_DIR / "variables.tf") as f:
+    with open(EXAMPLE_DIR / "variables.tf", encoding="utf-8") as f:
         return hcl2.load(f)
 
 
 @pytest.fixture(scope="module")
 def outputs_tf() -> dict:
-    with open(EXAMPLE_DIR / "outputs.tf") as f:
+    with open(EXAMPLE_DIR / "outputs.tf", encoding="utf-8") as f:
         return hcl2.load(f)
 
 
@@ -81,8 +80,8 @@ class TestTerraformBlock:
     def test_aws_provider_version_constraint(self, main_tf):
         providers = main_tf["terraform"][0]["required_providers"][0]
         aws_version = providers["aws"].get("version", "")
-        assert ">= 5.0" in aws_version or "~> 5" in aws_version, (
-            f"aws provider version constraint should pin to >= 5.0, got: {aws_version}"
+        assert aws_version.strip('"') == "= 6.64.0", (
+            f"aws provider version should pin to the tested stable release, got: {aws_version}"
         )
 
 
@@ -123,9 +122,9 @@ class TestRequiredResources:
     def test_iam_policy_present(self, main_tf):
         assert self._resource_names(main_tf, "aws_iam_policy"), "aws_iam_policy missing"
 
-    def test_secrets_manager_secret_present(self, main_tf):
-        assert self._resource_names(main_tf, "aws_secretsmanager_secret"), (
-            "aws_secretsmanager_secret missing — required for Ed25519 signing key"
+    def test_signing_key_is_not_exported_to_a_secret_store(self, main_tf):
+        assert not self._resource_names(main_tf, "aws_secretsmanager_secret"), (
+            "Ed25519 signing key must remain in KMS and not be exported as a PEM secret"
         )
 
     def test_cloudwatch_log_group_present(self, main_tf):
@@ -149,6 +148,7 @@ class TestSSMParameters:
         "rate_limit_rpm",
         "audit_enabled",
         "kill_switch_enabled",
+        "retention_days",
         "audit_bucket",
     }
 
@@ -175,6 +175,9 @@ class TestSSMParameters:
 
     def test_kill_switch_param_present(self, main_tf):
         assert "kill_switch_enabled" in self._ssm_param_names(main_tf)
+
+    def test_retention_days_param_present(self, main_tf):
+        assert "retention_days" in self._ssm_param_names(main_tf)
 
     def test_audit_bucket_param_present(self, main_tf):
         assert "audit_bucket" in self._ssm_param_names(main_tf)
@@ -220,7 +223,7 @@ class TestS3Security:
         assert found, "aws_s3_bucket_policy missing — TLS enforcement policy required"
 
     def test_tls_deny_in_bucket_policy(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         assert "DenyInsecureTransport" in raw or "aws:SecureTransport" in raw, (
             "Bucket policy must deny non-TLS access (aws:SecureTransport = false)"
         )
@@ -230,13 +233,35 @@ class TestS3Security:
 
 
 class TestKMSSecurity:
-    def test_kms_key_rotation_enabled(self, main_tf):
+    def _kms_keys(self, main_tf: dict) -> dict[str, dict]:
+        keys = {}
         for block in main_tf.get("resource", []):
             if '"aws_kms_key"' in block:
-                for _name, config in block['"aws_kms_key"'].items():
-                    assert config.get("enable_key_rotation") is True, (
-                        "KMS key must have enable_key_rotation = true"
-                    )
+                keys.update(
+                    {name.strip('"'): config for name, config in block['"aws_kms_key"'].items()}
+                )
+        return keys
+
+    def test_kms_key_rotation_enabled(self, main_tf):
+        encryption_key = self._kms_keys(main_tf)["encryption"]
+        assert encryption_key.get("enable_key_rotation") is True, (
+            "Symmetric encryption KMS key must rotate automatically"
+        )
+
+    def test_signing_key_uses_ed25519(self, main_tf):
+        signing_key = self._kms_keys(main_tf)["receipt_signing"]
+        assert str(signing_key.get("customer_master_key_spec", "")).strip('"') == "ECC_NIST_EDWARDS25519"
+        assert str(signing_key.get("key_usage", "")).strip('"') == "SIGN_VERIFY"
+
+    def test_cloudwatch_service_can_use_encryption_key(self):
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
+        assert 'Service = "logs.${data.aws_region.current.region}.amazonaws.com"' in raw
+        assert "kms:EncryptionContext:aws:logs:arn" in raw
+        assert "AllowCloudWatchLogsToEncryptLogGroup" in raw
+
+    def test_private_route_tables_reuse_available_nat_gateways(self):
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
+        assert "count.index % length(aws_nat_gateway.this)" in raw
 
     def test_kms_alias_present(self, main_tf):
         found = any('"aws_kms_alias"' in block for block in main_tf.get("resource", []))
@@ -256,11 +281,11 @@ class TestKMSSecurity:
 
 class TestSecurityGroup:
     def test_https_egress_rule_present(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         assert "443" in raw, "Security group must allow HTTPS (port 443) egress"
 
     def test_no_inbound_allow_all(self, main_tf):
-        raw = (EXAMPLE_DIR / "main.tf").read_text()
+        raw = (EXAMPLE_DIR / "main.tf").read_text(encoding="utf-8")
         # Fail if there is an ingress rule with cidr 0.0.0.0/0
         assert 'ingress' not in raw or '0.0.0.0/0' not in raw.split('ingress')[1].split('egress')[0], (
             "Security group must not allow inbound traffic from 0.0.0.0/0"
@@ -297,20 +322,22 @@ class TestVariables:
         assert not missing, f"Variables missing from variables.tf: {missing}"
 
     def test_trust_level_has_validation(self, variables_tf):
-        raw = (EXAMPLE_DIR / "variables.tf").read_text()
+        raw = (EXAMPLE_DIR / "variables.tf").read_text(encoding="utf-8")
         assert "trust_level" in raw
         assert "validation" in raw, "trust_level must have a validation block"
         assert "unclassified" in raw, "trust_level validation must include all GovernanceTier values"
         assert "critical" in raw
 
     def test_project_has_validation(self, variables_tf):
-        raw = (EXAMPLE_DIR / "variables.tf").read_text()
+        raw = (EXAMPLE_DIR / "variables.tf").read_text(encoding="utf-8")
         assert "validation" in raw, "project variable must have a validation block"
 
     def test_retention_days_has_validation(self, variables_tf):
-        raw = (EXAMPLE_DIR / "variables.tf").read_text()
+        raw = (EXAMPLE_DIR / "variables.tf").read_text(encoding="utf-8")
         assert "retention_days" in raw
-        assert "180" in raw, "retention_days must enforce a minimum of 180 days"
+        assert "contains([180, 365]" in raw, (
+            "retention_days must use values supported by CloudWatch Logs"
+        )
 
     def test_environment_default_is_dev(self, variables_tf):
         for block in variables_tf.get("variable", []):
@@ -334,8 +361,8 @@ class TestOutputs:
         "private_subnet_ids",
         "agent_security_group_id",
         "kms_key_arn",
+        "kms_encryption_key_arn",
         "audit_log_bucket",
-        "signing_key_secret_arn",
         "agent_iam_role_arn",
         "cloudwatch_log_group",
         "ssm_parameter_prefix",
@@ -369,8 +396,9 @@ class TestOutputs:
 
 class TestREADME:
     @pytest.fixture(scope="class")
-    def readme(self) -> str:
-        return (EXAMPLE_DIR / "README.md").read_text()
+    @classmethod
+    def readme(cls) -> str:
+        return (EXAMPLE_DIR / "README.md").read_text(encoding="utf-8")
 
     def test_quick_start_section_present(self, readme):
         assert "Quick Start" in readme or "quick start" in readme.lower()
@@ -382,11 +410,18 @@ class TestREADME:
         assert "AGT_TRUST_LEVEL" in readme
         assert "AGT_MAX_TOOL_CALLS" in readme
         assert "AGT_AUDIT_ENABLED" in readme
+        assert "AGT_RETENTION_DAYS" in readme
 
-    def test_signing_key_bootstrap_documented(self, readme):
-        assert "signing" in readme.lower() and ("bootstrap" in readme.lower() or "populate" in readme.lower()), (
-            "README must document how to populate the Ed25519 signing key after apply"
-        )
+    def test_remote_state_guidance_present(self, readme):
+        assert "remote backend" in readme.lower()
+
+    def test_documented_as_root_configuration(self, readme):
+        assert "not a published child" in readme
+        assert "../../infra/terraform" not in readme
+
+    def test_kms_signing_documented(self, readme):
+        assert "kms.sign(" in readme.lower()
+        assert "never placed in" in readme.lower() and "terraform state" in readme.lower()
 
     def test_known_limitations_documented(self, readme):
         assert "limitation" in readme.lower() or "Known" in readme, (

@@ -28,16 +28,18 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = ">= 3.85, < 5.0"
+      version = "= 4.81.0"
     }
     random = {
       source  = "hashicorp/random"
-      version = ">= 3.5"
+      version = "= 3.9.1"
     }
   }
 }
 
 provider "azurerm" {
+  storage_use_azuread = true
+
   features {
     key_vault {
       purge_soft_delete_on_destroy    = false
@@ -153,11 +155,12 @@ resource "azurerm_key_vault" "this" {
   sku_name                   = "premium"
   purge_protection_enabled   = var.environment == "prod"
   soft_delete_retention_days = var.environment == "prod" ? 90 : 7
-  enable_rbac_authorization  = true
+  rbac_authorization_enabled = true
 
   network_acls {
-    default_action             = "Deny"
-    bypass                     = "AzureServices"
+    default_action             = var.environment == "prod" ? "Deny" : "Allow"
+    bypass                     = var.environment == "prod" ? "None" : "AzureServices"
+    ip_rules                   = var.deployment_ip_ranges
     virtual_network_subnet_ids = [azurerm_subnet.agents.id]
   }
 
@@ -170,26 +173,13 @@ resource "azurerm_role_assignment" "agent_kv_secrets" {
   principal_id         = azurerm_user_assigned_identity.agent.principal_id
 }
 
-resource "azurerm_role_assignment" "agent_kv_crypto" {
+resource "azurerm_role_assignment" "terraform_kv_secrets" {
   scope                = azurerm_key_vault.this.id
-  role_definition_name = "Key Vault Crypto User"
-  principal_id         = azurerm_user_assigned_identity.agent.principal_id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
-# Placeholder secret — populate via CI bootstrap or key rotation script.
-resource "azurerm_key_vault_secret" "signing_key" {
-  name         = "agt-signing-key"
-  value        = "PLACEHOLDER-replace-with-Ed25519-PEM-via-CI-or-bootstrap-script"
-  key_vault_id = azurerm_key_vault.this.id
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-
-  tags = local.common_tags
-}
-
-# ── Storage Account for immutable audit logs ──────────────────────────────────
+# ── Storage Account for versioned audit logs ──────────────────────────────────
 
 resource "random_string" "sa_suffix" {
   length  = 6
@@ -198,30 +188,33 @@ resource "random_string" "sa_suffix" {
 }
 
 resource "azurerm_storage_account" "audit_logs" {
-  name                            = "${substr(replace(local.name_prefix, "-", ""), 0, 16)}${random_string.sa_suffix.result}"
-  resource_group_name             = azurerm_resource_group.this.name
-  location                        = azurerm_resource_group.this.location
-  account_tier                    = "Standard"
-  account_replication_type        = var.environment == "prod" ? "GRS" : "LRS"
-  min_tls_version                 = "TLS1_2"
-  allow_nested_items_to_be_public = false
-  https_traffic_only_enabled      = true
+  name                              = "${substr(replace(local.name_prefix, "-", ""), 0, 16)}${random_string.sa_suffix.result}"
+  resource_group_name               = azurerm_resource_group.this.name
+  location                          = azurerm_resource_group.this.location
+  account_tier                      = "Standard"
+  account_replication_type          = var.environment == "prod" ? "GRS" : "LRS"
+  min_tls_version                   = "TLS1_2"
+  allow_nested_items_to_be_public   = false
+  https_traffic_only_enabled        = true
+  shared_access_key_enabled         = false
+  infrastructure_encryption_enabled = true
 
   blob_properties {
     versioning_enabled = true
 
     delete_retention_policy {
-      days = 30
+      days = var.retention_days
     }
 
     container_delete_retention_policy {
-      days = 30
+      days = var.retention_days
     }
   }
 
   network_rules {
-    default_action             = "Deny"
+    default_action             = var.environment == "prod" ? "Deny" : "Allow"
     bypass                     = ["AzureServices"]
+    ip_rules                   = var.deployment_ip_ranges
     virtual_network_subnet_ids = [azurerm_subnet.agents.id]
   }
 
@@ -232,6 +225,8 @@ resource "azurerm_storage_container" "audit_logs" {
   name                  = "agt-audit-logs"
   storage_account_id    = azurerm_storage_account.audit_logs.id
   container_access_type = "private"
+
+  depends_on = [azurerm_role_assignment.terraform_storage]
 }
 
 resource "azurerm_storage_management_policy" "audit_logs" {
@@ -262,16 +257,68 @@ resource "azurerm_role_assignment" "agent_storage" {
   principal_id         = azurerm_user_assigned_identity.agent.principal_id
 }
 
+resource "azurerm_role_assignment" "terraform_storage" {
+  scope                = azurerm_storage_account.audit_logs.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
 # ── App Configuration — AGT governance parameters ────────────────────────────
 # Mirrors SSM parameters on AWS. Agents read these at startup so governance
 # config is version-controlled and not baked into container images.
 
 resource "azurerm_app_configuration" "governance" {
-  name                = "${local.name_prefix}-appconfig"
+  name                  = "${local.name_prefix}-appconfig-${random_string.appconfig_suffix.result}"
+  resource_group_name   = azurerm_resource_group.this.name
+  location              = azurerm_resource_group.this.location
+  sku                   = "standard"
+  local_auth_enabled    = false
+  public_network_access = var.environment == "prod" ? "Disabled" : "Enabled"
+  tags                  = local.common_tags
+}
+
+resource "random_string" "appconfig_suffix" {
+  length  = 4
+  special = false
+  upper   = false
+}
+
+resource "azurerm_private_dns_zone" "app_configuration" {
+  count               = var.environment == "prod" ? 1 : 0
+  name                = "privatelink.azconfig.io"
   resource_group_name = azurerm_resource_group.this.name
-  location            = azurerm_resource_group.this.location
-  sku                 = var.environment == "prod" ? "standard" : "free"
   tags                = local.common_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "app_configuration" {
+  count                 = var.environment == "prod" ? 1 : 0
+  name                  = "${local.name_prefix}-appconfig"
+  resource_group_name   = azurerm_resource_group.this.name
+  private_dns_zone_name = azurerm_private_dns_zone.app_configuration[0].name
+  virtual_network_id    = azurerm_virtual_network.this.id
+  registration_enabled  = false
+  tags                  = local.common_tags
+}
+
+resource "azurerm_private_endpoint" "app_configuration" {
+  count               = var.environment == "prod" ? 1 : 0
+  name                = "${local.name_prefix}-appconfig-pe"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  subnet_id           = azurerm_subnet.agents.id
+  tags                = local.common_tags
+
+  private_service_connection {
+    name                           = "${local.name_prefix}-appconfig-connection"
+    private_connection_resource_id = azurerm_app_configuration.governance.id
+    subresource_names              = ["configurationStores"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "app-configuration"
+    private_dns_zone_ids = [azurerm_private_dns_zone.app_configuration[0].id]
+  }
 }
 
 resource "azurerm_role_assignment" "agent_appconfig" {
@@ -280,11 +327,22 @@ resource "azurerm_role_assignment" "agent_appconfig" {
   principal_id         = azurerm_user_assigned_identity.agent.principal_id
 }
 
+resource "azurerm_role_assignment" "terraform_appconfig" {
+  scope                = azurerm_app_configuration.governance.id
+  role_definition_name = "App Configuration Data Owner"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
 resource "azurerm_app_configuration_key" "trust_level" {
   configuration_store_id = azurerm_app_configuration.governance.id
   key                    = "agt:trust-level"
   value                  = var.trust_level
   label                  = var.environment
+  depends_on = [
+    azurerm_role_assignment.terraform_appconfig,
+    azurerm_private_endpoint.app_configuration,
+    azurerm_private_dns_zone_virtual_network_link.app_configuration,
+  ]
 }
 
 resource "azurerm_app_configuration_key" "max_tool_calls" {
@@ -292,6 +350,11 @@ resource "azurerm_app_configuration_key" "max_tool_calls" {
   key                    = "agt:max-tool-calls"
   value                  = tostring(var.max_tool_calls)
   label                  = var.environment
+  depends_on = [
+    azurerm_role_assignment.terraform_appconfig,
+    azurerm_private_endpoint.app_configuration,
+    azurerm_private_dns_zone_virtual_network_link.app_configuration,
+  ]
 }
 
 resource "azurerm_app_configuration_key" "rate_limit_rpm" {
@@ -299,6 +362,11 @@ resource "azurerm_app_configuration_key" "rate_limit_rpm" {
   key                    = "agt:rate-limit-rpm"
   value                  = tostring(var.rate_limit_rpm)
   label                  = var.environment
+  depends_on = [
+    azurerm_role_assignment.terraform_appconfig,
+    azurerm_private_endpoint.app_configuration,
+    azurerm_private_dns_zone_virtual_network_link.app_configuration,
+  ]
 }
 
 resource "azurerm_app_configuration_key" "audit_enabled" {
@@ -306,6 +374,11 @@ resource "azurerm_app_configuration_key" "audit_enabled" {
   key                    = "agt:audit-enabled"
   value                  = tostring(var.audit_enabled)
   label                  = var.environment
+  depends_on = [
+    azurerm_role_assignment.terraform_appconfig,
+    azurerm_private_endpoint.app_configuration,
+    azurerm_private_dns_zone_virtual_network_link.app_configuration,
+  ]
 }
 
 resource "azurerm_app_configuration_key" "kill_switch_enabled" {
@@ -313,6 +386,23 @@ resource "azurerm_app_configuration_key" "kill_switch_enabled" {
   key                    = "agt:kill-switch-enabled"
   value                  = tostring(var.kill_switch_enabled)
   label                  = var.environment
+  depends_on = [
+    azurerm_role_assignment.terraform_appconfig,
+    azurerm_private_endpoint.app_configuration,
+    azurerm_private_dns_zone_virtual_network_link.app_configuration,
+  ]
+}
+
+resource "azurerm_app_configuration_key" "retention_days" {
+  configuration_store_id = azurerm_app_configuration.governance.id
+  key                    = "agt:retention-days"
+  value                  = tostring(var.retention_days)
+  label                  = var.environment
+  depends_on = [
+    azurerm_role_assignment.terraform_appconfig,
+    azurerm_private_endpoint.app_configuration,
+    azurerm_private_dns_zone_virtual_network_link.app_configuration,
+  ]
 }
 
 resource "azurerm_app_configuration_key" "audit_container" {
@@ -320,6 +410,11 @@ resource "azurerm_app_configuration_key" "audit_container" {
   key                    = "agt:audit-container"
   value                  = "${azurerm_storage_account.audit_logs.name}/${azurerm_storage_container.audit_logs.name}"
   label                  = var.environment
+  depends_on = [
+    azurerm_role_assignment.terraform_appconfig,
+    azurerm_private_endpoint.app_configuration,
+    azurerm_private_dns_zone_virtual_network_link.app_configuration,
+  ]
 }
 
 # ── Log Analytics Workspace for governance events ─────────────────────────────
@@ -329,6 +424,6 @@ resource "azurerm_log_analytics_workspace" "governance" {
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   sku                 = "PerGB2018"
-  retention_in_days   = min(var.retention_days, 730)
+  retention_in_days   = var.retention_days
   tags                = local.common_tags
 }

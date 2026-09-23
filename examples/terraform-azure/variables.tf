@@ -72,14 +72,20 @@ variable "kill_switch_enabled" {
 }
 
 variable "retention_days" {
-  description = "Days to retain audit logs in Blob Storage (AGT_RETENTION_DAYS). Must be >= 180."
+  description = "Days to retain audit logs in Azure Storage and Log Analytics (AGT_RETENTION_DAYS)."
   type        = number
   default     = 180
 
   validation {
-    condition     = var.retention_days >= 180
-    error_message = "retention_days must be at least 180 for compliance."
+    condition     = contains([180, 365], var.retention_days)
+    error_message = "retention_days must be 180 or 365 so the storage and analytics retention periods remain supported."
   }
+}
+
+variable "deployment_ip_ranges" {
+  description = "Public IPv4 addresses or CIDRs allowed to provision Key Vault and Storage resources in prod."
+  type        = list(string)
+  default     = []
 }
 
 # ── Networking ────────────────────────────────────────────────────────────────
