@@ -115,12 +115,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `AuditLog.export()` and `AuditLog.export_cloudevents()` now return all matching
+  records instead of silently capping exports at 10,000 records.
+- **Empty policy sets are visible to readiness probes.** The policy server and
+  governance sidecar now return `503 Not Ready` when no enabled policy rules
+  are loaded. Policy and generation status responses expose `effective_rules`
+  and `load_warnings` so operators can distinguish an empty policy set from a
+  healthy deployment.
 - **Pending-message batch isolation.** A single malformed entry in a relay-supplied
   `pending_messages` batch no longer aborts the drain; the failure is surfaced
   through the error handler and the remaining queued messages are still delivered.
+- `MerkleAuditChain` now records a canonical, reproducible Merkle root. The
+  incremental `add_entry` padded interior tree levels with the leaf sentinel
+  `'0' * 64` instead of the empty-subtree constant `E(k)`, so the recorded root
+  diverged from a from-scratch rebuild for most chain sizes (22 of the first 32)
+  and an exported `merkle_root` could not be reproduced by an independent
+  verifier. Interior padding now uses `E(k)`, keeping the update amortized
+  O(log n) per append (worst-case O(n) when tree capacity doubles). Exported
+  `merkle_root` values change for the affected sizes; see
+  `BREAKING_CHANGES.md`.
 
 ### Changed
 
+- **Policy directory loading now fails closed on invalid input.** The policy
+  server rejects missing directories, malformed files, and governance-shaped
+  documents that would otherwise be silently accepted by the trust-policy
+  fallback; rejected policy-server reloads retain the last complete policy set
+  and return `409`. The sidecar publishes a degraded generation and denies
+  evaluations when a policy file fails or its directory is unavailable. The
+  bundled Helm and container examples now use the flat policy schema and
+  explicitly target all agents. Closes #3538.
 - **Displaced connections now close with a distinct WebSocket code.** When a second
   connection authenticates for a DID, the relay closes the displaced socket with
   `4006` (`WS_CLOSE_SESSION_REPLACED`) instead of `1000`. `1000` was reported by

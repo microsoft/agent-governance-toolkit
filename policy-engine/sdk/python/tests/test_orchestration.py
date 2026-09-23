@@ -197,6 +197,32 @@ class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(NotImplementedError, "Native Agent Control Specification Python bindings are not implemented yet"):
             await control.evaluate_intervention_point(InterventionPoint.INPUT, {"input": "raw"})
 
+    def test_native_runtime_client_rejects_invalid_dispatcher_at_construction(self):
+        class Policy:
+            def evaluate(self, invocation):
+                return {"decision": "allow"}
+
+        class Annotator:
+            def dispatch(self, annotator_name, annotator_config, preliminary_policy_input):
+                return {}
+
+        class NotCallable:
+            evaluate = "allow"
+
+        # A bound method in place of the dispatcher object.
+        with self.assertRaisesRegex(TypeError, r"policy_dispatcher must provide a callable evaluate\(\) method, got method; pass the dispatcher object"):
+            NativeRuntimeClient({}, None, Policy().evaluate)
+        # Annotator and policy arguments swapped.
+        with self.assertRaisesRegex(TypeError, r"annotator_dispatcher must provide a callable dispatch\(\) method, got Policy"):
+            NativeRuntimeClient({}, Policy(), Annotator())
+        # The hook name is present but is not a method.
+        with self.assertRaisesRegex(TypeError, r"policy_dispatcher must provide a callable evaluate\(\) method, got NotCallable"):
+            NativeRuntimeClient({}, Annotator(), NotCallable())
+        # The classmethod constructors share the check, so the mistake surfaces
+        # before the native runtime is asked to load anything.
+        with self.assertRaisesRegex(TypeError, "policy_dispatcher"):
+            AgentControl.from_path("/nonexistent/manifest.yaml", None, Policy().evaluate)
+
     async def test_unknown_intervention_point_reaches_runtime_client(self):
         runtime = QueueRuntime([InterventionPointResult(Verdict(Decision.DENY, reason="runtime_error:intervention_point_unknown"))])
         control = AgentControl(runtime)

@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Tests for saga orchestrator and state machine."""
 
+import asyncio
+
 import pytest
 
 from hypervisor.saga.orchestrator import SagaOrchestrator
@@ -134,6 +136,107 @@ class TestSagaOrchestrator:
         assert step.state == StepState.COMMITTED
 
     @pytest.mark.asyncio
+    async def test_committed_step_rejects_execution_before_executor_is_called(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
+
+        async def ok_executor():
+            return "ok"
+
+        await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=ok_executor)
+        assert step.state == StepState.COMMITTED
+
+        calls = 0
+
+        def executor():
+            nonlocal calls
+            calls += 1
+            return asyncio.ensure_future(ok_executor())
+
+        with pytest.raises(SagaStateError, match="Invalid step transition"):
+            await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=executor)
+
+        assert calls == 0
+
+    @pytest.mark.asyncio
+    async def test_execute_step_accepts_generic_awaitable(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
+
+        class AwaitableResult:
+            def __await__(self):
+                async def _run():
+                    return "ok"
+
+                return _run().__await__()
+
+        result = await self.orchestrator.execute_step(
+            saga.saga_id,
+            step.step_id,
+            executor=lambda: AwaitableResult(),
+        )
+
+        assert result == "ok"
+        assert step.state == StepState.COMMITTED
+
+    @pytest.mark.asyncio
+    async def test_sync_executor_contract_error_is_not_retried(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(
+            saga.saga_id,
+            "a1",
+            "did:a",
+            "/api/exec",
+            max_retries=2,
+        )
+        calls = 0
+
+        def executor():
+            nonlocal calls
+            calls += 1
+            return "not-awaitable"
+
+        with pytest.raises(TypeError, match="executor must return an awaitable"):
+            await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=executor)
+
+        assert calls == 1
+        assert step.state == StepState.FAILED
+        assert "executor must return an awaitable" in step.error
+
+    @pytest.mark.asyncio
+    async def test_sync_executor_exception_retries(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(
+            saga.saga_id,
+            "a1",
+            "did:a",
+            "/api/exec",
+            max_retries=1,
+        )
+        calls = 0
+
+        def executor():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("setup failed")
+
+            async def _run():
+                return "ok"
+
+            return _run()
+
+        result = await self.orchestrator.execute_step(
+            saga.saga_id,
+            step.step_id,
+            executor=executor,
+        )
+
+        assert result == "ok"
+        assert calls == 2
+        assert step.state == StepState.COMMITTED
+
+    @pytest.mark.asyncio
     async def test_execute_step_failure(self):
         saga = self.orchestrator.create_saga("session:1")
         step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
@@ -185,3 +288,43 @@ class TestSagaOrchestrator:
         failed = await self.orchestrator.compensate(saga.saga_id, failing_compensator)
         assert len(failed) == 1
         assert saga.state == SagaState.ESCALATED
+
+    @pytest.mark.asyncio
+    async def test_sync_compensator_exception_escalates(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/exec", "/undo")
+
+        async def ok_executor():
+            return "ok"
+
+        await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=ok_executor)
+
+        def failing_compensator(step):
+            raise RuntimeError("sync undo failed")
+
+        failed = await self.orchestrator.compensate(saga.saga_id, failing_compensator)
+
+        assert failed == [step]
+        assert step.state == StepState.COMPENSATION_FAILED
+        assert saga.state == SagaState.ESCALATED
+        assert "sync undo failed" in step.error
+
+    @pytest.mark.asyncio
+    async def test_non_awaitable_compensator_result_escalates(self):
+        saga = self.orchestrator.create_saga("session:1")
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/exec", "/undo")
+
+        async def ok_executor():
+            return "ok"
+
+        await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=ok_executor)
+
+        def compensator(step):
+            return "not-awaitable"
+
+        failed = await self.orchestrator.compensate(saga.saga_id, compensator)
+
+        assert failed == [step]
+        assert step.state == StepState.COMPENSATION_FAILED
+        assert saga.state == SagaState.ESCALATED
+        assert "compensator must return an awaitable" in step.error

@@ -3,15 +3,18 @@
 """Tests for the govern() high-level wrapper."""
 
 import os
+import secrets
+
 import pytest
+
+from agentmesh.governance.audit_backends import FileAuditSink
 from agentmesh.governance.govern import (
-    govern,
-    GovernedCallable,
     GovernanceConfig,
     GovernanceDenied,
+    GovernedCallable,
+    govern,
 )
 from agentmesh.governance.policy import Policy
-
 
 # ── Test fixtures ──────────────────────────────────────────────────
 
@@ -322,8 +325,8 @@ rules:
 
     def test_circuit_breaker_trips_after_repeated_violations(self):
         """Repeated ring violations trip the circuit breaker."""
-        from hypervisor.rings.breach_detector import RingBreachDetector
         from hypervisor.models import ExecutionRing
+        from hypervisor.rings.breach_detector import RingBreachDetector
 
         # Use a detector with a very low baseline so the breaker trips quickly
         detector = RingBreachDetector(baseline_rate=0.01)
@@ -339,8 +342,11 @@ rules:
         MUST share one RingBreachDetector. Otherwise a rogue agent with N
         tools can spend the full per-detector violation budget N times."""
         from hypervisor.models import ExecutionRing
+
         from agentmesh.governance.govern import (
-            GovernanceConfig, GovernedCallable, _reset_shared_breach_detectors,
+            GovernanceConfig,
+            GovernedCallable,
+            _reset_shared_breach_detectors,
         )
 
         _reset_shared_breach_detectors()
@@ -359,8 +365,11 @@ rules:
     def test_breach_detector_isolated_across_sessions(self):
         """Different session_ids on the same agent get distinct detectors."""
         from hypervisor.models import ExecutionRing
+
         from agentmesh.governance.govern import (
-            GovernanceConfig, GovernedCallable, _reset_shared_breach_detectors,
+            GovernanceConfig,
+            GovernedCallable,
+            _reset_shared_breach_detectors,
         )
 
         _reset_shared_breach_detectors()
@@ -380,23 +389,472 @@ rules:
 
     def test_resource_inference_no_false_positive_httponly(self):
         """'set_httponly_flag' must NOT be inferred as a network action."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("set_httponly_flag") == ResourceType.TOOL_EXECUTION
 
     def test_resource_inference_no_false_positive_overwrite(self):
         """'overwrite_protection_check' must NOT be inferred as filesystem."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("overwrite_protection_check") == ResourceType.TOOL_EXECUTION
 
     def test_resource_inference_true_positives(self):
         """Real subprocess/network/filesystem actions still classify correctly."""
-        from agentmesh.governance.govern import _infer_resource_type
         from agentmesh.governance import ResourceType
+        from agentmesh.governance.govern import _infer_resource_type
         assert _infer_resource_type("http_get") == ResourceType.NETWORK
         assert _infer_resource_type("exec.command") == ResourceType.SUBPROCESS
         assert _infer_resource_type("shell-run") == ResourceType.SUBPROCESS
         assert _infer_resource_type("write_file") == ResourceType.FILESYSTEM
         assert _infer_resource_type("read_only_query") == ResourceType.TOOL_EXECUTION
 
+
+
+# ── govern() + Rego (rego_path/rego_content) ────────────────────────
+
+import shutil
+
+requires_opa = pytest.mark.skipif(
+    not shutil.which("opa"), reason="opa CLI not installed"
+)
+
+# A relational rule ("does the caller's attribute match the resource's
+# attribute") the YAML DSL's regex matcher cannot express - see the
+# rego_path/rego_content docstring on govern(). Rego handles it natively.
+RELATIONAL_REGO = """
+package agentmesh
+
+default allow = false
+
+allow {
+    input.caller_role.value == "auditor"
+}
+
+allow {
+    input.caller_mission.value == input.doc_mission.value
+}
+"""
+
+# default_action must be deny so the YAML engine's "no rule matched" result
+# (which is what happens for a relational condition it can't parse) falls
+# through to Rego, rather than silently allowing everything itself.
+DENY_ALL_YAML = """
+apiVersion: governance.toolkit/v1
+name: deny-all-defer-to-rego
+default_action: deny
+rules: []
+"""
+
+
+def read_doc(doc_id: str, doc_mission: str, caller_mission: str, caller_role: str):
+    """Stand-in for a resource-scoped tool: real access control depends on
+    matching the caller's attribute against the resource's own attribute,
+    not a value the caller supplies about itself in isolation."""
+    return {"doc_id": doc_id, "mission": doc_mission}
+
+
+@requires_opa
+class TestGovernWithRego:
+    """govern(..., rego_path=/rego_content=) - see #3911: BackendRegistry/
+    OPAPolicyBackend exist but govern() never consults them, so there was
+    no way to combine YAML with Rego through the public govern() API even
+    though PolicyEngine.load_rego() already supports it internally."""
+
+    def test_relational_rule_allows_matching_mission(self):
+        safe = govern(read_doc, policy=DENY_ALL_YAML, rego_content=RELATIONAL_REGO)
+        result = safe(doc_id="COMP-042", doc_mission="ARIEL", caller_mission="ARIEL", caller_role="engineer")
+        assert result["doc_id"] == "COMP-042"
+
+    def test_relational_rule_denies_mismatched_mission(self):
+        """The exact case a literal-only YAML policy gets wrong: nothing
+        stops a caller from claiming any mission for itself, so a
+        same-mission check needs to compare against the resource's own
+        attribute - which only the Rego path can express."""
+        safe = govern(read_doc, policy=DENY_ALL_YAML, rego_content=RELATIONAL_REGO)
+        with pytest.raises(GovernanceDenied):
+            safe(doc_id="COMP-099", doc_mission="JUICE", caller_mission="ARIEL", caller_role="engineer")
+
+    def test_relational_rule_role_override(self):
+        safe = govern(read_doc, policy=DENY_ALL_YAML, rego_content=RELATIONAL_REGO)
+        result = safe(doc_id="COMP-099", doc_mission="JUICE", caller_mission="ARIEL", caller_role="auditor")
+        assert result["doc_id"] == "COMP-099"
+
+    def test_yaml_rule_still_takes_precedence_over_rego(self):
+        """A matching YAML rule should still win - Rego is a fallback, not
+        a replacement (matches PolicyEngine.load_rego's documented
+        semantics, exercised end-to-end here through govern() itself)."""
+        yaml_denies_engineer = """
+apiVersion: governance.toolkit/v1
+name: block-engineer
+default_action: allow
+rules:
+  - name: block-engineer-role
+    condition: "caller_role.value == 'engineer'"
+    action: deny
+"""
+        safe = govern(read_doc, policy=yaml_denies_engineer, rego_content=RELATIONAL_REGO)
+        # Rego alone would allow this (same mission), but the YAML rule
+        # denies any "engineer" caller outright and is checked first.
+        with pytest.raises(GovernanceDenied):
+            safe(doc_id="COMP-042", doc_mission="ARIEL", caller_mission="ARIEL", caller_role="engineer")
+
+    def test_no_rego_configured_is_unaffected(self):
+        """Governing without rego_path/rego_content behaves exactly as
+        before - this is an additive, opt-in parameter."""
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY)
+        result = safe(action="read")
+        assert result["status"] == "executed"
+
+    def test_field_vs_literal_rule_needs_value_accessor(self):
+        """_build_context() wraps every scalar kwarg as {"value": ...}
+        before handing it to Rego as `input` (see GovernanceConfig.rego_path
+        and govern()'s docstring). RELATIONAL_REGO above only ever compares
+        two wrapped fields to each other, which works either way and hides
+        this entirely. A field-vs-literal rule needs the accessor, and gets
+        it wrong silently: no load-time or call-time error, just a rule
+        that never matches - this pins that failure down for both
+        spellings, for the same caller and the same rule intent."""
+        bare_role_check = """
+package agentmesh
+
+default allow = false
+
+allow {
+    input.caller_role == "auditor"
+}
+"""
+        wrapped_role_check = """
+package agentmesh
+
+default allow = false
+
+allow {
+    input.caller_role.value == "auditor"
+}
+"""
+        kwargs = dict(doc_id="COMP-042", doc_mission="ARIEL", caller_mission="ARIEL", caller_role="auditor")
+
+        # Without .value: compares {"value": "auditor"} to "auditor" - an
+        # object to a string, always false, nothing raised.
+        safe_bare = govern(read_doc, policy=DENY_ALL_YAML, rego_content=bare_role_check)
+        with pytest.raises(GovernanceDenied):
+            safe_bare(**kwargs)
+
+        # Same caller, same rule intent, with the accessor: actually matches.
+        safe_wrapped = govern(read_doc, policy=DENY_ALL_YAML, rego_content=wrapped_role_check)
+        result = safe_wrapped(**kwargs)
+        assert result["doc_id"] == "COMP-042"
+
+    @pytest.mark.parametrize("rego_value", ['"deny"', "{}", "[]", "42", "null"])
+    def test_non_boolean_allow_denies_end_to_end(self, rego_value):
+        """The non-boolean-allow rejection lives in OPAEvaluator; pin that
+        it actually reaches a real govern()-wrapped call, not just the
+        evaluator in isolation."""
+        rego = f"package agentmesh\n\nallow := {rego_value}\n"
+        safe = govern(dummy_tool, policy=DENY_ALL_YAML, rego_content=rego, rego_package="agentmesh")
+        with pytest.raises(GovernanceDenied):
+            safe(action="read")
+
+
+class TestGovernRegoEmptyStringWiring:
+    """rego_path="" / rego_content="" used to be indistinguishable from
+    "not configured" here: `if config.rego_path or config.rego_content`
+    is falsy for "" same as None, so govern() silently skipped Rego
+    instead of surfacing the caller's mistake. No opa needed - this
+    raises in load_rego() before OPAEvaluator is ever touched."""
+
+    def test_empty_rego_path_raises(self):
+        with pytest.raises(ValueError, match="rego_path must not be an empty string"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, rego_path="")
+
+    def test_empty_rego_content_raises(self):
+        with pytest.raises(ValueError, match="rego_content must not be an empty string"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, rego_content="")
+
+
+# ── govern() + audit_file (file-based audit persistence) ────────────
+
+
+class TestGovernWithAuditFile:
+    """govern(..., audit_file=) - audit_file was a documented
+    GovernanceConfig field ("Path for file-based audit log. None =
+    in-memory only.") that GovernedCallable.__init__ never actually read:
+    it always built AuditLog() with no sink, so entries never left memory
+    no matter what the caller configured, and the top-level govern()
+    factory did not even expose the parameter to pass through."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_registry(self):
+        from agentmesh.governance.govern import _reset_shared_audit_sinks
+
+        _reset_shared_audit_sinks()
+        yield
+        _reset_shared_audit_sinks()
+
+    def test_default_is_in_memory_only(self):
+        """Unaffected default behaviour: no audit_file, no file written."""
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY)
+        safe(action="read")
+        assert safe.audit_log is not None
+        assert len(safe.audit_log.get_entries_by_type("policy_evaluation")) == 1
+
+    def test_audit_file_without_key_or_env_var_raises(self, tmp_path):
+        """No audit_secret_key and no AGT_AUDIT_SECRET_KEY: refuse rather
+        than mint a random key nothing could ever verify against."""
+        path = tmp_path / "audit.jsonl"
+        with pytest.raises(ValueError, match="audit_secret_key"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+
+    def test_audit_file_short_key_raises(self, tmp_path):
+        """An empty or short key would technically compute an HMAC, just
+        not one worth anything as an integrity control."""
+        path = tmp_path / "audit.jsonl"
+        with pytest.raises(ValueError, match="at least 32 bytes"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+                audit_secret_key=b"too-short",
+            )
+
+    def test_audit_file_short_key_from_env_var_raises(self, tmp_path, monkeypatch):
+        path = tmp_path / "audit.jsonl"
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", b"too-short".hex())
+        with pytest.raises(ValueError, match="at least 32 bytes"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+
+    def test_audit_file_key_from_env_var(self, tmp_path, monkeypatch):
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", key.hex())
+
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        safe(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_audit_file_persists_entries(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=key,
+        )
+        safe(action="read")
+        safe(action="write")
+
+        assert path.exists()
+        # A FileAuditSink now verifies the existing chain under its own
+        # key at construction (see FileAuditSink._read_last_hash), so
+        # reading back requires the real key even for read_entries().
+        sink = FileAuditSink(path, secret_key=key)
+        entries = sink.read_entries()
+        assert len(entries) == 2
+        assert entries[0].action == "read"
+        assert entries[1].action == "write"
+        assert entries[1].outcome == "allow"
+
+    def test_audit_file_chain_and_signature_verify(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        for _ in range(3):
+            safe(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_audit_file_appends_across_instances(self, tmp_path):
+        """The whole point of file-based persistence: a second govern()
+        instance pointed at the same path resumes the chain instead of
+        overwriting it."""
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        second(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_second_instance_omitting_key_reuses_first_instances_sink(self, tmp_path):
+        """A second govern() call on the same path with no key of its own
+        shares the first call's sink rather than failing or minting a
+        fresh key that would desync the chain."""
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        second = govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+        second(action="read")
+
+        sink = FileAuditSink(path, secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    def test_second_instance_with_mismatched_key_raises(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        first_key = secrets.token_bytes(32)
+        govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=first_key,
+        )
+
+        with pytest.raises(ValueError, match="already open with a different"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+                audit_secret_key=secrets.token_bytes(32),
+            )
+
+    def test_two_instances_same_path_different_relative_spelling_share_one_sink(
+        self, tmp_path, monkeypatch,
+    ):
+        """The registry key is the resolved path, not the string a caller
+        happened to pass — "./audit.jsonl" and its absolute form must
+        still land on the same sink."""
+        monkeypatch.chdir(tmp_path)
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file="audit.jsonl",
+            audit_secret_key=key,
+        )
+        first(action="read")
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY,
+            audit_file=str((tmp_path / "audit.jsonl").resolve()),
+            audit_secret_key=key,
+        )
+        second(action="read")
+
+        sink = FileAuditSink(tmp_path / "audit.jsonl", secret_key=key)
+        assert len(sink.read_entries()) == 2
+        is_valid, error = sink.verify_integrity()
+        assert is_valid, error
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
+    def test_audit_file_created_with_restrictive_permissions(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        safe = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=secrets.token_bytes(32),
+        )
+        safe(action="read")
+
+        assert (path.stat().st_mode & 0o777) == 0o600
+
+    def test_corrupt_trailing_line_does_not_block_future_appends(self, tmp_path):
+        """A crash mid-write leaves a corrupt last line. Resuming the
+        chain must skip it, not raise and permanently block the file."""
+        path = tmp_path / "audit.jsonl"
+        key = secrets.token_bytes(32)
+        first = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        first(action="read")
+
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write('{"entry_id": "truncated", "content_hash": "abc\n')
+
+        from agentmesh.governance.govern import _reset_shared_audit_sinks
+        _reset_shared_audit_sinks()
+
+        second = govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path), audit_secret_key=key
+        )
+        second(action="write")
+
+        lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        assert len(lines) == 3
+        assert lines[1].startswith('{"entry_id": "truncated"')
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX symlinks only")
+    def test_symlinked_audit_file_raises(self, tmp_path):
+        """Path.resolve() (used to key the shared-sink registry) follows
+        symlinks, so by the time a sink would see the resolved path there's
+        no symlink component left for its own O_NOFOLLOW open() to refuse -
+        the FileAuditSink-level check alone would be silently bypassed for
+        exactly this path. Caught here instead, before resolve()."""
+        target = tmp_path / "real.jsonl"
+        target.write_text("")
+        link = tmp_path / "audit.jsonl"
+        link.symlink_to(target)
+
+        with pytest.raises(ValueError, match="symlink"):
+            govern(
+                dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(link),
+                audit_secret_key=secrets.token_bytes(32),
+            )
+
+    def test_second_instance_env_var_key_mismatch_raises(self, tmp_path, monkeypatch):
+        """The first instance's key came from an explicit argument; the
+        second omits secret_key but AGT_AUDIT_SECRET_KEY now holds a
+        *different* key. Previously only checked when secret_key was
+        passed explicitly, so a changed env var went unnoticed and the
+        second instance silently kept signing with the first key."""
+        path = tmp_path / "audit.jsonl"
+        first_key = secrets.token_bytes(32)
+        govern(
+            dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path),
+            audit_secret_key=first_key,
+        )
+
+        monkeypatch.setenv("AGT_AUDIT_SECRET_KEY", secrets.token_bytes(32).hex())
+        with pytest.raises(ValueError, match="already open with a different"):
+            govern(dummy_tool, policy=ALLOW_ALL_POLICY, audit_file=str(path))
+
+
+# ── govern() + advisory: an audit-write failure must not fail open ──
+
+
+class TestGovernAdvisoryAuditFailure:
+    """_run_advisory's try/except is meant to fail open only when
+    advisory.check() itself fails (non-deterministic, defense-in-depth).
+    It used to also wrap the audit log() call, so a failing audit write
+    (the file-backed sink's own fail-closed errors: ENOSPC, EPERM, ELOOP,
+    a tamper-detected chain) was indistinguishable from the classifier
+    failing and silently turned a BLOCK into allow."""
+
+    def test_audit_failure_during_advisory_check_does_not_downgrade_block(self):
+        from agentmesh.governance.advisory import AdvisoryDecision, CallbackAdvisory
+
+        block_always = CallbackAdvisory(
+            lambda ctx: AdvisoryDecision(action="block", reason="blocked by test classifier"),
+            name="test",
+        )
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, advisory=block_always)
+
+        real_log = safe.audit_log.log
+        seen_event_types = []
+
+        def flaky_log(*args, **kwargs):
+            seen_event_types.append(kwargs.get("event_type"))
+            if kwargs.get("event_type") == "advisory_check":
+                raise OSError("simulated audit-sink write failure")
+            return real_log(*args, **kwargs)
+
+        safe.audit_log.log = flaky_log
+
+        with pytest.raises(OSError, match="simulated audit-sink write failure"):
+            safe(action="read")
+
+        # The deterministic policy_evaluation write must have gone through
+        # before the advisory_check write that failed - confirms the block
+        # decision was actually reached, not skipped some other way.
+        assert seen_event_types == ["policy_evaluation", "advisory_check"]

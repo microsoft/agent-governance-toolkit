@@ -90,6 +90,24 @@ test("plugin initialization fails loudly for a missing configured policy", async
   }
 });
 
+test("failed initialization does not suppress later registrations", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-retry-"));
+  const client = { app: { log: async () => {} } };
+  try {
+    const policyPath = join(root, "invalid-policy.json");
+    await writeFile(policyPath, "{invalid json}\n", "utf8");
+
+    await assert.rejects(loadPlugin(root, { client, policyPath }), /policy could not be loaded|JSON/i);
+    await assert.rejects(loadPlugin(root, { client, policyPath }), /policy could not be loaded|JSON/i);
+
+    const plugin = await loadPlugin(root, { client });
+    assert.equal(typeof plugin["tool.execute.before"], "function");
+    assert.deepEqual(await loadPlugin(root, { client }), {});
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("tool.execute.before throws for denied tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-deny-"));
   try {
@@ -120,14 +138,17 @@ test("tool.execute.before allows safe read calls", async () => {
   }
 });
 
-test("tool.execute.before marks review tools with __agt_review_reason", async () => {
+test("tool.execute.before blocks enforce-mode review tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-review-"));
   try {
     const plugin = await loadPlugin(root);
     const output = { args: { file_path: join(root, "package.json"), content: "{}" } };
 
-    await plugin["tool.execute.before"]({ tool: "write", sessionID: "review-session" }, output);
-    assert.ok(typeof output.args.__agt_review_reason === "string");
+    await assert.rejects(
+      plugin["tool.execute.before"]({ tool: "write", sessionID: "review-session" }, output),
+      /review|required|AGT/i,
+    );
+    assert.equal(output.args.__agt_review_reason, undefined);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

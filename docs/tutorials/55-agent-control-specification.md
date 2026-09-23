@@ -68,7 +68,7 @@ cd /tmp/acs-email-tutorial
 Create `manifest.yaml`:
 
 ```yaml
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: acs-email-tutorial
 policies:
@@ -129,7 +129,7 @@ verdict := {
   "reason": "redact_tracking_token",
   "message": "Tracking token redacted before tool execution.",
   "transform": {
-    "path": "$policy_target.body",
+    "path": "$target.body",
     "value": "Your case is ready. Tracking token: [REDACTED]"
   }
 } if {

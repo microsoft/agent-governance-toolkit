@@ -51,7 +51,7 @@ fn explain(
 ) -> Result<(), CliError> {
     let engine = load(path)?;
 
-    let context_map: Option<HashMap<String, serde_yaml::Value>> = match context {
+    let context_map: Option<HashMap<String, agentmesh::policy_data::Value>> = match context {
         Some(raw) => Some(
             serde_json::from_str(raw)
                 .map_err(|err| CliError::failure(format!("invalid --context JSON: {err}")))?,

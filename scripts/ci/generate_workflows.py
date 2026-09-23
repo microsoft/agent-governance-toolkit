@@ -19,6 +19,9 @@ registry, and restricts workflow level permissions to ``contents: read``. An
 optional proposal agent may edit the manifest, but it never writes YAML and the
 deterministic ``--check`` job is the gate, so generation stays reproducible and
 reviewable.
+
+The hand-authored composite actions under ``.github/actions`` are also checked
+against the same action registry, and ``--write`` synchronizes their pins.
 """
 
 from __future__ import annotations
@@ -32,6 +35,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = REPO_ROOT / ".github" / "ci" / "workflows.toml"
 ACTIONS_PATH = REPO_ROOT / ".github" / "ci" / "actions.toml"
+COMPOSITE_ACTIONS_DIR = REPO_ROOT / ".github" / "actions"
+COMPOSITE_ACTION_USES_RE = re.compile(
+    r"^(?P<prefix>[ \t]*(?:-[ \t]+)?uses:[ \t]*)"
+    r"(?P<value>[^\r\n]*?)(?P<newline>\r?\n)?$"
+)
 
 OPA_VERSION = "0.70.0"
 OPA_LINUX_AMD64_SHA256 = "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084"
@@ -81,6 +89,134 @@ def _load_actions(path: Path) -> dict[str, str]:
         comment = entry.get("comment")
         registry[key] = f"{uses} # {comment}" if comment else uses
     return registry
+
+
+def _registry_by_action_name(actions: dict[str, str]) -> dict[str, str]:
+    registry: dict[str, str] = {}
+    for value in actions.values():
+        reference = value.split(" #", 1)[0]
+        action_name, separator, _revision = reference.partition("@")
+        if not separator:
+            raise GenerationError(
+                f"registry entry is not pinned to a revision: {value}"
+            )
+        previous = registry.get(action_name)
+        if previous is not None and previous != value:
+            raise GenerationError(
+                f"conflicting registry pins for action '{action_name}'"
+            )
+        registry[action_name] = value
+    return registry
+
+
+def _composite_action_files() -> list[Path]:
+    if not COMPOSITE_ACTIONS_DIR.is_dir():
+        raise GenerationError(
+            f"missing composite actions directory: {COMPOSITE_ACTIONS_DIR}"
+        )
+    paths = {
+        path
+        for pattern in ("*/action.yml", "*/action.yaml")
+        for path in COMPOSITE_ACTIONS_DIR.glob(pattern)
+    }
+    return sorted(paths)
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _read_composite_action_lines(path: Path) -> list[str]:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            return handle.read().splitlines(keepends=True)
+    except (OSError, UnicodeError) as exc:
+        raise GenerationError(
+            f"cannot read composite action file {_display_path(path)}: {exc}"
+        ) from exc
+
+
+def _inspect_composite_action_pins(
+    actions: dict[str, str],
+) -> tuple[list[str], list[str], dict[Path, str]]:
+    registry_by_name = _registry_by_action_name(actions)
+    drifted: list[str] = []
+    invalid: list[str] = []
+    rewrites: dict[Path, str] = {}
+
+    for path in _composite_action_files():
+        rel = _display_path(path)
+        lines = _read_composite_action_lines(path)
+        updated_lines: list[str] = []
+        changed = False
+        for line in lines:
+            match = COMPOSITE_ACTION_USES_RE.match(line)
+            if not match:
+                updated_lines.append(line)
+                continue
+
+            value = match.group("value").strip()
+            reference = value.split(maxsplit=1)[0] if value else ""
+            if not reference:
+                invalid.append(f"{rel}: uses step has no action reference")
+                updated_lines.append(line)
+                continue
+            if reference.startswith(("./", "../", "docker://")):
+                updated_lines.append(line)
+                continue
+
+            action_name = reference.split("@", 1)[0]
+            canonical = registry_by_name.get(action_name)
+            if canonical is None:
+                invalid.append(
+                    f"{rel}: '{reference}' is not registered in .github/ci/actions.toml"
+                )
+                updated_lines.append(line)
+                continue
+
+            if value != canonical:
+                drifted.append(
+                    f"{rel}: '{reference}' does not match registry pin '{canonical}'"
+                )
+                updated_lines.append(
+                    f"{match.group('prefix')}{canonical}{match.group('newline') or ''}"
+                )
+                changed = True
+            else:
+                updated_lines.append(line)
+
+        if changed:
+            rewrites[path] = "".join(updated_lines)
+
+    return drifted, invalid, rewrites
+
+
+def check_composite_action_pins(actions: dict[str, str]) -> list[str]:
+    """Return drift and unregistered remote action references in local actions."""
+    drifted, invalid, _rewrites = _inspect_composite_action_pins(actions)
+    return invalid + drifted
+
+
+def sync_composite_action_pins(actions: dict[str, str]) -> list[Path]:
+    """Rewrite registered composite action references to match the registry."""
+    _drifted, invalid, rewrites = _inspect_composite_action_pins(actions)
+    if invalid:
+        raise GenerationError("\n".join(invalid))
+
+    changed: list[Path] = []
+    for path, content in rewrites.items():
+        try:
+            with path.open("w", encoding="utf-8", newline="") as handle:
+                handle.write(content)
+        except (OSError, UnicodeError) as exc:
+            raise GenerationError(
+                f"cannot write composite action file {_display_path(path)}: {exc}"
+            ) from exc
+        changed.append(path)
+    return changed
 
 
 def _indent(text: str, spaces: int) -> list[str]:
@@ -229,8 +365,9 @@ def render_workflow(workflow: dict, actions: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def build_outputs() -> dict[Path, str]:
-    actions = _load_actions(ACTIONS_PATH)
+def build_outputs(actions: dict[str, str] | None = None) -> dict[Path, str]:
+    if actions is None:
+        actions = _load_actions(ACTIONS_PATH)
     manifest = _load_toml(MANIFEST_PATH)
     workflows = manifest.get("workflow", [])
     if not workflows:
@@ -254,16 +391,25 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        outputs = build_outputs()
+        actions = _load_actions(ACTIONS_PATH)
+        outputs = build_outputs(actions)
     except GenerationError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
     if args.write:
+        try:
+            synced = sync_composite_action_pins(actions)
+        except GenerationError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         for path, content in outputs.items():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            with path.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(content)
             print(f"wrote {path.relative_to(REPO_ROOT)}")
+        for path in synced:
+            print(f"synced {_display_path(path)}")
         return 0
 
     drifted: list[str] = []
@@ -273,12 +419,20 @@ def main(argv: list[str] | None = None) -> int:
             drifted.append(f"{rel} (missing, run --write)")
         elif path.read_text(encoding="utf-8") != content:
             drifted.append(f"{rel} (out of date, run --write)")
+    try:
+        drifted.extend(check_composite_action_pins(actions))
+    except GenerationError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     if drifted:
-        print("error: generated workflows are out of date:", file=sys.stderr)
+        print(
+            "error: generated workflows or composite action pins are out of date:",
+            file=sys.stderr,
+        )
         for item in drifted:
             print(f"  - {item}", file=sys.stderr)
         return 1
-    print("generated workflows are up to date")
+    print("generated workflows and composite action pins are up to date")
     return 0
 
 

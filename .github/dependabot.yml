@@ -49,7 +49,7 @@ updates:
           - "ruff"
 
   # npm packages share one multi-directory entry so the PR limit applies to the
-  # JavaScript workspace as a whole instead of multiplying across six entries.
+  # JavaScript workspace as a whole instead of multiplying across seven entries.
   # Related development tools move together, while other compatible patch and
   # minor updates are grouped by dependency name across directories.
   - package-ecosystem: "npm"
@@ -60,6 +60,7 @@ updates:
       - "/agent-governance-claude-code"
       - "/agent-governance-typescript"
       - "/agent-governance-antigravity-cli"
+      - "/agent-governance-codex-cli"
     schedule:
       interval: "weekly"
     cooldown:
@@ -71,6 +72,12 @@ updates:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
     groups:
+      # Preserve main's grouping of vitest and its plugins, including majors:
+      # their exact peer ranges must move together.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
       javascript-dev-tooling:
         dependency-type: "development"
         patterns:
@@ -78,9 +85,7 @@ updates:
           - "@typescript-eslint/*"
           - "typescript"
           - "@types/node"
-          - "vitest"
-          - "@vitest/*"
-          - "browserslist"
+          - "browserslist" # cspell:ignore browserslist
         update-types:
           - "minor"
           - "patch"

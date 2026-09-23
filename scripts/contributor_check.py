@@ -95,10 +95,31 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
             raise
 
 
+# GitHub's search endpoints cap results at 1000 total (the "Search API"
+# result-window limit, documented at
+# https://docs.github.com/en/rest/search#about-search). A single request
+# only ever returns one page of up to `per_page` items, so a subject with
+# more issues/PRs than fit on the first page silently loses coverage on
+# exactly the pages most likely to contain the later, farther-out signal
+# a real spray/laundering pattern would produce. Page through the full
+# result window instead of trusting the first response alone. Mirrors the
+# identical fix already applied to credential_audit.py's `_search`.
+_SEARCH_RESULT_WINDOW = 1000
+
+
 def _search_issues(query: str, per_page: int = 30) -> list[dict]:
     """Search GitHub issues/PRs."""
-    data = _api("/search/issues", {"q": query, "per_page": str(per_page)})
-    return data.get("items", []) if data else []
+    items: list[dict] = []
+    max_pages = max(1, _SEARCH_RESULT_WINDOW // per_page)
+    for page in range(1, max_pages + 1):
+        data = _api("/search/issues", {"q": query, "per_page": str(per_page), "page": str(page)})
+        page_items = data.get("items", []) if data else []
+        if not page_items:
+            break
+        items.extend(page_items)
+        if len(page_items) < per_page:
+            break
+    return items
 
 
 # ---------------------------------------------------------------------------
@@ -904,10 +925,22 @@ def _check_self_promotion(
 
 
 def check_credential_spray(username: str, target_repo: str | None = None) -> list[Signal]:
-    """Check if user cites merges from one repo in issues across other repos."""
+    """Check if user cites merges from one repo in issues or pull requests across other repos."""
     signals: list[Signal] = []
 
-    issues = _search_issues(f"author:{username} is:issue", per_page=50)
+    issue_items = _search_issues(f"author:{username} is:issue", per_page=50)
+    pr_items = _search_issues(f"author:{username} is:pr", per_page=50)
+
+    seen_urls = set()
+    issues = []
+    for item in issue_items + pr_items:
+        url = item.get("html_url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            issues.append(item)
+        elif not url:
+            issues.append(item)
+
     if not issues:
         return signals
 
@@ -939,14 +972,14 @@ def check_credential_spray(username: str, target_repo: str | None = None) -> lis
         signals.append(Signal(
             name="credential_laundering",
             severity="HIGH",
-            detail=f"Cites {target_repo} merges in issues across {len(repos_with_citations)} repos",
+            detail=f"Cites {target_repo} merges in issues and pull requests across {len(repos_with_citations)} repos",
             value=credential_citations,
         ))
     elif credential_citations >= 1:
         signals.append(Signal(
             name="credential_citation",
             severity="MEDIUM",
-            detail=f"Cites {target_repo} in issues across {len(repos_with_citations)} other repos",
+            detail=f"Cites {target_repo} in issues and pull requests across {len(repos_with_citations)} other repos",
             value=credential_citations,
         ))
 

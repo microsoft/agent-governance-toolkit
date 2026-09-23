@@ -1,10 +1,10 @@
 ---
 title: "AgentMesh Runtime"
-last_reviewed: 2026-07-02
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 # AgentMesh Runtime
 
@@ -54,8 +54,9 @@ from hypervisor import Hypervisor, SessionConfig, ConsistencyMode
 hv = Hypervisor()
 
 # Create a governed session
-session = await hv.create_session(
-    config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL)
+session = hv.create_session(
+    config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL),
+    creator_did="did:mesh:admin",
 )
 
 # Execute with privilege enforcement

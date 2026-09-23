@@ -5,6 +5,240 @@ entries appear first.
 
 ---
 
+## Python manifests declaring annotators require an explicit dispatcher
+
+**Date:** TBD
+
+**Affected**
+
+- Python hosts loading manifests with a non-empty `annotators` section using
+  the default wheel or a source build without `bundled-dispatchers`
+
+**What changed**
+
+After the ACS retarget, the credential-reading bundled annotator dispatcher
+is opt-in. Without it, constructing `AgentControl` with a manifest that
+declares annotators fails unless the host supplies `annotator_dispatcher`.
+This applies even if those annotators are not used by an interception point.
+Manifests without annotators still construct without an annotator dispatcher,
+and the default OPA policy dispatcher remains available.
+
+**How to update**
+
+Pass a host dispatcher with a `dispatch(annotator_name, annotator_config,
+preliminary_policy_input)` method, for example
+`AgentControl.from_path("manifest.yaml", annotator_dispatcher=host_annotator)`.
+Alternatively, build the Python extension with the `bundled-dispatchers`
+Cargo feature to opt into the bundled dispatcher and its access to host
+environment credentials. This is a build-time feature, not a Python package extra.
+
+See [the Python SDK dispatcher guidance](policy-engine/sdk/python/README.md#annotator-dispatchers).
+
+---
+
+## `Policy.scope` is validated at construction, invalid scopes are rejected
+
+**Date:** TBD
+
+**Affected**
+
+- Any `Policy` YAML/JSON file or programmatic construction that uses a
+  `scope` value other than `global`, `tenant`, `organization`, or `agent`
+  (case-sensitive)
+- Python: `Policy(scope="organisation")` now raises `ValueError`
+- TypeScript: `engine.loadYaml(...)` / `engine.loadJson(...)` now throws
+  `Error` for invalid scope
+- .NET: `Policy.FromYaml(...)` / `Policy.FromJson(...)` now throws
+  `ArgumentException` for invalid scope
+
+**What changed**
+
+Previously, an unrecognised `scope` value (British spelling, wrong case,
+invented value, empty string) was silently demoted to `GLOBAL` at evaluation
+time.  Under the `most_specific_wins` conflict strategy this demotion could
+flip a deny into an allow, the wrong failure direction for a governance
+component.
+
+The fix validates `scope` at the earliest possible point: model construction
+(Python), `dataToPolicy` (TypeScript), and `FromDocument` (.NET).  The set
+of accepted values is derived from the `PolicyScope` enum so the validator
+and the enum cannot drift apart.
+
+**Migration**
+
+Fix the typo.  If you used `"organisation"`, change it to `"organization"`.
+If you relied on the silent demotion to `GLOBAL`, set the scope explicitly to
+`"global"`.
+
+**Additional TypeScript change:** The `PolicyScope` enum now includes
+`Organization = 'organization'`.  The `SCOPE_SPECIFICITY` map adds
+`Organization: 2` and bumps `Agent` from `2` to `3` to match the Python and
+.NET SDKs.  The numeric specificity values are an internal implementation
+detail, the string-based `resolutionTrace` is the stable contract, but if
+you logged or stored numeric specificity values, they will change.
+
+---
+
+## Manifests declaring `bundle_url`, `system_prompt_file` or `system_prompt_url` are rejected
+
+**Date:** TBD
+
+**Affected**
+
+- manifests with a rego policy, or a policy binding, that declares `bundle_url`
+- manifests with an `llm` annotator, or an annotation binding, that declares
+  `system_prompt_file` or `system_prompt_url`
+- tooling that validates manifests against `policy-engine/spec/schema/manifest.schema.json`
+
+**What changed**
+
+The embedded engine implemented these three fields. `agent-control-spec`
+0.4.0-alpha.3 does not, and its policy and annotator configuration maps are
+open, so after the retarget a manifest declaring one of them was accepted with
+the feature silently missing: the `llm` annotator ran with the default system
+prompt, and a `bundle_url` rego policy denied every request with
+`runtime_error:policy_invocation_failed` and no diagnostic.
+
+Such a manifest now fails at load with `runtime_error:manifest_invalid` naming
+the field and its location, from every constructor in Rust, Python, Node and
+the C ABI, and from `validate_manifest_yaml` and
+`validate_manifest_overlay_yaml`. The schema marks the three keys as rejected
+properties, so schema-only validators reject them as well.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `system_prompt_file: prompts/judge.txt` | `system_prompt: <the file's text>` |
+| `system_prompt_url: {url: ..., sha256: ...}` | `system_prompt: <the fetched text>` |
+| `bundle_url: {url: ..., sha256: ...}` | `bundle: ./policy` shipped with the manifest, or a host policy dispatcher that fetches the bundle |
+
+See `policy-engine/docs/acs-retarget.md`, "Removed manifest fields".
+
+---
+
+## `manifest_from_url` blocks private and unique-local literals and local names
+
+**Date:** TBD
+
+**Affected**
+
+- hosts that load a manifest with `manifest_from_url` (Rust), `AgentControl.from_url`
+  (Python), `AgentControl.fromUrl` (Node) or `acs_builder_from_url` (C ABI) from an
+  RFC 1918, `100.64.0.0/10`, `fc00::/7` or `fec0::/10` IP literal, or from
+  `localhost`, a `*.localhost` name or a `*.local` name
+
+**What changed**
+
+The SSRF guard on the top level manifest URL now parses the URL with the same
+parser the fetcher uses and evaluates the canonical host, so non canonical
+loopback and link-local literals (`127.1`, `2130706433`, `0x7f000001`,
+`0177.0.0.1`, an embedded tab) are refused instead of walking past a
+dotted-quad-only check. While closing that, the blocked set widened. Private,
+shared address space, unique-local and site-local addresses, and the three
+local name patterns, now fail closed with `runtime_error:manifest_invalid`.
+The previous engine allowed private literals so a manifest could be hosted on
+an internal HTTPS server by IP.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `https://10.0.0.5/manifest.yaml` | `https://policies.internal.example/manifest.yaml` |
+| `https://localhost:8443/manifest.yaml` (local testing) | load the file with `from_path`, or serve it under a public name |
+
+The guard still checks only the URL a caller passes. It does not resolve
+hostnames and it does not re-check redirect hops. Redirects on a URL-sourced
+manifest are always disabled in `manifest_from_url`, in the SDK `from_url`
+methods, and in the C ABI `acs_builder_from_url`, all of which force the
+redirect budget to zero. The `max_url_redirects` (Python) and `maxRedirects`
+(Node) arguments, and the `Limits::max_manifest_url_redirects` field, now
+have no effect on URL sourcing and no longer need to be set. See
+`policy-engine/docs/acs-retarget.md`.
+
+---
+
+## The policy engine moves to `agent-control-spec` and a three verdict contract
+
+**Date:** TBD
+
+**Affected**
+
+- every manifest, because `agent_control_specification_version` accepts exactly
+  one value and rejects the rest at parse time
+- manifests using the `$policy_target` path root
+- callers reading `warn` or `escalate` off a verdict
+- callers that relied on the engine applying a transform, honouring
+  `evaluate_only`, or resolving an approval
+- Rust, Python, Node and .NET code importing from `policy-engine`
+
+**What changed**
+
+AGT no longer carries its own policy engine. It depends on `agent-control-spec`,
+the same engine extracted from this tree and rebased onto the agent-hooks control
+contract.
+
+The verdict set closed to `allow`, `deny` and `transform`. A policy may still
+express `warn` and `escalate`, but the engine normalizes them. `warn` becomes an
+`allow` with an entry in `warnings[]`. `escalate` becomes a `deny` carrying an
+`approval` block, which the spec calls a liftable deny. A `deny` without that
+block is final.
+
+The engine also stopped mutating anything. Applying a transform, honouring
+`evaluate_only`, resolving an approval, and deriving the identity trio are host
+obligations now, discharged by `HostEvaluation`.
+
+`policy-engine/core` retains compatibility aliases for one release cycle.
+These retain names, not the old signatures or behavior.
+
+**How to update**
+
+| Before | After |
+|--------|-------|
+| `agent_control_specification_version: 0.3.1-beta` | `agent_control_specification_version: 0.4.0-alpha.1` |
+| `$policy_target` | `$target` |
+| `decision: warn` | `decision: allow` with `warnings[]` |
+| `decision: escalate` | `decision: deny` with `approval` |
+
+A host that tested `decision == "warn"` should read `warnings` instead. A host
+that tested for `escalate` should test for the `approval` block on a `deny`.
+
+Host-synthesized reasons moved from the engine's `runtime_error:` namespace to
+the reserved `host_error:` namespace, and one was renamed. A host matching on
+the old strings must update:
+
+| Before | After |
+|--------|-------|
+| `runtime_error:approval_resolver_failed` | `host_error:approval_resolver_failed` |
+| `runtime_error:approval_action_mismatch` | `host_error:approval_identity_mismatch` |
+| (none) | `host_error:approval_unresolved`, a liftable deny with no resolver or a timed-out one |
+| `runtime_error:effect_invalid`, `runtime_error:effect_target_forbidden` | gone with the effects plane. The engine keeps `runtime_error:transform_invalid` and `runtime_error:transform_target_forbidden`; a transform the host rejects while applying it reports `host_error:transform_invalid` or `host_error:transform_target_forbidden` |
+| `runtime_error:adapter_unsupported`, `runtime_error:streaming_unsupported` | `host_error:adapter_unsupported`, `host_error:streaming_unsupported` |
+
+`policy-engine/spec/reserved-reasons.json` is the registry.
+
+Rust `use` paths inside `agent_control_specification_core` moved. The root
+re-exports still resolve; module-qualified imports must change:
+
+| Before | After |
+|--------|-------|
+| `manifest::{parse_manifest_yaml_value, validate_manifest_yaml, validate_manifest_overlay_yaml}` | `manifest_yaml::{...}` |
+| `telemetry::{InMemoryTelemetrySink, MultiSink, StdoutJsonTelemetrySink}` | `telemetry_sinks::{...}` |
+| `policy_input::action_identity` | `identity::action_identity` |
+| `intervention_point`, `verdict`, `ffi` modules | removed from the core crate root; the C ABI is `agent_control_specification::ffi` |
+| core `crate-type = ["lib", "cdylib"]` | `lib` only; the `cdylib` is built from `agent_control_specification` |
+
+Python consumers need `agent-control-specification>=0.4.0b0,<0.5.0`.
+`agt-policies` 5.1.0 and the generator declare that requirement so an installed
+0.3.1b1 wheel cannot satisfy it. Publish the new SDK before these consumers.
+The .NET SDK and adapters move together to 0.4.0-beta.0, and their native
+library is now `agent_control_specification`, without the `_core` suffix.
+
+`policy-engine/docs/acs-retarget.md` carries the full symbol mapping and the
+list of gaps filed upstream.
+
+---
+
 ## `TrustMiddleware` requires signed requests and an explicit trust anchor
 
 **Date:** TBD
@@ -60,6 +294,92 @@ builds the canonical envelope and is the authority on its contents.
 
 Both sides must be upgraded together: an unpatched client cannot authenticate
 against a patched server, by design.
+## MerkleAuditChain now records a canonical, reproducible Merkle root
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-governance-python` (`agentmesh.governance.audit`):
+  `MerkleAuditChain.add_entry`, `MerkleAuditChain.get_root_hash`,
+  `AuditLog.export` (`merkle_root` / `chain_root` fields), and Merkle inclusion
+  proofs from `MerkleAuditChain.get_proof`.
+- `agent-governance-python` (`agentmesh.governance.trace_sink`):
+  `session_to_trust_record` and `TRACEAuditSink.emit`, which derive the TRACE
+  Trust Record `runtime.measurement` (and, when `build_provenance_digest` is
+  unset, `build_provenance.digest`) from the Merkle root.
+- `agent-governance-python` (`agentmesh.services.audit`):
+  `AuditService.summary` (`root_hash` field).
+
+**What changed:**
+
+The incremental tree builder padded interior levels with the leaf sentinel
+`'0' * 64` rather than the empty-subtree constant `E(k)` (where `E(0) = '0' * 64`
+and `E(k+1) = SHA-256(E(k) || E(k))`). The recorded root therefore diverged from
+a from-scratch rebuild of the same leaves for most chain sizes (22 of the first
+32: n = 5, 6, 9-14, 17-30, and so on), so an exported `merkle_root` could not be
+reproduced by a verifier that rebuilt the tree. Interior padding now uses `E(k)`,
+so the incremental root, a from-scratch rebuild, and an independent textbook
+recomputation all agree, and the update stays amortized O(log n) per append
+(worst-case O(n) when tree capacity doubles).
+
+**Impact / required action:**
+
+For the affected chain sizes the exported `merkle_root` (and the corresponding
+inclusion proofs) now differ from values produced by earlier releases. Consumers
+who archived `AuditLog.export()` output as compliance evidence will see a
+mismatch when re-verifying old exports against a current build. Re-export and
+re-anchor any archived roots, or pin the prior version to verify pre-existing
+evidence. Entry hashes and the linear `previous_hash` chain (`verify_chain`) are
+unchanged.
+
+The TRACE Trust Records emitted by `TRACEAuditSink` carry this root in
+`runtime.measurement` and are Ed25519-signed before being written out for
+external relying parties. For the affected chain sizes a relying party that
+re-derives the measurement from the same audit entries now computes a different
+value, so those records must be re-issued (rebuilt and re-signed), not merely
+re-exported. `AuditService.summary()` likewise reports the new `root_hash` for
+the affected sizes.
+
+---
+
+## Hypervisor session lifecycle methods are synchronous
+
+**Date:** TBD
+
+**Affected**
+
+- `agent-hypervisor` (`hypervisor.Hypervisor`)
+- callers of `create_session`, `join_session`, `activate_session`,
+  `terminate_session`, `verify_behavior`, and `monitor_sessions`
+
+**What changed**
+
+The following `Hypervisor` methods are now synchronous:
+
+- `create_session`
+- `join_session`
+- `activate_session`
+- `terminate_session`
+- `verify_behavior`
+- `monitor_sessions`
+
+They previously returned coroutines despite having no internal await points.
+They now return their result directly.
+
+**How to migrate**
+
+Remove `await` when calling these methods:
+
+```python
+session = hv.create_session(config=config, creator_did="did:mesh:admin")
+ring = hv.join_session(session.sso.session_id, "did:mesh:agent", sigma_raw=0.85)
+hv.activate_session(session.sso.session_id)
+hash_root = hv.terminate_session(session.sso.session_id)
+```
+
+Keep awaiting unrelated async APIs such as `SagaOrchestrator.execute_step` and
+`SagaOrchestrator.compensate`.
 
 ---
 
@@ -153,12 +473,13 @@ The following public symbols are removed:
    updating.
 2. `agt validate` now applies the runtime's own contract, so a manifest with no
    intervention points is an error rather than a warning.
-3. The approval timeout moved onto the session. `HostSession` defaults to 300
-   seconds and denies on expiry; pass `approval_timeout_seconds` to change it.
-   The manifest's `approval.timeout_seconds` does not drive this. The core
-   treats that section as opaque host configuration and `AgentControl` does not
-   surface it, so a host that declares it in the manifest must pass the same
-   value to the session until the SDK exposes an accessor.
+3. The approval timeout moved onto the session. `HostSession` denies on
+   expiry and bounds the wait by, in order: an explicit
+   `approval_timeout_seconds` argument, the manifest's
+   `approval.timeout_seconds` (read through `AgentControl.approval_config`),
+   then a 300-second default. The manifest's `on_timeout` is not applied; the
+   session's own `approval_on_timeout` (default `deny`) decides what happens
+   on expiry.
 
 ---
 

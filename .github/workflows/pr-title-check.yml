@@ -55,7 +55,7 @@ jobs:
           types: |
             chore
           requireScope: true
-          subjectPattern: ^(?:[bB]ump|[uU]pdate) .+$
+          subjectPattern: ^(?:[bB]ump|[uU]pdate) .+$ # cspell:disable-line
           subjectPatternError: |
             Dependabot titles must use "chore(deps): Bump ...",
             "chore(deps-dev): Update ...", or their lowercase equivalents.

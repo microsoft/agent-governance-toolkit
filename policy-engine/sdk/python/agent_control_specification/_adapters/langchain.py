@@ -7,9 +7,11 @@ from .._orchestration import AgentControl
 from .._types import EnforcementMode, JsonValue
 from ._generic import guard_agent_method
 from ._errors import AdapterUnsupportedError
+from .._host import SnapshotSource
 from ._shared import (
     TOOL_CALL_ID_KWARG,
     _maybe_await,
+    _default_snapshot,
     _merge_snapshot,
     _ObjectProxy,
     _pop_common_adapter_kwargs,
@@ -54,7 +56,7 @@ def guard_langchain_tool(
     *,
     control: AgentControl | None = None,
     tool_call_id: str | None = None,
-    snapshot: Mapping[str, JsonValue] | None = None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None = None,
     mode: EnforcementMode | str = EnforcementMode.ENFORCE,
 ) -> AgentT:
     """Guard a LangChain BaseTool-style object via ``pre/post_tool_call``."""
@@ -100,10 +102,10 @@ def _guard_langchain_tool_ainvoke(
     method: Callable[..., JsonValue | Awaitable[JsonValue]],
     *,
     tool_call_id: str | None,
-    snapshot: Mapping[str, JsonValue] | None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None,
     mode: EnforcementMode | str,
 ) -> Callable[..., Awaitable[JsonValue]]:
-    default_snapshot = dict(snapshot or {})
+    default_snapshot = _default_snapshot(snapshot)
 
     async def guarded(args_value: JsonValue, *args: Any, **kwargs: Any) -> JsonValue:
         per_call_snapshot = _pop_common_adapter_kwargs(kwargs)

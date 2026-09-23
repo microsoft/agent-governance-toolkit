@@ -1,6 +1,6 @@
 ---
 title: Packages
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-10
 owner: docs-team
 ---
 
@@ -111,6 +111,10 @@ the [ACS package guide](agent-control-specification.md).
 
 Some Python packages, developer tools, ACS SDKs, and OCI images remain separate
 where consolidation would obscure their lifecycle or intended consumer.
+
+The source-distributed [Agent Learning governance package](agent-learning.md)
+adds governed capture, reward shaping, Bayesian decision audit, isolated policy
+candidates, and staged promotion for Microsoft Agent Learning `0.8.x`.
 
 ## Status labels
 

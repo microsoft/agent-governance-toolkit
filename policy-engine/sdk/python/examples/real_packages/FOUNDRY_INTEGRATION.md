@@ -42,23 +42,13 @@ deny any tool argument the model judge does not label `safe`, and fail closed if
 the judge is unavailable. To change what is enforced, edit the Rego rule and run
 `opa test policy`.
 
-Neither file has to live on disk. Load a remote manifest with
-`AgentControl.from_url("https://policies.example/foundry_governance.acs.yaml", sha256="<hex>")`,
-and reference a remote Rego bundle from the manifest with a pinned `bundle_url`
-instead of the local `bundle`.
-
-```yaml
-policies:
-  tool_guard:
-    type: rego
-    bundle_url:
-      url: https://policies.example/foundry_tool_guard.tar.gz
-      sha256: <64-hex digest>
-    query: data.agent_control_specification.foundry_tool_guard.verdict
-```
-
-A remote manifest or bundle must be pinned with a `sha256` so a swapped policy
-cannot silently run.
+The manifest does not have to live on disk. Load a remote one with
+`AgentControl.from_url("https://policies.example/foundry_governance.acs.yaml", sha256="<hex>")`.
+Pin it with a `sha256` so a swapped manifest cannot silently run. The Rego
+bundle itself stays local: the `bundle_url` field the earlier engine offered is
+not implemented by the pinned `agent-control-spec` release, and a manifest that
+declares it is rejected at load. See `policy-engine/docs/acs-retarget.md`,
+"Removed manifest fields".
 
 ## Step 2. Wire it into your agent
 

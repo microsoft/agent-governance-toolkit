@@ -1,6 +1,6 @@
 ---
 title: "Data Provenance Model for AI Agents"
-last_reviewed: 2026-04-25
+last_reviewed: 2026-08-14
 owner: agt-maintainers
 ---
 
@@ -12,7 +12,7 @@ owner: agt-maintainers
 > through AI agent systems. Required by EU AI Act Article 10 (data governance)
 > for high-risk AI systems.
 >
-> **Deadline**: EU AI Act high-risk provisions apply from **August 2, 2026**.
+> **Deadline**: EU AI Act high-risk obligations now phase in: Annex III / Art. 6(2) from **2 December 2027**; Annex I / Art. 6(1) from **2 August 2028**.
 
 ---
 

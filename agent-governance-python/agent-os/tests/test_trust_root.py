@@ -73,39 +73,20 @@ def test_non_integer_supervisor_level_is_rejected(level: object) -> None:
 def test_accepted_supervisor_levels_are_unchanged(level: int, is_agent: bool, expected: bool) -> None:
     assert _root().validate_supervisor({'name': 'sup', 'level': level, 'is_agent': is_agent}) is expected
 
-def _hierarchy_with(name: str, level: int, is_agent: bool) -> SupervisorHierarchy:
+def _hierarchy() -> SupervisorHierarchy:
     hierarchy = SupervisorHierarchy(trust_root=_root())
     hierarchy.register_supervisor('trust-root', level=0, is_agent=False)
     hierarchy.register_supervisor('safety-agent', level=1, is_agent=True)
-    hierarchy.register_supervisor(name, level=level, is_agent=is_agent)
     return hierarchy
 
-def test_agent_registered_above_the_root_is_reported() -> None:
-    """``validate_hierarchy`` had no check that could see a negative level.
-
-    The determinism rule only inspects supervisors whose level is exactly 0, and
-    the gap scan only walks ``range(1, max_level + 1)``. An LLM agent at level -1
-    therefore produced an empty violation list -- the documented "valid" signal.
-    """
-    violations = _hierarchy_with('above-root', -1, True).validate_hierarchy()
-    assert violations != []
-    assert any('above-root' in v and '-1' in v for v in violations)
-
-def test_deterministic_supervisor_above_the_root_is_also_reported() -> None:
-    assert _hierarchy_with('above-root', -1, False).validate_hierarchy() != []
-
-def test_negative_level_outranks_the_root_in_the_authority_chain() -> None:
-    """Why a violation is the right response rather than a warning.
-
-    The chain is ordered by level, so a negative level lands last -- the
-    position the docstring reserves for the trust root as final authority.
-    """
-    assert _hierarchy_with('above-root', -1, True).get_authority_chain({})[-1] == 'above-root'
-
 @pytest.mark.parametrize('level', [-1, -7])
-def test_negative_level_is_reported_even_without_a_level_0(level: int) -> None:
-    # The gap scan walks range(1, max_level + 1), which is empty when the highest
-    # level is negative, so nothing else would fire here either.
-    hierarchy = SupervisorHierarchy(trust_root=_root())
-    hierarchy.register_supervisor('only', level=level, is_agent=True)
-    assert any('negative level' in v for v in hierarchy.validate_hierarchy())
+@pytest.mark.parametrize('is_agent', [True, False])
+def test_hierarchy_rejects_negative_levels_before_they_reach_the_authority_chain(
+    level: int, is_agent: bool
+) -> None:
+    hierarchy = _hierarchy()
+
+    with pytest.raises(ValueError, match='must be non-negative'):
+        hierarchy.register_supervisor('above-root', level=level, is_agent=is_agent)
+
+    assert hierarchy.get_authority_chain({}) == ['safety-agent', 'trust-root']
