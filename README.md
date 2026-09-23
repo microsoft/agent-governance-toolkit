@@ -439,7 +439,7 @@ The only official sources for the Agent Governance Toolkit are:
 |----------|----------|
 | **Source code** | [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
 | **Documentation** | [microsoft.github.io/agent-governance-toolkit](https://microsoft.github.io/agent-governance-toolkit/) |
-| **Python packages** | [pypi.org/user/agentgovtoolkit](https://pypi.org/user/agentgovtoolkit/) |
+| **Python packages** | `https://pypi.org/user/agentgovtoolkit/` |
 | **npm packages** | `@microsoft/agent-governance-sdk` on [npmjs.com](https://www.npmjs.com/) |
 | **NuGet packages** | `Microsoft.AgentGovernance.*` on [nuget.org](https://www.nuget.org/) |
 | **Rust crates** | `agent-governance`, `agent-governance-mcp` on [crates.io](https://crates.io/) |
