@@ -98,6 +98,7 @@ Caldicott
 Cdecl
 Centralised
 Chatflows
+cjar
 Clendenen
 CommonMark
 Convs
@@ -176,6 +177,7 @@ ISSN
 Initialise
 Jaccard
 Janssen
+jans
 Kigali
 KillSwitch
 Kogi

@@ -133,6 +133,102 @@ test("evaluateOpenCodePrompt allows benign prompts", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+test("getPolicyStatus distinguishes effective defenses from configured context", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-defense-status-"));
+  const policyPath = join(root, "policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      version: 1,
+      minimumPromptDefenseGrade: "B",
+      additionalContext: [],
+      toolPolicies: { allowedTools: ["*"] },
+    }),
+    "utf8",
+  );
+  const state = await loadPolicy({ policyPath, auditPath: join(root, "audit.json") });
+
+  const status = await getPolicyStatus(state);
+
+  assert.equal(status.promptDefenseScope, "effective-context");
+  assert.equal(status.promptDefenseGrade, "A");
+  assert.equal(status.configuredPromptDefenseScope, "operator-additional-context");
+  assert.equal(status.configuredPromptDefenseGrade, "F");
+  assert.equal(status.configuredPromptDefenseCoverage, "0/12");
+  assert.equal(status.configuredPromptDefenseMissing.length, 12);
+  assert.equal(status.promptDefenseBlockingScope, "effective-context");
+
+  await rm(root, { recursive: true, force: true });
+});
+
+for (const scenario of [
+  { name: "no operator policy", invalidOperator: false, invalidDefault: false },
+  { name: "missing explicit operator policy", invalidOperator: false, invalidDefault: false, missingOperator: true },
+  { name: "invalid operator policy", invalidOperator: true, invalidDefault: false },
+  { name: "minimal fallback policy", invalidOperator: false, invalidDefault: true },
+  { name: "both policy files invalid", invalidOperator: true, invalidDefault: true },
+]) {
+  test(`getPolicyStatus reports empty configured context with ${scenario.name}`, async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "agt-opencode-defense-fallback-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const policyPath = join(root, "policy.json");
+    const defaultPolicyPath = join(root, "default-policy.json");
+    if (scenario.invalidOperator) {
+      await writeFile(policyPath, "invalid JSON", "utf8");
+    }
+    if (scenario.invalidDefault) {
+      await writeFile(defaultPolicyPath, "invalid JSON", "utf8");
+    }
+    const state = await loadPolicy({
+      policyPath: scenario.invalidOperator || scenario.missingOperator ? policyPath : null,
+      homeDirectory: root,
+      auditPath: join(root, "audit.json"),
+      ...(scenario.invalidDefault ? { defaultPolicyPath } : {}),
+    });
+    const status = await getPolicyStatus(state);
+
+    assert.equal(state.source, "bundled-default");
+    assert.equal(Boolean(state.configuredPolicyError), scenario.invalidOperator || Boolean(scenario.missingOperator));
+    if (scenario.missingOperator) {
+      assert.match(state.configuredPolicyError.message, /configured policy file not found/i);
+    }
+    assert.equal(Boolean(state.bundledDefaultError), scenario.invalidDefault);
+    assert.equal(status.configuredPromptDefenseScope, "operator-additional-context");
+    assert.equal(status.configuredPromptDefenseGrade, "F");
+    assert.equal(status.configuredPromptDefenseCoverage, "0/12");
+    assert.equal(status.configuredPromptDefenseMissing.length, 12);
+    assert.equal(status.promptDefenseScope, "effective-context");
+    assert.equal(status.promptDefenseGrade, "A");
+    assert.equal(status.promptDefenseCoverage, "12/12");
+    assert.equal(status.promptDefenseBlockingScope, "effective-context");
+
+    const result = await evaluateOpenCodePrompt(state, { prompt: "Hello" });
+    if (scenario.invalidOperator || scenario.missingOperator || scenario.invalidDefault) {
+      assert.equal(result.effect, "deny");
+      assert.match(result.reason, /policy could not be loaded/i);
+    } else {
+      assert.equal(status.configuredPolicyError, undefined);
+      assert.equal(result.effect, "allow");
+    }
+  });
+}
+
+test("getPolicyStatus still grades nonempty operator context", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-defense-operator-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "policy.json");
+  const policy = await readFile(new URL("../config/default-policy.json", import.meta.url), "utf8");
+  await writeFile(policyPath, policy, "utf8");
+  const state = await loadPolicy({ policyPath, auditPath: join(root, "audit.json") });
+  const status = await getPolicyStatus(state);
+
+  assert.notEqual(state.source, "bundled-default");
+  assert.equal(status.configuredPromptDefenseGrade, "D");
+  assert.equal(status.configuredPromptDefenseCoverage, "4/12");
+  assert.equal(status.promptDefenseGrade, "A");
+});
+
 test("evaluateOpenCodeTool denies dangerous bash bootstrap and enforce-mode review tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-tool-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });
