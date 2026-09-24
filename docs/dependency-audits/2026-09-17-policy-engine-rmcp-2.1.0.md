@@ -48,7 +48,7 @@ Both advisories are fixed in 2.0.0 and closed by this change.
   rust-sdk #937 (with a related SSRF guard in #935).
 
 Reachability in this repository: neither vulnerable module is compiled.
-`policy-engine/integrations/mcp/Cargo.toml` declares `rmcp = "2.1"` with no
+`policy-engine/integrations/mcp/Cargo.toml` declares `rmcp = "2.1.0"` with no
 feature list, so only the default features `base64`, `macros` and `server`
 are enabled (`cargo tree -e features` shows the single edge
 `rmcp feature "default"`). The Streamable HTTP server sits behind
