@@ -403,9 +403,7 @@ function createCommandPatternBackend(policy) {
 
         const recursiveDeleteMatched =
           rule.id === "recursive-delete" && matchesRecursiveDeleteCommand(commandText);
-        const matchedPattern = rule.id === "recursive-delete"
-          ? undefined
-          : rule.commandPatterns.find((pattern) => pattern.regex.test(commandText));
+        const matchedPattern = rule.commandPatterns.find((pattern) => pattern.regex.test(commandText));
         if (!recursiveDeleteMatched && !matchedPattern) {
           continue;
         }
@@ -982,9 +980,41 @@ function getShellCommandInvocation(tokens) {
       continue;
     }
 
-    if (["command", "exec", "nohup", "busybox"].includes(commandName)) {
+    if (commandName === "exec") {
       index += 1;
       while (tokens[index]?.startsWith("-")) {
+        const option = tokens[index];
+        index += option === "-a" ? 2 : 1;
+      }
+      continue;
+    }
+
+    if (["command", "nohup", "busybox"].includes(commandName)) {
+      index += 1;
+      while (tokens[index]?.startsWith("-")) {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (["nice", "time", "timeout"].includes(commandName)) {
+      index += 1;
+      const optionsWithArguments = {
+        nice: new Set(["-n", "--adjustment"]),
+        time: new Set(["-f", "--format", "-o", "--output"]),
+        timeout: new Set(["-k", "--kill-after", "-s", "--signal"]),
+      }[commandName];
+      while (tokens[index]?.startsWith("-")) {
+        const option = tokens[index];
+        index += 1;
+        if (option === "--") {
+          break;
+        }
+        if (optionsWithArguments.has(option)) {
+          index += 1;
+        }
+      }
+      if (commandName === "timeout" && index < tokens.length) {
         index += 1;
       }
       continue;
@@ -1014,9 +1044,7 @@ function getShellCommandInvocation(tokens) {
       while (index < tokens.length && tokens[index].startsWith("-")) {
         const option = tokens[index];
         index += 1;
-        if (
-          ["-u", "--user", "-g", "--group", "-h", "--host", "-p", "--prompt", "-C", "--close-from"].includes(option)
-        ) {
+        if (sudoWrapperOptionTakesArgument(option)) {
           index += 1;
         }
       }
@@ -1031,13 +1059,22 @@ function getShellCommandInvocation(tokens) {
   return undefined;
 }
 
+function sudoWrapperOptionTakesArgument(option) {
+  if (
+    ["-u", "--user", "-g", "--group", "-h", "--host", "-p", "--prompt", "-C", "--close-from"].includes(option)
+  ) {
+    return true;
+  }
+  return /^-[A-Za-z]+$/.test(option) && /[ughpC]$/.test(option.slice(1));
+}
+
 function parseRmOption(token) {
   if (token === "-" || !token.startsWith("-")) {
     return undefined;
   }
 
   if (token.startsWith("--")) {
-    const optionName = token.slice(2).toLowerCase();
+    const optionName = token.slice(2).split("=")[0].toLowerCase();
     if (optionName.startsWith("r") && "recursive".startsWith(optionName)) {
       return { force: false, recognized: true, recursive: true };
     }
@@ -1300,6 +1337,9 @@ function tokenizeShellCommands(commandText) {
   let token = "";
   let tokenStarted = false;
   let quote;
+  let resumeDoubleQuote = false;
+  let backtickSubstitution = false;
+  let commandSubstitutionDepth = 0;
   let hasControlOperator = false;
 
   const finishToken = () => {
@@ -1320,6 +1360,23 @@ function tokenizeShellCommands(commandText) {
   for (let index = 0; index < input.length; index += 1) {
     const character = input[index];
     if (quote) {
+      if (quote === '"' && character === "`") {
+        hasControlOperator = true;
+        finishCommand();
+        quote = undefined;
+        resumeDoubleQuote = true;
+        backtickSubstitution = true;
+        continue;
+      }
+      if (quote === '"' && character === "$" && input[index + 1] === "(") {
+        hasControlOperator = true;
+        finishCommand();
+        quote = undefined;
+        resumeDoubleQuote = true;
+        commandSubstitutionDepth = 1;
+        index += 1;
+        continue;
+      }
       if (character === quote) {
         quote = undefined;
       } else if (quote === '"' && character === "\\" && index + 1 < input.length) {
@@ -1334,6 +1391,35 @@ function tokenizeShellCommands(commandText) {
         token += character;
       }
       tokenStarted = true;
+      continue;
+    }
+
+    if (backtickSubstitution && character === "`") {
+      hasControlOperator = true;
+      finishCommand();
+      backtickSubstitution = false;
+      if (resumeDoubleQuote) {
+        quote = '"';
+        resumeDoubleQuote = false;
+        tokenStarted = true;
+      }
+      continue;
+    }
+    if (commandSubstitutionDepth > 0 && character === "(") {
+      hasControlOperator = true;
+      finishCommand();
+      commandSubstitutionDepth += 1;
+      continue;
+    }
+    if (commandSubstitutionDepth > 0 && character === ")") {
+      hasControlOperator = true;
+      finishCommand();
+      commandSubstitutionDepth -= 1;
+      if (commandSubstitutionDepth === 0 && resumeDoubleQuote) {
+        quote = '"';
+        resumeDoubleQuote = false;
+        tokenStarted = true;
+      }
       continue;
     }
 
@@ -1362,6 +1448,14 @@ function tokenizeShellCommands(commandText) {
       }
       continue;
     }
+    if (
+      character === "&" &&
+      ([">", "<"].includes(input[index - 1]) || [">", "<"].includes(input[index + 1]))
+    ) {
+      token += character;
+      tokenStarted = true;
+      continue;
+    }
     if (/\s/.test(character)) {
       finishToken();
       if (character === "\n" || character === "\r") {
@@ -1370,6 +1464,16 @@ function tokenizeShellCommands(commandText) {
         if (character === "\r" && input[index + 1] === "\n") {
           index += 1;
         }
+      }
+      continue;
+    }
+    if (character === ">" || character === "<") {
+      finishToken();
+      token = character;
+      tokenStarted = true;
+      if (input[index + 1] === character) {
+        token += character;
+        index += 1;
       }
       continue;
     }

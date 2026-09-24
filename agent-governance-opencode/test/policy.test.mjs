@@ -192,10 +192,23 @@ test("bundled recursive-delete policy denies common flag orderings", async (t) =
     "rm -r\\f /srv",
     "rm 'a;b' -rf /srv",
     "rm a\\;b -rf /srv",
+    "rm 2>&1 -rf /srv",
+    "rm >&2 -rf /srv",
+    "rm>/tmp -rf /srv",
     "echo ready; rm -rf /srv",
+    "echo \"$(rm -rf /srv)\"",
+    "echo \"`rm -rf /srv`\"",
+    "x=\"$(rm -rf /srv)\"",
     "sudo -u root rm -rf /srv",
+    "sudo -Hu root rm -rf /srv",
     "env AGT_TEST=1 rm -rf /srv",
     "command rm -rf /srv",
+    "nice rm -rf /srv",
+    "nice -n 10 rm -rf /srv",
+    "time rm -rf /srv",
+    "timeout 5 rm -rf /srv",
+    "timeout -k 1 5 rm -rf /srv",
+    "exec -a NAME rm -rf /srv",
   ];
 
   for (const command of commands) {
@@ -227,6 +240,7 @@ test("bundled recursive-delete policy keeps command boundaries and safe cleanup 
     { command: "rm '--' -rf /srv", matchedRecursiveDelete: false },
     { command: "rm --no-preserve-root --force /srv", matchedRecursiveDelete: false },
     { command: "rm --one-file-system --force /srv", matchedRecursiveDelete: false },
+    { command: "rm -rf --interactive=never node_modules", matchedRecursiveDelete: false },
     { command: "rm -r /tmp && rm -f /tmp", matchedRecursiveDelete: false },
     { command: "rm -rf node_modules", matchedRecursiveDelete: false },
     { command: "git rm -rf --cached dir", matchedRecursiveDelete: false },
@@ -251,6 +265,54 @@ test("bundled recursive-delete policy keeps command boundaries and safe cleanup 
       matchedRecursiveDelete,
       command,
     );
+  }
+});
+
+test("user recursive-delete rules retain their custom command patterns", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-custom-recursive-delete-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: {
+        allowedTools: ["bash"],
+        blockedTools: [],
+        reviewTools: [],
+        defaultEffect: "allow",
+      },
+      blockedToolCalls: [
+        {
+          id: "recursive-delete",
+          tool: "bash",
+          reason: "Custom recursive-delete command is blocked.",
+          effect: "deny",
+          commandPatterns: [
+            { source: "\\bdel\\s+/s\\b", flags: "i" },
+            { source: "\\brimraf\\b", flags: "i" },
+          ],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  const state = await loadPolicy({
+    policyPath,
+    auditPath: join(root, "audit.json"),
+    homeDirectory: root,
+  });
+
+  for (const command of ["del /s /q C:\\data", "npx rimraf dist"]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      cwd: root,
+      sessionId: "custom-recursive-delete-session",
+    });
+    assert.equal(result.effect, "deny", command);
+    assert.match(result.reason, /Custom recursive-delete command is blocked/, command);
   }
 });
 
