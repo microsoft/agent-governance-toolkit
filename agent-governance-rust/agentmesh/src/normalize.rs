@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 //! Content normalization (canonicalization) for prompt-injection defense.
 //!
 //! This module strengthens and **surfaces** the de-obfuscation that previously
@@ -914,7 +916,7 @@ mod tests {
     }
 
     #[test]
-    fn ambiguous_layer_rejects_nonprintable_nested_blob() {
+    fn ambiguous_layer_rejects_non_printable_nested_blob() {
         let binary_blob = STANDARD.encode((0_u8..32).collect::<Vec<_>>());
         let nested = encode_percent(&binary_blob);
 

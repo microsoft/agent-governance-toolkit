@@ -137,7 +137,7 @@ class TestTransformsFire(unittest.TestCase):
                         self.assertIn(wrapper_tag, result.transforms)
                         self.assertIn(blob_tag, result.transforms)
 
-    def test_ambiguous_layer_rejects_nonprintable_nested_blob(self):
+    def test_ambiguous_layer_rejects_non_printable_nested_blob(self):
         binary_blob = base64.b64encode(bytes(range(32))).decode("ascii")
         nested = "".join(f"%{byte:02x}" for byte in binary_blob.encode("ascii"))
 
