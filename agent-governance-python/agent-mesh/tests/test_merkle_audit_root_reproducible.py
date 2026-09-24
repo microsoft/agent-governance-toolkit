@@ -20,6 +20,7 @@ import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from threading import Event
+from unittest.mock import Mock
 
 import pytest
 
@@ -225,6 +226,161 @@ class TestMerkleRootReproducible:
         current_entries, current_root = chain._snapshot()
         assert len(current_entries) == 1
         assert current_root == root
+
+
+class TestMerkleAppendAtomicity:
+    def assert_consistent(self, chain):
+        root = chain.get_root_hash()
+        assert root == _textbook_merkle_root([entry.entry_hash for entry in chain._entries])
+        assert chain.verify_chain() == (True, None)
+        for entry in chain._entries:
+            proof = chain.get_proof(entry.entry_id)
+            assert proof is not None
+            assert chain.verify_proof(entry.entry_hash, proof, root)
+
+    @pytest.mark.parametrize("seed_count", [0, 1, 4, 5, 8])
+    @pytest.mark.parametrize("rebuilt", [False, True])
+    @pytest.mark.parametrize("failure_site", ["node", "hash"])
+    def test_update_failure_preserves_state_and_allows_retry(
+        self, monkeypatch, seed_count, rebuilt, failure_site,
+    ):
+        from agentmesh.governance import audit
+
+        base = [_entry(i) for i in range(seed_count)]
+
+        def seeded_chain():
+            chain = MerkleAuditChain()
+            for entry in base:
+                chain.add_entry(copy.deepcopy(entry))
+            if rebuilt:
+                chain._rebuild_tree()
+            return chain
+
+        probe = seeded_chain()
+        target, attribute = (
+            (audit, "MerkleNode") if failure_site == "node" else (audit.hashlib, "sha256")
+        )
+        operation = getattr(target, attribute)
+        with monkeypatch.context() as patch:
+            update = Mock(side_effect=operation)
+            patch.setattr(target, attribute, update)
+            probe.add_entry(_entry(seed_count))
+            call_count = update.call_count
+
+        # Fail every node/hash operation, including ancestors after earlier updates.
+        for fail_at in range(1, call_count + 1):
+            chain = seeded_chain()
+            entries_before = copy.deepcopy(chain._entries)
+            tree_before = copy.deepcopy(chain._tree)
+            root_before = chain.get_root_hash()
+            empty_hashes_before = list(chain._empty_hashes)
+            proofs_before = [chain.get_proof(entry.entry_id) for entry in chain._entries]
+            entry = _entry(seed_count)
+            entry.entry_hash = "original-hash"
+            entry_before = entry.model_dump()
+            calls = 0
+            failure = MemoryError(f"{failure_site} operation {fail_at}")
+
+            def fail_update(*args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == fail_at:
+                    raise failure
+                return operation(*args, **kwargs)
+
+            with monkeypatch.context() as patch:
+                patch.setattr(target, attribute, fail_update)
+                with pytest.raises(MemoryError) as raised:
+                    chain.add_entry(entry)
+
+            assert raised.value is failure
+            assert calls == fail_at
+            assert chain._entries == entries_before
+            assert chain._tree == tree_before
+            assert chain.get_root_hash() == root_before
+            assert chain._empty_hashes == empty_hashes_before
+            assert entry.model_dump() == entry_before
+            assert [chain.get_proof(item.entry_id) for item in chain._entries] == proofs_before
+            self.assert_consistent(chain)
+            assert chain._lock.acquire(blocking=False)
+            chain._lock.release()
+
+            chain.add_entry(entry)
+            self.assert_consistent(chain)
+            chain.add_entry(_entry(seed_count + 1))
+            self.assert_consistent(chain)
+
+    @pytest.mark.parametrize(
+        ("seed_count", "fail_at"),
+        [(0, 1), (5, 1), (5, 3), (4, 6)],
+        ids=["empty-leaf", "leaf", "parent", "capacity-growth"],
+    )
+    def test_failed_log_does_not_publish_to_sink_or_indexes(self, monkeypatch, seed_count, fail_at):
+        from agentmesh.governance import audit
+
+        sink = Mock()
+        log = AuditLog(sink=sink)
+        for i in range(seed_count):
+            log.log("tool_invocation", "did:mesh:test-agent", f"action-{i}")
+        entries_before = copy.deepcopy(log.query(limit=None))
+        tree_before = copy.deepcopy(log._chain._tree)
+        root_before = log._chain.get_root_hash()
+        agent_index_before = copy.deepcopy(log._by_agent)
+        type_index_before = copy.deepcopy(log._by_type)
+        sink_calls_before = list(sink.mock_calls)
+        node = audit.MerkleNode
+        calls = 0
+
+        def fail_node(**kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == fail_at:
+                raise MemoryError("node allocation failed")
+            return node(**kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(audit, "MerkleNode", fail_node)
+            with pytest.raises(MemoryError, match="node allocation failed"):
+                log.log("failed_event", "did:mesh:new-agent", "failed-action")
+
+        assert log.query(limit=None) == entries_before
+        assert log._chain._tree == tree_before
+        assert log._chain.get_root_hash() == root_before
+        assert log._by_agent == agent_index_before
+        assert log._by_type == type_index_before
+        assert sink.mock_calls == sink_calls_before
+        self.assert_consistent(log._chain)
+
+        appended = log.log("failed_event", "did:mesh:new-agent", "retry-action")
+        assert log.query(limit=None) == entries_before + [appended]
+        assert log.get_entries_for_agent("did:mesh:new-agent") == [appended]
+        assert log.get_entries_by_type("failed_event") == [appended]
+        assert sink.write.call_count == seed_count + 1
+        sink.write.assert_called_with(appended)
+        self.assert_consistent(log._chain)
+
+    def test_hash_failure_restores_input_entry(self):
+        chain = MerkleAuditChain()
+        chain.add_entry(_entry(0))
+        entries_before = copy.deepcopy(chain._entries)
+        tree_before = copy.deepcopy(chain._tree)
+        root_before = chain.get_root_hash()
+        entry = _entry(1)
+        entry.previous_hash = "original-previous-hash"
+        entry.entry_hash = "original-hash"
+        entry.data = {"not_json": object()}
+
+        with pytest.raises(TypeError, match="not JSON serializable"):
+            chain.add_entry(entry)
+
+        assert chain._entries == entries_before
+        assert chain._tree == tree_before
+        assert chain.get_root_hash() == root_before
+        assert entry.previous_hash == "original-previous-hash"
+        assert entry.entry_hash == "original-hash"
+        entry.data.clear()
+        chain.add_entry(entry)
+        self.assert_consistent(chain)
 
 
 @pytest.fixture(scope="class")
