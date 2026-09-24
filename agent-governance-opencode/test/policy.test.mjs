@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "../lib/audit.mjs";
 import {
   checkArbitraryText,
   evaluateOpenCodePrompt,
@@ -19,6 +20,84 @@ import {
 
 test("SURFACE_NAME is opencode", () => {
   assert.equal(SURFACE_NAME, "opencode");
+});
+
+for (const mode of ["enforce", "advisory"]) {
+  for (const decision of ["allow", "review", "deny"]) {
+    test(`prompt and tool audit match ${mode} ${decision} effects`, async (t) => {
+      const root = await mkdtemp(join(tmpdir(), "agt-opencode-audit-effect-"));
+      t.after(() => rm(root, { recursive: true, force: true }));
+      const auditPath = join(root, "audit.json");
+      const policyPath = join(root, "policy.json");
+      await writeFile(
+        policyPath,
+        JSON.stringify({
+          schemaVersion: 1,
+          mode,
+          toolPolicies: { allowedTools: ["read"], defaultEffect: "allow" },
+        }),
+        "utf8",
+      );
+      const state = await loadPolicy({ policyPath, auditPath, homeDirectory: root });
+      state.policyEngine.registerBackend({
+        name: "audit-fixture",
+        evaluateAction() {
+          return { backend: "audit-fixture", decision, reason: "Synthetic audit decision" };
+        },
+      });
+
+      // Existing review entries must remain valid without rewriting history.
+      const previous = await appendAuditEntry(auditPath, {
+        agentId: "opencode:previous-session",
+        action: "tool.write",
+        decision: "review",
+      });
+      const expected = mode === "enforce" && decision === "review" ? "deny" : decision;
+      const promptResult = await evaluateOpenCodePrompt(state, {
+        prompt: "Summarize this document.",
+        sessionId: "audit-session",
+      });
+      const toolResult = await evaluateOpenCodeTool(state, {
+        tool: "read",
+        args: { file_path: join(root, "notes.txt") },
+        cwd: root,
+        sessionId: "audit-session",
+      });
+      assert.equal(promptResult.effect, expected);
+      assert.equal(toolResult.effect, expected);
+      const entries = await loadAuditEntries(auditPath);
+      assert.equal(entries.length, 3);
+      assert.deepEqual(entries[0], previous);
+      assert.deepEqual(entries.slice(1).map(({ action, decision }) => ({ action, decision })), [
+        { action: "prompt.submit", decision: expected },
+        { action: "tool.read", decision: expected },
+      ]);
+      assert.equal(verifyAuditEntries(entries), true);
+      for (const entry of entries.slice(1)) {
+        assert.equal(entry.agentId, "opencode:audit-session");
+        assert.deepEqual(Object.keys(entry).sort(), [
+          "action", "agentId", "decision", "hash", "previousHash", "timestamp",
+        ]);
+      }
+    });
+  }
+}
+
+test("bundled tool policy audits the enforced effect", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-bundled-audit-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ policyPath: null, auditPath, homeDirectory: root });
+  const tools = ["write", "edit", "bash", "webfetch", "unlisted-tool", "read"];
+  for (const tool of tools) {
+    const result = await evaluateOpenCodeTool(state, { tool, args: {}, cwd: root });
+    assert.equal(result.effect, tool === "read" ? "allow" : "deny");
+  }
+  const entries = await loadAuditEntries(auditPath);
+  assert.deepEqual(entries.map((entry) => entry.decision), [
+    "deny", "deny", "deny", "deny", "deny", "allow",
+  ]);
+  assert.equal(verifyAuditEntries(entries), true);
 });
 
 test("evaluateOpenCodePrompt blocks prompt injection and records audit", async () => {
@@ -54,7 +133,7 @@ test("evaluateOpenCodePrompt allows benign prompts", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persistence writes", async () => {
+test("evaluateOpenCodeTool denies dangerous bash bootstrap and enforce-mode review tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-tool-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });
 
@@ -72,7 +151,7 @@ test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persisten
     sessionId: "write-session",
     cwd: root,
   });
-  assert.equal(reviewResult.effect, "review");
+  assert.equal(reviewResult.effect, "deny");
 
   const status = await getPolicyStatus(state);
   assert.ok(status.auditEntries >= 2);
@@ -133,6 +212,35 @@ test("evaluateOpenCodeToolOutput redacts known secret patterns in enforce mode",
   assert.equal(result.redact, true);
   assert.match(result.redactedOutput, /AGT_REDACTED:github-token/);
   assert.doesNotMatch(result.redactedOutput, /ghp_a{40}/);
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("evaluateOpenCodeToolOutput redacts known secret patterns in advisory mode", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-advisory-redact-"));
+  const policyPath = join(root, "policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      version: 1,
+      mode: "advisory",
+      toolPolicies: { allowedTools: ["*"] },
+    }),
+    "utf8",
+  );
+  const state = await loadPolicy({ policyPath, auditPath: join(root, "audit.json") });
+
+  const token = "ghp_" + "c".repeat(40);
+  const result = await evaluateOpenCodeToolOutput(state, {
+    tool: "bash",
+    output: `Here is your token: ${token}`,
+    sessionId: "advisory-redact-session",
+  });
+
+  assert.equal(result.redact, true);
+  assert.match(result.redactedOutput, /AGT_REDACTED:github-token/);
+  assert.doesNotMatch(result.redactedOutput, /ghp_c{40}/);
 
   await rm(root, { recursive: true, force: true });
 });

@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 package agentmesh
 
 import (
@@ -748,5 +751,110 @@ func TestRateLimitCounterDoesNotGrowAfterDeny(t *testing.T) {
 	}
 	if got := pe.rateLimits[key].count; got != 3 {
 		t.Errorf("after multiple denies, count = %d, want 3", got)
+	}
+}
+
+// ── Scope validation (#3536) ────────────────────────────────
+
+func TestValidateScope_ValidValues(t *testing.T) {
+	for _, s := range []PolicyScope{Global, Tenant, Organization, Agent} {
+		if err := ValidateScope(s); err != nil {
+			t.Errorf("ValidateScope(%q) = %v, want nil", s, err)
+		}
+	}
+}
+
+func TestValidateScope_InvalidValues(t *testing.T) {
+	invalid := []PolicyScope{
+		"organisation", "Agent", "GLOBAL", "team", "",
+	}
+	for _, s := range invalid {
+		if err := ValidateScope(s); err == nil {
+			t.Errorf("ValidateScope(%q) = nil, want error", s)
+		}
+	}
+}
+
+func TestOrganizationSpecificity(t *testing.T) {
+	org := CandidateDecision{Rule: PolicyRule{Scope: Organization}}
+	tenant := CandidateDecision{Rule: PolicyRule{Scope: Tenant}}
+	agent := CandidateDecision{Rule: PolicyRule{Scope: Agent}}
+	orgSpec := ruleSpecificity(org)
+	tenantSpec := ruleSpecificity(tenant)
+	agentSpec := ruleSpecificity(agent)
+	if tenantSpec >= orgSpec {
+		t.Errorf("tenant specificity %d >= org specificity %d", tenantSpec, orgSpec)
+	}
+	if orgSpec >= agentSpec {
+		t.Errorf("org specificity %d >= agent specificity %d", orgSpec, agentSpec)
+	}
+}
+
+func TestNewPolicyEngine_DoesNotMutateInput(t *testing.T) {
+	rules := []PolicyRule{
+		{Action: "data.read", Effect: Deny, Scope: "organisation"},
+	}
+	NewPolicyEngine(rules)
+	// The caller's slice must be untouched.
+	if rules[0].Scope != "organisation" {
+		t.Errorf("input slice mutated: scope = %q, want \"organisation\"", rules[0].Scope)
+	}
+}
+
+func TestLoadFromYAML_MisspelledScopeIsCorrectedToAgent(t *testing.T) {
+	dir := t.TempDir()
+	yamlContent := `rules:
+  - action: "data.export"
+    effect: "deny"
+    scope: "organisation"
+`
+	path := filepath.Join(dir, "policy.yaml")
+	if err := os.WriteFile(path, []byte(yamlContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pe := NewPolicyEngine(nil)
+	if err := pe.LoadFromYAML(path); err != nil {
+		t.Fatalf("LoadFromYAML: %v", err)
+	}
+
+	// validateAndCorrectRules must have corrected "organisation" -> "agent".
+	pe.mu.RLock()
+	defer pe.mu.RUnlock()
+	if len(pe.rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(pe.rules))
+	}
+	if pe.rules[0].Scope != "agent" {
+		t.Errorf("LoadFromYAML stored scope = %q, want \"agent\"", pe.rules[0].Scope)
+	}
+}
+
+func TestMergeFromYAML_MisspelledScopeIsCorrectedToAgent(t *testing.T) {
+	dir := t.TempDir()
+	yamlContent := `rules:
+  - action: "data.export"
+    effect: "deny"
+    scope: "organisation"
+`
+	path := filepath.Join(dir, "deny.yaml")
+	if err := os.WriteFile(path, []byte(yamlContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "data.export", Effect: Allow, Scope: Global, Priority: 50},
+	})
+	if err := pe.MergeFromYAML(path); err != nil {
+		t.Fatalf("MergeFromYAML: %v", err)
+	}
+
+	// The first rule is the original global allow, the merged rule is second.
+	pe.mu.RLock()
+	defer pe.mu.RUnlock()
+	if len(pe.rules) != 2 {
+		t.Fatalf("expected 2 rules, got %d", len(pe.rules))
+	}
+	if pe.rules[1].Scope != "agent" {
+		t.Errorf("MergeFromYAML stored scope = %q, want \"agent\"", pe.rules[1].Scope)
 	}
 }

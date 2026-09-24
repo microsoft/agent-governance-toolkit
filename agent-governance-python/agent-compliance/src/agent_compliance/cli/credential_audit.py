@@ -4,7 +4,7 @@
 """Credential audit: detect when merged PRs are used as spray credentials.
 
 Checks whether a contributor cites merges from a target repo in issues
-filed across other repos, a pattern called "credential laundering."
+or pull requests filed across other repos, a pattern called "credential laundering."
 
 Usage:
     python scripts/credential_audit.py --username <handle> --repo org/repo
@@ -145,9 +145,29 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
     return None
 
 
+# GitHub's search endpoints cap results at 1000 total (the "Search API"
+# result-window limit, documented at
+# https://docs.github.com/en/rest/search#about-search). A single request
+# only ever returns one page of up to `per_page` items, so a subject with
+# more issues/PRs than fit on the first page silently loses coverage on
+# exactly the pages most likely to contain the later, farther-out citations
+# a real credential spray would produce. Page through the full result
+# window instead of trusting the first response alone.
+_SEARCH_RESULT_WINDOW = 1000
+
+
 def _search(endpoint: str, query: str, per_page: int = 100) -> list[dict]:
-    data = _api(f"/search/{endpoint}", {"q": query, "per_page": str(per_page)})
-    return data.get("items", []) if data else []
+    items: list[dict] = []
+    max_pages = max(1, _SEARCH_RESULT_WINDOW // per_page)
+    for page in range(1, max_pages + 1):
+        data = _api(f"/search/{endpoint}", {"q": query, "per_page": str(per_page), "page": str(page)})
+        page_items = data.get("items", []) if data else []
+        if not page_items:
+            break
+        items.extend(page_items)
+        if len(page_items) < per_page:
+            break
+    return items
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +186,7 @@ class MergeRecord:
 
 @dataclass
 class SprayCitation:
-    """An issue in another repo that cites a merge from the target repo."""
+    """An issue or pull request in another repo that cites a merge from the target repo."""
     repo: str
     issue_number: int
     title: str
@@ -174,6 +194,7 @@ class SprayCitation:
     url: str
     citation_snippets: list[str] = field(default_factory=list)
     days_after_merge: int | None = None
+    kind: str = "issue"
 
 
 @dataclass
@@ -255,8 +276,20 @@ def find_spray_citations(
     target_repo: str,
     merges: list[MergeRecord],
 ) -> list[SprayCitation]:
-    """Find issues by username in OTHER repos that cite merges from target_repo."""
-    issues = _search("issues", f"author:{username} is:issue", per_page=100)
+    """Find issues and pull requests by username in OTHER repos that cite merges from target_repo."""
+    issue_items = _search("issues", f"author:{username} is:issue", per_page=100)
+    pr_items = _search("issues", f"author:{username} is:pr", per_page=100)
+
+    # Deduplicate items by html_url
+    seen_urls = set()
+    items = []
+    for item in issue_items + pr_items:
+        url = item.get("html_url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            items.append(item)
+        elif not url:
+            items.append(item)
 
     # Normalize target repo references to check for
     target_lower = target_repo.lower()
@@ -273,7 +306,7 @@ def find_spray_citations(
 
     citations: list[SprayCitation] = []
 
-    for issue in issues:
+    for issue in items:
         issue_repo_url = issue.get("repository_url", "")
         issue_repo = issue_repo_url.replace("https://api.github.com/repos/", "")
 
@@ -325,6 +358,8 @@ def find_spray_citations(
                 )
                 days_after = (issue_created - earliest_merge).days
 
+            kind = "pull_request" if "pull_request" in issue else "issue"
+
             citations.append(SprayCitation(
                 repo=issue_repo,
                 issue_number=issue.get("number", 0),
@@ -333,6 +368,7 @@ def find_spray_citations(
                 url=issue.get("html_url", ""),
                 citation_snippets=snippets[:3],  # cap at 3
                 days_after_merge=days_after,
+                kind=kind,
             ))
 
     citations.sort(key=lambda c: c.created_at)
@@ -383,7 +419,7 @@ def format_report(report: CredentialAuditReport, as_json: bool = False) -> str:
                 for m in report.merges
             ],
             "citations": [
-                {"repo": c.repo, "issue": c.issue_number, "title": c.title,
+                {"repo": c.repo, "issue": c.issue_number, "kind": c.kind, "title": c.title,
                  "created_at": c.created_at, "url": c.url,
                  "snippets": c.citation_snippets,
                  "days_after_merge": c.days_after_merge}
@@ -415,14 +451,14 @@ def format_report(report: CredentialAuditReport, as_json: bool = False) -> str:
         lines.append("")
         for c in report.citations:
             days_str = f" ({c.days_after_merge}d after merge)" if c.days_after_merge is not None else ""
-            lines.append(f"  {c.repo} #{c.issue_number}{days_str}")
+            lines.append(f"  [{c.kind}] {c.repo} #{c.issue_number}{days_str}")
             lines.append(f"    {c.title}")
             for snippet in c.citation_snippets[:2]:
                 clean = snippet.replace("\n", " ")[:100]
                 lines.append(f"    > {clean}")
             lines.append("")
     else:
-        lines.append("No credential citations found in external issues.")
+        lines.append("No credential citations found in external issues or pull requests.")
         lines.append("")
 
     return "\n".join(lines)
@@ -434,7 +470,10 @@ def format_report(report: CredentialAuditReport, as_json: bool = False) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Audit whether a contributor uses merged PRs as spray credentials.",
+        description=(
+            "Audit whether a contributor uses merged PRs as spray credentials "
+            "(searches the bodies of issues and pull requests the user authored in other repos)."
+        ),
     )
     parser.add_argument("--username", "-u", required=True, help="GitHub username to audit")
     parser.add_argument("--repo", "-r", required=True, help="Target repo (owner/repo)")

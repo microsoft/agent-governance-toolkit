@@ -39,10 +39,12 @@ from ._client import (
     validate_manifest_overlay,
 )
 from ._orchestration import AgentControl
+from . import schemas
 from ._host import (
     DEFAULT_APPROVAL_TIMEOUT_SECONDS,
     HostSession,
     SnapshotBuilder,
+    SnapshotSource,
     run_sync,
 )
 from ._telemetry import (
@@ -58,6 +60,7 @@ from ._telemetry import (
 from ._types import (
     AgentControlBlocked,
     AgentControlInterruption,
+    AgentControlRuntimeError,
     AgentControlSuspended,
     ApprovalOutcome,
     ApprovalResolution,
@@ -75,6 +78,7 @@ from ._types import (
     ToolRunResult,
     Transform,
     Verdict,
+    Warning,
     action_identity,
 )
 from .validation import (
@@ -88,12 +92,15 @@ __all__ = [
     "DEFAULT_APPROVAL_TIMEOUT_SECONDS",
     "HostSession",
     "SnapshotBuilder",
+    "SnapshotSource",
+    "schemas",
     "run_sync",
     "AdapterUnsupportedError",
     "AgentControlLiteLLMGuardrail",
     "AgentControl",
     "AgentControlBlocked",
     "AgentControlInterruption",
+    "AgentControlRuntimeError",
     "AgentControlSuspended",
     "AnnotatorDispatcher",
     "ApprovalOutcome",
@@ -134,6 +141,7 @@ __all__ = [
     "Transform",
     "UnsupportedFrameworkAdapter",
     "Verdict",
+    "Warning",
     "ValidationDiagnostic",
     "action_identity",
     "guard_agent_method",

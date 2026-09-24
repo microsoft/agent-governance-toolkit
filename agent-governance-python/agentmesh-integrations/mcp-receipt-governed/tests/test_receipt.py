@@ -3,16 +3,20 @@
 """Tests for GovernanceReceipt, ReceiptStore, signing/verification, and hash chaining."""
 
 import json
+import time
 from urllib.parse import urlparse
 
 import pytest
 
 from mcp_receipt_governed.receipt import (
     GovernanceReceipt,
+    ReceiptAuthorizationError,
     ReceiptStore,
+    authorize_receipt,
     hash_tool_args,
     sign_receipt,
     verify_receipt,
+    verify_receipt_authorization,
     verify_receipt_chain,
 )
 
@@ -33,6 +37,17 @@ def ed25519_key():
 @pytest.fixture()
 def signing_key(ed25519_key):
     return ed25519_key[0]
+
+
+@pytest.fixture()
+def authorizer_key():
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        key = Ed25519PrivateKey.generate()
+        return key.private_bytes_raw().hex(), key.public_key().public_bytes_raw().hex()
+    except ImportError as exc:
+        raise pytest.skip.Exception("cryptography not installed") from exc
 
 
 def _make_chain(*receipt_ids, sign_with=None):
@@ -87,6 +102,8 @@ class TestGovernanceReceipt:
         assert d["payload_hash"]
         assert d["parent_receipt_hash"] is None
         assert d["signature"] is None
+        assert d["assurance_level"] == "self_attested"
+        assert d["authorization_signature"] is None
 
 
 # ── JCS Canonicalization (RFC 8785) ──
@@ -236,6 +253,173 @@ class TestSignVerify:
         assert verify_receipt(r) is False
 
 
+class TestExternalAuthorization:
+    def test_external_authorization_binds_signed_receipt(self, ed25519_key, authorizer_key):
+        signer_seed, signer_public_key = ed25519_key
+        authorizer_seed, authorizer_public_key = authorizer_key
+        receipt = GovernanceReceipt(receipt_id="id", tool_name="T", agent_did="a", timestamp=1.0)
+        sign_receipt(receipt, signer_seed)
+        authorize_receipt(
+            receipt,
+            authorizer_seed,
+            authorizer_id="did:example:authorizer",
+            expires_at=time.time() + 60,
+            nonce="authorization-1",
+        )
+
+        assert receipt.assurance_level == "externally_authorized"
+        assert receipt.authorizer_public_key == authorizer_public_key
+        assert signer_public_key != authorizer_public_key
+        assert verify_receipt(receipt) is True
+        assert verify_receipt_authorization(
+            receipt,
+            trusted_authorizer_keys=[authorizer_public_key],
+        ) == []
+
+    def test_external_authorization_detects_receipt_tampering(
+        self, ed25519_key, authorizer_key
+    ):
+        signer_seed, _ = ed25519_key
+        authorizer_seed, _ = authorizer_key
+        receipt = GovernanceReceipt(receipt_id="id", tool_name="T", timestamp=1.0)
+        sign_receipt(receipt, signer_seed)
+        authorize_receipt(
+            receipt,
+            authorizer_seed,
+            authorizer_id="did:example:authorizer",
+            expires_at=time.time() + 60,
+        )
+
+        receipt.tool_name = "tampered"
+        errors = verify_receipt_authorization(
+            receipt,
+            trusted_authorizer_keys=[receipt.authorizer_public_key or ""],
+        )
+        assert any("valid receipt signature" in error.lower() for error in errors)
+
+    def test_external_authorization_expiration_rejected(self, ed25519_key, authorizer_key):
+        signer_seed, _ = ed25519_key
+        authorizer_seed, authorizer_public_key = authorizer_key
+        receipt = GovernanceReceipt(receipt_id="id", timestamp=1.0)
+        sign_receipt(receipt, signer_seed)
+        expires_at = time.time() + 60
+        authorize_receipt(
+            receipt,
+            authorizer_seed,
+            authorizer_id="did:example:authorizer",
+            expires_at=expires_at,
+        )
+
+        errors = verify_receipt_authorization(
+            receipt,
+            trusted_authorizer_keys=[authorizer_public_key],
+            now=expires_at,
+        )
+        assert any("expired" in error.lower() for error in errors)
+
+    def test_offline_verification_uses_signed_receipt_time(self, ed25519_key, authorizer_key):
+        signer_seed, signer_public_key = ed25519_key
+        authorizer_seed, authorizer_public_key = authorizer_key
+        receipt = GovernanceReceipt(receipt_id="id", timestamp=time.time() - 60)
+        sign_receipt(receipt, signer_seed)
+        expires_at = time.time() + 1
+        authorize_receipt(
+            receipt,
+            authorizer_seed,
+            authorizer_id="did:example:authorizer",
+            expires_at=expires_at,
+        )
+
+        assert verify_receipt_chain(
+            [receipt],
+            trusted_keys=[signer_public_key],
+            trusted_authorizer_keys=[authorizer_public_key],
+            require_external_authorization=True,
+        ) == []
+        assert any(
+            "expired" in error.lower()
+            for error in verify_receipt_authorization(
+                receipt,
+                trusted_authorizer_keys=[authorizer_public_key],
+                now=expires_at,
+            )
+        )
+
+    def test_same_key_cannot_authorize_and_sign(self, signing_key):
+        receipt = GovernanceReceipt(receipt_id="id", timestamp=1.0)
+        sign_receipt(receipt, signing_key)
+
+        with pytest.raises(ReceiptAuthorizationError, match="must differ"):
+            authorize_receipt(
+                receipt,
+                signing_key,
+                authorizer_id="did:example:authorizer",
+                expires_at=time.time() + 60,
+            )
+
+    def test_unsigned_receipt_cannot_be_externally_authorized(self, authorizer_key):
+        with pytest.raises(ReceiptAuthorizationError, match="valid signed receipt"):
+            authorize_receipt(
+                GovernanceReceipt(receipt_id="id", timestamp=1.0),
+                authorizer_key[0],
+                authorizer_id="did:example:authorizer",
+                expires_at=time.time() + 60,
+            )
+
+    def test_case_insensitive_key_comparisons_reject_self_authorization(self, signing_key):
+        receipt = GovernanceReceipt(
+            receipt_id="id",
+            timestamp=time.time(),
+            assurance_level="externally_authorized",
+            authorizer_id="did:example:authorizer",
+            authorization_expires_at=time.time() + 60,
+            authorization_nonce="nonce",
+        )
+        sign_receipt(receipt, signing_key)
+        sign_receipt(
+            receipt,
+            signing_key,
+            payload=receipt.canonical_authorization_payload().encode(),
+            signature_field="authorization_signature",
+            public_key_field="authorizer_public_key",
+        )
+        receipt.authorizer_public_key = receipt.authorizer_public_key.upper()
+
+        errors = verify_receipt_authorization(
+            receipt,
+            trusted_authorizer_keys=[receipt.authorizer_public_key],
+        )
+        assert any("must differ" in error for error in errors)
+
+    def test_non_finite_authorization_expiration_rejected(self, signing_key, authorizer_key):
+        receipt = GovernanceReceipt(receipt_id="id", timestamp=1.0)
+        sign_receipt(receipt, signing_key)
+
+        with pytest.raises(ReceiptAuthorizationError, match="finite timestamp"):
+            authorize_receipt(
+                receipt,
+                authorizer_key[0],
+                authorizer_id="did:example:authorizer",
+                expires_at=float("nan"),
+            )
+
+    def test_malformed_external_authorization_returns_errors(self, ed25519_key):
+        receipt = GovernanceReceipt(
+            receipt_id="id",
+            timestamp=1.0,
+            assurance_level="externally_authorized",
+            authorizer_id="did:example:authorizer",
+            authorization_expires_at=object(),
+            authorization_nonce="nonce",
+            authorization_signature="not-a-signature",
+            authorizer_public_key={"unexpected": "type"},
+        )
+        sign_receipt(receipt, ed25519_key[0])
+
+        errors = verify_receipt_authorization(receipt, trusted_authorizer_keys=["deadbeef" * 4])
+        assert any("malformed" in error.lower() for error in errors)
+
+
 # ── Chain Verification ──
 
 
@@ -301,6 +485,37 @@ class TestVerifyReceiptChain:
 
     def test_all_defaults_unsigned_flagged(self):
         assert any("Unsigned" in e for e in verify_receipt_chain([GovernanceReceipt()]))
+
+    def test_external_authorization_profile_requires_trusted_key(self, ed25519_key, authorizer_key):
+        signer_seed, signer_public_key = ed25519_key
+        authorizer_seed, authorizer_public_key = authorizer_key
+        receipt = GovernanceReceipt(receipt_id="r1", timestamp=1.0)
+        sign_receipt(receipt, signer_seed)
+        authorize_receipt(
+            receipt,
+            authorizer_seed,
+            authorizer_id="did:example:authorizer",
+            expires_at=time.time() + 60,
+        )
+
+        assert verify_receipt_chain(
+            [receipt],
+            trusted_keys=[signer_public_key],
+            trusted_authorizer_keys=[authorizer_public_key],
+            require_external_authorization=True,
+        ) == []
+
+        errors = verify_receipt_chain(
+            [receipt],
+            trusted_keys=[signer_public_key],
+            require_external_authorization=True,
+        )
+        assert any("No trusted authorizer" in error for error in errors)
+
+    def test_external_authorization_requirement_rejects_self_attested(self, signing_key):
+        receipt = _make_chain("r1", sign_with=signing_key)[0]
+        errors = verify_receipt_chain([receipt], require_external_authorization=True)
+        assert any("External authorization is required" in error for error in errors)
 
 
 # ── Receipt Store ──

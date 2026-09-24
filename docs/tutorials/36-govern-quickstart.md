@@ -170,6 +170,7 @@ print(f"Would be: {decision.action} by {decision.matched_rule}")
 | `agent_id` | str | `"*"` | Agent identifier for policy evaluation |
 | `audit` | bool | `True` | Enable audit logging |
 | `on_deny` | callable | `None` | Custom handler (default: raise GovernanceDenied) |
+| `on_flag` | callable | `None` | Called on advisory `flag_for_review`; never blocks execution |
 | `approval_handler` | ApprovalHandler | `None` | Human-in-the-loop handler |
 | `advisory` | AdvisoryCheck | `None` | Non-deterministic defense-in-depth |
 | `conflict_strategy` | str | `"deny_overrides"` | How to resolve rule conflicts |

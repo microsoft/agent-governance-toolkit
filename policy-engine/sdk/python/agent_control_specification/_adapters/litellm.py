@@ -594,7 +594,7 @@ def _raise_litellm_block(reason: str, message: str) -> None:
 
 
 def _has_transform(result: InterventionPointResult, mode: EnforcementMode) -> bool:
-    return mode == EnforcementMode.ENFORCE and result.verdict.decision.applies_effects and (
+    return mode == EnforcementMode.ENFORCE and result.verdict.decision.applies_transform and (
         result.transformed_policy_target_applied or result.transformed_policy_target is not None
     )
 

@@ -15,7 +15,7 @@
 //!
 //! ```
 //! use agentmesh::protocol_facets::default_registry;
-//! use serde_yaml::Value;
+//! use agentmesh::policy_data::Value;
 //!
 //! default_registry().register("redis", |sub| {
 //!     let mut out = std::collections::HashMap::new();
@@ -26,8 +26,8 @@
 //! });
 //! ```
 
+use crate::policy_data::{Mapping, Value};
 use regex::Regex;
-use serde_yaml::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
@@ -60,8 +60,7 @@ fn cached_regex(pattern: &str) -> Arc<Regex> {
 /// returns the facet fields to merge back into that sub-mapping. The
 /// returned keys are inserted as `<context_key>.<field>` flat entries on
 /// the top-level context so they can be referenced by policy rules.
-pub type ExtractorFn =
-    Box<dyn Fn(&serde_yaml::Mapping) -> HashMap<String, Value> + Send + Sync + 'static>;
+pub type ExtractorFn = Box<dyn Fn(&Mapping) -> HashMap<String, Value> + Send + Sync + 'static>;
 
 /// Holds protocol facet extractors keyed by context field name.
 ///
@@ -84,12 +83,9 @@ impl FacetRegistry {
     /// Register an extractor for sub-mappings stored at `context_key`.
     pub fn register<F>(&self, context_key: impl Into<String>, extractor: F)
     where
-        F: Fn(&serde_yaml::Mapping) -> HashMap<String, Value> + Send + Sync + 'static,
+        F: Fn(&Mapping) -> HashMap<String, Value> + Send + Sync + 'static,
     {
-        let mut guard = self
-            .extractors
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.extractors.write().unwrap_or_else(|e| e.into_inner());
         guard.push((context_key.into(), Box::new(extractor)));
     }
 
@@ -133,17 +129,14 @@ impl FacetRegistry {
     /// them out of the sub-mapping (e.g. by stashing them at the top level
     /// where they bypass extractor cloning).
     pub fn extract(&self, context: &mut HashMap<String, Value>) {
-        let extractors = self
-            .extractors
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let extractors = self.extractors.read().unwrap_or_else(|e| e.into_inner());
 
         // Snapshot the (key, facets) pairs first so we don't hold a mutable
         // borrow on `context` while iterating extractors.
         let mut updates: Vec<(String, HashMap<String, Value>)> = Vec::new();
         for (key, extractor) in extractors.iter() {
             let sub_map = match context.get(key) {
-                Some(Value::Mapping(m)) => m.clone(),
+                Some(Value::Object(m)) => m.clone(),
                 _ => continue,
             };
             // Per-extractor panic isolation: a buggy parser must never block
@@ -166,9 +159,9 @@ impl FacetRegistry {
         for (key, facets) in updates {
             // Merge facets back into the sub-mapping so consumers can read
             // them via `context["sql"]["verb"]`.
-            if let Some(Value::Mapping(m)) = context.get_mut(&key) {
+            if let Some(Value::Object(m)) = context.get_mut(&key) {
                 for (fk, fv) in &facets {
-                    m.insert(Value::String(fk.clone()), fv.clone());
+                    m.insert(fk.clone(), fv.clone());
                 }
             }
             // Also flatten to `key.field` at the top level so the existing
@@ -515,8 +508,8 @@ fn pick_target(query: &str, verb: &str, tables: &[String]) -> String {
 
 /// Built-in SQL facet extractor. Reads `sql_ctx["query"]` and returns
 /// `{verb, target, tables, functions}` (as flat-string fields).
-pub fn extract_sql_facets(sql_ctx: &serde_yaml::Mapping) -> HashMap<String, Value> {
-    let raw = match sql_ctx.get(Value::String("query".to_string())) {
+pub fn extract_sql_facets(sql_ctx: &Mapping) -> HashMap<String, Value> {
+    let raw = match sql_ctx.get("query") {
         Some(Value::String(s)) => s.clone(),
         _ => return empty_sql_facets(),
     };
@@ -530,7 +523,10 @@ pub fn extract_sql_facets(sql_ctx: &serde_yaml::Mapping) -> HashMap<String, Valu
     if statements.len() > 1 {
         return unknown_sql_facets();
     }
-    let query = statements.first().cloned().unwrap_or_else(|| trimmed.to_string());
+    let query = statements
+        .first()
+        .cloned()
+        .unwrap_or_else(|| trimmed.to_string());
 
     let verb_match = {
         static FIRST_WORD: OnceLock<Regex> = OnceLock::new();
@@ -645,8 +641,16 @@ fn k8s_patterns() -> &'static Vec<K8sPattern> {
                 &["namespace", "resource"],
                 false,
             ),
-            mk(r"^/api/[^/]+/([^/]+)/([^/]+)/?$", &["resource", "name"], false),
-            mk(r"^/apis/[^/]+/[^/]+/([^/]+)/([^/]+)/?$", &["resource", "name"], false),
+            mk(
+                r"^/api/[^/]+/([^/]+)/([^/]+)/?$",
+                &["resource", "name"],
+                false,
+            ),
+            mk(
+                r"^/apis/[^/]+/[^/]+/([^/]+)/([^/]+)/?$",
+                &["resource", "name"],
+                false,
+            ),
             mk(r"^/api/[^/]+/([^/]+)/?$", &["resource"], false),
             mk(r"^/apis/[^/]+/[^/]+/([^/]+)/?$", &["resource"], false),
         ]
@@ -679,12 +683,12 @@ fn method_to_verb_collection(m: &str) -> Option<&'static str> {
 
 /// Built-in Kubernetes facet extractor. Reads `k8s_ctx["method"]` and
 /// `k8s_ctx["path"]` and returns `{verb, resource, namespace, name, subresource}`.
-pub fn extract_k8s_facets(k8s_ctx: &serde_yaml::Mapping) -> HashMap<String, Value> {
-    let method = match k8s_ctx.get(Value::String("method".to_string())) {
+pub fn extract_k8s_facets(k8s_ctx: &Mapping) -> HashMap<String, Value> {
+    let method = match k8s_ctx.get("method") {
         Some(Value::String(s)) => s.to_ascii_uppercase(),
         _ => String::new(),
     };
-    let raw_path = match k8s_ctx.get(Value::String("path".to_string())) {
+    let raw_path = match k8s_ctx.get("path") {
         Some(Value::String(s)) => s.clone(),
         _ => String::new(),
     };
@@ -730,9 +734,9 @@ pub fn extract_k8s_facets(k8s_ctx: &serde_yaml::Mapping) -> HashMap<String, Valu
 
     // Honor `?watch=true` query parameter as an alternate way to signal a
     // watch request. Only treat as watch when explicitly set to true/1.
-    let query_signals_watch = query
-        .split('&')
-        .any(|kv| matches!(kv.split_once('='), Some(("watch", v)) if matches!(v, "true" | "1" | "True")));
+    let query_signals_watch = query.split('&').any(
+        |kv| matches!(kv.split_once('='), Some(("watch", v)) if matches!(v, "true" | "1" | "True")),
+    );
 
     let is_watch = matched_is_watch || query_signals_watch;
     let verb: String = if is_watch {
@@ -797,10 +801,10 @@ pub fn extract_protocol_facets_with(
 mod tests {
     use super::*;
 
-    fn map_of(pairs: &[(&str, Value)]) -> serde_yaml::Mapping {
-        let mut m = serde_yaml::Mapping::new();
+    fn map_of(pairs: &[(&str, Value)]) -> Mapping {
+        let mut m = Mapping::new();
         for (k, v) in pairs {
-            m.insert(Value::String((*k).to_string()), v.clone());
+            m.insert((*k).to_string(), v.clone());
         }
         m
     }
@@ -813,7 +817,7 @@ mod tests {
         r.register("redis", |sub| {
             let mut out = HashMap::new();
             let cmd = sub
-                .get(Value::String("command".to_string()))
+                .get("command")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_ascii_uppercase();
@@ -824,7 +828,7 @@ mod tests {
         let mut ctx: HashMap<String, Value> = HashMap::new();
         ctx.insert(
             "redis".to_string(),
-            Value::Mapping(map_of(&[(
+            Value::Object(map_of(&[(
                 "command",
                 Value::String("flushall".to_string()),
             )])),
@@ -838,12 +842,8 @@ mod tests {
             Some("FLUSHALL")
         );
         // And merged into sub-mapping
-        if let Some(Value::Mapping(m)) = ctx.get("redis") {
-            assert_eq!(
-                m.get(Value::String("verb".to_string()))
-                    .and_then(|v| v.as_str()),
-                Some("FLUSHALL")
-            );
+        if let Some(Value::Object(m)) = ctx.get("redis") {
+            assert_eq!(m.get("verb").and_then(|v| v.as_str()), Some("FLUSHALL"));
         } else {
             panic!("redis sub-context missing or not a mapping");
         }
@@ -875,11 +875,8 @@ mod tests {
             m
         });
         let mut ctx: HashMap<String, Value> = HashMap::new();
-        ctx.insert("bad".to_string(), Value::Mapping(serde_yaml::Mapping::new()));
-        ctx.insert(
-            "good".to_string(),
-            Value::Mapping(serde_yaml::Mapping::new()),
-        );
+        ctx.insert("bad".to_string(), Value::Object(Mapping::new()));
+        ctx.insert("good".to_string(), Value::Object(Mapping::new()));
         r.extract(&mut ctx);
         assert_eq!(ctx.get("good.ok"), Some(&Value::Bool(true)));
     }
@@ -897,15 +894,12 @@ mod tests {
     }
 
     fn fv(m: &HashMap<String, Value>, k: &str) -> String {
-        m.get(k)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string()
+        m.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string()
     }
 
     #[test]
     fn sql_empty_query_returns_empty_fields() {
-        let f = extract_sql_facets(&serde_yaml::Mapping::new());
+        let f = extract_sql_facets(&Mapping::new());
         assert_eq!(fv(&f, "verb"), "");
         let f = sql_facets("");
         assert_eq!(fv(&f, "verb"), "");
@@ -930,17 +924,9 @@ mod tests {
                 "sessions",
             ),
             ("DROP TABLE production", "DROP", "production"),
-            (
-                "DROP TABLE IF EXISTS staging.payments",
-                "DROP",
-                "payments",
-            ),
+            ("DROP TABLE IF EXISTS staging.payments", "DROP", "payments"),
             ("TRUNCATE TABLE audit_log", "TRUNCATE", "audit_log"),
-            (
-                "ALTER TABLE users ADD COLUMN age INT",
-                "ALTER",
-                "users",
-            ),
+            ("ALTER TABLE users ADD COLUMN age INT", "ALTER", "users"),
             ("CREATE TABLE foo (id INT)", "CREATE", "foo"),
             ("GRANT SELECT ON users TO bob", "GRANT", "users"),
             (
@@ -1069,7 +1055,12 @@ mod tests {
             let f = sql_facets(q);
             let raw = fv(&f, "tables");
             let tables: Vec<&str> = raw.split(',').collect();
-            assert!(tables.contains(&expected), "query={}, tables={:?}", q, tables);
+            assert!(
+                tables.contains(&expected),
+                "query={}, tables={:?}",
+                q,
+                tables
+            );
         }
     }
 
@@ -1084,7 +1075,7 @@ mod tests {
 
     #[test]
     fn k8s_empty_path() {
-        let f = extract_k8s_facets(&serde_yaml::Mapping::new());
+        let f = extract_k8s_facets(&Mapping::new());
         assert_eq!(fv(&f, "verb"), "");
         assert_eq!(fv(&f, "resource"), "");
     }
@@ -1189,7 +1180,10 @@ mod tests {
         let f = k8s("GET", "/api/v1/namespaces/prod/pods/web/log");
         assert_eq!(fv(&f, "subresource"), "log");
 
-        let f = k8s("PATCH", "/apis/apps/v1/namespaces/prod/deployments/web/status");
+        let f = k8s(
+            "PATCH",
+            "/apis/apps/v1/namespaces/prod/deployments/web/status",
+        );
         assert_eq!(fv(&f, "subresource"), "status");
         assert_eq!(fv(&f, "verb"), "patch");
     }
@@ -1201,16 +1195,13 @@ mod tests {
         let mut ctx: HashMap<String, Value> = HashMap::new();
         ctx.insert(
             "sql".to_string(),
-            Value::Mapping(map_of(&[(
+            Value::Object(map_of(&[(
                 "query",
                 Value::String("DROP TABLE production".to_string()),
             )])),
         );
         extract_protocol_facets(&mut ctx);
-        assert_eq!(
-            ctx.get("sql.verb").and_then(|v| v.as_str()),
-            Some("DROP")
-        );
+        assert_eq!(ctx.get("sql.verb").and_then(|v| v.as_str()), Some("DROP"));
         assert_eq!(
             ctx.get("sql.target").and_then(|v| v.as_str()),
             Some("production")
@@ -1222,7 +1213,7 @@ mod tests {
         let mut ctx: HashMap<String, Value> = HashMap::new();
         ctx.insert(
             "k8s".to_string(),
-            Value::Mapping(map_of(&[
+            Value::Object(map_of(&[
                 ("method", Value::String("DELETE".to_string())),
                 (
                     "path",
@@ -1231,10 +1222,7 @@ mod tests {
             ])),
         );
         extract_protocol_facets(&mut ctx);
-        assert_eq!(
-            ctx.get("k8s.verb").and_then(|v| v.as_str()),
-            Some("delete")
-        );
+        assert_eq!(ctx.get("k8s.verb").and_then(|v| v.as_str()), Some("delete"));
         assert_eq!(
             ctx.get("k8s.namespace").and_then(|v| v.as_str()),
             Some("prod")
@@ -1307,15 +1295,9 @@ mod tests {
         let mut ctx: HashMap<String, Value> = HashMap::new();
         ctx.insert(
             "sql".to_string(),
-            Value::Mapping(map_of(&[(
-                "query",
-                Value::String("SELECT 1".to_string()),
-            )])),
+            Value::Object(map_of(&[("query", Value::String("SELECT 1".to_string()))])),
         );
         extract_protocol_facets_with(&mut ctx, &r);
-        assert_eq!(
-            ctx.get("sql.verb").and_then(|v| v.as_str()),
-            Some("CUSTOM")
-        );
+        assert_eq!(ctx.get("sql.verb").and_then(|v| v.as_str()), Some("CUSTOM"));
     }
 }

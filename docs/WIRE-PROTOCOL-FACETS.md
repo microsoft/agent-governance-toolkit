@@ -1,6 +1,6 @@
 ---
 title: "Wire-Protocol-Aware Policy Evaluation"
-last_reviewed: 2026-05-27
+last_reviewed: 2026-09-18
 owner: agt-maintainers
 ---
 
@@ -193,7 +193,7 @@ defensive copy of the caller's context before matching rules.
 
 ```rust
 use agentmesh::{PolicyEngine, default_registry};
-use serde_yaml::Value;
+use agentmesh::policy_data::{Mapping, Value};
 use std::collections::HashMap;
 
 let engine = PolicyEngine::new();
@@ -208,10 +208,10 @@ policies:
       sql.verb: [DROP, TRUNCATE, DELETE]
 "#).unwrap();
 
-let mut sub = serde_yaml::Mapping::new();
-sub.insert(Value::String("query".into()), Value::String("DROP TABLE production".into()));
+let mut sub = Mapping::new();
+sub.insert("query".into(), Value::String("DROP TABLE production".into()));
 let mut ctx = HashMap::new();
-ctx.insert("sql".to_string(), Value::Mapping(sub));
+ctx.insert("sql".to_string(), Value::Object(sub));
 
 let decision = engine.evaluate("db.exec", Some(&ctx));
 // decision == PolicyDecision::Deny(...)
@@ -219,7 +219,7 @@ let decision = engine.evaluate("db.exec", Some(&ctx));
 // Register a custom protocol extractor:
 default_registry().register("redis", |sub| {
     let mut m = std::collections::HashMap::new();
-    if let Some(cmd) = sub.get(Value::String("command".into())).and_then(|v| v.as_str()) {
+    if let Some(cmd) = sub.get("command").and_then(|v| v.as_str()) {
         m.insert("verb".to_string(), Value::String(cmd.to_uppercase()));
     }
     m

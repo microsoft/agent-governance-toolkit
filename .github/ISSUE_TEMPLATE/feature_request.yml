@@ -12,11 +12,27 @@ body:
       label: Package
       description: Which package would this feature apply to?
       options:
-        - agent-os-kernel
+        - agent-governance-toolkit-core
+        - agent-primitives
+        - agent-os
         - agent-mesh
-        - agent-hypervisor
+        - agent-runtime
         - agent-sre
-        - agent-governance
+        - agent-compliance
+        - agent-mcp-governance
+        - agent-rag-governance
+        - agent-sandbox
+        - agent-discovery
+        - agt-policies
+        - agent-hypervisor
+        - agent-lightning
+        - agent-marketplace
+        - agent-governance-toolkit-cli
+        - agent-governance-toolkit-integrations
+        - agent-governance-toolkit-protocols
+        - agentmesh-integrations
+        - policy-engine
+        - schemas
         - New package / cross-cutting
         - Documentation
     validations:
@@ -28,6 +44,21 @@ body:
       description: What problem does this feature solve?
     validations:
       required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: How does this feature impact your work and what are you trying to achieve?
+      description: |
+        Help us understand your use case: how are you using AGT today, what are you
+        trying to achieve, and what pain point or blocker led to this request?
+    validations:
+      required: true
+  - type: input
+    id: timeline
+    attributes:
+      label: Timeline
+      description: If this is critical for you, when do you need it by? Leave blank if there is no specific deadline.
+      placeholder: e.g. by 2026-09-30, next quarter, or no hard deadline
   - type: textarea
     id: solution
     attributes:

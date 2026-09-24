@@ -1,10 +1,10 @@
 ---
 title: "Agent OS — Public Preview"
-last_reviewed: 2026-07-15
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 # Agent OS — Public Preview
 
@@ -78,7 +78,7 @@ owner: agt-maintainers
 | **OpenAI Agents SDK** | — | 📦 Published on PyPI | [agentmesh-openai-agents-trust](https://pypi.org/project/agentmesh-openai-agents-trust/) |
 | **OpenClaw** | — | 📦 Published on ClawHub | [agentmesh-governance](https://clawhub.ai/microsoft/agentmesh-governance) |
 
-<details>
+<details markdown="1">
 <summary><b>📋 Proposals under review at 10+ frameworks (click to expand)</b></summary>
 
 | Framework | Stars | Proposal |
@@ -182,7 +182,7 @@ That's it! Your agent now has deterministic policy enforcement. [Learn more →]
 git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python examples/maf-integration/01-loan-processing/python/main.py
 ```
 
-<details>
+<details markdown="1">
 <summary><b>📋 More examples (click to expand)</b></summary>
 
 ### Policy enforcement with custom rules
@@ -462,13 +462,13 @@ from runtime import Runtime, SessionConfig, ConsistencyMode
 rt = Runtime()
 
 # Create a governed multi-agent session
-session = await rt.create_session(
+session = rt.create_session(
     config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL, max_participants=5),
     creator_did="did:mesh:admin",
 )
 
 # Agents are automatically assigned privilege rings based on trust score
-ring = await rt.join_session(session.sso.session_id, "did:mesh:agent-alpha", sigma_raw=0.85)
+ring = rt.join_session(session.sso.session_id, "did:mesh:agent-alpha", sigma_raw=0.85)
 # → Ring 2 (Standard) — can execute reversible actions
 
 # Multi-step saga with automatic timeout and compensation
@@ -480,7 +480,7 @@ step = session.saga.add_step(
 )
 
 # Terminate — returns tamper-evident summary hash
-summary_hash = await rt.terminate_session(session.sso.session_id)
+summary_hash = rt.terminate_session(session.sso.session_id)
 ```
 
 📖 **[Full Runtime documentation →](https://github.com/microsoft/agent-governance-toolkit)**
@@ -1152,7 +1152,7 @@ MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob
 
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 **Exploring kernel concepts for AI agent safety.**
 

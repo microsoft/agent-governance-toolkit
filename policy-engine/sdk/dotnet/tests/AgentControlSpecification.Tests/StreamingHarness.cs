@@ -6,7 +6,7 @@ using AgentControlSpecification;
 internal static class StreamingHarness
 {
     private const string CodingAssistantManifest = """
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 policies:
   coding_policy:
     type: custom
@@ -92,7 +92,7 @@ annotators:
         catch (AgentControlBlockedException ex)
         {
             AssertEqual(InterventionPoint.PreModelCall, ex.InterventionPoint, "explicit streaming RunModelAsync request should block at pre_model_call.");
-            AssertEqual("runtime_error:streaming_unsupported", ex.Result.Verdict.Reason, "explicit streaming RunModelAsync request should use streaming unsupported.");
+            AssertEqual("host_error:streaming_unsupported", ex.Result.Verdict.Reason, "explicit streaming RunModelAsync request should use streaming unsupported.");
             AssertEqual(0, explicitStreamingUpstreamCalls, "explicit streaming RunModelAsync request should not invoke upstream.");
         }
 
@@ -120,7 +120,9 @@ annotators:
             (args, _) => ValueTask.FromResult(args.Command),
             "tool-escalate-allow");
         AssertEqual("deploy-production", sensitive.Value, "approved sensitive action should continue.");
-        AssertEqual(Decision.Escalate, sensitive.PreToolCallResult.Verdict.Decision, "sensitive action should escalate.");
+        // An escalation is a liftable deny: a deny carrying an approval block.
+        AssertEqual(Decision.Deny, sensitive.PreToolCallResult.Verdict.Decision, "sensitive action should escalate.");
+        AssertEqual(true, sensitive.PreToolCallResult.Verdict.Approval is not null, "an escalation must be liftable.");
 
         var rejectedControl = AgentControl.FromNative(CodingAssistantManifest, new OrderingAnnotator(), new CodingAssistantPolicy(), DenyApproval());
         try
@@ -145,7 +147,7 @@ annotators:
         // as an SSE response.
         await AssertStreamingBlockedAsync(
             new AgentControl(new DelegateRuntime(_ => new InterventionPointResult(
-                new Verdict(Decision.Transform, Transform: new Transform("$policy_target", JsonSerializer.SerializeToElement(new { choices = "bad" }))),
+                new Verdict(Decision.Transform, Transform: new Transform("$target", JsonSerializer.SerializeToElement(new { choices = "bad" }))),
                 JsonSerializer.SerializeToElement(new { choices = "bad" })))),
             "invalid transformed policy output should fail closed for streaming.");
         try
@@ -247,7 +249,7 @@ annotators:
                 }
                 catch (AgentControlBlockedException ex)
                 {
-                    AssertEqual("runtime_error:streaming_unsupported", ex.Result.Verdict.Reason, $"{name} should use streaming unsupported reason.");
+                    AssertEqual("host_error:streaming_unsupported", ex.Result.Verdict.Reason, $"{name} should use streaming unsupported reason.");
                     AssertEqual(testCase.GetProperty("error_message").GetString(), ex.Result.Verdict.Message, $"{name} should preserve the parser error message.");
                 }
             }
@@ -285,7 +287,7 @@ annotators:
         catch (AgentControlBlockedException ex)
         {
             AssertEqual(InterventionPoint.PostModelCall, ex.InterventionPoint, message);
-            AssertEqual("runtime_error:streaming_unsupported", ex.Result.Verdict.Reason, message);
+            AssertEqual("host_error:streaming_unsupported", ex.Result.Verdict.Reason, message);
         }
     }
 
@@ -332,7 +334,7 @@ annotators:
         // AGT D1: only Transform may rewrite the policy target; `warn`+effects
         // was the upstream-ACS pattern and is no longer valid.
         return new InterventionPointResult(
-            new Verdict(Decision.Transform, Transform: new Transform("$policy_target", transformed)),
+            new Verdict(Decision.Transform, Transform: new Transform("$target", transformed)),
             transformed);
     }
 
@@ -343,7 +345,7 @@ annotators:
             ["intervention_point"] = request.InterventionPoint.ToWireName(),
             ["snapshot"] = request.Snapshot,
         });
-        return new InterventionPointResult(new Verdict(Decision.Escalate), PolicyInput: policyInput, ActionIdentity: AgentControl.ActionIdentity(policyInput));
+        return new InterventionPointResult(new Verdict(Decision.Deny, Approval: JsonSerializer.SerializeToElement(new Dictionary<string, object>())), PolicyInput: policyInput, ActionIdentity: AgentControl.ActionIdentity(policyInput));
     }
 
     private static ApprovalResolver AllowApproval() => (_, result, _) => ValueTask.FromResult(ApprovalResolution.Allow(result.ActionIdentity!));
@@ -439,7 +441,7 @@ annotators:
                 reason = "secret_redacted",
                 transform = new
                 {
-                    path = "$policy_target.choices[0].message.content",
+                    path = "$target.choices[0].message.content",
                     value = content.Replace("SECRET", "[REDACTED]", StringComparison.Ordinal),
                 },
             });
