@@ -2,10 +2,54 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+
+test("private-key scanning finishes for repeated unmatched headers", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-pem-scan-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const moduleUrl = new URL("../lib/policy.mjs", import.meta.url).href;
+  const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    import { loadPolicy, evaluateOpenCodeToolOutput } from ${JSON.stringify(moduleUrl)};
+    const state = await loadPolicy({ auditPath: process.argv[1] });
+    const output = ("-----BEGIN " + "PRIVATE KEY-----\\nx\\n").repeat(40000);
+    const result = await evaluateOpenCodeToolOutput(state, { tool: "bash", output });
+    if (result.redact) process.exit(1);
+    // Another secret forces the replacement pass to scan the same PEM text.
+    const mixed = await evaluateOpenCodeToolOutput(state, {
+      tool: "bash", output: output + "ghp_" + "a".repeat(40),
+    });
+    if (!mixed.redact || !mixed.redactedOutput.endsWith("[AGT_REDACTED:github-token]")) {
+      process.exit(1);
+    }
+  `, join(root, "audit.json")], { timeout: 5000, encoding: "utf8" });
+  assert.equal(child.error, undefined, child.error?.message);
+  assert.equal(child.status, 0, child.stderr);
+});
+
+test("private-key redaction preserves complete, nested, and empty-body behavior", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-pem-redact-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+  const begin = ["-----BEGIN", "PRIVATE KEY-----"].join(" ");
+  const end = "-----END PRIVATE KEY-----";
+  const marker = "[AGT_REDACTED:private-key-block]";
+  for (const [output, expected] of [
+    [`before ${begin}\nfixture\n${end} after`, `before ${marker} after`],
+    [`${begin}outer${begin}inner${end} tail`, `${marker} tail`],
+    [`${begin}one${end} / ${begin}two${end}`, `${marker} / ${marker}`],
+    [`${begin}${end}`, undefined],
+    [`${begin}${end}body${end}`, marker],
+    [`${begin.replace("PRIVATE", "RSA PRIVATE")}\r\nfixture\r\n${end.replace("PRIVATE", "RSA PRIVATE")}`, marker],
+  ]) {
+    const result = await evaluateOpenCodeToolOutput(state, { tool: "bash", output });
+    assert.equal(result.redact, expected !== undefined);
+    assert.equal(result.redactedOutput, expected);
+  }
+});
 
 import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "../lib/audit.mjs";
 import {

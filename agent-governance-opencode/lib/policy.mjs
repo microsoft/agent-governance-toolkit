@@ -1372,13 +1372,36 @@ const SECRET_PATTERNS = [
   { id: "github-fine-grained", regex: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g },
   { id: "openai-key", regex: /\bsk-[A-Za-z0-9]{32,}\b/g },
   { id: "azure-account-key", regex: /\bAccountKey=[A-Za-z0-9+/=]{40,}\b/g },
-  { id: "private-key-block", regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/g },
+  { id: "private-key-block", ranges: privateKeyBlockRanges },
   { id: "jwt-token", regex: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
 ];
+
+function privateKeyBlockRanges(text) {
+  // Scan delimiters once. Retrying a whole-body regex at every unmatched BEGIN
+  // makes tool output containing repeated headers take quadratic time.
+  const delimiters = /-----(BEGIN|END) [A-Z ]*PRIVATE KEY-----/g;
+  const ranges = [];
+  let start = null;
+  let bodyStart = 0;
+  for (const match of text.matchAll(delimiters)) {
+    if (start === null && match[1] === "BEGIN") {
+      start = match.index;
+      bodyStart = match.index + match[0].length;
+    } else if (start !== null && match[1] === "END" && match.index > bodyStart) {
+      ranges.push([start, match.index + match[0].length]);
+      start = null;
+    }
+  }
+  return ranges;
+}
 
 function scanForSecretLikeContent(text) {
   const hits = [];
   for (const pattern of SECRET_PATTERNS) {
+    if (pattern.ranges) {
+      if (pattern.ranges(text).length) hits.push(pattern.id);
+      continue;
+    }
     pattern.regex.lastIndex = 0;
     if (pattern.regex.test(text)) {
       hits.push(pattern.id);
@@ -1390,6 +1413,17 @@ function scanForSecretLikeContent(text) {
 function redactSecretLikeContent(text, _findings) {
   let redacted = text;
   for (const pattern of SECRET_PATTERNS) {
+    if (pattern.ranges) {
+      const chunks = [];
+      let cursor = 0;
+      for (const [start, end] of pattern.ranges(redacted)) {
+        chunks.push(redacted.slice(cursor, start), `[AGT_REDACTED:${pattern.id}]`);
+        cursor = end;
+      }
+      chunks.push(redacted.slice(cursor));
+      redacted = chunks.join("");
+      continue;
+    }
     const flags = pattern.regex.flags.includes("g") ? pattern.regex.flags : `${pattern.regex.flags}g`;
     const globalRegex = new RegExp(pattern.regex.source, flags);
     redacted = redacted.replace(globalRegex, `[AGT_REDACTED:${pattern.id}]`);
