@@ -365,6 +365,14 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 raise ResolutionError.invalid_governance(
                     f"rule at level {level} is missing name"
                 )
+            if _condition_unsatisfiable(
+                rule.get("condition"), is_deny=_rule_action(rule) == "deny"
+            ):
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a condition that can never match; "
+                    "refusing migration because it could silently fall through to "
+                    "later rules or the default action"
+                )
 
     if len(documents) == 1:
         rules = list(documents[0].get("rules", []))

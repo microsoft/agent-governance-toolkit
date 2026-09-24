@@ -31,8 +31,10 @@ instead of on every evaluation; the algorithm is specified in
 `--write-report MIGRATION.md` records what changed.
 
 Migration refuses rather than guesses. Dynamic expressions, host-only settings,
-invalid patterns, unsupported fields, and an existing output file all stop the
-run with an error naming the construct.
+invalid patterns, unsupported fields, conditions proven unable to match (such as
+`in: []`), and an existing output file all stop the run with an error naming the
+construct. An impossible rule would otherwise be skipped and could leave a later
+rule or the default action in effect.
 
 ## After migrating
 

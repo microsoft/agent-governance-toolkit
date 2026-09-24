@@ -1118,6 +1118,31 @@ def test_resolve_invalid_field_syntax_fails_closed(tmp_path: Path) -> None:
     assert "invalid field" in rego
 
 
+def test_resolve_rejects_unsatisfiable_rule_before_materializing_bundle(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "never-match",
+                    "deny",
+                    {"field": "tool_name", "operator": "in", "value": []},
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+    bundle_dir = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="condition that can never match"):
+        resolve_manifest(root, root, bundle_dir=bundle_dir)
+
+    assert not bundle_dir.exists()
+
+
 def test_resolve_fails_closed_when_legacy_rules_unbound(tmp_path: Path) -> None:
     root = tmp_path
     _write(
@@ -1145,6 +1170,7 @@ def test_resolve_fails_closed_when_legacy_rules_unbound(tmp_path: Path) -> None:
     ("operator", "value", "expected_snippet"),
     [
         ("not_in", ["secret", "token"], "not _v in"),
+        ("not_in", [], "not _v in"),
         ("startswith", "sec", "startswith(_v"),
         ("endswith", "ret", "endswith(_v"),
         ("exists", None, "!= null"),
