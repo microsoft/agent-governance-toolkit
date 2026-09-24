@@ -32,9 +32,11 @@ instead of on every evaluation; the algorithm is specified in
 
 Migration refuses rather than guesses. Dynamic expressions, host-only settings,
 invalid patterns, unsupported fields, conditions proven unable to match (such as
-`in: []`), and an existing output file all stop the run with an error naming the
-construct. An impossible rule would otherwise be skipped and could leave a later
-rule or the default action in effect.
+`in: []`, an empty `or`, or contradictory `and` siblings), and an existing
+output file all stop the run with an error naming the construct. An impossible
+rule would otherwise be skipped and could leave a later rule or the default
+action in effect. Unlike `in: []`, `not_in: []` is accepted because it matches
+every present field value; deny rules also match when the field is absent.
 
 ## After migrating
 
