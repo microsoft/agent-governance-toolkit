@@ -481,27 +481,34 @@ class MerkleAuditChain:
 
     def get_proof(self, entry_id: str) -> Optional[list[tuple[str, str]]]:
         """Get a Merkle inclusion proof for an entry."""
-        # Find entry index
-        entry_idx = None
-        for i, entry in enumerate(self._entries):
-            if entry.entry_id == entry_id:
-                entry_idx = i
-                break
+        snapshot = self._proof_snapshot(entry_id)
+        return snapshot[1] if snapshot is not None else None
 
-        if entry_idx is None:
-            return None
+    def _proof_snapshot(
+        self, entry_id: str,
+    ) -> tuple[AuditEntry, list[tuple[str, str]], str | None] | None:
+        """Capture an entry, its inclusion path, and the root under one lock."""
+        with self._lock:
+            entry_idx = None
+            for i, entry in enumerate(self._entries):
+                if entry.entry_id == entry_id:
+                    entry_idx = i
+                    break
 
-        proof = []
-        idx = entry_idx
+            if entry_idx is None:
+                return None
 
-        for level in self._tree[:-1]:  # Exclude root
-            sibling_idx = idx ^ 1  # XOR to get sibling
-            if sibling_idx < len(level):
-                position = "right" if idx % 2 == 0 else "left"
-                proof.append((level[sibling_idx].hash, position))
-            idx //= 2
+            proof = []
+            idx = entry_idx
 
-        return proof
+            for level in self._tree[:-1]:  # Exclude root
+                sibling_idx = idx ^ 1  # XOR to get sibling
+                if sibling_idx < len(level):
+                    position = "right" if idx % 2 == 0 else "left"
+                    proof.append((level[sibling_idx].hash, position))
+                idx //= 2
+
+            return self._entries[entry_idx], proof, self._root_hash
 
     def verify_proof(
         self,
@@ -624,9 +631,10 @@ class AuditLog:
 
     def get_entry(self, entry_id: str) -> Optional[AuditEntry]:
         """Get an audit entry by its unique ID."""
-        for entry in self._chain._entries:
-            if entry.entry_id == entry_id:
-                return entry
+        with self._chain._lock:
+            for entry in self._chain._entries:
+                if entry.entry_id == entry_id:
+                    return entry
         return None
 
     def get_entries_for_agent(
@@ -666,7 +674,11 @@ class AuditLog:
 
         Pass ``limit=None`` to return all matching entries.
         """
-        results = self._chain._entries
+        filtered = any((agent_did, event_type, start_time, end_time, outcome))
+        with self._chain._lock:
+            if not filtered:
+                return self._chain._entries[-limit:] if limit is not None else list(self._chain._entries)
+            results = list(self._chain._entries)
 
         if agent_did:
             results = [e for e in results if e.agent_did == agent_did]
@@ -691,20 +703,20 @@ class AuditLog:
 
     def get_proof(self, entry_id: str) -> Optional[dict[str, Any]]:
         """Get tamper-proof evidence for a specific entry."""
-        entry = self.get_entry(entry_id)
-        if not entry:
+        snapshot = self._chain._proof_snapshot(entry_id)
+        if snapshot is None:
             return None
 
-        proof = self._chain.get_proof(entry_id)
+        entry, proof, root = snapshot
         if not proof:
             return None
 
         return {
             "entry": entry.model_dump(),
             "merkle_proof": proof,
-            "merkle_root": self._chain.get_root_hash(),
+            "merkle_root": root,
             "verified": self._chain.verify_proof(
-                entry.entry_hash, proof, self._chain.get_root_hash()
+                entry.entry_hash, proof, root
             ),
         }
 
