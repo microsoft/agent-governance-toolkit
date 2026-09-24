@@ -492,6 +492,11 @@ npm start -- --stdio
 npm start -- --http --port 3000
 ```
 
+Build, watch, and typecheck invoke `node node_modules/@typescript/native/bin/tsc`
+directly, avoiding npm's ambiguous `tsc` bin-link order. ESLint uses the
+TypeScript 6 API compatibility alias until tooling supports TypeScript 7's new
+API. Run `npm run typecheck` and `npm run lint` after changes.
+
 ### Project Structure
 
 ```
