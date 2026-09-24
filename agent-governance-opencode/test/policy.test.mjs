@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import test from "node:test";
 
 import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "../lib/audit.mjs";
@@ -181,11 +182,20 @@ test("bundled recursive-delete policy denies common flag orderings", async (t) =
     "rm /important-data -rf",
     "rm --recursiv --forc /",
     "rm --rec --for /",
+    "rm --r --f /",
+    "rm --re --fo /",
+    "rm --recu --fo /",
+    "rm -r --fo /",
     "rm \"-rf\" /srv",
     "rm -r'f' /srv",
     "rm -rf'' /srv",
+    "rm -r\\f /srv",
     "rm 'a;b' -rf /srv",
+    "rm a\\;b -rf /srv",
     "echo ready; rm -rf /srv",
+    "sudo -u root rm -rf /srv",
+    "env AGT_TEST=1 rm -rf /srv",
+    "command rm -rf /srv",
   ];
 
   for (const command of commands) {
@@ -242,6 +252,29 @@ test("bundled recursive-delete policy keeps command boundaries and safe cleanup 
       command,
     );
   }
+});
+
+test("bundled recursive-delete matcher stays fast on multi-command scripts", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-recursive-delete-performance-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const state = await loadPolicy({
+    policyPath: null,
+    auditPath: join(root, "audit.json"),
+    homeDirectory: root,
+  });
+  const command = Array.from({ length: 30 }, (_, index) => `echo command-${index}`).join("\n");
+  const start = performance.now();
+  const result = await evaluateOpenCodeTool(state, {
+    tool: "bash",
+    args: { command },
+    cwd: root,
+    sessionId: "recursive-delete-performance-session",
+  });
+  const elapsedMs = performance.now() - start;
+
+  assert.equal(result.effect, "deny");
+  assert.doesNotMatch(result.reason, /Recursive delete commands outside common build artifacts/);
+  assert.ok(elapsedMs < 1_000, `30-command script took ${elapsedMs.toFixed(1)}ms`);
 });
 
 test("evaluateOpenCodeTool denies metadata URL fetches regardless of arg name", async () => {

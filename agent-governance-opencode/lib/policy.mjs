@@ -401,18 +401,25 @@ function createCommandPatternBackend(policy) {
           continue;
         }
 
-        const matchedPattern = rule.commandPatterns.find((pattern) => pattern.regex.test(commandText));
-        if (!matchedPattern) {
+        const recursiveDeleteMatched =
+          rule.id === "recursive-delete" && matchesRecursiveDeleteCommand(commandText);
+        const matchedPattern = rule.id === "recursive-delete"
+          ? undefined
+          : rule.commandPatterns.find((pattern) => pattern.regex.test(commandText));
+        if (!recursiveDeleteMatched && !matchedPattern) {
           continue;
         }
         if (shouldBypassBlockedCommandRule(rule, commandText)) {
           continue;
         }
 
+        const matchDescription = recursiveDeleteMatched
+          ? "recursive-delete command"
+          : `/${matchedPattern.source}/${matchedPattern.flags}`;
         return {
           backend: "agt-command-patterns",
           decision: rule.effect,
-          reason: `${rule.reason} Matched /${matchedPattern.source}/${matchedPattern.flags}.`,
+          reason: `${rule.reason} Matched ${matchDescription}.`,
         };
       }
 
@@ -889,45 +896,177 @@ function shouldBypassBlockedCommandRule(rule, commandText) {
   return false;
 }
 
+function matchesRecursiveDeleteCommand(commandText) {
+  const { commands } = tokenizeShellCommands(commandText);
+  return commands.some((tokens) => {
+    const invocation = getShellCommandInvocation(tokens);
+    if (invocation?.name !== "rm") {
+      return false;
+    }
+
+    let recursive = false;
+    let force = false;
+    let optionsEnded = false;
+    for (const token of invocation.args) {
+      if (optionsEnded) {
+        continue;
+      }
+      if (token === "--") {
+        optionsEnded = true;
+        continue;
+      }
+
+      const option = parseRmOption(token);
+      if (option) {
+        recursive ||= option.recursive;
+        force ||= option.force;
+      }
+    }
+
+    return recursive && force;
+  });
+}
+
 function isSafeCleanupCommand(commandText) {
-  if (containsCommandControlOperator(commandText)) {
+  const parsedCommand = tokenizeShellCommands(commandText);
+  if (parsedCommand.hasControlOperator || parsedCommand.commands.length !== 1) {
     return false;
   }
 
-  const tokens = tokenizeCommand(commandText);
-  const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|ri|rd|del)$/i.test(stripCommandToken(token)),
-  );
-  if (commandIndex === -1) {
+  const invocation = getShellCommandInvocation(parsedCommand.commands[0]);
+  if (invocation?.name !== "rm") {
     return false;
   }
 
   const candidateTargets = [];
   let optionsEnded = false;
-  for (const token of tokens.slice(commandIndex + 1)) {
-    const normalizedToken = stripCommandToken(token);
-    if (!normalizedToken) {
+  for (const token of invocation.args) {
+    if (!token) {
       return false;
     }
     if (optionsEnded) {
-      if (!addSafeCleanupTargets(candidateTargets, normalizedToken)) {
+      if (!addSafeCleanupTargets(candidateTargets, token)) {
         return false;
       }
       continue;
     }
-    if (normalizedToken === "--") {
+    if (token === "--") {
       optionsEnded = true;
       continue;
     }
-    if (normalizedToken.startsWith("-")) {
+    if (token.startsWith("-")) {
+      const option = parseRmOption(token);
+      if (!option?.recognized) {
+        return false;
+      }
       continue;
     }
-    if (!addSafeCleanupTargets(candidateTargets, normalizedToken)) {
+    if (!addSafeCleanupTargets(candidateTargets, token)) {
       return false;
     }
   }
 
   return candidateTargets.length > 0 && candidateTargets.every(isSafeCleanupTarget);
+}
+
+function getShellCommandInvocation(tokens) {
+  let index = 0;
+  while (index < tokens.length) {
+    const token = tokens[index];
+    const commandName = getLastPathSegment(token.replace(/\\/g, "/")).toLowerCase();
+    if (
+      ["if", "then", "do", "else", "elif", "while", "until", "in"].includes(commandName) ||
+      /^[a-z_][a-z0-9_]*=/i.test(token)
+    ) {
+      index += 1;
+      continue;
+    }
+
+    if (["command", "exec", "nohup", "busybox"].includes(commandName)) {
+      index += 1;
+      while (tokens[index]?.startsWith("-")) {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (commandName === "env") {
+      index += 1;
+      while (index < tokens.length) {
+        const argument = tokens[index];
+        if (argument === "--") {
+          index += 1;
+          break;
+        }
+        if (["-u", "--unset", "-C", "--chdir"].includes(argument)) {
+          index += 2;
+        } else if (argument.startsWith("-") || /^[a-z_][a-z0-9_]*=/i.test(argument)) {
+          index += 1;
+        } else {
+          break;
+        }
+      }
+      continue;
+    }
+
+    if (commandName === "sudo" || commandName === "doas") {
+      index += 1;
+      while (index < tokens.length && tokens[index].startsWith("-")) {
+        const option = tokens[index];
+        index += 1;
+        if (
+          ["-u", "--user", "-g", "--group", "-h", "--host", "-p", "--prompt", "-C", "--close-from"].includes(option)
+        ) {
+          index += 1;
+        }
+      }
+      continue;
+    }
+
+    return {
+      args: tokens.slice(index + 1),
+      name: commandName,
+    };
+  }
+  return undefined;
+}
+
+function parseRmOption(token) {
+  if (token === "-" || !token.startsWith("-")) {
+    return undefined;
+  }
+
+  if (token.startsWith("--")) {
+    const optionName = token.slice(2).toLowerCase();
+    if (optionName.startsWith("r") && "recursive".startsWith(optionName)) {
+      return { force: false, recognized: true, recursive: true };
+    }
+    if (optionName.startsWith("f") && "force".startsWith(optionName)) {
+      return { force: true, recognized: true, recursive: false };
+    }
+
+    return {
+      force: false,
+      recognized: [
+        "dir",
+        "help",
+        "interactive",
+        "no-preserve-root",
+        "one-file-system",
+        "preserve-root",
+        "verbose",
+        "version",
+      ].includes(optionName),
+      recursive: false,
+    };
+  }
+
+  const optionLetters = token.slice(1).toLowerCase();
+  return {
+    force: optionLetters.includes("f"),
+    recognized: [...optionLetters].every((letter) => "firdv".includes(letter)),
+    recursive: optionLetters.includes("r"),
+  };
 }
 
 function addSafeCleanupTargets(candidateTargets, token) {
@@ -1152,6 +1291,105 @@ function normalizeUrlValue(value) {
   } catch {
     return raw.toLowerCase();
   }
+}
+
+function tokenizeShellCommands(commandText) {
+  const input = String(commandText);
+  const commands = [];
+  let command = [];
+  let token = "";
+  let tokenStarted = false;
+  let quote;
+  let hasControlOperator = false;
+
+  const finishToken = () => {
+    if (tokenStarted) {
+      command.push(token);
+      token = "";
+      tokenStarted = false;
+    }
+  };
+  const finishCommand = () => {
+    finishToken();
+    if (command.length > 0) {
+      commands.push(command);
+      command = [];
+    }
+  };
+
+  for (let index = 0; index < input.length; index += 1) {
+    const character = input[index];
+    if (quote) {
+      if (character === quote) {
+        quote = undefined;
+      } else if (quote === '"' && character === "\\" && index + 1 < input.length) {
+        const nextCharacter = input[index + 1];
+        if (['"', "\\", "$", "`"].includes(nextCharacter)) {
+          token += nextCharacter;
+          index += 1;
+        } else if (nextCharacter !== "\n" && nextCharacter !== "\r") {
+          token += character;
+        }
+      } else {
+        token += character;
+      }
+      tokenStarted = true;
+      continue;
+    }
+
+    if (character === "'" || character === '"') {
+      quote = character;
+      tokenStarted = true;
+      continue;
+    }
+    if (character === "\\") {
+      const nextCharacter = input[index + 1];
+      if (nextCharacter === "\n") {
+        index += 1;
+        continue;
+      }
+      if (nextCharacter === "\r" && input[index + 2] === "\n") {
+        index += 2;
+        continue;
+      }
+      if (nextCharacter !== undefined) {
+        token += nextCharacter;
+        tokenStarted = true;
+        index += 1;
+      } else {
+        token += character;
+        tokenStarted = true;
+      }
+      continue;
+    }
+    if (/\s/.test(character)) {
+      finishToken();
+      if (character === "\n" || character === "\r") {
+        hasControlOperator = true;
+        finishCommand();
+        if (character === "\r" && input[index + 1] === "\n") {
+          index += 1;
+        }
+      }
+      continue;
+    }
+    if (";|&(){} `".includes(character)) {
+      hasControlOperator = true;
+      finishCommand();
+      if (
+        (character === "|" || character === "&") &&
+        input[index + 1] === character
+      ) {
+        index += 1;
+      }
+      continue;
+    }
+
+    token += character;
+    tokenStarted = true;
+  }
+  finishCommand();
+  return { commands, hasControlOperator };
 }
 
 function containsCommandControlOperator(commandText) {
