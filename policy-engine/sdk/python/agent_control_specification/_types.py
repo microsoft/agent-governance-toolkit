@@ -6,10 +6,11 @@ import hashlib
 import json
 import warnings
 from enum import Enum, IntEnum
-from typing import Any, Mapping, MutableMapping, Sequence, Union
+from typing import Mapping, MutableMapping, Sequence, TypeAlias, Union
 
-JsonValue = Any
-JsonObject = MutableMapping[str, JsonValue]
+# Read-only containers so narrower caller payloads (dict[str, str], tuples) still type-check.
+JsonValue: TypeAlias = bool | int | float | str | None | Sequence["JsonValue"] | Mapping[str, "JsonValue"]
+JsonObject: TypeAlias = MutableMapping[str, JsonValue]
 
 
 class InterventionPoint(str, Enum):
@@ -159,7 +160,7 @@ class Warning:
     message: str | None = None
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, JsonValue]) -> "Warning":
+    def from_mapping(cls, value: JsonValue) -> "Warning":
         if not isinstance(value, Mapping):
             raise ValueError("warning must be a mapping")
         reason = value.get("reason")
@@ -267,6 +268,25 @@ class ToolRunResult:
     post_tool_call_result: InterventionPointResult
 
 
+class AgentControlRuntimeError(RuntimeError):
+    """An engine ``RuntimeError`` with its reserved reason code attached.
+
+    ``reason`` is the ``runtime_error:*`` code the engine reports and
+    ``detail`` its detail text. ``str(exc)`` is unchanged, so callers that
+    match on the message keep working; new callers branch on ``reason``.
+    """
+
+    def __init__(self, message: str, reason: str, detail: str = "") -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.detail = detail
+
+    # ``args`` holds only the message, so the default reduce cannot rebuild the
+    # three-argument constructor when a process pool loads the pickled error.
+    def __reduce__(self):
+        return (type(self), (str(self), self.reason, self.detail))
+
+
 class AgentControlInterruption(RuntimeError):
     """Base for control-flow interruptions raised by enforcing wrappers.
 
@@ -289,6 +309,10 @@ class AgentControlBlocked(AgentControlInterruption):
         self.result = result
         reason = f" ({result.verdict.reason})" if result.verdict.reason else ""
         super().__init__(f"Agent Control Specification blocked {intervention_point.value}{reason}.")
+
+    # Rebuild from the constructor arguments so the error survives pickling.
+    def __reduce__(self):
+        return (type(self), (self.intervention_point, self.result))
 
 
 class AgentControlSuspended(AgentControlInterruption):
@@ -314,6 +338,9 @@ class AgentControlSuspended(AgentControlInterruption):
             f"Agent Control Specification suspended {intervention_point.value} pending approval{reason}."
         )
 
+    def __reduce__(self):
+        return (type(self), (self.intervention_point, self.result, self.handle))
+
 
 class ApprovalOutcome(str, Enum):
     """Outcome of resolving an ``escalate`` verdict through an approval resolver."""
@@ -330,19 +357,24 @@ class ApprovalResolution:
     ``handle`` is an opaque, host-owned value carried on
     :class:`AgentControlSuspended` so the host can later resume the suspended
     interaction. The runtime never stores or interprets it.
+
+    ``reason`` is the resolver's explanation for a refusal. Enforcement copies
+    it onto the denial verdict's ``message``; the verdict's ``reason`` stays
+    the policy's own classified code.
     """
 
     outcome: ApprovalOutcome
     handle: JsonValue | None = None
     action_identity: str | None = None
+    reason: str | None = None
 
     @classmethod
     def allow(cls, action_identity: str) -> "ApprovalResolution":
         return cls(ApprovalOutcome.ALLOW, action_identity=action_identity)
 
     @classmethod
-    def deny(cls) -> "ApprovalResolution":
-        return cls(ApprovalOutcome.DENY)
+    def deny(cls, reason: str | None = None) -> "ApprovalResolution":
+        return cls(ApprovalOutcome.DENY, reason=reason)
 
     @classmethod
     def suspend(cls, handle: JsonValue | None = None, action_identity: str | None = None) -> "ApprovalResolution":

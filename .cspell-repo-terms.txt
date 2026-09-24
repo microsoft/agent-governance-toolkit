@@ -37,6 +37,8 @@ struction
 # discarded-verdict census (tests/test_transform_never_dropped.py)
 # dorny/paths-filter — GitHub Actions dependency used in policy-validation.yml
 # git fetch destination-ref syntax, spell-check.yml base fetch
+# git diff --numstat output format
+numstat
 AACS
 AAIF
 AARM
@@ -51,6 +53,10 @@ AILLM
 AKIA
 AKIAFAKE
 AKIAFAKEFORTEST
+AKIAAAAAAAAAAAAAAAAA
+AKIAIOSFODNN
+AKIAXXXX
+fooghp
 AKIDEXAMPLE
 APIM
 APPI
@@ -61,11 +67,16 @@ AWSIAM
 Acta
 Actix
 AgentGovernance
+Agentflow
+Agentflows
 AgentMesh
+Agentmetry
 AgentOS
 AgentRateLimiter
 Amol
 Anambra
+Artzain
+Assn
 Authenticode
 BFBFBF
 BLOCKME
@@ -90,9 +101,11 @@ Chatflows
 Clendenen
 CommonMark
 Convs
+conftest
 Cpus
 CrewAI
 CuriousHet
+getfixturevalue
 Cybercrimes
 DACL
 DEVNULL
@@ -105,6 +118,8 @@ DYLD
 DataQualityEvidence
 Dedup
 Defence
+demotes
+demoting
 Deque
 Deserialise
 Diffable
@@ -139,6 +154,13 @@ GRPC
 Gazetted
 Ghanaian
 GitHub
+thatjosh
+execdir
+ionice
+setsid
+xargs
+strace
+busybox
 Governorate
 HEALTHCHECK
 HKDF
@@ -150,6 +172,7 @@ Hyperlight
 IATP
 IGNORECASE
 IPFS
+ISSN
 Initialise
 Jaccard
 Janssen
@@ -197,6 +220,7 @@ Nanvix
 NemoClaw
 Nemotron
 Normalise
+OAEP
 OCSP
 OLLAMA
 ORAS
@@ -225,6 +249,7 @@ Printf
 Println
 Pseudonymisation
 Pydantic
+Quantumskipper
 REALPKG
 RISA
 RUBYOPT
@@ -244,6 +269,7 @@ Rootfs
 RustCrypto
 RustSec
 Rwandan
+SECP
 SGHA
 SIEM
 SIGSTOP
@@ -306,6 +332,7 @@ aexit
 agentchat
 agentframework
 agentidentity
+agentmeshentryhash
 agentrust
 agentshield
 agentveil
@@ -369,6 +396,7 @@ basenames
 behaviour
 behavioural
 bindgen
+blitzcrieg
 bluebubbles
 bmod
 bubblewrap
@@ -383,6 +411,7 @@ bytecount
 caas
 cands
 canonicality
+capitalised
 caplog
 capsys
 carloshvp
@@ -517,6 +546,7 @@ exfiltrat
 exfiltrated
 exfiltration
 expanduser
+exponentials
 externalidentity
 fastapi
 fastembed
@@ -534,6 +564,7 @@ fmean
 fnmatch
 fnmatchcase
 folderlocation
+footgun
 formedness
 fria
 fromisoformat
@@ -570,6 +601,7 @@ gomod
 governancekernel
 governancepolicy
 governorate
+granit
 grpc
 gunicorn
 gvisor
@@ -608,7 +640,9 @@ isalnum
 isascii
 isatty
 isawaitable
+isclose
 iscoroutine
+iscoroutinefunction
 isdigit
 isdir
 isdisjoint
@@ -653,10 +687,16 @@ langflow
 langgenius
 lawcontinue
 levelname
+lookahead
+lookaround
+lookarounds
+lookbehind
 liamcrumm
 libagent
 libc
+libyaml
 licen
+lifecycles
 linkcheck
 linkified
 linkpkg
@@ -668,6 +708,9 @@ lockdown
 lockfile
 lockfiles
 logdir
+logit
+logits
+logprob
 logprobs
 loopback
 lotl
@@ -742,11 +785,13 @@ neutralised
 neutralises
 neutralising
 newpartner
+newtype
 newurl
 nfiu
 nmap
 nonblocking
 nonconformant
+nonfinite
 nonimport
 nonlocal
 nono
@@ -762,6 +807,7 @@ normpath
 nostr
 nother
 notrequirements
+noverify
 npmjs
 nsecure
 ntpath
@@ -782,6 +828,7 @@ oorandom
 opencode
 openpolicyagent
 openshell
+organisation
 organisational
 organisations
 oserror
@@ -825,6 +872,7 @@ popitem
 popleft
 posixpath
 posonlyargs
+preauthorize
 prayagupa
 preimage
 prependpath
@@ -850,10 +898,12 @@ pypdf
 pypistats
 pyproject
 pypy
+pyright
 pytest
 pytestmark
 pythonhosted
 pythonstartup
+readyz
 pyupgrade
 pyyaml
 qualname
@@ -926,9 +976,12 @@ sandboxing
 sandboxprovider
 sanitisation
 sanitised
+saphyr
 sarif
 sboms
+sbyte
 scak
+scandir
 schemaversion
 scikit
 scipy
@@ -971,6 +1024,8 @@ slugification
 smol
 snupkg
 socat
+socsec
+softmax
 spacy
 spanid
 specversion
@@ -978,6 +1033,7 @@ spellcheck
 spellchecking
 spiffesvid
 splitlines
+keepends
 sprintf
 stacklevel
 startswith
@@ -1029,6 +1085,7 @@ tzdata
 ufeff
 unaliased
 uncallable
+uncompilable
 unconfigured
 unicodedata
 uninspectable
@@ -1175,3 +1232,44 @@ redirections
 karimad
 رقم
 قومي
+GPAI
+Harmonised
+
+# --- audit_backends.py / govern.py fail-closed-error comment terms (PR #3916) ---
+CREAT
+ELOOP
+ENOSPC
+EPERM
+FCHMOD
+WRONLY
+containerised
+fchmod
+fileno
+fromhex
+fstat
+serialisation
+
+# --- advisory.py / govern.py async advisory support terms (PR #4052) ---
+acall
+Acall
+acheck
+unroutable
+
+# --- Terraform examples ---
+myagent
+myagentprodsa
+passwordless
+appconfig
+appconfiguration
+azconfig
+boto
+hostnames
+tfvars
+amd64
+alltrue
+cidrhost
+CIDRs
+propagation
+readonly
+resolver
+sha256sum

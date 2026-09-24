@@ -158,7 +158,7 @@ def test_python_manifest_producers_require_the_retargeted_sdk() -> None:
     )["project"]
     policy_requirement = next(
         Requirement(value)
-        for value in core["dependencies"]
+        for value in core["optional-dependencies"]["migrate"]
         if Requirement(value).name == "agt-policies"
     )
     assert Version("5.1.0") in policy_requirement.specifier

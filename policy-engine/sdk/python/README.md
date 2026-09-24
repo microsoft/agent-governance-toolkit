@@ -6,7 +6,23 @@ Agent Control Specification (ACS) is a stateless, deterministic, fail-closed pol
 
 This package is the thin Python surface for the stateless Agent Control Specification runtime.
 
-It intentionally owns Python async orchestration and host/framework integration while the native core owns deterministic intervention point evaluation. `AgentControl.from_path("manifest.yaml")` builds a control backed by the bundled Rust core through the `_native` extension. The release pipeline produces CPython 3.11+ ABI3 wheels for Linux x86_64 and ARM64 with glibc 2.28 or newer, macOS Intel and Apple Silicon, and Windows x86_64. Installing one of those wheels does not require Rust. On other platforms pip falls back to the source distribution and builds the extension locally with maturin and Rust. With no dispatcher arguments the bundled OPA policy dispatcher and annotator dispatcher are wired automatically, so a host that uses Rego policies integrates in roughly three lines. Pass `annotator_dispatcher=` and `policy_dispatcher=` (or use `from_native(manifest, ...)`) to override either bundled default with host-specific logic. The zero-config construction section in the root README describes when to supply custom dispatchers.
+It intentionally owns Python async orchestration and host/framework integration while the native core owns deterministic intervention point evaluation. `AgentControl.from_path("manifest.yaml")` builds a control backed by the bundled Rust core through the `_native` extension. The release pipeline produces CPython 3.11+ ABI3 wheels for Linux x86_64 and ARM64 with glibc 2.28 or newer, macOS Intel and Apple Silicon, and Windows x86_64. Installing one of those wheels does not require Rust. On other platforms pip falls back to the source distribution and builds the extension locally with maturin and Rust. The default OPA policy dispatcher is wired automatically. Pass `policy_dispatcher=` to use host-specific policy logic. Manifests declaring annotators also require a host `annotator_dispatcher=` unless the extension was built with `bundled-dispatchers`.
+
+## Annotator dispatchers
+
+The default wheel does not enable the `bundled-dispatchers` Cargo feature.
+A manifest with a non-empty `annotators` section therefore requires an explicit
+`annotator_dispatcher`, including when its annotators are not referenced by an
+interception point. Supply a host object implementing
+`dispatch(annotator_name, annotator_config, preliminary_policy_input)` through
+`AgentControl.from_path("manifest.yaml", annotator_dispatcher=host_annotator)`
+or the corresponding argument on the other native constructors. Construction
+fails if a required dispatcher is missing.
+
+To opt into the bundled annotator dispatcher, build the extension from source
+with the `bundled-dispatchers` Cargo feature. This enables dispatchers that read
+host environment credentials. It is a build-time option, not a pip extra.
+Manifests without annotators do not need an annotator dispatcher.
 
 Runnable pieces today:
 
@@ -28,7 +44,7 @@ Runnable pieces today:
 
 Adapters are intentionally stateless. Pass ambient per-call data with the reserved keyword `agent_control_snapshot={...}`; it is merged over any default snapshot supplied when creating the wrapper. Unsupported or potentially bypassing methods raise `AdapterUnsupportedError` rather than returning an unguarded path. `guard_mcp_server()` covers MCP tool calls only. MCP resources, prompts, streams, and lifecycle hooks still need package-specific adapters, and known unsupported methods on a wrapped provider are blocked instead of being delegated. `guard_litellm_proxy()` buffers JSON ASGI request/response bodies and streaming chat responses instead of bypassing controls. `AgentControlLiteLLMGuardrail` maps LiteLLM `pre_call` and `post_call` guardrail hooks to ACS input, model, tool, and output intervention points. Install the optional proxy dependency with `pip install "agent-control-specification[litellm-proxy]"`.
 
-Use `parse_manifest(text)` when a host needs the runtime parser's YAML or JSON value before applying another contract such as JSON Schema. Use `validate_manifest(text)` for a complete manifest and `validate_manifest_overlay(text)` for resolution-independent checks on a partial manifest with `extends`. All three functions use the same bounded `serde_yaml` implementation as runtime construction.
+Use `parse_manifest(text)` when a host needs a YAML or JSON value before applying another contract such as JSON Schema. Use `validate_manifest(text)` for a complete manifest and `validate_manifest_overlay(text)` for resolution-independent checks on a partial manifest with `extends`. These tooling functions use AGT's bounded `serde-saphyr` parser. Runtime construction delegates to the pinned upstream ACS engine, whose parser migration must be released before AGT's registry dependency can be updated.
 
 ```python
 from agent_control_specification import validate_acs_artifacts
@@ -73,7 +89,13 @@ Python framework helpers are duck typed and guard the selected async or sync met
 
 Semantic Kernel helpers are exported as `guard_semantic_kernel_function()` for a single function-like object and `guard_semantic_kernel_filter()` for filter-style invocation contexts. Function wrappers mediate `pre_tool_call` and `post_tool_call`, passing transformed arguments to the function and transformed results back to the host.
 
+Tool wrappers also accept a `SnapshotBuilder` as `snapshot=` in place of a mapping: `guard_tool()`, `guard_mcp_tool()`, `guard_langchain_tool()`, the Semantic Kernel helpers, `guard_foundry_agent()`, and `AgentControl.run_tool()` / `protect_tool()` then build each snapshot from the builder's current envelope and advance `tool_call_count` once the pre-check permits a call, so a `budgets` cap on `tool_call_count` is enforced. A plain mapping is sent unchanged on every call, and the host advances the counters itself. The slot is reserved before the pre-check runs and released if the call is denied, so concurrent calls on one builder share the budget correctly. Do not also call `record_tool_call` for calls the SDK governs this way. The LiteLLM proxy guardrail still evaluates from the mapping it was constructed with and does not take a builder.
+
 Single-tool wrappers accept an optional snapshot-compatible tool call id: pass `tool_call_id=` to `AgentControl.run_tool()` / `protect_tool()`, or `agent_control_tool_call_id=` to adapter helpers such as `guard_tool()` / `guard_mcp_tool()`. When no id is supplied the snapshot omits `tool_call.id`.
+
+## Shipped schemas
+
+The `spec/schema` documents ship inside the package under `agent_control_specification.schemas`: `schemas.names()` lists them (`manifest`, `approval`, `cedar_advice` and the `wire/*` payload schemas), `schemas.text(name)` returns the JSON text and `schemas.load(name)` the parsed document. Validate advice and manifest payloads against these rather than a hand-copied contract; the files are copies of `policy-engine/spec/schema` and the test suite fails if they drift.
 
 ## Telemetry
 
@@ -145,9 +167,13 @@ guarded_tool = guard_langchain_tool(
 documents = await guarded_tool.ainvoke({"query": "public docs"})
 ```
 
+## Engine runtime errors
+
+Engine failures (an unreadable manifest, a missing policy-target path, a policy that could not be invoked) raise `AgentControlRuntimeError`, a `RuntimeError` whose `reason` is the reserved `runtime_error:*` code and whose `detail` is the engine's detail text, so a host branches on the code instead of parsing the message. `AgentControlRuntimeError`, `AgentControlBlocked`, and `AgentControlSuspended` all survive `pickle`, so they propagate unchanged out of `multiprocessing` and `concurrent.futures` process workers.
+
 ## Escalation and approval
 
-In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` verdict consults an optional approval resolver, a host callback that decides whether the action proceeds. Supply a resolver on the instance with `AgentControl(..., approval_resolver=...)` (or `from_native(..., approval_resolver=...)`) or override it per call with the `approval_resolver=` argument on `run()`, `run_tool()`, and `protect_tool()`. The resolver returns `ApprovalResolution.allow(result.action_identity)`, `ApprovalResolution.deny()`, or `ApprovalResolution.suspend(handle=..., action_identity=result.action_identity)`.
+In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` verdict consults an optional approval resolver, a host callback that decides whether the action proceeds. Supply a resolver on the instance with `AgentControl(..., approval_resolver=...)` (or `from_native(..., approval_resolver=...)`) or override it per call with the `approval_resolver=` argument on `run()`, `run_tool()`, and `protect_tool()`. The resolver returns `ApprovalResolution.allow(result.action_identity)`, `ApprovalResolution.deny(reason)` (the optional `reason` becomes the denial verdict's `message`), or `ApprovalResolution.suspend(handle=..., action_identity=result.action_identity)`.
 
 - allow proceeds with the original action target. `escalate` verdicts do not return or apply transformed targets
 - deny, an unrecognized result, or a resolver that raises blocks with `AgentControlBlocked`
@@ -155,5 +181,7 @@ In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` ver
 - with no resolver an `escalate` verdict fails closed to a block
 
 The resolver is consulted only for `escalate` and only in enforce mode. A `deny` never consults it. Framework adapters use the instance resolver. Resumption after a suspension is owned by the host. For a post action point such as `post_tool_call` the action already ran, so a resuming host delivers the produced result instead of running it again. `mcp_approval_resolver(elicit)` adapts an MCP elicitation callback into a resolver.
+
+The manifest's optional top-level `approval` section is exposed unchanged as `AgentControl.approval_config`, read from the fully merged manifest by the native core on every constructor. `HostSession` bounds its synchronous approval wait with that section's `timeout_seconds` when declared and with `DEFAULT_APPROVAL_TIMEOUT_SECONDS` otherwise; an explicit `approval_timeout_seconds=` argument wins over both. The section's `on_timeout` is not applied: on expiry the session uses its own `approval_on_timeout` argument, which defaults to `deny`.
 
 In artifact kits, install the Python wheel into a temporary virtual environment and run a host smoke test that loads a manifest with `NativeRuntimeClient.from_path`. In repository checkouts, run the Python SDK test suite through the project build instructions.

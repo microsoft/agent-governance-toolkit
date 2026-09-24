@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import threading
 import time
 import uuid
@@ -23,8 +24,12 @@ from typing import Any, Dict, List, Literal, Optional
 _logger = logging.getLogger(__name__)
 
 
-class ReceiptSigningError(Exception):
+class ReceiptSigningError(RuntimeError):
     """Raised when Ed25519 receipt signing fails."""
+
+
+class ReceiptAuthorizationError(RuntimeError):
+    """Raised when external receipt authorization fails validation."""
 
 
 @dataclass
@@ -42,6 +47,12 @@ class GovernanceReceipt:
     parent_receipt_hash: Optional[str] = None
     signature: Optional[str] = None
     signer_public_key: Optional[str] = None
+    assurance_level: Literal["self_attested", "externally_authorized"] = "self_attested"
+    authorizer_id: Optional[str] = None
+    authorization_expires_at: Optional[float] = None
+    authorization_nonce: Optional[str] = None
+    authorization_signature: Optional[str] = None
+    authorizer_public_key: Optional[str] = None
     error: Optional[str] = None
 
     def canonical_payload(self) -> str:
@@ -62,6 +73,24 @@ class GovernanceReceipt:
         # ensure_ascii=False: RFC 8785 §3.2.2.2 requires raw UTF-8, not \uXXXX escapes
         return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
+    def canonical_authorization_payload(self) -> str:
+        """Return the external-authorizer payload that binds this exact receipt."""
+        if (
+            self.authorizer_id is None
+            or self.authorization_expires_at is None
+            or self.authorization_nonce is None
+        ):
+            raise ReceiptAuthorizationError("External authorization metadata is incomplete.")
+
+        data = {
+            "authorizer_id": self.authorizer_id,
+            "authorization_expires_at": self.authorization_expires_at,
+            "authorization_nonce": self.authorization_nonce,
+            "receipt_payload_hash": self.payload_hash(),
+            "type": "https://agent-governance.org/receipts/external-authorization/v1",
+        }
+        return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
     def payload_hash(self) -> str:
         return hashlib.sha256(self.canonical_payload().encode()).hexdigest()
 
@@ -79,6 +108,12 @@ class GovernanceReceipt:
             "payload_hash": self.payload_hash(),
             "signature": self.signature,
             "signer_public_key": self.signer_public_key,
+            "assurance_level": self.assurance_level,
+            "authorizer_id": self.authorizer_id,
+            "authorization_expires_at": self.authorization_expires_at,
+            "authorization_nonce": self.authorization_nonce,
+            "authorization_signature": self.authorization_signature,
+            "authorizer_public_key": self.authorizer_public_key,
             "error": self.error,
         }
 
@@ -120,26 +155,42 @@ def hash_tool_args(tool_args: Optional[Dict[str, Any]]) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def sign_receipt(receipt: GovernanceReceipt, private_key_hex: str) -> GovernanceReceipt:
+def sign_receipt(
+    receipt: GovernanceReceipt,
+    private_key_hex: str,
+    *,
+    payload: Optional[bytes] = None,
+    signature_field: str = "signature",
+    public_key_field: str = "signer_public_key",
+) -> GovernanceReceipt:
     """Sign a receipt with an Ed25519 private key (hex-encoded 32-byte seed)."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
     private_key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_key_hex))
-    payload = receipt.canonical_payload().encode()
-    receipt.signature = private_key.sign(payload).hex()
-    receipt.signer_public_key = private_key.public_key().public_bytes_raw().hex()
+    signed_payload = receipt.canonical_payload().encode() if payload is None else payload
+    setattr(receipt, signature_field, private_key.sign(signed_payload).hex())
+    setattr(receipt, public_key_field, private_key.public_key().public_bytes_raw().hex())
     return receipt
 
 
-def verify_receipt(receipt: GovernanceReceipt) -> bool:
+def verify_receipt(
+    receipt: GovernanceReceipt,
+    *,
+    payload: Optional[bytes] = None,
+    signature: Optional[str] = None,
+    signer_public_key: Optional[str] = None,
+) -> bool:
     """Verify the Ed25519 signature on a receipt. Returns ``False`` if unsigned or invalid."""
-    if not receipt.signature or not receipt.signer_public_key:
+    signature_value = receipt.signature if signature is None else signature
+    public_key_value = receipt.signer_public_key if signer_public_key is None else signer_public_key
+    if not signature_value or not public_key_value:
         return False
     try:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-        public_key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(receipt.signer_public_key))
-        public_key.verify(bytes.fromhex(receipt.signature), receipt.canonical_payload().encode())
+        public_key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key_value))
+        signed_payload = receipt.canonical_payload().encode() if payload is None else payload
+        public_key.verify(bytes.fromhex(signature_value), signed_payload)
         return True
     except ImportError as exc:
         raise ImportError("The 'cryptography' library is required for Ed25519 signature verification.") from exc
@@ -147,16 +198,213 @@ def verify_receipt(receipt: GovernanceReceipt) -> bool:
         return False
 
 
+def authorize_receipt(
+    receipt: GovernanceReceipt,
+    private_key_hex: str,
+    *,
+    authorizer_id: str,
+    expires_at: float,
+    nonce: Optional[str] = None,
+) -> GovernanceReceipt:
+    """Attach an external pre-execution authorization to a signed receipt.
+
+    The authorizer signature is over the receipt payload hash, authorizer identity
+    expiration, and nonce. The authorizer key is identified by signature
+    verification and must differ from the receipt signer key; independent custody
+    of that key remains a deployment requirement.
+    """
+    if not verify_receipt(receipt):
+        raise ReceiptAuthorizationError("External authorization requires a valid signed receipt.")
+    if not authorizer_id:
+        raise ReceiptAuthorizationError("External authorization requires a non-empty authorizer_id.")
+    if (
+        isinstance(expires_at, bool)
+        or not isinstance(expires_at, (int, float))
+        or not math.isfinite(expires_at)
+        or expires_at <= time.time()
+    ):
+        raise ReceiptAuthorizationError(
+            "External authorization expiration must be a finite timestamp in the future."
+        )
+
+    original_authorization = (
+        receipt.assurance_level,
+        receipt.authorizer_id,
+        receipt.authorization_expires_at,
+        receipt.authorization_nonce,
+        receipt.authorization_signature,
+        receipt.authorizer_public_key,
+    )
+
+    receipt.assurance_level = "externally_authorized"
+    receipt.authorizer_id = authorizer_id
+    receipt.authorization_expires_at = expires_at
+    receipt.authorization_nonce = nonce or str(uuid.uuid4())
+    try:
+        sign_receipt(
+            receipt,
+            private_key_hex,
+            payload=receipt.canonical_authorization_payload().encode(),
+            signature_field="authorization_signature",
+            public_key_field="authorizer_public_key",
+        )
+    except Exception:
+        (
+            receipt.assurance_level,
+            receipt.authorizer_id,
+            receipt.authorization_expires_at,
+            receipt.authorization_nonce,
+            receipt.authorization_signature,
+            receipt.authorizer_public_key,
+        ) = original_authorization
+        raise
+    if _normalize_public_key(receipt.authorizer_public_key) == _normalize_public_key(
+        receipt.signer_public_key
+    ):
+        (
+            receipt.assurance_level,
+            receipt.authorizer_id,
+            receipt.authorization_expires_at,
+            receipt.authorization_nonce,
+            receipt.authorization_signature,
+            receipt.authorizer_public_key,
+        ) = original_authorization
+        raise ReceiptAuthorizationError("External authorizer key must differ from the receipt signer key.")
+
+    return receipt
+
+
+def _is_hex(value: object, expected_length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == expected_length
+        and all(char in "0123456789abcdefABCDEF" for char in value)
+    )
+
+
+def _normalize_public_key(value: object) -> Optional[str]:
+    """Return an Ed25519 public key in canonical hexadecimal form."""
+    return value.lower() if _is_hex(value, 64) else None
+
+
+def _has_authorization_metadata(receipt: GovernanceReceipt) -> bool:
+    return any(
+        value is not None
+        for value in (
+            receipt.authorizer_id,
+            receipt.authorization_expires_at,
+            receipt.authorization_nonce,
+            receipt.authorization_signature,
+            receipt.authorizer_public_key,
+        )
+    )
+
+
+def verify_receipt_authorization(
+    receipt: GovernanceReceipt,
+    *,
+    trusted_authorizer_keys: Optional[List[str]] = None,
+    now: Optional[float] = None,
+) -> List[str]:
+    """Verify the external authorization metadata on a receipt.
+
+    A valid signature alone is not sufficient: callers must provide the configured
+    authorizer trust roots for an externally authorized receipt to be accepted.
+    """
+    if receipt.assurance_level != "externally_authorized":
+        return ["Receipt is not marked externally_authorized."]
+
+    required_fields = {
+        "authorizer_id": receipt.authorizer_id,
+        "authorization_expires_at": receipt.authorization_expires_at,
+        "authorization_nonce": receipt.authorization_nonce,
+        "authorization_signature": receipt.authorization_signature,
+        "authorizer_public_key": receipt.authorizer_public_key,
+    }
+    missing = [name for name, value in required_fields.items() if value is None or value == ""]
+    if missing:
+        return [f"External authorization is missing {', '.join(missing)}."]
+
+    errors: List[str] = []
+    if not isinstance(receipt.authorizer_id, str):
+        errors.append("External authorization has a malformed authorizer_id.")
+    if not isinstance(receipt.authorization_nonce, str):
+        errors.append("External authorization has a malformed authorization_nonce.")
+    if (
+        isinstance(receipt.authorization_expires_at, bool)
+        or not isinstance(receipt.authorization_expires_at, (int, float))
+        or not math.isfinite(receipt.authorization_expires_at)
+    ):
+        errors.append("External authorization has a malformed authorization_expires_at.")
+    if not _is_hex(receipt.authorizer_public_key, 64):
+        errors.append("External authorization has a malformed authorizer_public_key.")
+    if not _is_hex(receipt.authorization_signature, 128):
+        errors.append("External authorization has a malformed authorization_signature.")
+    authorizer_public_key = _normalize_public_key(receipt.authorizer_public_key)
+    signer_public_key = _normalize_public_key(receipt.signer_public_key)
+    if authorizer_public_key is not None and authorizer_public_key == signer_public_key:
+        errors.append("External authorizer key must differ from the receipt signer key.")
+    if not verify_receipt(receipt):
+        errors.append("External authorization requires a valid receipt signature.")
+    verification_time = receipt.timestamp if now is None else now
+    if isinstance(verification_time, bool) or not isinstance(verification_time, (int, float)):
+        errors.append("External authorization has a malformed verification timestamp.")
+    elif not math.isfinite(verification_time):
+        errors.append("External authorization has a malformed verification timestamp.")
+    if (
+        isinstance(receipt.authorization_expires_at, (int, float))
+        and not isinstance(receipt.authorization_expires_at, bool)
+        and math.isfinite(receipt.authorization_expires_at)
+        and isinstance(verification_time, (int, float))
+        and not isinstance(verification_time, bool)
+        and math.isfinite(verification_time)
+        and receipt.authorization_expires_at <= verification_time
+    ):
+        errors.append("External authorization has expired.")
+
+    if not trusted_authorizer_keys:
+        errors.append("No trusted authorizer keys are configured.")
+    else:
+        trusted_keys = {
+            normalized
+            for key in trusted_authorizer_keys
+            if (normalized := _normalize_public_key(key)) is not None
+        }
+        if authorizer_public_key is not None and authorizer_public_key not in trusted_keys:
+            errors.append(
+                f"Untrusted external authorizer {authorizer_public_key[:16]}... - receipt rejected."
+            )
+
+    if errors:
+        return errors
+
+    assert isinstance(receipt.authorizer_public_key, str)
+    assert isinstance(receipt.authorization_signature, str)
+    if not verify_receipt(
+        receipt,
+        payload=receipt.canonical_authorization_payload().encode(),
+        signature=receipt.authorization_signature,
+        signer_public_key=receipt.authorizer_public_key,
+    ):
+        return ["External authorization signature is invalid."]
+
+    return []
+
+
 def verify_receipt_chain(
     receipts: List[GovernanceReceipt],
     *,
     trusted_keys: Optional[List[str]] = None,
+    trusted_authorizer_keys: Optional[List[str]] = None,
+    require_external_authorization: bool = False,
+    now: Optional[float] = None,
 ) -> List[str]:
     """Verify hash-chain integrity and Ed25519 signatures for an ordered receipt list.
 
     Returns a list of error strings; empty means the chain is fully valid.
     Checks: no-parent on first receipt, contiguous parent hashes, no duplicate
-    receipt IDs, valid signatures, and (if ``trusted_keys`` given) trusted signers.
+    receipt IDs, valid signatures, trusted receipt signers, and externally
+    authorized receipts (when present or required).
     """
     if not receipts:
         return []
@@ -183,7 +431,7 @@ def verify_receipt_chain(
 
         if r.signature:
             key = r.signer_public_key or ""
-            if len(key) != 64 or not all(c in "0123456789abcdefABCDEF" for c in key):
+            if not _is_hex(key, 64):
                 errors.append(f"[{i}] Malformed signer_public_key for receipt {r.receipt_id}")
             elif not verify_receipt(r):
                 errors.append(f"[{i}] Ed25519 signature invalid for receipt {r.receipt_id}")
@@ -191,6 +439,21 @@ def verify_receipt_chain(
                 errors.append(f"[{i}] Untrusted signer {key[:16]}… — receipt rejected")
         else:
             errors.append(f"[{i}] Unsigned receipt — missing Ed25519 signature")
+
+        if r.assurance_level == "externally_authorized":
+            authorization_errors = verify_receipt_authorization(
+                r,
+                trusted_authorizer_keys=trusted_authorizer_keys,
+                now=now,
+            )
+            errors.extend(f"[{i}] {error}" for error in authorization_errors)
+        elif r.assurance_level == "self_attested":
+            if _has_authorization_metadata(r):
+                errors.append(f"[{i}] Self-attested receipt contains external authorization metadata")
+            if require_external_authorization:
+                errors.append(f"[{i}] External authorization is required but receipt is self-attested")
+        else:
+            errors.append(f"[{i}] Unknown assurance level {r.assurance_level!r}")
 
     return errors
 

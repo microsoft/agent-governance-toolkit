@@ -59,7 +59,6 @@ pub struct AcsBuilder {
     perf_telemetry: PerfTelemetry,
     enable_default_annotations: bool,
     enable_default_policy: bool,
-    limits: Limits,
 }
 
 pub struct AcsRuntime {
@@ -180,7 +179,6 @@ fn builder_from_manifest(manifest: Manifest) -> *mut AcsBuilder {
         perf_telemetry: PerfTelemetry::default(),
         enable_default_annotations: false,
         enable_default_policy: false,
-        limits: Limits::default(),
     }))
 }
 
@@ -518,18 +516,13 @@ pub unsafe extern "C" fn acs_builder_set_perf_telemetry(
     })
 }
 
-/// Record URL fetch limits on the builder. `max_bytes` caps a fetched body,
-/// `timeout_ms` bounds each request, and `max_redirects` caps the redirect
-/// chain. A `max_bytes` or `timeout_ms` of 0 keeps the built in default for
-/// that field; `max_redirects` is applied as given so 0 forbids redirects.
+/// Report that configuring bundled-dispatcher URL fetch limits is unavailable.
 ///
-/// The pre-retarget engine threaded these into its bundled dispatchers for
-/// `system_prompt_url` and `bundle_url` fetches. Those fields were removed
-/// (a manifest declaring them is rejected at load) and `agent-control-spec`
-/// 0.4.0-alpha.3 constructs its dispatchers without limits, so this setter
-/// currently reaches nothing; it is kept so the ABI stays stable while
-/// upstream issue #21 is open. `acs_builder_from_url` fetches before the
-/// builder exists and uses the default budget.
+/// `agent-control-spec` 0.4.0-alpha.3 does not expose a way to pass limits to
+/// its bundled dispatchers. Returning an error prevents callers from relying
+/// on a budget that cannot be enforced. The ABI symbol remains available for
+/// compatibility until AGT can adopt an eligible upstream release with the
+/// limits-aware dispatcher constructors.
 ///
 /// # Safety
 /// `b` must be a live builder returned by ACS and not concurrently mutated. If
@@ -537,24 +530,23 @@ pub unsafe extern "C" fn acs_builder_set_perf_telemetry(
 #[no_mangle]
 pub unsafe extern "C" fn acs_builder_set_url_fetch_limits(
     b: *mut AcsBuilder,
-    max_bytes: u64,
-    timeout_ms: u64,
-    max_redirects: u32,
+    _max_bytes: u64,
+    _timeout_ms: u64,
+    _max_redirects: u32,
     err: *mut *mut c_char,
 ) -> i32 {
     ffi_guard!(code_with_err, err, -1, {
-        let Some(builder) = (unsafe { b.as_mut() }) else {
+        if b.is_null() {
             unsafe { write_err(err, "null builder") };
             return -1;
+        }
+        unsafe {
+            write_err(
+                err,
+                "URL fetch limits are unavailable: agent-control-spec 0.4.0-alpha.3 cannot apply them to bundled dispatchers",
+            )
         };
-        if max_bytes != 0 {
-            builder.limits.max_manifest_url_bytes = max_bytes as usize;
-        }
-        if timeout_ms != 0 {
-            builder.limits.manifest_url_timeout_ms = timeout_ms;
-        }
-        builder.limits.max_manifest_url_redirects = max_redirects as usize;
-        0
+        -1
     })
 }
 

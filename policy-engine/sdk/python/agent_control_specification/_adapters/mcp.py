@@ -15,9 +15,11 @@ from .._types import (
 )
 from ._errors import AdapterUnsupportedError
 from ._generic import guard_tool
+from .._host import SnapshotSource
 from ._shared import (
     Execute,
     TOOL_CALL_ID_KWARG,
+    _default_snapshot,
     _merge_snapshot,
     _maybe_await,
     _ObjectProxy,
@@ -45,7 +47,7 @@ def guard_mcp_tool(
     *,
     control: AgentControl | None = None,
     tool_call_id: str | None = None,
-    snapshot: Mapping[str, JsonValue] | None = None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None = None,
     mode: EnforcementMode | str = EnforcementMode.ENFORCE,
     approval_resolver: ApprovalResolver | None = None,
 ) -> Callable[..., Awaitable[JsonValue]]:
@@ -89,7 +91,7 @@ def guard_mcp_server(
     server: AgentT | None = None,
     *,
     control: AgentControl | None = None,
-    snapshot: Mapping[str, JsonValue] | None = None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None = None,
     mode: EnforcementMode | str = EnforcementMode.ENFORCE,
     approval_resolver: ApprovalResolver | None = None,
 ) -> AgentT:
@@ -170,11 +172,11 @@ def _guard_mcp_tool_provider_method(
     control: AgentControl,
     method: Execute,
     *,
-    snapshot: Mapping[str, JsonValue] | None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None,
     mode: EnforcementMode | str,
     approval_resolver: ApprovalResolver | None = None,
 ) -> Callable[..., Awaitable[JsonValue]]:
-    default_snapshot = dict(snapshot or {})
+    default_snapshot = _default_snapshot(snapshot)
 
     async def guarded(*args: Any, **kwargs: Any) -> JsonValue:
         per_call_snapshot = _pop_common_adapter_kwargs(kwargs)

@@ -441,7 +441,7 @@ class Policy(BaseModel):
     # Scope for conflict resolution
     scope: str = Field(
         default="global",
-        description="Policy scope: global, tenant, or agent",
+        description="Policy scope: global, tenant, organization, or agent",
     )
 
     # Rules
@@ -453,6 +453,31 @@ class Policy(BaseModel):
     # Metadata
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("scope")
+    @classmethod
+    def _validate_scope(cls, value: str) -> str:
+        """Reject scope values that ``PolicyScope`` cannot parse.
+
+        Without this, a misspelled scope (``"organisation"``, ``"Agent"``,
+        ``"team"``, ``""``) silently demotes to ``GLOBAL`` inside
+        ``PolicyEngine.evaluate``, which can flip a scope-sensitive deny
+        into an allow under ``most_specific_wins``.
+
+        The accepted values are derived from the ``PolicyScope`` enum so
+        the validator and the enum cannot drift apart.
+        """
+        from agentmesh.governance.conflict_resolution import PolicyScope
+
+        valid_scopes = {s.value for s in PolicyScope}
+        if value not in valid_scopes:
+            raise ValueError(
+                f"Invalid policy scope {value!r}. "
+                f"Accepted values (case-sensitive): {sorted(valid_scopes)}. "
+                f"Hint: scope must be lowercase; "
+                f"'organisation' is not accepted — use 'organization'."
+            )
+        return value
 
     @classmethod
     def from_yaml(cls, yaml_content: str, base_dir: str = "") -> "Policy":
@@ -1080,11 +1105,27 @@ class PolicyEngine:
         if applicable:
             candidates: list[CandidateDecision] = []
             for policy in applicable:
-                # Map policy scope string to enum
+                # Map policy scope string to enum.
+                # The field_validator on Policy rejects invalid scopes at
+                # construction, but pydantic does not re-validate on
+                # assignment so this fallback is kept as a defence-in-depth
+                # measure.  Unlike the previous silent demotion, we now log
+                # a warning so the misconfiguration is observable.
                 try:
                     scope = PolicyScope(policy.scope)
                 except ValueError:
-                    scope = PolicyScope.GLOBAL
+                    # Fail-closed: rank at AGENT (max specificity) so a
+                    # corrupted deny can never lose to a valid global allow
+                    # under most_specific_wins.  GLOBAL would be permissive.
+                    logger.warning(
+                        "Policy '%s' has unrecognised scope %r — "
+                        "ranking at AGENT (max specificity, fail-closed).  "
+                        "Fix the scope value to one of %s.",
+                        policy.name,
+                        policy.scope,
+                        [s.value for s in PolicyScope],
+                    )
+                    scope = PolicyScope.AGENT
 
                 for rule in policy.rules:
                     if rule.stage != stage:
@@ -1407,6 +1448,21 @@ def validate_policy_schema(yaml_content: str) -> list[str]:
                     f"Rule {i} ('{rule.get('name', '?')}'): "
                     f"invalid action '{action}', must be one of {valid_actions}"
                 )
+
+    # Validate scope
+    scope_value = data.get("scope", "global")
+    from agentmesh.governance.conflict_resolution import PolicyScope
+
+    valid_scopes = {s.value for s in PolicyScope}
+    if not isinstance(scope_value, str):
+        errors.append(
+            f"Invalid scope: expected a string, got {type(scope_value).__name__}"
+        )
+    elif scope_value not in valid_scopes:
+        errors.append(
+            f"Invalid scope: '{scope_value}', "
+            f"must be one of {sorted(valid_scopes)}"
+        )
 
     # Validate default_action
     default_action = data.get("default_action", "deny")

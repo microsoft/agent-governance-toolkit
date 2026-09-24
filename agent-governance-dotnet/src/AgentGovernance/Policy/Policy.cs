@@ -149,6 +149,17 @@ public sealed class Policy
             }
         }
 
+        // Reject unrecognised scope values at load time so a typo
+        // ("organisation", "Agent", "") does not silently demote to Global
+        // and flip a deny into an allow under MostSpecificWins.
+        if (raw.Scope is not null && !PolicyConflictResolver.ValidScopes.Contains(raw.Scope))
+        {
+            throw new ArgumentException(
+                $"Invalid policy scope '{raw.Scope}' in policy '{raw.Name ?? "(unnamed)"}'. " +
+                $"Accepted values (case-sensitive): {string.Join(", ", PolicyConflictResolver.ValidScopes)}. " +
+                $"Hint: scope must be lowercase; 'organisation' is not accepted — use 'organization'.");
+        }
+
         return new Policy
         {
             ApiVersion = apiVersion,

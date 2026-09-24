@@ -136,8 +136,18 @@ SHA-256 hash-chained audit log for tamper detection.
 |---|---|
 | `NewAuditLogger()` | Create an audit logger |
 | `(*AuditLogger).Log(agentID, action, decision)` | Append an audit entry |
+| `(*AuditLogger).LogWithSkillAuditMetadata(...)` | Append an entry with trusted skill metadata and context hashes |
 | `(*AuditLogger).Verify()` | Verify chain integrity |
 | `(*AuditLogger).GetEntries(filter)` | Query entries by filter |
+
+This module does not ship framework-specific adapters, and skill-aware
+metadata is opt-in: existing `Log(...)` calls keep their current entry shape.
+Hosts can pass `NewTrustedSkillMetadataSource(...)` values derived from
+framework-owned state to `LogWithSkillAuditMetadata(...)`; request payload
+fields are never used as skill identity. Context snapshots are stored as stable
+SHA-256 hashes, and unsupported values omit only their hash. Go serializes the
+metadata as a nested snake_case `skill_audit_metadata` object and includes it
+in the hash chain when present.
 
 ### Client (`client.go`)
 

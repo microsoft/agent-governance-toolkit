@@ -69,6 +69,12 @@ pub use agent_control_spec::dispatchers;
 #[cfg(feature = "opa")]
 pub use agent_control_spec::opa;
 
+#[cfg(feature = "rego")]
+pub use agent_control_spec::rego;
+
+#[cfg(feature = "streaming")]
+pub use agent_control_spec::stream_session;
+
 // ---------------------------------------------------------------------
 // The interception contract, by way of ACS.
 // ---------------------------------------------------------------------

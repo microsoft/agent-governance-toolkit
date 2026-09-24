@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,9 @@ class ScopeConfig:
     Attributes:
         max_files: Maximum number of files an agent may change.
         max_lines: Maximum total lines (insertions + deletions) allowed.
-        mode: Guard mode — ``"on"`` (default) to enforce, ``"off"`` to skip.
+        mode: Guard mode — ``"on"`` (default) to enforce. A git measurement
+            failure returns ``HARD_FAIL``; ``"off"`` is the explicit escape
+            hatch that skips measurement and scope checks.
         drift_detection: Whether to evaluate drift indicators.
     """
 
@@ -62,6 +64,7 @@ class ScopeEvaluation:
         drift_indicators: Drift indicator dicts passed in for audit.
         reason: Human-readable explanation of the decision.
         excess_files: File paths that exceed the file limit.
+        error: Error encountered while measuring a git diff, if any.
     """
 
     decision: str
@@ -72,6 +75,7 @@ class ScopeEvaluation:
     drift_indicators: list[dict[str, Any]] = field(default_factory=list)
     reason: str = ""
     excess_files: list[str] = field(default_factory=list)
+    error: str | None = None
 
 
 def _escalate(current: str, proposed: str) -> str:
@@ -84,40 +88,70 @@ def _escalate(current: str, proposed: str) -> str:
 
 def _get_diff_stats(
     repo_path: str, base_branch: str = "main"
-) -> tuple[list[str], int, int]:
-    """Return ``(changed_files, insertions, deletions)`` via ``git diff --numstat``.
+) -> tuple[list[str], int, int, str | None]:
+    """Return Git diff statistics and an optional measurement error.
 
     Args:
         repo_path: Path to a git repository or worktree.
         base_branch: Branch to diff against.
 
     Returns:
-        Tuple of (file paths, total insertions, total deletions).
+        Tuple of (file paths, total insertions, total deletions, error).
+        ``error`` is ``None`` when the diff was measured successfully.
     """
+    if not base_branch or base_branch.startswith("-"):
+        error = f"invalid base_branch {base_branch!r}"
+        logger.warning("_get_diff_stats failed: %s", error)
+        return [], 0, 0, error
+
     try:
         result = subprocess.run(  # noqa: S603 — trusted subprocess in scope guard
-            ["git", "diff", "--numstat", base_branch],  # noqa: S607 — known CLI tool path
+            [
+                "git",
+                "diff",
+                "--numstat",
+                "--end-of-options",
+                base_branch,
+                "--",
+            ],  # noqa: S607 — known CLI tool path
             cwd=repo_path,
             capture_output=True,
             text=True,
             timeout=30,
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
-        logger.warning("_get_diff_stats failed: %s", exc)
-        return [], 0, 0
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        logger.warning("_get_diff_stats failed: %s", error)
+        return [], 0, 0, error
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        stderr = stderr.splitlines()[0][:200] if stderr else ""
+        detail = f": {stderr}" if stderr else ""
+        error = f"git diff exited with status {result.returncode}{detail}"
+        logger.warning("_get_diff_stats failed: %s", error)
+        return [], 0, 0, error
 
     files: list[str] = []
     insertions = 0
     deletions = 0
-    for line in result.stdout.strip().splitlines():
+    for line_number, line in enumerate(result.stdout.strip().splitlines(), start=1):
         parts = line.split("\t")
-        if len(parts) == 3:
+        if len(parts) != 3:
+            error = f"unparseable Git diff statistics row at line {line_number}"
+            logger.warning("_get_diff_stats failed: %s", error)
+            return [], 0, 0, error
+        try:
             ins = int(parts[0]) if parts[0] != "-" else 0
-            dels = int(parts[1]) if parts[1] != "-" else 0
-            insertions += ins
-            deletions += dels
-            files.append(parts[2])
-    return files, insertions, deletions
+            deletions_count = int(parts[1]) if parts[1] != "-" else 0
+        except ValueError:
+            error = f"unparseable Git diff statistics row at line {line_number}"
+            logger.warning("_get_diff_stats failed: %s", error)
+            return [], 0, 0, error
+        insertions += ins
+        deletions += deletions_count
+        files.append(parts[2])
+    return files, insertions, deletions, None
 
 
 class ScopeGuard:
@@ -131,7 +165,7 @@ class ScopeGuard:
         policy_engine: Optional governance policy engine for audit trails.
     """
 
-    def __init__(self, policy_engine: Optional[Any] = None) -> None:
+    def __init__(self, policy_engine: Any | None = None) -> None:
         self._policy_engine = policy_engine
 
     # ── public API ──────────────────────────────────────────
@@ -143,7 +177,7 @@ class ScopeGuard:
         changed_files: list[str],
         insertions: int,
         deletions: int,
-        drift_indicators: Optional[list[dict[str, Any]]] = None,
+        drift_indicators: list[dict[str, Any]] | None = None,
     ) -> ScopeEvaluation:
         """Evaluate whether an agent's changes are within scope.
 
@@ -254,9 +288,9 @@ class ScopeGuard:
         config: ScopeConfig,
         repo_path: str,
         base_branch: str = "main",
-        drift_indicators: Optional[list[dict[str, Any]]] = None,
+        drift_indicators: list[dict[str, Any]] | None = None,
     ) -> ScopeEvaluation:
-        """Convenience wrapper that reads diff stats from *repo_path*.
+        """Read diff stats from *repo_path* and evaluate the configured scope.
 
         Args:
             agent_id: Unique agent identifier.
@@ -266,11 +300,37 @@ class ScopeGuard:
             drift_indicators: Optional drift indicator dicts.
 
         Returns:
-            A :class:`ScopeEvaluation`.
+            A :class:`ScopeEvaluation`. If the git diff cannot be measured,
+            the result is ``HARD_FAIL`` with ``error`` set. Set
+            ``config.mode="off"`` to explicitly skip measurement and scope
+            checks, including first-run or no-baseline flows.
         """
-        changed_files, insertions, deletions = _get_diff_stats(
+        if config.mode == "off":
+            return self.evaluate(
+                agent_id=agent_id,
+                config=config,
+                changed_files=[],
+                insertions=0,
+                deletions=0,
+                drift_indicators=drift_indicators,
+            )
+
+        changed_files, insertions, deletions, error = _get_diff_stats(
             repo_path, base_branch
         )
+        if error is not None:
+            evaluation = ScopeEvaluation(
+                decision="HARD_FAIL",
+                files_changed=0,
+                lines_changed=0,
+                max_files=config.max_files,
+                max_lines=config.max_lines,
+                drift_indicators=drift_indicators or [],
+                reason=f"Unable to measure git diff: {error}",
+                error=error,
+            )
+            self._record(agent_id, evaluation)
+            return evaluation
         return self.evaluate(
             agent_id=agent_id,
             config=config,
@@ -297,6 +357,7 @@ class ScopeGuard:
                     "lines_changed": evaluation.lines_changed,
                     "max_lines": evaluation.max_lines,
                     "reason": evaluation.reason,
+                    "error": evaluation.error,
                 }
             )
         except Exception:  # pragma: no cover — best-effort audit

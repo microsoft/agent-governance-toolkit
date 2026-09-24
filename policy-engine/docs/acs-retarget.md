@@ -37,6 +37,15 @@ Direct users of ACS's `AcsInterceptor` and `ActivatedPolicy` follow ACS's own
 feature selection. Switching the legacy host's default backend is a separate
 behavior change, not a side effect of upgrading its dependency.
 
+The core compatibility shim forwards the optional `rego` and `streaming`
+features to ACS. Enable `rego` to use the in-process dispatcher through
+`agent_control_specification_core::rego`, or `streaming` to use
+`agent_control_specification_core::stream_session`. Both are disabled by
+default. Only these module paths are forwarded, not the upstream root-level
+Rego and streaming type re-exports.
+The shim retains its OPA dependency feature for alpha.3 compatibility,
+and these opt-ins do not change the legacy host's explicit OPA dispatcher.
+
 The committed lockfiles retain `ureq` 3.4.0 and `ureq-proto` 0.6.1, both
 published August 8. Their September 6 successors are inside the seven-day
 cooling-off window and are not used in these builds.
@@ -156,7 +165,7 @@ shapes match the legacy consumer contract.
 | Gap | Issue |
 | --- | --- |
 | URL sourced manifests can read host environment credentials | [#20](https://github.com/responsibleai/agent-control-spec/issues/20) |
-| `Limits` do not reach the bundled dispatchers | [#21](https://github.com/responsibleai/agent-control-spec/issues/21) |
+| The selected `agent-control-spec` release cannot pass `Limits` to bundled dispatchers | [#21](https://github.com/responsibleai/agent-control-spec/issues/21), resolved upstream but not yet eligible for adoption |
 | Telemetry sink cannot be set after `Runtime` construction | [#22](https://github.com/responsibleai/agent-control-spec/issues/22) |
 | `from_url`, `policy_labels`, `validate_overlay` have no equivalent | [#23](https://github.com/responsibleai/agent-control-spec/issues/23) |
 | Original binding validation gap, resolved upstream after alpha.1 | [#14](https://github.com/responsibleai/agent-control-spec/issues/14) |
@@ -253,10 +262,11 @@ that loading one over the network is a first class API.
 - Upstream artifact diagnostics use the in-process backend and a different
   shape. AGT retains its bounded, source-located OPA lint diagnostics and
   explicit executable selection rather than silently changing that API.
-- `Limits` does not reach the bundled dispatchers, so a tightened URL fetch budget does
-  not apply to a dispatch time fetch; their own defaults govern it. The engine resource
-  budget it also carries (snapshot size, policy input size, annotators per point) does
-  reach the runtime, via `Runtime::with_limits`.
+- The selected `agent-control-spec` release does not expose limits-aware bundled
+  dispatchers. `acs_builder_set_url_fetch_limits` therefore fails closed instead of
+  reporting a successful configuration it cannot enforce. The C ABI retains the symbol
+  for compatibility until AGT can adopt the upstream fix after its supply-chain
+  stabilization period.
 
 Raise these as issues or proposals on the upstream repositories rather than forking
 contract semantics here. See `docs/proposals/README.md` in the agent-hooks repository for
@@ -307,11 +317,16 @@ What the guard does not do, all of it the same upstream gap as issue #20:
   `Limits::max_manifest_url_redirects`, default 5) and exposes no hook to
   intercept a hop, so a vetted public URL can redirect to a blocked address.
   The pre-retarget engine followed redirects itself and re-ran each hop through
-  the guard. A host that needs the guard to hold across redirects must pass
-  `max_manifest_url_redirects: 0` (`max_url_redirects=0` in Python,
-  `maxRedirects: 0` in Node). The C ABI `acs_builder_from_url` fetches with
-  the default budget; `acs_builder_set_url_fetch_limits` runs after the fetch
-  and does not reach it.
+  the guard. Because the pinned engine cannot re-validate a hop,
+  `manifest_from_url` fails closed by zeroing the redirect budget. A
+  redirecting URL is not followed. `ureq` returns the 3xx response instead of
+  following it and the upstream fetcher only rejects status codes of 400 and
+  above, so the 3xx body reaches the SHA-256 check and the manifest YAML parse
+  and fails there; the redirect target is never contacted, so the hop is
+  closed. The `max_url_redirects` (Python) and `maxRedirects` (Node) arguments
+  now have no effect on URL sourcing. A direct 2xx URL still loads.
+  Re-enabling redirects needs the upstream per-hop hook (issue #20), not an
+  AGT-side bypass.
 - A nested `extends` URL inside the fetched manifest resolves through the
   upstream loader with no destination check at all.
 

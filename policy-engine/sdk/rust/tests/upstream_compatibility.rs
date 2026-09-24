@@ -24,6 +24,33 @@ intervention_points:
 "#;
 
 #[test]
+fn ffi_rejects_url_fetch_limits_the_pinned_engine_cannot_enforce() {
+    use agent_control_specification::ffi;
+    use std::ffi::{CStr, CString};
+
+    let manifest = CString::new(MANIFEST).unwrap();
+    let mut error = std::ptr::null_mut();
+    unsafe {
+        let builder = ffi::acs_builder_from_yaml(manifest.as_ptr(), &mut error);
+        assert!(!builder.is_null());
+        assert!(error.is_null(), "builder construction failed");
+
+        assert_eq!(
+            ffi::acs_builder_set_url_fetch_limits(builder, 4096, 1_000, 0, &mut error),
+            -1
+        );
+        assert!(!error.is_null(), "unsupported limits must report an error");
+        let message = CStr::from_ptr(error).to_string_lossy();
+        assert!(
+            message.contains("cannot apply them to bundled dispatchers"),
+            "unexpected error: {message}"
+        );
+        ffi::acs_free_string(error);
+        ffi::acs_builder_free(builder);
+    }
+}
+
+#[test]
 fn engine_release_and_manifest_grammar_have_distinct_versions() {
     const LEGACY_ARRAY: [&str; 1] = SUPPORTED_MANIFEST_VERSIONS;
     assert_eq!(

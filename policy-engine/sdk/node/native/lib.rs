@@ -57,8 +57,9 @@ fn make_string_tsfn(
 }
 
 /// Build URL fetch limits from optional overrides, mirroring the FFI setter and
-/// the Python binding. `None` keeps the built in default for each field;
-/// `Some(0)` for `max_url_redirects` forbids redirects.
+/// the Python binding. `None` keeps the built in default for each field. The
+/// `max_url_redirects` argument is accepted for API compatibility but has no
+/// effect on URL sourcing, which always forces the redirect budget to zero.
 fn url_fetch_limits(
     max_bytes: Option<u32>,
     timeout_ms: Option<u32>,

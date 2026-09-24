@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import sys
 from unittest.mock import patch
@@ -35,10 +36,26 @@ class TestHealthProbes:
 
     def test_ready(self, client):
         resp = client.get("/ready")
-        assert resp.status_code == 200
+        assert resp.status_code == 503
         data = resp.json()
-        assert data["status"] == "ready"
+        assert data["status"] == "not-ready"
         assert "policies_loaded" in data
+
+    def test_ready_reports_startup_warning_when_no_policies(self, caplog, tmp_path):
+        with patch.dict(os.environ, {"AGT_POLICY_DIR": str(tmp_path)}):
+            from agentmesh.server.sidecar import create_sidecar_app
+
+            app = create_sidecar_app()
+            with caplog.at_level(logging.WARNING):
+                with TestClient(app) as client:
+                    resp = client.get("/ready")
+
+        assert resp.status_code == 503
+        data = resp.json()
+        assert data["policies_loaded"] == 0
+        assert data["effective_rules"] == 0
+        assert data["load_warnings"]
+        assert any("Policy load validation: no effective rules loaded" in msg for msg in caplog.messages)
 
     def test_healthz(self, client):
         resp = client.get("/healthz")
@@ -47,8 +64,8 @@ class TestHealthProbes:
 
     def test_readyz(self, client):
         resp = client.get("/readyz")
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "ready"
+        assert resp.status_code == 503
+        assert resp.json()["status"] == "not-ready"
 
 
 class TestMetricsEndpoint:
@@ -119,6 +136,7 @@ class TestPolicyEvaluation:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "reloaded"
+        assert "load_warnings" in data
 
 
 class TestPolicyWithFiles:
@@ -344,3 +362,61 @@ def test_evaluation_keeps_its_generation_when_reload_publishes(
     assert next_result["decision"] == "allow", next_result
     assert next_result["matched_rule"] == "permit"
     assert next_result["policy_set_id"] == sidecar._policy_state[1].policy_set_id
+
+
+def test_misspelled_scope_deny_causes_degraded_and_deny(generation_client, tmp_path):
+    """Regression test for #3536: a deny policy with scope: 'organisation'
+    (British spelling) must not silently flip to allow.
+
+    The misspelled scope causes a validation error at load time, which fails
+    the file, produces a 'degraded' generation, and evaluate returns deny
+    because policies_failed > 0.
+    """
+    import yaml as _yaml
+
+    deny_doc = {
+        "name": "block-export",
+        "scope": "organisation",  # deliberate typo
+        "agents": ["*"],
+        "rules": [
+            {
+                "name": "block",
+                "condition": "action == 'data.export'",
+                "action": "deny",
+                "priority": 50,
+            }
+        ],
+    }
+    allow_doc = {
+        "name": "allow-all",
+        "scope": "global",
+        "agents": ["*"],
+        "rules": [
+            {
+                "name": "permit",
+                "condition": "action == 'data.export'",
+                "action": "allow",
+                "priority": 100,
+            }
+        ],
+    }
+    (tmp_path / "deny.yaml").write_text(
+        _yaml.safe_dump(deny_doc, default_flow_style=False), encoding="utf-8"
+    )
+    (tmp_path / "allow.yaml").write_text(
+        _yaml.safe_dump(allow_doc, default_flow_style=False), encoding="utf-8"
+    )
+
+    reload = generation_client.post("/api/v1/policy/reload").json()
+    # The misspelled-scope file fails validation -> degraded, not complete.
+    assert reload["policies_failed"] == 1, reload
+    assert reload["policy_set_status"] == "degraded"
+
+    decision = generation_client.post(
+        "/api/v1/policy/evaluate",
+        json={"agent_did": "did:mesh:test", "action": "data.export"},
+    ).json()
+    # Fail-closed: must NOT return allow when a policy file failed to load.
+    assert decision["decision"] == "deny", decision
+    assert decision["matched_rule"] is None, decision
+    assert "degraded" in decision.get("reason", ""), decision

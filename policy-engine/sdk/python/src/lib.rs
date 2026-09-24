@@ -11,6 +11,7 @@ use agent_control_specification_core::{
     validate_manifest_yaml,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::import_exception;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::collections::BTreeMap;
@@ -81,8 +82,14 @@ fn py_to_json_value(obj: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
     }
 }
 
+import_exception!(agent_control_specification._types, AgentControlRuntimeError);
+
 fn runtime_error(error: RuntimeError) -> PyErr {
-    PyRuntimeError::new_err(error.to_string())
+    AgentControlRuntimeError::new_err((
+        error.to_string(),
+        error.reason().to_string(),
+        error.detail().to_string(),
+    ))
 }
 
 // cspell:ignore pyfunction
@@ -264,6 +271,7 @@ impl PolicyDispatcher for PyPolicyDispatcher {
 struct NativeRuntime {
     runtime: Runtime,
     policy_labels: JsonValue,
+    approval: JsonValue,
 }
 
 #[pymethods]
@@ -394,6 +402,14 @@ impl NativeRuntime {
     fn policy_labels(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(py, &self.policy_labels)
     }
+
+    /// The merged manifest's optional top-level `approval` section, or `None`
+    /// when the manifest declares none. The core validates its shape and
+    /// otherwise treats it as opaque host configuration, so the host SDK reads
+    /// it here to drive its own approval path.
+    fn approval_config(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(py, &self.approval)
+    }
 }
 
 impl NativeRuntime {
@@ -416,6 +432,8 @@ impl NativeRuntime {
             None => default_host_policy_dispatcher(&manifest).map_err(runtime_error)?,
         };
         let labels = policy_labels(&manifest);
+        let approval = serde_json::to_value(&manifest.approval)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         let runtime = Runtime::with_telemetry_perf_and_limits(
             manifest,
             annotations,
@@ -428,14 +446,15 @@ impl NativeRuntime {
         Ok(Self {
             runtime,
             policy_labels: labels,
+            approval,
         })
     }
 }
 
 /// Build URL fetch limits from optional overrides, mirroring the FFI setter.
-/// `None` keeps the built in default for `max_bytes` and `timeout_ms`;
-/// `max_redirects` defaults to the built in value when `None` and is applied as
-/// given otherwise, so `Some(0)` forbids redirects.
+/// `None` keeps the built in default for `max_bytes` and `timeout_ms`. The
+/// `max_redirects` argument is accepted for API compatibility but has no
+/// effect on URL sourcing, which always forces the redirect budget to zero.
 fn url_fetch_limits(
     max_bytes: Option<u64>,
     timeout_ms: Option<u64>,

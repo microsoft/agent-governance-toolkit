@@ -22,6 +22,8 @@ from typing import Any, Callable
 
 from agent_sandbox._hardening import (
     sanitize_env_vars as _sanitize_env_vars,
+)
+from agent_sandbox._hardening import (
     validate_mount_path as _validate_mount_path,
 )
 from agent_sandbox.code_scanner import enforce_no_subprocess_execution
@@ -141,6 +143,26 @@ def has_iptables() -> bool:
     return shutil.which("iptables") is not None
 
 
+_fallback_apparmor_warned = False
+_fallback_apparmor_lock = threading.Lock()
+
+
+def _fallback_apparmor_profile() -> str:
+    global _fallback_apparmor_warned
+    with _fallback_apparmor_lock:
+        if not _fallback_apparmor_warned:
+            logger.warning(
+                "Docker daemon does not report AppArmor support; falling back to "
+                "docker-default. To enable the agt-sandbox profile on an AppArmor "
+                "Docker host, install with "
+                "'sudo apparmor_parser -r -W "
+                "agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox'. "
+                "Set require_apparmor_profile=True to fail closed."
+            )
+            _fallback_apparmor_warned = True
+    return "docker-default"
+
+
 class DockerSandboxProvider(SandboxProvider):
     """``SandboxProvider`` backed by hardened Docker containers.
 
@@ -153,6 +175,9 @@ class DockerSandboxProvider(SandboxProvider):
     require_hardened_image:
         When ``True``, require the local hardened image and fail instead of
         falling back to the legacy image. Cannot be combined with ``image``.
+    require_apparmor_profile:
+        When ``True``, require the Docker daemon to support AppArmor and
+        verify that the container uses ``agt-sandbox`` in enforce mode.
     docker_url:
         Docker daemon URL (default: auto-detect via env).
     runtime:
@@ -170,6 +195,9 @@ class DockerSandboxProvider(SandboxProvider):
     # daemon. Kept stable so existing deployments do not break.
     _LEGACY_DEFAULT_IMAGE: str = "python:3.11-slim"
 
+    _APPARMOR_PROFILE_NAME: str = "agt-sandbox"
+    _require_apparmor_profile: bool = False
+
     def __init__(
         self,
         image: str | None = None,
@@ -177,6 +205,7 @@ class DockerSandboxProvider(SandboxProvider):
         runtime: IsolationRuntime = IsolationRuntime.AUTO,
         tools: dict[str, Callable[..., Any]] | None = None,
         require_hardened_image: bool = False,
+        require_apparmor_profile: bool = False,
     ) -> None:
         if image is not None and require_hardened_image:
             raise ValueError(
@@ -192,6 +221,7 @@ class DockerSandboxProvider(SandboxProvider):
             self._image = image if image is not None else self._select_default_image()
         self._tools: dict[str, Callable[..., Any]] = tools or {}
         self._requested_runtime = runtime
+        self._require_apparmor_profile = require_apparmor_profile
 
         # Session state.  Guarded by ``_state_lock`` because async variants
         # call into sync methods via ``asyncio.to_thread`` and can race.
@@ -1005,6 +1035,35 @@ class DockerSandboxProvider(SandboxProvider):
     # Container creation
     # ------------------------------------------------------------------
 
+    def _select_apparmor_profile(self) -> str:
+        security_options = self._client.info().get("SecurityOptions", [])
+        if "name=apparmor" in security_options:
+            return self._APPARMOR_PROFILE_NAME
+        if self._require_apparmor_profile:
+            raise RuntimeError(
+                "agt-sandbox AppArmor profile is required, but the Docker daemon "
+                "does not report AppArmor support in SecurityOptions"
+            )
+        return _fallback_apparmor_profile()
+
+    def _verify_apparmor_profile(self, container: Any) -> None:
+        result = container.exec_run(
+            [
+                "python3",
+                "-c",
+                "from pathlib import Path; print(Path('/proc/self/attr/current').read_text(encoding='utf-8'), end='')",
+            ]
+        )
+        if (
+            result.exit_code != 0
+            or not isinstance(result.output, bytes)
+            or result.output.strip() != b"agt-sandbox (enforce)"
+        ):
+            raise RuntimeError(
+                "Docker container did not report agt-sandbox in enforce mode; "
+                "refusing to use an unverified AppArmor profile"
+            )
+
     def _create_container(
         self,
         agent_id: str,
@@ -1024,6 +1083,8 @@ class DockerSandboxProvider(SandboxProvider):
                 specific snapshot without mutating ``self._image``,
                 which would race with concurrent restores.
         """
+        apparmor_profile = self._select_apparmor_profile()
+
         # Ensure the base image is available locally before creating
         self.ensure_image()
 
@@ -1073,14 +1134,14 @@ class DockerSandboxProvider(SandboxProvider):
             "network_disabled": not config.network_enabled,
             "read_only": config.read_only_fs,
             "tmpfs": tmpfs,
-            # Be explicit about seccomp and apparmor so that hosts which
-            # have customized the Docker daemon defaults to weaker policies
-            # do not silently weaken the sandbox. `default` resolves to
-            # Docker's built-in profile on hosts that ship one.
+            # Docker daemon capability is authoritative for remote Docker and
+            # non-root clients; verify the selected profile inside the container.
+            # Install on the Docker host with apparmor_parser -r -W
+            # agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox.
             "security_opt": [
                 "no-new-privileges",
                 "seccomp=default",
-                "apparmor=docker-default",
+                f"apparmor={apparmor_profile}",
             ],
             "cap_drop": ["ALL"],
             "user": "65534:65534",
@@ -1102,6 +1163,15 @@ class DockerSandboxProvider(SandboxProvider):
             run_kwargs["runtime"] = runtime_value
 
         container = self._client.containers.run(**run_kwargs)
+        if apparmor_profile == self._APPARMOR_PROFILE_NAME:
+            try:
+                self._verify_apparmor_profile(container)
+            except Exception:
+                try:
+                    container.remove(force=True)
+                except Exception:
+                    logger.exception("Failed to remove container with unverified AppArmor profile")
+                raise
         logger.info(
             "Created container '%s' for agent '%s' session '%s'",
             container_name,

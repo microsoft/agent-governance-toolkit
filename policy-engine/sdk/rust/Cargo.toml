@@ -2,7 +2,7 @@
 name = "agent_control_specification"
 version = "0.4.0-beta.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "MIT"
 description = "Rust SDK for the Agent Control Specification runtime."
 readme = "../../README.md"
@@ -76,6 +76,10 @@ jsonschema = { version = "=0.17.1", default-features = false }
 [[test]]
 name = "artifact_validation"
 required-features = ["opa"]
+
+[[test]]
+name = "ffi_default_dispatchers"
+required-features = ["bundled-dispatchers", "opa"]
 
 [[example]]
 name = "basic_host"

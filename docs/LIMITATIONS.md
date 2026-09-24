@@ -379,9 +379,9 @@ does not imply that the termination callback succeeded.
 | Behavior | Python | TypeScript | Go |
 |----------|--------|------------|----|
 | Model | Registered termination callback plus step handoff/compensation | Registered termination handlers plus compensation handlers | Scoped cooperative allow/deny registry |
-| Termination success signal | `KillResult.terminated` | `KillSwitchResult.terminated` (registered handlers completed; no independent process confirmation) | None; `KillSwitchDecision.Allowed` describes permission, not process termination |
-| Handler timeout | 5 seconds by default | None | N/A |
-| Handler failure recorded in kill history | Yes, with `terminated=False` | No if a handler throws before the result is created | N/A |
+| Termination success signal | `KillResult.terminated` | `KillSwitchResult.terminated` (every registered termination handler completed within its budget; no independent process confirmation) | None; `KillSwitchDecision.Allowed` describes permission, not process termination |
+| Handler timeout | 5 seconds by default | 5 seconds by default, per handler, via `callbackTimeoutMs` | N/A |
+| Handler failure recorded in kill history | Yes, with `terminated=False` | Yes, with `terminated=false` | N/A |
 | Registration/state after kill | Target callback removed unconditionally | Handlers remain registered | Active until `Clear()` |
 | Reversible | No direct clear operation | No direct clear operation | Yes, via `Clear()` |
 | Stops non-cooperating execution | Only if the registered callback stops it | Only if a registered handler stops it | No; the consumer must consult `DecisionFor()` |
@@ -390,9 +390,14 @@ does not imply that the termination callback succeeded.
 
 - In Python, check `result.terminated` before treating containment as confirmed.
   Re-register the agent before retrying a failed or timed-out kill.
-- In TypeScript, check `result.terminated` to confirm that registered termination
-  handlers completed. This does not independently prove that an external process
-  stopped, and handlers still have no built-in timeout; see #3741.
+- In TypeScript, check `result.terminated` to confirm that every registered
+  termination handler ran to completion. This does not independently prove
+  that an external process stopped. A handler that throws, rejects, or exceeds
+  `callbackTimeoutMs` is
+  reported as not executed rather than propagating, so `kill()` always settles
+  and always records the attempt. A hung handler is abandoned and left pending,
+  because JavaScript cannot cancel it; the Python port abandons a daemon thread
+  for the same reason.
 - In Go, treat `Activate()` as a cooperative circuit breaker. It changes what
   `DecisionFor()` reports, but running work must consult that decision for the
   switch to affect execution.

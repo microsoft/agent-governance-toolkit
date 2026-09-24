@@ -5,6 +5,7 @@ import json
 from collections.abc import Callable, Mapping
 from typing import Any, TypeVar
 
+from .._host import SnapshotSource, merge_snapshot
 from .._orchestration import AgentControl
 from .._types import (
     AgentControlBlocked,
@@ -16,6 +17,7 @@ from .._types import (
 from ._errors import AdapterUnsupportedError
 from ._shared import (
     SNAPSHOT_KWARG,
+    _default_snapshot,
     _jsonable,
     _maybe_await,
     _merge_snapshot,
@@ -61,7 +63,7 @@ def guard_foundry_agent(
     *,
     tools: Mapping[str, Callable[..., Any]],
     control: AgentControl | None = None,
-    snapshot: Mapping[str, JsonValue] | None = None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None = None,
     mode: EnforcementMode | str = EnforcementMode.ENFORCE,
     approval_resolver: ApprovalResolver | None = None,
 ) -> AgentT:
@@ -111,7 +113,7 @@ def guard_foundry_agent(
         resolved_control,
         resolved_client,
         resolved_tools,
-        default_snapshot=dict(snapshot or {}),
+        default_snapshot=_default_snapshot(snapshot),
         mode=mode,
         approval_resolver=approval_resolver,
     )
@@ -155,14 +157,14 @@ class _FoundryRunDriver:
         client: Any,
         tools: dict[str, Callable[..., Any]],
         *,
-        default_snapshot: Mapping[str, JsonValue],
+        default_snapshot: Mapping[str, JsonValue] | SnapshotSource,
         mode: EnforcementMode | str,
         approval_resolver: ApprovalResolver | None,
     ) -> None:
         self._control = control
         self._client = client
         self._tools = tools
-        self._default_snapshot = dict(default_snapshot)
+        self._default_snapshot = _default_snapshot(default_snapshot)
         self._mode = mode
         self._approval_resolver = approval_resolver
 
@@ -294,7 +296,7 @@ class _FoundryRunDriver:
         tool_calls: list[Any],
         thread_id: str,
         run_id: str,
-        merged_snapshot: Mapping[str, JsonValue],
+        merged_snapshot: Mapping[str, JsonValue] | SnapshotSource,
         resolver: ApprovalResolver | None,
     ) -> list[Any]:
         context: dict[str, JsonValue] = {"thread_id": thread_id, "run_id": run_id}
@@ -306,7 +308,7 @@ class _FoundryRunDriver:
         # The server-derived run context is authoritative and wins over any
         # host snapshot key, so a caller cannot feed the policy a spoofed run
         # identity.
-        call_snapshot = {**dict(merged_snapshot), **context}
+        call_snapshot = merge_snapshot(merged_snapshot, context)
         outputs: list[Any] = []
         for tool_call in tool_calls:
             outputs.append(await self._govern_one_call(tool_call, call_snapshot, resolver))
@@ -315,7 +317,7 @@ class _FoundryRunDriver:
     async def _govern_one_call(
         self,
         tool_call: Any,
-        snapshot: Mapping[str, JsonValue],
+        snapshot: Mapping[str, JsonValue] | SnapshotSource,
         resolver: ApprovalResolver | None,
     ) -> Any:
         call_id, name, args, parse_error = _parse_tool_call(tool_call)

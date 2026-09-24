@@ -81,8 +81,8 @@ jsonschema.validate(request, schema["definitions"]["RegistrationRequest"])
     "security_posture": 70,
     "collaboration_health": 50
   },
-  "access_token": "eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiSldUIn0...",
-  "refresh_token": "refresh_a3f8c2e1d4b6h9k2m5n7p1q4r8s2t6u9",
+  "access_token": "<redacted>",
+  "refresh_token": "<redacted>",
   "token_ttl_seconds": 900,
   "registry_endpoint": "https://registry.agentmesh.io",
   "ca_certificate": "-----BEGIN CERTIFICATE-----\nMIIC...",
