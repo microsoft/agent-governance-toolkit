@@ -18,7 +18,9 @@ entries appear first.
 `Decision.applies_effects` was deprecated when AGT D1 removed the `effects[]`
 surface; it returned `applies_transform` and emitted a `DeprecationWarning`
 on every access, which fails any suite run with `-W error` on code paths the
-host does not control. The property is gone.
+host does not control. The property is gone. Reading it now raises
+`AttributeError`, so any caller still on the old property fails loudly
+rather than warning.
 
 **How to update**
 
