@@ -1,6 +1,6 @@
 # AGT-SNAPSHOT-1.0.md — Per-intervention-point snapshot shape
 
-**Status:** Draft. **Version:** `1.0.0-alpha`. **Normative for:** AGT host SDKs and the AGT stock Rego/Cedar libraries.
+**Status:** Draft. **Version:** `1.0.0-alpha.2`. **Normative for:** AGT host SDKs and the AGT stock Rego/Cedar libraries.
 
 This document fixes the JSON shape of the snapshot AGT host SDKs build for each
 intervention point. The snapshot is the input the engine sees at
@@ -214,4 +214,6 @@ release builds.
 
 The snapshot shape is versioned through the AGT manifest version (§2 of
 `AGT-MANIFEST-1.0.md`). Shape changes are MAJOR-version events. Additive
-optional fields are MINOR-version events.
+optional fields are MINOR-version events. While the status is Draft, a shape
+change bumps the pre-release tag instead and is recorded in
+`BREAKING_CHANGES.md`; the MAJOR rule applies from `1.0.0`.

@@ -88,11 +88,13 @@ the new targets, the stock libraries read the new paths, and
 **How to update**
 
 Rewrite policy targets, in hand-written manifests and in anything `agt
-migrate` produced earlier (or re-run the migration):
+migrate` produced earlier (or re-run the migration, which binds
+`pre_model_call` to `$snap.model_request` and scans every prompt key but
+`model` and `tools`):
 
 | Before | After |
 |---|---|
-| `$snap.messages` at `pre_model_call` | `$snap.model_request.messages` |
+| `$snap.messages` at `pre_model_call` | `$snap.model_request.messages` (or `$snap.model_request` to cover `system` and `contents`) |
 | `$snap.model`, `$snap.tools` at `pre_model_call` | `$snap.model_request.model`, `$snap.model_request.tools` |
 | `$snap.response` at `post_model_call` | `$snap.model_response` |
 | `$snap.response.content` at `output` | `$snap.output` |
