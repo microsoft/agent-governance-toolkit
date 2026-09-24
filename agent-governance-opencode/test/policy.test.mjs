@@ -179,6 +179,13 @@ test("bundled recursive-delete policy denies common flag orderings", async (t) =
     "rm -r --force /",
     "rm -rfx /",
     "rm /important-data -rf",
+    "rm --recursiv --forc /",
+    "rm --rec --for /",
+    "rm \"-rf\" /srv",
+    "rm -r'f' /srv",
+    "rm -rf'' /srv",
+    "rm 'a;b' -rf /srv",
+    "echo ready; rm -rf /srv",
   ];
 
   for (const command of commands) {
@@ -205,13 +212,22 @@ test("bundled recursive-delete policy keeps command boundaries and safe cleanup 
     auditPath: join(root, "audit.json"),
     homeDirectory: root,
   });
-  const commands = [
-    "rm -- -rf /",
-    "rm -r /tmp && rm -f /tmp",
-    "rm -rf node_modules",
+  const cases = [
+    { command: "rm -- -rf /", matchedRecursiveDelete: false },
+    { command: "rm '--' -rf /srv", matchedRecursiveDelete: false },
+    { command: "rm --no-preserve-root --force /srv", matchedRecursiveDelete: false },
+    { command: "rm --one-file-system --force /srv", matchedRecursiveDelete: false },
+    { command: "rm -r /tmp && rm -f /tmp", matchedRecursiveDelete: false },
+    { command: "rm -rf node_modules", matchedRecursiveDelete: false },
+    { command: "git rm -rf --cached dir", matchedRecursiveDelete: false },
+    { command: "echo rm -rf /", matchedRecursiveDelete: false },
+    { command: "echo '; rm -rf /'", matchedRecursiveDelete: false },
+    { command: "grep -r 'rm -rf' src", matchedRecursiveDelete: false },
+    { command: "rm -rf node_modules /", matchedRecursiveDelete: true },
+    { command: "rm -rf node_modules ~/*", matchedRecursiveDelete: true },
   ];
 
-  for (const command of commands) {
+  for (const { command, matchedRecursiveDelete } of cases) {
     const result = await evaluateOpenCodeTool(state, {
       tool: "bash",
       args: { command },
@@ -219,9 +235,10 @@ test("bundled recursive-delete policy keeps command boundaries and safe cleanup 
       sessionId: "recursive-delete-boundary-session",
     });
     assert.equal(result.effect, "deny", command);
-    assert.doesNotMatch(
-      result.reason,
-      /Recursive delete commands outside common build artifacts/,
+    // The enforce-mode review tier from #3676 denies bash regardless of this rule's match.
+    assert.equal(
+      /Recursive delete commands outside common build artifacts/.test(result.reason),
+      matchedRecursiveDelete,
       command,
     );
   }

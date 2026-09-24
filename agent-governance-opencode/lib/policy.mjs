@@ -903,20 +903,41 @@ function isSafeCleanupCommand(commandText) {
   }
 
   const candidateTargets = [];
+  let optionsEnded = false;
   for (const token of tokens.slice(commandIndex + 1)) {
     const normalizedToken = stripCommandToken(token);
-    if (!normalizedToken || normalizedToken.startsWith("-")) {
+    if (!normalizedToken) {
+      return false;
+    }
+    if (optionsEnded) {
+      if (!addSafeCleanupTargets(candidateTargets, normalizedToken)) {
+        return false;
+      }
       continue;
     }
-    for (const part of normalizedToken.split(",")) {
-      const cleaned = normalizeCommandPathToken(part);
-      if (cleaned) {
-        candidateTargets.push(cleaned);
-      }
+    if (normalizedToken === "--") {
+      optionsEnded = true;
+      continue;
+    }
+    if (normalizedToken.startsWith("-")) {
+      continue;
+    }
+    if (!addSafeCleanupTargets(candidateTargets, normalizedToken)) {
+      return false;
     }
   }
 
   return candidateTargets.length > 0 && candidateTargets.every(isSafeCleanupTarget);
+}
+
+function addSafeCleanupTargets(candidateTargets, token) {
+  const parts = token.split(",");
+  const cleanedTargets = parts.map(normalizeCommandPathToken);
+  if (cleanedTargets.some((target) => !target)) {
+    return false;
+  }
+  candidateTargets.push(...cleanedTargets);
+  return true;
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
