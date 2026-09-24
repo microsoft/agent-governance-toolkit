@@ -319,6 +319,7 @@ ZDOTDIR
 aadhaar
 aarch64
 ababa
+abatch
 abprs
 abspath
 abstractmethod
@@ -346,6 +347,7 @@ aioredis
 aiter
 akickoff
 alikes
+alisteners
 allowlist
 allowlisted
 alnum
@@ -378,6 +380,7 @@ asynccontextmanager
 asyncgens
 asyncio
 atexit
+atransform
 attributeerror
 authorisation
 authorised
@@ -950,6 +953,7 @@ restype
 retarget
 retargeted
 retargets
+retryable
 returncode
 rfile
 rfind

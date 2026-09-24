@@ -19,6 +19,7 @@ from agent_control_specification import (
     guard_autogen_agent,
     guard_crewai_crew,
     guard_langchain_runnable,
+    guard_langchain_tool,
     guard_litellm_proxy,
     guard_mcp_server,
     guard_mcp_tool,
@@ -217,21 +218,137 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runtime.requests[1].snapshot["server"], "mcp")
         self.assertEqual(runtime.requests[1].snapshot["turn"], "t1")
 
-    async def test_langchain_adapter_wraps_ainvoke_and_blocks_sync_bypass(self):
+    async def test_langchain_adapter_guards_async_sync_and_batch_paths(self):
         class FakeRunnable:
+            def __init__(self):
+                self.calls = []
+
             async def ainvoke(self, value, config=None):
+                self.calls.append(("async", value, config))
                 return {"answer": value["text"], "config": config}
 
-            def invoke(self, value):
-                return {"unguarded": value}
+            def invoke(self, value, config=None):
+                self.calls.append(("sync", value, config))
+                return {"answer": value["text"], "config": config}
 
-        runtime = QueueRuntime([result(transformed_policy_target={"text": "safe"}), result(transformed_policy_target={"answer": "redacted"})])
-        guarded = guard_langchain_runnable(AgentControl(runtime), FakeRunnable())
+            def batch(self, inputs, config=None):
+                raise AssertionError("unguarded batch was called")
 
+            async def abatch(self, inputs, config=None):
+                raise AssertionError("unguarded abatch was called")
+
+            def stream(self, value):
+                raise AssertionError("unguarded stream was called")
+
+            async def astream(self, value):
+                raise AssertionError("unguarded astream was called")
+
+            def with_config(self, config):
+                raise AssertionError("unguarded binding was created")
+
+        runtime = QueueRuntime([
+            result(transformed_policy_target={"text": "safe"}),
+            result(transformed_policy_target={"answer": "redacted"}),
+            result(transformed_policy_target={"text": "sync"}),
+            result(),
+            result(), result(),
+            result(), result(),
+            result(), result(),
+        ])
+        target = FakeRunnable()
+        guarded = guard_langchain_runnable(AgentControl(runtime), target)
+
+        self.assertIsInstance(guarded, FakeRunnable)
         self.assertEqual(await guarded.ainvoke({"text": "raw"}, config={"tags": ["demo"]}), {"answer": "redacted"})
         self.assertEqual(runtime.requests[1].snapshot["output"], {"answer": "safe", "config": {"tags": ["demo"]}})
-        with self.assertRaises(AdapterUnsupportedError):
-            guarded.invoke({"text": "raw"})
+        self.assertEqual(guarded.invoke({"text": "raw"}), {"answer": "sync", "config": None})
+        self.assertEqual(
+            guarded.batch([{"text": "one"}, {"text": "two"}], config=[{"tags": ["a"]}, {"tags": ["b"]}]),
+            [
+                {"answer": "one", "config": {"tags": ["a"]}},
+                {"answer": "two", "config": {"tags": ["b"]}},
+            ],
+        )
+        self.assertEqual(await guarded.abatch([{"text": "three"}]), [{"answer": "three", "config": None}])
+        self.assertEqual([r.intervention_point for r in runtime.requests], [InterventionPoint.INPUT, InterventionPoint.OUTPUT] * 5)
+        self.assertEqual(target.calls[1], ("sync", {"text": "sync"}, None))
+        with self.assertRaisesRegex(AdapterUnsupportedError, "stream.*not guarded"):
+            guarded.stream({"text": "raw"})
+        with self.assertRaisesRegex(AdapterUnsupportedError, "astream.*not guarded"):
+            guarded.astream({"text": "raw"})
+        with self.assertRaisesRegex(AdapterUnsupportedError, "with_config.*not guarded"):
+            guarded.with_config({"tags": ["bypass"]})
+
+    async def test_langchain_tool_guards_sync_batch_and_rejects_policy_bypass(self):
+        class FakeTool:
+            name = "lookup"
+
+            def __init__(self):
+                self.calls = []
+
+            def invoke(self, value, config=None):
+                self.calls.append(("sync", value, config))
+                return {"answer": value["q"]}
+
+            async def ainvoke(self, value, config=None):
+                self.calls.append(("async", value, config))
+                return {"answer": value["q"]}
+
+            def batch(self, inputs, config=None):
+                raise AssertionError("unguarded batch was called")
+
+            async def abatch(self, inputs, config=None):
+                raise AssertionError("unguarded abatch was called")
+
+            def stream(self, value):
+                raise AssertionError("unguarded stream was called")
+
+            def run(self, value):
+                raise AssertionError("unguarded run was called")
+
+            async def arun(self, value):
+                raise AssertionError("unguarded arun was called")
+
+        runtime = QueueRuntime([
+            result(transformed_policy_target={"q": "safe"}),
+            result(transformed_policy_target={"answer": "redacted"}),
+            result(), result(),
+            result(), result(),
+        ])
+        target = FakeTool()
+        guarded = guard_langchain_tool(AgentControl(runtime), target, tool_call_id="tool-1")
+        self.assertIsInstance(guarded, FakeTool)
+        self.assertEqual(guarded.invoke({"q": "raw"}), {"answer": "redacted"})
+        self.assertEqual(await guarded.ainvoke({"q": "one"}), {"answer": "one"})
+        self.assertEqual(guarded.batch([{"q": "two"}]), [{"answer": "two"}])
+        self.assertEqual(target.calls[0], ("sync", {"q": "safe"}, None))
+        self.assertEqual([r.intervention_point for r in runtime.requests], [InterventionPoint.PRE_TOOL_CALL, InterventionPoint.POST_TOOL_CALL] * 3)
+        self.assertEqual(runtime.requests[0].snapshot["tool_call"]["id"], "tool-1")
+        with self.assertRaisesRegex(AdapterUnsupportedError, "stream.*not guarded"):
+            guarded.stream({"q": "raw"})
+        with self.assertRaisesRegex(AdapterUnsupportedError, "run.*not guarded"):
+            guarded.run({"q": "raw"})
+        with self.assertRaisesRegex(AdapterUnsupportedError, "arun.*not guarded"):
+            guarded.arun({"q": "raw"})
+
+        denied_runtime = QueueRuntime([result(Decision.DENY)])
+        denied = guard_langchain_tool(AgentControl(denied_runtime), target)
+        with self.assertRaises(AgentControlBlocked):
+            denied.batch([{"q": "raw"}], return_exceptions=True)
+        self.assertEqual(len(target.calls), 3)
+
+        structured = guard_langchain_tool(
+            AgentControl(QueueRuntime([result(Decision.DENY)])), target, on_deny="tool_error",
+        ).invoke({"q": "raw"})
+        self.assertEqual(structured["error"], "policy_denied")
+        self.assertTrue(structured["terminal"])
+        self.assertEqual(len(target.calls), 3)
+
+        denied_runnable = guard_langchain_runnable(
+            AgentControl(QueueRuntime([result(Decision.DENY)])), FakeTool(),
+        )
+        with self.assertRaises(AgentControlBlocked):
+            await denied_runnable.abatch([{"q": "raw"}], return_exceptions=True)
 
     async def test_openai_adapter_guards_chat_completions_create(self):
         class FakeCompletions:
