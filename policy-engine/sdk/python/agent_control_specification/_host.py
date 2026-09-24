@@ -430,7 +430,7 @@ class HostSession:
     def pre_model_call(self, request: JsonValue) -> InterventionPointResult:
         # The whole request rides under ``model_request``, the key the snapshot
         # contract and the framework adapters use, so one manifest binds
-        # ``$snap.model_request.messages`` through either seam. Provider shapes
+        # ``$snap.model_request`` through either seam. Provider shapes
         # differ (Anthropic ``system``, Gemini ``contents``), so nothing is
         # folded or dropped on the way.
         return self.evaluate(InterventionPoint.PRE_MODEL_CALL, model_request=request)

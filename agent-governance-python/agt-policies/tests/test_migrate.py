@@ -593,7 +593,7 @@ def test_every_adapter_point_is_bound(tmp_path: Path) -> None:
     # The model and output points bind the snapshot contract's keys, which
     # HostSession and the agent_os adapter runtime both send.
     points = manifest["intervention_points"]
-    assert points["pre_model_call"]["policy_target"] == "$.model_request.messages"
+    assert points["pre_model_call"]["policy_target"] == "$.model_request"
     assert points["post_model_call"]["policy_target"] == "$.model_response"
     assert points["output"]["policy_target"] == "$.output"
 
@@ -662,7 +662,7 @@ def test_object_targets_match_without_json_escaping(tmp_path: Path) -> None:
     )
     rego = (bundle / "p.rego").read_text(encoding="utf-8")
     assert "value := json.marshal(target)" not in rego
-    assert "walk(target" in rego
+    assert "walk(policy_scope" in rego
     _assert_denies(
         tmp_path / "esc",
         ["<script>", ('*.exe', "GLOB")],
@@ -724,6 +724,82 @@ def _migrated_session(policy: Any, tmp_path: Path):
     return HostSession(
         AgentControl.from_path(str(path)), agent_id="a", session_id="s"
     )
+
+
+def _pattern_session(tmp_path: Path):
+    from agt.cli._migrate_bridge import MigrationPolicyInput
+
+    return _migrated_session(
+        MigrationPolicyInput(
+            name="p", blocked_patterns=["BLOCK_ME"], confidence_threshold=0.0
+        ),
+        tmp_path,
+    )
+
+
+@pytest.mark.parametrize(
+    ("request_body", "blocked"),
+    [
+        pytest.param(
+            {
+                "model": "m",
+                "system": "BLOCK_ME",
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+            True,
+            id="anthropic-system",
+        ),
+        pytest.param(
+            {
+                "model": "m",
+                "contents": [{"role": "user", "parts": [{"text": "BLOCK_ME"}]}],
+            },
+            True,
+            id="gemini-contents",
+        ),
+        pytest.param(
+            {
+                "model": "m",
+                "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
+            },
+            False,
+            id="gemini-contents-benign",
+        ),
+        pytest.param(
+            {
+                "model": "BLOCK_ME",
+                "messages": [{"role": "user", "content": "hi"}],
+                "tools": [{"name": "t", "description": "BLOCK_ME"}],
+            },
+            False,
+            id="model-and-tools-out-of-scope",
+        ),
+    ],
+)
+def test_pre_model_call_scans_prompt_text_across_providers(
+    tmp_path: Path, request_body: dict[str, Any], blocked: bool
+) -> None:
+    """The migrated pattern check sees the prompt under any provider key.
+
+    HostSession forwards the request unchanged, so the prompt can sit under
+    ``system`` or ``contents`` as well as ``messages``; model names and tool
+    descriptions stay out of scope as they were in v4.
+    """
+    verdict = _pattern_session(tmp_path).pre_model_call(request_body).verdict
+    if blocked:
+        assert verdict.decision.value == "deny"
+        assert verdict.reason == "blocked_pattern_input"
+    else:
+        assert verdict.decision.value == "allow", verdict.reason
+
+
+def test_tool_args_named_model_stay_in_scope(tmp_path: Path) -> None:
+    """Only pre_model_call drops ``model`` and ``tools``; tool args keep them."""
+    verdict = _pattern_session(tmp_path).pre_tool_call(
+        tool_name="t", args={"model": "BLOCK_ME"}
+    ).verdict
+    assert verdict.decision.value == "deny"
+    assert verdict.reason == "blocked_pattern_input"
 
 
 def test_approval_stays_scoped_to_tool_calls(tmp_path: Path) -> None:
