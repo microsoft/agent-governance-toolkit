@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from threading import Event
 
 import pytest
 
@@ -158,6 +161,71 @@ class TestMerkleRootReproducible:
         chain._entries[1].entry_hash = hashlib.sha256(b"tampered").hexdigest()
         assert _textbook_merkle_root([e.entry_hash for e in chain._entries]) != recorded
 
+    @pytest.mark.parametrize("write_method", ["add_entry", "_rebuild_tree"])
+    def test_snapshot_waits_for_complete_chain_update(self, monkeypatch, write_method):
+        from agentmesh.governance import audit
+
+        chain = MerkleAuditChain()
+        for i in range(5):
+            chain.add_entry(_entry(i))
+        appended = _entry(5)
+        update_paused = Event()
+        finish_update = Event()
+        snapshot_attempted = Event()
+        snapshot_blocked = []
+        lock = chain._lock
+        node = audit.MerkleNode
+
+        class ObservedLock:
+            def __enter__(self):
+                if update_paused.is_set():
+                    acquired = lock.acquire(blocking=False)
+                    snapshot_blocked.append(not acquired)
+                    snapshot_attempted.set()
+                    if acquired:
+                        return self
+                lock.acquire()
+                return self
+
+            def __exit__(self, *args):
+                lock.release()
+
+        def pause_tree_update(**kwargs):
+            update_paused.set()
+            assert finish_update.wait(10), "tree update was not released"
+            return node(**kwargs)
+
+        monkeypatch.setattr(chain, "_lock", ObservedLock())
+        monkeypatch.setattr(audit, "MerkleNode", pause_tree_update)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            args = (appended,) if write_method == "add_entry" else ()
+            writer = pool.submit(getattr(chain, write_method), *args)
+            try:
+                assert update_paused.wait(10), "tree update did not reach the hook"
+                reader = pool.submit(chain._snapshot)
+                assert snapshot_attempted.wait(10), "snapshot did not attempt the lock"
+                assert snapshot_blocked == [True]
+                assert not reader.done()
+            finally:
+                finish_update.set()
+            writer.result(timeout=10)
+            entries, root = reader.result(timeout=10)
+
+        assert len(entries) == (6 if write_method == "add_entry" else 5)
+        assert root == _textbook_merkle_root([entry.entry_hash for entry in entries])
+        assert chain.verify_chain() == (True, None)
+
+    def test_snapshot_membership_is_detached_from_chain(self):
+        chain = MerkleAuditChain()
+        chain.add_entry(_entry(0))
+
+        entries, root = chain._snapshot()
+        entries.clear()
+
+        current_entries, current_root = chain._snapshot()
+        assert len(current_entries) == 1
+        assert current_root == root
+
 
 @pytest.fixture(scope="class")
 def large_audit_log():
@@ -170,6 +238,42 @@ def large_audit_log():
 
 
 class TestAuditLogExport:
+    @pytest.mark.parametrize("filtered", [False, True])
+    def test_export_keeps_root_from_before_append(self, monkeypatch, filtered):
+        log = AuditLog()
+        entries = [_entry(i) for i in range(5)]
+        for i, entry in enumerate(entries):
+            entry.timestamp = datetime(2026, 1, 1, 0, 0, i, tzinfo=UTC)
+            log._chain.add_entry(entry)
+        appended = _entry(5)
+        calls = 0
+
+        class AppendOnExportTimestamp(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                nonlocal calls
+                calls += 1
+                log._chain.add_entry(appended)
+                return datetime.now(tz)
+
+        # exported_at is read after entry capture and before the old root lookups.
+        monkeypatch.setattr("agentmesh.governance.audit.datetime", AppendOnExportTimestamp)
+        bounds = (
+            {"start_time": entries[1].timestamp, "end_time": entries[3].timestamp}
+            if filtered else {}
+        )
+
+        exported = log.export(**bounds)
+
+        assert calls == 1
+        assert len(log.query(limit=None)) == 6
+        expected = entries[1:4] if filtered else entries
+        assert exported["entries"] == [entry.model_dump() for entry in expected]
+        assert exported["entry_count"] == len(expected)
+        root = _textbook_merkle_root([entry.entry_hash for entry in entries])
+        assert exported["merkle_root"] == exported["chain_root"] == root
+        assert root != log._chain.get_root_hash()
+
     def test_export_includes_all_entries_and_reproducible_root(self, large_audit_log):
         log, entries = large_audit_log
 
@@ -228,22 +332,23 @@ class TestAuditLogExport:
         assert log.query(limit=None) == entries
 
     @pytest.mark.parametrize("export_method", ["export", "export_cloudevents"])
-    def test_export_includes_entry_appended_before_query(self, monkeypatch, export_method):
+    def test_export_includes_entry_appended_before_snapshot(self, monkeypatch, export_method):
         log = AuditLog()
         entries = [
             log.log("tool_invocation", "did:mesh:test-agent", f"action-{i}")
             for i in range(5)
         ]
-        query = log.query
+        snapshot = log._chain._snapshot
 
-        def append_before_query(**kwargs):
+        def append_before_snapshot():
             entries.append(log.log("tool_invocation", "did:mesh:test-agent", "appended"))
-            return query(**kwargs)
+            return snapshot()
 
-        monkeypatch.setattr(log, "query", append_before_query)
+        monkeypatch.setattr(log._chain, "_snapshot", append_before_snapshot)
 
         exported = getattr(log, export_method)()
 
+        assert len(entries) == 6
         if export_method == "export":
             assert exported["entry_count"] == len(entries)
             assert exported["entries"] == [entry.model_dump() for entry in entries]
@@ -254,6 +359,42 @@ class TestAuditLogExport:
             root = _textbook_merkle_root([event["agentmeshentryhash"] for event in exported])
             assert root == _textbook_merkle_root([entry.entry_hash for entry in entries])
         assert log.verify_integrity() == (True, None)
+
+    @pytest.mark.parametrize("export_method", ["export", "export_cloudevents"])
+    def test_export_serializes_snapshot_outside_lock(self, monkeypatch, export_method):
+        log = AuditLog()
+        entries = [
+            log.log("tool_invocation", "did:mesh:test-agent", f"action-{i}")
+            for i in range(5)
+        ]
+        serializer_name = "model_dump" if export_method == "export" else "to_cloudevent"
+        serialize = getattr(AuditEntry, serializer_name)
+        expected = [serialize(entry) for entry in entries]
+        appended = _entry(5)
+        calls = 0
+
+        def append_during_serialization(entry):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                assert log._chain._lock.acquire(blocking=False), "serialization holds the lock"
+                log._chain._lock.release()
+                log._chain.add_entry(appended)
+            return serialize(entry)
+
+        monkeypatch.setattr(AuditEntry, serializer_name, append_during_serialization)
+
+        exported = getattr(log, export_method)()
+
+        assert calls == 5
+        assert len(log.query(limit=None)) == 6
+        if export_method == "export":
+            assert exported["entries"] == expected
+            assert exported["entry_count"] == 5
+            root = _textbook_merkle_root([entry.entry_hash for entry in entries])
+            assert exported["merkle_root"] == exported["chain_root"] == root
+        else:
+            assert exported == expected
 
     def test_empty_exports(self):
         log = AuditLog()

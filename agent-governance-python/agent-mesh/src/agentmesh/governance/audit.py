@@ -10,6 +10,7 @@ Entries added via AuditLog or MerkleAuditChain get automatic hash chaining.
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional, Any
@@ -276,6 +277,7 @@ class MerkleAuditChain:
     """
 
     def __init__(self):
+        self._lock = threading.Lock()
         self._entries: list[AuditEntry] = []
         self._tree: list[list[MerkleNode]] = []
         self._root_hash: Optional[str] = None
@@ -311,6 +313,10 @@ class MerkleAuditChain:
         verifier, while the update stays amortized O(log n) per append
         (worst-case O(n) when tree capacity doubles).
         """
+        with self._lock:
+            self._add_entry_locked(entry)
+
+    def _add_entry_locked(self, entry: AuditEntry) -> None:
         # Set previous hash
         if self._entries:
             entry.previous_hash = self._entries[-1].entry_hash
@@ -389,6 +395,10 @@ class MerkleAuditChain:
 
     def _rebuild_tree(self) -> None:
         """Rebuild Merkle tree from entries (full rebuild, used for verification)."""
+        with self._lock:
+            self._rebuild_tree_locked()
+
+    def _rebuild_tree_locked(self) -> None:
         if not self._entries:
             self._tree = []
             self._root_hash = None
@@ -435,7 +445,13 @@ class MerkleAuditChain:
 
     def get_root_hash(self) -> Optional[str]:
         """Get the current Merkle root hash."""
-        return self._root_hash
+        with self._lock:
+            return self._root_hash
+
+    def _snapshot(self) -> tuple[list[AuditEntry], str | None]:
+        """Capture entry membership and its root under the append lock."""
+        with self._lock:
+            return list(self._entries), self._root_hash
 
     def get_proof(self, entry_id: str) -> Optional[list[tuple[str, str]]]:
         """Get a Merkle inclusion proof for an entry."""
@@ -666,6 +682,18 @@ class AuditLog:
             ),
         }
 
+    def _export_snapshot(
+        self,
+        start_time: datetime | None,
+        end_time: datetime | None,
+    ) -> tuple[list[AuditEntry], str | None]:
+        entries, root = self._chain._snapshot()
+        if start_time:
+            entries = [entry for entry in entries if entry.timestamp >= start_time]
+        if end_time:
+            entries = [entry for entry in entries if entry.timestamp <= end_time]
+        return entries, root
+
     def export(
         self,
         start_time: Optional[datetime] = None,
@@ -673,18 +701,16 @@ class AuditLog:
     ) -> dict[str, Any]:
         """Export all audit entries matching the optional time filters.
 
-        ``merkle_root`` and ``chain_root`` describe the complete chain, not
-        the filtered subset. A filtered export may therefore omit entries
-        needed to reproduce those roots.
+        Entries and both roots are captured from one chain state. ``merkle_root``
+        and ``chain_root`` describe that complete chain, not the filtered subset.
+        A filtered export may therefore omit entries needed to reproduce those roots.
         """
-        entries = self.query(
-            start_time=start_time, end_time=end_time, limit=None
-        )
+        entries, root = self._export_snapshot(start_time, end_time)
 
         return {
             "exported_at": datetime.now(timezone.utc).isoformat(),
-            "merkle_root": self._chain.get_root_hash(),
-            "chain_root": self._chain.get_root_hash(),
+            "merkle_root": root,
+            "chain_root": root,
             "entry_count": len(entries),
             "entries": [e.model_dump() for e in entries],
         }
@@ -694,8 +720,6 @@ class AuditLog:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
     ) -> list[dict[str, Any]]:
-        """Export audit entries as CloudEvents v1.0 JSON envelopes."""
-        entries = self.query(
-            start_time=start_time, end_time=end_time, limit=None
-        )
+        """Export a snapshot of audit entries as CloudEvents v1.0 JSON envelopes."""
+        entries, _ = self._export_snapshot(start_time, end_time)
         return [e.to_cloudevent() for e in entries]
