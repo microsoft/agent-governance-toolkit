@@ -160,6 +160,73 @@ test("evaluateOpenCodeTool denies dangerous bash bootstrap and enforce-mode revi
   await rm(root, { recursive: true, force: true });
 });
 
+test("bundled recursive-delete policy denies common flag orderings", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-recursive-delete-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const state = await loadPolicy({
+    policyPath: null,
+    auditPath: join(root, "audit.json"),
+    homeDirectory: root,
+  });
+  const commands = [
+    "rm -rf /",
+    "rm -fr /",
+    "rm -r -f /",
+    "rm -f -r /",
+    "rm --recursive --force /",
+    "rm --force --recursive /",
+    "rm --recursive -f /",
+    "rm -r --force /",
+    "rm -rfx /",
+    "rm /important-data -rf",
+  ];
+
+  for (const command of commands) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      cwd: root,
+      sessionId: "recursive-delete-session",
+    });
+    assert.equal(result.effect, "deny", command);
+    assert.match(
+      result.reason,
+      /Recursive delete commands outside common build artifacts/,
+      command,
+    );
+  }
+});
+
+test("bundled recursive-delete policy keeps command boundaries and safe cleanup exceptions", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-recursive-delete-boundary-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const state = await loadPolicy({
+    policyPath: null,
+    auditPath: join(root, "audit.json"),
+    homeDirectory: root,
+  });
+  const commands = [
+    "rm -- -rf /",
+    "rm -r /tmp && rm -f /tmp",
+    "rm -rf node_modules",
+  ];
+
+  for (const command of commands) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      cwd: root,
+      sessionId: "recursive-delete-boundary-session",
+    });
+    assert.equal(result.effect, "deny", command);
+    assert.doesNotMatch(
+      result.reason,
+      /Recursive delete commands outside common build artifacts/,
+      command,
+    );
+  }
+});
+
 test("evaluateOpenCodeTool denies metadata URL fetches regardless of arg name", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-url-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });

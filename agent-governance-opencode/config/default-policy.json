@@ -40,7 +40,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "\\brm\\b[\\s\\S]*\\b-rf\\b",
+          "source": "\\brm\\b(?=(?:(?!--\\s)[^\\n\\r;&|])*?\\s(?:-[a-z]*r[a-z]*|--recursive)(?=\\s|$))(?=(?:(?!--\\s)[^\\n\\r;&|])*?\\s(?:-[a-z]*f[a-z]*|--force)(?=\\s|$))[^\\n\\r;&|]*",
           "flags": "i"
         }
       ]
