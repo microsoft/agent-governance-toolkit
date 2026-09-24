@@ -1,6 +1,6 @@
 use agent_control_specification::{
-    action_identity, AgentControl, AnnotatorDispatcher, AnnotatorInvocation, ApprovalOutcome,
-    ApprovalResolution, ApprovalResolver, Decision, EnforcementMode, InterventionPoint, JsonValue,
+    identity, AgentControl, AnnotatorDispatcher, AnnotatorInvocation, ApprovalOutcome,
+    ApprovalResolution, ApprovalResolver, Decision, EnforcementMode, InterceptionPoint, JsonValue,
     Manifest, PolicyDispatcher, PreparedPolicyInvocation, RigLikeTool, Runtime, RuntimeError,
 };
 use serde_json::json;
@@ -63,10 +63,10 @@ impl PolicyDispatcher for ScenarioPolicy {
             "pre_model_call" => Ok(json!({
                 "decision": "transform",
                 "reason": "prompt_rewritten",
-                "transform": {"path": "$policy_target.prompt", "value": "safe research"}
+                "transform": {"path": "$target.prompt", "value": "safe research"}
             })),
             "post_model_call" => Ok(json!({
-                "decision": "transform", "transform": {"path": "$policy_target.text", "value": "model secret redacted"}
+                "decision": "transform", "transform": {"path": "$target.text", "value": "model secret redacted"}
             })),
             "pre_tool_call" => {
                 let tool = input["tool"]["name"].as_str().unwrap();
@@ -80,12 +80,12 @@ impl PolicyDispatcher for ScenarioPolicy {
                         // transform; for this test we collapse the redaction
                         // to its final value.
                         "decision": "transform",
-                        "transform": {"path": "$policy_target.query", "value": "search [redacted]"}
+                        "transform": {"path": "$target.query", "value": "search [redacted]"}
                     })),
                 }
             }
             "post_tool_call" => Ok(json!({
-                "decision": "transform", "transform": {"path": "$policy_target.answer", "value": "tool secret redacted"}
+                "decision": "transform", "transform": {"path": "$target.answer", "value": "tool secret redacted"}
             })),
             _ => Ok(json!({"decision": "allow"})),
         }
@@ -94,7 +94,7 @@ impl PolicyDispatcher for ScenarioPolicy {
 
 fn manifest() -> Manifest {
     Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   scenario:
     type: test
@@ -117,9 +117,9 @@ intervention_points:
     policy_target: $snap.tool_call.args
     annotations:
       z_late:
-        from: $policy_target
+        from: $target
       a_first:
-        from: $policy_target
+        from: $target
   post_tool_call:
     policy_target_kind: tool_result
     tool_name_from: $snap.tool_call.name
@@ -202,7 +202,7 @@ fn realistic_agent_loop_exercises_model_tool_and_approval_paths() {
             |_| json!({"deleted": true}),
         )
         .unwrap_err();
-    assert_eq!(denied.intervention_point(), InterventionPoint::PreToolCall);
+    assert_eq!(denied.intervention_point(), InterceptionPoint::PreToolCall);
     assert_eq!(
         denied.intervention_point_result().verdict.reason.as_deref(),
         Some("dangerous_tool")
@@ -220,8 +220,15 @@ fn realistic_agent_loop_exercises_model_tool_and_approval_paths() {
             .pre_tool_call_intervention_point_result
             .verdict
             .decision,
-        Decision::Escalate
+        // AGENT-HOOKS-0.1 section 5.1: an escalation is a liftable `deny`
+        // carrying an `approval` block, not a decision of its own.
+        Decision::Deny
     );
+    assert!(approved
+        .pre_tool_call_intervention_point_result
+        .verdict
+        .approval
+        .is_some());
 
     let rejected = control(policy, Arc::new(RecordingAnnotator::default()))
         .with_approval_resolver(deny_resolver())
@@ -233,7 +240,7 @@ fn realistic_agent_loop_exercises_model_tool_and_approval_paths() {
         .unwrap_err();
     assert_eq!(
         rejected.intervention_point(),
-        InterventionPoint::PreToolCall
+        InterceptionPoint::PreToolCall
     );
 
     let names = annotator.names();
@@ -262,7 +269,7 @@ fn runtime_policy_failures_and_invalid_outputs_fail_closed() {
         let error = control
             .run_tool("search", json!({"query": "token SECRET123"}), |_| json!({}))
             .unwrap_err();
-        assert_eq!(error.intervention_point(), InterventionPoint::PreToolCall);
+        assert_eq!(error.intervention_point(), InterceptionPoint::PreToolCall);
         assert_eq!(
             error.intervention_point_result().verdict.reason.as_deref(),
             Some(reason)
@@ -285,10 +292,10 @@ fn approval_resolver_panic_fails_closed() {
         )
         .unwrap_err();
 
-    assert_eq!(error.intervention_point(), InterventionPoint::PreToolCall);
+    assert_eq!(error.intervention_point(), InterceptionPoint::PreToolCall);
     assert_eq!(
         error.intervention_point_result().verdict.reason.as_deref(),
-        Some("runtime_error:approval_resolver_failed")
+        Some("host_error:approval_resolver_failed")
     );
 }
 
@@ -397,20 +404,20 @@ fn manual_evaluate_and_enforce_approval_identity_remains_deterministic() {
         Arc::new(RecordingAnnotator::default()),
     );
     let result = control.evaluate_intervention_point(
-        InterventionPoint::PreToolCall,
+        InterceptionPoint::PreToolCall,
         json!({"tool_call": {"name": "transfer_funds", "args": {"amount": 10}}}),
         EnforcementMode::Enforce,
     );
-    let expected_identity = action_identity(result.policy_input.as_ref().unwrap()).unwrap();
+    let expected_identity = identity(result.policy_input.as_ref().unwrap()).unwrap();
     let resolver: ApprovalResolver = Arc::new(
-        move |_, _result: &agent_control_specification::InterventionPointResult| {
+        move |_, _result: &agent_control_specification::HostEvaluation| {
             ApprovalResolution::allow(expected_identity.clone())
         },
     );
 
     assert!(control
         .enforce(
-            InterventionPoint::PreToolCall,
+            InterceptionPoint::PreToolCall,
             &result,
             EnforcementMode::Enforce,
             Some(&resolver)
@@ -447,7 +454,7 @@ impl PolicyDispatcher for PaymentPolicy {
 
 fn payment_manifest() -> Manifest {
     Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.1-beta
+        r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   payments:
     type: test
@@ -533,7 +540,7 @@ fn payment_escalation_hitl_exercises_identity_effects_and_isolation() {
         .unwrap_err();
     assert_eq!(
         rejected.intervention_point(),
-        InterventionPoint::PreToolCall
+        InterceptionPoint::PreToolCall
     );
     assert_eq!(
         rejected
@@ -546,7 +553,7 @@ fn payment_escalation_hitl_exercises_identity_effects_and_isolation() {
     assert!(!*rejected_executed.lock().unwrap());
 
     let stale_result = control.evaluate_intervention_point(
-        InterventionPoint::PreToolCall,
+        InterceptionPoint::PreToolCall,
         json!({"tool_call": {"id": "wire-replay", "name": "wire_transfer", "args": {"amount": 40_000, "beneficiary": "acct-3", "memo": "memo"}}}),
         EnforcementMode::Enforce,
     );
@@ -563,19 +570,16 @@ fn payment_escalation_hitl_exercises_identity_effects_and_isolation() {
         .unwrap_err();
     assert_eq!(
         stale.intervention_point_result().verdict.reason.as_deref(),
-        Some("runtime_error:approval_action_mismatch")
+        Some("host_error:approval_identity_mismatch")
     );
 
     let ordered = json!({"snapshot": {"tool_call": {"id": "stable", "name": "wire_transfer", "args": {"amount": 50_000, "beneficiary": "acct-4", "memo": "memo"}}}, "intervention_point": "pre_tool_call"});
     let reordered = json!({"intervention_point": "pre_tool_call", "snapshot": {"tool_call": {"args": {"memo": "memo", "beneficiary": "acct-4", "amount": 50_000}, "name": "wire_transfer", "id": "stable"}}});
     let string_amount = json!({"snapshot": {"tool_call": {"id": "stable", "name": "wire_transfer", "args": {"amount": "50000", "beneficiary": "acct-4", "memo": "memo"}}}, "intervention_point": "pre_tool_call"});
-    assert_eq!(
-        action_identity(&ordered).unwrap(),
-        action_identity(&reordered).unwrap()
-    );
+    assert_eq!(identity(&ordered).unwrap(), identity(&reordered).unwrap());
     assert_ne!(
-        action_identity(&ordered).unwrap(),
-        action_identity(&string_amount).unwrap()
+        identity(&ordered).unwrap(),
+        identity(&string_amount).unwrap()
     );
 
     let malformed: ApprovalResolver = Arc::new(|_, _| ApprovalResolution {
@@ -597,7 +601,7 @@ fn payment_escalation_hitl_exercises_identity_effects_and_isolation() {
             .verdict
             .reason
             .as_deref(),
-        Some("runtime_error:approval_action_mismatch")
+        Some("host_error:approval_identity_mismatch")
     );
 }
 

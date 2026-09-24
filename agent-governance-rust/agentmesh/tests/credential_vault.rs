@@ -11,7 +11,8 @@ use agentmesh::credential_vault::{
 
 fn make_stack() -> CredentialVault {
     let v = CredentialVault::new();
-    v.put("github_pat", "GHP-RESOLVED-VALUE", "bearer_token").unwrap();
+    v.put("github_pat", "GHP-RESOLVED-VALUE", "bearer_token")
+        .unwrap();
     v.put("db_password", "DBP-VALUE", "password").unwrap();
     let mut ci = BTreeMap::new();
     ci.insert("github:read_issues".to_string(), "github_pat".to_string());
@@ -43,7 +44,10 @@ fn put_rejects_bad_names() {
 fn list_handles_no_value_leak() {
     let v = make_stack();
     let names = v.list_handles().unwrap();
-    assert_eq!(names, vec!["db_password".to_string(), "github_pat".to_string()]);
+    assert_eq!(
+        names,
+        vec!["db_password".to_string(), "github_pat".to_string()]
+    );
     for n in &names {
         let meta = v.metadata(n).unwrap().unwrap();
         let json = serde_json::to_string(&meta).unwrap();
@@ -143,14 +147,8 @@ fn inject_tool_args_nested() {
     let r = injector.inject_tool_args("did:web:agent-ci", args, &opts);
     assert!(r.allowed);
     let p = r.payload.unwrap();
-    assert_eq!(
-        p["secrets"][0].as_str(),
-        Some("GHP-RESOLVED-VALUE")
-    );
-    assert_eq!(
-        p["nested"]["token"].as_str(),
-        Some("GHP-RESOLVED-VALUE")
-    );
+    assert_eq!(p["secrets"][0].as_str(), Some("GHP-RESOLVED-VALUE"));
+    assert_eq!(p["nested"]["token"].as_str(), Some("GHP-RESOLVED-VALUE"));
 }
 
 #[test]
@@ -159,7 +157,10 @@ fn inject_env_renders_values() {
     let injector = CredentialInjector::new(&v);
     let mut env = HashMap::new();
     env.insert("PATH".to_string(), "/usr/bin".to_string());
-    env.insert("GITHUB_TOKEN".to_string(), "{{cred:github_pat}}".to_string());
+    env.insert(
+        "GITHUB_TOKEN".to_string(),
+        "{{cred:github_pat}}".to_string(),
+    );
     let opts = InjectionOptions::new("github:read_issues", "subprocess", &["github_pat"]);
     let r = injector.inject_env("did:web:agent-ci", &env, &opts);
     assert!(r.allowed);

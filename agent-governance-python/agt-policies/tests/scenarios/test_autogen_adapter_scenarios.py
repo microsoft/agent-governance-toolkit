@@ -76,7 +76,7 @@ from agent_control_specification import (  # noqa: E402
 )
 
 
-_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: autogen_adapter_scenarios
 extends: []
@@ -207,7 +207,7 @@ def test_on_send_transform_path_rewrites_function_call_arguments(tmp_path: Path)
                 "decision": "transform",
                 "reason": "args_sanitized",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"arguments": '{"q":"[SANITIZED]"}'},
                 },
             }

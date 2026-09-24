@@ -52,6 +52,84 @@ diff --git a/src/example.py b/src/example.py
     assert changed_lines.extract_added_lines(diff_text) == "New README tokenn.\nprint(\"neew token\")\n"
 
 
+def test_added_line_whose_content_starts_with_plus_plus_is_not_dropped() -> None:
+    """A content line beginning with `++` arrives as `+++...`, like a file header.
+
+    Skipping every `+++` by prefix silently discards that content, so the words
+    on it are never spell-checked. That is the direction this script must not
+    fail in: over-reporting is noisy, under-reporting means the check passes on
+    text nobody looked at. File headers only appear before the first `@@`, so
+    position separates them from content exactly.
+    """
+    diff_text = """diff --git a/src/counter.cpp b/src/counter.cpp
+index 1111111..2222222 100644
+--- a/src/counter.cpp
++++ b/src/counter.cpp
+@@ -1,2 +1,4 @@
+ int main() {
++++counter_increment;
++  normal_added_line();
+"""
+
+    # The added source line is `++counter_increment;`, so the diff renders it
+    # as `+++counter_increment;` -- indistinguishable from a file header by
+    # prefix alone.
+    assert changed_lines.extract_added_lines(diff_text) == (
+        "++counter_increment;\n  normal_added_line();\n"
+    )
+
+
+def test_file_headers_are_still_skipped_across_several_files() -> None:
+    """The hunk-position rule must not start admitting real `+++ b/path` headers."""
+    diff_text = """diff --git a/a.md b/a.md
+--- a/a.md
++++ b/a.md
+@@ -1 +1,2 @@
++first heading
+diff --git a/b.md b/b.md
+--- a/b.md
++++ b/b.md
+@@ -1 +1,2 @@
++second heading
+"""
+
+    assert changed_lines.extract_added_lines(diff_text) == "first heading\nsecond heading\n"
+
+
+def test_fallback_emits_a_workflow_annotation_only_under_github_actions(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `::warning::` form is what makes an over-reporting run visible.
+
+    On stderr alone the notice is buried in the step log, so a run that fell
+    back is indistinguishable from a correctly scoped one at the point someone
+    reads the check result. The annotation is gated on GITHUB_ACTIONS so a local
+    run does not print workflow-command syntax at a developer.
+    """
+    repo = tmp_path / "unrelated"
+    repo.mkdir()
+    git(repo, "init", "--quiet", "--initial-branch=main")
+    git(repo, "config", "user.email", "ci@example.invalid")
+    git(repo, "config", "user.name", "CI")
+    (repo / "notes.md").write_text("Only history.\n", encoding="utf-8")
+    git(repo, "add", "notes.md")
+    git(repo, "commit", "--quiet", "--message", "only commit")
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    changed_lines.resolve_merge_base(repo, "refs/heads/no-such-branch")
+    captured = capsys.readouterr()
+    assert "::warning::changed_lines: cannot resolve merge base" in captured.err
+    assert captured.out == ""
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "false")
+    changed_lines.resolve_merge_base(repo, "refs/heads/no-such-branch")
+    captured = capsys.readouterr()
+    assert "cannot resolve merge base" in captured.err
+    assert "::warning::" not in captured.err
+
+
 def test_extension_pathspecs_are_normalized_for_git_diff() -> None:
     extensions = changed_lines.normalize_extensions("md,.txt, py,,")
 

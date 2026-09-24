@@ -409,7 +409,7 @@ Consulta [Limitaciones conocidas](../LIMITATIONS.md) para conocer los límites d
 | **Especificaciones** | [Todas las especificaciones](../specs/) (10 especificaciones formales, 992 pruebas de conformidad) |
 | **Referencia de API** | [Agent OS](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/README.md) · [AgentMesh](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/README.md) · [Agent SRE](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/README.md) |
 | **Cumplimiento** | [OWASP](../compliance/owasp-agentic-top10-architecture.md) · [Reglamento de IA de la UE](../compliance/) · [NIST AI RMF](../compliance/nist-ai-rmf-alignment.md) · [SOC 2](../compliance/soc2-mapping.md) · [AARM Extended](https://aarm.dev/builders/agent-governance-toolkit-microsoft) · [ATF](https://agentictrustframework.ai/ecosystem) |
-| **Despliegue** | [Azure](../deployment/README.md) · [AWS](../deployment/README.md) · [GCP](../deployment/README.md) · [Docker Compose](../deployment/README.md) |
+| **Despliegue** | [Azure](../deployment/index.md) · [AWS](../deployment/index.md) · [GCP](../deployment/index.md) · [Docker Compose](../deployment/index.md) |
 | **Extensiones** | [VS Code](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript/agent-os-vscode) · [Integraciones de frameworks](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations) |
 
 ---

@@ -4,16 +4,16 @@ Enforce AGT governance policies inside any Flowise flow. Because Flowise runs in
 
 ## Architecture
 
-The included `flowise-flow.json` is a 5-node sequential demo flow (Flowise 2.x / 3.x):
+The `flowise-flow.json` contains a 5-node Agentflow assembled from the Flowise 3.1.4 Agentflow marketplace node templates:
 
 ```
-[Chat Input]
+[Start]
      |
      v
-[Custom Function]  -- builds {"tool": "search_web", "content": <msg>, "agent_id": "flowise-agent"}
+[Custom JS Function]  -- builds {"tool": "search_web", "content": <msg>, "agent_id": "flowise-agent"}
      |
      v
-[HTTP Request]     -- POST http://localhost:8000/govern
+[HTTP]             -- POST http://localhost:8000/govern
      |
      v
 [AGT Governance Sidecar :8000]
@@ -22,13 +22,13 @@ The included `flowise-flow.json` is a 5-node sequential demo flow (Flowise 2.x /
      |-- audit log         (hash-chain tamper-evident JSONL)
      |
      v  {"allowed": true/false, "reason": "..."}
-[Custom Function]  -- formats response as "[ALLOWED] ..." or "[BLOCKED] ..."
+[Custom JS Function]  -- formats response as "[ALLOWED] ..." or "[BLOCKED] ..."
      |
      v
-[Chat Output]
+[Direct Reply]
 ```
 
-The demo flow returns the raw governance decision in the chat. To add a full LLM response for allowed requests, wire a ChatOpenAI node between the Format node and Chat Output, and add your OpenAI API key to it.
+The demo flow returns the formatted governance decision in the chat. It does not include an LLM node; to add a full LLM response for allowed requests, insert a ChatOpenAI node between the Format node and Direct Reply, and add your OpenAI API key to it.
 
 ## Quick Start
 
@@ -63,21 +63,42 @@ curl -s -X POST http://localhost:8000/govern \
   -d '{"tool": "execute_shell", "content": "ls /", "agent_id": "flowise-agent"}' | python -m json.tool
 ```
 
+### Flowise local HTTP security
+
+Flowise 3.1.4 protects the HTTP Agentflow node with an SSRF deny list. The default policy rejects `localhost`, loopback, and private-network addresses, so the local sidecar URL in this example will be refused unless the guard is explicitly disabled for the Flowise process:
+
+```bash
+export HTTP_SECURITY_CHECK=false
+```
+
+On PowerShell, use `$env:HTTP_SECURITY_CHECK = "false"` before starting Flowise. This disables the SSRF guard for the entire Flowise instance; use it only for this local demonstration and prefer a permitted, network-reachable sidecar address in any shared or production deployment.
+
 ### 2. Import the flow into Flowise
 
-1. Open your Flowise instance (2.x or 3.x).
-2. Go to **Chatflows** and click **Add New**.
-3. Click the **import** icon (top right toolbar) and select `flowise-flow.json` from this directory.
-4. The flow loads with five nodes already connected.
-5. Click **Save** and then **Deploy**.
+1. Open your Flowise 3.1.4 instance.
+2. Open **Agentflows** and create a new Agentflow.
+3. In the Flowise UI, click **Settings (gear icon) > Load Chatflow** (or the Import icon).
+4. Select the `flowise-flow.json` provided in this directory.
+5. The flow loads with five nodes already connected.
+6. Click **Save** and then **Deploy**.
 
-### 3. Test the full flow
+### 3. Test the full flow (Flowise 3.1.4 Agentflow template)
 
-Send a message through the Flowise chat UI. The flow:
+Send a message through the Flowise chat UI.
 
 - Builds a governance payload from your message.
 - Calls the sidecar at `http://localhost:8000/govern`.
-- Routes to the LLM if allowed, or returns a block message if denied.
+- Returns an `[ALLOWED]` message when the governance check permits the request, or a `[BLOCKED]` message when policy denies it.
+
+### Export validation
+
+The checked-in JSON is assembled from the Flowise 3.1.4 Agentflow marketplace node templates. To produce and verify a raw export for a specific running instance:
+
+1. Create the five-node flow shown above in a new Agentflow.
+2. Configure the HTTP node to call `http://localhost:8000/govern` with the custom-function output as its JSON body.
+3. Save the flow and export/download it from the Flowise canvas.
+4. Load the exported file into a clean Flowise 3.1.4 Agentflow and confirm that it imports with all five nodes connected.
+5. Run the flow with an allowed tool (`search_web`) and a blocked tool (`execute_shell`) while the sidecar is running.
 
 ## Configuration
 
@@ -156,5 +177,5 @@ The hash chain gives tamper evidence: any modification to a past entry breaks al
 |------|-------------|
 | `governance_server.py` | FastAPI sidecar server |
 | `policy.yaml` | Sample governance policy |
-| `flowise-flow.json` | Importable Flowise chatflow |
+| `flowise-flow.json` | Importable Flowise Agentflow |
 | `requirements.txt` | Python dependencies |

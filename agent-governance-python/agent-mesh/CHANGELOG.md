@@ -9,6 +9,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **HTTP trust middleware request authentication.** `TrustMiddleware` no longer
+  accepts a caller-supplied `X-Agent-DID` header as proof of identity. It
+  previously started from a trust score of `1.0` and only lowered it inside an
+  `except` branch that could never execute, so any caller who set the header was
+  verified with full trust and `X-Agent-Capabilities` was honoured as
+  self-asserted authorization. Callers now prove possession of a registered
+  Ed25519 key over a canonical envelope binding DID, audience, timestamp, nonce,
+  method, undecoded request target, target mode, covered request headers, and
+  body digest, with single-use nonce replay protection. Verification keys and
+  capabilities are resolved only from a
+  trusted registry, never from request headers. The Flask, FastAPI, and Django
+  integrations now share one envelope implementation, and the header lookup is
+  case-insensitive so the FastAPI path no longer silently misses the trust
+  headers Starlette lowercases. See `BREAKING_CHANGES.md` — clients must be
+  upgraded alongside servers.
+- **The signed target is the undecoded one.** Signing the percent-decoded path
+  made `/files/a%2Fb` and `/files/a/b` produce identical signed bytes, so a
+  signature captured for one was valid for the other wherever a proxy, gateway,
+  or audit log reads the target before the application decodes it. All three
+  integrations now sign the raw origin-form target from `RAW_URI`,
+  `REQUEST_URI`, or `scope["raw_path"]`, and servers that publish none of these
+  fail with `500` rather than silently downgrading. `target_mode` travels inside
+  the signed bytes, so a raw↔decoded downgrade fails closed.
+- **Covered headers are chosen by the server and bind presence.** `Content-Type`
+  was signed as `""` when absent, so an attacker could add one the signer never
+  sent — enough to change how a body is parsed. Headers named by
+  `TrustConfig.signed_header_names` are now omitted from the envelope when
+  absent, so adding or stripping one invalidates the signature. The covered set
+  is server-configured rather than caller-declared, so a caller cannot narrow
+  its own coverage.
+- **Verification is time-bounded.** `TrustConfig.io_timeout_seconds` (default
+  `5.0`) budgets an entire verification rather than each dependency call, so a
+  slow peer resolver cannot hand its remaining time to a slow replay cache. The
+  remaining budget is passed to resolvers and caches that declare a
+  `timeout_seconds` parameter, the budget is re-checked before the nonce is
+  consumed so a doomed request never burns a single-use nonce, and exhaustion
+  denies with `503`.
+- **Django exempt routes no longer publish an unverified DID.** `@trust_exempt`
+  views and exempt path prefixes copied the attacker-controlled `X-Agent-DID`
+  header onto `request.agent_did`, so a view that logged or authorized on it
+  received a value nothing had verified. Exempt and denied requests now set
+  `agent_did=None`, `agent_trust_score=None`, and `agent_authenticated=False`.
+- **`@trust_required(min_score=0)` still requires authentication.** The Django
+  gate compared only the trust score, so a zero floor admitted a caller whose
+  signature had failed — a deliberately open route silently became an
+  unauthenticated one. Authentication is now checked before the score.
+- **Anonymous callers cannot reach protected routes.** `flask_trust_required`
+  and `fastapi_trust_required` reject any result that is not cryptographically
+  authenticated, so a `permissive_mode` deployment no longer admits an
+  unauthenticated caller to a route that requires capabilities. Serving
+  anonymous callers now requires the explicitly-named `flask_trust_optional` /
+  `fastapi_trust_optional` variants, and `TrustConfig` refuses to combine
+  `permissive_mode` with an authorization gate.
+- **Unauthenticated request-handling hardening.** The signed body is read
+  against `max_signed_body_bytes` before buffering, so an unauthenticated caller
+  cannot force unbounded memory allocation; `install_fastapi_trust` installs the
+  pre-routing body guard and returns a dependency bound to it, and that
+  dependency now fails closed with `500` when the guard is absent rather than
+  verifying a body FastAPI has already buffered without limit; a presented
+  public key is compared as
+  decoded bytes rather than base64 text, so a non-ASCII header value can no
+  longer raise inside the auth path; `401` responses no longer disclose which
+  DIDs are registered; DIDs are bounded and charset-checked before reaching a
+  resolver or a log sink; replay-cache exhaustion is reported as `503` rather
+  than being recorded as a replay attempt; and replay keys are namespaced by
+  audience so services sharing a cache cannot burn each other's nonces.
+- **Server faults are no longer reported as authentication failures.** A peer
+  resolver that raises, an unreadable request body, and any unexpected internal
+  error now return `503` instead of `401`, so an identity-store outage cannot
+  masquerade as every caller presenting bad credentials and stays visible to
+  alerting keyed on server errors. `TrustConfig` is frozen so the
+  `permissive_mode` guard cannot be voided by post-construction assignment, and
+  it rejects a bare string for `required_capabilities`, which was previously
+  expanded character-by-character into an unsatisfiable authorization gate.
+- **Denial telemetry and decorator hardening.** Pre-authentication failures stay
+  at `DEBUG` so they cannot be used to flood logs, but each distinct denial
+  reason now also emits a rate-limited `WARNING` carrying a coarse reason and
+  status — never the DID — so an attack is visible at default log levels. The
+  Flask and FastAPI decorators extend `verify_request`'s never-raise guarantee
+  over the body read that precedes it, and both derive the signed request target
+  from the raw query bytes, so a client disconnect or a non-UTF-8 query no longer
+  produces a `500` and both frameworks sign identical payloads. Internal-fault
+  tracebacks are emitted at most once per minute per call site, so a failing peer
+  resolver cannot amplify one fault into an `ERROR` traceback per request, and a
+  missing-capability denial is now logged with the agent's DID so privilege
+  probing by an authenticated agent is visible.
 - **AgentMesh transport message authentication.** `MeshClient` no longer lets a
   sender-supplied `plaintext` wire flag select the legacy no-crypto receive path;
   whether an inbound message is treated as plaintext is decided solely by the
@@ -29,12 +115,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `AuditLog.export()` and `AuditLog.export_cloudevents()` now return all matching
+  records instead of silently capping exports at 10,000 records.
+- **Empty policy sets are visible to readiness probes.** The policy server and
+  governance sidecar now return `503 Not Ready` when no enabled policy rules
+  are loaded. Policy and generation status responses expose `effective_rules`
+  and `load_warnings` so operators can distinguish an empty policy set from a
+  healthy deployment.
 - **Pending-message batch isolation.** A single malformed entry in a relay-supplied
   `pending_messages` batch no longer aborts the drain; the failure is surfaced
   through the error handler and the remaining queued messages are still delivered.
+- `MerkleAuditChain` now records a canonical, reproducible Merkle root. The
+  incremental `add_entry` padded interior tree levels with the leaf sentinel
+  `'0' * 64` instead of the empty-subtree constant `E(k)`, so the recorded root
+  diverged from a from-scratch rebuild for most chain sizes (22 of the first 32)
+  and an exported `merkle_root` could not be reproduced by an independent
+  verifier. Interior padding now uses `E(k)`, keeping the update amortized
+  O(log n) per append (worst-case O(n) when tree capacity doubles). Exported
+  `merkle_root` values change for the affected sizes; see
+  `BREAKING_CHANGES.md`.
 
 ### Changed
 
+- **Policy directory loading now fails closed on invalid input.** The policy
+  server rejects missing directories, malformed files, and governance-shaped
+  documents that would otherwise be silently accepted by the trust-policy
+  fallback; rejected policy-server reloads retain the last complete policy set
+  and return `409`. The sidecar publishes a degraded generation and denies
+  evaluations when a policy file fails or its directory is unavailable. The
+  bundled Helm and container examples now use the flat policy schema and
+  explicitly target all agents. Closes #3538.
 - **Displaced connections now close with a distinct WebSocket code.** When a second
   connection authenticates for a DID, the relay closes the displaced socket with
   `4006` (`WS_CLOSE_SESSION_REPLACED`) instead of `1000`. `1000` was reported by

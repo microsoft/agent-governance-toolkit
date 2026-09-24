@@ -29,7 +29,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance?label=NuGet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/compliance/owasp-agentic-top10-architecture.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-7_Full,_3_Partial-blue)](docs/compliance/owasp-agentic-top10-architecture.md)
 [![AARM Extended](https://img.shields.io/badge/AARM-Extended_(R1–R9)-brightgreen)](https://aarm.dev/builders/agent-governance-toolkit-microsoft)
 [![ATF](https://img.shields.io/badge/ATF-All_5_Elements-brightgreen)](https://agentictrustframework.ai/ecosystem)
 
@@ -265,6 +265,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
 | **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
+| **Codex CLI** | [`@microsoft/agent-governance-codex-cli`](agent-governance-codex-cli/) | `node agent-governance-codex-cli/bin/agt-codex.mjs install` |
 | **OpenCode** | [`@microsoft/agent-governance-opencode`](agent-governance-opencode/) | `npm install @microsoft/agent-governance-opencode` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
@@ -337,6 +338,7 @@ Full list: [Framework Integrations](agent-governance-python/agentmesh-integratio
 | [maf-integration](examples/maf-integration) | MAF | Microsoft Agent Framework integration |
 | [mcp-trust-verified-server](examples/mcp-trust-verified-server) | MCP | Trust-verified MCP server implementation |
 | [governance-dashboard](examples/demos/governance-dashboard) | Streamlit | Real-time fleet visibility dashboard |
+| [k8s-agent-sandbox-governed](examples/k8s-agent-sandbox-governed) | kubernetes-sigs/agent-sandbox | Pre-dispatch command policy on top of Kubernetes-native execution isolation |
 
 ---
 
@@ -437,7 +439,7 @@ The only official sources for the Agent Governance Toolkit are:
 |----------|----------|
 | **Source code** | [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
 | **Documentation** | [microsoft.github.io/agent-governance-toolkit](https://microsoft.github.io/agent-governance-toolkit/) |
-| **Python packages** | [pypi.org/user/agentgovtoolkit](https://pypi.org/user/agentgovtoolkit/) |
+| **Python packages** | `https://pypi.org/user/agentgovtoolkit/` |
 | **npm packages** | `@microsoft/agent-governance-sdk` on [npmjs.com](https://www.npmjs.com/) |
 | **NuGet packages** | `Microsoft.AgentGovernance.*` on [nuget.org](https://www.nuget.org/) |
 | **Rust crates** | `agent-governance`, `agent-governance-mcp` on [crates.io](https://crates.io/) |

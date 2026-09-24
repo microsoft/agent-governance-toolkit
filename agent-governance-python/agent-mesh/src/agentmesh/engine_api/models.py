@@ -55,8 +55,8 @@ class PolicyDetail(PolicySummary):
 
 # ── Policy validate (section 7.4) ────────────────────────────────────────────
 class PolicyValidationError(BaseModel):
-    line: int = Field(..., description="1-based line of the error (0 when unknown)")
-    col: int = Field(..., description="1-based column of the error (0 when unknown)")
+    line: int | None = Field(None, ge=1, description="1-based line of the error")
+    col: int | None = Field(None, ge=1, description="1-based column of the error")
     message: str = Field(..., description="Parse or lint error message")
 
 
@@ -69,9 +69,7 @@ class ValidateRequest(BaseModel):
 
 class ValidateResponse(BaseModel):
     valid: bool = Field(..., description="True if the policy parses and passes all lint rules")
-    errors: list[PolicyValidationError] = Field(
-        default_factory=list, description="Parse or lint errors (empty when valid)"
-    )
+    errors: list[PolicyValidationError] = Field(..., description="Parse or lint errors")
 
 
 # ── Policy test (section 7.5) ────────────────────────────────────────────────
@@ -84,7 +82,10 @@ class FixtureInput(BaseModel):
 
 class TestRequest(BaseModel):
     fixtures: list[FixtureInput] = Field(
-        ..., max_length=_MAX_FIXTURES, description="Inline fixtures to execute"
+        ...,
+        min_length=1,
+        max_length=_MAX_FIXTURES,
+        description="Inline fixtures to execute",
     )
     policy_dir: str | None = Field(
         None,
@@ -108,7 +109,7 @@ class TestResponse(BaseModel):
     total: int = Field(..., description="Total fixtures run")
     passed: int = Field(..., description="Fixtures that matched expected verdict")
     failed: int = Field(..., description="Fixtures that did not match")
-    results: list[FixtureResult] = Field(default_factory=list, description="Per-fixture outcomes")
+    results: list[FixtureResult] = Field(..., description="Per-fixture outcomes")
 
 
 # ── Policy save (section 7.6) ────────────────────────────────────────────────
@@ -155,7 +156,7 @@ class TrustScoreItem(BaseModel):
 
 
 class TrustGraphNode(BaseModel):
-    did: str
+    agent_did: str
     trust_score: int = Field(..., ge=0, le=1000)
     name: str | None = None
 
@@ -168,8 +169,8 @@ class TrustGraphEdge(BaseModel):
 
 
 class TrustGraph(BaseModel):
-    nodes: list[TrustGraphNode] = Field(default_factory=list)
-    edges: list[TrustGraphEdge] = Field(default_factory=list)
+    nodes: list[TrustGraphNode] = Field(...)
+    edges: list[TrustGraphEdge] = Field(...)
 
 
 # ── Agents (section 7.10) ────────────────────────────────────────────────────

@@ -3,8 +3,9 @@ from __future__ import annotations
 import inspect
 import json
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Any
+from typing import Any, TypeVar
 
+from .._host import SnapshotSource, merge_snapshot
 from .._orchestration import AgentControl
 from .._types import (
     EnforcementMode,
@@ -14,6 +15,7 @@ from .._types import (
 from ._errors import AdapterUnsupportedError
 
 Execute = Callable[..., JsonValue | Awaitable[JsonValue]]
+_T = TypeVar("_T")
 SNAPSHOT_KWARG = "agent_control_snapshot"
 TOOL_CALL_ID_KWARG = "agent_control_tool_call_id"
 
@@ -48,7 +50,7 @@ class _ObjectProxy:
         setattr(object.__getattribute__(self, "_agent_control_target"), name, value)
 
 
-async def _maybe_await(value: JsonValue | Awaitable[JsonValue]) -> JsonValue:
+async def _maybe_await(value: _T | Awaitable[_T]) -> _T:
     if inspect.isawaitable(value):
         return await value
     return value
@@ -61,11 +63,17 @@ def _pop_common_adapter_kwargs(kwargs: dict[str, Any]) -> Mapping[str, JsonValue
     return per_call_snapshot
 
 
+def _default_snapshot(
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None,
+) -> dict[str, JsonValue] | SnapshotSource:
+    return snapshot if isinstance(snapshot, SnapshotSource) else dict(snapshot or {})
+
+
 def _merge_snapshot(
-    default_snapshot: Mapping[str, JsonValue],
+    default_snapshot: Mapping[str, JsonValue] | SnapshotSource,
     per_call_snapshot: Mapping[str, JsonValue] | None,
-) -> dict[str, JsonValue]:
-    return {**dict(default_snapshot), **dict(per_call_snapshot or {})}
+) -> dict[str, JsonValue] | SnapshotSource:
+    return merge_snapshot(default_snapshot, per_call_snapshot)
 
 
 def _transformed_or(

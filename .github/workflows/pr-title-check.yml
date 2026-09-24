@@ -34,7 +34,6 @@ jobs:
             build
             revert
           requireScope: false
-          subjectPattern: ^(?![A-Z]).+$
+          subjectPattern: ${{ github.event.pull_request.user.login == 'dependabot[bot]' && '.+' || '^(?![A-Z]).+$' }}
           subjectPatternError: |
-            The PR title subject "{subject}" must not start with an uppercase letter.
-            Use lowercase: "feat: add foo" not "feat: Add foo".
+            The PR title subject "{subject}" must start with a lowercase letter unless the pull request is authored by Dependabot, and must not be empty.

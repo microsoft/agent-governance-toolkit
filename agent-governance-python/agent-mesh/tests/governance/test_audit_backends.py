@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -217,6 +218,167 @@ class TestFileAuditSink:
 
         assert isinstance(sink, AuditSink)
 
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file modes only")
+    def test_write_tightens_permissions_on_a_pre_existing_file(self, tmp_path: Path):
+        """os.open(..., O_CREAT, 0o600)'s mode only applies if the call
+        creates the file; one that already exists at a looser mode (e.g.
+        world-readable) used to keep it, silently, for every subsequent
+        write of an entry that can carry call arguments."""
+        path = tmp_path / "audit.jsonl"
+        path.touch()
+        path.chmod(0o644)
+
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry())
+
+        assert (path.stat().st_mode & 0o777) == 0o600
+
+    @pytest.mark.skipif(not hasattr(os, "fchmod"), reason="fchmod is POSIX-only")
+    def test_fchmod_failure_does_not_leak_the_descriptor(self, tmp_path: Path, monkeypatch):
+        """fchmod runs inside the fdopen block, on the file object's own
+        descriptor, specifically so a failing fchmod (e.g. EPERM: the file
+        is owned by another user) still closes it via the same path a
+        failing write would - not after os.open but before fdopen, where
+        an exception would skip the close entirely."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+
+        captured_fd = {}
+        real_open = os.open
+
+        def spy_open(*args, **kwargs):
+            fd = real_open(*args, **kwargs)
+            captured_fd["fd"] = fd
+            return fd
+
+        monkeypatch.setattr(os, "open", spy_open)
+        monkeypatch.setattr(
+            os, "fchmod",
+            lambda fd, mode: (_ for _ in ()).throw(PermissionError("EPERM")),
+        )
+
+        with pytest.raises(PermissionError):
+            sink.write(_make_entry())
+
+        # A bad-descriptor error on fstat is proof the descriptor was
+        # actually closed; a leak would instead succeed.
+        with pytest.raises(OSError):
+            os.fstat(captured_fd["fd"])
+
+    def test_corrupted_middle_line_does_not_break_resume_or_reads(self, tmp_path: Path):
+        """A single trailing corrupt line was already tolerated; a
+        corrupt line followed by a resumed write (e.g. crash mid-append,
+        then process restart) used to leave verify_integrity()/
+        read_entries() permanently broken from that point on."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="first"))
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write('{"not": "valid json"\n')  # simulates a crash mid-write
+        sink.close()
+
+        sink2 = FileAuditSink(path, SECRET_KEY)
+        sink2.write(_make_entry(entry_id="second"))
+
+        entries = sink2.read_entries()
+        assert [e.entry_id for e in entries] == ["first", "second"]
+
+        is_valid, error = sink2.verify_integrity()
+        assert is_valid is True, f"Integrity check failed: {error}"
+
+
+class TestFileAuditSinkConstructionValidation:
+    """A bad path used to construct fine and fail lazily on the first
+    write() (FileNotFoundError / IsADirectoryError / ELOOP for a symlink) -
+    now checked eagerly, at construction, like the secret key already is."""
+
+    def test_path_is_a_directory_raises(self, tmp_path: Path):
+        with pytest.raises(IsADirectoryError):
+            FileAuditSink(tmp_path, SECRET_KEY)
+
+    def test_parent_directory_missing_raises(self, tmp_path: Path):
+        with pytest.raises(FileNotFoundError):
+            FileAuditSink(tmp_path / "no-such-dir" / "audit.jsonl", SECRET_KEY)
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX symlinks only")
+    def test_path_is_a_symlink_raises(self, tmp_path: Path):
+        target = tmp_path / "real.jsonl"
+        target.write_text("")
+        link = tmp_path / "audit.jsonl"
+        link.symlink_to(target)
+        with pytest.raises(ValueError, match="symlink"):
+            FileAuditSink(link, SECRET_KEY)
+
+    def test_existing_file_signed_with_a_different_key_raises(self, tmp_path: Path):
+        """Opening a sink on a file that already has entries - just not
+        ones this key can verify - must fail at construction, not go on
+        to silently extend that chain as if it were this sink's own."""
+        path = tmp_path / "audit.jsonl"
+        FileAuditSink(path, b"a-completely-different-key-32by").write(_make_entry())
+
+        with pytest.raises(ValueError, match="does not verify"):
+            FileAuditSink(path, SECRET_KEY)
+
+
+class TestFileAuditSinkExternalRotation:
+    """logrotate-style external rotation (rename the file away, a fresh one
+    appears at the same path) used to leave a long-lived sink's in-memory
+    previous_hash pointing at a chain that no longer exists at that path -
+    verify_integrity() on the replacement file then broke at entry 0."""
+
+    def test_write_after_external_rename_starts_a_fresh_chain(self, tmp_path: Path):
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="before-rotation"))
+
+        # Simulate an external log rotator: move the file away, nothing
+        # left at `path` until the sink's next write recreates it.
+        (path).rename(tmp_path / "audit.jsonl.1")
+
+        sink.write(_make_entry(entry_id="after-rotation"))
+
+        is_valid, error = sink.verify_integrity()
+        assert is_valid is True, f"Integrity check failed: {error}"
+        assert len(sink.read_entries()) == 1
+
+    def test_write_after_external_replace_with_same_key_resyncs(self, tmp_path: Path):
+        """Replacement by a *different* sink/process using the *same* key
+        (not just a rename-away) is a legitimate resync: the file at
+        `path` changes identity even though a file exists there the
+        whole time, but the chain is still authentically ours."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="original"))
+
+        other = FileAuditSink(tmp_path / "other.jsonl", SECRET_KEY)
+        other.write(_make_entry(entry_id="unrelated"))
+        (tmp_path / "other.jsonl").replace(path)
+
+        sink.write(_make_entry(entry_id="after-replace"))
+
+        entries = sink.read_entries()
+        assert len(entries) == 2
+        assert entries[0].entry_id == "unrelated"
+        assert entries[1].entry_id == "after-replace"
+
+    def test_write_after_external_replace_with_different_key_fails_closed(
+        self, tmp_path: Path
+    ):
+        """A file swapped in under a *different* key must not be silently
+        extended as if it were this sink's own chain - see the docstring
+        on FileAuditSink._read_last_hash."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="original"))
+
+        other_key = b"a-completely-different-key-32by"
+        other = FileAuditSink(tmp_path / "other.jsonl", other_key)
+        other.write(_make_entry(entry_id="unrelated"))
+        (tmp_path / "other.jsonl").replace(path)
+
+        with pytest.raises(ValueError, match="does not verify"):
+            sink.write(_make_entry(entry_id="after-replace"))
+
 
 # ---------------------------------------------------------------------------
 # HashChainVerifier
@@ -287,6 +449,22 @@ class TestHashChainVerifier:
 
         assert is_valid is False
         assert any("does not exist" in e for e in errors)
+
+    def test_skips_unparsable_line_instead_of_failing_the_whole_file(self, tmp_path: Path):
+        """A corrupt line does not, on its own, make the surrounding
+        genuine entries unverifiable - only a real chain break or bad
+        signature among what parses should."""
+        path = tmp_path / "audit.jsonl"
+        sink = FileAuditSink(path, SECRET_KEY)
+        sink.write(_make_entry(entry_id="before"))
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("not json at all\n")
+        sink.write(_make_entry(entry_id="after"))
+
+        verifier = HashChainVerifier()
+        is_valid, errors = verifier.verify_file(path, SECRET_KEY)
+
+        assert is_valid is True, errors
 
 
 # ---------------------------------------------------------------------------

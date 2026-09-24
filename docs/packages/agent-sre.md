@@ -1,10 +1,10 @@
 ---
 title: "Agent SRE"
-last_reviewed: 2026-07-16
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 # Agent SRE
 
@@ -664,7 +664,7 @@ MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob
 
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 **Observability tells you what happened. Agent SRE tells you if it was within budget.**
 

@@ -10,7 +10,7 @@ A later epic wires this to the agent registry to return persisted
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 
 from agentmesh.engine_api.capabilities import capability_flags
 from agentmesh.engine_api.models import AgentListResponse
@@ -26,12 +26,15 @@ router = APIRouter()
     operation_id="listAgents",
     tags=["agents"],
     response_model=AgentListResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def list_agents(
     request: Request,
+    response: Response,
     pagination: PaginationParams = Depends(),
 ) -> AgentListResponse:
     """Return registered agents (empty until the agent registry ships)."""
+    response.headers["X-AGT-Backend-Status"] = "placeholder"
     items, page = paginate([], pagination)
     return AgentListResponse(items=items, pagination=page)

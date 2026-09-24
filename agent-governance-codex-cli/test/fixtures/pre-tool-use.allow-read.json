@@ -1,0 +1,12 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": null,
+  "cwd": "/tmp/agt-playground",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.6-terra",
+  "permission_mode": "default",
+  "turn_id": "turn-2",
+  "tool_name": "Read",
+  "tool_use_id": "call-2",
+  "tool_input": { "file_path": "README.md" }
+}
