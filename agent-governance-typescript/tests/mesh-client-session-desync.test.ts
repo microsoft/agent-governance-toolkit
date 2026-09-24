@@ -18,7 +18,7 @@
 
 import { MeshClient, type MeshClientOptions } from "../src/encryption/mesh-client";
 import { X3DHKeyManager } from "../src/encryption/x3dh";
-import { ed25519 } from "@noble/curves/ed25519";
+import { ed25519 } from "@noble/curves/ed25519.js";
 
 class MockWebSocket {
   sent: Array<Record<string, unknown>> = [];

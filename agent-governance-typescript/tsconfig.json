@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "NodeNext",
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -13,8 +13,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "moduleResolution": "node10",
-    "ignoreDeprecations": "6.0",
+    "moduleResolution": "NodeNext",
     "types": ["node", "jest"]
   },
   "include": ["src/**/*.ts"],

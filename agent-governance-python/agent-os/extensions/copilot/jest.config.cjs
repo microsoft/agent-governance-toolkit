@@ -1,15 +1,15 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
   verbose: false,
   transform: {
-    '^.+\\.ts$': ['ts-jest', {
-      tsconfig: {
-        types: ['jest', 'node'],
-        esModuleInterop: true,
-      },
+    '^.+\\.ts$': ['@swc/jest', {
+      jsc: { parser: { syntax: 'typescript' }, target: 'es2022' },
+      module: { type: 'commonjs' },
     }],
   },
 };
