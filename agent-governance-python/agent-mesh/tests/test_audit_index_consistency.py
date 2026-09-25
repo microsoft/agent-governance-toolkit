@@ -321,3 +321,41 @@ def test_indexed_reader_preserves_limits_order_and_empty_keys(reader_name, limit
     assert read("missing", limit=limit) == []
     result.clear()
     assert read("", limit=limit) == matching[-limit:]
+
+
+@pytest.mark.parametrize("reader_name", ["get_entries_for_agent", "get_entries_by_type"])
+@pytest.mark.parametrize("limit", [1, 3, 100, 0, -1, -5, -100])
+def test_indexed_reader_scans_only_required_suffix(monkeypatch, reader_name, limit):
+    log = AuditLog()
+    for i in range(12):
+        log.log("other", "other", f"older-{i}")
+    matching = []
+    for i in range(5):
+        matching.append(log.log("target", "target", f"match-{i}"))
+        log.log("other", "other", f"other-{i}")
+    visited = []
+
+    class ObservedEntries(list):
+        def __iter__(self):
+            pytest.fail("indexed read copied or scanned the full entry list")
+
+        def __getitem__(self, key):
+            assert not isinstance(key, slice), "indexed read sliced the entry list"
+            return super().__getitem__(key)
+
+        def __reversed__(self):
+            for entry in super().__reversed__():
+                assert log._chain._lock.locked(), "indexed read bypassed the chain lock"
+                visited.append(entry.entry_id)
+                yield entry
+
+    monkeypatch.setattr(log._chain, "_entries", ObservedEntries(log._chain._entries))
+    expected = matching[-limit:]
+    result = getattr(log, reader_name)("target", limit=limit)
+
+    assert result == expected
+    assert all(actual is wanted for actual, wanted in zip(result, expected))
+    assert len(visited) == 2 * len(expected)
+    visited.clear()
+    assert getattr(log, reader_name)("missing", limit=limit) == []
+    assert visited == []

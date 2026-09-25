@@ -25,6 +25,8 @@ def _reader(service, kind, monkeypatch):
         return lambda: service.entry_count
     if kind == "summary":
         return service.summary
+    if kind == "snapshot":
+        return service._log.verify_snapshot
     pytest.importorskip("fastapi", reason="fastapi not installed (optional server extra)")
     from agentmesh.server import audit_collector
 
@@ -32,15 +34,18 @@ def _reader(service, kind, monkeypatch):
     return lambda: asyncio.run(audit_collector.verify_integrity())
 
 
-def _expected(kind, count, root, valid=True):
+def _expected(kind, entries, root, valid=True):
+    count = len(entries)
     if kind == "count":
         return count
+    if kind == "snapshot":
+        return entries, root, valid
     if kind == "summary":
         return {"total_entries": count, "chain_valid": valid, "root_hash": root}
     return {"chain_valid": valid, "entry_count": count}
 
 
-@pytest.mark.parametrize("kind", ["count", "summary", "collector"])
+@pytest.mark.parametrize("kind", ["count", "summary", "collector", "snapshot"])
 @pytest.mark.parametrize("seed_count", [0, 5])
 @pytest.mark.parametrize("fail", [False, True])
 def test_service_reader_waits_for_commit_or_rollback(monkeypatch, kind, seed_count, fail):
@@ -99,12 +104,12 @@ def test_service_reader_waits_for_commit_or_rollback(monkeypatch, kind, seed_cou
     entries, root = chain._snapshot()
     assert blocked == [True]
     assert len(entries) == seed_count + (not fail)
-    assert result == _expected(kind, len(entries), root)
+    assert result == _expected(kind, entries, root)
     if fail:
         assert (entries, root) == before
 
 
-@pytest.mark.parametrize("kind", ["summary", "collector"])
+@pytest.mark.parametrize("kind", ["summary", "collector", "snapshot"])
 @pytest.mark.parametrize("append_at", ["snapshot-release", "verification"])
 def test_response_keeps_one_snapshot_during_append(monkeypatch, kind, append_at):
     service = _service()
@@ -150,10 +155,10 @@ def test_response_keeps_one_snapshot_during_append(monkeypatch, kind, append_at)
     assert service.entry_count == len(entries) + 1
     assert chain.get_root_hash() != root
     assert verified == [entry.entry_id for entry in entries]
-    assert result == _expected(kind, len(entries), root)
+    assert result == _expected(kind, entries, root)
 
 
-@pytest.mark.parametrize("kind", ["summary", "collector"])
+@pytest.mark.parametrize("kind", ["summary", "collector", "snapshot"])
 @pytest.mark.parametrize("state", ["empty", "healthy", "bad-hash", "bad-link"])
 def test_response_preserves_shape_and_corruption_detection(monkeypatch, kind, state):
     service = _service(0 if state == "empty" else 5)
@@ -166,4 +171,37 @@ def test_response_preserves_shape_and_corruption_detection(monkeypatch, kind, st
 
     result = _reader(service, kind, monkeypatch)()
 
-    assert result == _expected(kind, len(entries), root, state in ("empty", "healthy"))
+    assert result == _expected(kind, entries, root, state in ("empty", "healthy"))
+
+
+def test_verified_snapshot_membership_is_detached_from_chain():
+    service = _service()
+    entries, root, valid = service._log.verify_snapshot()
+    expected = list(entries)
+
+    service.log_action("did:mesh:test", "later")
+
+    assert entries == expected
+    assert valid is True
+    assert root != service.chain.get_root_hash()
+    entries.clear()
+    assert service.entry_count == len(expected) + 1
+
+
+@pytest.mark.parametrize("kind", ["summary", "collector"])
+@pytest.mark.parametrize("valid", [False, True])
+def test_response_uses_public_verified_snapshot(monkeypatch, kind, valid):
+    service = _service()
+    entries, root = service.chain._snapshot()
+    read = _reader(service, kind, monkeypatch)
+    calls = []
+
+    class SnapshotLog:
+        def verify_snapshot(self):
+            calls.append(True)
+            return entries, root, valid
+
+    monkeypatch.setattr(service, "_log", SnapshotLog())
+
+    assert read() == _expected(kind, entries, root, valid)
+    assert calls == [True]

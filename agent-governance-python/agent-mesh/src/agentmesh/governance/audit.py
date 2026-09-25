@@ -664,13 +664,7 @@ class AuditLog:
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Get the most recent entries for a specific agent."""
-        with self._chain._lock:
-            entry_ids = self._by_agent.get(agent_did, [])[-limit:]
-            entries = list(self._chain._entries)
-        return [
-            entry for entry in entries
-            if entry.entry_id in entry_ids
-        ]
+        return self._get_indexed_entries(self._by_agent, agent_did, limit)
 
     def get_entries_by_type(
         self,
@@ -678,13 +672,24 @@ class AuditLog:
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Get the most recent entries of a given event type."""
+        return self._get_indexed_entries(self._by_type, event_type, limit)
+
+    def _get_indexed_entries(
+        self, index: dict[str, list[str]], key: str, limit: int,
+    ) -> list[AuditEntry]:
         with self._chain._lock:
-            entry_ids = self._by_type.get(event_type, [])[-limit:]
-            entries = list(self._chain._entries)
-        return [
-            entry for entry in entries
-            if entry.entry_id in entry_ids
-        ]
+            wanted = set(index.get(key, [])[-limit:])
+            if not wanted:
+                return []
+            entries = []
+            for entry in reversed(self._chain._entries):
+                if entry.entry_id in wanted:
+                    entries.append(entry)
+                    wanted.remove(entry.entry_id)
+                    if not wanted:
+                        break
+        entries.reverse()
+        return entries
 
     def query(
         self,
@@ -723,8 +728,19 @@ class AuditLog:
         return results[-limit:] if limit is not None else list(results)
 
     def verify_integrity(self) -> tuple[bool, Optional[str]]:
-        """Always valid."""
+        """Verify audit hash/link integrity, returning validity and an optional error."""
         return self._chain.verify_chain()
+
+    def verify_snapshot(self) -> tuple[list[AuditEntry], str | None, bool]:
+        """Capture a committed chain snapshot and verify it outside the lock.
+
+        Returns:
+            Entries in append order, their full-chain Merkle root, and hash/link
+            validity. The list is detached; the entry objects are not copied.
+        """
+        entries, root = self._chain._snapshot()
+        valid, _error = self._chain._verify_entries(entries)
+        return entries, root, valid
 
     def get_proof(self, entry_id: str) -> Optional[dict[str, Any]]:
         """Get tamper-proof evidence for a specific entry."""
