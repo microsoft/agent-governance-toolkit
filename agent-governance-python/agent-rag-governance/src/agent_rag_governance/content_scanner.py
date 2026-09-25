@@ -89,6 +89,18 @@ _PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         "SSN",
     ),
     (
+        # A bare nine-digit run is blocked only after an explicit SSN cue.
+        # Bound the punctuation gap to avoid treating a later, unrelated ID
+        # as an SSN, while accepting quotes and markup around the cue.
+        re.compile(
+            r"(?<![A-Za-z0-9])"
+            r"(?:social\s+security(?:\s+(?:number|num|no|#))?|soc(?:ial)?\s*sec|ssn)"
+            r"[^A-Za-z0-9]{0,10}\d{9}(?![A-Za-z0-9])",
+            re.IGNORECASE,
+        ),
+        "SSN",
+    ),
+    (
         # Credit-card BINs:
         #   Visa            4 followed by 12 or 15 digits
         #   Mastercard      51-55 followed by 14 digits (legacy 5-series)

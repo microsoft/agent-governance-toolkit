@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import inspect
 import json
 import logging
 import os
@@ -28,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-from .advisory import AdvisoryCheck, AdvisoryDecision
+from .advisory import AdvisoryCheck, AdvisoryDecision, AdvisoryMisconfiguredError
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
 from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
@@ -307,6 +308,12 @@ class GovernedCallable:
     """Wraps any callable with policy enforcement and audit logging.
 
     This is the core primitive — framework-specific wrappers build on it.
+
+    Call it directly (``__call__``) for a synchronous ``fn`` and a
+    synchronous (or no) ``advisory``. Use ``acall()`` instead when either
+    ``fn`` is a coroutine function, or ``advisory`` needs to await real
+    I/O (an LLM call, an HTTP judge) via ``AdvisoryCheck.acheck()`` — see
+    ``acall()``'s own docstring for what is and isn't covered.
     """
 
     def __init__(self, fn: Callable, config: GovernanceConfig):
@@ -496,6 +503,146 @@ class GovernedCallable:
 
         # Allowed — execute the wrapped function
         return self._fn(*args, **kwargs)
+
+    async def acall(self, *args: Any, **kwargs: Any) -> Any:
+        """Async counterpart of ``__call__``.
+
+        Needed for two independent reasons, either of which is enough on
+        its own: (1) ``fn`` is a coroutine function (``__call__`` would
+        return the un-awaited coroutine object rather than its result),
+        or (2) ``advisory`` is configured with a classifier that does real
+        async I/O (an LLM call, an HTTP judge, a second sandbox round
+        trip) via ``AdvisoryCheck.acheck()`` - ``__call__`` calls
+        ``advisory.check()`` synchronously and has no way to await
+        anything.
+
+        Everything else (ring enforcement, deterministic policy
+        evaluation, audit logging) is unchanged from ``__call__`` and
+        stays fully synchronous - those paths do no I/O today, so there
+        is nothing to gain from awaiting them, and keeping them identical
+        between ``__call__`` and ``acall()`` avoids duplicating logic
+        that could drift out of sync. Both ``on_flag`` and ``on_deny``
+        may be a sync or async callable here; an async result is awaited
+        before being returned, the same way ``on_flag``'s result already
+        is - a caller-supplied async ``on_deny`` that isn't awaited would
+        otherwise make ``acall()`` return a bare, never-awaited coroutine.
+        """
+        context = self._build_context(args, kwargs)
+
+        if self._ring_enforcer is not None and self._config.ring is not None:
+            ring_denial = self._check_ring(context)
+            if ring_denial is not None:
+                if self._config.on_deny:
+                    return await self._invoke_on_deny_async(ring_denial)
+                raise GovernanceDenied(ring_denial)
+
+        start = time.monotonic()
+        decision = self._engine.evaluate(self._config.agent_id, context)
+        eval_ms = (time.monotonic() - start) * 1000
+
+        if decision.action == "require_approval":
+            decision = self._handle_approval(decision, context)
+
+        if self._audit:
+            self._audit.log(
+                event_type="policy_evaluation",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome=decision.action,
+                policy_decision=decision.action,
+                data={
+                    "rule": decision.matched_rule or "",
+                    "reason": decision.reason or "",
+                    "evaluation_ms": round(eval_ms, 3),
+                },
+            )
+
+        if not decision.allowed:
+            if self._config.on_deny:
+                return await self._invoke_on_deny_async(decision)
+            raise GovernanceDenied(decision)
+
+        if self._config.advisory and decision.allowed:
+            advisory_result = await self._run_advisory_async(context)
+            if advisory_result and advisory_result.action == "block":
+                blocked = PolicyDecision(
+                    allowed=False,
+                    action="deny",
+                    matched_rule=f"advisory:{advisory_result.classifier}",
+                    reason=f"[Advisory, non-deterministic] {advisory_result.reason}",
+                )
+                if self._config.on_deny:
+                    return await self._invoke_on_deny_async(blocked)
+                raise GovernanceDenied(blocked)
+            if advisory_result and advisory_result.action == "flag_for_review":
+                if self._config.on_flag:
+                    try:
+                        result = self._config.on_flag(context, advisory_result)
+                        if inspect.isawaitable(result):
+                            await result
+                    except Exception as e:
+                        logger.warning("on_flag callback failed", exc_info=True)
+                        if self._audit:
+                            self._audit.log(
+                                event_type="on_flag_callback_error",
+                                agent_did=self._config.agent_id,
+                                action=context.get("action", {}).get("type", "unknown"),
+                                outcome="error",
+                                data={
+                                    "classifier": advisory_result.classifier,
+                                    "error": str(e),
+                                },
+                            )
+
+        # Allowed — execute the wrapped function, awaiting it if it's a
+        # coroutine function (or if calling it returned an awaitable, e.g.
+        # a sync wrapper that itself returns a coroutine).
+        result = self._fn(*args, **kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
+    async def _invoke_on_deny_async(self, decision: PolicyDecision) -> Any:
+        """Call ``on_deny`` from ``acall()`` and await the result if it's
+        awaitable, mirroring how ``on_flag`` is already handled - without
+        this, a caller-supplied async ``on_deny`` would make ``acall()``
+        return a bare, never-awaited coroutine instead of its result."""
+        result = self._config.on_deny(decision)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
+    async def _run_advisory_async(self, context: dict) -> Optional[AdvisoryDecision]:
+        """Async counterpart of ``_run_advisory()`` - see that docstring
+        for the audit-write-outside-the-try and AdvisoryMisconfiguredError
+        rationale, both of which apply identically here."""
+        advisory = self._config.advisory
+        if not advisory:
+            return None
+
+        try:
+            decision = await advisory.acheck(context)
+        except AdvisoryMisconfiguredError:
+            raise
+        except Exception as e:
+            logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
+            return AdvisoryDecision(action="allow", reason=f"Error: {e}")
+
+        if self._audit:
+            self._audit.log(
+                event_type="advisory_check",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome=decision.action,
+                data={
+                    "classifier": decision.classifier,
+                    "reason": decision.reason,
+                    "confidence": decision.confidence,
+                    "deterministic": False,
+                },
+            )
+
+        return decision
 
     def _check_ring(self, context: dict) -> Optional[PolicyDecision]:
         """Enforce ring-level resource constraints and inject ring context.
@@ -827,6 +974,13 @@ class GovernedCallable:
         The deterministic policy_evaluation audit write a few lines up
         already fails closed the same way (unguarded, propagates out of
         __call__) - this matches that.
+
+        AdvisoryMisconfiguredError is deliberately NOT covered by that
+        fail-open: it signals a caller wiring bug (e.g. an async callback
+        passed to the sync check() path), not a transient classifier
+        failure, and converting it to "allow" here would silently degrade
+        every single call through a misconfigured advisory to a no-op
+        check - exactly the kind of bug that should surface immediately.
         """
         advisory = self._config.advisory
         if not advisory:
@@ -834,6 +988,8 @@ class GovernedCallable:
 
         try:
             decision = advisory.check(context)
+        except AdvisoryMisconfiguredError:
+            raise
         except Exception as e:
             logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
             return AdvisoryDecision(action="allow", reason=f"Error: {e}")

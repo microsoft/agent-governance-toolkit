@@ -29,6 +29,7 @@ jobs:
       workflows: ${{ steps.filter.outputs.workflows }}
       docs-only: ${{ steps.filter.outputs.docs-only }}
       docker: ${{ steps.filter.outputs.docker }}
+      terraform-examples: ${{ steps.filter.outputs.terraform-examples }}
       engine-api-conformance: ${{ steps.filter.outputs.engine-api-conformance }}
       changed-py-pkgs: ${{ steps.py-pkgs.outputs.list }}
       changed-ts-pkgs: ${{ steps.ts-pkgs.outputs.list }}
@@ -71,11 +72,17 @@ jobs:
               - 'agent-governance-typescript/**'
               - 'agent-governance-antigravity-cli/**'
               - 'agent-governance-opencode/**'
+              - 'agent-governance-codex-cli/**'
               - 'agent-governance-python/agent-os/extensions/**'
               - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
               - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
             integrations:
               - 'agent-governance-python/agentmesh-integrations/**'
+              - 'examples/flowise-governance/**'
+            terraform-examples:
+              - 'examples/terraform-aws/**'
+              - 'examples/terraform-azure/**'
+              - 'examples/terraform-test-requirements.txt'
             workflows:
               - '.github/workflows/**'
             rust:
@@ -145,6 +152,8 @@ jobs:
               - 'agent-governance-claude-code/**'
             pkg-agent-governance-opencode:
               - 'agent-governance-opencode/**'
+            pkg-agent-governance-codex-cli:
+              - 'agent-governance-codex-cli/**'
             pkg-agent-governance-sdk:
               - 'agent-governance-typescript/**'
             pkg-agentmesh-api:
@@ -199,6 +208,7 @@ jobs:
           COPILOT: ${{ steps.filter.outputs.pkg-agent-governance-copilot-cli }}
           CLAUDE: ${{ steps.filter.outputs.pkg-agent-governance-claude-code }}
           OPENCODE: ${{ steps.filter.outputs.pkg-agent-governance-opencode }}
+          CODEX: ${{ steps.filter.outputs.pkg-agent-governance-codex-cli }}
           SDK: ${{ steps.filter.outputs.pkg-agent-governance-sdk }}
           API: ${{ steps.filter.outputs.pkg-agentmesh-api }}
           EXT: ${{ steps.filter.outputs.pkg-agent-os-copilot-extension }}
@@ -210,6 +220,7 @@ jobs:
           [ "$COPILOT" = "true" ] && pkgs+=('"agent-governance-copilot-cli"')
           [ "$CLAUDE" = "true" ] && pkgs+=('"agent-governance-claude-code"')
           [ "$OPENCODE" = "true" ] && pkgs+=('"agent-governance-opencode"')
+          [ "$CODEX" = "true" ] && pkgs+=('"agent-governance-codex-cli"')
           [ "$SDK" = "true" ] && pkgs+=('"agent-governance-sdk"')
           [ "$API" = "true" ] && pkgs+=('"agentmesh-api"')
           [ "$EXT" = "true" ] && pkgs+=('"agent-os-copilot-extension"')
@@ -469,7 +480,7 @@ jobs:
           fi
       - name: Upload coverage
         if: steps.gate.outputs.run == 'true'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: agent-governance-python/${{ matrix.package }}/coverage.xml
           flags: ${{ matrix.package }}
@@ -864,6 +875,8 @@ jobs:
             import-module: llama_index.agent.agentmesh
           - package: mcp-trust-proxy
             import-module: mcp_trust_proxy
+          - package: mcp-receipt-governed
+            import-module: mcp_receipt_governed
           - package: nostr-wot
             import-module: agentmesh_nostr_wot
           - package: openai-agents-agentmesh
@@ -874,6 +887,8 @@ jobs:
             import-module: openshell_agentmesh
           - package: pydantic-ai-governance
             import-module: pydantic_ai_governance
+          - package: cedarling-acs
+            import-module: cedarling_acs
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -1167,6 +1182,9 @@ jobs:
           - name: agent-governance-opencode
             path: agent-governance-opencode
             node-version: "22"
+          - name: agent-governance-codex-cli
+            path: agent-governance-codex-cli
+            node-version: "22"
           - name: agent-governance-copilot-cli
             path: agent-governance-copilot-cli
             node-version: "22"
@@ -1304,7 +1322,7 @@ jobs:
           docker buildx version
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
         with:
           # Use the daemon's built-in BuildKit (docker driver) instead of the
           # default docker-container driver. The container driver boots a
@@ -1363,6 +1381,52 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  # ── Terraform examples validation ────────────────────────────────────
+  terraform-examples:
+    needs: changes
+    if: needs.changes.outputs.terraform-examples == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install Terraform example test dependencies
+        run: python -m pip install --disable-pip-version-check -r examples/terraform-test-requirements.txt
+
+      - name: Run Terraform example structural tests
+        run: python -m pytest -q examples/terraform-aws/test_terraform_aws.py examples/terraform-azure/test_terraform_azure.py
+
+      - name: Install Terraform CLI
+        env:
+          TERRAFORM_VERSION: "1.16.2"
+          TERRAFORM_LINUX_AMD64_SHA256: "0d17011f0c4664539b164b044903d04e296c86c13cb9f28040076c65cfb3985a"
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/terraform.zip"
+          curl --proto '=https' --tlsv1.2 -fSLo "$archive" \
+            --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_LINUX_AMD64_SHA256}  ${archive}" | sha256sum --check -
+          unzip -q "$archive" -d "$RUNNER_TEMP"
+          chmod +x "$RUNNER_TEMP/terraform"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/terraform" version
+
+      - name: Format, initialize, and validate both Terraform roots
+        run: |
+          set -euo pipefail
+          for directory in examples/terraform-aws examples/terraform-azure; do
+            terraform -chdir="$directory" fmt -check -recursive
+            terraform -chdir="$directory" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$directory" validate -no-color
+          done
+
   # ── CI Gate — required status check that handles skipped jobs ────────
   # When path-filters skip jobs (e.g. docs-only PRs skip tests), those
   # jobs report "skipped" which doesn't satisfy required status checks.
@@ -1388,6 +1452,7 @@ jobs:
         build-rust,
         build-go,
         docker-compose-test,
+        terraform-examples,
         engine-api-conformance,
         markdown-link-check,
       ]

@@ -21,6 +21,8 @@
 #![cfg_attr(test, allow(deprecated))]
 
 pub mod audit;
+pub mod context;
+pub mod context_audit;
 pub mod control_support;
 pub mod credential_vault;
 pub mod governance_support;
@@ -53,6 +55,7 @@ pub(crate) mod regex_cache;
 pub mod reward_support;
 pub mod rings;
 pub mod sandbox;
+pub mod skill_audit;
 #[cfg(feature = "telemetry")]
 pub mod telemetry;
 pub mod trust;
@@ -123,6 +126,9 @@ pub use reward_support::{
     RewardSignal, RewardStrategy, RewardTrustScore, TrustEvent, TrustWeightedStrategy,
 };
 pub use rings::{Ring, RingEnforcer};
+pub use skill_audit::{
+    build_skill_audit_metadata, hash_context, SkillAuditMetadata, TrustedSkillMetadataSource,
+};
 pub use trust::{TrustConfig, TrustManager};
 pub use trust_support::{
     CapabilityGrant, CapabilityRegistry, CapabilityScope, CardRegistry, HandshakeChallenge,

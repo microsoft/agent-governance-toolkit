@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import pickle
 import unittest
 from pathlib import Path
 
 from agent_control_specification import (
-    AgentControl,
-    Decision,
-    EnforcementMode,
-    InterventionPoint,
-    PerfTelemetry,
     action_identity,
+    AgentControl,
+    AgentControlRuntimeError,
+    Decision,
+    DEFAULT_APPROVAL_TIMEOUT_SECONDS,
+    EnforcementMode,
+    HostSession,
+    InterventionPoint,
     parse_manifest,
+    PerfTelemetry,
     validate_manifest,
     validate_manifest_overlay,
 )
@@ -44,6 +48,19 @@ annotators:
   prompt_classifier:
     type: classifier
 """
+
+MANIFEST_WITH_APPROVAL_YAML = (
+    MANIFEST_YAML
+    + """approval:
+  default_resolver: webhook
+  timeout_seconds: 120
+  on_timeout: deny
+  resolvers:
+    webhook:
+      type: webhook
+      url: https://example.com/approve
+"""
+)
 
 
 class MockAnnotator:
@@ -99,6 +116,23 @@ class NativeRuntimeTests(unittest.TestCase):
                 self.assertEqual(result.verdict.decision, Decision.DENY)
                 self.assertEqual(result.verdict.reason, "host_error:transform_invalid")
                 self.assertIsNone(result.transformed_policy_target)
+
+    def test_manifest_approval_section_drives_the_host_session_timeout(self):
+        control = AgentControl.from_native(MANIFEST_WITH_APPROVAL_YAML, MockAnnotator(), MockPolicy())
+
+        self.assertEqual(control.approval_config["timeout_seconds"], 120)
+        self.assertEqual(control.approval_config["on_timeout"], "deny")
+        self.assertEqual(control.approval_config["resolvers"]["webhook"]["type"], "webhook")
+        self.assertEqual(HostSession(control)._approval_timeout_seconds, 120.0)
+        self.assertEqual(
+            HostSession(control, approval_timeout_seconds=7)._approval_timeout_seconds, 7
+        )
+
+    def test_manifest_without_approval_section_keeps_the_default_timeout(self):
+        control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), MockPolicy())
+
+        self.assertEqual(dict(control.approval_config), {})
+        self.assertEqual(HostSession(control)._approval_timeout_seconds, DEFAULT_APPROVAL_TIMEOUT_SECONDS)
 
     def test_parse_manifest_uses_native_yaml_semantics(self):
         parsed = parse_manifest(
@@ -486,6 +520,29 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             AgentControl.from_url("http://policy.example/manifest.yaml")
         self.assertIn("runtime_error:manifest_invalid", str(ctx.exception))
+
+    def test_runtime_errors_carry_the_reason_code(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            AgentControl.from_url("http://policy.example/manifest.yaml")
+        error = ctx.exception
+        self.assertIsInstance(error, AgentControlRuntimeError)
+        self.assertEqual(error.reason, "runtime_error:manifest_invalid")
+        self.assertIn("unsupported URL scheme", error.detail)
+        # The message is unchanged, so string-matching callers keep working.
+        self.assertIn("runtime_error:manifest_invalid", str(error))
+        self.assertIn(error.detail, str(error))
+
+    def test_runtime_errors_survive_pickling(self):
+        # Hosts that build controls in process-pool workers get the error back
+        # through pickle; the attributes must survive the round trip.
+        with self.assertRaises(AgentControlRuntimeError) as ctx:
+            AgentControl.from_url("http://policy.example/manifest.yaml")
+        error = ctx.exception
+        restored = pickle.loads(pickle.dumps(error))
+        self.assertIsInstance(restored, AgentControlRuntimeError)
+        self.assertEqual(restored.reason, error.reason)
+        self.assertEqual(restored.detail, error.detail)
+        self.assertEqual(str(restored), str(error))
 
     def test_from_url_pin_is_optional(self):
         # The pin is optional, mirroring URL extends. Omitting it still reaches

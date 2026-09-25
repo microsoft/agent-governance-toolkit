@@ -310,7 +310,7 @@ def _effect_applied(result: Any, mode: EnforcementMode | str) -> bool:
     )
 
 
-def _restore_response_shape(original: Any, value: JsonValue) -> JsonValue:
+def _restore_response_shape(original: Any, value: JsonValue) -> Any:
     if isinstance(original, Mapping) or not isinstance(value, Mapping):
         return value
     for factory_name in ("model_validate", "parse_obj"):
@@ -421,7 +421,7 @@ def _relative_path_segments(path: str) -> list[str | int]:
     return segments
 
 
-def _runner_output_value(output: Any) -> JsonValue:
+def _runner_output_value(output: Any) -> Any:
     if hasattr(output, "final_output"):
         return getattr(output, "final_output")
     return output
@@ -432,7 +432,7 @@ def _restore_runner_output(
     value: JsonValue,
     result: Any,
     mode: EnforcementMode | str,
-) -> JsonValue:
+) -> Any:
     if not hasattr(original, "final_output"):
         return value
     if not _effect_applied(result, mode):

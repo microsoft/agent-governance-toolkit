@@ -6,12 +6,17 @@ from __future__ import annotations
 
 import threading
 from collections import OrderedDict
-from datetime import datetime, timezone
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
+
+
+class DuplicateNonceError(RuntimeError):
+    """Raised when a nonce has already been accepted inside its replay window."""
 
 
 class NonceStoreCapacityError(RuntimeError):
@@ -44,7 +49,13 @@ class MCPNonceStore(Protocol):
         """Return ``True`` when *nonce* is still tracked."""
 
     def add(self, nonce: str, expires_at: datetime) -> None:
-        """Track *nonce* until *expires_at*.
+        """Atomically claim *nonce* until *expires_at*.
+
+        Implementations must atomically reject an already-live nonce with
+        ``DuplicateNonceError`` without changing its existing retention.
+        A nonce remains live at its exact expiry instant. A separate ``has``
+        followed by an unconditional write is insufficient when verifiers
+        share a store.
 
         Implementations must retain a nonce for at least its replay window and
         must not evict an in-window nonce to make room. When the store is full
@@ -104,7 +115,9 @@ class InMemoryNonceStore:
     have already expired; it never evicts an in-window nonce, because doing so
     would re-open the replay window. If the store is full of in-window nonces a
     new insertion raises :class:`NonceStoreCapacityError` so the caller can fail
-    closed. Effective memory is bounded by ``max_entries``.
+    closed. Duplicate live nonces raise :class:`DuplicateNonceError` atomically,
+    including when multiple signers share this store. Effective memory is
+    bounded by ``max_entries``.
     """
 
     def __init__(
@@ -136,10 +149,13 @@ class InMemoryNonceStore:
 
     def add(self, nonce: str, expires_at: datetime) -> None:
         with self._lock:
+            now = self._clock()
+            existing_expiry = self._nonces.get(nonce)
+            if existing_expiry is not None and existing_expiry >= now:
+                raise DuplicateNonceError("Nonce already accepted.")
             if nonce not in self._nonces and len(self._nonces) >= self._max_entries:
                 # Expired-first eviction: reclaim room only from nonces whose
                 # replay window has strictly elapsed (matches has()/cleanup()).
-                now = self._clock()
                 for expired in [n for n, exp in self._nonces.items() if exp < now]:
                     self._nonces.pop(expired, None)
                 # Fail closed: never evict an in-window nonce to make room.

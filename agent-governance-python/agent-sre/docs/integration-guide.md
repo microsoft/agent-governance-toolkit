@@ -5,7 +5,7 @@
 Agent-SRE monitors agent behavior. [Agent-OS](https://github.com/microsoft/agent-governance-toolkit) enforces governance. Together: measure reliability + enforce policies.
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, PolicyCompliance
 from agent_sre.replay.capture import TraceCapture, SpanKind
 
@@ -138,7 +138,7 @@ When an SLO is breached, capture it with structured context including burn rate
 and budget remaining:
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate
 from agent_sre.integrations.sentry import SentryExporter
 

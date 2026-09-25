@@ -51,6 +51,22 @@ def _compound_items(condition: dict[str, Any], key: str) -> list[Any] | None:
     return None
 
 
+def _rego_values_equal(left: Any, right: Any) -> bool:
+    """Compare JSON values without Python's bool-is-an-int equality."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return isinstance(left, bool) and isinstance(right, bool) and left is right
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            _rego_values_equal(left_value, right_value)
+            for left_value, right_value in zip(left, right)
+        )
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(
+            _rego_values_equal(left[key], right[key]) for key in left
+        )
+    return left == right
+
+
 _VALUE_TEST_OPERATORS = {
     "eq",
     "ne",
@@ -66,40 +82,63 @@ _VALUE_TEST_OPERATORS = {
 }
 
 
-def _accepts_value(operator: str, expected: Any, value: Any) -> bool:
+def _accepts_value(
+    operator: str, expected: Any, value: Any, *, deny_polarity: bool = False
+) -> bool:
+    # deny_polarity mirrors the compiler: deny ne/not_in drop the _v != null
+    # guard and fire on an absent field (null sentinel), while allow ne/not_in
+    # keep the guard and never fire on null. The flag must be True exactly when
+    # the operator belongs to a deny rule.
+    # This is used to prove conditions disjoint, so uncertain comparisons must
+    # remain possible rather than being mistaken for an impossible rule.
     try:
         if operator == "eq":
-            return value == expected
+            return _rego_values_equal(value, expected)
         if operator == "ne":
-            return value is not None and value != expected
+            if deny_polarity:
+                return not _rego_values_equal(value, expected)
+            return value is not None and not _rego_values_equal(value, expected)
         if operator == "gt":
+            if isinstance(value, bool) != isinstance(expected, bool):
+                return True
             return value is not None and value > expected
         if operator == "gte":
+            if isinstance(value, bool) != isinstance(expected, bool):
+                return True
             return value is not None and value >= expected
         if operator == "lt":
+            if isinstance(value, bool) != isinstance(expected, bool):
+                return True
             return value is not None and value < expected
         if operator == "lte":
+            if isinstance(value, bool) != isinstance(expected, bool):
+                return True
             return value is not None and value <= expected
         if operator == "in" and isinstance(expected, list):
-            return value is not None and value in expected
+            return value is not None and any(
+                _rego_values_equal(value, candidate) for candidate in expected
+            )
         if operator == "not_in" and isinstance(expected, list):
-            return value is not None and value not in expected
+            not_in = not any(
+                _rego_values_equal(value, candidate) for candidate in expected
+            )
+            if deny_polarity:
+                return not_in
+            return value is not None and not_in
         if operator == "contains":
-            return value is not None and expected in value
+            if not isinstance(value, str) or not isinstance(expected, str):
+                return True
+            return expected in value
         if operator == "startswith":
-            return (
-                isinstance(value, str)
-                and isinstance(expected, str)
-                and value.startswith(expected)
-            )
+            if not isinstance(value, str) or not isinstance(expected, str):
+                return True
+            return value.startswith(expected)
         if operator == "endswith":
-            return (
-                isinstance(value, str)
-                and isinstance(expected, str)
-                and value.endswith(expected)
-            )
+            if not isinstance(value, str) or not isinstance(expected, str):
+                return True
+            return value.endswith(expected)
     except TypeError:
-        return False
+        return True
     return False
 
 
@@ -151,7 +190,13 @@ def _all_values_in(values: list[Any], excluded: list[Any]) -> bool:
     )
 
 
-def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> bool:
+def _scalar_conditions_disjoint(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    *,
+    left_deny: bool = False,
+    right_deny: bool = False,
+) -> bool:
     left_parts = _condition_parts(left)
     right_parts = _condition_parts(right)
     if left_parts is None or right_parts is None:
@@ -167,14 +212,24 @@ def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> 
     if left_operator in {"matches", "regex"} or right_operator in {"matches", "regex"}:
         return False
 
+    # Polarity is explicit per operand: left_deny/right_deny say whether that
+    # side's operator belongs to a deny rule (deny ne/not_in fire on an absent
+    # field; allow ne/not_in do not). The overlap check passes left_deny=True,
+    # right_deny=False (parent deny vs child allow); the unsatisfiable-sibling
+    # check passes the shared rule polarity for both. deny_polarity therefore
+    # tracks the operator's own side, not its position in the pair.
     if left_operator == "eq":
         if right_operator not in _VALUE_TEST_OPERATORS:
             return False
-        return not _accepts_value(right_operator, right_value, left_value)
+        return not _accepts_value(
+            right_operator, right_value, left_value, deny_polarity=right_deny
+        )
     if right_operator == "eq":
         if left_operator not in _VALUE_TEST_OPERATORS:
             return False
-        return not _accepts_value(left_operator, left_value, right_value)
+        return not _accepts_value(
+            left_operator, left_value, right_value, deny_polarity=left_deny
+        )
 
     if left_operator == "in" and isinstance(left_value, list):
         if not left_value:
@@ -182,7 +237,8 @@ def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> 
         if right_operator not in _VALUE_TEST_OPERATORS:
             return False
         return not any(
-            _accepts_value(right_operator, right_value, value) for value in left_value
+            _accepts_value(right_operator, right_value, value, deny_polarity=right_deny)
+            for value in left_value
         )
     if right_operator == "in" and isinstance(right_value, list):
         if not right_value:
@@ -190,7 +246,8 @@ def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> 
         if left_operator not in _VALUE_TEST_OPERATORS:
             return False
         return not any(
-            _accepts_value(left_operator, left_value, value) for value in right_value
+            _accepts_value(left_operator, left_value, value, deny_polarity=left_deny)
+            for value in right_value
         )
 
     if left_operator == "not_in" and isinstance(left_value, list):
@@ -222,55 +279,88 @@ def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> 
     return False
 
 
-def _condition_unsatisfiable(condition: Any) -> bool:
+def _condition_unsatisfiable(condition: Any, *, is_deny: bool = False) -> bool:
+    # is_deny carries the polarity of the rule this condition belongs to so that
+    # ne/not_in siblings are analyzed with the same null semantics the compiled
+    # rule uses. Sibling pairs are peers of one rule, not a deny/allow overlap,
+    # so both sides share is_deny.
     if not isinstance(condition, dict):
         return False
     and_items = _compound_items(condition, "and")
     if and_items is not None:
-        return any(_condition_unsatisfiable(item) for item in and_items) or any(
-            _conditions_disjoint(left, right)
+        return any(
+            _condition_unsatisfiable(item, is_deny=is_deny) for item in and_items
+        ) or any(
+            _conditions_disjoint(left, right, left_deny=is_deny, right_deny=is_deny)
             for index, left in enumerate(and_items)
             for right in and_items[index + 1 :]
         )
     or_items = _compound_items(condition, "or")
     if or_items is not None:
-        return not or_items or all(_condition_unsatisfiable(item) for item in or_items)
+        return not or_items or all(
+            _condition_unsatisfiable(item, is_deny=is_deny) for item in or_items
+        )
     if "not" in condition:
         return False
     parts = _condition_parts(condition)
     return parts is not None and parts[1] == "in" and condition.get("value") == []
 
 
-def _conditions_disjoint(left: Any, right: Any) -> bool:
-    if _condition_unsatisfiable(left) or _condition_unsatisfiable(right):
+def _conditions_disjoint(
+    left: Any,
+    right: Any,
+    *,
+    left_deny: bool = False,
+    right_deny: bool = False,
+) -> bool:
+    if _condition_unsatisfiable(left, is_deny=left_deny) or _condition_unsatisfiable(
+        right, is_deny=right_deny
+    ):
         return True
     if not isinstance(left, dict) or not isinstance(right, dict):
         return False
 
     left_or = _compound_items(left, "or")
     if left_or is not None:
-        return all(_conditions_disjoint(item, right) for item in left_or)
+        return all(
+            _conditions_disjoint(item, right, left_deny=left_deny, right_deny=right_deny)
+            for item in left_or
+        )
     right_or = _compound_items(right, "or")
     if right_or is not None:
-        return all(_conditions_disjoint(left, item) for item in right_or)
+        return all(
+            _conditions_disjoint(left, item, left_deny=left_deny, right_deny=right_deny)
+            for item in right_or
+        )
 
     left_and = _compound_items(left, "and")
     if left_and is not None:
-        return any(_conditions_disjoint(item, right) for item in left_and)
+        return any(
+            _conditions_disjoint(item, right, left_deny=left_deny, right_deny=right_deny)
+            for item in left_and
+        )
     right_and = _compound_items(right, "and")
     if right_and is not None:
-        return any(_conditions_disjoint(left, item) for item in right_and)
+        return any(
+            _conditions_disjoint(left, item, left_deny=left_deny, right_deny=right_deny)
+            for item in right_and
+        )
 
     if "not" in left or "not" in right:
         return False
 
-    return _scalar_conditions_disjoint(left, right)
+    return _scalar_conditions_disjoint(
+        left, right, left_deny=left_deny, right_deny=right_deny
+    )
 
 
 def _conditions_overlap(parent_condition: Any, child_condition: Any) -> bool:
     if _condition_key(parent_condition) == _condition_key(child_condition):
         return True
-    return not _conditions_disjoint(parent_condition, child_condition)
+    # Parent is the deny rule, child the allow rule being tested for preemption.
+    return not _conditions_disjoint(
+        parent_condition, child_condition, left_deny=True, right_deny=False
+    )
 
 
 def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -303,6 +393,14 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if not isinstance(rule, dict) or "name" not in rule:
                 raise ResolutionError.invalid_governance(
                     f"rule at level {level} is missing name"
+                )
+            if _condition_unsatisfiable(
+                rule.get("condition"), is_deny=_rule_action(rule) == "deny"
+            ):
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a condition that can never match; "
+                    "refusing migration because it could silently fall through to "
+                    "later rules or the default action"
                 )
 
     if len(documents) == 1:

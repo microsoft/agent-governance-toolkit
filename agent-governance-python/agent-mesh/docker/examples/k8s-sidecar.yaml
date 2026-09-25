@@ -84,6 +84,7 @@ data:
   sandbox-policy.yaml: |
     name: sandbox-policy
     version: "1.0"
+    agents: ["*"]
     rules:
       - name: allow-file-read
         condition: "action == 'file.read'"

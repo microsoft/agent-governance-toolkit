@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using AgentGovernance.Audit;
 using AgentGovernance.Integration;
 using AgentGovernance.Policy;
 using Microsoft.Agents.AI;
@@ -39,6 +40,12 @@ public sealed class AgentFrameworkGovernanceOptions
     /// Converts validated function arguments into the dictionary exposed to AGT policy conditions.
     /// </summary>
     public Func<FunctionInvocationContext, Dictionary<string, object>>? ToolArgumentsResolver { get; set; }
+
+    /// <summary>
+    /// Resolves trusted skill metadata from framework-owned agent or function state.
+    /// Do not derive skill identity from <see cref="FunctionInvocationContext.Arguments"/>.
+    /// </summary>
+    public Func<AIAgent, FunctionInvocationContext, TrustedSkillMetadataSource?>? TrustedSkillMetadataResolver { get; set; }
 
     /// <summary>
     /// Builds the user-visible response when a run is denied before the inner agent executes.

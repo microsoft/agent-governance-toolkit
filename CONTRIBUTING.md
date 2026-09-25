@@ -51,8 +51,18 @@ source .venv/bin/activate        # Linux/macOS
 # (Required for all local development to ensure you test against local core changes)
 pip install --no-cache-dir --no-deps -e agent-governance-toolkit-core
 
+# Build the local ACS SDK required by the consolidated core package. The
+# required 0.4.0b0 release is not available from PyPI yet.
+pip install --no-cache-dir maturin==1.8.7
+pip install --no-cache-dir --no-build-isolation ../policy-engine/sdk/python
+
 # Install the package you are working on in editable mode
 pip install -e "agent-os[dev]"       # Policy engine
+# agent-mesh's dev extra requires the monorepo-only agent_hypervisor 5.x stub.
+# Install it locally first so pip does not fall back to the pre-consolidation
+# 3.7.0 PyPI package, whose hypervisor code conflicts with the package supplied
+# by agent-governance-toolkit-core.
+pip install --no-cache-dir --no-deps -e agent-hypervisor
 pip install -e "agent-mesh[dev]"     # Identity/trust layer
 pip install -e "agent-compliance[dev]"  # Compliance tooling
 
@@ -300,9 +310,17 @@ cd agent-governance-toolkit
 # Install the core package from the local source to avoid dependency conflicts
 pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-governance-toolkit-core"
 
+# Build the local ACS SDK required by the consolidated core package. The
+# required 0.4.0b0 release is not available from PyPI yet.
+pip install --no-cache-dir maturin==1.8.7
+pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
+
 pip install -e "agent-governance-python/agent-primitives[dev]"
 pip install -e "agent-governance-python/agent-mcp-governance[dev]"
 pip install -e "agent-governance-python/agent-os[dev]"
+# agent-mesh[dev] requires the local 5.x agent_hypervisor stub; install it
+# before the dev extra so pip does not select the conflicting PyPI package.
+pip install --no-cache-dir --no-deps -e "agent-governance-python/agent-hypervisor"
 pip install -e "agent-governance-python/agent-mesh[dev]"
 pip install -e "agent-governance-python/agent-runtime[dev]"
 pip install -e "agent-governance-python/agent-sre[dev]"

@@ -15,7 +15,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+import yaml
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from agentmesh.governance.policy import PolicyDecision, PolicyEngine
@@ -28,6 +30,7 @@ logger = logging.getLogger(__name__)
 app = create_base_app(
     "policy-server",
     "Evaluates governance policies against agent actions.",
+    include_readyz=False,
 )
 
 POLICY_DIR = os.getenv("AGENTMESH_POLICY_DIR", "/etc/agentmesh/policies")
@@ -37,46 +40,121 @@ _engine: PolicyEngine = PolicyEngine()
 _trust_policies: list[TrustPolicy] = []
 _trust_evaluator: PolicyEvaluator | None = None
 _loaded_count: int = 0
+_GOVERNANCE_ONLY_KEYS = frozenset({"agent", "agents", "default_action", "extends", "scope"})
+_effective_rule_count: int = 0
+_load_warnings: list[str] = []
+
+
+@app.get("/readyz", tags=["health"], response_model=None)
+async def readyz() -> JSONResponse:
+    payload = {
+        "status": "ready" if _effective_rule_count > 0 else "not-ready",
+        "component": "policy-server",
+        "total_loaded": _loaded_count,
+        "effective_rules": _effective_rule_count,
+        "policy_dir": POLICY_DIR,
+        "load_warnings": list(_load_warnings),
+    }
+    if _effective_rule_count == 0:
+        return JSONResponse(status_code=503, content=payload)
+    return JSONResponse(content=payload)
+
+
+def _validate_load_warnings() -> None:
+    """Record a warning when a load completes without effective rules."""
+    global _load_warnings
+
+    _load_warnings = []
+    if _effective_rule_count == 0:
+        warning = (
+            f"Policy load validation: no effective rules loaded from {POLICY_DIR}; "
+            "readiness remains blocked until an enabled policy rule is loaded."
+        )
+        logger.warning(warning)
+        _load_warnings.append(warning)
 
 
 def _load_policies() -> None:
     """Load all YAML/JSON policy files from POLICY_DIR."""
-    global _engine, _trust_policies, _trust_evaluator, _loaded_count
+    global _engine, _trust_policies, _trust_evaluator, _loaded_count, _effective_rule_count
 
     policy_path = Path(POLICY_DIR)
-    if not policy_path.exists():
-        logger.warning("Policy directory %s does not exist", POLICY_DIR)
-        return
+    if not policy_path.is_dir():
+        raise RuntimeError(
+            f"Policy directory {POLICY_DIR} does not exist or is not a directory; "
+            "refusing to load an undefined policy set"
+        )
 
     # Load into locals first; assign globals only after all files succeed.
     # A failed reload (POST /api/v1/policy/reload) must not leave a
     # partially loaded engine live (#3536 review feedback).
     local_engine = PolicyEngine()
-    local_trust: list = []
+    local_trust: list[TrustPolicy] = []
     governance_count = 0
+    effective_rule_count = 0
     errors: list[tuple[str, Exception]] = []
 
-    for f in sorted(policy_path.glob("*.yaml")):
-        gov_exc = None
+    try:
+        with os.scandir(policy_path) as entries:
+            discovered = sorted(
+                (Path(entry.path) for entry in entries),
+                key=lambda path: path.name,
+            )
+    except OSError as exc:
+        raise RuntimeError(
+            f"Policy directory {POLICY_DIR} cannot be read; "
+            "refusing to load an undefined policy set"
+        ) from exc
+
+    for f in (path for path in discovered if path.suffix == ".yaml"):
         try:
-            local_engine.load_yaml(f.read_text())
+            content = f.read_text(encoding="utf-8")
+        except Exception as exc:
+            errors.append((f.name, exc))
+            continue
+
+        try:
+            policy = local_engine.load_yaml(content)
             governance_count += 1
+            effective_rule_count += sum(rule.enabled for rule in policy.rules)
             logger.info("Loaded governance policy: %s", f.name)
         except Exception as ge:
-            gov_exc = ge
             try:
-                tp = TrustPolicy.from_yaml(f.read_text())
+                raw = yaml.safe_load(content)
+                if not isinstance(raw, dict):
+                    raise ValueError("policy document must be a mapping")
+                if "kind" in raw or "apiVersion" in raw:
+                    raise ValueError(
+                        "governance-shaped document was not accepted by the "
+                        "governance policy parser"
+                    )
+                governance_keys = sorted(_GOVERNANCE_ONLY_KEYS.intersection(raw))
+                if governance_keys:
+                    raise ValueError(
+                        "governance-only fields are not valid in a trust policy: "
+                        + ", ".join(governance_keys)
+                    )
+                tp = TrustPolicy(**raw)
+                if not tp.rules:
+                    raise ValueError("trust policy must contain at least one rule")
                 local_trust.append(tp)
                 logger.info("Loaded trust policy: %s", f.name)
-            except Exception:
-                # Log the governance exception (the real cause), not the
-                # TrustPolicy fallback's misleading error.
-                errors.append((f.name, gov_exc))
+            except Exception as trust_exc:
+                errors.append(
+                    (
+                        f.name,
+                        RuntimeError(
+                            f"not a governance policy ({type(ge).__name__}: {ge}); "
+                            f"not a trust policy ({type(trust_exc).__name__}: {trust_exc})"
+                        ),
+                    )
+                )
 
-    for f in sorted(policy_path.glob("*.json")):
+    for f in (path for path in discovered if path.suffix == ".json"):
         try:
-            local_engine.load_json(f.read_text())
+            policy = local_engine.load_json(f.read_text(encoding="utf-8"))
             governance_count += 1
+            effective_rule_count += sum(rule.enabled for rule in policy.rules)
         except Exception as exc:
             errors.append((f.name, exc))
 
@@ -84,8 +162,7 @@ def _load_policies() -> None:
         for name, exc in errors:
             logger.error("Policy load failed for %s: %s", name, exc)
         raise RuntimeError(
-            f"{len(errors)} policy file(s) failed to load: "
-            + ", ".join(name for name, _ in errors)
+            f"{len(errors)} policy file(s) failed to load: " + ", ".join(name for name, _ in errors)
         )
 
     # All loaded successfully -- swap globals atomically.
@@ -97,11 +174,15 @@ def _load_policies() -> None:
     _trust_evaluator = PolicyEvaluator(_trust_policies) if _trust_policies else None
 
     _loaded_count = governance_count + len(_trust_policies)
+    _effective_rule_count = effective_rule_count + sum(
+        len(policy.rules) for policy in _trust_policies
+    )
     logger.info(
         "Loaded %d governance + %d trust policies",
         governance_count,
         len(_trust_policies),
     )
+    _validate_load_warnings()
 
 
 @app.on_event("startup")
@@ -191,19 +272,30 @@ async def list_policies() -> dict[str, Any]:
     """List all loaded policies."""
     return {
         "total_loaded": _loaded_count,
+        "effective_rules": _effective_rule_count,
         "trust_policies": len(_trust_policies),
         "policy_dir": POLICY_DIR,
+        "load_warnings": list(_load_warnings),
     }
 
 
 @app.post("/api/v1/policy/reload", tags=["policy"])
 async def reload_policies() -> dict[str, Any]:
     """Reload policies from disk."""
-    _load_policies()
+    try:
+        _load_policies()
+    except RuntimeError as exc:
+        logger.error("Policy reload rejected, keeping previous set: %s", exc)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Policy reload rejected; previous policy set retained. {exc}",
+        ) from exc
     return {
         "status": "reloaded",
         "total_loaded": _loaded_count,
+        "effective_rules": _effective_rule_count,
         "trust_policies": len(_trust_policies),
+        "load_warnings": list(_load_warnings),
     }
 
 

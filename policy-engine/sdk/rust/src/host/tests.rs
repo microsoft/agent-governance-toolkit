@@ -1195,6 +1195,39 @@ fn manifest_from_url_never_connects_to_a_blocked_literal() {
 }
 
 #[test]
+fn manifest_from_url_forces_redirects_off() {
+    // The SSRF guard runs on the URL a caller passes and on nothing deeper.
+    // The upstream fetcher follows redirects inside its HTTP client without
+    // re-running the guard and exposes no hook, so a vetted public URL could
+    // bounce the fetch to a blocked address. `manifest_from_url` must
+    // therefore refuse to follow any redirect hop.
+    //
+    // This asserts the helper directly, not through `manifest_from_url`, and
+    // that assertion is the coverage for the zeroed budget. `manifest_from_url`
+    // is the only place `Limits` reaches `Manifest::from_path_with_limits`, and
+    // it applies this helper on the way. No end-to-end redirect test is
+    // possible in this environment. The upstream fetcher is HTTPS-only and its
+    // system root store cannot be driven against a local server without
+    // shipping TLS test infrastructure. A direct 2xx URL is unaffected because
+    // a zero redirect budget still loads the response.
+    let limits = Limits {
+        max_manifest_url_redirects: 9,
+        max_manifest_url_bytes: 2048,
+        ..Default::default()
+    };
+
+    let effective = super::fail_closed_url_fetch_limits(limits);
+
+    assert_eq!(effective.max_manifest_url_redirects, 0);
+    // The unrelated fetch limits are preserved.
+    assert_eq!(effective.max_manifest_url_bytes, 2048);
+    assert_eq!(
+        effective.manifest_url_timeout_ms,
+        Limits::default().manifest_url_timeout_ms
+    );
+}
+
+#[test]
 fn host_constructors_reject_removed_manifest_fields() {
     // Upstream parses these; the pinned engine has nothing behind them. A
     // `bundle_url` rego policy would deny every request with

@@ -148,11 +148,13 @@ an internal HTTPS server by IP.
 | `https://localhost:8443/manifest.yaml` (local testing) | load the file with `from_path`, or serve it under a public name |
 
 The guard still checks only the URL a caller passes. It does not resolve
-hostnames and it does not re-check redirect hops; set the redirect limit to
-zero (`Limits::max_manifest_url_redirects` in Rust, `max_url_redirects=0` in
-Python, `maxRedirects: 0` in Node) if the guard must hold across redirects.
-The C ABI `acs_builder_from_url` fetches with the default budget and cannot
-lower it yet. See `policy-engine/docs/acs-retarget.md`.
+hostnames and it does not re-check redirect hops. Redirects on a URL-sourced
+manifest are always disabled in `manifest_from_url`, in the SDK `from_url`
+methods, and in the C ABI `acs_builder_from_url`, all of which force the
+redirect budget to zero. The `max_url_redirects` (Python) and `maxRedirects`
+(Node) arguments, and the `Limits::max_manifest_url_redirects` field, now
+have no effect on URL sourcing and no longer need to be set. See
+`policy-engine/docs/acs-retarget.md`.
 
 ---
 
@@ -292,6 +294,52 @@ builds the canonical envelope and is the authority on its contents.
 
 Both sides must be upgraded together: an unpatched client cannot authenticate
 against a patched server, by design.
+## MerkleAuditChain now records a canonical, reproducible Merkle root
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-governance-python` (`agentmesh.governance.audit`):
+  `MerkleAuditChain.add_entry`, `MerkleAuditChain.get_root_hash`,
+  `AuditLog.export` (`merkle_root` / `chain_root` fields), and Merkle inclusion
+  proofs from `MerkleAuditChain.get_proof`.
+- `agent-governance-python` (`agentmesh.governance.trace_sink`):
+  `session_to_trust_record` and `TRACEAuditSink.emit`, which derive the TRACE
+  Trust Record `runtime.measurement` (and, when `build_provenance_digest` is
+  unset, `build_provenance.digest`) from the Merkle root.
+- `agent-governance-python` (`agentmesh.services.audit`):
+  `AuditService.summary` (`root_hash` field).
+
+**What changed:**
+
+The incremental tree builder padded interior levels with the leaf sentinel
+`'0' * 64` rather than the empty-subtree constant `E(k)` (where `E(0) = '0' * 64`
+and `E(k+1) = SHA-256(E(k) || E(k))`). The recorded root therefore diverged from
+a from-scratch rebuild of the same leaves for most chain sizes (22 of the first
+32: n = 5, 6, 9-14, 17-30, and so on), so an exported `merkle_root` could not be
+reproduced by a verifier that rebuilt the tree. Interior padding now uses `E(k)`,
+so the incremental root, a from-scratch rebuild, and an independent textbook
+recomputation all agree, and the update stays amortized O(log n) per append
+(worst-case O(n) when tree capacity doubles).
+
+**Impact / required action:**
+
+For the affected chain sizes the exported `merkle_root` (and the corresponding
+inclusion proofs) now differ from values produced by earlier releases. Consumers
+who archived `AuditLog.export()` output as compliance evidence will see a
+mismatch when re-verifying old exports against a current build. Re-export and
+re-anchor any archived roots, or pin the prior version to verify pre-existing
+evidence. Entry hashes and the linear `previous_hash` chain (`verify_chain`) are
+unchanged.
+
+The TRACE Trust Records emitted by `TRACEAuditSink` carry this root in
+`runtime.measurement` and are Ed25519-signed before being written out for
+external relying parties. For the affected chain sizes a relying party that
+re-derives the measurement from the same audit entries now computes a different
+value, so those records must be re-issued (rebuilt and re-signed), not merely
+re-exported. `AuditService.summary()` likewise reports the new `root_hash` for
+the affected sizes.
 
 ---
 
@@ -425,12 +473,13 @@ The following public symbols are removed:
    updating.
 2. `agt validate` now applies the runtime's own contract, so a manifest with no
    intervention points is an error rather than a warning.
-3. The approval timeout moved onto the session. `HostSession` defaults to 300
-   seconds and denies on expiry; pass `approval_timeout_seconds` to change it.
-   The manifest's `approval.timeout_seconds` does not drive this. The core
-   treats that section as opaque host configuration and `AgentControl` does not
-   surface it, so a host that declares it in the manifest must pass the same
-   value to the session until the SDK exposes an accessor.
+3. The approval timeout moved onto the session. `HostSession` denies on
+   expiry and bounds the wait by, in order: an explicit
+   `approval_timeout_seconds` argument, the manifest's
+   `approval.timeout_seconds` (read through `AgentControl.approval_config`),
+   then a 300-second default. The manifest's `on_timeout` is not applied; the
+   session's own `approval_on_timeout` (default `deny`) decides what happens
+   on expiry.
 
 ---
 

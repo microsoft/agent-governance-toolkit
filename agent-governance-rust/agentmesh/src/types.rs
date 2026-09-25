@@ -84,6 +84,8 @@ pub struct AuditEntry {
     pub decision: String,
     pub previous_hash: String,
     pub hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_audit_metadata: Option<crate::skill_audit::SkillAuditMetadata>,
 }
 
 /// Filter for querying audit entries.
@@ -301,6 +303,7 @@ mod tests {
             decision: "allow".to_string(),
             previous_hash: "".to_string(),
             hash: "abc123".to_string(),
+            skill_audit_metadata: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: AuditEntry = serde_json::from_str(&json).unwrap();
@@ -372,6 +375,7 @@ mod tests {
                 decision: "allow".to_string(),
                 previous_hash: "".to_string(),
                 hash: "abc".to_string(),
+                skill_audit_metadata: None,
             },
         };
         assert!(result.allowed);

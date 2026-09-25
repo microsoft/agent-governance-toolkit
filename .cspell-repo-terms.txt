@@ -37,6 +37,8 @@ struction
 # discarded-verdict census (tests/test_transform_never_dropped.py)
 # dorny/paths-filter — GitHub Actions dependency used in policy-validation.yml
 # git fetch destination-ref syntax, spell-check.yml base fetch
+# git diff --numstat output format
+numstat
 AACS
 AAIF
 AARM
@@ -65,11 +67,16 @@ AWSIAM
 Acta
 Actix
 AgentGovernance
+Agentflow
+Agentflows
 AgentMesh
+Agentmetry
 AgentOS
 AgentRateLimiter
 Amol
 Anambra
+Artzain
+Assn
 Authenticode
 BFBFBF
 BLOCKME
@@ -91,6 +98,7 @@ Caldicott
 Cdecl
 Centralised
 Chatflows
+cjar
 Clendenen
 CommonMark
 Convs
@@ -147,6 +155,13 @@ GRPC
 Gazetted
 Ghanaian
 GitHub
+thatjosh
+execdir
+ionice
+setsid
+xargs
+strace
+busybox
 Governorate
 HEALTHCHECK
 HKDF
@@ -158,9 +173,11 @@ Hyperlight
 IATP
 IGNORECASE
 IPFS
+ISSN
 Initialise
 Jaccard
 Janssen
+jans
 Kigali
 KillSwitch
 Kogi
@@ -234,6 +251,7 @@ Printf
 Println
 Pseudonymisation
 Pydantic
+Quantumskipper
 REALPKG
 RISA
 RUBYOPT
@@ -303,6 +321,7 @@ ZDOTDIR
 aadhaar
 aarch64
 ababa
+abatch
 abprs
 abspath
 abstractmethod
@@ -316,6 +335,7 @@ aexit
 agentchat
 agentframework
 agentidentity
+agentmeshentryhash
 agentrust
 agentshield
 agentveil
@@ -329,6 +349,7 @@ aioredis
 aiter
 akickoff
 alikes
+alisteners
 allowlist
 allowlisted
 alnum
@@ -361,6 +382,7 @@ asynccontextmanager
 asyncgens
 asyncio
 atexit
+atransform
 attributeerror
 authorisation
 authorised
@@ -379,6 +401,7 @@ basenames
 behaviour
 behavioural
 bindgen
+blitzcrieg
 bluebubbles
 bmod
 bubblewrap
@@ -891,6 +914,7 @@ pytest
 pytestmark
 pythonhosted
 pythonstartup
+readyz
 pyupgrade
 pyyaml
 qualname
@@ -937,6 +961,7 @@ restype
 retarget
 retargeted
 retargets
+retryable
 returncode
 rfile
 rfind
@@ -968,6 +993,7 @@ sarif
 sboms
 sbyte
 scak
+scandir
 schemaversion
 scikit
 scipy
@@ -1010,6 +1036,7 @@ slugification
 smol
 snupkg
 socat
+socsec
 softmax
 spacy
 spanid
@@ -1018,6 +1045,7 @@ spellcheck
 spellchecking
 spiffesvid
 splitlines
+keepends
 sprintf
 stacklevel
 startswith
@@ -1069,6 +1097,7 @@ tzdata
 ufeff
 unaliased
 uncallable
+uncompilable
 unconfigured
 unicodedata
 uninspectable
@@ -1231,3 +1260,28 @@ fileno
 fromhex
 fstat
 serialisation
+
+# --- advisory.py / govern.py async advisory support terms (PR #4052) ---
+acall
+Acall
+acheck
+unroutable
+
+# --- Terraform examples ---
+myagent
+myagentprodsa
+passwordless
+appconfig
+appconfiguration
+azconfig
+boto
+hostnames
+tfvars
+amd64
+alltrue
+cidrhost
+CIDRs
+propagation
+readonly
+resolver
+sha256sum

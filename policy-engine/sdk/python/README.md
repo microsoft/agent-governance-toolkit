@@ -89,7 +89,13 @@ Python framework helpers are duck typed and guard the selected async or sync met
 
 Semantic Kernel helpers are exported as `guard_semantic_kernel_function()` for a single function-like object and `guard_semantic_kernel_filter()` for filter-style invocation contexts. Function wrappers mediate `pre_tool_call` and `post_tool_call`, passing transformed arguments to the function and transformed results back to the host.
 
+Tool wrappers also accept a `SnapshotBuilder` as `snapshot=` in place of a mapping: `guard_tool()`, `guard_mcp_tool()`, `guard_langchain_tool()`, the Semantic Kernel helpers, `guard_foundry_agent()`, and `AgentControl.run_tool()` / `protect_tool()` then build each snapshot from the builder's current envelope and advance `tool_call_count` once the pre-check permits a call, so a `budgets` cap on `tool_call_count` is enforced. A plain mapping is sent unchanged on every call, and the host advances the counters itself. The slot is reserved before the pre-check runs and released if the call is denied, so concurrent calls on one builder share the budget correctly. Do not also call `record_tool_call` for calls the SDK governs this way. The LiteLLM proxy guardrail still evaluates from the mapping it was constructed with and does not take a builder.
+
 Single-tool wrappers accept an optional snapshot-compatible tool call id: pass `tool_call_id=` to `AgentControl.run_tool()` / `protect_tool()`, or `agent_control_tool_call_id=` to adapter helpers such as `guard_tool()` / `guard_mcp_tool()`. When no id is supplied the snapshot omits `tool_call.id`.
+
+## Shipped schemas
+
+The `spec/schema` documents ship inside the package under `agent_control_specification.schemas`: `schemas.names()` lists them (`manifest`, `approval`, `cedar_advice` and the `wire/*` payload schemas), `schemas.text(name)` returns the JSON text and `schemas.load(name)` the parsed document. Validate advice and manifest payloads against these rather than a hand-copied contract; the files are copies of `policy-engine/spec/schema` and the test suite fails if they drift.
 
 ## Telemetry
 
@@ -134,9 +140,11 @@ Python custom annotator dispatcher exceptions fail closed as `runtime_error:anno
 
 ## LangChain adapters
 
-Use `guard_langchain_runnable()` for async Runnable objects. It wraps `ainvoke(...)` and routes the call through `input` and `output`. Sync and batch entry points such as `invoke`, `batch`, and `stream` are blocked by the adapter instead of bypassing ACS.
+Use `guard_langchain_runnable()` for Runnable objects. It guards `invoke`, `ainvoke`, `batch`, and `abatch` through `input` and `output`. Batches evaluate each input independently and sequentially, including any per-input config. A policy interruption or runtime error always propagates, even with `return_exceptions=True`. Streaming and iterator entry points remain blocked because a partial stream cannot be post-evaluated without buffering. Methods such as `with_config` and `bind` that create an unguarded derivative also remain blocked. An unsupported error names the blocked method in its message; for compatibility its structured reason remains `host_error:adapter_unsupported` at `input`.
 
-Use `guard_langchain_tool()` for async BaseTool-style objects. The tool must expose a string `name` and an async `ainvoke(...)` method. The adapter routes arguments through `pre_tool_call`, invokes the tool with transformed arguments, then routes the tool result through `post_tool_call`.
+Use `guard_langchain_tool()` for BaseTool-style objects. The tool must expose a string `name` and an `ainvoke(...)` method. It guards sync and async invocation and batch paths through `pre_tool_call` and `post_tool_call`. Direct `run` and `arun` calls remain blocked. A LangChain `ToolCall` is evaluated using its `args` while preserving its call ID and `ToolMessage` result for LangGraph. Arguments marked as injected by LangChain are excluded from the policy target, then restored for execution; a policy transform cannot replace them. Only use direct `ToolCall` inputs from a trusted host because outside `ToolNode` the adapter cannot establish who supplied those injected values. Non-JSON-serializable tool message artifacts fail closed with `AdapterUnsupportedError` before the post-tool policy check, rather than bypassing that check.
+
+Both proxies pass `isinstance` checks for their wrapped types. They are not an isolation boundary for the underlying object: retaining the original reference, `copy.deepcopy(guarded)`, `guarded.model_copy()` and delegated attributes such as `guarded.func(...)` can reach unguarded behavior. Do not use these paths in agent execution; use the guarded `invoke` or `ainvoke` entry points throughout.
 
 ```python
 from agent_control_specification import (
@@ -161,9 +169,32 @@ guarded_tool = guard_langchain_tool(
 documents = await guarded_tool.ainvoke({"query": "public docs"})
 ```
 
+By default `guard_langchain_tool()` raises `AgentControlBlocked` on a deny. Set `on_deny="tool_error"` for a LangGraph `ToolNode` to receive a `ToolMessage(status="error")` for a policy deny rather than a retryable exception. Fail-closed `runtime_error:*` and `host_error:*` verdicts still raise; they are not reported as policy denies. Its content states the verdict reason and message and says not to retry. `message.additional_kwargs["agent_control"]` contains `error`, `reason`, `message`, and `terminal: True` so a graph can route terminal denies away from its model/tool retry loop. A caller without a tool call ID instead receives the same structured error mapping. LangGraph does not automatically stop a model that ignores the message, so configure a conditional edge on the terminal marker when the graph must stop. A `post_tool_call` deny hides the result but cannot undo the tool's side effects. Streaming remains blocked on both adapters.
+
+For an existing graph builder with `tools` and `agent` nodes, use the opt-in behavior and route terminal denies.
+
+```python
+from langchain_core.messages import ToolMessage
+from langgraph.graph import END
+
+guarded_tool = guard_langchain_tool(control, retriever_tool, on_deny="tool_error")
+
+def after_tools(state):
+    last = state["messages"][-1]
+    if isinstance(last, ToolMessage) and last.additional_kwargs.get("agent_control", {}).get("terminal"):
+        return END
+    return "agent"
+
+graph.add_conditional_edges("tools", after_tools)
+```
+
+## Engine runtime errors
+
+Engine failures (an unreadable manifest, a missing policy-target path, a policy that could not be invoked) raise `AgentControlRuntimeError`, a `RuntimeError` whose `reason` is the reserved `runtime_error:*` code and whose `detail` is the engine's detail text, so a host branches on the code instead of parsing the message. `AgentControlRuntimeError`, `AgentControlBlocked`, and `AgentControlSuspended` all survive `pickle`, so they propagate unchanged out of `multiprocessing` and `concurrent.futures` process workers.
+
 ## Escalation and approval
 
-In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` verdict consults an optional approval resolver, a host callback that decides whether the action proceeds. Supply a resolver on the instance with `AgentControl(..., approval_resolver=...)` (or `from_native(..., approval_resolver=...)`) or override it per call with the `approval_resolver=` argument on `run()`, `run_tool()`, and `protect_tool()`. The resolver returns `ApprovalResolution.allow(result.action_identity)`, `ApprovalResolution.deny()`, or `ApprovalResolution.suspend(handle=..., action_identity=result.action_identity)`.
+In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` verdict consults an optional approval resolver, a host callback that decides whether the action proceeds. Supply a resolver on the instance with `AgentControl(..., approval_resolver=...)` (or `from_native(..., approval_resolver=...)`) or override it per call with the `approval_resolver=` argument on `run()`, `run_tool()`, and `protect_tool()`. The resolver returns `ApprovalResolution.allow(result.action_identity)`, `ApprovalResolution.deny(reason)` (the optional `reason` becomes the denial verdict's `message`), or `ApprovalResolution.suspend(handle=..., action_identity=result.action_identity)`.
 
 - allow proceeds with the original action target. `escalate` verdicts do not return or apply transformed targets
 - deny, an unrecognized result, or a resolver that raises blocks with `AgentControlBlocked`
@@ -171,5 +202,7 @@ In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` ver
 - with no resolver an `escalate` verdict fails closed to a block
 
 The resolver is consulted only for `escalate` and only in enforce mode. A `deny` never consults it. Framework adapters use the instance resolver. Resumption after a suspension is owned by the host. For a post action point such as `post_tool_call` the action already ran, so a resuming host delivers the produced result instead of running it again. `mcp_approval_resolver(elicit)` adapts an MCP elicitation callback into a resolver.
+
+The manifest's optional top-level `approval` section is exposed unchanged as `AgentControl.approval_config`, read from the fully merged manifest by the native core on every constructor. `HostSession` bounds its synchronous approval wait with that section's `timeout_seconds` when declared and with `DEFAULT_APPROVAL_TIMEOUT_SECONDS` otherwise; an explicit `approval_timeout_seconds=` argument wins over both. The section's `on_timeout` is not applied: on expiry the session uses its own `approval_on_timeout` argument, which defaults to `deny`.
 
 In artifact kits, install the Python wheel into a temporary virtual environment and run a host smoke test that loads a manifest with `NativeRuntimeClient.from_path`. In repository checkouts, run the Python SDK test suite through the project build instructions.

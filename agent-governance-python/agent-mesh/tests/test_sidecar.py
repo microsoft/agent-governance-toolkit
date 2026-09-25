@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import sys
 from unittest.mock import patch
@@ -35,10 +36,26 @@ class TestHealthProbes:
 
     def test_ready(self, client):
         resp = client.get("/ready")
-        assert resp.status_code == 200
+        assert resp.status_code == 503
         data = resp.json()
-        assert data["status"] == "ready"
+        assert data["status"] == "not-ready"
         assert "policies_loaded" in data
+
+    def test_ready_reports_startup_warning_when_no_policies(self, caplog, tmp_path):
+        with patch.dict(os.environ, {"AGT_POLICY_DIR": str(tmp_path)}):
+            from agentmesh.server.sidecar import create_sidecar_app
+
+            app = create_sidecar_app()
+            with caplog.at_level(logging.WARNING):
+                with TestClient(app) as client:
+                    resp = client.get("/ready")
+
+        assert resp.status_code == 503
+        data = resp.json()
+        assert data["policies_loaded"] == 0
+        assert data["effective_rules"] == 0
+        assert data["load_warnings"]
+        assert any("Policy load validation: no effective rules loaded" in msg for msg in caplog.messages)
 
     def test_healthz(self, client):
         resp = client.get("/healthz")
@@ -47,8 +64,8 @@ class TestHealthProbes:
 
     def test_readyz(self, client):
         resp = client.get("/readyz")
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "ready"
+        assert resp.status_code == 503
+        assert resp.json()["status"] == "not-ready"
 
 
 class TestMetricsEndpoint:
@@ -119,6 +136,7 @@ class TestPolicyEvaluation:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "reloaded"
+        assert "load_warnings" in data
 
 
 class TestPolicyWithFiles:

@@ -16,24 +16,26 @@ import (
 
 // AuditEntry represents a single immutable audit record.
 type AuditEntry struct {
-	Timestamp    time.Time      `json:"timestamp"`
-	AgentID      string         `json:"agent_id"`
-	Action       string         `json:"action"`
-	Decision     PolicyDecision `json:"decision"`
-	Hash         string         `json:"hash"`
-	PreviousHash string         `json:"previous_hash"`
+	Timestamp          time.Time           `json:"timestamp"`
+	AgentID            string              `json:"agent_id"`
+	Action             string              `json:"action"`
+	Decision           PolicyDecision      `json:"decision"`
+	Hash               string              `json:"hash"`
+	PreviousHash       string              `json:"previous_hash"`
+	SkillAuditMetadata *SkillAuditMetadata `json:"skill_audit_metadata,omitempty"`
 }
 
 // Clone returns a value-copy of the entry. Used at the AuditLogger
 // API boundary so callers cannot mutate the in-store record (and
 // thereby break the hash chain) through the returned pointer.
-// AuditEntry contains only value types, so a struct copy is a deep
-// copy.
+// The optional skill metadata is copied separately so callers cannot mutate
+// the in-store record through its pointer.
 func (ae *AuditEntry) Clone() *AuditEntry {
 	if ae == nil {
 		return nil
 	}
 	c := *ae
+	c.SkillAuditMetadata = cloneSkillAuditMetadata(ae.SkillAuditMetadata)
 	return &c
 }
 
@@ -55,6 +57,26 @@ func NewAuditLogger() *AuditLogger {
 // their final hash is retained as a seam so Verify() can re-anchor the
 // surviving chain.
 func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *AuditEntry {
+	return al.logWithSkillAuditMetadata(agentID, action, decision, nil)
+}
+
+// LogWithSkillAuditMetadata appends an audit entry with framework-owned skill
+// metadata and hashes of the before/after context snapshots.
+func (al *AuditLogger) LogWithSkillAuditMetadata(
+	agentID, action string,
+	decision PolicyDecision,
+	trustedSource *TrustedSkillMetadataSource,
+	contextBefore, contextAfter any,
+) *AuditEntry {
+	metadata := BuildSkillAuditMetadata(trustedSource, contextBefore, contextAfter)
+	return al.logWithSkillAuditMetadata(agentID, action, decision, metadata)
+}
+
+func (al *AuditLogger) logWithSkillAuditMetadata(
+	agentID, action string,
+	decision PolicyDecision,
+	skillAuditMetadata *SkillAuditMetadata,
+) *AuditEntry {
 	al.mu.Lock()
 	defer al.mu.Unlock()
 
@@ -75,11 +97,12 @@ func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *Aud
 	}
 
 	entry := &AuditEntry{
-		Timestamp:    time.Now().UTC(),
-		AgentID:      agentID,
-		Action:       action,
-		Decision:     decision,
-		PreviousHash: prevHash,
+		Timestamp:          time.Now().UTC(),
+		AgentID:            agentID,
+		Action:             action,
+		Decision:           decision,
+		PreviousHash:       prevHash,
+		SkillAuditMetadata: cloneSkillAuditMetadata(skillAuditMetadata),
 	}
 	entry.Hash = computeHash(entry)
 	al.entries = append(al.entries, entry)
@@ -140,10 +163,11 @@ func (al *AuditLogger) GetEntries(filter AuditFilter) []*AuditEntry {
 	return result
 }
 
-// auditHashVersion identifies the wire format of the hash input. Bumping
-// this invalidates any persisted hashes and is required when the field
-// layout below changes.
+// auditHashVersion identifies legacy entries without skill metadata.
 const auditHashVersion byte = 1
+
+// auditSkillHashVersion identifies entries that also hash skill metadata.
+const auditSkillHashVersion byte = 2
 
 // computeHash returns the SHA-256 hash of a length-prefixed encoding of the
 // entry's fields. Each variable-length field is encoded as a 4-byte
@@ -155,15 +179,33 @@ const auditHashVersion byte = 1
 func computeHash(e *AuditEntry) string {
 	timestamp := e.Timestamp.Format(time.RFC3339Nano)
 
-	// 1 byte version + 5 fields, each prefixed by a 4-byte length.
+	// Entries without skill metadata keep the original wire version and hash.
 	size := 1 + 5*4 + len(timestamp) + len(e.AgentID) + len(e.Action) + len(e.Decision) + len(e.PreviousHash)
+	version := auditHashVersion
+	if e.SkillAuditMetadata != nil {
+		version = auditSkillHashVersion
+		metadata := e.SkillAuditMetadata
+		size += 5*4 +
+			len(metadata.SkillName) +
+			len(metadata.SkillOrigin) +
+			len(metadata.ProvenanceSourceTrust) +
+			len(metadata.ContextHashBefore) +
+			len(metadata.ContextHashAfter)
+	}
 	buf := make([]byte, 0, size)
-	buf = append(buf, auditHashVersion)
+	buf = append(buf, version)
 	buf = appendLengthPrefixed(buf, timestamp)
 	buf = appendLengthPrefixed(buf, e.AgentID)
 	buf = appendLengthPrefixed(buf, e.Action)
 	buf = appendLengthPrefixed(buf, string(e.Decision))
 	buf = appendLengthPrefixed(buf, e.PreviousHash)
+	if metadata := e.SkillAuditMetadata; metadata != nil {
+		buf = appendLengthPrefixed(buf, metadata.SkillName)
+		buf = appendLengthPrefixed(buf, metadata.SkillOrigin)
+		buf = appendLengthPrefixed(buf, metadata.ProvenanceSourceTrust)
+		buf = appendLengthPrefixed(buf, metadata.ContextHashBefore)
+		buf = appendLengthPrefixed(buf, metadata.ContextHashAfter)
+	}
 
 	h := sha256.Sum256(buf)
 	return hex.EncodeToString(h[:])

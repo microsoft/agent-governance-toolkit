@@ -72,7 +72,10 @@ cargo clippy --locked -p agent_control_specification_core --no-default-features 
 """
 [[workflow.job.step]]
 name = "OPA compatibility with upstream Rego enabled"
-run = "AGT_EXPECT_UPSTREAM_REGO=1 cargo test --locked -p agent_control_specification --features bundled-dispatchers,opa,agent-control-spec/rego --test upstream_compatibility"
+run = """
+AGT_EXPECT_UPSTREAM_REGO=1 cargo test --locked -p agent_control_specification --features bundled-dispatchers,opa,agent-control-spec/rego --test upstream_compatibility
+cargo test --locked -p agent_control_specification --features bundled-dispatchers,opa --test ffi_default_dispatchers
+"""
 [[workflow.job.step]]
 name = "Package publishable ACS crates"
 run = """

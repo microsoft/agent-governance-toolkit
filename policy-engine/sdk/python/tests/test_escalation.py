@@ -222,6 +222,46 @@ class EscalationConformanceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(AgentControlBlocked):
             await control.run({"text": "x"}, _noop_execute())
 
+    async def test_escalate_deny_carries_the_resolver_reason_as_message(self):
+        runtime = QueueRuntime([_escalate()])
+
+        async def resolver(intervention_point, result):
+            return ApprovalResolution.deny("ticket CR-42 was rejected")
+
+        control = AgentControl(runtime, approval_resolver=resolver)
+
+        with self.assertRaises(AgentControlBlocked) as caught:
+            await control.run({"text": "x"}, _noop_execute())
+        # The policy's classified reason survives; the resolver's explanation
+        # rides on the message, where free text belongs.
+        self.assertEqual(caught.exception.result.verdict.reason, "needs approval")
+        self.assertEqual(caught.exception.result.verdict.message, "ticket CR-42 was rejected")
+
+    async def test_escalate_deny_without_reason_leaves_the_verdict_alone(self):
+        runtime = QueueRuntime([_escalate()])
+
+        async def resolver(intervention_point, result):
+            return ApprovalResolution.deny()
+
+        control = AgentControl(runtime, approval_resolver=resolver)
+
+        with self.assertRaises(AgentControlBlocked) as caught:
+            await control.run({"text": "x"}, _noop_execute())
+        self.assertEqual(caught.exception.result.verdict, _escalate().verdict)
+
+    async def test_escalate_deny_ignores_a_non_string_reason(self):
+        runtime = QueueRuntime([_escalate()])
+
+        async def resolver(intervention_point, result):
+            return ApprovalResolution(ApprovalOutcome.DENY, reason={"decision": "allow"})
+
+        control = AgentControl(runtime, approval_resolver=resolver)
+
+        with self.assertRaises(AgentControlBlocked) as caught:
+            await control.run({"text": "x"}, _noop_execute())
+        # Only a string belongs on the message; anything else leaves it as it was.
+        self.assertEqual(caught.exception.result.verdict, _escalate().verdict)
+
     async def test_escalate_suspend_raises_suspended_with_handle(self):
         runtime = QueueRuntime([_escalate()])
 
