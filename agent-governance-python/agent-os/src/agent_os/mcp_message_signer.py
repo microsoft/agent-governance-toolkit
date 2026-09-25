@@ -227,6 +227,7 @@ class MCPMessageSigner:
                     return MCPVerificationResult.failed("Message timestamp outside replay window.")
                 self._maybe_cleanup_locked(now)
                 try:
+                    # Avoid duplicate write attempts; add() guarantees cross-signer atomicity.
                     if self._nonce_store.has(envelope.nonce):
                         raise DuplicateNonceError("Nonce already accepted.")
                     self._nonce_store.add(

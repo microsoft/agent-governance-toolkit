@@ -114,7 +114,7 @@ def test_atomic_claim_replaces_strictly_expired_nonce_at_capacity(clock):
     assert store.count() == 1
 
 
-def test_falsey_injected_nonce_store_is_not_replaced(clock):
+def test_falsy_injected_nonce_store_is_not_replaced(clock):
     class EmptyStore(InMemoryNonceStore):
         def __bool__(self):
             return bool(self.count())
