@@ -56,8 +56,7 @@ Run `agentmesh proxy --help` to inspect the installed command.
 
 The YAML below illustrates the standalone simulation's rule format. It is not
 loadable through the live CLI or the SDK's `PolicyEngine.load_yaml` API.
-See [`policies/mcp-governance.yaml`](policies/mcp-governance.yaml) for the
-illustrative policy file. The demo uses its own in-code rules.
+The demo uses its own in-code rules.
 
 ```yaml
 policies:
