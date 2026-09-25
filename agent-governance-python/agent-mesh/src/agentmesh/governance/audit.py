@@ -530,9 +530,15 @@ class MerkleAuditChain:
 
     def verify_chain(self) -> tuple[bool, Optional[str]]:
         """Verify the entire chain integrity."""
+        entries, _ = self._snapshot()
+        return self._verify_entries(entries)
+
+    @staticmethod
+    def _verify_entries(entries: list[AuditEntry]) -> tuple[bool, str | None]:
+        """Verify hash/link integrity of an already captured entry list."""
         previous_hash = ""
 
-        for i, entry in enumerate(self._entries):
+        for i, entry in enumerate(entries):
             # Verify entry's own hash
             if not entry.verify_hash():
                 return False, f"Entry {i} hash mismatch"
@@ -612,20 +618,35 @@ class AuditLog:
             completed_at=completed_at,
         )
 
-        self._chain.add_entry(entry)
+        with self._chain._lock:
+            agent_entries = self._by_agent.get(agent_did)
+            type_entries = self._by_type.get(event_type)
+            agent_count = len(agent_entries) if agent_entries is not None else 0
+            type_count = len(type_entries) if type_entries is not None else 0
+            try:
+                if agent_entries is None:
+                    self._by_agent[agent_did] = []
+                self._by_agent[agent_did].append(entry.entry_id)
+
+                if type_entries is None:
+                    self._by_type[event_type] = []
+                self._by_type[event_type].append(entry.entry_id)
+
+                self._chain._add_entry_locked(entry)
+            except BaseException:
+                if agent_entries is None:
+                    self._by_agent.pop(agent_did, None)
+                else:
+                    del agent_entries[agent_count:]
+                if type_entries is None:
+                    self._by_type.pop(event_type, None)
+                else:
+                    del type_entries[type_count:]
+                raise
 
         # Write to external sink if configured
         if self._sink is not None:
             self._sink.write(entry)
-
-        # Index
-        if agent_did not in self._by_agent:
-            self._by_agent[agent_did] = []
-        self._by_agent[agent_did].append(entry.entry_id)
-
-        if event_type not in self._by_type:
-            self._by_type[event_type] = []
-        self._by_type[event_type].append(entry.entry_id)
 
         return entry
 
@@ -643,9 +664,11 @@ class AuditLog:
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Get the most recent entries for a specific agent."""
-        entry_ids = self._by_agent.get(agent_did, [])[-limit:]
+        with self._chain._lock:
+            entry_ids = self._by_agent.get(agent_did, [])[-limit:]
+            entries = list(self._chain._entries)
         return [
-            entry for entry in self._chain._entries
+            entry for entry in entries
             if entry.entry_id in entry_ids
         ]
 
@@ -655,9 +678,11 @@ class AuditLog:
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Get the most recent entries of a given event type."""
-        entry_ids = self._by_type.get(event_type, [])[-limit:]
+        with self._chain._lock:
+            entry_ids = self._by_type.get(event_type, [])[-limit:]
+            entries = list(self._chain._entries)
         return [
-            entry for entry in self._chain._entries
+            entry for entry in entries
             if entry.entry_id in entry_ids
         ]
 
