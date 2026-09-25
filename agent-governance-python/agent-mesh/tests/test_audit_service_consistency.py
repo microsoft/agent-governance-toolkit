@@ -9,7 +9,7 @@ from threading import Event, Lock
 import pytest
 
 from agentmesh.governance import audit
-from agentmesh.governance.audit import AuditEntry
+from agentmesh.governance.audit import AuditEntry, AuditSnapshot
 from agentmesh.services.audit import AuditService
 
 
@@ -34,12 +34,12 @@ def _reader(service, kind, monkeypatch):
     return lambda: asyncio.run(audit_collector.verify_integrity())
 
 
-def _expected(kind, entries, root, valid=True):
+def _expected(kind, entries, root, valid=True, error=None):
     count = len(entries)
     if kind == "count":
         return count
     if kind == "snapshot":
-        return entries, root, valid
+        return AuditSnapshot(entries, root, valid, error)
     if kind == "summary":
         return {"total_entries": count, "chain_valid": valid, "root_hash": root}
     return {"chain_valid": valid, "entry_count": count}
@@ -163,29 +163,71 @@ def test_response_keeps_one_snapshot_during_append(monkeypatch, kind, append_at)
 def test_response_preserves_shape_and_corruption_detection(monkeypatch, kind, state):
     service = _service(0 if state == "empty" else 5)
     entries, root = service.chain._snapshot()
+    error = None
     if state == "bad-hash":
         entries[2].action = "tampered"
+        error = "Entry 2 hash mismatch"
     elif state == "bad-link":
         entries[2].previous_hash = "0" * 64
         entries[2].entry_hash = entries[2].compute_hash()
+        error = "Entry 2 chain broken"
 
     result = _reader(service, kind, monkeypatch)()
 
-    assert result == _expected(kind, entries, root, state in ("empty", "healthy"))
+    assert result == _expected(kind, entries, root, state in ("empty", "healthy"), error)
 
 
 def test_verified_snapshot_membership_is_detached_from_chain():
     service = _service()
-    entries, root, valid = service._log.verify_snapshot()
+    entries, root, valid, error = service._log.verify_snapshot()
     expected = list(entries)
 
     service.log_action("did:mesh:test", "later")
 
     assert entries == expected
     assert valid is True
+    assert error is None
     assert root != service.chain.get_root_hash()
     entries.clear()
     assert service.entry_count == len(expected) + 1
+
+
+@pytest.mark.parametrize("broken_link", [False, True])
+def test_invalid_snapshot_returns_error_without_second_read(monkeypatch, broken_link):
+    service = _service()
+    entries, root = service.chain._snapshot()
+    if broken_link:
+        entries[2].previous_hash = "0" * 64
+        entries[2].entry_hash = entries[2].compute_hash()
+        error = "Entry 2 chain broken"
+    else:
+        entries[2].action = "tampered"
+        error = "Entry 2 hash mismatch"
+    capture = service.chain._snapshot
+    calls = []
+
+    def capture_once():
+        assert not calls, "verification captured a second snapshot"
+        calls.append(True)
+        snapshot = capture()
+        service.log_action("did:mesh:test", "after-snapshot")
+        return snapshot
+
+    def reject_second_verification():
+        pytest.fail("snapshot error required a separate integrity check")
+
+    monkeypatch.setattr(service.chain, "_snapshot", capture_once)
+    monkeypatch.setattr(service._log, "verify_integrity", reject_second_verification)
+
+    result = service._log.verify_snapshot()
+
+    assert result.entries == entries
+    assert result.root_hash == root
+    assert result.valid is False
+    assert result.error == error
+    assert calls == [True]
+    assert service.entry_count == len(entries) + 1
+    assert service.chain.get_root_hash() != root
 
 
 @pytest.mark.parametrize("kind", ["summary", "collector"])
@@ -199,7 +241,7 @@ def test_response_uses_public_verified_snapshot(monkeypatch, kind, valid):
     class SnapshotLog:
         def verify_snapshot(self):
             calls.append(True)
-            return entries, root, valid
+            return AuditSnapshot(entries, root, valid, None if valid else "Entry 2 hash mismatch")
 
     monkeypatch.setattr(service, "_log", SnapshotLog())
 

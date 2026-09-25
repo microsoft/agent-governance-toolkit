@@ -13,7 +13,7 @@ import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional, Any
+from typing import TYPE_CHECKING, Optional, Any, NamedTuple
 from pydantic import BaseModel, Field
 import hashlib
 import hmac
@@ -242,6 +242,15 @@ class AuditEntry(BaseModel):
             **({"traceid": self.trace_id} if self.trace_id else {}),
             **({"sessionid": self.session_id} if self.session_id else {}),
         }
+
+
+class AuditSnapshot(NamedTuple):
+    """Captured entries and root with their hash/link verification result."""
+
+    entries: list[AuditEntry]
+    root_hash: str | None
+    valid: bool
+    error: str | None
 
 
 class MerkleNode(BaseModel):
@@ -677,6 +686,7 @@ class AuditLog:
     def _get_indexed_entries(
         self, index: dict[str, list[str]], key: str, limit: int,
     ) -> list[AuditEntry]:
+        """Entry IDs are assumed unique; AuditLog.log() generates UUID4 IDs."""
         with self._chain._lock:
             wanted = set(index.get(key, [])[-limit:])
             if not wanted:
@@ -731,16 +741,17 @@ class AuditLog:
         """Verify audit hash/link integrity, returning validity and an optional error."""
         return self._chain.verify_chain()
 
-    def verify_snapshot(self) -> tuple[list[AuditEntry], str | None, bool]:
+    def verify_snapshot(self) -> AuditSnapshot:
         """Capture a committed chain snapshot and verify it outside the lock.
 
         Returns:
-            Entries in append order, their full-chain Merkle root, and hash/link
-            validity. The list is detached; the entry objects are not copied.
+            Entries in append order, their full-chain Merkle root, hash/link
+            validity, and an error string if invalid (otherwise None). The list
+            is detached; the entry objects are not copied.
         """
         entries, root = self._chain._snapshot()
-        valid, _error = self._chain._verify_entries(entries)
-        return entries, root, valid
+        valid, error = self._chain._verify_entries(entries)
+        return AuditSnapshot(entries, root, valid, error)
 
     def get_proof(self, entry_id: str) -> Optional[dict[str, Any]]:
         """Get tamper-proof evidence for a specific entry."""
