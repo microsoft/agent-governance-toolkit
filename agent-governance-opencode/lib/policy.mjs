@@ -1337,9 +1337,7 @@ function tokenizeShellCommands(commandText) {
   let token = "";
   let tokenStarted = false;
   let quote;
-  let resumeDoubleQuote = false;
-  let backtickSubstitution = false;
-  let commandSubstitutionDepth = 0;
+  const substitutions = [];
   let hasControlOperator = false;
 
   const finishToken = () => {
@@ -1364,16 +1362,18 @@ function tokenizeShellCommands(commandText) {
         hasControlOperator = true;
         finishCommand();
         quote = undefined;
-        resumeDoubleQuote = true;
-        backtickSubstitution = true;
+        substitutions.push({ resumeDoubleQuote: true, type: "backtick" });
         continue;
       }
       if (quote === '"' && character === "$" && input[index + 1] === "(") {
         hasControlOperator = true;
         finishCommand();
         quote = undefined;
-        resumeDoubleQuote = true;
-        commandSubstitutionDepth = 1;
+        substitutions.push({
+          depth: 1,
+          resumeDoubleQuote: true,
+          type: "command",
+        });
         index += 1;
         continue;
       }
@@ -1394,30 +1394,49 @@ function tokenizeShellCommands(commandText) {
       continue;
     }
 
-    if (backtickSubstitution && character === "`") {
+    const activeSubstitution = substitutions.at(-1);
+    if (character === "`" && activeSubstitution?.type === "backtick") {
       hasControlOperator = true;
       finishCommand();
-      backtickSubstitution = false;
-      if (resumeDoubleQuote) {
+      substitutions.pop();
+      if (activeSubstitution.resumeDoubleQuote) {
         quote = '"';
-        resumeDoubleQuote = false;
         tokenStarted = true;
       }
       continue;
     }
-    if (commandSubstitutionDepth > 0 && character === "(") {
+    if (character === "`") {
       hasControlOperator = true;
       finishCommand();
-      commandSubstitutionDepth += 1;
+      substitutions.push({ resumeDoubleQuote: false, type: "backtick" });
       continue;
     }
-    if (commandSubstitutionDepth > 0 && character === ")") {
+    if (character === "$" && input[index + 1] === "(") {
       hasControlOperator = true;
       finishCommand();
-      commandSubstitutionDepth -= 1;
-      if (commandSubstitutionDepth === 0 && resumeDoubleQuote) {
+      substitutions.push({
+        depth: 1,
+        resumeDoubleQuote: false,
+        type: "command",
+      });
+      index += 1;
+      continue;
+    }
+    if (activeSubstitution?.type === "command" && character === "(") {
+      hasControlOperator = true;
+      finishCommand();
+      activeSubstitution.depth += 1;
+      continue;
+    }
+    if (activeSubstitution?.type === "command" && character === ")") {
+      hasControlOperator = true;
+      finishCommand();
+      activeSubstitution.depth -= 1;
+      if (activeSubstitution.depth === 0) {
+        substitutions.pop();
+      }
+      if (activeSubstitution.depth === 0 && activeSubstitution.resumeDoubleQuote) {
         quote = '"';
-        resumeDoubleQuote = false;
         tokenStarted = true;
       }
       continue;
