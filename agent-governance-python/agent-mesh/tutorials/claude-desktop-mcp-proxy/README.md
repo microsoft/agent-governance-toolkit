@@ -39,7 +39,7 @@ trust policies, rate limits, and tamper-evident audit logging on every tool call
 ## Step 1: Install AgentMesh
 
 ```bash
-pip install agentmesh-platform
+pip install agent-governance-toolkit-core
 ```
 
 Verify:
@@ -276,7 +276,7 @@ shadow-mode option; do not rely on it to disable enforcement.
 | Claude can't see MCP tools | Check `claude_desktop_config.json` syntax, restart Claude |
 | All calls blocked | Check the selected built-in policy preset and the denial reason |
 | Unknown option | Use `agentmesh proxy --help`; `--upstream` and `--audit-dir` are unsupported |
-| Proxy won't start | Check Python 3.11+, run `pip install agentmesh-platform` |
+| Proxy won't start | Check Python 3.11+, run `pip install agent-governance-toolkit-core` |
 
 ## Next Steps
 

@@ -8,6 +8,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "../lib/audit.mjs";
+import {
+  checkArbitraryText,
+  evaluateOpenCodePrompt,
+  evaluateOpenCodeTool,
+  evaluateOpenCodeToolOutput,
+  getPolicyStatus,
+  loadPolicy,
+  SURFACE_NAME,
+} from "../lib/policy.mjs";
+
 test("private-key scanning finishes for repeated unmatched headers", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "agt-pem-scan-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -50,17 +61,6 @@ test("private-key redaction preserves complete, nested, and empty-body behavior"
     assert.equal(result.redactedOutput, expected);
   }
 });
-
-import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "../lib/audit.mjs";
-import {
-  checkArbitraryText,
-  evaluateOpenCodePrompt,
-  evaluateOpenCodeTool,
-  evaluateOpenCodeToolOutput,
-  getPolicyStatus,
-  loadPolicy,
-  SURFACE_NAME,
-} from "../lib/policy.mjs";
 
 test("SURFACE_NAME is opencode", () => {
   assert.equal(SURFACE_NAME, "opencode");

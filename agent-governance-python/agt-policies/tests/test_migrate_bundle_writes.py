@@ -59,8 +59,10 @@ def test_directory_failure_is_a_migration_diagnostic(tmp_path, monkeypatch):
         raise PermissionError("injected directory failure")
 
     monkeypatch.setattr(Path, "mkdir", fail_mkdir)
-    with pytest.raises(ResolutionError, match="PermissionError"):
+    with pytest.raises(ResolutionError, match="PermissionError") as error:
         _materialize_rego_bundle(tmp_path / "output", [])
+    assert str(tmp_path / "output" / "policy") in error.value.detail
+    assert "injected directory failure" not in error.value.detail
 
 
 def test_concurrent_publication_has_one_complete_winner(tmp_path, monkeypatch):

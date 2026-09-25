@@ -223,7 +223,8 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
         return policy_dir
     except OSError as exc:
         raise ResolutionError.invalid_governance(
-            f"could not publish generated policy bundle ({type(exc).__name__})"
+            f"could not publish generated policy bundle at {bundle_root / 'policy'} "
+            f"({type(exc).__name__})"
         ) from exc
 
 

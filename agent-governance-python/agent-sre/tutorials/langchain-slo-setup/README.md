@@ -11,7 +11,7 @@ Monitor a LangChain agent with **Service Level Objectives**, **error budgets**, 
 ## Quick Start
 
 ```bash
-pip install agent-sre
+pip install agent-governance-toolkit-cli
 cd agent-governance-python/agent-sre/tutorials/langchain-slo-setup
 python -X utf8 demo.py
 ```
