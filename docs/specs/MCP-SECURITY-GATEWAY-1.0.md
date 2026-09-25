@@ -1,6 +1,6 @@
 ---
 title: "MCP Security Gateway -- Version 1.0"
-last_reviewed: 2026-07-07
+last_reviewed: 2026-09-24
 owner: agt-maintainers
 ---
 
@@ -637,22 +637,33 @@ Factory methods:
 The `verify_message(envelope)` method MUST perform the following
 checks in order:
 
-1. **Timestamp validity:** Parse the envelope timestamp. If parsing
-   fails, return `failed("invalid timestamp format")`.
-2. **Replay window check:** If the message age exceeds the
-   `replay_window`, return `failed("message outside replay window")`.
-3. **Nonce uniqueness:** If the nonce has been seen before within the
-   replay window, return `failed("duplicate nonce")`.
-4. **Signature verification:** Recompute the HMAC-SHA256 signature
+1. **Timestamp validity:** If the envelope timestamp cannot be compared
+   with the current UTC time, verification MUST fail closed.
+2. **Replay window check:** If the absolute clock skew exceeds the
+   `replay_window`, return
+   `failed("Message timestamp outside replay window.")`.
+3. **Signature verification:** Recompute the HMAC-SHA256 signature
    and compare against the envelope signature using constant-time
-   comparison. If mismatch, return `failed("invalid signature")`.
-5. **Store and success:** Store the nonce in the cache and return
+   comparison. If mismatch, return `failed("Invalid signature.")`.
+   Unauthenticated messages MUST NOT access or modify the replay store,
+   including triggering automatic cleanup or consuming nonce capacity.
+4. **Freshness and nonce uniqueness:** Recheck the replay window after
+   signature computation and lock acquisition. Hold the signer lock across
+   this recheck, automatic cleanup, nonce lookup, and the atomic nonce claim.
+   If another verifier has already claimed the nonce, return
+   `failed("Duplicate nonce (replay detected).")`. The store's atomic claim
+   MUST also protect against concurrent claims from other signer instances
+   (see §7.10); a per-signer lock alone is insufficient.
+5. **Store and success:** Only after the nonce claim succeeds, return
    `success(payload, sender_id)`. If the nonce cannot be stored
    without evicting an in-window nonce (see §7.9), the store fails
    closed and verification MUST return
    `failed("Nonce store at capacity (fail-closed).")` rather than
    accept a message whose nonce cannot be retained for the full
    replay window.
+
+Backend failures MUST reject the message without exposing a verified
+payload or sender.
 
 **[Pure Specification]**
 
@@ -690,6 +701,8 @@ checks in order:
    (retention is inclusive of the exact expiry instant, matching the
    inclusive replay-window check in §7.7 step 2); it is eligible for
    eviction only once `now > expires_at`.
+7. A duplicate nonce claim MUST NOT shorten or extend the existing
+   retention, including at capacity or at the exact expiry instant.
 
 **[Pure Specification]**
 
@@ -698,6 +711,27 @@ checks in order:
 Implementations MUST accept an optional external `nonce_store` for
 distributed deployments. When provided, nonce checks and insertions
 MUST use the external store instead of the in-memory cache.
+An explicitly supplied store MUST be honored even when its boolean value
+is false (for example, an empty store).
+
+The `add(nonce, expires_at)` operation MUST atomically insert only when
+the nonce is absent or strictly expired, raising `DuplicateNonceError`
+otherwise. Checking with `has` and then unconditionally overwriting is not
+sufficient: concurrent verifiers could both accept the same message.
+Rejecting a duplicate MUST NOT shorten or extend the original retention.
+
+**Breaking custom-store migration:** stateful and distributed backends
+MUST implement atomic conditional insertion or an equivalent backend
+transaction before using this verifier. The atomic operation must cover
+all verifiers sharing the store, retain nonces through the exact expiry
+instant, and reject live duplicates with the public `DuplicateNonceError`.
+There is no fallback for a backend that still unconditionally overwrites
+nonces. Backend and capacity failures MUST fail closed. The signature
+algorithm and envelope format are unchanged by this replay-store contract.
+
+Independent in-memory stores do not prevent the same envelope from being
+accepted by different receivers. Receivers in one replay-protection domain
+MUST share an atomic nonce store.
 **[Pure Specification]**
 
 ---
