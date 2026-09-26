@@ -1,0 +1,84 @@
+{
+  "$id": "https://agent-control-specification.test/wire/snapshot.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Control Specification host snapshot",
+  "description": "Explicit host supplied facts for one intervention point. Ambient context remains in this object.",
+  "type": "object",
+  "additionalProperties": true,
+  "anyOf": [
+    {
+      "required": ["agent"]
+    },
+    {
+      "required": ["input"]
+    },
+    {
+      "required": ["model_request"]
+    },
+    {
+      "required": ["model_response"]
+    },
+    {
+      "required": ["tool_call"],
+      "properties": {
+        "tool_call": {
+          "$ref": "#/$defs/pre_tool_call"
+        }
+      }
+    },
+    {
+      "required": ["tool_call", "tool_result"],
+      "properties": {
+        "tool_call": {
+          "$ref": "#/$defs/post_tool_call"
+        }
+      }
+    },
+    {
+      "required": ["output"]
+    }
+  ],
+  "properties": {
+    "agent": true,
+    "input": true,
+    "model_request": true,
+    "model_response": true,
+    "tool_call": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "tool_result": true,
+    "output": true,
+    "actor": true,
+    "tenant": true,
+    "conversation": true,
+    "messages": true,
+    "approvals": true,
+    "prior_decisions": true,
+    "transport": true,
+    "metadata": true,
+    "reason": true
+  },
+  "$defs": {
+    "pre_tool_call": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "args"],
+      "properties": {
+        "id": true,
+        "name": true,
+        "args": true
+      }
+    },
+    "post_tool_call": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "id": true,
+        "name": true,
+        "args": true
+      }
+    }
+  }
+}

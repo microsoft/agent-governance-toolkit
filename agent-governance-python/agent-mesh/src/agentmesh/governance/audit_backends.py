@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import os
 import sys
 import threading
@@ -22,6 +23,14 @@ from typing import Any, Optional, Protocol, runtime_checkable
 from pydantic import BaseModel, Field
 
 from .audit import AuditEntry
+
+logger = logging.getLogger(__name__)
+
+# Not defined on Windows; there a symlinked audit path is a smaller risk
+# (no unprivileged-user symlink-swap TOCTOU) so opening without it is fine.
+_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+# Not defined on Windows, which has no equivalent POSIX-permission concept.
+_HAS_FCHMOD = hasattr(os, "fchmod")
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +219,34 @@ class SignedAuditEntry(BaseModel):
         return self.model_dump()
 
 
+def _iter_parsed_entries(path: Path) -> list[SignedAuditEntry]:
+    """Parse every line of *path*, skipping (and logging) any that don't.
+
+    A write interrupted mid-line (crash, disk full) leaves a corrupt
+    line; treating that as a hard failure would turn one bad append into
+    a permanent block on ever reading or verifying the file again. This
+    doesn't weaken the hash chain: a skipped line is simply excluded from
+    it, so replacing a real entry with garbage still breaks chain
+    continuity at the next real entry - it can't be smoothed over without
+    the signing key. Shared by read_entries, HashChainVerifier.verify_file,
+    and FileAuditSink's own chain-resume logic, so all three agree on what
+    "readable" means.
+    """
+    entries: list[SignedAuditEntry] = []
+    if not path.exists():
+        return entries
+    with open(path, "r", encoding="utf-8") as fh:
+        for lineno, line in enumerate(fh, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                entries.append(SignedAuditEntry.model_validate_json(stripped))
+            except Exception:
+                logger.warning("%s: skipping unparsable line %d", path, lineno)
+    return entries
+
+
 # ---------------------------------------------------------------------------
 # FileAuditSink
 # ---------------------------------------------------------------------------
@@ -237,6 +274,22 @@ class FileAuditSink:
         max_file_size: int = 0,
     ) -> None:
         self._path = Path(path)
+        # Validated here rather than left for the first write() to hit
+        # FileNotFoundError/IsADirectoryError/ELOOP by accident: a caller
+        # going through govern() already gets a construction-time error for
+        # a bad key, and a bad path deserves the same rather than a lazily
+        # discovered one. A symlinked path specifically would otherwise
+        # still open successfully (following it) for every operation except
+        # _append_line's O_NOFOLLOW, which only raises ELOOP once the first
+        # entry is actually written.
+        if self._path.is_symlink():
+            raise ValueError(f"audit sink path must not be a symlink: {self._path}")
+        if self._path.is_dir():
+            raise IsADirectoryError(f"audit sink path is a directory: {self._path}")
+        if not self._path.parent.is_dir():
+            raise FileNotFoundError(
+                f"audit sink parent directory does not exist: {self._path.parent}"
+            )
         self._secret_key = secret_key
         self._max_file_size = max_file_size
         self._lock = threading.Lock()
@@ -246,6 +299,11 @@ class FileAuditSink:
         # Resume chain if the file already has entries.
         if self._path.exists() and self._path.stat().st_size > 0:
             self._previous_hash = self._read_last_hash()
+        # (st_dev, st_ino) of the file backing previous_hash above, so a
+        # write() can tell whether *path* still names that same file or an
+        # external rotation (logrotate-style rename) replaced it - see
+        # _resync_if_rotated.
+        self._file_id = self._current_file_id()
 
     # ------------------------------------------------------------------
     # AuditSink interface
@@ -255,6 +313,7 @@ class FileAuditSink:
         """Write a single entry, rotating the file if necessary."""
         with self._lock:
             self._maybe_rotate()
+            self._resync_if_rotated()
             signed = SignedAuditEntry.from_entry(
                 entry,
                 previous_hash=self._previous_hash,
@@ -262,10 +321,12 @@ class FileAuditSink:
             )
             self._append_line(signed)
             self._previous_hash = signed.content_hash
+            self._file_id = self._current_file_id()
 
     def write_batch(self, entries: list[AuditEntry]) -> None:
         """Write a batch of entries atomically (under lock)."""
         with self._lock:
+            self._resync_if_rotated()
             for entry in entries:
                 self._maybe_rotate()
                 signed = SignedAuditEntry.from_entry(
@@ -275,6 +336,7 @@ class FileAuditSink:
                 )
                 self._append_line(signed)
                 self._previous_hash = signed.content_hash
+            self._file_id = self._current_file_id()
 
     def verify_integrity(self) -> tuple[bool, str | None]:
         """Read back the file and verify hash chain + HMAC signatures."""
@@ -283,6 +345,10 @@ class FileAuditSink:
         if is_valid:
             return True, None
         return False, "; ".join(errors)
+
+    def matches_key(self, secret_key: bytes) -> bool:
+        """Whether *secret_key* is the key this sink signs entries with."""
+        return hmac.compare_digest(self._secret_key, secret_key)
 
     def close(self) -> None:
         """Mark the sink as closed."""
@@ -293,9 +359,31 @@ class FileAuditSink:
     # ------------------------------------------------------------------
 
     def _append_line(self, signed: SignedAuditEntry) -> None:
-        """Append a single JSON line to the file."""
+        """Append a single JSON line to the file.
+
+        Opens with O_CREAT|O_APPEND and mode 0600 rather than plain
+        open(path, "a"): entries can carry an agent's call arguments, so
+        the default 0644 a plain open() creates would make audit content
+        world-readable, and O_NOFOLLOW refuses to write through a symlink
+        planted at the configured path. The 0o600 above only applies if
+        this call created the file; one that already existed (e.g. 0644)
+        keeps its old mode otherwise, so fchmod tightens it explicitly too
+        - inside the fdopen block, on the file object's own descriptor, so
+        a failing fchmod (e.g. EPERM: the file is owned by another user)
+        still closes the descriptor via the same exception path a failing
+        write would, rather than leaking it. A file this process can't
+        chmod now fails every write instead of silently leaving it at its
+        existing, looser mode.
+        """
         line = json.dumps(signed.to_dict(), sort_keys=True, default=str)
-        with open(self._path, "a", encoding="utf-8") as fh:
+        fd = os.open(
+            self._path,
+            os.O_WRONLY | os.O_CREAT | os.O_APPEND | _O_NOFOLLOW,
+            0o600,
+        )
+        with os.fdopen(fd, "a", encoding="utf-8") as fh:
+            if _HAS_FCHMOD:
+                os.fchmod(fh.fileno(), 0o600)
             fh.write(line + "\n")
 
     def _maybe_rotate(self) -> None:
@@ -312,30 +400,59 @@ class FileAuditSink:
             # Reset chain for the new file
             self._previous_hash = ""
 
+    def _current_file_id(self) -> tuple[int, int] | None:
+        """(st_dev, st_ino) of the file at self._path, or None if absent."""
+        try:
+            st = self._path.stat()
+        except OSError:
+            return None
+        return (st.st_dev, st.st_ino)
+
+    def _resync_if_rotated(self) -> None:
+        """Re-derive previous_hash if *path* no longer names the file this
+        sink last wrote to.
+
+        _maybe_rotate() is this sink's own, self-triggered rotation and
+        already resets previous_hash directly. This instead covers a file
+        replaced out from under a *shared* sink by something external
+        (logrotate-style rename, another process, a caller removing the
+        file by hand): without it, the cached previous_hash keeps chaining
+        onto a hash from a file that's gone, and verify_integrity() on the
+        replacement breaks at its first entry. Caller must hold self._lock.
+        """
+        current_id = self._current_file_id()
+        if current_id == self._file_id:
+            return
+        self._previous_hash = self._read_last_hash() if current_id is not None else ""
+        self._file_id = current_id
+
     def _read_last_hash(self) -> str:
-        """Read the content_hash of the last entry in the file."""
-        last_line = ""
-        with open(self._path, "r", encoding="utf-8") as fh:
-            for line in fh:
-                stripped = line.strip()
-                if stripped:
-                    last_line = stripped
-        if not last_line:
-            return ""
-        data = json.loads(last_line)
-        return data.get("content_hash", "")
+        """Return the content_hash to chain the next entry onto, after
+        verifying the existing chain authenticates under this sink's key.
+
+        Resuming onto an unverified chain would let a file swapped out
+        from under this sink - by another process, an attacker, or just a
+        different key - get silently extended as if it were ours;
+        verify_integrity() would then fail confusingly, if anyone thought
+        to check. Fail closed here instead, at resume time, with a clear
+        reason. Unparsable lines are skipped, not treated as a failure -
+        see _iter_parsed_entries.
+        """
+        previous_hash = ""
+        for entry in _iter_parsed_entries(self._path):
+            if entry.previous_hash != previous_hash or not entry.verify(self._secret_key):
+                raise ValueError(
+                    f"{self._path}: existing audit chain does not verify "
+                    "under the configured audit_secret_key - refusing to "
+                    "resume onto an unauthenticated or tampered file."
+                )
+            previous_hash = entry.content_hash
+        return previous_hash
 
     def read_entries(self) -> list[SignedAuditEntry]:
-        """Read all signed entries from the file (for testing/querying)."""
-        entries: list[SignedAuditEntry] = []
-        if not self._path.exists():
-            return entries
-        with open(self._path, "r", encoding="utf-8") as fh:
-            for line in fh:
-                stripped = line.strip()
-                if stripped:
-                    entries.append(SignedAuditEntry.model_validate_json(stripped))
-        return entries
+        """Read all signed entries from the file (for testing/querying).
+        Unparsable lines are skipped - see _iter_parsed_entries."""
+        return _iter_parsed_entries(self._path)
 
 
 # ---------------------------------------------------------------------------
@@ -373,19 +490,10 @@ class HashChainVerifier:
         if not path.exists():
             return False, ["File does not exist"]
 
-        entries: list[SignedAuditEntry] = []
-        with open(path, "r", encoding="utf-8") as fh:
-            for lineno, line in enumerate(fh, start=1):
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                try:
-                    entries.append(SignedAuditEntry.model_validate_json(stripped))
-                except Exception as exc:
-                    errors.append(f"Line {lineno}: parse error: {exc}")
-
-        if errors:
-            return False, errors
+        # Unparsable lines are skipped, not a hard failure - see
+        # _iter_parsed_entries. A genuinely tampered or foreign entry among
+        # what does parse still fails chain-continuity or HMAC below.
+        entries = _iter_parsed_entries(path)
 
         previous_hash = ""
         for idx, entry in enumerate(entries):

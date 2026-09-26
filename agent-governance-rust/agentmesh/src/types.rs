@@ -84,6 +84,8 @@ pub struct AuditEntry {
     pub decision: String,
     pub previous_hash: String,
     pub hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_audit_metadata: Option<crate::skill_audit::SkillAuditMetadata>,
 }
 
 /// Filter for querying audit entries.
@@ -110,6 +112,8 @@ pub enum ConflictResolutionStrategy {
 }
 
 /// The scope at which a policy rule applies.
+///
+/// Specificity order (most → least): Agent > Organization > Tenant > Global.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicyScope {
@@ -118,6 +122,8 @@ pub enum PolicyScope {
     Global,
     /// Applies to a specific tenant.
     Tenant,
+    /// Applies to a specific organization within a tenant.
+    Organization,
     /// Applies to a specific agent.
     Agent,
 }
@@ -128,9 +134,14 @@ impl PolicyScope {
         match self {
             PolicyScope::Global => 0,
             PolicyScope::Tenant => 1,
-            PolicyScope::Agent => 2,
+            PolicyScope::Organization => 2,
+            PolicyScope::Agent => 3,
         }
     }
+
+    // VALID_VALUES removed: serde's rename_all = "snake_case" already
+    // rejects unknown variants at deserialization, so a hand-maintained
+    // list would drift with no benefit (#3536 review feedback).
 }
 
 /// A candidate decision produced by a single policy rule evaluation.
@@ -292,6 +303,7 @@ mod tests {
             decision: "allow".to_string(),
             previous_hash: "".to_string(),
             hash: "abc123".to_string(),
+            skill_audit_metadata: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: AuditEntry = serde_json::from_str(&json).unwrap();
@@ -363,6 +375,7 @@ mod tests {
                 decision: "allow".to_string(),
                 previous_hash: "".to_string(),
                 hash: "abc".to_string(),
+                skill_audit_metadata: None,
             },
         };
         assert!(result.allowed);
@@ -385,5 +398,28 @@ mod tests {
         assert_ne!(TrustTier::Standard, TrustTier::Trusted);
         assert_eq!(TrustTier::VerifiedPartner, TrustTier::VerifiedPartner);
         assert_ne!(TrustTier::Untrusted, TrustTier::Probationary);
+    }
+
+    // ── Scope validation (#3536) ────────────────────────────────
+
+    #[test]
+    fn test_organization_scope_specificity() {
+        assert!(PolicyScope::Tenant.specificity() < PolicyScope::Organization.specificity());
+        assert!(PolicyScope::Organization.specificity() < PolicyScope::Agent.specificity());
+    }
+
+    #[test]
+    fn test_organization_scope_serde_roundtrip() {
+        let scope = PolicyScope::Organization;
+        let json = serde_json::to_string(&scope).unwrap();
+        assert_eq!(json, "\"organization\"");
+        let back: PolicyScope = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, PolicyScope::Organization);
+    }
+
+    #[test]
+    fn test_invalid_scope_serde_rejects() {
+        let result: Result<PolicyScope, _> = serde_json::from_str("\"organisation\"");
+        assert!(result.is_err());
     }
 }

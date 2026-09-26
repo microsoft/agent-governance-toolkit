@@ -7,6 +7,12 @@ Defines a unified interface for pluggable policy evaluators (OPA, Cedar, or
 any custom backend). Backends register themselves with BackendRegistry for
 discovery by name.
 
+This is a standalone, manually wired API. Registering a backend does not
+connect it to govern() or PolicyEngine; callers retrieve it, call evaluate(),
+and enforce the returned decision themselves. For Rego in govern(), use its
+rego_path or rego_content arguments. A directly managed PolicyEngine supports
+load_rego() and load_cedar() independently of this registry.
+
 Usage:
     from agentmesh.governance.backend import (
         ExternalPolicyBackend,
@@ -55,7 +61,8 @@ class ExternalPolicyBackend(Protocol):
     """Protocol for pluggable policy evaluators.
 
     Any class implementing these three members can be registered with
-    BackendRegistry and used interchangeably by the governance layer.
+    BackendRegistry and used by callers that explicitly retrieve and evaluate
+    it. Registration does not change govern() or PolicyEngine enforcement.
     """
 
     @property

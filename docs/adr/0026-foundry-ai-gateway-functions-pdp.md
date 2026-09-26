@@ -1,12 +1,12 @@
 ---
 title: "ADR 0026: Azure Functions PDP behind AI Gateway for Foundry prompt-based agents"
-last_reviewed: 2026-05-24
+last_reviewed: 2026-09-06
 owner: agt-maintainers
 ---
 
 # ADR 0026: Azure Functions PDP behind AI Gateway for Foundry prompt-based agents
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-05-24
 
 ## Context
@@ -88,3 +88,9 @@ boundary but must be communicated clearly in operator docs. Because the PDP
 sees a digest of prompt/tool input rather than the raw payload by default,
 PDP logic that needs the full text must opt in explicitly and accept the
 associated data-handling obligations.
+
+## Implementation
+
+[PR #2536](https://github.com/microsoft/agent-governance-toolkit/pull/2536)
+shipped the reference sample, APIM policy fragment, Azure Function, deployment
+template, and latency harness described by this decision.

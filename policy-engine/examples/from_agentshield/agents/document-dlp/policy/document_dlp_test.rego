@@ -19,7 +19,7 @@ test_post_tool_call_secret_transform if {
 	}
 	verdict.decision == "transform"
 	verdict.reason == "redact_secret_in_tool_result"
-	verdict.transform.path == "$policy_target.text"
+	verdict.transform.path == "$target.text"
 	verdict.transform.value == "leak [SECRET-REDACTED] here"
 }
 

@@ -225,11 +225,11 @@ class TestIATPManifestOnboarding:
         assert sigma == 0.95  # 950 / 1000
 
         # Join session with Nexus-enriched sigma
-        session = await self.hv.create_session(
+        session = self.hv.create_session(
             config=SessionConfig(max_participants=5),
             creator_did="did:mesh:admin",
         )
-        ring = await self.hv.join_session(
+        ring = self.hv.join_session(
             session.sso.session_id,
             "did:mesh:partner-agent",
             actions=analysis.actions,
@@ -266,11 +266,11 @@ class TestIATPManifestOnboarding:
         )
         assert sigma == 0.40
 
-        session = await self.hv.create_session(
+        session = self.hv.create_session(
             config=SessionConfig(),
             creator_did="did:mesh:admin",
         )
-        ring = await self.hv.join_session(
+        ring = self.hv.join_session(
             session.sso.session_id,
             "did:mesh:new-agent",
             actions=analysis.actions,
@@ -299,11 +299,11 @@ class TestIATPManifestOnboarding:
         analysis = self.iatp.analyze_manifest_dict(manifest)
         assert analysis.has_non_reversible_actions is True
 
-        session = await self.hv.create_session(
+        session = self.hv.create_session(
             config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL),
             creator_did="did:mesh:admin",
         )
-        await self.hv.join_session(
+        self.hv.join_session(
             session.sso.session_id,
             "did:mesh:admin-agent",
             actions=analysis.actions,
@@ -396,14 +396,14 @@ class TestFullGovernancePipeline:
             history=AgentHistory(agent_did),
         )
 
-        session = await self.hv.create_session(
+        session = self.hv.create_session(
             config=SessionConfig(enable_audit=True),
             creator_did="did:mesh:admin",
         )
         sid = session.sso.session_id
 
-        await self.hv.join_session(sid, agent_did, sigma_raw=sigma)
-        await self.hv.activate_session(sid)
+        self.hv.join_session(sid, agent_did, sigma_raw=sigma)
+        self.hv.activate_session(sid)
 
         # All verification checks pass
         for i in range(5):
@@ -435,7 +435,7 @@ class TestFullGovernancePipeline:
             ],
         )
 
-        hash_chain_root = await self.hv.terminate_session(sid)
+        hash_chain_root = self.hv.terminate_session(sid)
         assert hash_chain_root is not None
 
 
@@ -626,7 +626,7 @@ class TestWiredHypervisor:
 
     async def test_join_with_manifest_auto_parses(self):
         """Providing a manifest dict auto-parses actions and sigma."""
-        session = await self.hv.create_session(
+        session = self.hv.create_session(
             config=SessionConfig(max_participants=5),
             creator_did="did:mesh:admin",
         )
@@ -648,7 +648,7 @@ class TestWiredHypervisor:
             "scopes": ["data"],
         }
 
-        ring = await self.hv.join_session(
+        ring = self.hv.join_session(
             sid,
             "did:mesh:alice",
             manifest=manifest,
@@ -661,13 +661,13 @@ class TestWiredHypervisor:
 
     async def test_nexus_auto_resolves_sigma_when_zero(self):
         """When sigma_raw=0 and no manifest, Nexus resolves sigma."""
-        session = await self.hv.create_session(
+        session = self.hv.create_session(
             config=SessionConfig(max_participants=5),
             creator_did="did:mesh:admin",
         )
         sid = session.sso.session_id
 
-        ring = await self.hv.join_session(
+        ring = self.hv.join_session(
             sid,
             "did:mesh:alice",
             agent_history=AgentHistory("did:mesh:alice"),
@@ -677,14 +677,14 @@ class TestWiredHypervisor:
 
     async def test_nexus_conservative_merge(self):
         """When both sigma_raw and Nexus are available, uses lower (conservative)."""
-        session = await self.hv.create_session(
+        session = self.hv.create_session(
             config=SessionConfig(max_participants=5),
             creator_did="did:mesh:admin",
         )
         sid = session.sso.session_id
 
         # sigma_raw=0.95, Nexus=0.85 → min=0.85
-        ring = await self.hv.join_session(
+        ring = self.hv.join_session(
             sid,
             "did:mesh:alice",
             sigma_raw=0.95,
@@ -694,17 +694,17 @@ class TestWiredHypervisor:
 
     async def test_verify_behavior_returns_clean_result(self):
         """verify_behavior() returns a passing result for clean output."""
-        session = await self.hv.create_session(
+        session = self.hv.create_session(
             config=SessionConfig(max_participants=5),
             creator_did="did:mesh:admin",
         )
         sid = session.sso.session_id
 
-        await self.hv.join_session(sid, "did:mesh:alice", sigma_raw=0.85)
-        await self.hv.activate_session(sid)
+        self.hv.join_session(sid, "did:mesh:alice", sigma_raw=0.85)
+        self.hv.activate_session(sid)
 
         self.verification_backend.set_drift("did:mesh:alice", 0.02)
-        result = await self.hv.verify_behavior(
+        result = self.hv.verify_behavior(
             session_id=sid,
             agent_did="did:mesh:alice",
             claimed_embedding="did:mesh:alice",
@@ -717,15 +717,15 @@ class TestWiredHypervisor:
     async def test_verify_behavior_returns_none_without_verifier(self):
         """Without Verification adapter, verify_behavior returns None."""
         hv_no_verifier = Hypervisor()
-        session = await hv_no_verifier.create_session(
+        session = hv_no_verifier.create_session(
             config=SessionConfig(max_participants=5),
             creator_did="did:mesh:admin",
         )
         sid = session.sso.session_id
-        await hv_no_verifier.join_session(sid, "did:mesh:alice", sigma_raw=0.85)
-        await hv_no_verifier.activate_session(sid)
+        hv_no_verifier.join_session(sid, "did:mesh:alice", sigma_raw=0.85)
+        hv_no_verifier.activate_session(sid)
 
-        result = await hv_no_verifier.verify_behavior(
+        result = hv_no_verifier.verify_behavior(
             session_id=sid,
             agent_did="did:mesh:alice",
             claimed_embedding="a",
@@ -736,13 +736,13 @@ class TestWiredHypervisor:
     async def test_backward_compat_no_adapters(self):
         """Hypervisor without adapters works exactly as before."""
         hv = Hypervisor()
-        session = await hv.create_session(
+        session = hv.create_session(
             config=SessionConfig(max_participants=5),
             creator_did="did:mesh:admin",
         )
         sid = session.sso.session_id
 
-        ring = await hv.join_session(sid, "did:mesh:alice", sigma_raw=0.85)
+        ring = hv.join_session(sid, "did:mesh:alice", sigma_raw=0.85)
         assert ring == ExecutionRing.RING_2_STANDARD
         assert hv.nexus is None
         assert hv.policy_check is None

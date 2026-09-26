@@ -46,31 +46,51 @@ class CredentialRedactor:
     callers. The class operates on plain strings as well as nested dictionaries,
     lists, and tuples, replacing detected secret values with a stable
     placeholder.
+
+    By default :meth:`redact` (and the structure/mapping helpers) scrub
+    *secrets only* — the material in :attr:`PATTERNS`. PII/CRI (email, phone,
+    SSN, credit card, IP) is *detected* by :meth:`find_pii_matches` but is not
+    removed unless the caller opts in with ``redact_pii=True``. This split is
+    deliberate: PII handling is often policy-driven (report vs. block vs.
+    scrub), so callers choose when to strip it rather than having it removed
+    silently.
+
+    .. note::
+        ``redact()`` and the nested helpers leave PII unchanged by default. Pass
+        ``redact_pii=True`` when output must not contain PII; use
+        :meth:`find_pii_matches` / :meth:`contains_pii` for detection without
+        removal.
     """
 
     # Python's stdlib ``re`` does not support per-pattern timeouts. These
     # patterns are kept simple and anchored to avoid pathological backtracking.
     #
-    # Prefix-anchored patterns use a ``(?<![A-Za-z0-9])`` lookbehind rather than
-    # ``\b`` so a secret glued directly to a preceding word character (for
-    # example ``session_sk-...``) is still detected. ``\b`` treats ``_`` as a
-    # word character, so ``_sk-`` has no boundary and the secret would be missed;
-    # ``(?<![A-Za-z0-9])`` treats ``_`` (and ``-``, ``/``, ``.``, whitespace) as a
-    # valid left edge while still not matching inside an alphanumeric word.
+    # Both anchors use a ``(?<![A-Za-z0-9])`` lookbehind and a
+    # ``(?![A-Za-z0-9])`` lookahead rather than ``\b`` so a secret glued
+    # directly to a word character via ``_`` or ``-`` (for example
+    # ``session_sk-...`` or ``AKIA<key>_old``) is still detected. ``\b``
+    # treats ``_`` as a word character, so ``_sk-`` has no boundary and the
+    # secret would be missed; the explicit lookaround treats ``_`` (and
+    # ``-``, ``/``, ``.``, whitespace) as a valid edge while still not
+    # matching inside an alphanumeric word.
+    #
+    # Slack and xapp tokens intentionally omit a right-edge lookahead
+    # because their value class includes ``-``, and a trailing ``\b`` would
+    # backtrack and redact only a prefix, leaking the final segment.
     PATTERNS: tuple[CredentialPattern, ...] = (
         CredentialPattern(
             name="OpenAI API key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             name="GitHub token",
             pattern=re.compile(
-                r"(?<![A-Za-z0-9])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])"
+                r"(?<![A-Za-z0-9])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9])"
             ),
         ),
         CredentialPattern(
             name="AWS access key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             # The 40-char base64 secret value has no distinctive prefix, so it is
@@ -119,8 +139,15 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="Basic auth secret",
+            # Bound the scheme-like scan at every candidate start. Without this
+            # limit, separator-dense input with no ``://`` makes the unbounded
+            # scheme class scan overlapping suffixes repeatedly. Allow any
+            # scheme character to start the bounded suffix: a long valid scheme
+            # may have only digits or punctuation in its final 64 characters,
+            # but its username/password must still be redacted fail-closed.
             pattern=re.compile(
-                r"(?i)(?:\bBasic\s+[A-Za-z0-9+/=]{8,}\b|\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@)"
+                r"(?i)(?:(?<![A-Za-z0-9])Basic\s+[A-Za-z0-9+/=]{8,}(?![A-Za-z0-9+/=])"
+                r"|[a-z0-9+.-]{1,64}://[^/\s:@]+:[^@\s/]+@)"
             ),
         ),
         CredentialPattern(
@@ -138,12 +165,25 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])(?:xox[baprs]|xapp)-[A-Za-z0-9-]{10,}"),
         ),
         CredentialPattern(
+            # The value class includes "_"/"-", and the length is fixed at 35,
+            # so a real key can end in one of them. A trailing \b treats "-"
+            # as an automatic boundary on its own, since "-" is not a word
+            # character, so it redacted a key ending in "-" even when glued
+            # straight to more text. The mirror assertion by itself loses that
+            # shape: a detector change must never lose a shape the previous
+            # version caught, so the trailing assertion also accepts whenever
+            # the character actually consumed is "-", regardless of what
+            # follows, restoring the original \b behavior for exactly that
+            # case while keeping the "one more alphanumeric character" guard
+            # everywhere else. Verified against base and head with no
+            # regressions and no new over-redaction; pinned as a positive
+            # case by test_redacts_google_api_key_ending_in_hyphen_when_glued.
             name="Google API key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}(?:(?![A-Za-z0-9])|(?<=-))"),
         ),
         CredentialPattern(
             name="Stripe secret key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}\b"),
+            pattern=re.compile(r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             name="Generic API secret",
@@ -159,8 +199,20 @@ class CredentialRedactor:
     PII_PATTERNS: tuple[CredentialPattern, ...] = (
         CredentialPattern(
             name="Email address",
+            # RFC 5321 limits the local part to 64 octets. The character class
+            # below is ASCII-only, so the same limit also bounds regex work at
+            # every candidate start. Without it, separator-dense input that
+            # contains no ``@`` makes the greedy local part scan overlapping
+            # suffixes from many candidate starts, producing quadratic behavior.
+            # Deliberately omit word boundaries around the pattern. This is a
+            # fail-closed egress detector, not an RFC validator: if untrusted
+            # output pads a readable address with uninterrupted word characters,
+            # the engine must report a bounded match instead of missing it.
+            # With redact_pii=True, only the final 64 local-part characters and
+            # domain are redacted; an overlong local-part prefix stays visible.
+            # Version strings such as pkg@1.0.0.dev1 may also match intentionally.
             pattern=re.compile(
-                r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
+                r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
             ),
         ),
         CredentialPattern(
@@ -239,7 +291,7 @@ class CredentialRedactor:
         return bool(cls.find_pii_matches(value))
 
     @classmethod
-    def redact(cls, value: str | None) -> str:
+    def redact(cls, value: str | None, *, redact_pii: bool = False) -> str:
         """Redact credential-like values from a string.
 
         Redaction is driven by the exact spans that :meth:`find_matches`
@@ -249,19 +301,33 @@ class CredentialRedactor:
         pattern consume the anchor keyword of a later one, which would remove
         less than detection reported and leave a secret in place.
 
+        By default this scrubs *secrets only* (:attr:`PATTERNS`); PII detected
+        by :meth:`find_pii_matches` (email, phone, SSN, credit card, IP) is
+        left in place. Pass ``redact_pii=True`` to also remove PII spans — for
+        example before returning tool output to a model or persisting an audit
+        payload where PII must not flow through. Overlapping secret/PII spans
+        are merged, so PII inside a secret (or vice versa) is redacted once.
+
         Args:
             value: String content that may contain credential-like material.
+            redact_pii: When ``True``, also redact PII/CRI spans in addition to
+                secrets. Defaults to ``False`` (secrets-only, backwards
+                compatible).
 
         Returns:
-            A string with each detected credential replaced by
-            ``REDACTED_PLACEHOLDER``. Empty input returns an empty string.
+            A string with each detected credential (and, when ``redact_pii`` is
+            set, each detected PII span) replaced by ``REDACTED_PLACEHOLDER``.
+            Empty input returns an empty string.
         """
         if not value:
             return ""
 
+        matches = cls.find_matches(value)
+        if redact_pii:
+            matches = matches + cls.find_pii_matches(value)
         spans = sorted(
             (match.start, match.end)
-            for match in cls.find_matches(value)
+            for match in matches
             if match.start >= 0 and match.end > match.start
         )
         if not spans:
@@ -310,12 +376,16 @@ class CredentialRedactor:
         return cls.redact(value), type_names
 
     @classmethod
-    def redact_mapping(cls, mapping: dict[str, Any] | None) -> dict[str, Any]:
+    def redact_mapping(
+        cls, mapping: dict[str, Any] | None, *, redact_pii: bool = False
+    ) -> dict[str, Any]:
         """Redact all nested values in a mapping.
 
         Args:
             mapping: A possibly nested mapping containing strings, lists,
                 tuples, or dictionaries.
+            redact_pii: When ``True``, also redact PII/CRI spans in nested
+                strings. Defaults to ``False`` (secrets-only).
 
         Returns:
             A new mapping with nested strings redacted recursively. Empty input
@@ -323,39 +393,51 @@ class CredentialRedactor:
         """
         if not mapping:
             return {}
-        return {key: cls.redact_data_structure(value) for key, value in mapping.items()}
+        return {
+            key: cls.redact_data_structure(value, redact_pii=redact_pii)
+            for key, value in mapping.items()
+        }
 
     @classmethod
-    def redact_dictionary(cls, mapping: dict[str, Any] | None) -> dict[str, Any]:
+    def redact_dictionary(
+        cls, mapping: dict[str, Any] | None, *, redact_pii: bool = False
+    ) -> dict[str, Any]:
         """Compatibility alias for dictionary redaction.
 
         Args:
             mapping: Dictionary-like content to redact.
+            redact_pii: When ``True``, also redact PII/CRI spans. Defaults to
+                ``False`` (secrets-only).
 
         Returns:
             The redacted mapping produced by :meth:`redact_mapping`.
         """
-        return cls.redact_mapping(mapping)
+        return cls.redact_mapping(mapping, redact_pii=redact_pii)
 
     @classmethod
-    def redact_data_structure(cls, value: Any) -> Any:
+    def redact_data_structure(cls, value: Any, *, redact_pii: bool = False) -> Any:
         """Recursively redact nested strings in dicts, lists, and tuples.
 
         Args:
             value: Any Python value that may contain nested strings.
+            redact_pii: When ``True``, also redact PII/CRI spans in nested
+                strings. Defaults to ``False`` (secrets-only).
 
         Returns:
             A value of the same general shape with strings redacted in place of
             their original secret-bearing content.
         """
         if isinstance(value, str):
-            return cls.redact(value)
+            return cls.redact(value, redact_pii=redact_pii)
         if isinstance(value, dict):
-            return {key: cls.redact_data_structure(item) for key, item in value.items()}
+            return {
+                key: cls.redact_data_structure(item, redact_pii=redact_pii)
+                for key, item in value.items()
+            }
         if isinstance(value, list):
-            return [cls.redact_data_structure(item) for item in value]
+            return [cls.redact_data_structure(item, redact_pii=redact_pii) for item in value]
         if isinstance(value, tuple):
-            return tuple(cls.redact_data_structure(item) for item in value)
+            return tuple(cls.redact_data_structure(item, redact_pii=redact_pii) for item in value)
         return value
 
     @classmethod

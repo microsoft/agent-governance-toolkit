@@ -5,11 +5,13 @@
 from __future__ import annotations
 
 import asyncio
+import pickle
 
 import pytest
 
 from agent_control_specification import (
     DEFAULT_APPROVAL_TIMEOUT_SECONDS,
+    AgentControl,
     AgentControlBlocked,
     AgentControlSuspended,
     Decision,
@@ -18,6 +20,7 @@ from agent_control_specification import (
     InterventionPointResult,
     SnapshotBuilder,
     Verdict,
+    guard_tool,
     run_sync,
 )
 
@@ -237,7 +240,7 @@ def test_run_sync_returns_the_awaited_value() -> None:
 
 
 _ESCALATED = InterventionPointResult(
-    verdict=Verdict(decision=Decision.ESCALATE, reason="needs-approval")
+    verdict=Verdict(decision=Decision.DENY, reason="needs-approval", approval={})
 )
 
 
@@ -255,7 +258,11 @@ class _EscalatingControl:
 
     async def evaluate_intervention_point(self, intervention_point, snapshot, mode):
         return InterventionPointResult(
-            verdict=Verdict(decision=Decision.ESCALATE, reason="needs-approval")
+            verdict=Verdict(
+                decision=Decision.DENY,
+                reason="needs-approval",
+                approval={},
+            )
         )
 
     async def enforce(self, intervention_point, result, mode):
@@ -282,15 +289,64 @@ def test_escalation_blocked_becomes_deny() -> None:
     result = _escalating_session(AgentControlBlocked(InterventionPoint.INPUT, _ESCALATED)).input("x")
 
     assert result.verdict.decision is Decision.DENY
-    assert result.verdict.reason == "approval_denied"
+    # The blocking result's own reason survives rather than being replaced by
+    # a name outside the reserved set.
+    assert result.verdict.reason == _ESCALATED.verdict.reason
 
 
-def test_escalation_suspended_stays_escalated_for_later_resume() -> None:
-    """A suspended approval is left escalated so the host can resume it."""
+def test_escalation_blocked_keeps_the_blocking_message() -> None:
+    """A resolver's refusal reason reaches the session caller on the verdict message."""
+    blocked = InterventionPointResult(
+        Verdict(Decision.DENY, reason="needs-approval", message="ticket CR-42 was rejected", approval={})
+    )
+    result = _escalating_session(AgentControlBlocked(InterventionPoint.INPUT, blocked)).input("x")
+
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.reason == "needs-approval"
+    assert result.verdict.message == "ticket CR-42 was rejected"
+
+
+def test_escalation_blocked_without_a_message_keeps_the_policy_message() -> None:
+    """A synthesized block with no message must not erase the policy's own."""
+    blocked = InterventionPointResult(Verdict(Decision.DENY, reason="host_error:approval_identity_mismatch"))
+
+    class _MessagedEscalatingControl(_EscalatingControl):
+        async def evaluate_intervention_point(self, intervention_point, snapshot, mode):
+            return InterventionPointResult(
+                Verdict(Decision.DENY, reason="needs-approval", message="manager sign-off required", approval={})
+            )
+
+    result = HostSession(_MessagedEscalatingControl(AgentControlBlocked(InterventionPoint.INPUT, blocked))).input("x")
+
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.reason == "host_error:approval_identity_mismatch"
+    assert result.verdict.message == "manager sign-off required"
+
+
+def test_escalation_suspended_stays_liftable_for_later_resume() -> None:
+    """A suspended approval retains its liftable deny for later resume."""
     result = _escalating_session(AgentControlSuspended(InterventionPoint.INPUT, _ESCALATED)).input("x")
 
-    assert result.verdict.decision is Decision.ESCALATE
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.approval == {}
     assert result.verdict.reason == "needs-approval"
+
+
+def test_interruptions_survive_pickling() -> None:
+    """Blocked and suspended errors cross process boundaries intact."""
+    blocked = pickle.loads(pickle.dumps(AgentControlBlocked(InterventionPoint.INPUT, _ESCALATED)))
+    assert isinstance(blocked, AgentControlBlocked)
+    assert blocked.intervention_point is InterventionPoint.INPUT
+    assert blocked.result == _ESCALATED
+    assert str(blocked) == str(AgentControlBlocked(InterventionPoint.INPUT, _ESCALATED))
+
+    suspended = pickle.loads(
+        pickle.dumps(AgentControlSuspended(InterventionPoint.INPUT, _ESCALATED, handle={"ticket": "7"}))
+    )
+    assert isinstance(suspended, AgentControlSuspended)
+    assert suspended.intervention_point is InterventionPoint.INPUT
+    assert suspended.result == _ESCALATED
+    assert suspended.handle == {"ticket": "7"}
 
 
 def test_escalation_with_a_broken_resolver_fails_closed() -> None:
@@ -298,7 +354,7 @@ def test_escalation_with_a_broken_resolver_fails_closed() -> None:
     result = _escalating_session(RuntimeError("resolver exploded")).input("x")
 
     assert result.verdict.decision is Decision.DENY
-    assert result.verdict.reason == "approval_failed"
+    assert result.verdict.reason == "host_error:approval_resolver_failed"
 
 
 def test_escalation_timeout_denies_by_default() -> None:
@@ -306,7 +362,7 @@ def test_escalation_timeout_denies_by_default() -> None:
     result = _escalating_session(TimeoutError()).input("x")
 
     assert result.verdict.decision is Decision.DENY
-    assert result.verdict.reason == "runtime_error:approval_timeout"
+    assert result.verdict.reason == "host_error:approval_unresolved"
 
 
 def test_escalation_timeout_allows_only_when_configured() -> None:
@@ -320,13 +376,14 @@ def test_escalation_timeout_allows_only_when_configured() -> None:
 
 
 def test_escalation_is_not_resolved_in_evaluate_only_mode() -> None:
-    """evaluate_only reports the escalation instead of running approval."""
+    """evaluate_only reports the liftable deny instead of running approval."""
     control = _EscalatingControl()
     session = HostSession(control, mode="evaluate_only")
 
     result = session.input("x")
 
-    assert result.verdict.decision is Decision.ESCALATE
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.approval == {}
     assert control.enforced == []
 
 
@@ -348,6 +405,79 @@ def test_explicit_timeout_overrides_the_default() -> None:
     assert session._approval_timeout_seconds == 3
 
 
+class _ManifestControl(_EscalatingControl):
+    """An escalating control whose manifest declares an ``approval`` section."""
+
+    def __init__(self, approval, on_enforce: BaseException | None = None) -> None:
+        super().__init__(on_enforce)
+        self.approval_config = approval
+
+
+def test_manifest_timeout_replaces_the_default() -> None:
+    """``approval.timeout_seconds`` from the manifest bounds the wait."""
+    session = HostSession(_ManifestControl({"timeout_seconds": 42, "on_timeout": "deny"}))
+
+    assert session._approval_timeout_seconds == 42.0
+
+
+def test_explicit_timeout_overrides_the_manifest() -> None:
+    """A caller-supplied timeout still wins over the manifest's."""
+    session = HostSession(_ManifestControl({"timeout_seconds": 42}), approval_timeout_seconds=3)
+
+    assert session._approval_timeout_seconds == 3
+
+
+@pytest.mark.parametrize(
+    "approval",
+    [
+        {},
+        {"default_resolver": "webhook"},
+        {"timeout_seconds": "soon"},
+        {"timeout_seconds": True},
+        {"timeout_seconds": 0},
+        {"timeout_seconds": -1},
+        "not-a-mapping",
+    ],
+)
+def test_manifest_without_a_usable_timeout_keeps_the_default(approval) -> None:
+    """A manifest that declares no usable timeout leaves the default in place."""
+    session = HostSession(_ManifestControl(approval))
+
+    assert session._approval_timeout_seconds == DEFAULT_APPROVAL_TIMEOUT_SECONDS
+
+
+@pytest.mark.parametrize("path", ["manifest", "argument"])
+def test_oversized_timeout_is_clamped_to_what_join_accepts(path) -> None:
+    """A u64 the core accepts must not turn every escalation into OverflowError."""
+    import threading
+
+    huge = 2**64 - 1
+    if path == "manifest":
+        session = HostSession(_ManifestControl({"timeout_seconds": huge}))
+    else:
+        session = HostSession(_ManifestControl({}), approval_timeout_seconds=huge)
+
+    assert session._approval_timeout_seconds == threading.TIMEOUT_MAX
+
+
+def test_manifest_timeout_bounds_a_hung_resolver() -> None:
+    """The manifest bound is enforced, not just recorded."""
+    import time
+
+    class _HangingManifestControl(_ManifestControl):
+        async def enforce(self, intervention_point, result, mode):
+            time.sleep(30)
+            return result
+
+    started = time.monotonic()
+    result = HostSession(_HangingManifestControl({"timeout_seconds": 1})).input("x")
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 5
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.reason == "host_error:approval_unresolved"
+
+
 def test_a_hung_resolver_denies_rather_than_blocking() -> None:
     """The bound is real: a resolver that never returns still yields a deny."""
     import time
@@ -365,4 +495,125 @@ def test_a_hung_resolver_denies_rather_than_blocking() -> None:
 
     assert elapsed < 5
     assert result.verdict.decision is Decision.DENY
-    assert result.verdict.reason == "runtime_error:approval_timeout"
+    assert result.verdict.reason == "host_error:approval_unresolved"
+
+
+class _BudgetControl:
+    """Denies pre_tool_call once the envelope's tool_call_count reaches the cap."""
+
+    def __init__(self, cap: int) -> None:
+        self.cap = cap
+        self.snapshots: list[tuple[str, dict]] = []
+
+    async def evaluate_intervention_point(self, request):
+        # Yield like the native runtime does (run_in_executor), so concurrent
+        # calls interleave here rather than running to completion in turn.
+        await asyncio.sleep(0)
+        point = request.intervention_point.value
+        self.snapshots.append((point, dict(request.snapshot)))
+        count = request.snapshot["envelope"]["budgets"]["tool_call_count"]
+        if point == "pre_tool_call" and count >= self.cap:
+            return InterventionPointResult(Verdict(Decision.DENY, reason="budget:max_tool_calls"))
+        return InterventionPointResult(Verdict(Decision.ALLOW))
+
+
+def _counts(control: _BudgetControl, point: str) -> list[int]:
+    return [s["envelope"]["budgets"]["tool_call_count"] for p, s in control.snapshots if p == point]
+
+
+def test_guard_tool_advances_the_tool_call_count_from_a_builder() -> None:
+    runtime = _BudgetControl(cap=2)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: {"ok": args}, snapshot=builder)
+
+    assert run_sync(guarded({"n": 1})) == {"ok": {"n": 1}}
+    assert run_sync(guarded({"n": 2})) == {"ok": {"n": 2}}
+    with pytest.raises(AgentControlBlocked) as blocked:
+        run_sync(guarded({"n": 3}))
+
+    assert blocked.value.result.verdict.reason == "budget:max_tool_calls"
+    # The policy deciding call N reads the count as of N-1; the post check of
+    # call N sees N; the denied third call left the counter alone.
+    assert _counts(runtime, "pre_tool_call") == [0, 1, 2]
+    assert _counts(runtime, "post_tool_call") == [1, 2]
+    assert builder.tool_call_count == 2
+
+
+def test_guard_tool_with_a_frozen_mapping_never_advances() -> None:
+    """A plain mapping keeps today's behaviour: the host owns the counter."""
+    runtime = _BudgetControl(cap=2)
+    snapshot = SnapshotBuilder(agent_id="bot", session_id="s1").snapshot("pre_tool_call")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=snapshot)
+
+    for n in range(3):
+        run_sync(guarded({"n": n}))
+
+    assert _counts(runtime, "pre_tool_call") == [0, 0, 0]
+
+
+def test_per_call_ambient_data_layers_over_a_builder_but_not_its_envelope() -> None:
+    runtime = _BudgetControl(cap=10)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=builder)
+
+    run_sync(
+        guarded(
+            {},
+            agent_control_snapshot={"turn": "t1", "envelope": "spoofed", "intervention_point": "also fine"},
+        )
+    )
+
+    _point, snapshot = runtime.snapshots[0]
+    assert snapshot["turn"] == "t1"
+    assert snapshot["intervention_point"] == "also fine"
+    assert snapshot["envelope"]["agent"]["id"] == "bot"
+    assert snapshot["envelope"]["budgets"]["tool_call_count"] == 0
+
+
+def test_concurrent_tool_calls_share_one_budget() -> None:
+    """Five parallel calls at cap 2: two go ahead and the counter ends at 2.
+
+    The slot is reserved before the first await, so each call's pre-check
+    reads the earlier reservations instead of one stale count; the three
+    denied calls give their reservations back.
+    """
+    runtime = _BudgetControl(cap=2)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=builder)
+
+    async def fan_out():
+        return await asyncio.gather(*(guarded({"n": n}) for n in range(5)), return_exceptions=True)
+
+    outcomes = asyncio.run(fan_out())
+
+    assert sum(not isinstance(o, BaseException) for o in outcomes) == 2
+    assert sum(isinstance(o, AgentControlBlocked) for o in outcomes) == 3
+    assert builder.tool_call_count == 2
+    assert sorted(_counts(runtime, "pre_tool_call")) == [0, 1, 2, 3, 4]
+
+
+def test_a_denied_pre_check_gives_the_reservation_back() -> None:
+    runtime = _BudgetControl(cap=0)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=builder)
+
+    with pytest.raises(AgentControlBlocked):
+        run_sync(guarded({}))
+
+    assert builder.tool_call_count == 0
+    with pytest.raises(ValueError):
+        builder.release_tool_call()
+
+
+def test_run_tool_and_protect_tool_accept_a_builder() -> None:
+    runtime = _BudgetControl(cap=10)
+    control = AgentControl(runtime)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+
+    run_sync(control.run_tool("t", {"a": 1}, lambda args: args, snapshot=builder))
+    protected = control.protect_tool("t", lambda args: args, snapshot=builder)
+    run_sync(protected({"a": 2}, snapshot={"turn": "t2"}))
+
+    assert builder.tool_call_count == 2
+    assert _counts(runtime, "pre_tool_call") == [0, 1]
+    assert runtime.snapshots[-1][1]["turn"] == "t2"

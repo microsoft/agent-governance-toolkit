@@ -174,6 +174,56 @@ rules: []
         assert any("default_action" in e for e in errors)
 
 
+class TestSchemaValidationScope:
+    """validate_policy_schema must reject invalid scope values (#3536)."""
+
+    def test_valid_scope_passes(self):
+        yaml_content = """
+apiVersion: governance.toolkit/v1
+name: scoped
+scope: organization
+rules: []
+"""
+        errors = validate_policy_schema(yaml_content)
+        assert not any("scope" in e.lower() for e in errors)
+
+    def test_invalid_scope_reported(self):
+        yaml_content = """
+apiVersion: governance.toolkit/v1
+name: bad-scope
+scope: Team
+rules: []
+"""
+        errors = validate_policy_schema(yaml_content)
+        scope_errors = [e for e in errors if "scope" in e.lower()]
+        assert len(scope_errors) == 1
+        assert "Team" in scope_errors[0]
+
+    def test_empty_scope_reported(self):
+        yaml_content = """
+apiVersion: governance.toolkit/v1
+name: empty-scope
+scope: ""
+rules: []
+"""
+        errors = validate_policy_schema(yaml_content)
+        assert any("scope" in e.lower() for e in errors)
+
+
+    def test_non_string_scope_reported(self):
+        """scope: [agent] must return an error, not raise TypeError (#3536 review)."""
+        yaml_content = """
+apiVersion: governance.toolkit/v1
+name: list-scope
+scope:
+  - agent
+rules: []
+"""
+        errors = validate_policy_schema(yaml_content)
+        assert any("scope" in e.lower() for e in errors)
+        assert any("string" in e.lower() for e in errors)
+
+
 class TestPolicyEngineWithVersioning:
     def test_engine_loads_versioned_policy(self):
         engine = PolicyEngine()

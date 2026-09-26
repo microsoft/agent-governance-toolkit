@@ -10,6 +10,7 @@ Usage:
 
 Supported manifest types:
     - Python   pyproject.toml   [project].version
+    - Python   __init__.py      selected bundled runtime __version__ values
     - Node     package.json     top-level "version"
     - Rust     Cargo.toml       [workspace.package].version
     - .NET     Directory.Build.props  <Version> property
@@ -53,6 +54,13 @@ EXEMPT_PREFIXES = (
     "agent-governance-python/agt-policies/",
 )
 
+PYTHON_RUNTIME_VERSION_FILES = (
+    "agent-governance-python/agent-hypervisor/src/hypervisor/__init__.py",
+    "agent-governance-python/agent-mesh/src/agentmesh/__init__.py",
+    "agent-governance-python/agent-os/src/agent_os/__init__.py",
+    "agent-governance-python/agent-runtime/src/agent_runtime/__init__.py",
+)
+
 
 def is_exempt(path: Path) -> bool:
     """Return True if this manifest is intentionally versioned independently."""
@@ -94,6 +102,31 @@ def sync_pyproject(path: Path, version: str, check: bool) -> bool:
         return False
     new_text = text[:m.start()] + expected + text[m.end():]
     path.write_text(new_text, encoding="utf-8")
+    print(f"  UPDATED {path.relative_to(REPO_ROOT)}")
+    return True
+
+
+_PYTHON_RUNTIME_VERSION_RE = re.compile(r'^(?P<prefix>__version__\s*=\s*)"[^"]*"', re.MULTILINE)
+
+
+def sync_python_runtime_version(path: Path, version: str, check: bool) -> bool:
+    """Update a bundled Python package's ``__version__`` declaration."""
+    text = path.read_text(encoding="utf-8")
+    match = _PYTHON_RUNTIME_VERSION_RE.search(text)
+    if not match:
+        if check:
+            print(f"  DRIFT {path.relative_to(REPO_ROOT)}  (no __version__ declaration)")
+            return False
+        print(f"  SKIP {path.relative_to(REPO_ROOT)}  (no __version__ declaration)")
+        return True
+    current = match.group(0)
+    expected = f'{match.group("prefix")}"{version}"'
+    if current == expected:
+        return True
+    if check:
+        print(f"  DRIFT {path.relative_to(REPO_ROOT)}  (has {current})")
+        return False
+    path.write_text(text[: match.start()] + expected + text[match.end() :], encoding="utf-8")
     print(f"  UPDATED {path.relative_to(REPO_ROOT)}")
     return True
 
@@ -302,6 +335,12 @@ def main() -> int:
         if is_exempt(p):
             continue
         ok &= sync_pyproject(p, version, check)
+
+    print("\nPython runtime versions (__init__.py):")
+    for relative_path in PYTHON_RUNTIME_VERSION_FILES:
+        path = REPO_ROOT / relative_path
+        if path.exists():
+            ok &= sync_python_runtime_version(path, version, check)
 
     # Node / TypeScript
     print("\nNode/TypeScript (package.json):")

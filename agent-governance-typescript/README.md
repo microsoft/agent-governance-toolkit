@@ -349,6 +349,35 @@ The adapter is now **identity-bound** to the `AgentMeshClient` you construct it 
 
 **Migration guidance:** if you previously reused one `GenericFrameworkAdapter` across multiple runtime identities and passed per-call `agentId` values, create a separate `AgentMeshClient`/`GenericFrameworkAdapter` pair for each real agent identity instead of relying on caller-asserted IDs.
 
+### `toFrameworkInvocation` (WebMCP)
+
+[WebMCP](https://github.com/webmachinelearning/webmcp) lets a web page register client-side tools for a browser agent via `document.modelContext.registerTool()`. A tool's `execute()` callback runs in the page itself and typically calls back into the site's own backend to do its real work. `toFrameworkInvocation()` maps that backend call onto a `FrameworkInvocation` so it can be governed with the same `GenericFrameworkAdapter` used for any other framework integration — this does not run governance inside the browser page.
+
+```typescript
+import {
+  AgentMeshClient,
+  GenericFrameworkAdapter,
+  toFrameworkInvocation,
+} from '@microsoft/agent-governance-sdk';
+
+// Backend handler for the WebMCP tool's execute() callback, e.g. POST /api/draft
+const client = AgentMeshClient.create('site-webmcp-agent', {
+  policyRules: [{ action: 'webmcp.email.createDraft', effect: 'allow' }],
+});
+const adapter = new GenericFrameworkAdapter(client);
+
+const invocation = toFrameworkInvocation(
+  { name: 'email.createDraft', annotations: { readOnlyHint: false } },
+  { to: 'someone@example.com' },
+);
+
+const result = await adapter.run(invocation, async () => createDraft());
+```
+
+Only the two annotations merged into the WebMCP spec today (`readOnlyHint`, `untrustedContentHint`) are read explicitly; any other annotation (including proposed-but-unmerged hints like `consequentialHint`, [webmachinelearning/webmcp#217](https://github.com/webmachinelearning/webmcp/issues/217)) is passed through under `attributes.webmcpAnnotations`, namespaced so a page-supplied annotation name can never shadow `attributes.assertedAgentOrigin` in the audit trace.
+
+**This namespacing protects audit-trail integrity only — it is not an origin-verification mechanism, and policy conditions never see it.** `attributes` are attached to the trace span, but policy decisions are made against `action` and `input` alone. Since `input` is the tool call's own page-controlled arguments, a page can put any key it wants there — including something shaped like `assertedAgentOrigin` — and a policy condition keyed on that field would match the forged value regardless of what this module does with `attributes`. If you need to gate governance on the calling page's origin, that verification must happen in your own backend code *before* calling `toFrameworkInvocation`/`adapter.run()` — WebMCP does not yet define a verified client/origin binding ([webmachinelearning/webmcp#96](https://github.com/webmachinelearning/webmcp/issues/96), [#105](https://github.com/webmachinelearning/webmcp/issues/105)), so `client.agentOrigin` is only ever a best-effort hint. See `examples/webmcp-tool-governance.ts` for a full example.
+
 ## Development
 
 ```bash

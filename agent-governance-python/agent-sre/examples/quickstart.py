@@ -11,7 +11,7 @@ Run:
 
 import random
 
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask, HallucinationRate
 from agent_sre.slo.dashboard import SLODashboard
 from agent_sre.cost.guard import CostGuard

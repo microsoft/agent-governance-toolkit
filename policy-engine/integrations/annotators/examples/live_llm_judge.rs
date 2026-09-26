@@ -51,9 +51,8 @@ fn main() {
             ("label_field", json!("label")),
         ];
         pairs.extend(extra);
-        let annotator = AnnotatorInvocation {
-            fields: fields(&pairs),
-        };
+        let mut annotator = AnnotatorInvocation::default();
+        annotator.fields.extend(fields(&pairs));
         let pi = json!({"snapshot": {"input": {"text": "Summarize the standup notes."}}});
         match LlmAnnotator::new().dispatch("judge", &annotator, &pi) {
             Ok(v) => println!("OK   [{mode}] => {v}"),

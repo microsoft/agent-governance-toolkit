@@ -1,0 +1,114 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+# cspell:ignore memfd
+#
+# AppArmor command-denylist profile for the Docker sandbox (#3068).
+# Base confinement follows Docker's docker-default AppArmor profile
+# (moby/moby); the deny rules below add restrictions on selected CLI paths.
+#
+# Install on the Docker daemon host, from the repository root:
+#   sudo apparmor_parser -r -W agent-governance-python/agent-sandbox/docker/apparmor/agt-sandbox
+#
+# This is an exec-level defense in depth, not network isolation. In-process
+# network access (for example via Python urllib) is not blocked here. Denying
+# execution from known writable paths prevents copying a binary into those
+# paths, but cannot prevent memfd_create + /proc/self/fd execution, execution
+# from other writable mounts, or execution from a writable root filesystem.
+# Those cases need separate controls (for example seccomp and mount policy).
+# On daemons without AppArmor, the provider falls back to docker-default
+# with a warning (or fails when require_apparmor_profile=True). On daemons
+# with AppArmor, it requests this profile, verifies enforce mode from inside
+# the container, and fails if the profile is missing or not enforcing.
+
+#include <tunables/global>
+
+profile agt-sandbox flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network,
+  capability,
+  file,
+  umount,
+
+  # Docker default /proc and /sys confinement.
+  deny @{PROC}/{*,**^[0-9*],sys/kernel/shm*} wklx,
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/mem rwklx,
+  deny @{PROC}/kmem rwklx,
+  deny @{PROC}/kcore rwklx,
+  deny @{PROC}/kmsg rwklx,
+
+  deny mount,
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/efi/efivars/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+
+  signal (receive) peer=unconfined,
+  signal (send,receive) peer=@{profile_name},
+  ptrace (read,trace) peer=@{profile_name},
+
+  # Deny read, execute and executable memory mapping of selected binaries
+  # even via the dynamic loader. Keep these names aligned with
+  # DENIED_LOGGED_BIN_NAMES in docker/Dockerfile.sandbox. In the hardened
+  # image, those paths resolve to the logging denial shim instead of the
+  # original binaries: AppArmor mediates the resolved shim path, so these
+  # per-binary rules do not fire there. The writable-path denies below are
+  # the additional enforcement in that image. These per-binary rules are
+  # useful with other images where the binaries remain at their original
+  # paths; they do not restrict a renamed binary at an arbitrary location.
+  deny /usr/bin/curl        mrx,
+  deny /usr/bin/wget        mrx,
+  deny /usr/bin/nc          mrx,
+  deny /usr/bin/netcat      mrx,
+  deny /usr/bin/ncat        mrx,
+  deny /usr/bin/socat       mrx,
+  deny /bin/nc              mrx,
+
+  deny /usr/bin/ssh         mrx,
+  deny /usr/bin/scp         mrx,
+  deny /usr/bin/sftp        mrx,
+  deny /usr/bin/rsync       mrx,
+  deny /usr/bin/ssh-keygen  mrx,
+  deny /usr/bin/ssh-agent   mrx,
+  deny /usr/bin/telnet      mrx,
+  deny /usr/bin/ftp         mrx,
+  deny /usr/bin/tftp        mrx,
+  deny /usr/bin/git         mrx,
+
+  deny /usr/bin/az          mrx,
+  deny /usr/local/bin/az    mrx,
+  deny /usr/bin/aws         mrx,
+  deny /usr/local/bin/aws   mrx,
+  deny /usr/bin/gcloud      mrx,
+  deny /usr/local/bin/gcloud mrx,
+
+  deny /usr/bin/kubectl        mrx,
+  deny /usr/local/bin/kubectl  mrx,
+  deny /usr/bin/terraform      mrx,
+  deny /usr/local/bin/terraform mrx,
+  deny /usr/bin/helm           mrx,
+  deny /usr/local/bin/helm     mrx,
+  deny /usr/bin/ansible        mrx,
+  deny /usr/local/bin/ansible  mrx,
+
+  deny /usr/bin/apt         mrx,
+  deny /usr/bin/apt-get     mrx,
+  deny /usr/bin/dpkg        mrx,
+  deny /usr/bin/dnf         mrx,
+  deny /usr/bin/yum         mrx,
+  deny /usr/bin/apk         mrx,
+
+  # These directories are writable in the default Docker sandbox:
+  # /workspace and (with a read-only root) /tmp are tmpfs; /output is an
+  # optional read-write bind mount; /dev/shm is Docker's shared-memory mount.
+  # Use mx, not mrx: denying read would also break normal file access.
+  deny /tmp/**       mx,
+  deny /var/tmp/**   mx,
+  deny /workspace/** mx,
+  deny /output/**    mx,
+  deny /dev/shm/**   mx,
+}
