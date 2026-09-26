@@ -54,18 +54,18 @@ public class HealthcareIdentifierDetectorTests
     [InlineData("A123456789")]
     [InlineData("Z987654")]
     [InlineData("ABC12345678")]
-    [InlineData("XMRN: A123456789")]
+    [InlineData("prefixMRN: A123456789")]
     [InlineData("prefixNPI: 1234567893")]
-    [InlineData("MRN: ABCDEFGHIJKLM")]
-    [InlineData("MRN: ABCDEF_GHIJKL")]
-    [InlineData("MRN: ABCDEF-GHIJKL")]
+    [InlineData("MRN: characteristics")]
+    [InlineData("MRN: ABCDEF_INVALID")]
+    [InlineData("MRN: ABCDEF-INVALID")]
     [InlineData("MRN: ABCDEF_more")]
-    [InlineData("member_id: ABCDEFGHIJKLMNOP")]
-    [InlineData("policy_id: ABCDEFGHIJKLMNOP")]
+    [InlineData("member_id: misunderstanding")]
+    [InlineData("policy_id: misunderstanding")]
     [InlineData("NPI: 1234567893X")]
     [InlineData("medical record: ABCDE")]
     [InlineData("member id: ABC1234")]
-    public void Find_RejectsUncuedInvalidOrGluedValues(string text)
+    public void Find_RejectsValuesWithoutContextOrWithInvalidOrGluedValues(string text)
     {
         Assert.Empty(HealthcareIdentifierDetector.Find(text));
     }
