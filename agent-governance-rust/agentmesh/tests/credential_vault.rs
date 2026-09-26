@@ -33,6 +33,16 @@ fn put_returns_handle_with_placeholder() {
 }
 
 #[test]
+fn generated_vault_keys_are_distinct_and_nonzero() {
+    let key1 = CredentialVault::generate_key();
+    let key2 = CredentialVault::generate_key();
+
+    assert_ne!(key1, [0u8; 32]);
+    assert_ne!(key2, [0u8; 32]);
+    assert_ne!(key1, key2);
+}
+
+#[test]
 fn put_rejects_bad_names() {
     let v = CredentialVault::new();
     assert!(v.put("", "v", "secret").is_err());

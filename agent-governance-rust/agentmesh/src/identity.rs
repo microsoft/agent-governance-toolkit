@@ -4,7 +4,8 @@
 //! Ed25519-based agent identity with DID support.
 
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
+use rand::rand_core::UnwrapErr;
+use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 
 /// Maximum delegation depth to prevent Sybil attacks via infinite chains.
@@ -29,7 +30,7 @@ pub struct AgentIdentity {
 impl AgentIdentity {
     /// Generate a new Ed25519-based identity for the given agent.
     pub fn generate(agent_id: &str, capabilities: Vec<String>) -> Result<Self, IdentityError> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = SigningKey::generate(&mut UnwrapErr(SysRng));
         let public_key = signing_key.verifying_key();
         Ok(Self {
             did: format!("did:agentmesh:{}", agent_id),
@@ -77,7 +78,7 @@ impl AgentIdentity {
             }
         }
 
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = SigningKey::generate(&mut UnwrapErr(SysRng));
         let public_key = signing_key.verifying_key();
 
         Ok(Self {
@@ -214,6 +215,21 @@ mod tests {
         let id1 = AgentIdentity::generate("agent-a", vec![]).unwrap();
         let id2 = AgentIdentity::generate("agent-b", vec![]).unwrap();
         assert_ne!(id1.public_key.to_bytes(), id2.public_key.to_bytes());
+    }
+
+    #[test]
+    fn test_os_entropy_keygen_distinct_and_usable() {
+        let id1 = AgentIdentity::generate("entropy-a", vec![]).unwrap();
+        let id2 = AgentIdentity::generate("entropy-b", vec![]).unwrap();
+        assert_ne!(id1.public_key.to_bytes(), id2.public_key.to_bytes());
+
+        let data = b"os entropy round trip";
+        let sig1 = id1.sign(data);
+        let sig2 = id2.sign(data);
+        assert!(id1.verify(data, &sig1));
+        assert!(id2.verify(data, &sig2));
+        assert!(!id1.verify(data, &sig2));
+        assert!(!id2.verify(data, &sig1));
     }
 
     #[test]
