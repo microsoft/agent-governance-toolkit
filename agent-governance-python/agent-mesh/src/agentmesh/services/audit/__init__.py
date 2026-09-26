@@ -129,15 +129,16 @@ class AuditService:
     @property
     def entry_count(self) -> int:
         """Total number of audit entries."""
-        return len(self._log._chain._entries)
+        with self._log._chain._lock:
+            return len(self._log._chain._entries)
 
     def summary(self) -> dict[str, Any]:
         """Get audit service summary statistics."""
-        count = self.entry_count
+        snapshot = self._log.verify_snapshot()
         return {
-            "total_entries": count,
-            "chain_valid": self.verify_chain(),
-            "root_hash": self._log._chain.get_root_hash() if count > 0 else None,
+            "total_entries": len(snapshot.entries),
+            "chain_valid": snapshot.valid,
+            "root_hash": snapshot.root_hash,
         }
 
 

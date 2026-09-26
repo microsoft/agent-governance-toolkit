@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from agent_os._supervisor_constants import MAX_SUPERVISOR_LEVEL
 from agent_os.trust_root import TrustDecision, TrustRoot
 
 
@@ -53,7 +54,8 @@ class SupervisorHierarchy:
 
         Raises:
             TypeError: If ``level`` is not an integer or is a boolean.
-            ValueError: If ``level`` is negative or an agent is registered at level 0.
+            ValueError: If ``level`` is negative, exceeds ``MAX_SUPERVISOR_LEVEL``,
+                or an agent is registered at level 0.
         """
         if isinstance(level, bool) or not isinstance(level, int):
             raise TypeError(f"Supervisor level must be an int, got {level!r}")
@@ -61,6 +63,11 @@ class SupervisorHierarchy:
             raise ValueError("Supervisor level must be non-negative; level 0 is the root")
         if level == 0 and is_agent:
             raise ValueError("Level 0 supervisor must be deterministic, not an LLM agent")
+        if level > MAX_SUPERVISOR_LEVEL:
+            raise ValueError(
+                f"Supervisor '{name}' has level {level}, which exceeds the "
+                f"maximum allowed level ({MAX_SUPERVISOR_LEVEL})"
+            )
         self._supervisors.append(_Supervisor(name=name, level=level, is_agent=is_agent))
 
     # ------------------------------------------------------------------
@@ -113,11 +120,17 @@ class SupervisorHierarchy:
                         f"Level 0 supervisor '{s.name}' must be deterministic, not an LLM agent"
                     )
 
-        # Ensure no gaps in levels (every level between 0 and max has a supervisor)
+        # Sorting costs O(n log n); reporting each missing level also costs O(g),
+        # where g is the number of gaps. Registration bounds the highest level.
         if valid_supervisors:
-            max_level = max(s.level for s in valid_supervisors)
-            for lvl in range(1, max_level + 1):
-                if not any(s.level == lvl for s in valid_supervisors):
+            occupied = sorted({s.level for s in valid_supervisors if s.level >= 0})
+            # Anchor at 0 so gaps below the minimum occupied level are reported
+            # (e.g. levels=[3] must report 1 and 2 missing, not nothing).
+            anchored = [0, *occupied] if occupied and occupied[0] != 0 else occupied
+            for i in range(1, len(anchored)):
+                gap_start = anchored[i - 1] + 1
+                gap_end = anchored[i]
+                for lvl in range(gap_start, gap_end):
                     violations.append(f"Level {lvl} has no registered supervisor")
 
         return violations

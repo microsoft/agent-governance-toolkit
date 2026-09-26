@@ -480,7 +480,7 @@ jobs:
           fi
       - name: Upload coverage
         if: steps.gate.outputs.run == 'true'
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: agent-governance-python/${{ matrix.package }}/coverage.xml
           flags: ${{ matrix.package }}
@@ -885,6 +885,8 @@ jobs:
             import-module: openai_agents_trust
           - package: pydantic-ai-governance
             import-module: pydantic_ai_governance
+          - package: cedarling-acs
+            import-module: cedarling_acs
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -1197,7 +1199,7 @@ jobs:
             node-version: "20"
           - name: agentos-mcp-server
             path: agent-governance-python/agent-os/extensions/mcp-server
-            node-version: "20"
+            node-version: "22"
     steps:
       - name: Determine if package changed
         id: gate

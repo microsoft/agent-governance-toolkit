@@ -10,9 +10,10 @@ Entries added via AuditLog or MerkleAuditChain get automatic hash chaining.
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional, Any
+from typing import TYPE_CHECKING, Optional, Any, NamedTuple
 from pydantic import BaseModel, Field
 import hashlib
 import hmac
@@ -243,6 +244,15 @@ class AuditEntry(BaseModel):
         }
 
 
+class AuditSnapshot(NamedTuple):
+    """Captured entries and root with their hash/link verification result."""
+
+    entries: list[AuditEntry]
+    root_hash: str | None
+    valid: bool
+    error: str | None
+
+
 class MerkleNode(BaseModel):
     """Node in a Merkle tree used for audit verification.
 
@@ -276,6 +286,7 @@ class MerkleAuditChain:
     """
 
     def __init__(self):
+        self._lock = threading.Lock()
         self._entries: list[AuditEntry] = []
         self._tree: list[list[MerkleNode]] = []
         self._root_hash: Optional[str] = None
@@ -311,84 +322,118 @@ class MerkleAuditChain:
         verifier, while the update stays amortized O(log n) per append
         (worst-case O(n) when tree capacity doubles).
         """
-        # Set previous hash
-        if self._entries:
-            entry.previous_hash = self._entries[-1].entry_hash
+        with self._lock:
+            self._add_entry_locked(entry)
 
-        # Compute and set hash
-        entry.entry_hash = entry.compute_hash()
+    def _add_entry_locked(self, entry: AuditEntry) -> None:
+        entry_count = len(self._entries)
+        tree = self._tree
+        root_hash = self._root_hash
+        empty_hash_count = len(self._empty_hashes)
+        previous_hash, entry_hash = entry.previous_hash, entry.entry_hash
+        # Save only the update path and level sizes; rollback must not rebuild the tree.
+        path = []
+        idx = entry_count
+        for level in tree:
+            path.append((level, len(level), idx, level[idx] if idx < len(level) else None))
+            idx //= 2
 
-        self._entries.append(entry)
+        try:
+            # Set previous hash
+            if self._entries:
+                entry.previous_hash = self._entries[-1].entry_hash
 
-        new_leaf = MerkleNode(
-            hash=entry.entry_hash,
-            is_leaf=True,
-            entry_id=entry.entry_id,
-        )
+            # Compute and set hash
+            entry.entry_hash = entry.compute_hash()
 
-        n = len(self._entries)
+            self._entries.append(entry)
 
-        if n == 1:
-            # First entry — initialize tree
-            self._tree = [[new_leaf]]
-            self._root_hash = new_leaf.hash
-            return
+            new_leaf = MerkleNode(
+                hash=entry.entry_hash,
+                is_leaf=True,
+                entry_id=entry.entry_id,
+            )
 
-        # Check if we need to expand the tree capacity
-        capacity = len(self._tree[0])
-        if n > capacity:
-            # Double capacity: pad each level with its own empty-subtree
-            # constant E(level), then add a new root level.
-            for level_idx in range(len(self._tree)):
-                self._tree[level_idx].extend(
-                    [
-                        MerkleNode(hash=self._empty_subtree_hash(level_idx))
-                        for _ in range(len(self._tree[level_idx]))
-                    ]
+            n = len(self._entries)
+
+            if n == 1:
+                # First entry — initialize tree
+                self._tree = [[new_leaf]]
+                self._root_hash = new_leaf.hash
+                return
+
+            # Check if we need to expand the tree capacity
+            capacity = len(self._tree[0])
+            if n > capacity:
+                # Double capacity: pad each level with its own empty-subtree
+                # constant E(level), then add a new root level.
+                for level_idx in range(len(self._tree)):
+                    self._tree[level_idx].extend(
+                        [
+                            MerkleNode(hash=self._empty_subtree_hash(level_idx))
+                            for _ in range(len(self._tree[level_idx]))
+                        ]
+                    )
+                # Add new root level. The old root's sibling is an all-zero subtree
+                # at the old top level; the new level's spare slot is one higher.
+                old_root = self._tree[-1][0]
+                empty_sibling = MerkleNode(hash=self._empty_subtree_hash(len(self._tree) - 1))
+                combined = old_root.hash + empty_sibling.hash
+                new_root = MerkleNode(
+                    hash=hashlib.sha256(combined.encode()).hexdigest(),
+                    left_child=old_root.hash,
+                    right_child=empty_sibling.hash,
                 )
-            # Add new root level. The old root's sibling is an all-zero subtree
-            # at the old top level; the new level's spare slot is one higher.
-            old_root = self._tree[-1][0]
-            empty_sibling = MerkleNode(hash=self._empty_subtree_hash(len(self._tree) - 1))
-            combined = old_root.hash + empty_sibling.hash
-            new_root = MerkleNode(
-                hash=hashlib.sha256(combined.encode()).hexdigest(),
-                left_child=old_root.hash,
-                right_child=empty_sibling.hash,
-            )
-            self._tree.append([new_root, MerkleNode(hash=self._empty_subtree_hash(len(self._tree)))])
+                self._tree.append([new_root, MerkleNode(hash=self._empty_subtree_hash(len(self._tree)))])
 
-        # Place new leaf
-        leaf_idx = n - 1
-        self._tree[0][leaf_idx] = new_leaf
+            # Place new leaf
+            leaf_idx = n - 1
+            self._tree[0][leaf_idx] = new_leaf
 
-        # Update path from leaf to root
-        idx = leaf_idx
-        for level_idx in range(len(self._tree) - 1):
-            parent_idx = idx // 2
-            left_idx = parent_idx * 2
-            right_idx = left_idx + 1
+            # Update path from leaf to root
+            idx = leaf_idx
+            for level_idx in range(len(self._tree) - 1):
+                parent_idx = idx // 2
+                left_idx = parent_idx * 2
+                right_idx = left_idx + 1
 
-            # After the capacity-doubling above, every level has an even length,
-            # so a left node at an even index always has its right sibling in
-            # range; no odd-duplication fallback is needed (matching _rebuild_tree).
-            left = self._tree[level_idx][left_idx]
-            right = self._tree[level_idx][right_idx]
+                # After the capacity-doubling above, every level has an even length,
+                # so a left node at an even index always has its right sibling in
+                # range; no odd-duplication fallback is needed (matching _rebuild_tree).
+                left = self._tree[level_idx][left_idx]
+                right = self._tree[level_idx][right_idx]
 
-            combined = left.hash + right.hash
-            parent_hash = hashlib.sha256(combined.encode()).hexdigest()
+                combined = left.hash + right.hash
+                parent_hash = hashlib.sha256(combined.encode()).hexdigest()
 
-            self._tree[level_idx + 1][parent_idx] = MerkleNode(
-                hash=parent_hash,
-                left_child=left.hash,
-                right_child=right.hash,
-            )
-            idx = parent_idx
+                self._tree[level_idx + 1][parent_idx] = MerkleNode(
+                    hash=parent_hash,
+                    left_child=left.hash,
+                    right_child=right.hash,
+                )
+                idx = parent_idx
 
-        self._root_hash = self._tree[-1][0].hash if self._tree else None
+            self._root_hash = self._tree[-1][0].hash if self._tree else None
+        except BaseException:
+            self._tree = tree
+            for level, size, idx, node in path:
+                if node is not None:
+                    level[idx] = node
+                del level[size:]
+            del tree[len(path):]
+            del self._entries[entry_count:]
+            self._root_hash = root_hash
+            del self._empty_hashes[empty_hash_count:]
+            entry.previous_hash = previous_hash
+            entry.entry_hash = entry_hash
+            raise
 
     def _rebuild_tree(self) -> None:
         """Rebuild Merkle tree from entries (full rebuild, used for verification)."""
+        with self._lock:
+            self._rebuild_tree_locked()
+
+    def _rebuild_tree_locked(self) -> None:
         if not self._entries:
             self._tree = []
             self._root_hash = None
@@ -435,31 +480,44 @@ class MerkleAuditChain:
 
     def get_root_hash(self) -> Optional[str]:
         """Get the current Merkle root hash."""
-        return self._root_hash
+        with self._lock:
+            return self._root_hash
+
+    def _snapshot(self) -> tuple[list[AuditEntry], str | None]:
+        """Capture entry membership and its root under the append lock."""
+        with self._lock:
+            return list(self._entries), self._root_hash
 
     def get_proof(self, entry_id: str) -> Optional[list[tuple[str, str]]]:
         """Get a Merkle inclusion proof for an entry."""
-        # Find entry index
-        entry_idx = None
-        for i, entry in enumerate(self._entries):
-            if entry.entry_id == entry_id:
-                entry_idx = i
-                break
+        snapshot = self._proof_snapshot(entry_id)
+        return snapshot[1] if snapshot is not None else None
 
-        if entry_idx is None:
-            return None
+    def _proof_snapshot(
+        self, entry_id: str,
+    ) -> tuple[AuditEntry, list[tuple[str, str]], str | None] | None:
+        """Capture an entry, its inclusion path, and the root under one lock."""
+        with self._lock:
+            entry_idx = None
+            for i, entry in enumerate(self._entries):
+                if entry.entry_id == entry_id:
+                    entry_idx = i
+                    break
 
-        proof = []
-        idx = entry_idx
+            if entry_idx is None:
+                return None
 
-        for level in self._tree[:-1]:  # Exclude root
-            sibling_idx = idx ^ 1  # XOR to get sibling
-            if sibling_idx < len(level):
-                position = "right" if idx % 2 == 0 else "left"
-                proof.append((level[sibling_idx].hash, position))
-            idx //= 2
+            proof = []
+            idx = entry_idx
 
-        return proof
+            for level in self._tree[:-1]:  # Exclude root
+                sibling_idx = idx ^ 1  # XOR to get sibling
+                if sibling_idx < len(level):
+                    position = "right" if idx % 2 == 0 else "left"
+                    proof.append((level[sibling_idx].hash, position))
+                idx //= 2
+
+            return self._entries[entry_idx], proof, self._root_hash
 
     def verify_proof(
         self,
@@ -481,9 +539,15 @@ class MerkleAuditChain:
 
     def verify_chain(self) -> tuple[bool, Optional[str]]:
         """Verify the entire chain integrity."""
+        entries, _ = self._snapshot()
+        return self._verify_entries(entries)
+
+    @staticmethod
+    def _verify_entries(entries: list[AuditEntry]) -> tuple[bool, str | None]:
+        """Verify hash/link integrity of an already captured entry list."""
         previous_hash = ""
 
-        for i, entry in enumerate(self._entries):
+        for i, entry in enumerate(entries):
             # Verify entry's own hash
             if not entry.verify_hash():
                 return False, f"Entry {i} hash mismatch"
@@ -563,28 +627,44 @@ class AuditLog:
             completed_at=completed_at,
         )
 
-        self._chain.add_entry(entry)
+        with self._chain._lock:
+            agent_entries = self._by_agent.get(agent_did)
+            type_entries = self._by_type.get(event_type)
+            agent_count = len(agent_entries) if agent_entries is not None else 0
+            type_count = len(type_entries) if type_entries is not None else 0
+            try:
+                if agent_entries is None:
+                    self._by_agent[agent_did] = []
+                self._by_agent[agent_did].append(entry.entry_id)
+
+                if type_entries is None:
+                    self._by_type[event_type] = []
+                self._by_type[event_type].append(entry.entry_id)
+
+                self._chain._add_entry_locked(entry)
+            except BaseException:
+                if agent_entries is None:
+                    self._by_agent.pop(agent_did, None)
+                else:
+                    del agent_entries[agent_count:]
+                if type_entries is None:
+                    self._by_type.pop(event_type, None)
+                else:
+                    del type_entries[type_count:]
+                raise
 
         # Write to external sink if configured
         if self._sink is not None:
             self._sink.write(entry)
 
-        # Index
-        if agent_did not in self._by_agent:
-            self._by_agent[agent_did] = []
-        self._by_agent[agent_did].append(entry.entry_id)
-
-        if event_type not in self._by_type:
-            self._by_type[event_type] = []
-        self._by_type[event_type].append(entry.entry_id)
-
         return entry
 
     def get_entry(self, entry_id: str) -> Optional[AuditEntry]:
         """Get an audit entry by its unique ID."""
-        for entry in self._chain._entries:
-            if entry.entry_id == entry_id:
-                return entry
+        with self._chain._lock:
+            for entry in self._chain._entries:
+                if entry.entry_id == entry_id:
+                    return entry
         return None
 
     def get_entries_for_agent(
@@ -593,11 +673,7 @@ class AuditLog:
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Get the most recent entries for a specific agent."""
-        entry_ids = self._by_agent.get(agent_did, [])[-limit:]
-        return [
-            entry for entry in self._chain._entries
-            if entry.entry_id in entry_ids
-        ]
+        return self._get_indexed_entries(self._by_agent, agent_did, limit)
 
     def get_entries_by_type(
         self,
@@ -605,11 +681,25 @@ class AuditLog:
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Get the most recent entries of a given event type."""
-        entry_ids = self._by_type.get(event_type, [])[-limit:]
-        return [
-            entry for entry in self._chain._entries
-            if entry.entry_id in entry_ids
-        ]
+        return self._get_indexed_entries(self._by_type, event_type, limit)
+
+    def _get_indexed_entries(
+        self, index: dict[str, list[str]], key: str, limit: int,
+    ) -> list[AuditEntry]:
+        """Entry IDs are assumed unique; AuditLog.log() generates UUID4 IDs."""
+        with self._chain._lock:
+            wanted = set(index.get(key, [])[-limit:])
+            if not wanted:
+                return []
+            entries = []
+            for entry in reversed(self._chain._entries):
+                if entry.entry_id in wanted:
+                    entries.append(entry)
+                    wanted.remove(entry.entry_id)
+                    if not wanted:
+                        break
+        entries.reverse()
+        return entries
 
     def query(
         self,
@@ -624,7 +714,11 @@ class AuditLog:
 
         Pass ``limit=None`` to return all matching entries.
         """
-        results = self._chain._entries
+        filtered = any((agent_did, event_type, start_time, end_time, outcome))
+        with self._chain._lock:
+            if not filtered:
+                return self._chain._entries[-limit:] if limit is not None else list(self._chain._entries)
+            results = list(self._chain._entries)
 
         if agent_did:
             results = [e for e in results if e.agent_did == agent_did]
@@ -644,27 +738,51 @@ class AuditLog:
         return results[-limit:] if limit is not None else list(results)
 
     def verify_integrity(self) -> tuple[bool, Optional[str]]:
-        """Always valid."""
+        """Verify audit hash/link integrity, returning validity and an optional error."""
         return self._chain.verify_chain()
+
+    def verify_snapshot(self) -> AuditSnapshot:
+        """Capture a committed chain snapshot and verify it outside the lock.
+
+        Returns:
+            Entries in append order, their full-chain Merkle root, hash/link
+            validity, and an error string if invalid (otherwise None). The list
+            is detached; the entry objects are not copied.
+        """
+        entries, root = self._chain._snapshot()
+        valid, error = self._chain._verify_entries(entries)
+        return AuditSnapshot(entries, root, valid, error)
 
     def get_proof(self, entry_id: str) -> Optional[dict[str, Any]]:
         """Get tamper-proof evidence for a specific entry."""
-        entry = self.get_entry(entry_id)
-        if not entry:
+        snapshot = self._chain._proof_snapshot(entry_id)
+        if snapshot is None:
             return None
 
-        proof = self._chain.get_proof(entry_id)
+        entry, proof, root = snapshot
         if not proof:
             return None
 
         return {
             "entry": entry.model_dump(),
             "merkle_proof": proof,
-            "merkle_root": self._chain.get_root_hash(),
+            "merkle_root": root,
             "verified": self._chain.verify_proof(
-                entry.entry_hash, proof, self._chain.get_root_hash()
+                entry.entry_hash, proof, root
             ),
         }
+
+    def _export_snapshot(
+        self,
+        start_time: datetime | None,
+        end_time: datetime | None,
+    ) -> tuple[list[AuditEntry], str | None]:
+        entries, root = self._chain._snapshot()
+        if start_time:
+            entries = [entry for entry in entries if entry.timestamp >= start_time]
+        if end_time:
+            entries = [entry for entry in entries if entry.timestamp <= end_time]
+        return entries, root
 
     def export(
         self,
@@ -673,18 +791,16 @@ class AuditLog:
     ) -> dict[str, Any]:
         """Export all audit entries matching the optional time filters.
 
-        ``merkle_root`` and ``chain_root`` describe the complete chain, not
-        the filtered subset. A filtered export may therefore omit entries
-        needed to reproduce those roots.
+        Entries and both roots are captured from one chain state. ``merkle_root``
+        and ``chain_root`` describe that complete chain, not the filtered subset.
+        A filtered export may therefore omit entries needed to reproduce those roots.
         """
-        entries = self.query(
-            start_time=start_time, end_time=end_time, limit=None
-        )
+        entries, root = self._export_snapshot(start_time, end_time)
 
         return {
             "exported_at": datetime.now(timezone.utc).isoformat(),
-            "merkle_root": self._chain.get_root_hash(),
-            "chain_root": self._chain.get_root_hash(),
+            "merkle_root": root,
+            "chain_root": root,
             "entry_count": len(entries),
             "entries": [e.model_dump() for e in entries],
         }
@@ -694,8 +810,6 @@ class AuditLog:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
     ) -> list[dict[str, Any]]:
-        """Export audit entries as CloudEvents v1.0 JSON envelopes."""
-        entries = self.query(
-            start_time=start_time, end_time=end_time, limit=None
-        )
+        """Export a snapshot of audit entries as CloudEvents v1.0 JSON envelopes."""
+        entries, _ = self._export_snapshot(start_time, end_time)
         return [e.to_cloudevent() for e in entries]

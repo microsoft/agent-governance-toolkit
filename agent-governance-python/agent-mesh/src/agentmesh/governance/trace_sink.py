@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from .audit import AuditLog
+from .audit import AuditEntry, AuditLog
 from .trace_model import TRACE_EAT_PROFILE
 
 _SUBJECT_RE = re.compile(r"^(spiffe://|did:)")
@@ -69,9 +69,20 @@ def session_to_trust_record(
 
     Pass the returned dict to agentrust_trace.sign_record() before writing.
     """
+    entries, root = audit_log._chain._snapshot()
+    return _snapshot_to_trust_record(agent_did, entries, root, policy_bundle_hash, config)
+
+
+def _snapshot_to_trust_record(
+    agent_did: str,
+    entries: list[AuditEntry],
+    root: str | None,
+    policy_bundle_hash: str,
+    config: TraceConfig,
+) -> dict[str, Any]:
+    """Serialize a captured chain state without holding the chain lock."""
     import time
 
-    entries = audit_log._chain._entries
     iat = int(entries[-1].timestamp.timestamp()) if entries else int(time.time())
 
     # SHA-256 of the canonical JSON of all audit entries -- the tool transcript hash
@@ -84,7 +95,7 @@ def session_to_trust_record(
     transcript_hash = "sha256:" + hashlib.sha256(entries_canonical).hexdigest()
 
     # Merkle root as the runtime measurement (software-only; no TEE measurement)
-    merkle_root = audit_log._chain.get_root_hash() or ("0" * 64)
+    merkle_root = root or ("0" * 64)
     measurement = "sha256:" + hashlib.sha256(merkle_root.encode()).hexdigest()
 
     bp_digest = config.build_provenance_digest or measurement
@@ -169,7 +180,10 @@ class TRACEAuditSink:
         Returns the path of the written file, or None if the audit log is
         empty, the agent_id is not a DID/SPIFFE URI, or audit_log is None.
         """
-        if audit_log is None or not audit_log._chain._entries:
+        if audit_log is None:
+            return None
+        entries, root = audit_log._chain._snapshot()
+        if not entries:
             return None
 
         if not _SUBJECT_RE.match(self._agent_did):
@@ -189,9 +203,10 @@ class TRACEAuditSink:
                 "Install it with: pip install 'agentrust-trace>=0.5.1,<0.6.0'"
             ) from exc
 
-        record = session_to_trust_record(
+        record = _snapshot_to_trust_record(
             self._agent_did,
-            audit_log,
+            entries,
+            root,
             self._policy_bundle_hash,
             self._config,
         )
@@ -203,7 +218,6 @@ class TRACEAuditSink:
         out = Path(self._config.output_path)
         if self._config.output_path.endswith("/") or (out.exists() and out.is_dir()):
             out.mkdir(parents=True, exist_ok=True)
-            entries = audit_log._chain._entries
             session_id = (entries[0].session_id or "session")[:16]
             iat = signed["iat"]
             out = out / f"trace-{iat}-{session_id}.json"

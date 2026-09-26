@@ -47,13 +47,13 @@ dev = [
     "fastapi>=0.141.1,<1.0",
     "uvicorn>=0.53.0,<1.0",
     "anyio>=4.14.2,<5.0",
-    "aiohttp>=3.13.4,<4.0",
+    "aiohttp>=3.14.3,<4.0",
     "structlog>=26.1.0,<27.0",
     "redis>=8.1.0,<9.0",
     "cryptography>=50.0.1,<51.0",
     "pynacl>=1.6.2,<2.0",
     "eval_type_backport>=0.2.0; python_version < '3.10'",
-    "tzdata>=2024.1,<2027.0",
+    "tzdata>=2026.4,<2027.0",
 ]
 # Optional local backend for the (default-off) embedding evidence signal in
 # `agent_os.prompt_injection_embedding`. Never required: the module is inert

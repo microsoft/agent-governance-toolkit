@@ -35,6 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generators. Framework adapters require `AgentControl`; sandbox providers use
   `runtime=` plus explicit `SandboxConfig`.
 
+- **BREAKING: `register_supervisor` rejects levels above 1 000.** Calling
+  `SupervisorHierarchy.register_supervisor()` with a `level` exceeding
+  `MAX_SUPERVISOR_LEVEL` (1 000) now raises `ValueError`. Previously any
+  Python `int` was accepted, but a pathologically large level (e.g.
+  `10**100`) made `validate_hierarchy()` hang — a denial-of-service vector
+  when levels come from attacker-influenced configuration.
+  `TrustRoot.validate_supervisor` mirrors the bound. The constant lives in
+  `agent_os._supervisor_constants` so both modules import a single
+  definition. (#3788)
+
 ### Fixed
 - **`AgentControlBlocked` and `AgentControlSuspended` survive pickling** - both are rebuilt from their constructor arguments when loaded back from a pickle, so they propagate out of `multiprocessing` and `concurrent.futures` process workers instead of failing with a `TypeError`.
 - **Python tool adapters advance `tool_call_count`** — `guard_tool()`, `guard_mcp_tool()`, `guard_langchain_tool()`, the Semantic Kernel helpers, `guard_foundry_agent()` and `AgentControl.run_tool()` / `protect_tool()` accept a `SnapshotBuilder` as `snapshot=`. Each call is then evaluated against the builder's current envelope and `tool_call_count` advances once the pre-check permits it, so a `budgets` cap on tool calls no longer fails open, including for concurrent calls on one builder. A plain mapping is unchanged: the host advances the counters. Hosts must not also call `record_tool_call` for calls governed this way. The LiteLLM proxy guardrail is not covered and still evaluates from a fixed mapping.
@@ -90,6 +100,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository-wide vocabulary. The base is now resolved to its merge base, and
   the depth-limited base fetch in `spell-check.yml` is gone because it truncated
   the history that resolution needs.
+- **Supervisor hierarchy gap scan no longer hangs and now reports all missing
+  levels** — `validate_hierarchy()` iterated `range(1, max_level + 1)`,
+  which was O(max_level). The gap scan now walks the sorted set of occupied
+  levels anchored at 0 (O(n log n + g), with g missing levels), so gaps below the
+  minimum occupied level are reported correctly. (#3788)
 
 ## [5.0.0] - 2026-06-25
 

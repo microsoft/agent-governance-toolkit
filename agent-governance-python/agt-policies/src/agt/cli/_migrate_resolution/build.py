@@ -16,17 +16,17 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from pathlib import Path
 import tempfile
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any
 
 import yaml
 
+from .._migrate_re2 import validate_re2
 from .discover import discover_policies
 from .errors import ResolutionError
 from .merge import merge_documents, merge_top_level_section
 from .scope import filter_by_scope
-from .._migrate_re2 import validate_re2
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def resolve_manifest(
     root: Path,
     action_path: Path,
     *,
-    bundle_dir: Optional[Path] = None,
+    bundle_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Resolve a governance chain into a flat ACS manifest.
 
@@ -200,18 +200,32 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
     returns the first matching verdict shape. Per AGT-RESOLUTION §2.5
     the AGT host points the engine at this bundle, not at inline rego.
     """
-    bundle_root = bundle_root.resolve()
-    policy_dir = bundle_root / "policy"
-    policy_dir.mkdir(parents=True, exist_ok=True)
-
-    body = _render_rego(rules)
-    rego_file = policy_dir / "agt_legacy.rego"
-    rego_file.write_text(body, encoding="utf-8")
-
-    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    (policy_dir / "agt_legacy.rego.sha256").write_text(digest, encoding="utf-8")
-
-    return policy_dir
+    # Hash the exact bytes written, including on Windows where write_text
+    # would otherwise translate line endings after the digest was computed.
+    body = _render_rego(rules).encode("utf-8")
+    digest = hashlib.sha256(body).hexdigest().encode("ascii")
+    try:
+        bundle_root = bundle_root.resolve()
+        policy_dir = bundle_root / "policy"
+        if policy_dir.exists() or policy_dir.is_symlink():
+            raise ResolutionError.invalid_governance(
+                "migration policy output already exists; refusing to overwrite"
+            )
+        bundle_root.mkdir(parents=True, exist_ok=True)
+        # Publish both files with one same-filesystem directory rename. The
+        # private staging directory is cleaned if either write or rename fails.
+        with tempfile.TemporaryDirectory(prefix=".agt-policy-", dir=bundle_root) as staging:
+            staged_policy = Path(staging) / "policy"
+            staged_policy.mkdir()
+            (staged_policy / "agt_legacy.rego").write_bytes(body)
+            (staged_policy / "agt_legacy.rego.sha256").write_bytes(digest)
+            staged_policy.rename(policy_dir)
+        return policy_dir
+    except OSError as exc:
+        raise ResolutionError.invalid_governance(
+            f"could not publish generated policy bundle at {bundle_root / 'policy'} "
+            f"({type(exc).__name__})"
+        ) from exc
 
 
 def _render_rego(rules: list[dict[str, Any]]) -> str:
@@ -372,7 +386,7 @@ def _rego_field_accessor(field: str) -> str | None:
     return f"object.get(input.snapshot, {json.dumps(parts)}, null)"
 
 
-def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "allow") -> Optional[str]:
+def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "allow") -> str | None:
     """Render the body of a ``_match[i]`` rule for a given operator.
 
     The ``action`` parameter controls polarity for negative operators

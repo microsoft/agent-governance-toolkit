@@ -173,6 +173,7 @@ from agent_os.mcp_message_signer import (
     MCPVerificationResult,
 )
 from agent_os.mcp_protocols import (
+    DuplicateNonceError,
     InMemoryAuditSink,
     InMemoryNonceStore,
     InMemoryRateLimitStore,
@@ -418,6 +419,7 @@ __all__ = [
     "MCPAuditSink",
     "InMemorySessionStore",
     "InMemoryNonceStore",
+    "DuplicateNonceError",
     "NonceStoreCapacityError",
     "InMemoryRateLimitStore",
     "InMemoryAuditSink",
