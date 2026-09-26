@@ -4,6 +4,20 @@
 
 import re
 
+_IDENTIFIER_VALUE_SEPARATOR = r"[ \t\r\n_#:-]+"
+
+
+def _build_contextual_identifier_pattern(cue: str, min_length: int, max_length: int) -> str:
+    """Build an identifier pattern with a strict separator for letter-prefixed values."""
+    digits_only = rf"\d{{{min_length},{max_length}}}"
+    alphanumeric = rf"[A-Z](?=[A-Z0-9]*\d)[A-Z0-9]{{{min_length - 1},{max_length - 1}}}"
+    return (
+        rf"(?i)(?<![A-Za-z0-9])(?:{cue})"
+        rf"(?:{_IDENTIFIER_VALUE_SEPARATOR}(?:{alphanumeric}|{digits_only})|{digits_only})"
+        rf"(?![A-Za-z0-9])"
+    )
+
+
 def is_valid_npi(npi: str) -> bool:
     """Check if a 10-digit string is a valid NPI using the Luhn algorithm.
 
@@ -28,6 +42,7 @@ def is_valid_npi(npi: str) -> bool:
 
     return checksum % 10 == 0
 
+
 def validate_npi_match(match: re.Match[str]) -> bool:
     """Validator for NPI matches that extracts digits and checks Luhn."""
     # Extract just the digits from the match
@@ -38,13 +53,14 @@ def validate_npi_match(match: re.Match[str]) -> bool:
         return False
     return is_valid_npi(digits)
 
+
 # We define the raw patterns here as tuples of (name, regex_string, [optional_validator])
 # to avoid a circular dependency with credential_redactor.py.
 # The CredentialRedactor will instantiate these as CredentialPattern objects.
 HIPAA_PHI_RAW_PATTERNS = (
     (
         "Medical Record Number (MRN)",
-        r"(?i)(?<![A-Za-z0-9])(?:mrn|medical[\s_-]*record)[\s#:-]*([A-Z0-9]{6,12})(?![A-Za-z0-9])",
+        _build_contextual_identifier_pattern(r"mrn|medical[\s_-]*record", 6, 12),
     ),
     (
         "National Provider Identifier (NPI)",
@@ -53,6 +69,10 @@ HIPAA_PHI_RAW_PATTERNS = (
     ),
     (
         "Health Plan ID",
-        r"(?i)(?<![A-Za-z0-9])(?:hpid|member[\s_-]*id|policy[\s_-]*id)[\s#:-]*([A-Z0-9]{8,15})(?![A-Za-z0-9])",
+        _build_contextual_identifier_pattern(
+            r"hpid|health[\s_-]*plan|member[\s_-]*(?:id|identification)|policy[\s_-]*id",
+            8,
+            15,
+        ),
     ),
 )
