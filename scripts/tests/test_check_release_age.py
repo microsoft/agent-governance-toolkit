@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import _supply_chain_common as common  # noqa: E402
 import check_release_age as cra  # noqa: E402
 
-
 # --------------------------- _resolve_pkgjson_deps ---------------------------
 
 def test_pkgjson_resolves_exact_pins():
@@ -46,6 +45,14 @@ def test_pkgjson_skips_ranges_and_specials():
 def test_pkgjson_handles_scoped_names():
     tree = {"dependencies": {"@scope/pkg": "1.0.0"}}
     assert cra._resolve_pkgjson_deps(tree) == {"@scope/pkg": "1.0.0"}
+
+
+def test_pkgjson_aliases_are_retained_for_canonical_resolution():
+    tree = {"devDependencies": {
+        "@typescript/native": "npm:typescript@7.0.2",
+        "typescript": "npm:@typescript/typescript6@6.0.2",
+    }}
+    assert cra._resolve_pkgjson_deps(tree) == tree["devDependencies"]
 
 
 def test_pkgjson_rejects_unsafe_name_or_version():
@@ -279,6 +286,35 @@ def test_collect_candidates_pkgjson_version_bump_detected():
     assert out == [("npm", "axios", "1.15.0", "package.json")]
 
 
+def test_collect_candidates_uses_canonical_npm_alias_identity():
+    json_map = {
+        ("origin/main", "package.json"): {"devDependencies": {}},
+        ("HEAD", "package.json"): {"devDependencies": {
+            "@typescript/native": "npm:typescript@7.0.2",
+            "typescript": "npm:@typescript/typescript6@6.0.2",
+        }},
+    }
+    with _mock_changed(["package.json"]), \
+         _mock_loaders(json_map)[0], _mock_loaders(json_map)[1], _mock_loaders(json_map)[2]:
+        assert cra.collect_candidates("origin/main") == [
+            ("npm", "typescript", "7.0.2", "package.json"),
+            ("npm", "@typescript/typescript6", "6.0.2", "package.json"),
+        ]
+
+
+def test_collect_candidates_rejects_unapproved_npm_alias():
+    json_map = {
+        ("origin/main", "package.json"): {"devDependencies": {}},
+        ("HEAD", "package.json"): {"devDependencies": {
+            "@typescript/native": "npm:evil-typescript@7.0.2",
+        }},
+    }
+    with _mock_changed(["package.json"]), \
+         _mock_loaders(json_map)[0], _mock_loaders(json_map)[1], \
+         _mock_loaders(json_map)[2], pytest.raises(ValueError):
+        cra.collect_candidates("origin/main")
+
+
 def test_collect_candidates_cargo_dotted_table():
     """H2 end-to-end: dotted Cargo tables flow through structural diff."""
     import tomllib
@@ -395,9 +431,8 @@ def test_fetch_release_time_pypi_happy():
 
 
 def test_fetch_release_time_pypi_404_raises():
-    with patch.object(common, "fetch_json", side_effect=LookupError("404")):
-        with pytest.raises(LookupError):
-            cra.fetch_release_time("pypi", "ghost", "0.0.1")
+    with patch.object(common, "fetch_json", side_effect=LookupError("404")), pytest.raises(LookupError):
+        cra.fetch_release_time("pypi", "ghost", "0.0.1")
 
 
 def test_fetch_release_time_pypi_transient_returns_none():
@@ -406,10 +441,17 @@ def test_fetch_release_time_pypi_transient_returns_none():
 
 
 def test_fetch_release_time_npm_per_version():
-    body = {"time": _stamp(20)}
+    body = {"name": "axios", "version": "1.14.0", "time": _stamp(20)}
     with patch.object(common, "fetch_json", return_value=body):
         out = cra.fetch_release_time("npm", "axios", "1.14.0")
     assert out is not None
+
+
+def test_fetch_release_time_npm_rejects_wrong_registry_identity():
+    with patch.object(common, "fetch_json", return_value={
+        "name": "evil", "version": "1.14.0", "time": _stamp(20),
+    }), pytest.raises(LookupError):
+        cra.fetch_release_time("npm", "axios", "1.14.0")
 
 
 def test_fetch_release_time_cargo():
@@ -424,6 +466,11 @@ def test_fetch_release_time_cargo():
 def test_main_no_candidates_returns_zero():
     with patch.object(cra, "collect_candidates", return_value=[]):
         assert cra.main_with_args(["--base", "origin/main"]) == 0
+
+
+def test_main_rejects_malformed_alias_even_if_allowed():
+    with patch.object(cra, "collect_candidates", side_effect=ValueError("bad alias")):
+        assert cra.main_with_args(["--allow", "typescript@7.0.2"]) == 1
 
 
 def test_main_explicit_too_fresh_fails():
@@ -547,7 +594,7 @@ def test_fetch_release_time_npm_packument_fallback_uses_large_cap(monkeypatch):
     def fake_fetch_json(url, *, max_bytes=cra.common.MAX_RESPONSE_BYTES):
         calls.append((url, max_bytes))
         if url.endswith("/9.9.9"):
-            return {}  # per-version doc without a time field
+            return {"name": "big-packument-pkg", "version": "9.9.9"}  # no time field
         return {"time": {"9.9.9": "2026-07-20T17:39:25.625Z"}}
 
     monkeypatch.setattr(cra.common, "fetch_json", fake_fetch_json)
