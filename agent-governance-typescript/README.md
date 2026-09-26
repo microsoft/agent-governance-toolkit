@@ -380,8 +380,14 @@ Only the two annotations merged into the WebMCP spec today (`readOnlyHint`, `unt
 
 ## Development
 
+The build and test typecheck invoke `node node_modules/@typescript/native/bin/tsc`
+directly, so npm cannot select the TypeScript 6 compatibility binary by bin-link
+order. ESLint uses the official TypeScript 6 API compatibility alias because
+TypeScript 7.0 does not provide the TypeScript 6 compiler API; Jest transforms
+tests with SWC rather than `ts-jest`.
+
 ```bash
-npm install
+npm ci --legacy-peer-deps
 npm run build    # Compile TypeScript
 npm test         # Run Jest tests
 npm run lint     # Lint with ESLint
