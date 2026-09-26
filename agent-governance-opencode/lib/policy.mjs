@@ -1454,16 +1454,18 @@ function tokenizeShellCommands(commandText) {
       continue;
     }
 
-    const hashFollowsExpansionSyntax = ["{", ")", "`"].includes(input[index - 1]);
+    const hashFollowsExpansionSyntax = ["{", "}", ")", "`"].includes(input[index - 1]);
     if (character === "#" && !tokenStarted && !hashFollowsExpansionSyntax) {
-      const activeSubstitution = substitutions.at(-1);
+      const insideBacktickSubstitution = substitutions.some(
+        (substitution) => substitution.type === "backtick",
+      );
       let precedingBackslashes = 0;
       while (index + 1 < input.length) {
         const nextCharacter = input[index + 1];
         if (
           nextCharacter === "\n" ||
           nextCharacter === "\r" ||
-          (activeSubstitution?.type === "backtick" &&
+          (insideBacktickSubstitution &&
             nextCharacter === "`" &&
             precedingBackslashes % 2 === 0)
         ) {
