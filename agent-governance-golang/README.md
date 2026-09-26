@@ -179,6 +179,28 @@ result := scanner.Scan(agentmesh.McpToolDefinition{
 fmt.Printf("Safe: %v, Risk: %d\n", result.Safe, result.RiskScore)
 ```
 
+### Healthcare Identifier Detection (`healthcare_identifiers.go`)
+
+Detect context-labeled MRNs, NPIs, and health-plan/member/policy identifiers
+without modifying the source text:
+
+```go
+text := "Patient MRN: A123456789; Provider NPI: 1234567893"
+matches := agentmesh.FindHealthcareIdentifiers(text)
+for _, match := range matches {
+    value := text[match.Start:match.End] // Start and End are byte offsets.
+    fmt.Printf("%s: %s\n", match.Kind, value)
+}
+```
+
+The detector requires an explicit cue (`MRN`/`medical record`, `NPI`/`provider
+ID`, or `HPID`/`health plan ID`/`member ID`/`policy ID`). MRNs are limited to
+6-12 alphanumeric characters, health-plan identifiers to 8-15, and NPIs to 10
+digits with a valid 80840-prefixed Luhn check digit. NPIs identify providers
+and are not inherently PHI. This detector neither classifies nor redacts data,
+verifies NPI issuance, identifies every healthcare identifier, or establishes
+HIPAA/SOC 2 compliance.
+
 ### Execution Rings (`rings.go`)
 
 Privilege ring model for agent access control (Ring 0 = Admin … Ring 3 = Sandboxed).

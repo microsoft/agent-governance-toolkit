@@ -73,6 +73,33 @@ policies:
 }
 ```
 
+## Healthcare Identifier Detection
+
+`agentmesh` exposes a context-aware detector for MRNs, NPIs, and health-plan,
+member, or policy identifiers. It returns byte ranges for identifier values;
+it does not classify or redact data.
+
+```rust
+use agentmesh::{find_healthcare_identifiers, HealthcareIdentifierKind};
+
+let text = "Patient MRN: A123456789; Provider NPI: 1234567893";
+for matched in find_healthcare_identifiers(text) {
+    let value = &text[matched.start..matched.end];
+    match matched.kind {
+        HealthcareIdentifierKind::MedicalRecordNumber => println!("MRN: {value}"),
+        HealthcareIdentifierKind::NationalProviderIdentifier => println!("NPI: {value}"),
+        HealthcareIdentifierKind::HealthPlanIdentifier => println!("Plan ID: {value}"),
+    }
+}
+```
+
+Detection requires an explicit cue (`MRN`/`medical record`, `NPI`/`provider
+ID`, or `HPID`/`health plan ID`/`member ID`/`policy ID`). MRNs are limited to
+6-12 alphanumeric characters, health-plan identifiers to 8-15, and NPIs to
+10 digits with a valid 80840-prefixed Luhn check digit. An NPI identifies a
+provider and is not inherently PHI. These patterns neither identify every
+healthcare identifier nor establish HIPAA or SOC 2 compliance.
+
 ## OpenTelemetry Policy Spans
 
 Policy-evaluation spans are available behind the opt-in `telemetry` feature. The
