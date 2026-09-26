@@ -27,11 +27,8 @@ class QueueRuntime:
 
 class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_run_enforces_input_and_output(self):
-        # AGT D1: only Decision.TRANSFORM applies the engine's
-        # transformed_policy_target. Pre-AGT the SDK gated on
-        # applies_effects (allow|warn|escalate), so this fixture used
-        # ALLOW/WARN. Migrate to TRANSFORM so the SDK propagates the
-        # rewrite per AGT D1.1.
+        # Only Decision.TRANSFORM applies the engine's transformed_policy_target,
+        # so this fixture uses TRANSFORM rather than ALLOW/WARN.
         runtime = QueueRuntime(
             [
                 InterventionPointResult(Verdict(Decision.TRANSFORM), transformed_policy_target={"text": "rewritten"}),

@@ -4,7 +4,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 import hashlib
 import json
-import warnings
 from enum import Enum, IntEnum
 from typing import Mapping, MutableMapping, Sequence, TypeAlias, Union
 
@@ -70,27 +69,6 @@ class Decision(str, Enum):
         """
         return self is Decision.TRANSFORM
 
-    @property
-    def applies_effects(self) -> bool:
-        """Deprecated. Use ``applies_transform`` (or ``permits`` to check
-        whether the action proceeds).
-
-        AGT D1 removed the effects[] surface; only ``transform`` mutates. This
-        property previously returned True for ``allow``, ``warn``, and
-        ``escalate``, none of which can mutate under AGT. It now returns
-        ``applies_transform`` and emits a DeprecationWarning to surface the
-        rename. Hosts that relied on the old "may apply mutations" semantics
-        should use ``applies_transform``; hosts that meant "execution
-        proceeds" should use ``permits``.
-        """
-        warnings.warn(
-            "Decision.applies_effects is deprecated per AGT D1; "
-            "use Decision.applies_transform (only transform mutates) "
-            "or Decision.permits (action proceeds).",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.applies_transform
 
 
 class PerfTelemetry(IntEnum):

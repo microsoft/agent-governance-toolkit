@@ -5,6 +5,30 @@ entries appear first.
 
 ---
 
+## Python `Decision.applies_effects` is removed
+
+**Date:** TBD
+
+**Affected**
+
+- Python hosts still reading `Decision.applies_effects`
+
+**What changed**
+
+`Decision.applies_effects` was deprecated when AGT D1 removed the `effects[]`
+surface; it returned `applies_transform` and emitted a `DeprecationWarning`
+on every access, which fails any suite run with `-W error` on code paths the
+host does not control. The property is gone. Reading it now raises
+`AttributeError`, so any caller still on the old property fails loudly
+rather than warning.
+
+**How to update**
+
+Use `Decision.applies_transform` to ask whether the verdict mutates the
+policy target, or `Decision.permits` to ask whether execution proceeds.
+
+---
+
 ## Python manifests declaring annotators require an explicit dispatcher
 
 **Date:** TBD
