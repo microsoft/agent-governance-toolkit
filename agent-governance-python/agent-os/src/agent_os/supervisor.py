@@ -154,15 +154,18 @@ class SupervisorHierarchy:
     ) -> TrustDecision:
         """Escalate *action* up the hierarchy starting above *from_level*.
 
-        Each level is consulted in descending order.  If the action reaches
-        level 0 the trust root makes the **final, non-overridable** decision.
+        Each level is consulted in descending order. If the escalation remains
+        within the configured depth cap, level 0 makes the **final,
+        non-overridable** decision.
 
         Args:
             action: Dict with ``tool`` and ``arguments``.
             from_level: The level that initiated escalation.
 
         Returns:
-            TrustDecision from the trust root (always deterministic).
+            A deterministic denial with ``authority="trust_root"`` when the
+            configured cap is exceeded. Otherwise, the trust root's decision,
+            whose native runtime authority is ``"native-runtime"``.
         """
         levels_above = sorted(
             {s.level for s in self._supervisors if s.level < from_level},
@@ -173,10 +176,12 @@ class SupervisorHierarchy:
         for _level in levels_above:
             depth += 1
             if depth > self.trust_root.max_escalation_depth:
+                # The trust root owns the configured cap, so cap denials retain
+                # trust-root authority even though this hierarchy enforces it.
                 return TrustDecision(
                     allowed=False,
                     reason="Max escalation depth exceeded",
-                    authority="supervisor",
+                    authority="trust_root",
                 )
 
         # Below the escalation-depth cap, the final decision comes from the
