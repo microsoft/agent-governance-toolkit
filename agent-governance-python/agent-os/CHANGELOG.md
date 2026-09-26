@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **Breaking custom-store contract: atomic MCP replay protection**:
+  `MCPMessageSigner` verifies signatures before accessing the replay store and
+  rechecks freshness under its lock before claiming a nonce. Concurrent
+  verification accepts a nonce only once, including across signers sharing a
+  store. Custom `MCPNonceStore.add` implementations must atomically reject live
+  duplicates with the new public `DuplicateNonceError`, without changing their
+  retention. Capacity and backend failures remain fail closed. Injected stores
+  are honored even when empty and falsy. Signatures are unchanged; see the
+  [custom nonce-store migration](../../docs/specs/MCP-SECURITY-GATEWAY-1.0.md#710-nonce-store-extensibility).
 - Bound email local-part and Basic-auth URI scheme scans to prevent quadratic scanning on separator-dense input (#3566), based on dev404ai's implementation in #3575. Fail-closed detection may match package prerelease versions; with `redact_pii=True`, an overlong email local part retains its prefix before the final 64 characters.
 - **Agent OS security & integrity hardening** ([#3247](https://github.com/microsoft/agent-governance-toolkit/pull/3247)) — five governance gaps closed so `agent_os` fails closed when gating and recording untrusted activity:
   - `MCPMessageSigner` / `InMemoryNonceStore` no longer evict in-window nonces by count. The nonce store keeps every nonce for its full replay window and, when saturated with live nonces, raises `NonceStoreCapacityError` so verification fails closed instead of re-opening the replay window. (New public export: `NonceStoreCapacityError`.)

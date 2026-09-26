@@ -1118,6 +1118,116 @@ def test_resolve_invalid_field_syntax_fails_closed(tmp_path: Path) -> None:
     assert "invalid field" in rego
 
 
+@pytest.mark.parametrize(
+    "condition",
+    [
+        pytest.param(
+            {"field": "tool_name", "operator": "in", "value": []},
+            id="empty-in",
+        ),
+        pytest.param({"or": []}, id="empty-or"),
+        pytest.param(
+            {
+                "and": [
+                    {"field": "tool_name", "operator": "eq", "value": "delete"},
+                    {"field": "tool_name", "operator": "eq", "value": "export"},
+                ]
+            },
+            id="contradictory-equality",
+        ),
+        pytest.param(
+            {
+                "and": [
+                    {"field": "tool_name", "operator": "in", "value": ["delete"]},
+                    {
+                        "field": "tool_name",
+                        "operator": "not_in",
+                        "value": ["delete"],
+                    },
+                ]
+            },
+            id="contradictory-membership",
+        ),
+        pytest.param(
+            {
+                "and": [
+                    {"field": "amount", "operator": "gt", "value": 5},
+                    {"field": "amount", "operator": "lt", "value": 3},
+                ]
+            },
+            id="disjoint-ranges",
+        ),
+    ],
+)
+def test_resolve_rejects_unsatisfiable_rule_before_materializing_bundle(
+    tmp_path: Path, condition: dict[str, object]
+) -> None:
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition("never-match", "deny", condition)
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+    bundle_dir = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="condition that can never match"):
+        resolve_manifest(root, root, bundle_dir=bundle_dir)
+
+    assert not bundle_dir.exists()
+
+
+@pytest.mark.parametrize(
+    ("equal_value", "operator", "value"),
+    [
+        pytest.param("5", "gt", 3, id="string-versus-number"),
+        pytest.param(True, "not_in", [1], id="boolean-versus-number"),
+        pytest.param(True, "gt", 3, id="boolean-range"),
+    ],
+)
+def test_resolve_does_not_reject_uncertain_mixed_type_conditions(
+    tmp_path: Path,
+    equal_value: object,
+    operator: str,
+    value: object,
+) -> None:
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "mixed-types",
+                    "deny",
+                    {
+                        "and": [
+                            {
+                                "field": "tool_name",
+                                "operator": "eq",
+                                "value": equal_value,
+                            },
+                            {
+                                "field": "tool_name",
+                                "operator": operator,
+                                "value": value,
+                            },
+                        ]
+                    },
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+    bundle_dir = tmp_path / "bundle"
+
+    manifest = resolve_manifest(root, root, bundle_dir=bundle_dir)
+
+    assert manifest["policies"]["agt_legacy_rules"]["bundle"]
+
+
 def test_resolve_fails_closed_when_legacy_rules_unbound(tmp_path: Path) -> None:
     root = tmp_path
     _write(
@@ -1145,6 +1255,7 @@ def test_resolve_fails_closed_when_legacy_rules_unbound(tmp_path: Path) -> None:
     ("operator", "value", "expected_snippet"),
     [
         ("not_in", ["secret", "token"], "not _v in"),
+        ("not_in", [], "not _v in"),
         ("startswith", "sec", "startswith(_v"),
         ("endswith", "ret", "endswith(_v"),
         ("exists", None, "!= null"),

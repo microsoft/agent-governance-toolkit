@@ -100,7 +100,7 @@ You can also define scenarios declaratively in
 An SLO combines **Service Level Indicators** (SLIs) with an **Error Budget**:
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, ResponseLatency, CostPerTask
 
 slo = SLO(

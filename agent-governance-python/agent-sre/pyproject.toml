@@ -43,6 +43,7 @@ dev = [
     "opentelemetry-exporter-otlp-proto-grpc>=1.44.0,<2.0",
     "fastapi>=0.141.1,<1.0",
     "uvicorn>=0.53.0,<1.0",
+    "sentry-sdk>=2.0,<3.0",
 ]
 
 [project.urls]

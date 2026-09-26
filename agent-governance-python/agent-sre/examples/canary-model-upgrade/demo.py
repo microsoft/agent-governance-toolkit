@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import random
 
-from agent_sre import SLO, ErrorBudget
 from agent_sre.delivery.rollout import (
     RollbackCondition,
     RolloutState,
@@ -33,6 +32,7 @@ from agent_sre.slo.indicators import (
     ResponseLatency,
     TaskSuccessRate,
 )
+from agent_sre.slo.objectives import SLO, ErrorBudget
 
 # ── ANSI helpers ──────────────────────────────────────────────────────
 

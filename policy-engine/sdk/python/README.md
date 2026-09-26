@@ -140,9 +140,11 @@ Python custom annotator dispatcher exceptions fail closed as `runtime_error:anno
 
 ## LangChain adapters
 
-Use `guard_langchain_runnable()` for async Runnable objects. It wraps `ainvoke(...)` and routes the call through `input` and `output`. Sync and batch entry points such as `invoke`, `batch`, and `stream` are blocked by the adapter instead of bypassing ACS.
+Use `guard_langchain_runnable()` for Runnable objects. It guards `invoke`, `ainvoke`, `batch`, and `abatch` through `input` and `output`. Batches evaluate each input independently and sequentially, including any per-input config. A policy interruption or runtime error always propagates, even with `return_exceptions=True`. Streaming and iterator entry points remain blocked because a partial stream cannot be post-evaluated without buffering. Methods such as `with_config` and `bind` that create an unguarded derivative also remain blocked. An unsupported error names the blocked method in its message; for compatibility its structured reason remains `host_error:adapter_unsupported` at `input`.
 
-Use `guard_langchain_tool()` for async BaseTool-style objects. The tool must expose a string `name` and an async `ainvoke(...)` method. The adapter routes arguments through `pre_tool_call`, invokes the tool with transformed arguments, then routes the tool result through `post_tool_call`.
+Use `guard_langchain_tool()` for BaseTool-style objects. The tool must expose a string `name` and an `ainvoke(...)` method. It guards sync and async invocation and batch paths through `pre_tool_call` and `post_tool_call`. Direct `run` and `arun` calls remain blocked. A LangChain `ToolCall` is evaluated using its `args` while preserving its call ID and `ToolMessage` result for LangGraph. Arguments marked as injected by LangChain are excluded from the policy target, then restored for execution; a policy transform cannot replace them. Only use direct `ToolCall` inputs from a trusted host because outside `ToolNode` the adapter cannot establish who supplied those injected values. Non-JSON-serializable tool message artifacts fail closed with `AdapterUnsupportedError` before the post-tool policy check, rather than bypassing that check.
+
+Both proxies pass `isinstance` checks for their wrapped types. They are not an isolation boundary for the underlying object: retaining the original reference, `copy.deepcopy(guarded)`, `guarded.model_copy()` and delegated attributes such as `guarded.func(...)` can reach unguarded behavior. Do not use these paths in agent execution; use the guarded `invoke` or `ainvoke` entry points throughout.
 
 ```python
 from agent_control_specification import (
@@ -165,6 +167,25 @@ guarded_tool = guard_langchain_tool(
     tool_call_id="rag-retrieve-1",
 )
 documents = await guarded_tool.ainvoke({"query": "public docs"})
+```
+
+By default `guard_langchain_tool()` raises `AgentControlBlocked` on a deny. Set `on_deny="tool_error"` for a LangGraph `ToolNode` to receive a `ToolMessage(status="error")` for a policy deny rather than a retryable exception. Fail-closed `runtime_error:*` and `host_error:*` verdicts still raise; they are not reported as policy denies. Its content states the verdict reason and message and says not to retry. `message.additional_kwargs["agent_control"]` contains `error`, `reason`, `message`, and `terminal: True` so a graph can route terminal denies away from its model/tool retry loop. A caller without a tool call ID instead receives the same structured error mapping. LangGraph does not automatically stop a model that ignores the message, so configure a conditional edge on the terminal marker when the graph must stop. A `post_tool_call` deny hides the result but cannot undo the tool's side effects. Streaming remains blocked on both adapters.
+
+For an existing graph builder with `tools` and `agent` nodes, use the opt-in behavior and route terminal denies.
+
+```python
+from langchain_core.messages import ToolMessage
+from langgraph.graph import END
+
+guarded_tool = guard_langchain_tool(control, retriever_tool, on_deny="tool_error")
+
+def after_tools(state):
+    last = state["messages"][-1]
+    if isinstance(last, ToolMessage) and last.additional_kwargs.get("agent_control", {}).get("terminal"):
+        return END
+    return "agent"
+
+graph.add_conditional_edges("tools", after_tools)
 ```
 
 ## Engine runtime errors

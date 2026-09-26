@@ -51,6 +51,22 @@ def _compound_items(condition: dict[str, Any], key: str) -> list[Any] | None:
     return None
 
 
+def _rego_values_equal(left: Any, right: Any) -> bool:
+    """Compare JSON values without Python's bool-is-an-int equality."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return isinstance(left, bool) and isinstance(right, bool) and left is right
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            _rego_values_equal(left_value, right_value)
+            for left_value, right_value in zip(left, right)
+        )
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(
+            _rego_values_equal(left[key], right[key]) for key in left
+        )
+    return left == right
+
+
 _VALUE_TEST_OPERATORS = {
     "eq",
     "ne",
@@ -73,43 +89,56 @@ def _accepts_value(
     # guard and fire on an absent field (null sentinel), while allow ne/not_in
     # keep the guard and never fire on null. The flag must be True exactly when
     # the operator belongs to a deny rule.
+    # This is used to prove conditions disjoint, so uncertain comparisons must
+    # remain possible rather than being mistaken for an impossible rule.
     try:
         if operator == "eq":
-            return value == expected
+            return _rego_values_equal(value, expected)
         if operator == "ne":
             if deny_polarity:
-                return value != expected
-            return value is not None and value != expected
+                return not _rego_values_equal(value, expected)
+            return value is not None and not _rego_values_equal(value, expected)
         if operator == "gt":
+            if isinstance(value, bool) != isinstance(expected, bool):
+                return True
             return value is not None and value > expected
         if operator == "gte":
+            if isinstance(value, bool) != isinstance(expected, bool):
+                return True
             return value is not None and value >= expected
         if operator == "lt":
+            if isinstance(value, bool) != isinstance(expected, bool):
+                return True
             return value is not None and value < expected
         if operator == "lte":
+            if isinstance(value, bool) != isinstance(expected, bool):
+                return True
             return value is not None and value <= expected
         if operator == "in" and isinstance(expected, list):
-            return value is not None and value in expected
+            return value is not None and any(
+                _rego_values_equal(value, candidate) for candidate in expected
+            )
         if operator == "not_in" and isinstance(expected, list):
+            not_in = not any(
+                _rego_values_equal(value, candidate) for candidate in expected
+            )
             if deny_polarity:
-                return value not in expected
-            return value is not None and value not in expected
+                return not_in
+            return value is not None and not_in
         if operator == "contains":
-            return value is not None and expected in value
+            if not isinstance(value, str) or not isinstance(expected, str):
+                return True
+            return expected in value
         if operator == "startswith":
-            return (
-                isinstance(value, str)
-                and isinstance(expected, str)
-                and value.startswith(expected)
-            )
+            if not isinstance(value, str) or not isinstance(expected, str):
+                return True
+            return value.startswith(expected)
         if operator == "endswith":
-            return (
-                isinstance(value, str)
-                and isinstance(expected, str)
-                and value.endswith(expected)
-            )
+            if not isinstance(value, str) or not isinstance(expected, str):
+                return True
+            return value.endswith(expected)
     except TypeError:
-        return False
+        return True
     return False
 
 
@@ -364,6 +393,14 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if not isinstance(rule, dict) or "name" not in rule:
                 raise ResolutionError.invalid_governance(
                     f"rule at level {level} is missing name"
+                )
+            if _condition_unsatisfiable(
+                rule.get("condition"), is_deny=_rule_action(rule) == "deny"
+            ):
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a condition that can never match; "
+                    "refusing migration because it could silently fall through to "
+                    "later rules or the default action"
                 )
 
     if len(documents) == 1:

@@ -98,6 +98,7 @@ Caldicott
 Cdecl
 Centralised
 Chatflows
+cjar
 Clendenen
 CommonMark
 Convs
@@ -176,6 +177,7 @@ ISSN
 Initialise
 Jaccard
 Janssen
+jans
 Kigali
 KillSwitch
 Kogi
@@ -319,6 +321,7 @@ ZDOTDIR
 aadhaar
 aarch64
 ababa
+abatch
 abprs
 abspath
 abstractmethod
@@ -346,6 +349,7 @@ aioredis
 aiter
 akickoff
 alikes
+alisteners
 allowlist
 allowlisted
 alnum
@@ -378,6 +382,7 @@ asynccontextmanager
 asyncgens
 asyncio
 atexit
+atransform
 attributeerror
 authorisation
 authorised
@@ -950,6 +955,7 @@ restype
 retarget
 retargeted
 retargets
+retryable
 returncode
 rfile
 rfind
@@ -1273,3 +1279,15 @@ propagation
 readonly
 resolver
 sha256sum
+# --- Python stdlib identifiers (scripts/check_lockfile_integrity.py) ---
+fromhex
+EBADENGINE
+hono
+# --- rmcp 2.0.0 dependency audit (docs/dependency-audits) ---
+# --- rmcp 2.1.0 dependency audit (docs/dependency-audits) ---
+Abuomar
+Haroon
+alexhancock
+chrono
+pastey
+schemars
