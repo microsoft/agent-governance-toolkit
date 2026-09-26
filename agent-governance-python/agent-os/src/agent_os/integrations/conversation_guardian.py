@@ -80,15 +80,49 @@ _HOMOGLYPH_MAP: dict[str, str] = {
 }
 
 
-def normalize_text(text: str) -> str:
-    """Normalize text to defeat common evasion techniques.
+# Unicode 17.0.0 Default_Ignorable_Code_Point, not a general category filter:
+# https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt
+# Includes Mn, Lo and reserved code points as well as Cf.
+# Prior art: LHMQ878's report #3500 and fix proposal #3501 identified the
+# property-based coverage and the need to preserve invisible word boundaries.
+_INVISIBLE_RANGES: tuple[tuple[int, int], ...] = (
+    (0x00AD, 0x00AD),  # Soft hyphen
+    (0x034F, 0x034F),  # Combining grapheme joiner
+    (0x061C, 0x061C),  # Arabic letter mark
+    (0x115F, 0x1160),  # Hangul fillers
+    (0x17B4, 0x17B5),  # Khmer inherent vowels
+    (0x180B, 0x180F),  # Mongolian selectors and vowel separator
+    (0x200B, 0x200F),  # Zero-width characters and directional marks
+    (0x202A, 0x202E),  # Bidi embeddings and overrides
+    (0x2060, 0x206F),  # Invisible operators, bidi isolates and reserved formats
+    (0x3164, 0x3164),  # Hangul filler
+    (0xFE00, 0xFE0F),  # Variation selectors
+    (0xFEFF, 0xFEFF),  # BOM
+    (0xFFA0, 0xFFA0),  # Halfwidth Hangul filler
+    (0xFFF0, 0xFFF8),  # Reserved default-ignorables
+    (0xFFF9, 0xFFFB),  # Interlinear annotations: additional, not default-ignorable
+    (0x1BCA0, 0x1BCA3),  # Shorthand format controls
+    (0x1D173, 0x1D17A),  # Musical format controls
+    (0xE0000, 0xE0FFF),  # Tags, supplementary selectors and reserved code points
+)
+_INVISIBLE_DELETE = {
+    cp: "" for start, end in _INVISIBLE_RANGES for cp in range(start, end + 1)
+}
+_INVISIBLE_SPACE = dict.fromkeys(_INVISIBLE_DELETE, " ")
+_LEGACY_INVISIBLE_DELETE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"), "")
+_LEET_TRANSLATION = str.maketrans(_LEET_MAP)
+_LEET_DIGIT_TRANSLATION = str.maketrans(
+    {char: replacement for char, replacement in _LEET_MAP.items() if char.isalnum()}
+)
+_LEET_PUNCTUATION = re.compile(
+    r"(?<=[^\W_])["
+    + re.escape("".join(char for char in _LEET_MAP if not char.isalnum()))
+    + r"](?=[^\W_])"
+)
 
-    Handles: unicode homoglyphs, leetspeak, zero-width characters,
-    excessive whitespace, combining diacritics, fullwidth characters.
-    """
-    # Strip zero-width characters
-    text = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text)
 
+def _normalize_unicode(text: str) -> str:
+    """Apply the shared transforms without changing punctuation or digits."""
     # NFKD decomposition (handles fullwidth, compatibility chars)
     text = unicodedata.normalize("NFKD", text)
 
@@ -98,13 +132,52 @@ def normalize_text(text: str) -> str:
     # Homoglyph replacement
     text = "".join(_HOMOGLYPH_MAP.get(c, c) for c in text)
 
-    # Leetspeak replacement (only in word context)
-    text = "".join(_LEET_MAP.get(c, c) for c in text)
-
     # Collapse excessive whitespace / mixed whitespace
     text = re.sub(r"\s+", " ", text).strip()
 
     return text
+
+
+def normalize_text(text: str) -> str:
+    """Return a lossy, detection-only view of text with invisible characters removed.
+
+    Handles Unicode 17.0.0 default-ignorables, interlinear annotation controls,
+    homoglyphs, leetspeak, whitespace, diacritics and compatibility characters.
+    Do not replace displayed text or audit records with this normalized view.
+    Detectors also retain other views to preserve word boundaries and numbers.
+    """
+    # Remove fillers before NFKD can turn them into different Hangul characters.
+    return _normalize_unicode(text.translate(_INVISIBLE_DELETE)).translate(_LEET_TRANSLATION)
+
+
+def detection_texts(text: str) -> tuple[str, ...]:
+    """Return the original text and at most seven distinct normalization views.
+
+    The views are for detection only, not display or audit storage. Their count
+    is independent of the number of invisible characters in the input.
+    """
+    candidates = [text]
+    normalized_views: dict[str, str] = {}
+    # Deletion repairs split keywords; spaces retain otherwise lost boundaries.
+    for visible in dict.fromkeys(
+        (text.translate(_INVISIBLE_DELETE), text.translate(_INVISIBLE_SPACE))
+    ):
+        normalized = _normalize_unicode(visible)
+        normalized_views[visible] = normalized
+        candidates.append(normalized)
+        candidates.append(normalized.translate(_LEET_TRANSLATION))
+        # Preserve punctuation boundaries in a separate leet view: converting
+        # the final "!" in "urg3nt!" to "i" would hide the restored keyword.
+        candidates.append(_LEET_PUNCTUATION.sub(
+            lambda match: _LEET_MAP[match[0]],
+            normalized.translate(_LEET_DIGIT_TRANSLATION),
+        ))
+    # Keep the former normalization result too: old joiners inside words can
+    # coexist with newly covered characters that used to act as boundaries.
+    legacy = text.translate(_LEGACY_INVISIBLE_DELETE)
+    if legacy not in normalized_views:
+        candidates.append(_normalize_unicode(legacy).translate(_LEET_TRANSLATION))
+    return tuple(dict.fromkeys(candidates))
 
 
 # ── Enums ────────────────────────────────────────────────────────────
@@ -341,18 +414,19 @@ class EscalationClassifier:
     def score_message(self, text: str) -> tuple[float, list[str]]:
         """Score a single message for escalation patterns.
 
-        Matches against both original and normalized text to catch
-        evasion while preserving regular detection.
+        Matches original and normalized views, counting each pattern once.
 
         Returns:
             Tuple of (score in [0, 1], list of matched pattern descriptions).
         """
-        normalized = normalize_text(text)
+        return self._score_candidates(detection_texts(text))
+
+    def _score_candidates(self, candidates: tuple[str, ...]) -> tuple[float, list[str]]:
         total = 0.0
         matched: list[str] = []
         for weight, patterns in _ESCALATION_PATTERNS:
             for pattern in patterns:
-                if pattern.search(text) or pattern.search(normalized):
+                if any(pattern.search(candidate) for candidate in candidates):
                     total += weight
                     matched.append(pattern.pattern)
         return min(total, 1.0), matched
@@ -371,8 +445,16 @@ class EscalationClassifier:
         Returns:
             Tuple of (conversation escalation score, matched patterns).
         """
+        return self._analyze_candidates(conversation_id, detection_texts(text), timestamp)
+
+    def _analyze_candidates(
+        self,
+        conversation_id: str,
+        candidates: tuple[str, ...],
+        timestamp: float | None = None,
+    ) -> tuple[float, list[str]]:
         ts = timestamp or time.time()
-        msg_score, matched = self.score_message(text)
+        msg_score, matched = self._score_candidates(candidates)
 
         self._history[conversation_id].append((ts, msg_score))
 
@@ -479,18 +561,19 @@ class OffensiveIntentDetector:
     def score_message(self, text: str) -> tuple[float, list[str]]:
         """Score a message for offensive intent patterns.
 
-        Matches against both original and normalized text to catch
-        evasion while preserving regular detection.
+        Matches original and normalized views, counting each pattern once.
 
         Returns:
             Tuple of (score in [0, 1], list of matched pattern descriptions).
         """
-        normalized = normalize_text(text)
+        return self._score_candidates(detection_texts(text))
+
+    def _score_candidates(self, candidates: tuple[str, ...]) -> tuple[float, list[str]]:
         total = 0.0
         matched: list[str] = []
         for weight, patterns in _OFFENSIVE_PATTERNS:
             for pattern in patterns:
-                if pattern.search(text) or pattern.search(normalized):
+                if any(pattern.search(candidate) for candidate in candidates):
                     total += weight
                     matched.append(pattern.pattern)
         return min(total, 1.0), matched
@@ -559,7 +642,10 @@ class FeedbackLoopBreaker:
         return self._states[conversation_id]
 
     def _is_error_message(self, text: str) -> bool:
-        return any(p.search(text) for p in _ERROR_PATTERNS)
+        return self._is_error_candidates(detection_texts(text))
+
+    def _is_error_candidates(self, candidates: tuple[str, ...]) -> bool:
+        return any(p.search(candidate) for p in _ERROR_PATTERNS for candidate in candidates)
 
     def record_message(
         self,
@@ -573,6 +659,17 @@ class FeedbackLoopBreaker:
         Returns:
             Loop score in [0, 1]. Higher = more likely in a dangerous loop.
         """
+        return self._record_candidates(
+            conversation_id, detection_texts(text), escalation_score, timestamp,
+        )
+
+    def _record_candidates(
+        self,
+        conversation_id: str,
+        candidates: tuple[str, ...],
+        escalation_score: float = 0.0,
+        timestamp: float | None = None,
+    ) -> float:
         ts = timestamp or time.time()
         state = self._get_state(conversation_id)
 
@@ -583,7 +680,7 @@ class FeedbackLoopBreaker:
         state.escalation_scores.append(escalation_score)
 
         # Detect error → retry pattern
-        if self._is_error_message(text):
+        if self._is_error_candidates(candidates):
             if state.last_error_turn == state.turn_count - 1:
                 state.error_retry_streak += 1
             else:
@@ -735,25 +832,26 @@ class ConversationGuardian:
         ts = timestamp or time.time()
         reasons: list[str] = []
         all_patterns: list[str] = []
+        candidates = detection_texts(content)
 
         with self._lock:
             # 1. Escalation analysis
-            esc_score, esc_patterns = self.escalation_classifier.analyze(
-                conversation_id, content, timestamp=ts,
+            esc_score, esc_patterns = self.escalation_classifier._analyze_candidates(
+                conversation_id, candidates, timestamp=ts,
             )
             all_patterns.extend(esc_patterns)
             if esc_score >= self.escalation_classifier.threshold:
                 reasons.append(f"Escalation detected (score={esc_score:.2f})")
 
             # 2. Offensive intent analysis
-            off_score, off_patterns = self.offensive_detector.score_message(content)
+            off_score, off_patterns = self.offensive_detector._score_candidates(candidates)
             all_patterns.extend(off_patterns)
             if off_score >= self.offensive_detector.threshold:
                 reasons.append(f"Offensive intent detected (score={off_score:.2f})")
 
             # 3. Feedback loop analysis
-            loop_score = self.loop_breaker.record_message(
-                conversation_id, content,
+            loop_score = self.loop_breaker._record_candidates(
+                conversation_id, candidates,
                 escalation_score=esc_score, timestamp=ts,
             )
             should_break, break_reason = self.loop_breaker.should_break(conversation_id)
@@ -952,6 +1050,7 @@ __all__ = [
     "FeedbackLoopBreaker",
     "OffensiveIntentDetector",
     "TranscriptEntry",
+    "detection_texts",
     "load_conversation_guardian_config",
     "normalize_text",
 ]

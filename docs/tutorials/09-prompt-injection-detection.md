@@ -1,6 +1,6 @@
 ---
 title: Prompt Injection Detection
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-24
 owner: docs-team
 ---
 
@@ -589,9 +589,40 @@ evasion techniques:
 
 - **Leetspeak:** `3xpl0it` → `exploit`, `byp4ss` → `bypass`
 - **Homoglyphs:** Cyrillic `а` (U+0430) → Latin `a`
-- **Zero-width characters:** stripped before matching
+- **Invisible characters:** Unicode 17.0.0 `Default_Ignorable_Code_Point`
+  characters and interlinear annotation controls are removed before NFKD
+  decomposition, including soft hyphens, variation selectors, bidi controls,
+  Hangul fillers, and supplementary-plane tags
 - **Fullwidth characters:** NFKD-normalized
 - **Combining diacritics:** removed
+
+Escalation, offensive-intent, and retry-loop checks all use the same bounded
+set of detection views. These include the original text, invisible-character
+deletion and space substitution, and normalization with and without leetspeak
+conversion. This catches characters inserted inside keywords without losing
+word boundaries when they separate keywords. A punctuation-preserving leetspeak
+view handles combinations such as `ur\u00adg3nt!`; numeric error codes such as
+`4\u034f03` remain detectable too. Each pattern contributes to the score only
+once, even when several views match. The previous normalization view is retained
+so mixed old and newly covered invisible characters do not remove existing
+matches. At most eight distinct views are checked per message.
+The public `detection_texts(text)` helper returns these views; the guardian
+computes them once and shares them across all three detectors.
+
+**Numeric retry trade-off:** digits separated by invisible characters, such as
+`4\u200b0\u200b1` or `id 40\u00ad3`, now count as error turns because they
+normalize to `401` or `403`. Even benign-looking identifiers can therefore
+contribute to the retry limit. This is intentional parity with the existing
+plain-text error-code rules, not a new inference of malicious intent.
+
+Normalization is for detection only: transcript previews and hashes still use
+the original message. Invisible characters alone do not trigger an alert.
+Visible whitespace and letters are not indiscriminately deleted.
+
+These are heuristic sample detectors, not a guarantee against every prompt
+injection or encoding strategy. Keep deterministic tool permissions, policy
+enforcement, and approval controls in place; an `AlertAction.NONE` result is
+not authorization to perform an action.
 
 ---
 
