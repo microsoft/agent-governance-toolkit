@@ -428,36 +428,15 @@ class HostSession:
         return self.evaluate(InterventionPoint.INPUT, input={"body": body})
 
     def pre_model_call(self, request: JsonValue) -> InterventionPointResult:
-        # Emit the same top-level keys the framework adapters send (``model``,
-        # ``messages``, ``tools``) so one manifest binds paths that resolve
-        # through either seam. Read them out by name rather than spreading the
-        # caller's mapping, which would raise TypeError for a body carrying a
-        # key named after one of this method's parameters.
-        #
-        # Anything outside that set is folded into ``messages`` rather than
-        # dropped. The signature accepts any JSON, and provider request shapes
-        # differ (Anthropic puts instructions in ``system``, Gemini in
-        # ``contents``, Bedrock in ``inputText``); discarding them would hand
-        # the policy an empty request and allow prompt text nobody inspected.
-        canonical = ("model", "messages", "tools", "request_id")
-        body: dict[str, JsonValue] = {"model": {}, "messages": [], "tools": []}
-        if isinstance(request, dict):
-            for key in canonical:
-                if key in request:
-                    body[key] = request[key]
-            extras = {k: v for k, v in request.items() if k not in canonical}
-            if extras:
-                carried = body["messages"]
-                body["messages"] = [
-                    *(carried if isinstance(carried, list) else [carried]),
-                    extras,
-                ]
-        else:
-            body["messages"] = request
-        return self.evaluate(InterventionPoint.PRE_MODEL_CALL, **body)
+        # The whole request rides under ``model_request``, the key the snapshot
+        # contract and the framework adapters use, so one manifest binds
+        # ``$snap.model_request`` through either seam. Provider shapes
+        # differ (Anthropic ``system``, Gemini ``contents``), so nothing is
+        # folded or dropped on the way.
+        return self.evaluate(InterventionPoint.PRE_MODEL_CALL, model_request=request)
 
     def post_model_call(self, response: JsonValue) -> InterventionPointResult:
-        return self.evaluate(InterventionPoint.POST_MODEL_CALL, response=response)
+        return self.evaluate(InterventionPoint.POST_MODEL_CALL, model_response=response)
 
     def pre_tool_call(
         self,
@@ -488,7 +467,7 @@ class HostSession:
         )
 
     def output(self, content: JsonValue) -> InterventionPointResult:
-        return self.evaluate(InterventionPoint.OUTPUT, response={"content": content})
+        return self.evaluate(InterventionPoint.OUTPUT, output=content)
 
     def agent_shutdown(self, summary: JsonValue | None = None) -> InterventionPointResult:
         return self.evaluate(InterventionPoint.AGENT_SHUTDOWN, summary=summary or {})

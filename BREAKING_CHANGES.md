@@ -5,6 +5,68 @@ entries appear first.
 
 ---
 
+## Python `HostSession` and the AGT adapter runtime send the snapshot contract's keys
+
+**Date:** TBD
+
+**Affected**
+
+- Python hosts evaluating `pre_model_call`, `post_model_call` or `output`
+  through `HostSession`, and every `agent_os` framework adapter, which
+  reaches the same points through `NativeAdapterRuntime`
+- Manifests whose policy targets were written against the keys those seams
+  used to send, including every manifest `agt migrate v4-to-v5` produced
+  before this change
+- Rego or Cedar that reads those keys in its body rather than through
+  `policy_target`, and the stock `data.agt.ifc`, `ifc.cedar` and
+  `patterns.cedar` output rules
+
+**What changed**
+
+`HostSession.pre_model_call` sent the request spread over top-level `model`,
+`messages` and `tools`, `post_model_call` sent `response`, and `output` sent
+`response.content`; the `agent_os` adapter runtime did the same. The snapshot
+contract, the wire schema and the framework adapters in every SDK use
+`model_request`, `model_response` and `output`, so a manifest written from the
+contract failed closed with `runtime_error:path_missing` when driven through
+either seam. Both now send the contract keys: the request under
+`model_request` (the adapter runtime nests its `model`, `messages` and `tools`
+there; `HostSession` forwards the caller's request unchanged), the response
+under `model_response`, and the final content under `output`. IFC result
+labels at `output` move from `response.ifc.result_labels` to the top-level
+`ifc.result_labels`, since `output` is the bare content. `agt migrate` emits
+the new targets, the stock libraries read the new paths, and
+`AGT-SNAPSHOT-1.0.md` §2.3, §2.4 and §2.7 document them.
+
+**How to update**
+
+Rewrite policy targets, in hand-written manifests and in anything `agt
+migrate` produced earlier (or re-run the migration, which binds
+`pre_model_call` to `$snap.model_request` and scans every prompt key but
+`model` and `tools`):
+
+| Before | After |
+|---|---|
+| `$snap.messages` at `pre_model_call` | `$snap.model_request.messages` (or `$snap.model_request` to cover `system` and `contents`) |
+| `$snap.model`, `$snap.tools` at `pre_model_call` | `$snap.model_request.model`, `$snap.model_request.tools` |
+| `$snap.response` at `post_model_call` | `$snap.model_response` |
+| `$snap.response.content` at `output` | `$snap.output` |
+
+Rego that reads the snapshot directly needs the same rename:
+`input.snapshot.response.content` → `input.snapshot.output`,
+`input.snapshot.response` → `input.snapshot.model_response`,
+`input.snapshot.messages` → `input.snapshot.model_request.messages`, and
+`input.snapshot.response.ifc.result_labels` → `input.snapshot.ifc.result_labels`
+(the `data.agt.ifc` `result_labels` helper already follows). Cedar reads
+`context.output` and `context.ifc.result_labels` in place of
+`context.response.content` and `context.response.ifc.result_labels`. Check
+these reads before upgrading: a rule under `default verdict := {"decision":
+"allow"}` that reads an old path never fires, so it fails open rather than
+closed. Manifests already written against the adapters or the contract need
+no change.
+
+---
+
 ## Python manifests declaring annotators require an explicit dispatcher
 
 **Date:** TBD

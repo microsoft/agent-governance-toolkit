@@ -107,7 +107,7 @@
       "resource": "PolicyTarget::\"assistant_output\"",
       "context": {
         "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
-        "response": {"content": "answer"},
+        "output": "answer",
         "annotations": {"confidence": {"score": 20}}
       }
     },
@@ -167,7 +167,7 @@
       "resource": "PolicyTarget::\"assistant_output\"",
       "context": {
         "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
-        "response": {"content": "answer"},
+        "output": "answer",
         "annotations": {"pii_detected": true}
       }
     },
@@ -187,7 +187,7 @@
       "resource": "PolicyTarget::\"assistant_output\"",
       "context": {
         "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
-        "response": {"content": "answer"},
+        "output": "answer",
         "annotations": {"drift_score": 80}
       }
     },
@@ -207,7 +207,7 @@
       "resource": "PolicyTarget::\"assistant_output\"",
       "context": {
         "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
-        "response": {"content": "alice@example.com"},
+        "output": "alice@example.com",
         "annotations": {"pii_detected": true, "confidence": {"score": 10}}
       }
     },
