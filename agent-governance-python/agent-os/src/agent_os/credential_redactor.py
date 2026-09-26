@@ -6,14 +6,32 @@ from __future__ import annotations
 
 import logging
 import re
-from .hipaa_patterns import HIPAA_PHI_RAW_PATTERNS
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
+from .hipaa_patterns import HIPAA_PHI_RAW_PATTERNS
 
 logger = logging.getLogger(__name__)
 
 REDACTED_PLACEHOLDER = "[REDACTED]"
+
+
+def _compile_named_patterns(
+    raw_patterns: tuple[
+        tuple[str, str] | tuple[str, str, Callable[[re.Match[str]], bool]],
+        ...,
+    ],
+) -> tuple[CredentialPattern, ...]:
+    """Compile named regex definitions into ``CredentialPattern`` records."""
+    return tuple(
+        CredentialPattern(
+            name=pattern[0],
+            pattern=re.compile(pattern[1]),
+            validator=pattern[2] if len(pattern) > 2 else None,
+        )
+        for pattern in raw_patterns
+    )
 
 
 @dataclass(frozen=True)
@@ -155,7 +173,9 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="JWT",
-            pattern=re.compile(r"(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9._-]{6,}\.[A-Za-z0-9._-]{6,}\b"),
+            pattern=re.compile(
+                r"(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9._-]{6,}\.[A-Za-z0-9._-]{6,}\b"
+            ),
         ),
         CredentialPattern(
             # Covers bot/user/legacy tokens (xoxb/xoxa/xoxp/xoxr/xoxs) and
@@ -186,7 +206,9 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="Stripe secret key",
-            pattern=re.compile(r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}(?![A-Za-z0-9])"),
+            pattern=re.compile(
+                r"(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}(?![A-Za-z0-9])"
+            ),
         ),
         CredentialPattern(
             name="Generic API secret",
@@ -196,18 +218,15 @@ class CredentialRedactor:
         ),
     )
 
-    # PII / CRI patterns — detection-only (not used for redaction by default).
-    # These catch personally identifiable information that should not flow
-    # into LLM context in enterprise governance scenarios.
+    # PHI patterns are kept separate from ordinary PII so callers can inspect
+    # or enforce HIPAA-specific findings independently, while the public
+    # detection helpers below remain backward compatible by scanning both.
+    PHI_PATTERNS: tuple[CredentialPattern, ...] = _compile_named_patterns(HIPAA_PHI_RAW_PATTERNS)
+
+    # Ordinary PII / CRI patterns — detection-only (not used for redaction by
+    # default). These catch non-HIPAA personally identifiable information that
+    # should not flow into LLM context in enterprise governance scenarios.
     PII_PATTERNS: tuple[CredentialPattern, ...] = (
-        *(
-            CredentialPattern(
-                name=p[0],
-                pattern=re.compile(p[1]),
-                validator=p[2] if len(p) > 2 else None,
-            )
-            for p in HIPAA_PHI_RAW_PATTERNS
-        ),
         CredentialPattern(
             name="Email address",
             # RFC 5321 limits the local part to 64 octets. The character class
@@ -222,15 +241,11 @@ class CredentialRedactor:
             # With redact_pii=True, only the final 64 local-part characters and
             # domain are redacted; an overlong local-part prefix stays visible.
             # Version strings such as pkg@1.0.0.dev1 may also match intentionally.
-            pattern=re.compile(
-                r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
-            ),
+            pattern=re.compile(r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"),
         ),
         CredentialPattern(
             name="US phone number",
-            pattern=re.compile(
-                r"(?<!\d)(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?!\d)"
-            ),
+            pattern=re.compile(r"(?<!\d)(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?!\d)"),
         ),
         CredentialPattern(
             name="US SSN",
@@ -242,9 +257,7 @@ class CredentialRedactor:
             # keeps the looser form for detection-only reporting.
             # Use the lookaround idiom documented above rather than ``\b`` so an
             # SSN adjacent to ``_`` (``employee_123-45-6789``) is still detected.
-            pattern=re.compile(
-                r"(?<![A-Za-z0-9])\d{3}[\s.-]\d{2}[\s.-]\d{4}(?![A-Za-z0-9])"
-            ),
+            pattern=re.compile(r"(?<![A-Za-z0-9])\d{3}[\s.-]\d{2}[\s.-]\d{4}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
             name="Credit card number",
@@ -260,12 +273,15 @@ class CredentialRedactor:
 
     @classmethod
     def find_pii_matches(cls, value: str | None) -> list[CredentialMatch]:
-        """Return all PII/CRI-like matches found in a string.
+        """Return all PII- and PHI-like matches found in a string.
 
         Unlike :meth:`find_matches`, these patterns detect personally
-        identifiable information (email, phone, SSN, credit card, IP address)
-        rather than secrets. Use for detection and policy enforcement, not
-        for audit redaction.
+        identifiable information and HIPAA identifiers (email, phone, SSN,
+        credit card, IP address, MRN, NPI, health plan identifiers) rather
+        than secrets. ``PII_PATTERNS`` and ``PHI_PATTERNS`` remain separately
+        inspectable for callers that need category-aware handling; this method
+        intentionally scans both collections for backwards compatibility. Use
+        for detection and policy enforcement, not for audit redaction.
 
         Args:
             value: String content to inspect.
@@ -277,7 +293,7 @@ class CredentialRedactor:
             return []
 
         matches: list[CredentialMatch] = []
-        for pii_pattern in cls.PII_PATTERNS:
+        for pii_pattern in cls.PII_PATTERNS + cls.PHI_PATTERNS:
             for match in pii_pattern.pattern.finditer(value):
                 if pii_pattern.validator and not pii_pattern.validator(match):
                     continue
@@ -293,13 +309,13 @@ class CredentialRedactor:
 
     @classmethod
     def contains_pii(cls, value: str | None) -> bool:
-        """Return whether a string contains any PII/CRI pattern.
+        """Return whether a string contains any PII or PHI pattern.
 
         Args:
             value: String content to inspect.
 
         Returns:
-            ``True`` when at least one PII pattern matches.
+            ``True`` when at least one PII or PHI pattern matches.
         """
         return bool(cls.find_pii_matches(value))
 
@@ -314,12 +330,13 @@ class CredentialRedactor:
         pattern consume the anchor keyword of a later one, which would remove
         less than detection reported and leave a secret in place.
 
-        By default this scrubs *secrets only* (:attr:`PATTERNS`); PII detected
-        by :meth:`find_pii_matches` (email, phone, SSN, credit card, IP) is
-        left in place. Pass ``redact_pii=True`` to also remove PII spans — for
-        example before returning tool output to a model or persisting an audit
-        payload where PII must not flow through. Overlapping secret/PII spans
-        are merged, so PII inside a secret (or vice versa) is redacted once.
+        By default this scrubs *secrets only* (:attr:`PATTERNS`); PII/PHI
+        detected by :meth:`find_pii_matches` (email, phone, SSN, credit card,
+        IP, MRN, NPI, health plan identifiers) is left in place. Pass
+        ``redact_pii=True`` to also remove those spans — for example before
+        returning tool output to a model or persisting an audit payload where
+        PII or PHI must not flow through. Overlapping secret/PII spans are
+        merged, so PII inside a secret (or vice versa) is redacted once.
 
         Args:
             value: String content that may contain credential-like material.

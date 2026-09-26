@@ -11,6 +11,13 @@ HIPAA_NAMES = {
     "National Provider Identifier (NPI)",
     "Health Plan ID",
 }
+ORDINARY_PII_NAMES = {
+    "Email address",
+    "US phone number",
+    "US SSN",
+    "Credit card number",
+    "IPv4 address",
+}
 
 
 def _hipaa_matches(text: str) -> list[tuple[str, str]]:
@@ -19,6 +26,20 @@ def _hipaa_matches(text: str) -> list[tuple[str, str]]:
         for match in CredentialRedactor.find_pii_matches(text)
         if match.name in HIPAA_NAMES
     ]
+
+
+def _all_named_matches(text: str) -> list[tuple[str, str]]:
+    return [
+        (match.name, match.matched_text)
+        for match in CredentialRedactor.find_pii_matches(text)
+        if match.name in HIPAA_NAMES | ORDINARY_PII_NAMES
+    ]
+
+
+def test_phi_patterns_are_separate_from_pii_patterns():
+    assert {pattern.name for pattern in CredentialRedactor.PII_PATTERNS} == ORDINARY_PII_NAMES
+    assert {pattern.name for pattern in CredentialRedactor.PHI_PATTERNS} == HIPAA_NAMES
+    assert not ({pattern.name for pattern in CredentialRedactor.PII_PATTERNS} & HIPAA_NAMES)
 
 
 @pytest.mark.parametrize(
@@ -77,6 +98,20 @@ def test_member_identification_uses_full_health_plan_cue():
 
 
 @pytest.mark.parametrize(
+    ("text", "expected_match"),
+    [
+        ("MRN: ABC123456", ("Medical Record Number (MRN)", "MRN: ABC123456")),
+        ("NPI: 1234567893", ("National Provider Identifier (NPI)", "NPI: 1234567893")),
+        ("member id: ABC12345678", ("Health Plan ID", "member id: ABC12345678")),
+        ("Email me at jane.doe@example.com", ("Email address", "jane.doe@example.com")),
+        ("Call 555-123-4567 today", ("US phone number", "555-123-4567")),
+    ],
+)
+def test_find_pii_matches_remains_backward_compatible_for_pii_and_phi(text, expected_match):
+    assert expected_match in _all_named_matches(text)
+
+
+@pytest.mark.parametrize(
     "text",
     [
         # NPI false positives (valid digits but no context)
@@ -95,6 +130,7 @@ def test_member_identification_uses_full_health_plan_cue():
         "XMRN: A123456789",
         "MRN: A123456789012345",  # Too long
         "MRN: patient 123456",
+        "MRN: patient",
         "member id: confused",
         "policy id: alphabetic",
         "We shipped build ABC12345678 to staging.",
