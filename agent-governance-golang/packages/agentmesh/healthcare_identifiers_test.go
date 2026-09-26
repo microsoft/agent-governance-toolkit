@@ -50,7 +50,7 @@ func TestFindHealthcareIdentifiersContextualMatches(t *testing.T) {
 	}
 }
 
-func TestFindHealthcareIdentifiersRejectsUncuedInvalidOrGluedValues(t *testing.T) {
+func TestFindHealthcareIdentifiersRejectsValuesWithoutContextOrWithInvalidOrGluedValues(t *testing.T) {
 	cases := []string{
 		"1234567893",
 		"The number is 1234567893",
@@ -63,14 +63,14 @@ func TestFindHealthcareIdentifiersRejectsUncuedInvalidOrGluedValues(t *testing.T
 		"A123456789",
 		"Z987654",
 		"ABC12345678",
-		"XMRN: A123456789",
+		"prefixMRN: A123456789",
 		"prefixNPI: 1234567893",
-		"MRN: ABCDEFGHIJKLM",
-		"MRN: ABCDEF_GHIJKL",
-		"MRN: ABCDEF-GHIJKL",
+		"MRN: characteristics",
+		"MRN: ABCDEF_INVALID",
+		"MRN: ABCDEF-INVALID",
 		"MRN: ABCDEF_more",
-		"member_id: ABCDEFGHIJKLMNOP",
-		"policy_id: ABCDEFGHIJKLMNOP",
+		"member_id: misunderstanding",
+		"policy_id: misunderstanding",
 		"NPI: 1234567893X",
 		"medical record: ABCDE",
 		"member id: ABC1234",

@@ -556,6 +556,8 @@ When enabled via `GovernanceOptions.EnablePromptInjectionDetection`, injection c
 
 ### Healthcare Identifier Detection
 
+<!-- cspell:ignore HPID hpid Luhn -->
+
 `HealthcareIdentifierDetector` provides a separate, non-mutating detector for
 context-labeled MRNs, NPIs, and health-plan/member/policy identifiers:
 

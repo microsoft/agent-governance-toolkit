@@ -48,18 +48,18 @@ describe('healthcare identifier detection', () => {
     'A123456789',
     'Z987654',
     'ABC12345678',
-    'XMRN: A123456789',
+    'prefixMRN: A123456789',
     'prefixNPI: 1234567893',
-    'MRN: ABCDEFGHIJKLM',
-    'MRN: ABCDEF_GHIJKL',
-    'MRN: ABCDEF-GHIJKL',
+    'MRN: characteristics',
+    'MRN: ABCDEF_INVALID',
+    'MRN: ABCDEF-INVALID',
     'MRN: ABCDEF_more',
-    'member_id: ABCDEFGHIJKLMNOP',
-    'policy_id: ABCDEFGHIJKLMNOP',
+    'member_id: misunderstanding',
+    'policy_id: misunderstanding',
     'NPI: 1234567893X',
     'medical record: ABCDE',
     'member id: ABC1234',
-  ])('rejects uncued, invalid, or glued value %s', (text) => {
+  ])('rejects values without context or with an invalid or glued value %s', (text) => {
     expect(findHealthcareIdentifiers(text)).toEqual([]);
   });
 

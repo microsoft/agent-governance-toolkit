@@ -258,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_uncued_invalid_or_glued_identifiers() {
+    fn rejects_values_without_context_or_with_invalid_or_glued_identifiers() {
         let cases = [
             "1234567893",
             "The number is 1234567893",
@@ -271,14 +271,14 @@ mod tests {
             "A123456789",
             "Z987654",
             "ABC12345678",
-            "XMRN: A123456789",
+            "prefixMRN: A123456789",
             "prefixNPI: 1234567893",
-            "MRN: ABCDEFGHIJKLM",
-            "MRN: ABCDEF_GHIJKL",
-            "MRN: ABCDEF-GHIJKL",
+            "MRN: characteristics",
+            "MRN: ABCDEF_INVALID",
+            "MRN: ABCDEF-INVALID",
             "MRN: ABCDEF_more",
-            "member_id: ABCDEFGHIJKLMNOP",
-            "policy_id: ABCDEFGHIJKLMNOP",
+            "member_id: misunderstanding",
+            "policy_id: misunderstanding",
             "NPI: 1234567893X",
             "medical record: ABCDE",
             "member id: ABC1234",
@@ -287,7 +287,7 @@ mod tests {
         for text in cases {
             assert!(
                 find_healthcare_identifiers(text).is_empty(),
-                "unexpected match for {text:?}"
+                "unexpected match without context or for an invalid or glued value: {text:?}"
             );
         }
     }
