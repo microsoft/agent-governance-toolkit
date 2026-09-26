@@ -4,13 +4,13 @@
 
 import pytest
 
-from agent_os.credential_redactor import CredentialRedactor
+from agent_os.credential_redactor import CredentialMatch, CredentialRedactor
 
-HIPAA_NAMES = {
+PHI_NAMES = {
     "Medical Record Number (MRN)",
-    "National Provider Identifier (NPI)",
     "Health Plan ID",
 }
+HEALTHCARE_IDENTIFIER_NAMES = {"National Provider Identifier (NPI)"}
 ORDINARY_PII_NAMES = {
     "Email address",
     "US phone number",
@@ -24,7 +24,7 @@ def _hipaa_matches(text: str) -> list[tuple[str, str]]:
     return [
         (match.name, match.matched_text)
         for match in CredentialRedactor.find_pii_matches(text)
-        if match.name in HIPAA_NAMES
+        if match.name in PHI_NAMES | HEALTHCARE_IDENTIFIER_NAMES
     ]
 
 
@@ -32,14 +32,20 @@ def _all_named_matches(text: str) -> list[tuple[str, str]]:
     return [
         (match.name, match.matched_text)
         for match in CredentialRedactor.find_pii_matches(text)
-        if match.name in HIPAA_NAMES | ORDINARY_PII_NAMES
+        if match.name in PHI_NAMES | HEALTHCARE_IDENTIFIER_NAMES | ORDINARY_PII_NAMES
     ]
 
 
-def test_phi_patterns_are_separate_from_pii_patterns():
+def test_healthcare_pattern_collections_are_separate():
     assert {pattern.name for pattern in CredentialRedactor.PII_PATTERNS} == ORDINARY_PII_NAMES
-    assert {pattern.name for pattern in CredentialRedactor.PHI_PATTERNS} == HIPAA_NAMES
-    assert not ({pattern.name for pattern in CredentialRedactor.PII_PATTERNS} & HIPAA_NAMES)
+    assert {pattern.name for pattern in CredentialRedactor.PHI_PATTERNS} == PHI_NAMES
+    assert {pattern.name for pattern in CredentialRedactor.HEALTHCARE_IDENTIFIER_PATTERNS} == (
+        HEALTHCARE_IDENTIFIER_NAMES
+    )
+    assert "National Provider Identifier (NPI)" not in {
+        pattern.name for pattern in CredentialRedactor.PHI_PATTERNS
+    }
+    assert not ({pattern.name for pattern in CredentialRedactor.PII_PATTERNS} & PHI_NAMES)
 
 
 @pytest.mark.parametrize(
@@ -109,6 +115,33 @@ def test_member_identification_uses_full_health_plan_cue():
 )
 def test_find_pii_matches_remains_backward_compatible_for_pii_and_phi(text, expected_match):
     assert expected_match in _all_named_matches(text)
+
+
+def test_find_pii_matches_preserves_healthcare_then_pii_ordering():
+    matches = CredentialRedactor.find_pii_matches(
+        "MRN: ABC123456; NPI: 1234567893; contact jane.doe@example.com"
+    )
+
+    assert matches[:3] == [
+        CredentialMatch(
+            name="Medical Record Number (MRN)",
+            matched_text="MRN: ABC123456",
+            start=0,
+            end=14,
+        ),
+        CredentialMatch(
+            name="National Provider Identifier (NPI)",
+            matched_text="NPI: 1234567893",
+            start=16,
+            end=31,
+        ),
+        CredentialMatch(
+            name="Email address",
+            matched_text="jane.doe@example.com",
+            start=41,
+            end=61,
+        ),
+    ]
 
 
 @pytest.mark.parametrize(

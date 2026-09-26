@@ -58,15 +58,22 @@ def validate_npi_match(match: re.Match[str]) -> bool:
 # to avoid a circular dependency with credential_redactor.py.
 # The CredentialRedactor will instantiate these as CredentialPattern objects.
 HIPAA_PHI_RAW_PATTERNS = (
+    # MRNs identify a patient within a healthcare record system, so they are
+    # treated as PHI and grouped with patient-linked healthcare identifiers.
     (
         "Medical Record Number (MRN)",
         _build_contextual_identifier_pattern(r"mrn|medical[\s_-]*record", 6, 12),
     ),
+    # NPIs identify healthcare providers, are publicly available via the NPPES
+    # registry, and are retained for healthcare identifier detection but are
+    # not treated as PHI by the redactor collections.
     (
         "National Provider Identifier (NPI)",
         r"(?i)(?<![0-9])(?:npi|provider[\s_-]*id)[\s#:-]*(\d{10})(?![0-9])",
         validate_npi_match,
     ),
+    # Health-plan or member identifiers describe a patient's insurance
+    # relationship in clinical workflows, so they are treated as PHI.
     (
         "Health Plan ID",
         _build_contextual_identifier_pattern(

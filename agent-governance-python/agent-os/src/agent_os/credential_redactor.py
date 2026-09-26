@@ -34,6 +34,13 @@ def _compile_named_patterns(
     )
 
 
+def _select_named_patterns(
+    patterns: tuple[CredentialPattern, ...], names: frozenset[str]
+) -> tuple[CredentialPattern, ...]:
+    """Return the subset of compiled patterns whose names are in ``names``."""
+    return tuple(pattern for pattern in patterns if pattern.name in names)
+
+
 @dataclass(frozen=True)
 class CredentialPattern:
     """A named credential detection pattern."""
@@ -218,10 +225,26 @@ class CredentialRedactor:
         ),
     )
 
-    # PHI patterns are kept separate from ordinary PII so callers can inspect
-    # or enforce HIPAA-specific findings independently, while the public
-    # detection helpers below remain backward compatible by scanning both.
-    PHI_PATTERNS: tuple[CredentialPattern, ...] = _compile_named_patterns(HIPAA_PHI_RAW_PATTERNS)
+    _COMPILED_HEALTHCARE_PATTERNS: tuple[CredentialPattern, ...] = _compile_named_patterns(
+        HIPAA_PHI_RAW_PATTERNS
+    )
+    _PHI_PATTERN_NAMES = frozenset({"Medical Record Number (MRN)", "Health Plan ID"})
+    _NON_PHI_HEALTHCARE_IDENTIFIER_NAMES = frozenset({"National Provider Identifier (NPI)"})
+
+    # Strict PHI patterns remain separately inspectable for callers that need
+    # HIPAA-specific handling of patient-linked identifiers.
+    PHI_PATTERNS: tuple[CredentialPattern, ...] = _select_named_patterns(
+        _COMPILED_HEALTHCARE_PATTERNS,
+        _PHI_PATTERN_NAMES,
+    )
+
+    # Healthcare identifiers that are useful for detection but are not PHI.
+    # NPIs identify providers and are publicly available via NPPES, so they
+    # live outside ``PHI_PATTERNS`` while remaining part of compatibility scans.
+    HEALTHCARE_IDENTIFIER_PATTERNS: tuple[CredentialPattern, ...] = _select_named_patterns(
+        _COMPILED_HEALTHCARE_PATTERNS,
+        _NON_PHI_HEALTHCARE_IDENTIFIER_NAMES,
+    )
 
     # Ordinary PII / CRI patterns — detection-only (not used for redaction by
     # default). These catch non-HIPAA personally identifiable information that
@@ -276,24 +299,28 @@ class CredentialRedactor:
         """Return all PII- and PHI-like matches found in a string.
 
         Unlike :meth:`find_matches`, these patterns detect personally
-        identifiable information and HIPAA identifiers (email, phone, SSN,
-        credit card, IP address, MRN, NPI, health plan identifiers) rather
-        than secrets. ``PII_PATTERNS`` and ``PHI_PATTERNS`` remain separately
-        inspectable for callers that need category-aware handling; this method
-        intentionally scans both collections for backwards compatibility. Use
-        for detection and policy enforcement, not for audit redaction.
+        identifiable information plus healthcare identifiers (email, phone,
+        SSN, credit card, IP address, MRN, NPI, health plan identifiers)
+        rather than secrets. ``PII_PATTERNS``, ``PHI_PATTERNS``, and
+        ``HEALTHCARE_IDENTIFIER_PATTERNS`` remain separately inspectable for
+        callers that need category-aware handling; this method intentionally
+        scans them in the historical effective order of PHI first, then
+        non-PHI healthcare identifiers, then ordinary PII. Use for detection
+        and policy enforcement, not for audit redaction.
 
         Args:
             value: String content to inspect.
 
         Returns:
-            A list of ``CredentialMatch`` records for each detected PII span.
+            A list of ``CredentialMatch`` records for each detected PII, PHI,
+            or non-PHI healthcare identifier span.
         """
         if not value:
             return []
 
         matches: list[CredentialMatch] = []
-        for pii_pattern in cls.PII_PATTERNS + cls.PHI_PATTERNS:
+        ordered_patterns = cls.PHI_PATTERNS + cls.HEALTHCARE_IDENTIFIER_PATTERNS + cls.PII_PATTERNS
+        for pii_pattern in ordered_patterns:
             for match in pii_pattern.pattern.finditer(value):
                 if pii_pattern.validator and not pii_pattern.validator(match):
                     continue
@@ -309,13 +336,14 @@ class CredentialRedactor:
 
     @classmethod
     def contains_pii(cls, value: str | None) -> bool:
-        """Return whether a string contains any PII or PHI pattern.
+        """Return whether a string contains any PII, PHI, or healthcare identifier.
 
         Args:
             value: String content to inspect.
 
         Returns:
-            ``True`` when at least one PII or PHI pattern matches.
+            ``True`` when at least one PII, PHI, or healthcare identifier
+            pattern matches.
         """
         return bool(cls.find_pii_matches(value))
 
@@ -330,13 +358,14 @@ class CredentialRedactor:
         pattern consume the anchor keyword of a later one, which would remove
         less than detection reported and leave a secret in place.
 
-        By default this scrubs *secrets only* (:attr:`PATTERNS`); PII/PHI
-        detected by :meth:`find_pii_matches` (email, phone, SSN, credit card,
-        IP, MRN, NPI, health plan identifiers) is left in place. Pass
-        ``redact_pii=True`` to also remove those spans — for example before
-        returning tool output to a model or persisting an audit payload where
-        PII or PHI must not flow through. Overlapping secret/PII spans are
-        merged, so PII inside a secret (or vice versa) is redacted once.
+        By default this scrubs *secrets only* (:attr:`PATTERNS`); PII/PHI and
+        healthcare identifiers detected by :meth:`find_pii_matches` (email,
+        phone, SSN, credit card, IP, MRN, NPI, health plan identifiers) are
+        left in place. Pass ``redact_pii=True`` to also remove those spans
+        — for example before returning tool output to a model or persisting an
+        audit payload where PII or PHI must not flow through. Overlapping
+        secret/PII spans are merged, so PII inside a secret (or vice versa) is
+        redacted once.
 
         Args:
             value: String content that may contain credential-like material.
