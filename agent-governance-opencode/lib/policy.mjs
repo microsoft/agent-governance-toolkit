@@ -1454,14 +1454,30 @@ function tokenizeShellCommands(commandText) {
       continue;
     }
 
-    if (character === "#" && !tokenStarted) {
-      while (index + 1 < input.length && input[index + 1] !== "\n" && input[index + 1] !== "\r") {
+    const hashFollowsExpansionSyntax = ["{", ")", "`"].includes(input[index - 1]);
+    if (character === "#" && !tokenStarted && !hashFollowsExpansionSyntax) {
+      const activeSubstitution = substitutions.at(-1);
+      let precedingBackslashes = 0;
+      while (index + 1 < input.length) {
+        const nextCharacter = input[index + 1];
+        if (
+          nextCharacter === "\n" ||
+          nextCharacter === "\r" ||
+          (activeSubstitution?.type === "backtick" &&
+            nextCharacter === "`" &&
+            precedingBackslashes % 2 === 0)
+        ) {
+          break;
+        }
+        precedingBackslashes = nextCharacter === "\\" ? precedingBackslashes + 1 : 0;
         index += 1;
       }
       finishCommand();
       if (input[index + 1] === "\r" && input[index + 2] === "\n") {
+        hasControlOperator = true;
         index += 2;
       } else if (input[index + 1] === "\n" || input[index + 1] === "\r") {
+        hasControlOperator = true;
         index += 1;
       }
       continue;
