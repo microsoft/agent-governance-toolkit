@@ -175,6 +175,28 @@ const risky = results.filter((r) => !r.safe);
 | `hidden_instruction` | Zero-width Unicode characters or homoglyphs |
 | `rug_pull` | Abnormally long descriptions containing instruction-like patterns |
 
+### Healthcare Identifier Detection
+
+The SDK also exposes a separate detector for context-labeled MRNs, NPIs, and
+health-plan/member/policy identifiers:
+
+```typescript
+import { findHealthcareIdentifiers } from '@microsoft/agent-governance-sdk';
+
+const text = 'Patient MRN: A123456789; Provider NPI: 1234567893';
+const matches = findHealthcareIdentifiers(text);
+for (const match of matches) {
+  console.log(match.kind, text.slice(match.start, match.end));
+}
+```
+
+MRNs are limited to 6-12 alphanumeric characters, health-plan identifiers to
+8-15, and NPIs to 10 digits with a valid 80840-prefixed Luhn check digit.
+Ranges use UTF-16 string indexes and cover only the identifier values. NPIs
+identify providers and are not inherently PHI. Detection is context-cued and
+does not classify or redact data, verify NPI issuance, identify every
+healthcare identifier, or establish HIPAA/SOC 2 compliance.
+
 ### `LifecycleManager`
 
 Govern agent state transitions with an enforced state machine and event log.
