@@ -25,6 +25,10 @@ Defensive contracts upheld here:
 * **Pathspec coverage.** ``changed_manifests()`` queries both ``**/X`` and
   the repo-root form so a manifest at the repository root is *also* matched
   (git pathspecs treat ``**/X`` as "at least one directory segment").
+* **Reviewed npm aliases.** Direct and transitive lockfile aliases must map
+  to explicitly approved registry names. A dependency bump that introduces
+  a new alias (including ``-cjs`` aliases) fails closed until its name/target
+  pair is reviewed and added to ``APPROVED_NPM_TRANSITIVE_ALIASES``.
 
 This module is import-safe and dependency-free (stdlib only, Python 3.11+).
 """

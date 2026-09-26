@@ -188,7 +188,10 @@ def _extract_lockfile_pairs(tree: dict | None) -> dict[tuple[str, str], bool | N
     # npm v7+ lockfile v2/v3
     packages = tree.get("packages")
     if isinstance(packages, dict):
-        declarations = common.npm_alias_declarations(packages)
+        try:
+            declarations = common.npm_alias_declarations(packages)
+        except ValueError as exc:
+            raise InvalidAlias(f"invalid npm alias declaration: {exc}") from exc
         for raw_key, meta in packages.items():
             if not isinstance(raw_key, str) or not isinstance(meta, dict):
                 continue

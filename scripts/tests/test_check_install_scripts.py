@@ -432,6 +432,44 @@ def test_collect_candidates_rejects_malicious_manifest_alias():
         cis.collect_candidates("origin/main")
 
 
+def test_repaired_unapproved_base_alias_is_checked():
+    invalid_base = {"packages": {
+        "node_modules/parent": {
+            "version": "1.0.0", "dependencies": {"lodash": "npm:evil@1.0.0"},
+        },
+        "node_modules/lodash": {
+            "name": "evil", "version": "1.0.0",
+            "resolved": "https://registry.npmjs.org/evil/-/evil-1.0.0.tgz",
+        },
+    }}
+    repaired_head = {"packages": {
+        "node_modules/lodash": {"version": "1.0.0", "hasInstallScript": True},
+    }}
+    json_map = {
+        ("origin/main", "package-lock.json"): invalid_base,
+        ("HEAD", "package-lock.json"): repaired_head,
+    }
+    with _mock_changed(["package-lock.json"]), _mock_json(json_map):
+        assert cis.collect_candidates("origin/main") == [
+            ("lodash", "1.0.0", True, "package-lock.json"),
+        ]
+
+
+def test_unapproved_head_alias_declaration_fails_closed():
+    json_map = {
+        ("origin/main", "package-lock.json"): {"packages": {}},
+        ("HEAD", "package-lock.json"): {"packages": {
+            "node_modules/parent": {
+                "version": "1.0.0", "dependencies": {"lodash": "npm:evil@1.0.0"},
+            },
+        }},
+    }
+    with _mock_changed(["package-lock.json"]), _mock_json(json_map), pytest.raises(
+        cis.InvalidAlias, match="unapproved npm lockfile alias",
+    ):
+        cis.collect_candidates("origin/main")
+
+
 def test_collect_candidates_dedupes_across_lockfiles():
     json_map = {
         ("origin/main", "a/package-lock.json"): {"lockfileVersion": 3, "packages": {}},
