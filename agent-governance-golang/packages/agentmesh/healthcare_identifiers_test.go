@@ -31,7 +31,10 @@ func TestFindHealthcareIdentifiersContextualMatches(t *testing.T) {
 		{"member-id # ABC12345678", HealthcareIdentifierHealthPlan, "ABC12345678"},
 		{"HPID # 999888777", HealthcareIdentifierHealthPlan, "999888777"},
 		{"health plan id X1234567890", HealthcareIdentifierHealthPlan, "X1234567890"},
+		{"health plan X1234567890", HealthcareIdentifierHealthPlan, "X1234567890"},
 		{"health-plan_id: X1234567890", HealthcareIdentifierHealthPlan, "X1234567890"},
+		{"member identification: AB12CDEF78", HealthcareIdentifierHealthPlan, "AB12CDEF78"},
+		{"member-identification # AB12CDEF78", HealthcareIdentifierHealthPlan, "AB12CDEF78"},
 		{"policy id X1234567890", HealthcareIdentifierHealthPlan, "X1234567890"},
 		{"policy-id X1234567890", HealthcareIdentifierHealthPlan, "X1234567890"},
 		{"policy_id 123456789012345", HealthcareIdentifierHealthPlan, "123456789012345"},
@@ -80,7 +83,8 @@ func TestFindHealthcareIdentifiersRejectsValuesWithoutContextOrWithInvalidOrGlue
 		"MRN: ABCDEF_more",
 		"member_id: misunderstanding",
 		"policy_id: misunderstanding",
-		"member identification: AB12CDEF78",
+		"member identification: confusion",
+		"health plan identification: AB12345678",
 		"MRN: patient 123456",
 		"member id: confused",
 		"NPI: 1234567893X",
@@ -92,6 +96,8 @@ func TestFindHealthcareIdentifiersRejectsValuesWithoutContextOrWithInvalidOrGlue
 		"MRN: A12345\u017f",
 		"MRN: \u212a12345",
 		"MRN: A12345\u212a",
+		"MRN: 123456\u00b2",
+		"MRN: 123456\u0301",
 	}
 
 	for _, text := range cases {

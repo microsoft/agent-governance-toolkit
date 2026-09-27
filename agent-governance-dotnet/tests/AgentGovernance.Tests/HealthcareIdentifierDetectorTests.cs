@@ -29,7 +29,10 @@ public class HealthcareIdentifierDetectorTests
     [InlineData("member-id # ABC12345678", HealthcareIdentifierKind.HealthPlanIdentifier, "ABC12345678")]
     [InlineData("HPID # 999888777", HealthcareIdentifierKind.HealthPlanIdentifier, "999888777")]
     [InlineData("health plan id X1234567890", HealthcareIdentifierKind.HealthPlanIdentifier, "X1234567890")]
+    [InlineData("health plan X1234567890", HealthcareIdentifierKind.HealthPlanIdentifier, "X1234567890")]
     [InlineData("health-plan_id: X1234567890", HealthcareIdentifierKind.HealthPlanIdentifier, "X1234567890")]
+    [InlineData("member identification: AB12CDEF78", HealthcareIdentifierKind.HealthPlanIdentifier, "AB12CDEF78")]
+    [InlineData("member-identification # AB12CDEF78", HealthcareIdentifierKind.HealthPlanIdentifier, "AB12CDEF78")]
     [InlineData("policy id X1234567890", HealthcareIdentifierKind.HealthPlanIdentifier, "X1234567890")]
     [InlineData("policy-id X1234567890", HealthcareIdentifierKind.HealthPlanIdentifier, "X1234567890")]
     [InlineData("policy_id 123456789012345", HealthcareIdentifierKind.HealthPlanIdentifier, "123456789012345")]
@@ -71,7 +74,8 @@ public class HealthcareIdentifierDetectorTests
     [InlineData("MRN: ABCDEF_more")]
     [InlineData("member_id: misunderstanding")]
     [InlineData("policy_id: misunderstanding")]
-    [InlineData("member identification: AB12CDEF78")]
+    [InlineData("member identification: confusion")]
+    [InlineData("health plan identification: AB12345678")]
     [InlineData("MRN: patient 123456")]
     [InlineData("member id: confused")]
     [InlineData("NPI: 1234567893X")]
@@ -83,6 +87,8 @@ public class HealthcareIdentifierDetectorTests
     [InlineData("MRN: A12345\u017f")]
     [InlineData("MRN: \u212a12345")]
     [InlineData("MRN: A12345\u212a")]
+    [InlineData("MRN: 123456\u00b2")]
+    [InlineData("MRN: 123456\u0301")]
     public void Find_RejectsValuesWithoutContextOrWithInvalidOrGluedValues(string text)
     {
         Assert.Empty(HealthcareIdentifierDetector.Find(text));

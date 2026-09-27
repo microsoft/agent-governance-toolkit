@@ -33,7 +33,7 @@ const patterns: readonly IdentifierPattern[] = [
   {
     kind: 'health_plan_identifier',
     expression:
-      /(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn][ \t\r\n_-]*[Ii][Dd]|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*[Ii][Dd]|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*([A-Za-z0-9]{8,15})/g,
+      /(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn](?:[ \t\r\n_-]*[Ii][Dd])?|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*(?:[Ii][Dd][Ee][Nn][Tt][Ii][Ff][Ii][Cc][Aa][Tt][Ii][Oo][Nn]|[Ii][Dd])|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*([A-Za-z0-9]{8,15})/g,
   },
 ];
 

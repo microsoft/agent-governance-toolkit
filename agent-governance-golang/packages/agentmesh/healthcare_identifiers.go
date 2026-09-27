@@ -50,7 +50,7 @@ var healthcareIdentifierPatterns = [...]healthcareIdentifierPattern{
 	{
 		kind: HealthcareIdentifierHealthPlan,
 		pattern: regexp.MustCompile(
-			`(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn][ \t\r\n_-]*[Ii][Dd]|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*[Ii][Dd]|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*([A-Za-z0-9]{8,15})`,
+			`(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn](?:[ \t\r\n_-]*[Ii][Dd])?|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*(?:[Ii][Dd][Ee][Nn][Tt][Ii][Ff][Ii][Cc][Aa][Tt][Ii][Oo][Nn]|[Ii][Dd])|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*([A-Za-z0-9]{8,15})`,
 		),
 	},
 }
@@ -118,7 +118,7 @@ func isHealthcareIdentifierContinuation(text string, end int) bool {
 	}
 	character, _ := utf8.DecodeRuneInString(text[end:])
 	return unicode.IsLetter(character) ||
-		unicode.IsDigit(character) ||
+		unicode.IsNumber(character) ||
 		unicode.IsMark(character) ||
 		character == '_' ||
 		character == '-'

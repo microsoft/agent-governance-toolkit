@@ -51,7 +51,7 @@ public static class HealthcareIdentifierDetector
         new(
             HealthcareIdentifierKind.HealthPlanIdentifier,
             new Regex(
-                @"(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn][ \t\r\n_-]*[Ii][Dd]|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*[Ii][Dd]|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*(?<identifier>[A-Za-z0-9]{8,15})",
+                @"(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn](?:[ \t\r\n_-]*[Ii][Dd])?|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*(?:[Ii][Dd][Ee][Nn][Tt][Ii][Ff][Ii][Cc][Aa][Tt][Ii][Oo][Nn]|[Ii][Dd])|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*(?<identifier>[A-Za-z0-9]{8,15})",
                 PatternOptions))
     ];
 
@@ -134,10 +134,13 @@ public static class HealthcareIdentifierDetector
         }
 
         var category = Rune.GetUnicodeCategory(character);
-        return Rune.IsLetterOrDigit(character) ||
-            category == System.Globalization.UnicodeCategory.NonSpacingMark ||
-            category == System.Globalization.UnicodeCategory.SpacingCombiningMark ||
-            category == System.Globalization.UnicodeCategory.EnclosingMark ||
+        return Rune.IsLetter(character) ||
+            category is System.Globalization.UnicodeCategory.DecimalDigitNumber or
+                System.Globalization.UnicodeCategory.LetterNumber or
+                System.Globalization.UnicodeCategory.OtherNumber or
+                System.Globalization.UnicodeCategory.NonSpacingMark or
+                System.Globalization.UnicodeCategory.SpacingCombiningMark or
+                System.Globalization.UnicodeCategory.EnclosingMark ||
             character.Value is '_' or '-';
     }
 

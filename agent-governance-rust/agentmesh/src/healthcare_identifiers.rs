@@ -22,9 +22,14 @@ static NPI_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 
 static HEALTH_PLAN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn][ \t\r\n_-]*[Ii][Dd]|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*[Ii][Dd]|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*(?P<identifier>[A-Za-z0-9]{8,15})",
+        r"(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn](?:[ \t\r\n_-]*[Ii][Dd])?|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*(?:[Ii][Dd][Ee][Nn][Tt][Ii][Ff][Ii][Cc][Aa][Tt][Ii][Oo][Nn]|[Ii][Dd])|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*(?P<identifier>[A-Za-z0-9]{8,15})",
     )
     .expect("health-plan identifier regex literal must compile")
+});
+
+static UNICODE_IDENTIFIER_CONTINUATION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[\p{L}\p{N}\p{M}]")
+        .expect("Unicode identifier continuation regex literal must compile")
 });
 
 /// Category of a healthcare identifier found by [`find_healthcare_identifiers`].
@@ -137,7 +142,12 @@ fn collect_matches(
 }
 
 fn is_identifier_continuation(character: char) -> bool {
-    character.is_alphanumeric() || matches!(character, '_' | '-')
+    if matches!(character, '_' | '-') {
+        return true;
+    }
+
+    let mut encoded = [0; 4];
+    UNICODE_IDENTIFIER_CONTINUATION.is_match(character.encode_utf8(&mut encoded))
 }
 
 fn is_identifier_separator(byte: u8) -> bool {
@@ -275,9 +285,24 @@ mod tests {
                 "X1234567890",
             ),
             (
+                "health plan X1234567890",
+                HealthcareIdentifierKind::HealthPlanIdentifier,
+                "X1234567890",
+            ),
+            (
                 "health-plan_id: X1234567890",
                 HealthcareIdentifierKind::HealthPlanIdentifier,
                 "X1234567890",
+            ),
+            (
+                "member identification: AB12CDEF78",
+                HealthcareIdentifierKind::HealthPlanIdentifier,
+                "AB12CDEF78",
+            ),
+            (
+                "member-identification # AB12CDEF78",
+                HealthcareIdentifierKind::HealthPlanIdentifier,
+                "AB12CDEF78",
             ),
             (
                 "policy id X1234567890",
@@ -339,7 +364,8 @@ mod tests {
             "MRN: ABCDEF_more",
             "member_id: misunderstanding",
             "policy_id: misunderstanding",
-            "member identification: AB12CDEF78",
+            "member identification: confusion",
+            "health plan identification: AB12345678",
             "MRN: patient 123456",
             "member id: confused",
             "NPI: 1234567893X",
@@ -351,6 +377,8 @@ mod tests {
             "MRN: A12345\u{017f}",
             "MRN: \u{212a}12345",
             "MRN: A12345\u{212a}",
+            "MRN: 123456\u{00b2}",
+            "MRN: 123456\u{0301}",
         ];
 
         for text in cases {

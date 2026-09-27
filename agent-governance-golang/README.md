@@ -194,13 +194,14 @@ for _, match := range matches {
 ```
 
 The detector requires an explicit cue (`MRN`/`medical record`, `NPI`/`provider
-ID`, or `HPID`/`health plan ID`/`member ID`/`policy ID`). MRNs are limited to
-6-12 ASCII letters or digits and health-plan identifiers to 8-15; both must
-contain a digit. Letter-initial values require a separator after the cue, while
-digits-only values may follow immediately. NPIs must be 10 digits with a valid
-80840-prefixed Luhn check digit. NPIs identify providers and are not inherently
-PHI. This detector neither classifies nor redacts data, verifies NPI issuance,
-identifies every healthcare identifier, or establishes HIPAA/SOC 2 compliance.
+ID`, `HPID`/`health plan` with optional `ID`, `member ID`/`member identification`,
+or `policy ID`). MRNs are limited to 6-12 ASCII letters or digits and health-plan
+identifiers to 8-15; both must contain a digit. Letter-initial values require a
+separator after the cue, while digits-only values may follow immediately.
+NPIs must be 10 digits with a valid 80840-prefixed Luhn check digit. NPIs
+identify providers and are not inherently PHI. This detector neither
+classifies nor redacts data, verifies NPI issuance, identifies every healthcare
+identifier, or establishes HIPAA/SOC 2 compliance.
 
 ### Execution Rings (`rings.go`)
 
