@@ -134,8 +134,50 @@ The plugin loads policy from (in order):
 3. `~/.config/opencode/agt/policy.json`
 4. The bundled `config/default-policy.json` (enforce mode, fail-closed)
 
-Audit log path defaults to `~/.config/opencode/agt/audit.json` and can be
+Audit log path defaults to `~/.config/opencode/agt/audit-log.json` and can be
 overridden via `AGT_OPENCODE_AUDIT_PATH`.
+
+### Audit evidence
+
+Each entry is a link in the audit hash chain and carries:
+
+| Field | Always present | Meaning |
+|-------|----------------|---------|
+| `v` | yes | Entry schema version. `2` today. Entries without it are version 1. |
+| `timestamp`, `agentId`, `action`, `decision` | yes | What ran, under which session, and how it was decided. |
+| `previousHash`, `hash` | yes | Chain links. `hash` covers every other field on the entry. |
+| `policyVersion` | yes | `sha256:<hex>` over the active policy, so a decision can be tied to the policy that produced it. |
+| `reason` | when one exists | Why the decision was reached, flattened and capped at 1024 characters. |
+| `argsDigest`, `argsDigestAlg` | tool calls only | Identifies the attempted arguments without storing them. |
+| `argsTruncated` | only when `true` | Arguments exceeded 1 MiB and were digested in part. |
+| `principal` | when configured | `{ sub, iss? }`, the identity the agent acted for. |
+
+Entries are verified against the version they were written under, so a log
+written by an earlier release keeps verifying after an upgrade. New entries are
+hashed over a canonical form with keys sorted by UTF-16 code unit, the ordering
+[RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) specifies, so an external
+verifier can reproduce a hash without knowing property insertion order.
+
+**What the digest does and does not do.** `argsDigest` lets you match an entry
+against another system's record of the same call. It does not hide the
+arguments: tool arguments are often low entropy, such as a path or a short
+command, and a plain SHA-256 of one can be recovered by guessing. Set
+`AGT_OPENCODE_AUDIT_HMAC_KEY` to at least 32 bytes to switch to HMAC-SHA256,
+which makes digests unguessable without the key. A shorter key is refused
+rather than used. Verification never recomputes the digest, so rotating or
+losing the key leaves existing entries verifiable.
+
+**Recording who the agent acted for.** `agentId` identifies the session, not the
+person who delegated the work. Set `AGT_OPENCODE_PRINCIPAL_SUB`, and optionally
+`AGT_OPENCODE_PRINCIPAL_ISS`, to record that identity alongside each decision.
+The principal is read only from operator configuration, never from tool
+arguments or model output, since a principal the agent can name is not
+evidence. A misconfigured principal or HMAC key fails closed in enforce mode
+rather than being silently dropped.
+
+**Limits.** `reason` can quote a matched path or URL from the request, so it is
+not free of request data. `policyVersion` covers the policy document, so it does
+not change when a package upgrade alters built-in defaults.
 
 ### Positive command and URL allowlists
 
