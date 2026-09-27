@@ -1291,3 +1291,8 @@ alexhancock
 chrono
 pastey
 schemars
+
+# Healthcare identifier detection
+HPID
+hpid
+Luhn

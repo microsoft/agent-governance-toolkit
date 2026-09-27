@@ -95,11 +95,12 @@ for matched in find_healthcare_identifiers(text) {
 
 Detection requires an explicit cue (`MRN`/`medical record`, `NPI`/`provider
 ID`, or `HPID`/`health plan ID`/`member ID`/`policy ID`). MRNs are limited to
-6-12 alphanumeric characters, health-plan identifiers to 8-15, and NPIs to
-10 digits with a valid 80840-prefixed Luhn check digit. An NPI identifies a
-provider and is not inherently PHI. These patterns neither identify every
-healthcare identifier nor establish HIPAA or SOC 2 compliance.
-
+6-12 ASCII letters or digits and health-plan identifiers to 8-15; both must
+contain a digit. Letter-initial values require a separator after the cue, while
+digits-only values may follow immediately. NPIs must be 10 digits with a valid
+80840-prefixed Luhn check digit. An NPI identifies a provider and is not
+inherently PHI. These patterns neither identify every healthcare identifier
+nor establish HIPAA or SOC 2 compliance.
 ## OpenTelemetry Policy Spans
 
 Policy-evaluation spans are available behind the opt-in `telemetry` feature. The

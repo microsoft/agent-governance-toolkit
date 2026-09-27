@@ -15,7 +15,11 @@ public class HealthcareIdentifierDetectorTests
     [InlineData("medical-record: Z987654", HealthcareIdentifierKind.MedicalRecordNumber, "Z987654")]
     [InlineData("MRN-123456", HealthcareIdentifierKind.MedicalRecordNumber, "123456")]
     [InlineData("MRN_123456789012", HealthcareIdentifierKind.MedicalRecordNumber, "123456789012")]
+    [InlineData("MRN123456", HealthcareIdentifierKind.MedicalRecordNumber, "123456")]
+    [InlineData("mrn ABC123456", HealthcareIdentifierKind.MedicalRecordNumber, "ABC123456")]
+    [InlineData("MRN: A123456789", HealthcareIdentifierKind.MedicalRecordNumber, "A123456789")]
     [InlineData("Provider NPI: 1234567893", HealthcareIdentifierKind.NationalProviderIdentifier, "1234567893")]
+    [InlineData("NPI1234567893", HealthcareIdentifierKind.NationalProviderIdentifier, "1234567893")]
     [InlineData("npi 1234567893", HealthcareIdentifierKind.NationalProviderIdentifier, "1234567893")]
     [InlineData("provider id 1234567893", HealthcareIdentifierKind.NationalProviderIdentifier, "1234567893")]
     [InlineData("provider-id # 1234567893", HealthcareIdentifierKind.NationalProviderIdentifier, "1234567893")]
@@ -29,6 +33,7 @@ public class HealthcareIdentifierDetectorTests
     [InlineData("policy id X1234567890", HealthcareIdentifierKind.HealthPlanIdentifier, "X1234567890")]
     [InlineData("policy-id X1234567890", HealthcareIdentifierKind.HealthPlanIdentifier, "X1234567890")]
     [InlineData("policy_id 123456789012345", HealthcareIdentifierKind.HealthPlanIdentifier, "123456789012345")]
+    [InlineData("HPID12345678", HealthcareIdentifierKind.HealthPlanIdentifier, "12345678")]
     public void Find_ReturnsContextualIdentifierValue(
         string text,
         HealthcareIdentifierKind expectedKind,
@@ -55,6 +60,10 @@ public class HealthcareIdentifierDetectorTests
     [InlineData("Z987654")]
     [InlineData("ABC12345678")]
     [InlineData("prefixMRN: A123456789")]
+    [InlineData("MRNABC123456")]
+    [InlineData("MRN: A123456789012")]
+    [InlineData("memberidAB12345678")]
+    [InlineData("policyidX12345678")]
     [InlineData("prefixNPI: 1234567893")]
     [InlineData("MRN: characteristics")]
     [InlineData("MRN: ABCDEF_INVALID")]
@@ -62,9 +71,18 @@ public class HealthcareIdentifierDetectorTests
     [InlineData("MRN: ABCDEF_more")]
     [InlineData("member_id: misunderstanding")]
     [InlineData("policy_id: misunderstanding")]
+    [InlineData("member identification: AB12CDEF78")]
+    [InlineData("MRN: patient 123456")]
+    [InlineData("member id: confused")]
     [InlineData("NPI: 1234567893X")]
+    [InlineData("NPI: 12345678930")]
+    [InlineData("member_id: ABCDEFGHIJK12345")]
     [InlineData("medical record: ABCDE")]
     [InlineData("member id: ABC1234")]
+    [InlineData("MRN: \u017f12345")]
+    [InlineData("MRN: A12345\u017f")]
+    [InlineData("MRN: \u212a12345")]
+    [InlineData("MRN: A12345\u212a")]
     public void Find_RejectsValuesWithoutContextOrWithInvalidOrGluedValues(string text)
     {
         Assert.Empty(HealthcareIdentifierDetector.Find(text));
@@ -89,5 +107,15 @@ public class HealthcareIdentifierDetectorTests
         Assert.Equal(
             new[] { "A1234567", "B12345", "1234567893" },
             matches.Select(match => text[match.Start..match.End]));
+    }
+
+    [Fact]
+    public void Find_ScansLargeInputsWithoutTimeout()
+    {
+        var noMatch = new string('x', 8 * 1024 * 1024);
+        Assert.Empty(HealthcareIdentifierDetector.Find(noMatch));
+
+        var longCue = $"medical{new string('_', 4 * 1024 * 1024)}";
+        Assert.Empty(HealthcareIdentifierDetector.Find(longCue));
     }
 }

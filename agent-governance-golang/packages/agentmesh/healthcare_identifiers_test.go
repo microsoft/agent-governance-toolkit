@@ -17,7 +17,11 @@ func TestFindHealthcareIdentifiersContextualMatches(t *testing.T) {
 		{"medical-record: Z987654", HealthcareIdentifierMedicalRecordNumber, "Z987654"},
 		{"MRN-123456", HealthcareIdentifierMedicalRecordNumber, "123456"},
 		{"MRN_123456789012", HealthcareIdentifierMedicalRecordNumber, "123456789012"},
+		{"MRN123456", HealthcareIdentifierMedicalRecordNumber, "123456"},
+		{"mrn ABC123456", HealthcareIdentifierMedicalRecordNumber, "ABC123456"},
+		{"MRN: A123456789", HealthcareIdentifierMedicalRecordNumber, "A123456789"},
 		{"Provider NPI: 1234567893", HealthcareIdentifierNationalProviderIdentifier, "1234567893"},
+		{"NPI1234567893", HealthcareIdentifierNationalProviderIdentifier, "1234567893"},
 		{"npi 1234567893", HealthcareIdentifierNationalProviderIdentifier, "1234567893"},
 		{"provider id 1234567893", HealthcareIdentifierNationalProviderIdentifier, "1234567893"},
 		{"provider-id # 1234567893", HealthcareIdentifierNationalProviderIdentifier, "1234567893"},
@@ -31,6 +35,7 @@ func TestFindHealthcareIdentifiersContextualMatches(t *testing.T) {
 		{"policy id X1234567890", HealthcareIdentifierHealthPlan, "X1234567890"},
 		{"policy-id X1234567890", HealthcareIdentifierHealthPlan, "X1234567890"},
 		{"policy_id 123456789012345", HealthcareIdentifierHealthPlan, "123456789012345"},
+		{"HPID12345678", HealthcareIdentifierHealthPlan, "12345678"},
 	}
 
 	for _, test := range cases {
@@ -64,6 +69,10 @@ func TestFindHealthcareIdentifiersRejectsValuesWithoutContextOrWithInvalidOrGlue
 		"Z987654",
 		"ABC12345678",
 		"prefixMRN: A123456789",
+		"MRNABC123456",
+		"MRN: A123456789012",
+		"memberidAB12345678",
+		"policyidX12345678",
 		"prefixNPI: 1234567893",
 		"MRN: characteristics",
 		"MRN: ABCDEF_INVALID",
@@ -71,9 +80,18 @@ func TestFindHealthcareIdentifiersRejectsValuesWithoutContextOrWithInvalidOrGlue
 		"MRN: ABCDEF_more",
 		"member_id: misunderstanding",
 		"policy_id: misunderstanding",
+		"member identification: AB12CDEF78",
+		"MRN: patient 123456",
+		"member id: confused",
 		"NPI: 1234567893X",
+		"NPI: 12345678930",
+		"member_id: ABCDEFGHIJK12345",
 		"medical record: ABCDE",
 		"member id: ABC1234",
+		"MRN: \u017f12345",
+		"MRN: A12345\u017f",
+		"MRN: \u212a12345",
+		"MRN: A12345\u212a",
 	}
 
 	for _, text := range cases {

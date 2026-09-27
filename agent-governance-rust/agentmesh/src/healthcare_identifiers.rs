@@ -8,21 +8,21 @@ use std::sync::LazyLock;
 
 static MRN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)(^|[^A-Za-z0-9])(?:mrn|medical[ \t\r\n_-]*record)[ \t\r\n_#:-]*(?P<identifier>[A-Za-z0-9]{6,12})",
+        r"(?:^|[^A-Za-z0-9])(?:[Mm][Rr][Nn]|[Mm][Ee][Dd][Ii][Cc][Aa][Ll][ \t\r\n_-]*[Rr][Ee][Cc][Oo][Rr][Dd])[ \t\r\n_#:-]*(?P<identifier>[A-Za-z0-9]{6,12})",
     )
     .expect("MRN regex literal must compile")
 });
 
 static NPI_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)(^|[^A-Za-z0-9])(?:npi|provider[ \t\r\n_-]*id)[ \t\r\n_#:-]*(?P<identifier>[0-9]{10})",
+        r"(?:^|[^A-Za-z0-9])(?:[Nn][Pp][Ii]|[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*(?P<identifier>[0-9]{10})",
     )
     .expect("NPI regex literal must compile")
 });
 
 static HEALTH_PLAN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)(^|[^A-Za-z0-9])(?:hpid|health[ \t\r\n_-]*plan[ \t\r\n_-]*id|member[ \t\r\n_-]*id|policy[ \t\r\n_-]*id)[ \t\r\n_#:-]*(?P<identifier>[A-Za-z0-9]{8,15})",
+        r"(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn][ \t\r\n_-]*[Ii][Dd]|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*[Ii][Dd]|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*(?P<identifier>[A-Za-z0-9]{8,15})",
     )
     .expect("health-plan identifier regex literal must compile")
 });
@@ -52,8 +52,10 @@ pub struct HealthcareIdentifierMatch {
 /// Finds context-labeled MRNs, NPIs, and health-plan/member/policy identifiers.
 ///
 /// MRNs are limited to 6-12 ASCII letters or digits, health-plan identifiers
-/// to 8-15, and NPIs to exactly 10 ASCII digits with a valid 80840-prefixed
-/// Luhn check digit. The returned ranges cover only each identifier value.
+/// to 8-15, and both require at least one digit. A letter-initial value must
+/// have a separator after its cue; a digits-only value may follow immediately.
+/// NPIs must be exactly 10 ASCII digits with a valid 80840-prefixed Luhn check
+/// digit. The returned ranges cover only each identifier value.
 ///
 /// This detector does not classify data, redact values, verify that an NPI was
 /// issued, or establish HIPAA/SOC 2 compliance. NPIs identify providers and
@@ -92,10 +94,32 @@ fn collect_matches(
         let Some(identifier) = captures.name("identifier") else {
             continue;
         };
-        if text
+        if text[identifier.end()..]
+            .chars()
+            .next()
+            .is_some_and(is_identifier_continuation)
+        {
+            continue;
+        }
+        if kind != HealthcareIdentifierKind::NationalProviderIdentifier
+            && !identifier
+                .as_str()
+                .bytes()
+                .any(|byte| byte.is_ascii_digit())
+        {
+            continue;
+        }
+        let starts_with_digit = identifier
+            .as_str()
             .as_bytes()
-            .get(identifier.end())
-            .is_some_and(|byte| is_identifier_continuation(*byte))
+            .first()
+            .is_some_and(u8::is_ascii_digit);
+        if !starts_with_digit
+            && !identifier
+                .start()
+                .checked_sub(1)
+                .and_then(|index| text.as_bytes().get(index))
+                .is_some_and(|byte| is_identifier_separator(*byte))
         {
             continue;
         }
@@ -112,8 +136,15 @@ fn collect_matches(
     }
 }
 
-fn is_identifier_continuation(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-'
+fn is_identifier_continuation(character: char) -> bool {
+    character.is_alphanumeric() || matches!(character, '_' | '-')
+}
+
+fn is_identifier_separator(byte: u8) -> bool {
+    matches!(
+        byte,
+        b' ' | b'\t' | b'\r' | b'\n' | b'_' | b'#' | b':' | b'-'
+    )
 }
 
 fn is_valid_npi(npi: &str) -> bool {
@@ -174,7 +205,27 @@ mod tests {
                 "123456789012",
             ),
             (
+                "MRN123456",
+                HealthcareIdentifierKind::MedicalRecordNumber,
+                "123456",
+            ),
+            (
+                "MRN: A123456789",
+                HealthcareIdentifierKind::MedicalRecordNumber,
+                "A123456789",
+            ),
+            (
+                "mrn ABC123456",
+                HealthcareIdentifierKind::MedicalRecordNumber,
+                "ABC123456",
+            ),
+            (
                 "Provider NPI: 1234567893",
+                HealthcareIdentifierKind::NationalProviderIdentifier,
+                "1234567893",
+            ),
+            (
+                "NPI1234567893",
                 HealthcareIdentifierKind::NationalProviderIdentifier,
                 "1234567893",
             ),
@@ -243,6 +294,11 @@ mod tests {
                 HealthcareIdentifierKind::HealthPlanIdentifier,
                 "123456789012345",
             ),
+            (
+                "HPID12345678",
+                HealthcareIdentifierKind::HealthPlanIdentifier,
+                "12345678",
+            ),
         ];
 
         for (text, expected_kind, expected_value) in cases {
@@ -272,6 +328,10 @@ mod tests {
             "Z987654",
             "ABC12345678",
             "prefixMRN: A123456789",
+            "MRNABC123456",
+            "MRN: A123456789012",
+            "memberidAB12345678",
+            "policyidX12345678",
             "prefixNPI: 1234567893",
             "MRN: characteristics",
             "MRN: ABCDEF_INVALID",
@@ -279,9 +339,18 @@ mod tests {
             "MRN: ABCDEF_more",
             "member_id: misunderstanding",
             "policy_id: misunderstanding",
+            "member identification: AB12CDEF78",
+            "MRN: patient 123456",
+            "member id: confused",
             "NPI: 1234567893X",
+            "NPI: 12345678930",
+            "member_id: ABCDEFGHIJK12345",
             "medical record: ABCDE",
             "member id: ABC1234",
+            "MRN: \u{017f}12345",
+            "MRN: A12345\u{017f}",
+            "MRN: \u{212a}12345",
+            "MRN: A12345\u{212a}",
         ];
 
         for text in cases {

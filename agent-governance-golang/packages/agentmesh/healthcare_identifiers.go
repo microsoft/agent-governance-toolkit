@@ -6,6 +6,8 @@ package agentmesh
 import (
 	"regexp"
 	"sort"
+	"unicode"
+	"unicode/utf8"
 )
 
 // HealthcareIdentifierKind identifies the kind of healthcare identifier found.
@@ -36,19 +38,19 @@ var healthcareIdentifierPatterns = [...]healthcareIdentifierPattern{
 	{
 		kind: HealthcareIdentifierMedicalRecordNumber,
 		pattern: regexp.MustCompile(
-			`(?i)(^|[^A-Za-z0-9])(mrn|medical[ \t\r\n_-]*record)[ \t\r\n_#:-]*([A-Za-z0-9]{6,12})`,
+			`(?:^|[^A-Za-z0-9])(?:[Mm][Rr][Nn]|[Mm][Ee][Dd][Ii][Cc][Aa][Ll][ \t\r\n_-]*[Rr][Ee][Cc][Oo][Rr][Dd])[ \t\r\n_#:-]*([A-Za-z0-9]{6,12})`,
 		),
 	},
 	{
 		kind: HealthcareIdentifierNationalProviderIdentifier,
 		pattern: regexp.MustCompile(
-			`(?i)(^|[^A-Za-z0-9])(npi|provider[ \t\r\n_-]*id)[ \t\r\n_#:-]*([0-9]{10})`,
+			`(?:^|[^A-Za-z0-9])(?:[Nn][Pp][Ii]|[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*([0-9]{10})`,
 		),
 	},
 	{
 		kind: HealthcareIdentifierHealthPlan,
 		pattern: regexp.MustCompile(
-			`(?i)(^|[^A-Za-z0-9])(hpid|health[ \t\r\n_-]*plan[ \t\r\n_-]*id|member[ \t\r\n_-]*id|policy[ \t\r\n_-]*id)[ \t\r\n_#:-]*([A-Za-z0-9]{8,15})`,
+			`(?:^|[^A-Za-z0-9])(?:[Hh][Pp][Ii][Dd]|[Hh][Ee][Aa][Ll][Tt][Hh][ \t\r\n_-]*[Pp][Ll][Aa][Nn][ \t\r\n_-]*[Ii][Dd]|[Mm][Ee][Mm][Bb][Ee][Rr][ \t\r\n_-]*[Ii][Dd]|[Pp][Oo][Ll][Ii][Cc][Yy][ \t\r\n_-]*[Ii][Dd])[ \t\r\n_#:-]*([A-Za-z0-9]{8,15})`,
 		),
 	},
 }
@@ -57,9 +59,11 @@ var healthcareIdentifierPatterns = [...]healthcareIdentifierPattern{
 // health-plan/member/policy identifiers in text.
 //
 // MRNs must contain 6-12 ASCII letters or digits, health-plan identifiers
-// 8-15, and NPIs exactly 10 ASCII digits with a valid 80840-prefixed Luhn
-// check digit. Start is inclusive and End is exclusive; both are byte offsets
-// covering only the identifier value. Results are ordered by position.
+// 8-15, and both require at least one digit. Letter-initial values require a
+// separator after the cue; digits-only values may follow immediately. NPIs must
+// be exactly 10 ASCII digits with a valid 80840-prefixed Luhn check digit.
+// Start is inclusive and End is exclusive; both are byte offsets covering only
+// the identifier value. Results are ordered by position.
 //
 // This detector does not classify data, redact values, verify that an NPI was
 // issued, or establish HIPAA/SOC 2 compliance. NPIs identify providers and
@@ -68,15 +72,24 @@ func FindHealthcareIdentifiers(text string) []HealthcareIdentifierMatch {
 	matches := make([]HealthcareIdentifierMatch, 0)
 	for _, detector := range healthcareIdentifierPatterns {
 		for _, indices := range detector.pattern.FindAllStringSubmatchIndex(text, -1) {
-			if len(indices) < 8 {
+			if len(indices) < 4 {
 				continue
 			}
-			start, end := indices[6], indices[7]
-			if end < len(text) && isHealthcareIdentifierContinuation(text[end]) {
+			start, end := indices[2], indices[3]
+			identifier := text[start:end]
+			if isHealthcareIdentifierContinuation(text, end) {
 				continue
+			}
+			if detector.kind != HealthcareIdentifierNationalProviderIdentifier && !hasASCIIIdentifierDigit(identifier) {
+				continue
+			}
+			if text[start] < '0' || text[start] > '9' {
+				if start == 0 || !isHealthcareIdentifierSeparator(text[start-1]) {
+					continue
+				}
 			}
 			if detector.kind == HealthcareIdentifierNationalProviderIdentifier &&
-				!isValidNPI(text[start:end]) {
+				!isValidNPI(identifier) {
 				continue
 			}
 			matches = append(matches, HealthcareIdentifierMatch{
@@ -99,11 +112,34 @@ func FindHealthcareIdentifiers(text string) []HealthcareIdentifierMatch {
 	return matches
 }
 
-func isHealthcareIdentifierContinuation(value byte) bool {
-	return value >= 'A' && value <= 'Z' ||
-		value >= 'a' && value <= 'z' ||
-		value >= '0' && value <= '9' ||
-		value == '_' || value == '-'
+func isHealthcareIdentifierContinuation(text string, end int) bool {
+	if end >= len(text) {
+		return false
+	}
+	character, _ := utf8.DecodeRuneInString(text[end:])
+	return unicode.IsLetter(character) ||
+		unicode.IsDigit(character) ||
+		unicode.IsMark(character) ||
+		character == '_' ||
+		character == '-'
+}
+
+func isHealthcareIdentifierSeparator(value byte) bool {
+	switch value {
+	case ' ', '\t', '\r', '\n', '_', '#', ':', '-':
+		return true
+	default:
+		return false
+	}
+}
+
+func hasASCIIIdentifierDigit(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if value[i] >= '0' && value[i] <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func isValidNPI(npi string) bool {

@@ -11,7 +11,11 @@ const positiveCases: Array<[string, HealthcareIdentifierKind, string]> = [
   ['medical-record: Z987654', 'medical_record_number', 'Z987654'],
   ['MRN-123456', 'medical_record_number', '123456'],
   ['MRN_123456789012', 'medical_record_number', '123456789012'],
+  ['MRN123456', 'medical_record_number', '123456'],
+  ['mrn ABC123456', 'medical_record_number', 'ABC123456'],
+  ['MRN: A123456789', 'medical_record_number', 'A123456789'],
   ['Provider NPI: 1234567893', 'national_provider_identifier', '1234567893'],
+  ['NPI1234567893', 'national_provider_identifier', '1234567893'],
   ['npi 1234567893', 'national_provider_identifier', '1234567893'],
   ['provider id 1234567893', 'national_provider_identifier', '1234567893'],
   ['provider-id # 1234567893', 'national_provider_identifier', '1234567893'],
@@ -25,6 +29,7 @@ const positiveCases: Array<[string, HealthcareIdentifierKind, string]> = [
   ['policy id X1234567890', 'health_plan_identifier', 'X1234567890'],
   ['policy-id X1234567890', 'health_plan_identifier', 'X1234567890'],
   ['policy_id 123456789012345', 'health_plan_identifier', '123456789012345'],
+  ['HPID12345678', 'health_plan_identifier', '12345678'],
 ];
 
 describe('healthcare identifier detection', () => {
@@ -49,6 +54,10 @@ describe('healthcare identifier detection', () => {
     'Z987654',
     'ABC12345678',
     'prefixMRN: A123456789',
+    'MRNABC123456',
+    'MRN: A123456789012',
+    'memberidAB12345678',
+    'policyidX12345678',
     'prefixNPI: 1234567893',
     'MRN: characteristics',
     'MRN: ABCDEF_INVALID',
@@ -56,9 +65,18 @@ describe('healthcare identifier detection', () => {
     'MRN: ABCDEF_more',
     'member_id: misunderstanding',
     'policy_id: misunderstanding',
+    'member identification: AB12CDEF78',
+    'MRN: patient 123456',
+    'member id: confused',
     'NPI: 1234567893X',
+    'NPI: 12345678930',
+    'member_id: ABCDEFGHIJK12345',
     'medical record: ABCDE',
     'member id: ABC1234',
+    'MRN: \u017f12345',
+    'MRN: A12345\u017f',
+    'MRN: \u212a12345',
+    'MRN: A12345\u212a',
   ])('rejects values without context or with an invalid or glued value %s', (text) => {
     expect(findHealthcareIdentifiers(text)).toEqual([]);
   });
