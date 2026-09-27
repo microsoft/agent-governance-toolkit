@@ -118,11 +118,19 @@ for (const mode of ["enforce", "advisory"]) {
         { action: "tool.read", decision: expected },
       ]);
       assert.equal(verifyAuditEntries(entries), true);
+      const allowedKeys = new Set([
+        "action", "agentId", "argsDigest", "argsDigestAlg", "argsTruncated", "decision",
+        "hash", "policyVersion", "previousHash", "principal", "reason", "timestamp", "v",
+      ]);
       for (const entry of entries.slice(1)) {
         assert.equal(entry.agentId, "opencode:audit-session");
-        assert.deepEqual(Object.keys(entry).sort(), [
-          "action", "agentId", "decision", "hash", "previousHash", "timestamp",
-        ]);
+        assert.equal(entry.v, 2);
+        for (const key of ["action", "agentId", "decision", "hash", "previousHash", "timestamp"]) {
+          assert.ok(Object.hasOwn(entry, key), `missing ${key}`);
+        }
+        for (const key of Object.keys(entry)) {
+          assert.ok(allowedKeys.has(key), `unexpected audit key ${key}`);
+        }
       }
     });
   }
