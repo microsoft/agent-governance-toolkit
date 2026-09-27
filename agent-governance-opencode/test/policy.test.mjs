@@ -11,12 +11,15 @@ import test from "node:test";
 
 import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "../lib/audit.mjs";
 import {
+  AUDIT_HMAC_KEY_ENV,
   checkArbitraryText,
   evaluateOpenCodePrompt,
   evaluateOpenCodeTool,
   evaluateOpenCodeToolOutput,
   getPolicyStatus,
   loadPolicy,
+  PRINCIPAL_ISS_ENV,
+  PRINCIPAL_SUB_ENV,
   SURFACE_NAME,
 } from "../lib/policy.mjs";
 
@@ -861,4 +864,155 @@ test("an empty HMAC key env value means unkeyed, not misconfigured", async (t) =
   const status = await getPolicyStatus(state);
   assert.equal(status.auditConfigError, undefined);
   assert.equal(status.auditArgsDigestAlg, "sha256");
+});
+
+test("a configured principal is recorded on every entry", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-principal-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({
+    auditPath,
+    homeDirectory: root,
+    policyPath: null,
+    principal: { sub: "alice@example.com", iss: "https://idp.example" },
+  });
+
+  await evaluateOpenCodeTool(state, { tool: "read", args: {}, cwd: root, sessionId: "s" });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.deepEqual(entry.principal, { iss: "https://idp.example", sub: "alice@example.com" });
+  // The session id still identifies the agent; the principal is who it acted for.
+  assert.equal(entry.agentId, "opencode:s");
+  assert.equal(verifyAuditEntries([entry]), true);
+});
+
+test("no configured principal means the field is omitted", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-noprincipal-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null, principal: null });
+
+  await evaluateOpenCodeTool(state, { tool: "read", args: {}, cwd: root, sessionId: "s" });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.equal(Object.hasOwn(entry, "principal"), false);
+});
+
+test("an invalid principal is a config error and fails closed in enforce mode", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-badprincipal-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+
+  const cases = [
+    [{ iss: "https://idp.example" }, /non-empty sub/],
+    [{ sub: "   " }, /non-empty sub/],
+    [{ sub: 1 }, /non-empty sub/],
+    [{ sub: "a", role: "admin" }, /unsupported field 'role'/],
+    [["alice"], /must be an object/],
+    [{ sub: "a", iss: 7 }, /iss must be a short string/],
+  ];
+
+  for (const [principal, expected] of cases) {
+    const state = await loadPolicy({
+      auditPath: join(root, `${Math.random()}.json`),
+      homeDirectory: root,
+      policyPath: null,
+      principal,
+    });
+    const status = await getPolicyStatus(state);
+    assert.match(status.auditConfigError, expected, JSON.stringify(principal));
+    assert.equal(status.auditPrincipal, undefined);
+
+    const result = await evaluateOpenCodePrompt(state, { prompt: "hi", sessionId: "s" });
+    assert.equal(result.effect, "deny", JSON.stringify(principal));
+  }
+});
+
+test("a principal cannot be smuggled in through tool arguments or input", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-principal-smuggle-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null, principal: null });
+
+  await evaluateOpenCodeTool(state, {
+    tool: "read",
+    args: { principal: { sub: "attacker" } },
+    cwd: root,
+    principal: { sub: "attacker" },
+    sessionId: "s",
+  });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.equal(Object.hasOwn(entry, "principal"), false);
+  assert.equal((await readFile(auditPath, "utf8")).includes("attacker"), false);
+});
+
+test("the principal can come from the environment", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-principal-env-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const previous = { sub: process.env[PRINCIPAL_SUB_ENV], iss: process.env[PRINCIPAL_ISS_ENV] };
+  t.after(() => {
+    for (const [key, value] of [[PRINCIPAL_SUB_ENV, previous.sub], [PRINCIPAL_ISS_ENV, previous.iss]]) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  process.env[PRINCIPAL_SUB_ENV] = "bob@example.com";
+  process.env[PRINCIPAL_ISS_ENV] = "https://login.example";
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null });
+
+  await evaluateOpenCodeTool(state, { tool: "read", args: {}, cwd: root, sessionId: "s" });
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.deepEqual(entry.principal, { iss: "https://login.example", sub: "bob@example.com" });
+
+  // An empty value means unset, not misconfigured.
+  process.env[PRINCIPAL_SUB_ENV] = "";
+  process.env[PRINCIPAL_ISS_ENV] = "";
+  const cleared = await loadPolicy({
+    auditPath: join(root, "b.json"),
+    homeDirectory: root,
+    policyPath: null,
+  });
+  const status = await getPolicyStatus(cleared);
+  assert.equal(status.auditConfigError, undefined);
+  assert.equal(status.auditPrincipal, undefined);
+});
+
+test("an issuer without a subject is refused", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-iss-only-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const previous = process.env[PRINCIPAL_ISS_ENV];
+  t.after(() => {
+    if (previous === undefined) delete process.env[PRINCIPAL_ISS_ENV];
+    else process.env[PRINCIPAL_ISS_ENV] = previous;
+  });
+
+  process.env[PRINCIPAL_ISS_ENV] = "https://login.example";
+  delete process.env[PRINCIPAL_SUB_ENV];
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    homeDirectory: root,
+    policyPath: null,
+  });
+
+  const status = await getPolicyStatus(state);
+  assert.match(status.auditConfigError, /non-empty sub/);
+});
+
+test("both audit config errors are reported together", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-both-errors-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    auditHmacKey: "short",
+    homeDirectory: root,
+    policyPath: null,
+    principal: { sub: "" },
+  });
+
+  const status = await getPolicyStatus(state);
+  assert.match(status.auditConfigError, /at least 32 bytes/);
+  assert.match(status.auditConfigError, /non-empty sub/);
+  assert.equal(AUDIT_HMAC_KEY_ENV, "AGT_OPENCODE_AUDIT_HMAC_KEY");
 });

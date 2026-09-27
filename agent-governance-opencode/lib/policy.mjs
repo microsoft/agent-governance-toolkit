@@ -26,6 +26,8 @@ import { safeJsonStringify, summarizeText } from "./poisoning.mjs";
 export const USER_POLICY_ENV = "AGT_OPENCODE_POLICY_PATH";
 export const AUDIT_PATH_ENV = "AGT_OPENCODE_AUDIT_PATH";
 export const AUDIT_HMAC_KEY_ENV = "AGT_OPENCODE_AUDIT_HMAC_KEY";
+export const PRINCIPAL_SUB_ENV = "AGT_OPENCODE_PRINCIPAL_SUB";
+export const PRINCIPAL_ISS_ENV = "AGT_OPENCODE_PRINCIPAL_ISS";
 export const SURFACE_NAME = "opencode";
 
 const USER_POLICY_RELATIVE_PATH = [".config", "opencode", "agt", "policy.json"];
@@ -37,6 +39,8 @@ const MAX_AUDIT_REASON_LENGTH = 1024;
 const MAX_AUDIT_FAILURE_REASON_LENGTH = 256;
 /** Shortest HMAC key accepted, in bytes. Anything shorter weakens the digest. */
 const MIN_AUDIT_HMAC_KEY_BYTES = 32;
+/** Bounds on the principal subject and issuer recorded in an audit entry. */
+const MAX_PRINCIPAL_FIELD_LENGTH = 256;
 const DEFAULT_MIN_PROMPT_DEFENSE_GRADE = "B";
 const SUPPORTED_POLICY_SCHEMA_VERSION = 1;
 const DEFAULT_TOOL_EFFECT = "allow";
@@ -74,6 +78,7 @@ export async function loadPolicy({
   policyPath = process.env[USER_POLICY_ENV],
   auditPath = process.env[AUDIT_PATH_ENV],
   auditHmacKey = process.env[AUDIT_HMAC_KEY_ENV],
+  principal = principalFromEnvironment(),
   homeDirectory = homedir(),
 } = {}) {
   const bundledDefaultPath = normalizeFilePath(defaultPolicyPath);
@@ -128,13 +133,17 @@ export async function loadPolicy({
   // Resolved once per load rather than per write, and kept non-enumerable so
   // it is not swept into a log line or a JSON dump of the state.
   const resolvedHmacKey = resolveAuditHmacKey(auditHmacKey);
-  state.auditConfigError = resolvedHmacKey.error;
+  const resolvedPrincipal = resolvePrincipal(principal);
+  state.auditConfigError = [resolvedHmacKey.error, resolvedPrincipal.error]
+    .filter(Boolean)
+    .join(" ") || undefined;
 
   Object.defineProperty(state, "auditContext", {
     enumerable: false,
     value: Object.freeze({
       hmacKey: resolvedHmacKey.key,
       policyVersion: computePolicyVersion(compiledPolicy.raw),
+      principal: resolvedPrincipal.principal,
     }),
   });
 
@@ -370,6 +379,7 @@ export async function getPolicyStatus(state) {
     auditArgsDigestAlg: auditContext.hmacKey ? "hmac-sha256" : "sha256",
     auditConfigError: state.auditConfigError,
     auditEntries: auditStatus.count,
+    auditPrincipal: auditContext.principal,
     auditError: auditStatus.error,
     auditPath: state.auditPath,
     auditValid: auditStatus.valid,
@@ -678,11 +688,72 @@ async function recordAudit(state, { action, decision, sessionId, reason, toolArg
     agentId: `${DEFAULT_AGENT_ID}:${sessionId ?? "unknown-session"}`,
     decision: toAuditDecision(decision),
     policyVersion: auditContext.policyVersion,
+    principal: auditContext.principal,
     reason: normalizeAuditReason(reason),
     ...(toolArgs === undefined
       ? {}
       : computeArgsDigest(toolArgs, { hmacKey: auditContext.hmacKey })),
   });
+}
+
+/**
+ * Read the delegating principal from the environment.
+ *
+ * The principal answers "on whose behalf", which is the difference between an
+ * action the agent took by itself and one a human delegated. It comes only
+ * from operator configuration: taking it from tool arguments or model output
+ * would let the agent name its own authority, and then it is not evidence.
+ */
+function principalFromEnvironment() {
+  const sub = process.env[PRINCIPAL_SUB_ENV];
+  const iss = process.env[PRINCIPAL_ISS_ENV];
+  if (!sub && !iss) {
+    return undefined;
+  }
+  return { ...(sub ? { sub } : {}), ...(iss ? { iss } : {}) };
+}
+
+/**
+ * Validate the configured principal. Shaped after OIDC (`sub`, optional
+ * `iss`) so the record stays unambiguous when more than one identity provider
+ * is in play. An invalid principal is an error rather than a silent omission,
+ * because a missing principal and a misconfigured one mean different things to
+ * whoever reads the log later.
+ */
+function resolvePrincipal(principal) {
+  if (principal === undefined || principal === null) {
+    return { principal: undefined, error: undefined };
+  }
+
+  if (typeof principal !== "object" || Array.isArray(principal)) {
+    return { principal: undefined, error: "Audit principal must be an object with a sub." };
+  }
+
+  for (const key of Object.keys(principal)) {
+    if (key !== "sub" && key !== "iss") {
+      return { principal: undefined, error: `Audit principal has an unsupported field '${key}'.` };
+    }
+  }
+
+  const sub = principal.sub;
+  if (typeof sub !== "string" || sub.trim().length === 0) {
+    return {
+      principal: undefined,
+      error: `Audit principal requires a non-empty sub (set ${PRINCIPAL_SUB_ENV}).`,
+    };
+  }
+  if (sub.length > MAX_PRINCIPAL_FIELD_LENGTH) {
+    return { principal: undefined, error: "Audit principal sub is too long." };
+  }
+
+  if (Object.hasOwn(principal, "iss")) {
+    if (typeof principal.iss !== "string" || principal.iss.length > MAX_PRINCIPAL_FIELD_LENGTH) {
+      return { principal: undefined, error: "Audit principal iss must be a short string." };
+    }
+    return { principal: Object.freeze({ iss: principal.iss, sub }), error: undefined };
+  }
+
+  return { principal: Object.freeze({ sub }), error: undefined };
 }
 
 /**
