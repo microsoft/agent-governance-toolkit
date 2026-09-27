@@ -680,3 +680,99 @@ test("corrupt audit logs are reported invalid and fail closed on new decisions",
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("audit entries carry the decision reason and the active policy version", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-reason-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null });
+
+  await evaluateOpenCodeTool(state, {
+    tool: "bash",
+    args: { command: "rm -rf /" },
+    cwd: root,
+    sessionId: "reason-session",
+  });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.match(entry.policyVersion, /^sha256:[0-9a-f]{64}$/);
+  assert.ok(entry.reason.length > 0, "a denied tool call must record why");
+  assert.equal(verifyAuditEntries([entry]), true);
+});
+
+test("policyVersion is stable for one policy and differs across policies", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-policyversion-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const policyPath = join(root, "policy.json");
+
+  await writeFile(policyPath, JSON.stringify({ version: 1, mode: "enforce" }), "utf8");
+  const first = await loadPolicy({ auditPath: join(root, "a.json"), homeDirectory: root, policyPath });
+  const again = await loadPolicy({ auditPath: join(root, "b.json"), homeDirectory: root, policyPath });
+  assert.equal(first.auditContext.policyVersion, again.auditContext.policyVersion);
+
+  await writeFile(policyPath, JSON.stringify({ version: 1, mode: "advisory" }), "utf8");
+  const edited = await loadPolicy({ auditPath: join(root, "c.json"), homeDirectory: root, policyPath });
+  assert.notEqual(first.auditContext.policyVersion, edited.auditContext.policyVersion);
+});
+
+test("a governance failure records why it failed closed", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-failure-reason-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null });
+
+  // Force the evaluation itself to throw, rather than reach a verdict.
+  state.policyEngine.evaluateWithBackends = async () => {
+    throw new Error("backend exploded");
+  };
+
+  const result = await evaluateOpenCodeTool(state, {
+    tool: "bash",
+    args: { command: "ls" },
+    cwd: root,
+    sessionId: "failure-session",
+  });
+
+  assert.equal(result.effect, "deny");
+  const entries = await loadAuditEntries(auditPath);
+  const failure = entries.at(-1);
+  assert.equal(failure.action, "tool.policy_error");
+  assert.match(failure.reason, /^policy_error: backend exploded/);
+  assert.equal(verifyAuditEntries(entries), true);
+});
+
+test("tool output entries record pattern ids, never the matched secret", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-output-reason-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null });
+  const secret = "AKIAIOSFODNN7EXAMPLE";
+
+  await evaluateOpenCodeToolOutput(state, {
+    tool: "bash",
+    output: `aws_access_key_id=${secret}`,
+    sessionId: "output-session",
+  });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.equal(entry.decision, "review");
+  assert.match(entry.reason, /secret pattern/i);
+  assert.equal((await readFile(auditPath, "utf8")).includes(secret), false);
+});
+
+test("a clean tool output entry records no reason", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-output-clean-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null });
+
+  await evaluateOpenCodeToolOutput(state, {
+    tool: "bash",
+    output: "all tests passed",
+    sessionId: "output-session",
+  });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.equal(entry.decision, "allow");
+  assert.equal(Object.hasOwn(entry, "reason"), false);
+});

@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -15,7 +15,7 @@ import {
   PromptDefenseEvaluator,
 } from "@microsoft/agent-governance-sdk";
 
-import { appendAuditEntry, getAuditStatus } from "./audit.mjs";
+import { appendAuditEntry, canonicalJson, getAuditStatus } from "./audit.mjs";
 import { safeJsonStringify, summarizeText } from "./poisoning.mjs";
 
 export const USER_POLICY_ENV = "AGT_OPENCODE_POLICY_PATH";
@@ -25,6 +25,10 @@ export const SURFACE_NAME = "opencode";
 const USER_POLICY_RELATIVE_PATH = [".config", "opencode", "agt", "policy.json"];
 const USER_AUDIT_RELATIVE_PATH = [".config", "opencode", "agt", "audit-log.json"];
 const DEFAULT_AGENT_ID = "opencode";
+/** Upper bound on the decision reason copied into an audit entry. */
+const MAX_AUDIT_REASON_LENGTH = 1024;
+/** Upper bound on the error text copied into a failure audit entry. */
+const MAX_AUDIT_FAILURE_REASON_LENGTH = 256;
 const DEFAULT_MIN_PROMPT_DEFENSE_GRADE = "B";
 const SUPPORTED_POLICY_SCHEMA_VERSION = 1;
 const DEFAULT_TOOL_EFFECT = "allow";
@@ -99,7 +103,7 @@ export async function loadPolicy({
   }
 
   const runtime = createGovernanceRuntime(compiledPolicy, configuredAdditionalContext);
-  return {
+  const state = {
     auditPath: resolvedAuditPath,
     bundledDefaultError,
     configuredPolicyError,
@@ -111,6 +115,17 @@ export async function loadPolicy({
     source,
     ...runtime,
   };
+
+  // Resolved once per load rather than per write, and kept non-enumerable so
+  // it is not swept into a log line or a JSON dump of the state.
+  Object.defineProperty(state, "auditContext", {
+    enumerable: false,
+    value: Object.freeze({
+      policyVersion: computePolicyVersion(compiledPolicy.raw),
+    }),
+  });
+
+  return state;
 }
 
 export function buildSessionStartResult(state, input = {}) {
@@ -167,6 +182,7 @@ export async function evaluatePromptSubmission(state, input = {}) {
     await recordAudit(state, {
       action: "prompt.submit",
       decision: decision.effectiveDecision,
+      reason,
       sessionId: input.session_id,
     });
 
@@ -194,6 +210,7 @@ export async function evaluatePromptSubmission(state, input = {}) {
       await recordFailureAudit(state, {
         action: "prompt.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.session_id,
       });
       return {
@@ -245,6 +262,7 @@ export async function evaluatePreToolUse(state, input = {}) {
     await recordAudit(state, {
       action: `tool.${toolName}`,
       decision: decision.effectiveDecision,
+      reason,
       sessionId: input.session_id,
     });
 
@@ -279,6 +297,7 @@ export async function evaluatePreToolUse(state, input = {}) {
       await recordFailureAudit(state, {
         action: "tool.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.session_id,
       });
       return {
@@ -628,13 +647,48 @@ function createContextDetector(policy) {
   });
 }
 
-async function recordAudit(state, { action, decision, sessionId }) {
+async function recordAudit(state, { action, decision, sessionId, reason }) {
   await mkdir(dirname(state.auditPath), { recursive: true });
+  const auditContext = state.auditContext ?? {};
   await appendAuditEntry(state.auditPath, {
     action,
     agentId: `${DEFAULT_AGENT_ID}:${sessionId ?? "unknown-session"}`,
     decision: toAuditDecision(decision),
+    policyVersion: auditContext.policyVersion,
+    reason: normalizeAuditReason(reason),
   });
+}
+
+/**
+ * Reasons are operator-facing evidence, not free-form storage. Only strings are
+ * accepted, whitespace is flattened, and the text is capped, because a reason
+ * can quote a matched path or URL from the request.
+ */
+function normalizeAuditReason(reason) {
+  if (typeof reason !== "string") {
+    return undefined;
+  }
+  const summarized = summarizeText(reason, MAX_AUDIT_REASON_LENGTH);
+  return summarized.length > 0 ? summarized : undefined;
+}
+
+/** Reason recorded when governance itself failed rather than reached a verdict. */
+function failureReason(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return `policy_error: ${summarizeText(message, MAX_AUDIT_FAILURE_REASON_LENGTH)}`;
+}
+
+/**
+ * Identifies the policy that produced a decision. Derived from the active raw
+ * policy rather than a declared version field, so an edited policy always
+ * produces a different value.
+ */
+function computePolicyVersion(raw) {
+  try {
+    return `sha256:${createHash("sha256").update(canonicalJson(raw ?? null), "utf8").digest("hex")}`;
+  } catch {
+    return "sha256:unavailable";
+  }
 }
 
 async function recordFailureAudit(state, payload) {
@@ -1646,6 +1700,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
     await recordAudit(state, {
       action: "prompt.submit",
       decision: effect,
+      reason,
       sessionId: input.sessionId,
     });
 
@@ -1658,6 +1713,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
       await recordFailureAudit(state, {
         action: "prompt.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.sessionId,
       });
       return {
@@ -1704,6 +1760,7 @@ export async function evaluateOpenCodeTool(state, input = {}) {
     await recordAudit(state, {
       action: `tool.${toolName}`,
       decision: effect,
+      reason,
       sessionId: input.sessionId,
     });
 
@@ -1716,6 +1773,7 @@ export async function evaluateOpenCodeTool(state, input = {}) {
       await recordFailureAudit(state, {
         action: "tool.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.sessionId,
       });
       return {
@@ -1751,6 +1809,8 @@ export async function evaluateOpenCodeToolOutput(state, input = {}) {
   await recordAudit(state, {
     action: `tool.${String(input.tool ?? "unknown")}.output`,
     decision: findings.length ? "review" : "allow",
+    // Pattern identifiers only. The matched text is never recorded.
+    reason: findings.length ? describeSecretFindings(findings) : undefined,
     sessionId: input.sessionId,
   });
 
