@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createSecretKey, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -15,11 +15,17 @@ import {
   PromptDefenseEvaluator,
 } from "@microsoft/agent-governance-sdk";
 
-import { appendAuditEntry, canonicalJson, getAuditStatus } from "./audit.mjs";
+import {
+  appendAuditEntry,
+  canonicalJson,
+  computeArgsDigest,
+  getAuditStatus,
+} from "./audit.mjs";
 import { safeJsonStringify, summarizeText } from "./poisoning.mjs";
 
 export const USER_POLICY_ENV = "AGT_OPENCODE_POLICY_PATH";
 export const AUDIT_PATH_ENV = "AGT_OPENCODE_AUDIT_PATH";
+export const AUDIT_HMAC_KEY_ENV = "AGT_OPENCODE_AUDIT_HMAC_KEY";
 export const SURFACE_NAME = "opencode";
 
 const USER_POLICY_RELATIVE_PATH = [".config", "opencode", "agt", "policy.json"];
@@ -29,6 +35,8 @@ const DEFAULT_AGENT_ID = "opencode";
 const MAX_AUDIT_REASON_LENGTH = 1024;
 /** Upper bound on the error text copied into a failure audit entry. */
 const MAX_AUDIT_FAILURE_REASON_LENGTH = 256;
+/** Shortest HMAC key accepted, in bytes. Anything shorter weakens the digest. */
+const MIN_AUDIT_HMAC_KEY_BYTES = 32;
 const DEFAULT_MIN_PROMPT_DEFENSE_GRADE = "B";
 const SUPPORTED_POLICY_SCHEMA_VERSION = 1;
 const DEFAULT_TOOL_EFFECT = "allow";
@@ -65,6 +73,7 @@ export async function loadPolicy({
   defaultPolicyPath = new URL("../config/default-policy.json", import.meta.url),
   policyPath = process.env[USER_POLICY_ENV],
   auditPath = process.env[AUDIT_PATH_ENV],
+  auditHmacKey = process.env[AUDIT_HMAC_KEY_ENV],
   homeDirectory = homedir(),
 } = {}) {
   const bundledDefaultPath = normalizeFilePath(defaultPolicyPath);
@@ -118,9 +127,13 @@ export async function loadPolicy({
 
   // Resolved once per load rather than per write, and kept non-enumerable so
   // it is not swept into a log line or a JSON dump of the state.
+  const resolvedHmacKey = resolveAuditHmacKey(auditHmacKey);
+  state.auditConfigError = resolvedHmacKey.error;
+
   Object.defineProperty(state, "auditContext", {
     enumerable: false,
     value: Object.freeze({
+      hmacKey: resolvedHmacKey.key,
       policyVersion: computePolicyVersion(compiledPolicy.raw),
     }),
   });
@@ -264,6 +277,7 @@ export async function evaluatePreToolUse(state, input = {}) {
       decision: decision.effectiveDecision,
       reason,
       sessionId: input.session_id,
+      toolArgs: input.tool_input,
     });
 
     if (decision.effectiveDecision === "deny") {
@@ -299,6 +313,7 @@ export async function evaluatePreToolUse(state, input = {}) {
         decision: "deny",
         reason: failureReason(error),
         sessionId: input.session_id,
+        toolArgs: input.tool_input,
       });
       return {
         hookSpecificOutput: {
@@ -349,11 +364,16 @@ export function checkArbitraryText(state, text, sessionId = "adhoc-check") {
 
 export async function getPolicyStatus(state) {
   const auditStatus = await getAuditStatus(state.auditPath);
+  const auditContext = state.auditContext ?? {};
   return {
+    // Reports which digest is in force, never the key itself.
+    auditArgsDigestAlg: auditContext.hmacKey ? "hmac-sha256" : "sha256",
+    auditConfigError: state.auditConfigError,
     auditEntries: auditStatus.count,
     auditError: auditStatus.error,
     auditPath: state.auditPath,
     auditValid: auditStatus.valid,
+    policyVersion: auditContext.policyVersion,
     bundledDefaultError: state.bundledDefaultError?.message,
     configuredPolicyError: state.configuredPolicyError?.message,
     configuredPolicyPath: state.configuredPolicyPath,
@@ -408,6 +428,9 @@ function createGovernanceRuntime(policy, configuredAdditionalContext) {
 }
 
 function getPolicyLoadFailure(state) {
+  if (state.auditConfigError) {
+    return `AGT audit configuration is invalid: ${state.auditConfigError}`;
+  }
   if (state.configuredPolicyError) {
     return `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`;
   }
@@ -647,7 +670,7 @@ function createContextDetector(policy) {
   });
 }
 
-async function recordAudit(state, { action, decision, sessionId, reason }) {
+async function recordAudit(state, { action, decision, sessionId, reason, toolArgs }) {
   await mkdir(dirname(state.auditPath), { recursive: true });
   const auditContext = state.auditContext ?? {};
   await appendAuditEntry(state.auditPath, {
@@ -656,7 +679,40 @@ async function recordAudit(state, { action, decision, sessionId, reason }) {
     decision: toAuditDecision(decision),
     policyVersion: auditContext.policyVersion,
     reason: normalizeAuditReason(reason),
+    ...(toolArgs === undefined
+      ? {}
+      : computeArgsDigest(toolArgs, { hmacKey: auditContext.hmacKey })),
   });
+}
+
+/**
+ * Resolve the optional key that turns the argument digest from a plain
+ * SHA-256 into an HMAC.
+ *
+ * A short key is refused rather than used, so a weak digest cannot be
+ * mistaken for a keyed one. The key is wrapped in a KeyObject, which
+ * serializes as `{}`, so it cannot leak through a log line or a status dump.
+ */
+function resolveAuditHmacKey(value) {
+  if (value === undefined || value === null || value === "") {
+    return { key: null, error: undefined };
+  }
+
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(String(value), "utf8");
+  if (buffer.byteLength < MIN_AUDIT_HMAC_KEY_BYTES) {
+    return {
+      key: null,
+      error:
+        `${AUDIT_HMAC_KEY_ENV} must be at least ${MIN_AUDIT_HMAC_KEY_BYTES} bytes; ` +
+        "falling back to an unkeyed digest.",
+    };
+  }
+
+  try {
+    return { key: createSecretKey(buffer), error: undefined };
+  } catch (error) {
+    return { key: null, error: `${AUDIT_HMAC_KEY_ENV} could not be used: ${error.message}` };
+  }
 }
 
 /**
@@ -1762,6 +1818,7 @@ export async function evaluateOpenCodeTool(state, input = {}) {
       decision: effect,
       reason,
       sessionId: input.sessionId,
+      toolArgs: input.args,
     });
 
     return {
@@ -1775,6 +1832,7 @@ export async function evaluateOpenCodeTool(state, input = {}) {
         decision: "deny",
         reason: failureReason(error),
         sessionId: input.sessionId,
+        toolArgs: input.args,
       });
       return {
         effect: "deny",

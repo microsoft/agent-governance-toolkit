@@ -776,3 +776,89 @@ test("a clean tool output entry records no reason", async (t) => {
   assert.equal(entry.decision, "allow");
   assert.equal(Object.hasOwn(entry, "reason"), false);
 });
+
+test("tool entries carry an args digest; prompt and output entries do not", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-argsdigest-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null });
+  const secretPath = join(root, "very-secret-filename.txt");
+
+  await evaluateOpenCodePrompt(state, { prompt: "hello there", sessionId: "s" });
+  await evaluateOpenCodeTool(state, {
+    tool: "read",
+    args: { file_path: secretPath },
+    cwd: root,
+    sessionId: "s",
+  });
+  await evaluateOpenCodeToolOutput(state, { tool: "read", output: "clean", sessionId: "s" });
+
+  const entries = await loadAuditEntries(auditPath);
+  const byAction = Object.fromEntries(entries.map((entry) => [entry.action, entry]));
+
+  assert.equal(Object.hasOwn(byAction["prompt.submit"], "argsDigest"), false);
+  assert.equal(Object.hasOwn(byAction["tool.read.output"], "argsDigest"), false);
+  assert.match(byAction["tool.read"].argsDigest, /^[0-9a-f]{64}$/);
+  assert.equal(byAction["tool.read"].argsDigestAlg, "sha256");
+
+  // The digest identifies the arguments; it must not reproduce them.
+  assert.equal((await readFile(auditPath, "utf8")).includes("very-secret-filename"), false);
+  assert.equal(verifyAuditEntries(entries), true);
+});
+
+test("a configured HMAC key switches the digest algorithm", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-hmac-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({
+    auditPath,
+    auditHmacKey: "k".repeat(32),
+    homeDirectory: root,
+    policyPath: null,
+  });
+
+  await evaluateOpenCodeTool(state, { tool: "read", args: { a: 1 }, cwd: root, sessionId: "s" });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.equal(entry.argsDigestAlg, "hmac-sha256");
+
+  const status = await getPolicyStatus(state);
+  assert.equal(status.auditArgsDigestAlg, "hmac-sha256");
+  assert.equal(status.auditConfigError, undefined);
+  // No key material anywhere in the status payload.
+  assert.equal(JSON.stringify(status).includes("kkkk"), false);
+});
+
+test("a short HMAC key is a config error and fails closed in enforce mode", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-shortkey-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    auditHmacKey: "too-short",
+    homeDirectory: root,
+    policyPath: null,
+  });
+
+  const status = await getPolicyStatus(state);
+  assert.match(status.auditConfigError, /at least 32 bytes/);
+  assert.equal(status.auditArgsDigestAlg, "sha256");
+
+  const result = await evaluateOpenCodePrompt(state, { prompt: "hi", sessionId: "s" });
+  assert.equal(result.effect, "deny");
+  assert.match(result.reason, /audit configuration is invalid/i);
+});
+
+test("an empty HMAC key env value means unkeyed, not misconfigured", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-emptykey-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    auditHmacKey: "",
+    homeDirectory: root,
+    policyPath: null,
+  });
+
+  const status = await getPolicyStatus(state);
+  assert.equal(status.auditConfigError, undefined);
+  assert.equal(status.auditArgsDigestAlg, "sha256");
+});
