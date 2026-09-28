@@ -55,8 +55,9 @@ Remote client -- protected transport / reverse proxy -- explicit non-loopback
 | Sidecar -> Engine API / filesystem; sidecar + adapter | Loaded runtime policy state, policy files, configuration and audit/trust/decision data are separate assets. An Engine API policy directory is not automatically an authorized Studio workspace; the process's OS permissions are an upper bound, not the Studio allowlist. |
 | Sidecar -> local logs; Studio sidecar + user | The future Studio-local audit/debug logs are user-writable and may reveal policy filenames or usage patterns. They are not the engine's Merkle-backed audit chain. |
 
-The five [umbrella tracker](https://github.com/microsoft/agent-governance-toolkit/issues/2729)
-non-negotiables apply: (1) runtime state stays read-only, with no approvals,
+The five binding constraints in the
+[umbrella tracker](https://github.com/microsoft/agent-governance-toolkit/issues/2729)
+apply: (1) runtime state stays read-only, with no approvals,
 quarantine, production hot-reload, credential rotation or incident/SOC
 operations; (2) the sole user-facing write is policy YAML in an explicitly
 selected local workspace; (3) Studio remains the one canonical UI; (4)
@@ -97,8 +98,8 @@ distinction without introducing a remote identity system:
 
 - A single, sidecar-owned opaque token is a one-line UTF-8 value of the form
   `agt-studio-v1.<scope>.<random>`, with `<scope>` equal to `read_only` or
-  `policy_write` and `<random>` equal to unpadded base64url of **32
-  cryptographically random bytes**. The explicit version and scope are
+  `policy_write` and `<random>` equal to the base64url encoding (without
+  padding) of **32 cryptographically random bytes**. The explicit version and scope are
   identifiers, **not** proof of authority: compare the *entire* bearer value
   against the locally configured token in constant time, then use the
   **server-configured** scope. Do not trust a claim parsed from an
@@ -112,8 +113,9 @@ distinction without introducing a remote identity system:
   read exactly one token from that file. No token may be conveyed via query
   parameter, URL fragment, command-line argument, response or example.
   Environment variables may be visible to other same-user processes; prefer
-  the file. A provisioning action must explicitly generate the secret via an
-  OS CSPRNG before remote opt-in, never silently at listener startup. The
+  the file. A provisioning action must explicitly generate the secret via the
+  operating system's cryptographically secure random generator before remote
+  opt-in, never silently at listener startup. The
   sidecar must never print the value.
 - The file and its parent directory must be owned by the invoking user,
   non-symlink, and inaccessible to other unprivileged users: Unix directory
@@ -217,8 +219,8 @@ different root. Validate the ID and extension, canonicalize each candidate,
 check containment by path components (not string prefix), reject symlinks,
 junctions/reparse points and hard-link escapes as appropriate to the
 platform, and avoid time-of-check/time-of-use races using safe filesystem
-handles and no-follow semantics. Refuse system paths and unowned/unwritable
-roots; run as the invoking user with least privilege, never setuid/admin.
+handles and no-follow semantics. Refuse system paths and roots the invoking
+user does not own or cannot write; run with least privilege, never setuid/admin.
 Do not treat the user's manual workspace selection as permission for the
 HTTP client to create or expand that allowlist.
 
@@ -246,8 +248,9 @@ this is not proof that production enforcement policies were hot-reloaded.
 If the adapter is attached to live production state so that saving activates
 policies, that conflicts with [ADR 0028](../adr/0028-agt-studio-unified-ui.md)
 and must block Studio save until maintainers resolve the architecture. The
-contract [sections 7.6 and 8](engine-api-contract.md#76-post-apiv1policysave)
-describe saving to the engine policy directory and a reload side effect;
+contract [section 7.6](engine-api-contract.md#7-endpoint-catalog) and
+[section 8](engine-api-contract.md#8-excluded-endpoints) describe saving to
+the engine policy directory and a reload side effect;
 neither grants Studio permission to hot-reload production policy.
 
 The Engine API wire format permits **YAML and JSON** saves; the umbrella
@@ -330,10 +333,18 @@ last column; the Epic 11 sidecar review rechecks them end to end.
 | Local registry re-scan vs production reload; Studio + Engine API owners | Prove saving cannot activate production policies, or revise the contract/architecture with maintainer review; do not treat section 8.1 as permission to hot-reload. |
 | HTTP `/events` 426 reservation; Engine API owner (Epic 7a) | The spec describes 426, but the reference adapter and Epic 0 conformance profile defer it. Do not count it among 12 operations or claim it is implemented. |
 
+Review against the contract's [transport](engine-api-contract.md#2-transport),
+[authentication](engine-api-contract.md#4-authentication),
+[capabilities](engine-api-contract.md#5-capability-metadata),
+[read-only invariant](engine-api-contract.md#6-read-only-invariant),
+[replay and save endpoints](engine-api-contract.md#7-endpoint-catalog),
+[exclusions](engine-api-contract.md#8-excluded-endpoints), and
+[conformance rules](engine-api-contract.md#9-conformance-rules).
+
 This document does not implement `agt serve`, the workspace picker/save/log
 (Epic 3), webview transport (Epic 1c/6), WebSocket (Epic 7a), or the full
 sidecar penetration/security review (Epic 11). The Studio package scaffold
 and its README are still pending in [#3898](https://github.com/microsoft/agent-governance-toolkit/issues/3898);
-add a backlink there when that file lands. Any new runtime-control or
+add a link back there when that file lands. Any new runtime-control or
 public-API semantics require the repository's maintainer decision process,
 not a silent interpretation of this document.
