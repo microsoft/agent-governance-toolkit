@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import pytest
 
+from agent_os.credential_redactor import CredentialRedactor
 from agent_os.policies.data_classification import (
     ABACPolicy,
     DataAccessDecision,
@@ -17,7 +18,6 @@ from agent_os.policies.data_classification import (
     detect_phi,
     detect_pii,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -91,9 +91,7 @@ class TestClassificationHierarchy:
             < DataClassification.TOP_SECRET
         )
 
-    def test_exceeds_max_classification_denied(
-        self, permissive_policy: ABACPolicy
-    ) -> None:
+    def test_exceeds_max_classification_denied(self, permissive_policy: ABACPolicy) -> None:
         label = DataLabel(classification=DataClassification.RESTRICTED)
         evaluator = DataAccessEvaluator([permissive_policy])
         decision = evaluator.evaluate("agent-1", label)
@@ -120,17 +118,13 @@ class TestCategoryLists:
             denied_categories=["ITAR"],
             max_classification=DataClassification.TOP_SECRET,
         )
-        label = DataLabel(
-            classification=DataClassification.INTERNAL, categories=["ITAR"]
-        )
+        label = DataLabel(classification=DataClassification.INTERNAL, categories=["ITAR"])
         decision = DataAccessEvaluator([policy]).evaluate("agent-x", label)
         assert not decision.allowed
         assert "denied" in decision.reason.lower()
 
     def test_allowed_category_passes(self, permissive_policy: ABACPolicy) -> None:
-        label = DataLabel(
-            classification=DataClassification.CONFIDENTIAL, categories=["PII"]
-        )
+        label = DataLabel(classification=DataClassification.CONFIDENTIAL, categories=["PII"])
         evaluator = DataAccessEvaluator([permissive_policy])
         decision = evaluator.evaluate("agent-1", label)
         assert decision.allowed
@@ -141,9 +135,7 @@ class TestCategoryLists:
             allowed_categories=["PII"],
             max_classification=DataClassification.TOP_SECRET,
         )
-        label = DataLabel(
-            classification=DataClassification.PUBLIC, categories=["GDPR"]
-        )
+        label = DataLabel(classification=DataClassification.PUBLIC, categories=["GDPR"])
         decision = DataAccessEvaluator([policy]).evaluate("agent-y", label)
         assert not decision.allowed
         assert "not in allowed" in decision.reason.lower()
@@ -154,9 +146,7 @@ class TestCategoryLists:
             allowed_categories=[],
             max_classification=DataClassification.TOP_SECRET,
         )
-        label = DataLabel(
-            classification=DataClassification.PUBLIC, categories=["PCI", "GDPR"]
-        )
+        label = DataLabel(classification=DataClassification.PUBLIC, categories=["PCI", "GDPR"])
         decision = DataAccessEvaluator([policy]).evaluate("agent-z", label)
         assert decision.allowed
 
@@ -238,12 +228,8 @@ class TestMultiplePolicies:
             denied_categories=["PII"],
             max_classification=DataClassification.TOP_SECRET,
         )
-        label = DataLabel(
-            classification=DataClassification.PUBLIC, categories=["PII"]
-        )
-        decision = DataAccessEvaluator([permissive, restrictive]).evaluate(
-            "multi", label
-        )
+        label = DataLabel(classification=DataClassification.PUBLIC, categories=["PII"])
+        decision = DataAccessEvaluator([permissive, restrictive]).evaluate("multi", label)
         assert not decision.allowed
 
     def test_all_policies_allow(self) -> None:
@@ -281,6 +267,71 @@ class TestDetectPII:
 class TestDetectPHI:
     def test_mrn_detected(self) -> None:
         assert "MRN" in detect_phi("Patient MRN: 12345678")
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "MRN: ABC123456",
+            "medical record: ABC123456",
+            "Patient MRN: 12345678",
+            "MRN: 1a2b3c",
+            "mrn: A12345",
+            "medical record 123456",
+        ],
+    )
+    def test_detect_phi_uses_canonical_mrn_definition(self, text: str) -> None:
+        assert "MRN" in detect_phi(text)
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "MRN: patient",
+            "We shipped build ABC12345678 to staging.",
+            "MRN: A123456789012345",
+            "MRN: ſ12345",
+            "MRN: K12345",
+            "MRN: İ12345",
+            "MRN: 123456²",
+            "MRN: 123456\u0301",
+            "MRN: 123456-7",
+            "MRN: 123456_more",
+            "MRN: A12345_more",
+            "medical\u00a0record 123456",
+        ],
+    )
+    def test_detect_phi_rejects_invalid_canonical_mrn_cases(self, text: str) -> None:
+        assert "MRN" not in detect_phi(text)
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "MRN: ABC123456",
+            "medical record: ABC123456",
+            "Patient MRN: 12345678",
+            "MRN: 1a2b3c",
+            "mrn: A12345",
+            "medical record 123456",
+            "MRN: patient",
+            "We shipped build ABC12345678 to staging.",
+            "MRN: A123456789012345",
+            "MRN: ſ12345",
+            "MRN: K12345",
+            "MRN: İ12345",
+            "MRN: 123456²",
+            "MRN: 123456\u0301",
+            "MRN: 123456-7",
+            "MRN: 123456_more",
+            "MRN: A12345_more",
+            "medical\u00a0record 123456",
+        ],
+    )
+    def test_detect_phi_and_credential_redactor_share_mrn_semantics(self, text: str) -> None:
+        detect_phi_found = "MRN" in detect_phi(text)
+        redactor_found = any(
+            match.name == "Medical Record Number (MRN)"
+            for match in CredentialRedactor.find_pii_matches(text)
+        )
+        assert detect_phi_found == redactor_found
 
     def test_icd_code_detected(self) -> None:
         assert "ICD-code" in detect_phi("Diagnosis J45.20")

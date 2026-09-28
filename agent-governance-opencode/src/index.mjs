@@ -8,6 +8,8 @@ import {
   evaluateOpenCodePrompt,
   evaluateOpenCodeTool,
   evaluateOpenCodeToolOutput,
+  cleanupOpenCodeSessionState,
+  finalizeOpenCodeSessionState,
   getPolicyStatus,
   loadPolicy,
 } from "../lib/opencode-policy.mjs";
@@ -62,11 +64,12 @@ export const AgtGovernance = async (ctx) => {
 
   const initialState = await getState();
   const initializationError = getPolicyInitializationError(initialState);
-  if (initializationError && initialState.policy.denyOnPolicyError) {
+  if (initializationError && initialState.policy.denyOnPolicyError && !initialState.sessionStateError) {
     throw new Error(initializationError);
   }
 
-  // Failed policy initialization must not claim a successful registration.
+  // Base-policy initialization errors still fail registration. Session-state
+  // restore errors keep fail-closed hooks active so OpenCode does not drop AGT.
   const registration = claimRegistration(ctx);
   if (registration.duplicate) {
     await logDuplicateRegistration(ctx, registration.workspace);
@@ -87,6 +90,7 @@ export const AgtGovernance = async (ctx) => {
                 `[AGT] OpenCode governance active — mode=${status.mode} source=${status.source} ` +
                 `promptDefenseEffective=${status.promptDefenseGrade} ` +
                 `promptDefenseConfigured=${status.configuredPromptDefenseGrade} ` +
+                `sessionStateEnabled=${status.sessionState.enabled} ` +
                 `audit=${status.auditEntries}`,
             },
           });
@@ -97,6 +101,15 @@ export const AgtGovernance = async (ctx) => {
     },
 
     event: async ({ event } = {}) => {
+      const lifecycleSessionId = extractLifecycleSessionId(event);
+      if (event?.type === "session.deleted" && lifecycleSessionId) {
+        const state = await getState();
+        await cleanupOpenCodeSessionState(state, lifecycleSessionId);
+      } else if (event?.type === "session.idle" && lifecycleSessionId) {
+        const state = await getState();
+        await finalizeOpenCodeSessionState(state, lifecycleSessionId);
+      }
+
       // OpenCode emits a wide range of events. Only inspect prompt-bearing
       // events; ignore the rest cheaply.
       const prompt = extractPromptFromEvent(event);
@@ -123,6 +136,7 @@ export const AgtGovernance = async (ctx) => {
         args: output?.args,
         cwd: ctx?.directory ?? ctx?.worktree,
         sessionId: input?.sessionID,
+        callID: input?.callID,
       });
 
       if (result.effect === "deny") {
@@ -143,23 +157,26 @@ export const AgtGovernance = async (ctx) => {
     },
 
     "tool.execute.after": async (input, output) => {
-      if (!output || typeof output !== "object") {
-        return;
-      }
       const state = await getState();
-      const text = typeof output.output === "string" ? output.output : "";
-      const result = await evaluateOpenCodeToolOutput(state, {
-        tool: input?.tool,
-        output: text,
-        sessionId: input?.sessionID,
-      });
-      if (result.redact && typeof result.redactedOutput === "string") {
-        output.output = result.redactedOutput;
-        if (typeof output.metadata === "object" && output.metadata !== null) {
-          output.metadata.agtRedacted = true;
-          output.metadata.agtRedactionReason = result.reason;
+      const text =
+        output && typeof output === "object" && typeof output.output === "string"
+          ? output.output
+          : "";
+      let result;
+      try {
+        result = await evaluateOpenCodeToolOutput(state, {
+          tool: input?.tool,
+          output: text,
+          sessionId: input?.sessionID,
+          callID: input?.callID,
+        });
+      } catch (error) {
+        if (error && typeof error === "object") {
+          applyToolOutputResult(output, error.outputResult);
         }
+        throw error;
       }
+      applyToolOutputResult(output, result);
     },
 
     tool: {
@@ -188,6 +205,9 @@ export const AgtGovernance = async (ctx) => {
 };
 
 function getPolicyInitializationError(state) {
+  if (state.sessionStateError) {
+    return `AGT session-scoped policy could not be initialized: ${state.sessionStateError.message}`;
+  }
   if (state.configuredPolicyError) {
     return `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`;
   }
@@ -291,4 +311,31 @@ function extractPromptFromEvent(event) {
     }
   }
   return "";
+}
+
+function extractLifecycleSessionId(event) {
+  if (event?.type === "session.deleted") {
+    return event.properties?.info?.id;
+  }
+  if (event?.type === "session.idle") {
+    return event.properties?.sessionID;
+  }
+  return undefined;
+}
+
+function applyToolOutputResult(output, result) {
+  if (
+    !output ||
+    typeof output !== "object" ||
+    !result?.redact ||
+    typeof result.redactedOutput !== "string"
+  ) {
+    return;
+  }
+
+  output.output = result.redactedOutput;
+  if (typeof output.metadata === "object" && output.metadata !== null) {
+    output.metadata.agtRedacted = true;
+    output.metadata.agtRedactionReason = result.reason;
+  }
 }

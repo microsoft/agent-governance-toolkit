@@ -158,6 +158,76 @@ public sealed class PolicyEngine
     /// </summary>
     public PolicyDecision Evaluate(string agentDid, Dictionary<string, object> context)
     {
+        var prep = Prepare(agentDid, context);
+        if (prep.ExternalBackends.Count == 0)
+        {
+            return CloneDecision(
+                prep.Internal.Decision,
+                prep.Stopwatch.Elapsed.TotalMilliseconds,
+                prep.Internal.Decision.Metadata);
+        }
+
+        var externalDecisions = prep.ExternalBackends
+            .Select(backend => backend.Evaluate(prep.EvalContext))
+            .ToList();
+
+        return Combine(prep, externalDecisions);
+    }
+
+    /// <summary>
+    /// Asynchronously evaluates an agent request against all loaded policies, awaiting external backends
+    /// via <see cref="IExternalPolicyBackend.EvaluateAsync"/> instead of blocking on the synchronous
+    /// path. Internal (in-memory) policy evaluation and the fail-closed resolution are identical to
+    /// <see cref="Evaluate"/>.
+    /// </summary>
+    /// <remarks>
+    /// Fail-closed resolution only covers a backend that returns a decision with a non-empty
+    /// <see cref="ExternalPolicyDecision.Error"/> (or a deny). It does not wrap exceptions: if a backend
+    /// throws, the exception propagates to the caller rather than being turned into a deny, exactly as in
+    /// <see cref="Evaluate"/>. Cancellation likewise surfaces as an <see cref="OperationCanceledException"/>
+    /// (checked on entry and again before each backend call, and honored by cooperating backends) and no
+    /// <see cref="PolicyDecision"/> is produced — including when no external backends are registered.
+    /// Callers own both the throw path and cancellation handling.
+    /// </remarks>
+    public async Task<PolicyDecision> EvaluateAsync(
+        string agentDid,
+        Dictionary<string, object> context,
+        CancellationToken cancellationToken = default)
+    {
+        // Honor cancellation on entry so an already-cancelled token throws even on the no-backend
+        // in-memory path, keeping "no PolicyDecision is produced on cancellation" true for every path.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var prep = Prepare(agentDid, context);
+        if (prep.ExternalBackends.Count == 0)
+        {
+            return CloneDecision(
+                prep.Internal.Decision,
+                prep.Stopwatch.Elapsed.TotalMilliseconds,
+                prep.Internal.Decision.Metadata);
+        }
+
+        // Evaluate external backends sequentially to preserve ordering and avoid assuming backends are
+        // safe to invoke concurrently.
+        var externalDecisions = new List<ExternalPolicyDecision>(prep.ExternalBackends.Count);
+        foreach (var backend in prep.ExternalBackends)
+        {
+            // Inspect the token ourselves before each call: the default EvaluateAsync wraps the sync
+            // Evaluate and ignores the token, so without this a backend would run its full work on an
+            // already-cancelled token and a later backend would still be invoked after an earlier one
+            // completed on a cancelled token.
+            cancellationToken.ThrowIfCancellationRequested();
+            externalDecisions.Add(await backend.EvaluateAsync(prep.EvalContext, cancellationToken).ConfigureAwait(false));
+        }
+
+        return Combine(prep, externalDecisions);
+    }
+
+    // Shared prologue for Evaluate/EvaluateAsync: validate, normalize the DID, snapshot policies and
+    // backends, build the evaluation context, and run the in-memory policies. The stopwatch is stopped
+    // after internal evaluation so external time is accounted separately (via each decision's EvaluationMs).
+    private EvaluationPrep Prepare(string agentDid, Dictionary<string, object> context)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentDid);
         ArgumentNullException.ThrowIfNull(context);
 
@@ -191,19 +261,14 @@ public sealed class PolicyEngine
         var internalEvaluation = EvaluateInternalPolicies(snapshot, evalContext, evaluatedAt, sw);
         sw.Stop();
 
-        if (externalSnapshot.Count == 0)
-        {
-            return CloneDecision(
-                internalEvaluation.Decision,
-                sw.Elapsed.TotalMilliseconds,
-                internalEvaluation.Decision.Metadata);
-        }
+        return new EvaluationPrep(evalContext, internalEvaluation, externalSnapshot, evaluatedAt, sw);
+    }
 
-        var externalDecisions = externalSnapshot
-            .Select(backend => backend.Evaluate(evalContext))
-            .ToList();
-
-        var metadata = CreateExternalMetadata(internalEvaluation.Decision.Metadata, externalDecisions);
+    // Combines the internal decision with the external backend decisions. Fail-closed: any backend with a
+    // non-empty Error or a deny fails the whole request.
+    private PolicyDecision Combine(EvaluationPrep prep, List<ExternalPolicyDecision> externalDecisions)
+    {
+        var metadata = CreateExternalMetadata(prep.Internal.Decision.Metadata, externalDecisions);
         var failingDecision = externalDecisions.FirstOrDefault(decision => !string.IsNullOrWhiteSpace(decision.Error) || !decision.Allowed);
 
         if (failingDecision is not null)
@@ -212,25 +277,25 @@ public sealed class PolicyEngine
             {
                 Allowed = false,
                 Action = "deny",
-                MatchedRule = internalEvaluation.Decision.MatchedRule,
-                PolicyName = internalEvaluation.Decision.PolicyName,
+                MatchedRule = prep.Internal.Decision.MatchedRule,
+                PolicyName = prep.Internal.Decision.PolicyName,
                 Reason = string.IsNullOrWhiteSpace(failingDecision.Error)
                     ? $"External policy backend '{failingDecision.Backend}' denied the request."
                     : $"External policy backend '{failingDecision.Backend}' failed: {failingDecision.Error}",
-                Approvers = internalEvaluation.Decision.Approvers,
-                RateLimited = internalEvaluation.Decision.RateLimited,
-                RateLimitReset = internalEvaluation.Decision.RateLimitReset,
-                EvaluatedAt = evaluatedAt,
-                EvaluationMs = sw.Elapsed.TotalMilliseconds + externalDecisions.Sum(decision => decision.EvaluationMs),
+                Approvers = prep.Internal.Decision.Approvers,
+                RateLimited = prep.Internal.Decision.RateLimited,
+                RateLimitReset = prep.Internal.Decision.RateLimitReset,
+                EvaluatedAt = prep.EvaluatedAt,
+                EvaluationMs = prep.Stopwatch.Elapsed.TotalMilliseconds + externalDecisions.Sum(decision => decision.EvaluationMs),
                 Metadata = metadata
             };
         }
 
-        if (internalEvaluation.HadMatches)
+        if (prep.Internal.HadMatches)
         {
             return CloneDecision(
-                internalEvaluation.Decision,
-                sw.Elapsed.TotalMilliseconds + externalDecisions.Sum(decision => decision.EvaluationMs),
+                prep.Internal.Decision,
+                prep.Stopwatch.Elapsed.TotalMilliseconds + externalDecisions.Sum(decision => decision.EvaluationMs),
                 metadata);
         }
 
@@ -242,17 +307,25 @@ public sealed class PolicyEngine
                 Allowed = true,
                 Action = "allow",
                 Reason = $"Allowed by external policy backend(s): {string.Join(", ", externalDecisions.Select(decision => decision.Backend).Distinct(StringComparer.Ordinal))}.",
-                EvaluatedAt = evaluatedAt,
-                EvaluationMs = sw.Elapsed.TotalMilliseconds + externalDecisions.Sum(decision => decision.EvaluationMs),
+                EvaluatedAt = prep.EvaluatedAt,
+                EvaluationMs = prep.Stopwatch.Elapsed.TotalMilliseconds + externalDecisions.Sum(decision => decision.EvaluationMs),
                 Metadata = metadata
             };
         }
 
         return CloneDecision(
-            internalEvaluation.Decision,
-            sw.Elapsed.TotalMilliseconds,
+            prep.Internal.Decision,
+            prep.Stopwatch.Elapsed.TotalMilliseconds,
             metadata);
     }
+
+    // Shared state captured by Prepare and consumed by Combine.
+    private sealed record EvaluationPrep(
+        Dictionary<string, object> EvalContext,
+        InternalEvaluation Internal,
+        List<IExternalPolicyBackend> ExternalBackends,
+        DateTime EvaluatedAt,
+        Stopwatch Stopwatch);
 
     private static Dictionary<string, object> CreateExternalMetadata(
         Dictionary<string, object>? existingMetadata,

@@ -34,6 +34,7 @@ public static class AgentGovernanceMcpServerBuilderExtensions
         builder.Services.TryAddSingleton(static serviceProvider =>
             new GovernanceKernel(serviceProvider.GetRequiredService<IOptions<McpGovernanceOptions>>().Value.ToGovernanceOptions()));
         builder.Services.TryAddSingleton<McpResponseSanitizer>();
+        builder.Services.TryAddSingleton<IResponseSanitizer>(sp => sp.GetRequiredService<McpResponseSanitizer>());
         builder.Services.TryAddSingleton<McpSecurityScanner>();
         builder.Services.TryAddSingleton<McpGovernanceRuntime>();
         builder.Services.TryAddEnumerable(

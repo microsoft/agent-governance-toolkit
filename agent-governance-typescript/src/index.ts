@@ -33,6 +33,11 @@ export { ShadowDiscovery } from './discovery';
 export { CedarBackend } from './policy-backends/cedar';
 export { OPABackend } from './policy-backends/opa';
 export { PromptDefenseEvaluator } from './prompt-defense';
+export { findHealthcareIdentifiers } from './healthcare-identifiers';
+export type {
+  HealthcareIdentifierKind,
+  HealthcareIdentifierMatch,
+} from './healthcare-identifiers';
 // Credential Vault & Injection (issue #2535 / #2481)
 export {
   CredentialVault,

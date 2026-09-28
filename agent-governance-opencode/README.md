@@ -134,8 +134,92 @@ The plugin loads policy from (in order):
 3. `~/.config/opencode/agt/policy.json`
 4. The bundled `config/default-policy.json` (enforce mode, fail-closed)
 
-Audit log path defaults to `~/.config/opencode/agt/audit.json` and can be
+Audit log path defaults to `~/.config/opencode/agt/audit-log.json` and can be
 overridden via `AGT_OPENCODE_AUDIT_PATH`.
+
+### Audit evidence
+
+Each entry is a link in the audit hash chain and carries:
+
+| Field | Always present | Meaning |
+|-------|----------------|---------|
+| `v` | yes | Entry schema version. `2` today. Entries without it are version 1. |
+| `timestamp`, `agentId`, `action`, `decision` | yes | What ran, under which session, and how it was decided. |
+| `previousHash`, `hash` | yes | Chain links. `hash` covers every other field on the entry. |
+| `policyVersion` | yes | `sha256:<hex>` over the active policy, so a decision can be tied to the policy that produced it. |
+| `reason` | when one exists | Why the decision was reached, flattened and capped at 1024 characters. |
+| `argsDigest`, `argsDigestAlg` | tool calls only | Identifies the attempted arguments without storing them. |
+| `argsTruncated` | only when `true` | Arguments exceeded 1 MiB and only the first 1 MiB was digested. |
+| `argsUnserializable` | only when `true` | Arguments could not be serialized, so the digest is a constant and identifies nothing. |
+| `principal` | when configured | `{ sub, iss? }`, the identity the agent acted for. |
+
+Entries are verified against the version they were written under, so a log
+written by an earlier release keeps verifying after an upgrade. New entries are
+hashed over a canonical form with keys sorted by UTF-16 code unit, the ordering
+[RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) specifies, so an external
+verifier can reproduce a hash without knowing property insertion order.
+
+**The upgrade is one way.** Once a version 2 entry is written to a file, an
+older release cannot verify that file. Because a failed chain denies every
+request, downgrading after an upgrade means moving the audit file aside first.
+
+**Reproducing a hash.** The preimage is the canonical JSON of the entry with
+`hash` removed, encoded as UTF-8:
+
+```
+hash = sha256(canonicalJson(entry without hash))
+```
+
+**Reproducing `argsDigest`.** The preimage is the canonical JSON of the tool
+arguments object, encoded as UTF-8, truncated to the first 1 MiB:
+
+```
+argsDigest = sha256(canonicalJson(args))          # HMAC-SHA256 when a key is set
+```
+
+Canonical JSON follows ordinary JSON semantics for the argument object, so a
+value JSON drops is dropped. If the arguments cannot be serialized at all, for
+example because they are cyclic, hold a bigint, or have a throwing getter, the
+digest is taken over the constant `[unserializable]` and the entry carries
+`argsUnserializable: true`. All such entries share one digest value, so it
+identifies nothing.
+
+**What the digest does and does not do.** `argsDigest` lets you match an entry
+against another system's record of the same call. It does not hide the
+arguments: tool arguments are often low entropy, such as a path or a short
+command, and a plain SHA-256 of one can be recovered by guessing. Set
+`AGT_OPENCODE_AUDIT_HMAC_KEY` to at least 32 bytes to switch to HMAC-SHA256,
+which makes digests unguessable without the key. A shorter key is refused
+rather than used. Verification never recomputes the digest, so rotating or
+losing the key leaves existing entries verifiable.
+
+The key is read from the OpenCode process environment, so tool subprocesses
+such as `bash` inherit it. An agent able to run a shell command can read it and
+forge digests. Treat it as raising the cost of guessing a digest, not as a
+secret the agent cannot reach.
+
+**Recording who the agent acted for.** `agentId` identifies the session, not the
+person who delegated the work. Set `AGT_OPENCODE_PRINCIPAL_SUB`, and optionally
+`AGT_OPENCODE_PRINCIPAL_ISS`, to record that identity alongside each decision.
+The principal is read only from operator configuration, never from tool
+arguments or model output, since a principal the agent can name is not
+evidence.
+
+**The principal is declared, not verified.** It records who the operator says
+the agent acted for. Nothing proves that person authorised any particular
+action, and on a single-user machine the same person whose actions are logged
+usually controls that environment. Read it as a label on the session, not as
+proof of approval.
+
+A misconfigured principal or HMAC key is refused rather than silently dropped.
+When `denyOnPolicyError` is on, which is the default, that refusal denies
+requests until the configuration is fixed. With it off, decisions are still
+recorded, but with an unkeyed digest and no principal.
+
+**Limits.** `reason` names the rule that matched and its description, not the
+value that matched it, so a denied read of a secret-bearing path does not write
+that path into the log. `policyVersion` covers the policy document, so it does
+not change when a package upgrade alters built-in defaults.
 
 ### Positive command and URL allowlists
 
@@ -191,6 +275,59 @@ means the positive gate is satisfied; it cannot override a deny from
 
 A complete opt-in example is provided at
 `config/allowlist-policy.example.json`.
+
+### Session-scoped monotonic state
+
+Policies can opt into staged session state with a `sessionState` block. The
+reference policy at `config/session-state-policy.example.json` allows a
+`webfetch` before a sensitive-path read and denies it afterward.
+
+- Declare boolean latches in `attributes`. A matching `transitions` entry
+  stages its latch in `tool.execute.before`; the pending latch immediately
+  participates in `rules`, so concurrent outbound calls in that session are
+  blocked while the read is in flight. `tool.execute.after` commits the latch.
+- A transition matches the tool name (`*` matches any tool) and, when
+  `pathPatterns` is present, one of the configured top-level path arguments.
+  The default argument keys are `filePath`, `file_path`, and `path`;
+  `argumentKeys` can override them. Without `pathPatterns`, every call to the
+  configured tool matches.
+- Path matching is lexical: transitions do not resolve symlinks or inspect
+  paths embedded in shell commands or other tool arguments. Use transitions
+  with tools that expose the resource path directly, and pair them with
+  command policy when shell tools can read the same sensitive data.
+- Latches can only move from unset to set. Tool output is never parsed to
+  create, clear, or downgrade state. Because OpenCode's tool hook does not
+  expose a reliable success flag, a matching transition is finalized when
+  `tool.execute.after` runs; `session.idle` also conservatively finalizes any
+  still-pending transitions. The plugin clears state on `session.deleted`.
+- Committed and pending latch events are written to the hash-chained AGT audit
+  log and replayed on plugin initialization. Keep that audit log to preserve
+  state across restarts. An invalid audit chain or invalid session-state policy
+  fails closed.
+- State is held per OpenCode session, with `maxSessions` defaulting to 1024
+  (maximum 4096) and `maxPendingCallsPerSession` defaulting to 64 (maximum
+  256); pending attribute references are additionally capped at 256 per
+  session. When audit replay finds more latched sessions than `maxSessions`,
+  it restores the most recently changed sessions and quarantines older session
+  IDs. Quarantined sessions are denied until OpenCode emits `session.deleted`;
+  state is never silently dropped to permit those sessions to continue. At
+  runtime, reaching the state limit denies new transitions rather than
+  evicting a tracked session. Deleted sessions are removed and recorded in the
+  audit log.
+- With `sessionState` enabled, tool evaluations sharing the audit path are
+  serialized within the process so staged transitions and audit-chain updates
+  stay ordered; each session retains an independent latch set. This lock is
+  process-local. Do not run multiple OpenCode processes concurrently against
+  the same audit file; the audit writer does not coordinate cross-process
+  read-modify-write updates.
+
+The audit writer retains at most 10,000 entries but currently does not preserve
+a verifiable prefix anchor when it trims the oldest entry. The append that
+crosses that limit makes the retained chain unverifiable, and subsequent
+governance evaluations fail closed rather than resetting session latches.
+Repairing audit-chain rollover is outside this change and must be addressed in
+the shared audit implementation before relying on higher-volume persistent
+session state.
 
 ## Important parity notes
 

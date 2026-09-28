@@ -2,11 +2,24 @@
 // Licensed under the MIT License.
 
 import { isIP } from "node:net";
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 
+import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "./audit.mjs";
 import {
   evaluateDirectResourceAccess,
+  evaluateOpenCodePrompt as evaluateBaseOpenCodePrompt,
+  evaluateOpenCodeTool as evaluateBaseOpenCodeTool,
+  evaluateOpenCodeToolOutput as evaluateBaseOpenCodeToolOutput,
+  getPolicyStatus as getBasePolicyStatus,
   loadPolicy as loadBasePolicy,
 } from "./policy.mjs";
+import {
+  compileSessionStatePolicy,
+  createSessionStateRuntime,
+  isValidSessionId,
+  restoreSessionStateFromAudit,
+} from "./session-state.mjs";
 
 export * from "./policy.mjs";
 
@@ -14,9 +27,11 @@ const DEFAULT_ALLOWLIST_EFFECT = "allow";
 const COMMAND_ARGUMENT_KEYS = ["command", "bash", "powershell", "script", "cmd"];
 const COMMAND_TOOL_NAME_PATTERN =
   /(?:^|[._:/-])(?:bash|shell|sh|zsh|fish|powershell|pwsh|cmd|terminal|exec|execute|command)(?:$|[._:/-])/i;
+const DEFAULT_AGENT_ID = "opencode";
+const auditQueues = new Map();
 
 /**
- * Load the existing OpenCode policy and attach positive command/URL allowlists.
+ * Load the existing OpenCode policy and attach OpenCode-only evaluator layers.
  *
  * The base policy remains the source for deny/review rules. This layer only
  * adds a deny result when an explicitly enabled positive allowlist does not
@@ -47,7 +62,351 @@ export async function loadPolicy(options = {}) {
     }
   }
 
+  try {
+    const sessionStatePolicy = compileSessionStatePolicy(state.policy.raw?.sessionState);
+    if (sessionStatePolicy) {
+      const auditEntries = await loadAuditEntries(state.auditPath);
+      if (!verifyAuditEntries(auditEntries)) {
+        throw new Error(`Audit log at ${state.auditPath} failed hash-chain verification.`);
+      }
+
+      const restoredState = restoreSessionStateFromAudit(sessionStatePolicy, auditEntries);
+      const runtime = createSessionStateRuntime(sessionStatePolicy, {
+        restoredSessions: restoredState.sessions,
+        quarantinedSessionIds: restoredState.quarantinedSessionIds,
+      });
+      state.sessionStatePolicy = sessionStatePolicy;
+      state.sessionStateRuntime = runtime;
+      state.policyEngine.registerBackend(createSessionStateBackend(runtime));
+    }
+  } catch (error) {
+    state.sessionStateError = error instanceof Error ? error : new Error(String(error));
+  }
+
   return state;
+}
+
+export async function evaluateOpenCodePrompt(state, input = {}) {
+  if (state.sessionStateError) {
+    return { effect: "deny", reason: getSessionStateInitializationError(state) };
+  }
+  if (!state.sessionStateRuntime) {
+    return evaluateBaseOpenCodePrompt(state, input);
+  }
+
+  return withAuditLock(state.auditPath, async () => {
+    return evaluateBaseOpenCodePrompt(state, input);
+  });
+}
+
+export async function evaluateOpenCodeTool(state, input = {}) {
+  if (!state.sessionStateError && !state.sessionStateRuntime) {
+    return evaluateBaseOpenCodeTool(state, input);
+  }
+
+  return withAuditLock(state.auditPath, async () => {
+    if (state.sessionStateError) {
+      return denySessionStateEvaluation(state, input.sessionId, getSessionStateInitializationError(state));
+    }
+
+    const runtime = state.sessionStateRuntime;
+    if (!runtime) {
+      return evaluateBaseOpenCodeTool(state, input);
+    }
+    if (!isValidSessionId(input.sessionId)) {
+      return denySessionStateEvaluation(
+        state,
+        input.sessionId,
+        "AGT session-scoped policy requires a valid OpenCode session ID.",
+      );
+    }
+
+    return runtime.withSessionLock(input.sessionId, async () => {
+      const result = await evaluateBaseOpenCodeTool(state, input);
+      if (result.effect === "deny") {
+        return result;
+      }
+      if (result.policyError) {
+        return denySessionStateEvaluation(
+          state,
+          input.sessionId,
+          `AGT session-state evaluation failed closed. ${result.reason}`,
+        );
+      }
+
+      let attributes;
+      try {
+        attributes = runtime.stageToolCall(
+          input.sessionId,
+          input.callID,
+          input.tool,
+          input.args,
+        );
+      } catch (error) {
+        const reason = `AGT session-state staging failed closed: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+        return denySessionStateEvaluation(state, input.sessionId, reason);
+      }
+
+      try {
+        await recordSessionStateAttributes(
+          state,
+          input.sessionId,
+          "pending",
+          attributes,
+        );
+      } catch (error) {
+        const reason = `AGT could not audit staged session state; the tool call was denied: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+        runtime.quarantineSession(
+          input.sessionId,
+          "AGT session-state audit failed; this session is quarantined until it is deleted.",
+        );
+        return {
+          effect: "deny",
+          reason,
+        };
+      }
+
+      return result;
+    });
+  });
+}
+
+export async function evaluateOpenCodeToolOutput(state, input = {}) {
+  if (!state.sessionStateError && !state.sessionStateRuntime) {
+    return evaluateBaseOpenCodeToolOutput(state, input);
+  }
+
+  return withAuditLock(state.auditPath, async () => {
+    if (state.sessionStateError) {
+      throw new Error(getSessionStateInitializationError(state));
+    }
+
+    const runtime = state.sessionStateRuntime;
+    if (!runtime) {
+      return evaluateBaseOpenCodeToolOutput(state, input);
+    }
+    if (!isValidSessionId(input.sessionId)) {
+      throw new Error("AGT session-scoped policy requires a valid OpenCode session ID.");
+    }
+
+    return runtime.withSessionLock(input.sessionId, async () => {
+      let outputResult;
+      let outputError;
+      try {
+        outputResult = await evaluateBaseOpenCodeToolOutput(state, input);
+      } catch (error) {
+        outputError = error instanceof Error ? error : new Error(String(error));
+      }
+
+      let stateError;
+      try {
+        const attributes = runtime.completeToolCall(input.sessionId, input.callID);
+        await recordSessionStateAttributes(state, input.sessionId, "set", attributes);
+      } catch (error) {
+        stateError = error instanceof Error ? error : new Error(String(error));
+        runtime.quarantineSession(
+          input.sessionId,
+          "AGT session-state audit failed; this session is quarantined until it is deleted.",
+        );
+      }
+
+      if (outputError && stateError) {
+        throw new AggregateError(
+          [outputError, stateError],
+          "AGT tool-output and session-state evaluation both failed.",
+        );
+      }
+      if (outputError) {
+        throw outputError;
+      }
+      if (stateError) {
+        const error = new Error(stateError.message, { cause: stateError });
+        Object.defineProperty(error, "outputResult", { value: outputResult });
+        throw error;
+      }
+      return outputResult;
+    });
+  });
+}
+
+export async function finalizeOpenCodeSessionState(state, sessionId) {
+  const runtime = state.sessionStateRuntime;
+  if (!runtime || !isValidSessionId(sessionId)) {
+    return [];
+  }
+
+  return withAuditLock(state.auditPath, () =>
+    runtime.withSessionLock(sessionId, async () => {
+      const attributes = runtime.finalizePendingCalls(sessionId);
+      try {
+        await recordSessionStateAttributes(state, sessionId, "set", attributes);
+      } catch (error) {
+        runtime.quarantineSession(
+          sessionId,
+          "AGT session-state audit failed; this session is quarantined until it is deleted.",
+        );
+        throw error;
+      }
+      return attributes;
+    }),
+  );
+}
+
+export async function cleanupOpenCodeSessionState(state, sessionId) {
+  const runtime = state.sessionStateRuntime;
+  if (!runtime || !isValidSessionId(sessionId)) {
+    return false;
+  }
+
+  return withAuditLock(state.auditPath, () =>
+    runtime.withSessionLock(sessionId, async () => {
+      const snapshot = runtime.snapshot(sessionId);
+      if (!snapshot) {
+        return false;
+      }
+
+      if (
+        snapshot.quarantined ||
+        snapshot.attributes.length > 0 ||
+        snapshot.pendingAttributes.length > 0
+      ) {
+        await recordSessionStateEvent(state, sessionId, "session.state.cleanup", "allow");
+      }
+      runtime.removeSession(sessionId);
+      return true;
+    }),
+  );
+}
+
+export function getOpenCodeSessionState(state, sessionId) {
+  return state.sessionStateRuntime?.snapshot(sessionId);
+}
+
+export async function getPolicyStatus(state) {
+  const status = await getBasePolicyStatus(state);
+  if (!state.sessionStateRuntime) {
+    return {
+      ...status,
+      sessionState: {
+        configured: Boolean(state.policy.raw?.sessionState),
+        enabled: false,
+        error: state.sessionStateError?.message,
+      },
+    };
+  }
+
+  return {
+    ...status,
+    sessionState: {
+      configured: true,
+      enabled: true,
+      attributes: [...state.sessionStatePolicy.attributes],
+      ...state.sessionStateRuntime.status(),
+    },
+  };
+}
+
+function createSessionStateBackend(runtime) {
+  return {
+    name: "agt-session-state",
+    evaluateAction(action, context) {
+      if (!String(action).startsWith("tool.")) {
+        return "allow";
+      }
+
+      try {
+        const result = runtime.evaluateTool(context.sessionId, context.toolName);
+        return result
+          ? {
+              backend: "agt-session-state",
+              decision: result.decision,
+              reason: result.reason,
+            }
+          : "allow";
+      } catch (error) {
+        return {
+          backend: "agt-session-state",
+          decision: "deny",
+          reason: `AGT session-state evaluation failed closed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        };
+      }
+    },
+  };
+}
+
+async function denySessionStateEvaluation(state, sessionId, reason) {
+  let message = reason;
+  try {
+    await recordSessionStateEvent(
+      state,
+      isValidSessionId(sessionId) ? sessionId : "unknown-session",
+      "session.state.error",
+      "deny",
+    );
+  } catch (error) {
+    message += ` Session-state audit also failed: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
+  }
+  return { effect: "deny", reason: message };
+}
+
+async function recordSessionStateAttributes(state, sessionId, stage, attributes) {
+  if (attributes.length === 0) {
+    return;
+  }
+  const serializedAttributes = [...new Set(attributes)].sort().join(",");
+  await recordSessionStateEvent(
+    state,
+    sessionId,
+    `session.state.${stage}:${serializedAttributes}`,
+    "allow",
+  );
+}
+
+async function recordSessionStateEvent(state, sessionId, action, decision) {
+  await mkdir(dirname(state.auditPath), { recursive: true });
+  await appendAuditEntry(state.auditPath, {
+    action,
+    agentId: `${DEFAULT_AGENT_ID}:${sessionId}`,
+    decision,
+  });
+}
+
+function getSessionStateInitializationError(state) {
+  return `AGT session-scoped policy could not be initialized: ${
+    state.sessionStateError?.message ?? "unknown initialization error"
+  }`;
+}
+
+function withAuditLock(auditPath, operation) {
+  const key = String(auditPath ?? "");
+  const previous = auditQueues.get(key);
+  let release;
+  const queued = new Promise((resolve) => {
+    release = resolve;
+  });
+  auditQueues.set(key, queued);
+
+  return (async () => {
+    if (previous) {
+      await previous;
+    }
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (auditQueues.get(key) === queued) {
+        auditQueues.delete(key);
+      }
+    }
+  })();
 }
 
 function compilePositiveAllowlistPolicy(raw) {

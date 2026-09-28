@@ -13,11 +13,15 @@ their AI from accessing unauthorized data (Kiteworks 2026 research).
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import IntEnum
-from typing import Optional
 
 from pydantic import BaseModel, Field
+
+from agent_os.hipaa_patterns import (
+    MEDICAL_RECORD_NUMBER_REGEX,
+    validate_contextual_identifier_match,
+)
 
 
 class DataClassification(IntEnum):
@@ -50,7 +54,7 @@ class ABACPolicy(BaseModel):
     allowed_classifications: list[DataClassification] = Field(default_factory=list)
     allowed_categories: list[str] = Field(default_factory=list)
     denied_categories: list[str] = Field(default_factory=list)
-    required_geography: Optional[str] = None
+    required_geography: str | None = None
     max_classification: DataClassification = DataClassification.PUBLIC
 
 
@@ -61,8 +65,8 @@ class DataAccessDecision(BaseModel):
     reason: str
     agent_id: str
     data_label: DataLabel
-    matched_policy: Optional[str] = None
-    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    matched_policy: str | None = None
+    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DataAccessEvaluator:
@@ -125,10 +129,7 @@ class DataAccessEvaluator:
         ):
             return DataAccessDecision(
                 allowed=False,
-                reason=(
-                    f"Classification {data_label.classification.name} not in "
-                    f"allowed list"
-                ),
+                reason=(f"Classification {data_label.classification.name} not in allowed list"),
                 agent_id=agent_id,
                 data_label=data_label,
                 matched_policy=policy_ref,
@@ -185,11 +186,11 @@ class DataAccessEvaluator:
 
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
-_PHONE_RE = re.compile(
-    r"\b(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"
-)
+_PHONE_RE = re.compile(r"\b(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
 
-_MRN_RE = re.compile(r"\bMRN[-:\s]*\d{6,10}\b", re.IGNORECASE)
+# Reuse the canonical contextual MRN definition from ``hipaa_patterns`` so
+# PHI classification and credential redaction cannot drift.
+_MRN_RE = re.compile(MEDICAL_RECORD_NUMBER_REGEX)
 _ICD_RE = re.compile(r"\b[A-Z]\d{2}(?:\.\d{1,4})?\b")
 
 _CC_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
@@ -210,7 +211,7 @@ def detect_pii(text: str) -> list[str]:
 def detect_phi(text: str) -> list[str]:
     """Detect PHI patterns (medical record numbers, diagnosis codes)."""
     findings: list[str] = []
-    if _MRN_RE.search(text):
+    if any(validate_contextual_identifier_match(match) for match in _MRN_RE.finditer(text)):
         findings.append("MRN")
     if _ICD_RE.search(text):
         findings.append("ICD-code")
