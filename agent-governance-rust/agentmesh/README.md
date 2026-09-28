@@ -102,6 +102,7 @@ values may follow immediately. NPIs must be 10 digits with a valid
 80840-prefixed Luhn check digit. An NPI identifies a provider and is not
 inherently PHI. These patterns neither identify every healthcare
 identifier nor establish HIPAA or SOC 2 compliance.
+
 ## OpenTelemetry Policy Spans
 
 Policy-evaluation spans are available behind the opt-in `telemetry` feature. The
