@@ -192,6 +192,39 @@ means the positive gate is satisfied; it cannot override a deny from
 A complete opt-in example is provided at
 `config/allowlist-policy.example.json`.
 
+### Session-scoped monotonic state
+
+Policies can opt into staged session state with a `sessionState` block. The
+reference policy at `config/session-state-policy.example.json` allows a
+`webfetch` before a sensitive-path read and denies it afterward.
+
+- Declare boolean latches in `attributes`. A matching `transitions` entry
+  stages its latch in `tool.execute.before`; the pending latch immediately
+  participates in `rules`, so concurrent outbound calls in that session are
+  blocked while the read is in flight. `tool.execute.after` commits the latch.
+- A transition matches the tool name and, when `pathPatterns` is present, one
+  of the configured top-level path arguments. The default argument keys are
+  `filePath`, `file_path`, and `path`; `argumentKeys` can override them. Without
+  `pathPatterns`, every completed call to the configured tool matches.
+- Latches can only move from unset to set. Tool output is never parsed to
+  create, clear, or downgrade state. Because OpenCode's tool hook does not
+  expose a reliable success flag, a matching transition is finalized when
+  `tool.execute.after` runs; `session.idle` also conservatively finalizes any
+  still-pending transitions. The plugin clears state on `session.deleted`.
+- Committed and pending latch events are written to the hash-chained AGT audit
+  log and replayed on plugin initialization. Keep that audit log to preserve
+  state across restarts. An invalid audit chain or invalid session-state policy
+  fails closed.
+- State is held per OpenCode session, with `maxSessions` defaulting to 1024
+  (maximum 4096) and `maxPendingCallsPerSession` defaulting to 64 (maximum
+  256); pending attribute references are additionally capped at 256 per
+  session. Reaching a limit denies the affected call; active state is never
+  evicted to make room. Deleted sessions are removed and recorded in the audit
+  log.
+- With `sessionState` enabled, tool evaluations sharing the audit path are
+  serialized within the process so staged transitions and audit-chain updates
+  stay ordered; each session retains an independent latch set.
+
 ## Important parity notes
 
 - OpenCode's in-process plugin contract does not currently expose a server-side

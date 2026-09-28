@@ -138,6 +138,116 @@ test("tool.execute.before allows safe read calls", async () => {
   }
 });
 
+test("plugin stages session latches around tool execution and clears them on deletion", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-session-state-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "session-policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: {
+        allowedTools: ["read", "webfetch"],
+        defaultEffect: "deny",
+      },
+      sessionState: {
+        maxSessions: 8,
+        maxPendingCallsPerSession: 8,
+        attributes: ["sensitive_data_read"],
+        transitions: [
+          {
+            id: "sensitive-path-read",
+            tool: "read",
+            attribute: "sensitive_data_read",
+            pathPatterns: [{ source: "(^|/)(?:personal|private)(/|$)", flags: "i" }],
+          },
+        ],
+        rules: [
+          {
+            id: "deny-outbound-after-sensitive-read",
+            tools: ["webfetch"],
+            requires: ["sensitive_data_read"],
+            effect: "deny",
+            reason: "Outbound tools are blocked after a sensitive file read.",
+          },
+        ],
+      },
+    }),
+    "utf8",
+  );
+
+  try {
+    const plugin = await loadPlugin(root, { policyPath });
+    const sessionID = "plugin-session";
+    const readArgs = { filePath: "C:\\data\\personal\\profile.txt" };
+    const status = JSON.parse(await plugin.tool.agt_policy_status.execute({}));
+    assert.equal(status.sessionState.enabled, true);
+
+    await plugin["tool.execute.before"](
+      { tool: "read", sessionID, callID: "plugin-read-call" },
+      { args: readArgs },
+    );
+    await assert.rejects(
+      plugin["tool.execute.before"](
+        { tool: "webfetch", sessionID, callID: "plugin-outbound-call" },
+        { args: { url: "https://example.com/upload" } },
+      ),
+      /sensitive file read/i,
+    );
+
+    await plugin["tool.execute.after"](
+      { tool: "read", sessionID, callID: "plugin-read-call", args: readArgs },
+      { output: "profile contents", metadata: {}, title: "Read profile" },
+    );
+    await assert.rejects(
+      plugin["tool.execute.before"](
+        { tool: "webfetch", sessionID, callID: "plugin-later-outbound-call" },
+        { args: { url: "https://example.com/upload" } },
+      ),
+      /sensitive file read/i,
+    );
+
+    await plugin.event({
+      event: {
+        type: "session.deleted",
+        properties: { info: { id: sessionID } },
+      },
+    });
+    await plugin["tool.execute.before"](
+      { tool: "webfetch", sessionID, callID: "plugin-after-delete-call" },
+      { args: { url: "https://example.com/upload" } },
+    );
+
+    const idleSessionID = "plugin-idle-session";
+    await plugin["tool.execute.before"](
+      { tool: "read", sessionID: idleSessionID, callID: "plugin-idle-read-call" },
+      { args: readArgs },
+    );
+    await plugin.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: idleSessionID },
+      },
+    });
+    await assert.rejects(
+      plugin["tool.execute.before"](
+        { tool: "webfetch", sessionID: idleSessionID, callID: "plugin-idle-egress-call" },
+        { args: { url: "https://example.com/upload" } },
+      ),
+      /sensitive file read/i,
+    );
+    await plugin.event({
+      event: {
+        type: "session.deleted",
+        properties: { info: { id: idleSessionID } },
+      },
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("tool.execute.before blocks enforce-mode review tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-review-"));
   try {
