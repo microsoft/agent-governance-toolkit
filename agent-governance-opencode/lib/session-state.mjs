@@ -76,25 +76,32 @@ export function restoreSessionStateFromAudit(policy, entries) {
     if (!isValidSessionId(sessionId)) {
       continue;
     }
-    if (entry.action === "session.state.cleanup") {
+    if (entry.action === "session.state.cleanup" && entry.decision === "allow") {
       sessions.delete(sessionId);
       continue;
     }
 
-    const match = /^session\.state\.(?:pending|set):([a-z][a-z0-9_]{0,63})$/.exec(
-      entry.action,
-    );
-    const attribute = match?.[1];
-    if (!attribute || !allowedAttributes.has(attribute)) {
+    const match =
+      /^session\.state\.(?:pending|set):([a-z][a-z0-9_]{0,63}(?:,[a-z][a-z0-9_]{0,63})*)$/.exec(
+        entry.action,
+      );
+    const attributes = match?.[1]?.split(",");
+    if (
+      entry.decision !== "allow" ||
+      !attributes?.length ||
+      attributes.some((attribute) => !allowedAttributes.has(attribute))
+    ) {
       continue;
     }
 
-    let attributes = sessions.get(sessionId);
-    if (!attributes) {
-      attributes = new Set();
-      sessions.set(sessionId, attributes);
+    let sessionAttributes = sessions.get(sessionId);
+    if (!sessionAttributes) {
+      sessionAttributes = new Set();
+      sessions.set(sessionId, sessionAttributes);
     }
-    attributes.add(attribute);
+    for (const attribute of attributes) {
+      sessionAttributes.add(attribute);
+    }
   }
 
   return [...sessions].map(([sessionId, attributes]) => ({
@@ -202,18 +209,23 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
     }
 
     const activeAttributes = collectActiveAttributes(entry);
+    let reviewMatch;
     for (const rule of policy.rules) {
       if (
         matchesToolName(rule.tools, toolName) &&
         rule.requires.every((attribute) => activeAttributes.has(attribute))
       ) {
-        return {
+        const result = {
           decision: rule.effect,
           reason: rule.reason,
         };
+        if (result.decision === "deny") {
+          return result;
+        }
+        reviewMatch ??= result;
       }
     }
-    return undefined;
+    return reviewMatch;
   }
 
   function stageToolCall(sessionId, callId, toolName, args) {
@@ -236,11 +248,11 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
     if (attributes.size === 0) {
       return [];
     }
+    const normalizedCallId = requireCallId(callId);
     if (!entry) {
       entry = getEntry(id, { create: true });
     }
 
-    const normalizedCallId = requireCallId(callId);
     if (entry.pendingCalls.has(normalizedCallId)) {
       throw new Error("AGT could not stage session state for a duplicate OpenCode tool call ID.");
     }

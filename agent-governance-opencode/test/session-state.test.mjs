@@ -144,6 +144,7 @@ test("staged reads block concurrent outbound tools and latch state monotonically
 
   const status = await getPolicyStatus(state);
   assert.equal(status.sessionState.enabled, true);
+  assert.equal(status.sessionState.configured, true);
   assert.equal(status.sessionState.trackedSessions, 1);
   assert.equal(status.sessionState.maxPendingAttributesPerSession, 256);
 });
@@ -165,6 +166,24 @@ test("the reference policy allows outbound access only before a sensitive read",
     (await evaluateOpenCodeTool(state, outboundInput("example-session", "after-read"))).effect,
     "deny",
   );
+});
+
+test("transitions are scoped to matching paths and do not create empty session records", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-session-path-scope-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = await writePolicy(root);
+  const state = await loadState(root, policyPath);
+
+  assert.equal(
+    (await evaluateOpenCodeTool(state, {
+      ...readInput("public-session"),
+      args: { filePath: "C:\\data\\public\\readme.txt" },
+      callID: "public-read-call",
+    })).effect,
+    "allow",
+  );
+  assert.equal((await evaluateOpenCodeTool(state, outboundInput("public-session"))).effect, "allow");
+  assert.equal((await getPolicyStatus(state)).sessionState.trackedSessions, 0);
 });
 
 test("session idle finalizes pending latches and tool output cannot reset them", async (t) => {
@@ -193,6 +212,86 @@ test("session idle finalizes pending latches and tool output cannot reset them",
     (await evaluateOpenCodeTool(state, outboundInput("idle-session", "after-idle"))).effect,
     "deny",
   );
+});
+
+test("deny rules take precedence over review rules regardless of policy order", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-session-rule-precedence-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = await writePolicy(root, {
+    sessionState: {
+      ...sessionStatePolicy,
+      rules: [
+        {
+          id: "review-outbound-after-sensitive-read",
+          tools: ["webfetch"],
+          requires: ["sensitive_data_read"],
+          effect: "review",
+          reason: "Review outbound tools after a sensitive file read.",
+        },
+        sessionStatePolicy.rules[0],
+      ],
+    },
+  });
+  const state = await loadState(root, policyPath);
+
+  await evaluateOpenCodeTool(state, readInput("precedence-session"));
+  const result = await evaluateOpenCodeTool(
+    state,
+    outboundInput("precedence-session", "precedence-outbound"),
+  );
+  assert.equal(result.effect, "deny");
+  assert.match(result.reason, /sensitive file read/i);
+});
+
+test("audits multiple staged latches in a single event and restores all of them", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-session-multi-latch-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = await writePolicy(root, {
+    sessionState: {
+      ...sessionStatePolicy,
+      attributes: ["sensitive_data_read", "private_file_read"],
+      transitions: [
+        ...sessionStatePolicy.transitions,
+        {
+          id: "private-path-read",
+          tool: "read",
+          attribute: "private_file_read",
+          pathPatterns: [{ source: "(^|/)personal(/|$)", flags: "i" }],
+        },
+      ],
+    },
+  });
+  const auditPath = join(root, "audit.json");
+  const state = await loadState(root, policyPath, auditPath);
+  const callID = "multi-latch-read";
+
+  assert.equal((await evaluateOpenCodeTool(state, readInput("multi-latch-session", callID))).effect, "allow");
+  assert.deepEqual(getOpenCodeSessionState(state, "multi-latch-session").pendingAttributes, [
+    "private_file_read",
+    "sensitive_data_read",
+  ]);
+  await evaluateOpenCodeToolOutput(state, {
+    tool: "read",
+    output: "private profile",
+    sessionId: "multi-latch-session",
+    callID,
+  });
+
+  const actions = (await loadAuditEntries(auditPath)).map((entry) => entry.action);
+  assert.equal(
+    actions.filter((action) => action === "session.state.pending:private_file_read,sensitive_data_read").length,
+    1,
+  );
+  assert.equal(
+    actions.filter((action) => action === "session.state.set:private_file_read,sensitive_data_read").length,
+    1,
+  );
+
+  const restarted = await loadState(root, policyPath, auditPath);
+  assert.deepEqual(getOpenCodeSessionState(restarted, "multi-latch-session").attributes, [
+    "private_file_read",
+    "sensitive_data_read",
+  ]);
 });
 
 test("restores pending latches from the audit chain and clears state on session deletion", async (t) => {
@@ -266,6 +365,18 @@ test("fails closed when session capacity or pending-call capacity is reached", a
   ]);
 });
 
+test("invalid OpenCode call IDs deny matching transitions without consuming capacity", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-session-call-id-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = await writePolicy(root);
+  const state = await loadState(root, policyPath);
+
+  const result = await evaluateOpenCodeTool(state, readInput("missing-call-id", ""));
+  assert.equal(result.effect, "deny");
+  assert.match(result.reason, /tool call ID/i);
+  assert.equal((await getPolicyStatus(state)).sessionState.trackedSessions, 0);
+});
+
 test("session policy configuration errors deny rather than silently disabling ratchets", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-session-invalid-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -289,7 +400,10 @@ test("session policy configuration errors deny rather than silently disabling ra
   const result = await evaluateOpenCodeTool(state, outboundInput("invalid-policy-session"));
   assert.equal(result.effect, "deny");
   assert.match(result.reason, /could not be initialized/i);
-  assert.match((await getPolicyStatus(state)).sessionState.error, /undeclared attribute/i);
+  const status = await getPolicyStatus(state);
+  assert.equal(status.sessionState.configured, true);
+  assert.equal(status.sessionState.enabled, false);
+  assert.match(status.sessionState.error, /undeclared attribute/i);
 });
 
 test("corrupt audit state fails closed instead of dropping restored latches", async (t) => {

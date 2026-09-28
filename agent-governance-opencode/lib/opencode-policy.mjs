@@ -284,6 +284,7 @@ export async function getPolicyStatus(state) {
     return {
       ...status,
       sessionState: {
+        configured: Boolean(state.policy.raw?.sessionState),
         enabled: false,
         error: state.sessionStateError?.message,
       },
@@ -293,6 +294,7 @@ export async function getPolicyStatus(state) {
   return {
     ...status,
     sessionState: {
+      configured: true,
       enabled: true,
       attributes: [...state.sessionStatePolicy.attributes],
       ...state.sessionStateRuntime.status(),
@@ -348,14 +350,16 @@ async function denySessionStateEvaluation(state, sessionId, reason) {
 }
 
 async function recordSessionStateAttributes(state, sessionId, stage, attributes) {
-  for (const attribute of attributes) {
-    await recordSessionStateEvent(
-      state,
-      sessionId,
-      `session.state.${stage}:${attribute}`,
-      "allow",
-    );
+  if (attributes.length === 0) {
+    return;
   }
+  const serializedAttributes = [...new Set(attributes)].sort().join(",");
+  await recordSessionStateEvent(
+    state,
+    sessionId,
+    `session.state.${stage}:${serializedAttributes}`,
+    "allow",
+  );
 }
 
 async function recordSessionStateEvent(state, sessionId, action, decision) {
