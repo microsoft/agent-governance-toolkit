@@ -159,6 +159,24 @@ hashed over a canonical form with keys sorted by UTF-16 code unit, the ordering
 [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) specifies, so an external
 verifier can reproduce a hash without knowing property insertion order.
 
+**Rollover.** The log keeps the most recent 10,000 entries. When it rolls over,
+the file changes from a bare array to `{ "seamHash": "<hex>", "entries": [...] }`,
+where `seamHash` is the hash of the last evicted entry. The surviving head
+anchors to that seam instead of to the genesis hash, so the chain stays
+verifiable across an eviction. A file that has never rolled over stays a bare
+array and is always anchored to the genesis hash, so a bare array whose head
+does not anchor to genesis fails verification.
+
+The chain is unkeyed, so this raises the cost of editing a log rather than
+preventing it. Someone who can rewrite the file can also rewrap it as
+`{ "seamHash": "<hash of the entry before the new head>", "entries": [...] }`
+and it will verify. Detecting that needs a signature or an external anchor,
+neither of which this format has.
+
+If a log was already broken by the earlier rollover behaviour, it stays
+unverifiable and appends keep failing, which is intended. Move that file aside
+and let a new one start.
+
 **The upgrade is one way.** Once a version 2 entry is written to a file, an
 older release cannot verify that file. Because a failed chain denies every
 request, downgrading after an upgrade means moving the audit file aside first.
@@ -303,7 +321,8 @@ reference policy at `config/session-state-policy.example.json` allows a
 - Committed and pending latch events are written to the hash-chained AGT audit
   log and replayed on plugin initialization. Keep that audit log to preserve
   state across restarts. An invalid audit chain or invalid session-state policy
-  fails closed.
+  fails closed. Replay only covers the retained window, so a latch older than
+  the retention limit is lost on restart; see the retention note below.
 - State is held per OpenCode session, with `maxSessions` defaulting to 1024
   (maximum 4096) and `maxPendingCallsPerSession` defaulting to 64 (maximum
   256); pending attribute references are additionally capped at 256 per
@@ -321,13 +340,16 @@ reference policy at `config/session-state-policy.example.json` allows a
   the same audit file; the audit writer does not coordinate cross-process
   read-modify-write updates.
 
-The audit writer retains at most 10,000 entries but currently does not preserve
-a verifiable prefix anchor when it trims the oldest entry. The append that
-crosses that limit makes the retained chain unverifiable, and subsequent
-governance evaluations fail closed rather than resetting session latches.
-Repairing audit-chain rollover is outside this change and must be addressed in
-the shared audit implementation before relying on higher-volume persistent
-session state.
+The audit writer retains at most 10,000 entries. Rollover now preserves a
+verifiable anchor, so the chain stays valid across the trim and governance
+keeps working past that point. See "Audit evidence" above for the file shape.
+
+Replay only sees the retained window, so a latch whose events have scrolled
+out of it is not restored on restart. A session that read sensitive data more
+than 10,000 entries ago therefore comes back without that latch and its
+outbound tools are allowed again. On a busy log, treat the retention limit as
+the lifetime of persisted session state, and lower the limit or export the log
+if a latch needs to outlive it.
 
 ## Important parity notes
 

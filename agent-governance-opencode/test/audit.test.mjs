@@ -11,6 +11,8 @@ import test from "node:test";
 import {
   AUDIT_ARGS_DIGEST_MAX_BYTES,
   appendAuditEntry,
+  getAuditStatus,
+  loadAuditFile,
   canonicalJson,
   computeArgsDigest,
   loadAuditEntries,
@@ -329,4 +331,112 @@ test("raw arguments never reach the audit file", async (t) => {
 
   const contents = await readFile(path, "utf8");
   assert.equal(contents.includes(secret), false);
+});
+
+test("rollover keeps the surviving log verifiable", async (t) => {
+  const path = await auditFile(t);
+  const limit = 5;
+
+  // One more than the limit, so exactly one entry is evicted.
+  for (let i = 0; i < limit + 1; i += 1) {
+    await appendAuditEntry(path, { agentId: "opencode:s", action: `a${i}`, decision: "allow" }, { limit });
+  }
+
+  const { seamHash, entries } = await loadAuditFile(path);
+  assert.equal(entries.length, limit, "the log must stay at the limit");
+  assert.match(seamHash, /^[0-9a-f]{64}$/, "the evicted hash must be kept as a seam");
+  assert.equal(entries[0].previousHash, seamHash, "the head must anchor to the seam");
+  assert.equal(verifyAuditEntries(entries, seamHash), true);
+
+  // The real regression: the next write must not throw.
+  await appendAuditEntry(path, { agentId: "opencode:s", action: "next", decision: "deny" }, { limit });
+  const after = await loadAuditFile(path);
+  assert.equal(verifyAuditEntries(after.entries, after.seamHash), true);
+  assert.equal((await getAuditStatus(path)).valid, true);
+});
+
+test("rollover survives many evictions", async (t) => {
+  const path = await auditFile(t);
+  const limit = 3;
+
+  for (let i = 0; i < 20; i += 1) {
+    await appendAuditEntry(path, { agentId: "opencode:s", action: `a${i}`, decision: "allow" }, { limit });
+  }
+
+  const { seamHash, entries } = await loadAuditFile(path);
+  assert.equal(entries.length, limit);
+  assert.equal(verifyAuditEntries(entries, seamHash), true);
+  assert.equal(entries.at(-1).action, "a19");
+});
+
+test("rollover across the v1 boundary keeps the log verifiable", async (t) => {
+  const path = await auditFile(t);
+  const limit = 3;
+
+  // A log that starts with entries written by an earlier release.
+  const first = makeV1Entry({ action: "legacy-0" });
+  const second = makeV1Entry({ action: "legacy-1", previousHash: first.hash });
+  await writeEntries(path, [first, second]);
+
+  // Append until both v1 entries have been evicted.
+  for (let i = 0; i < 4; i += 1) {
+    await appendAuditEntry(path, { agentId: "opencode:s", action: `v2-${i}`, decision: "allow" }, { limit });
+  }
+
+  const { seamHash, entries } = await loadAuditFile(path);
+  assert.equal(entries.length, limit);
+  assert.equal(entries.every((entry) => entry.v === 2), true, "the v1 prefix should be gone");
+  assert.equal(verifyAuditEntries(entries, seamHash), true);
+});
+
+test("a log that has never rolled over stays a bare array", async (t) => {
+  const path = await auditFile(t);
+  await appendAuditEntry(path, { agentId: "opencode:s", action: "a", decision: "allow" });
+
+  const parsed = JSON.parse(await readFile(path, "utf8"));
+  assert.equal(Array.isArray(parsed), true, "format must not change before the first rollover");
+});
+
+test("a bare array is always anchored to GENESIS", async (t) => {
+  const path = await auditFile(t);
+  const limit = 3;
+  for (let i = 0; i < 5; i += 1) {
+    await appendAuditEntry(path, { agentId: "opencode:s", action: `a${i}`, decision: "allow" }, { limit });
+  }
+
+  // Strip the seam and keep only the entries, which is what deleting a prefix
+  // of the log looks like. Re-anchoring the survivors to GENESIS must fail.
+  const { entries } = await loadAuditFile(path);
+  await writeEntries(path, entries);
+
+  assert.equal(verifyAuditEntries(await loadAuditEntries(path)), false);
+  assert.equal((await getAuditStatus(path)).valid, false);
+});
+
+test("a tampered seam fails verification", async (t) => {
+  const path = await auditFile(t);
+  const limit = 2;
+  for (let i = 0; i < 4; i += 1) {
+    await appendAuditEntry(path, { agentId: "opencode:s", action: `a${i}`, decision: "allow" }, { limit });
+  }
+
+  const { entries } = await loadAuditFile(path);
+  assert.equal(verifyAuditEntries(entries, "f".repeat(64)), false);
+});
+
+test("an unusable entry limit is refused", async (t) => {
+  const path = await auditFile(t);
+  for (const limit of [0, -1, 1.5, "10", null]) {
+    await assert.rejects(
+      () => appendAuditEntry(path, { agentId: "a", action: "b", decision: "allow" }, { limit }),
+      /positive integer/,
+      String(limit),
+    );
+  }
+});
+
+test("an unrecognised audit format is rejected", async (t) => {
+  const path = await auditFile(t);
+  await writeFile(path, JSON.stringify({ notEntries: [] }), "utf8");
+  await assert.rejects(() => loadAuditFile(path), /not a recognised audit format/);
 });
