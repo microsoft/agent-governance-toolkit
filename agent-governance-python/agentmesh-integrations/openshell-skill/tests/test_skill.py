@@ -338,13 +338,9 @@ def test_interception_is_restored_after_context() -> None:
 
 def test_interception_is_restored_when_body_raises() -> None:
     original_run = subprocess.run
-    try:
+    with pytest.raises(RuntimeError, match="body failed"):
         with governed_shell(GovernanceSkill(FakeControl())):
             raise RuntimeError("body failed")
-    except RuntimeError as exc:
-        assert str(exc) == "body failed"
-    else:
-        pytest.fail("governed body did not raise")
     assert subprocess.run is original_run
 
 
