@@ -10,6 +10,7 @@ const MAX_TOOL_NAMES = 64;
 const MAX_ARGUMENT_KEYS = 32;
 const MAX_REGEX_LENGTH = 2048;
 const MAX_PENDING_ATTRIBUTE_REFERENCES_PER_SESSION = 256;
+const MAX_RESTORED_QUARANTINED_SESSIONS = 10000;
 const MAX_SESSION_ID_LENGTH = 256;
 const MAX_CALL_ID_LENGTH = 256;
 const DEFAULT_ARGUMENT_KEYS = ["filePath", "file_path", "path"];
@@ -61,6 +62,7 @@ export function compileSessionStatePolicy(raw) {
 export function restoreSessionStateFromAudit(policy, entries) {
   const allowedAttributes = new Set(policy.attributes);
   const sessions = new Map();
+  const quarantinedSessionIds = new Set();
   const agentPrefix = `${DEFAULT_AGENT_ID}:`;
 
   for (const entry of entries) {
@@ -78,6 +80,7 @@ export function restoreSessionStateFromAudit(policy, entries) {
     }
     if (entry.action === "session.state.cleanup" && entry.decision === "allow") {
       sessions.delete(sessionId);
+      quarantinedSessionIds.delete(sessionId);
       continue;
     }
 
@@ -94,30 +97,71 @@ export function restoreSessionStateFromAudit(policy, entries) {
       continue;
     }
 
+    if (quarantinedSessionIds.has(sessionId)) {
+      continue;
+    }
+
     let sessionAttributes = sessions.get(sessionId);
     if (!sessionAttributes) {
+      if (sessions.size >= policy.maxSessions) {
+        const oldestSessionId = sessions.keys().next().value;
+        sessions.delete(oldestSessionId);
+        quarantinedSessionIds.add(oldestSessionId);
+        if (quarantinedSessionIds.size > MAX_RESTORED_QUARANTINED_SESSIONS) {
+          throw new Error(
+            `Restored session quarantine exceeds ${MAX_RESTORED_QUARANTINED_SESSIONS} sessions.`,
+          );
+        }
+      }
       sessionAttributes = new Set();
-      sessions.set(sessionId, sessionAttributes);
+    } else {
+      sessions.delete(sessionId);
     }
     for (const attribute of attributes) {
       sessionAttributes.add(attribute);
     }
+    sessions.set(sessionId, sessionAttributes);
   }
 
-  return [...sessions].map(([sessionId, attributes]) => ({
-    attributes: [...attributes],
-    sessionId,
-  }));
+  return {
+    quarantinedSessionIds: [...quarantinedSessionIds],
+    sessions: [...sessions].map(([sessionId, attributes]) => ({
+      attributes: [...attributes],
+      sessionId,
+    })),
+  };
 }
 
-export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}) {
+export function createSessionStateRuntime(
+  policy,
+  { restoredSessions = [], quarantinedSessionIds: restoredQuarantinedIds = [] } = {},
+) {
   const sessions = new Map();
   const sessionQueues = new Map();
+  const quarantinedSessionIds = new Set();
   const configuredAttributes = new Set(policy.attributes);
+
+  if (
+    !Array.isArray(restoredQuarantinedIds) ||
+    restoredQuarantinedIds.length > MAX_RESTORED_QUARANTINED_SESSIONS
+  ) {
+    throw new Error(
+      `Restored session quarantine must contain at most ${MAX_RESTORED_QUARANTINED_SESSIONS} session IDs.`,
+    );
+  }
+  for (const sessionId of restoredQuarantinedIds) {
+    if (!isValidSessionId(sessionId)) {
+      throw new Error("The audit log contains an invalid quarantined session ID.");
+    }
+    quarantinedSessionIds.add(sessionId);
+  }
 
   for (const restored of restoredSessions) {
     if (!isValidSessionId(restored?.sessionId)) {
       throw new Error("The audit log contains an invalid session-state session ID.");
+    }
+    if (quarantinedSessionIds.has(restored.sessionId)) {
+      throw new Error("A session cannot be both restored and quarantined.");
     }
 
     const attributes = new Set(
@@ -151,6 +195,9 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
 
   function getEntry(sessionId, { create = false } = {}) {
     const id = requireSessionId(sessionId);
+    if (quarantinedSessionIds.has(id)) {
+      throw new Error(getQuarantinedSessionReason(id));
+    }
     let entry = sessions.get(id);
     if (entry || !create) {
       return entry;
@@ -197,6 +244,12 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
 
   function evaluateTool(sessionId, toolName) {
     const id = requireSessionId(sessionId);
+    if (quarantinedSessionIds.has(id)) {
+      return {
+        decision: "deny",
+        reason: getQuarantinedSessionReason(id),
+      };
+    }
     const entry = sessions.get(id);
     if (!entry) {
       return undefined;
@@ -230,6 +283,9 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
 
   function stageToolCall(sessionId, callId, toolName, args) {
     const id = requireSessionId(sessionId);
+    if (quarantinedSessionIds.has(id)) {
+      throw new Error(getQuarantinedSessionReason(id));
+    }
     let entry = sessions.get(id);
     if (entry?.quarantinedReason) {
       throw new Error(entry.quarantinedReason);
@@ -277,6 +333,9 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
   }
 
   function completeToolCall(sessionId, callId) {
+    if (quarantinedSessionIds.has(requireSessionId(sessionId))) {
+      return [];
+    }
     const entry = getEntry(sessionId);
     if (!entry) {
       return [];
@@ -304,6 +363,9 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
   }
 
   function finalizePendingCalls(sessionId) {
+    if (quarantinedSessionIds.has(requireSessionId(sessionId))) {
+      return [];
+    }
     const entry = getEntry(sessionId);
     if (!entry || entry.pendingCalls.size === 0) {
       return [];
@@ -333,6 +395,9 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
 
   function removeSession(sessionId) {
     const id = requireSessionId(sessionId);
+    if (quarantinedSessionIds.delete(id)) {
+      return { hadState: true };
+    }
     const entry = sessions.get(id);
     if (!entry) {
       return undefined;
@@ -344,6 +409,14 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
   }
 
   function snapshot(sessionId) {
+    const id = requireSessionId(sessionId);
+    if (quarantinedSessionIds.has(id)) {
+      return Object.freeze({
+        attributes: Object.freeze([]),
+        pendingAttributes: Object.freeze([]),
+        quarantined: true,
+      });
+    }
     const entry = getEntry(sessionId);
     if (!entry) {
       return undefined;
@@ -361,6 +434,7 @@ export function createSessionStateRuntime(policy, { restoredSessions = [] } = {}
       maxPendingCallsPerSession: policy.maxPendingCallsPerSession,
       maxPendingAttributesPerSession: MAX_PENDING_ATTRIBUTE_REFERENCES_PER_SESSION,
       maxSessions: policy.maxSessions,
+      quarantinedSessions: quarantinedSessionIds.size,
       trackedSessions: sessions.size,
     });
   }
@@ -663,6 +737,10 @@ function requireSessionId(sessionId) {
     );
   }
   return sessionId;
+}
+
+function getQuarantinedSessionReason(sessionId) {
+  return `AGT session state for '${sessionId}' was not restored because the configured session capacity was exceeded. Delete this OpenCode session to release its quarantine.`;
 }
 
 function requireCallId(callId) {

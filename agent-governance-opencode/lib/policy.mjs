@@ -1677,7 +1677,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
  *
  * @param {object} state Loaded policy state from {@link loadPolicy}.
  * @param {{ tool: string, args?: object, cwd?: string, sessionId?: string }} input
- * @returns {Promise<{ effect: "allow"|"review"|"deny", reason: string }>}
+ * @returns {Promise<{ effect: "allow"|"review"|"deny", reason: string, policyError?: boolean }>}
  */
 export async function evaluateOpenCodeTool(state, input = {}) {
   const policyLoadFailure = getPolicyLoadFailure(state);
@@ -1721,11 +1721,13 @@ export async function evaluateOpenCodeTool(state, input = {}) {
       return {
         effect: "deny",
         reason: `AGT tool evaluation failed closed: ${error instanceof Error ? error.message : String(error)}`,
+        policyError: true,
       };
     }
     return {
       effect: "allow",
       reason: `AGT advisory: tool evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
+      policyError: true,
     };
   }
 }

@@ -90,6 +90,66 @@ test("plugin initialization fails loudly for a missing configured policy", async
   }
 });
 
+test("plugin registers fail-closed hooks when session-state restoration fails", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-session-state-init-error-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "session-policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: { allowedTools: ["read"], defaultEffect: "deny" },
+      sessionState: {
+        attributes: ["sensitive_data_read"],
+        transitions: [
+          { id: "sensitive-read", tool: "read", attribute: "sensitive_data_read" },
+        ],
+        rules: [
+          {
+            id: "deny-reads-after-sensitive-read",
+            tools: ["read"],
+            requires: ["sensitive_data_read"],
+            effect: "deny",
+            reason: "The session already read sensitive data.",
+          },
+        ],
+      },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(root, "audit.json"),
+    JSON.stringify([
+      {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        agentId: "opencode:broken-audit-session",
+        action: "session.state.set:sensitive_data_read",
+        decision: "allow",
+        previousHash: "1".repeat(64),
+        hash: "2".repeat(64),
+      },
+    ]),
+    "utf8",
+  );
+
+  const plugin = await loadPlugin(root, { policyPath });
+  assert.equal(typeof plugin.event, "function");
+  assert.equal(typeof plugin["tool.execute.before"], "function");
+  const status = JSON.parse(await plugin.tool.agt_policy_status.execute({}));
+  assert.equal(status.sessionState.configured, true);
+  assert.equal(status.sessionState.enabled, false);
+  assert.match(status.sessionState.error, /failed hash-chain verification/i);
+
+  await assert.rejects(
+    plugin["tool.execute.before"](
+      { tool: "read", sessionID: "broken-audit-session", callID: "blocked-call" },
+      { args: { filePath: "C:\\data\\public\\readme.txt" } },
+    ),
+    /session-scoped policy could not be initialized/i,
+  );
+});
+
 test("failed initialization does not suppress later registrations", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-retry-"));
   const client = { app: { log: async () => {} } };

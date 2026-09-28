@@ -70,8 +70,11 @@ export async function loadPolicy(options = {}) {
         throw new Error(`Audit log at ${state.auditPath} failed hash-chain verification.`);
       }
 
-      const restoredSessions = restoreSessionStateFromAudit(sessionStatePolicy, auditEntries);
-      const runtime = createSessionStateRuntime(sessionStatePolicy, { restoredSessions });
+      const restoredState = restoreSessionStateFromAudit(sessionStatePolicy, auditEntries);
+      const runtime = createSessionStateRuntime(sessionStatePolicy, {
+        restoredSessions: restoredState.sessions,
+        quarantinedSessionIds: restoredState.quarantinedSessionIds,
+      });
       state.sessionStatePolicy = sessionStatePolicy;
       state.sessionStateRuntime = runtime;
       state.policyEngine.registerBackend(createSessionStateBackend(runtime));
@@ -123,11 +126,12 @@ export async function evaluateOpenCodeTool(state, input = {}) {
       if (result.effect === "deny") {
         return result;
       }
-      if (/^AGT advisory: (?:policy|tool) evaluation failed:/i.test(result.reason)) {
-        return {
-          effect: "deny",
-          reason: `AGT session-state evaluation failed closed. ${result.reason}`,
-        };
+      if (result.policyError) {
+        return denySessionStateEvaluation(
+          state,
+          input.sessionId,
+          `AGT session-state evaluation failed closed. ${result.reason}`,
+        );
       }
 
       let attributes;
@@ -265,7 +269,11 @@ export async function cleanupOpenCodeSessionState(state, sessionId) {
         return false;
       }
 
-      if (snapshot.attributes.length > 0 || snapshot.pendingAttributes.length > 0) {
+      if (
+        snapshot.quarantined ||
+        snapshot.attributes.length > 0 ||
+        snapshot.pendingAttributes.length > 0
+      ) {
         await recordSessionStateEvent(state, sessionId, "session.state.cleanup", "allow");
       }
       runtime.removeSession(sessionId);

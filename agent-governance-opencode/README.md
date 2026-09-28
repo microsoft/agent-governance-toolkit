@@ -202,10 +202,15 @@ reference policy at `config/session-state-policy.example.json` allows a
   stages its latch in `tool.execute.before`; the pending latch immediately
   participates in `rules`, so concurrent outbound calls in that session are
   blocked while the read is in flight. `tool.execute.after` commits the latch.
-- A transition matches the tool name and, when `pathPatterns` is present, one
-  of the configured top-level path arguments. The default argument keys are
-  `filePath`, `file_path`, and `path`; `argumentKeys` can override them. Without
-  `pathPatterns`, every completed call to the configured tool matches.
+- A transition matches the tool name (`*` matches any tool) and, when
+  `pathPatterns` is present, one of the configured top-level path arguments.
+  The default argument keys are `filePath`, `file_path`, and `path`;
+  `argumentKeys` can override them. Without `pathPatterns`, every call to the
+  configured tool matches.
+- Path matching is lexical: transitions do not resolve symlinks or inspect
+  paths embedded in shell commands or other tool arguments. Use transitions
+  with tools that expose the resource path directly, and pair them with
+  command policy when shell tools can read the same sensitive data.
 - Latches can only move from unset to set. Tool output is never parsed to
   create, clear, or downgrade state. Because OpenCode's tool hook does not
   expose a reliable success flag, a matching transition is finalized when
@@ -218,12 +223,27 @@ reference policy at `config/session-state-policy.example.json` allows a
 - State is held per OpenCode session, with `maxSessions` defaulting to 1024
   (maximum 4096) and `maxPendingCallsPerSession` defaulting to 64 (maximum
   256); pending attribute references are additionally capped at 256 per
-  session. Reaching a limit denies the affected call; active state is never
-  evicted to make room. Deleted sessions are removed and recorded in the audit
-  log.
+  session. When audit replay finds more latched sessions than `maxSessions`,
+  it restores the most recently changed sessions and quarantines older session
+  IDs. Quarantined sessions are denied until OpenCode emits `session.deleted`;
+  state is never silently dropped to permit those sessions to continue. At
+  runtime, reaching the state limit denies new transitions rather than
+  evicting a tracked session. Deleted sessions are removed and recorded in the
+  audit log.
 - With `sessionState` enabled, tool evaluations sharing the audit path are
   serialized within the process so staged transitions and audit-chain updates
-  stay ordered; each session retains an independent latch set.
+  stay ordered; each session retains an independent latch set. This lock is
+  process-local. Do not run multiple OpenCode processes concurrently against
+  the same audit file; the audit writer does not coordinate cross-process
+  read-modify-write updates.
+
+The audit writer retains at most 10,000 entries but currently does not preserve
+a verifiable prefix anchor when it trims the oldest entry. The append that
+crosses that limit makes the retained chain unverifiable, and subsequent
+governance evaluations fail closed rather than resetting session latches.
+Repairing audit-chain rollover is outside this change and must be addressed in
+the shared audit implementation before relying on higher-volume persistent
+session state.
 
 ## Important parity notes
 

@@ -64,14 +64,12 @@ export const AgtGovernance = async (ctx) => {
 
   const initialState = await getState();
   const initializationError = getPolicyInitializationError(initialState);
-  if (
-    initializationError &&
-    (initialState.policy.denyOnPolicyError || initialState.sessionStateError)
-  ) {
+  if (initializationError && initialState.policy.denyOnPolicyError && !initialState.sessionStateError) {
     throw new Error(initializationError);
   }
 
-  // Failed policy initialization must not claim a successful registration.
+  // Base-policy initialization errors still fail registration. Session-state
+  // restore errors keep fail-closed hooks active so OpenCode does not drop AGT.
   const registration = claimRegistration(ctx);
   if (registration.duplicate) {
     await logDuplicateRegistration(ctx, registration.workspace);
