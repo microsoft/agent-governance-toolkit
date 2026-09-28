@@ -7,7 +7,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const GENESIS_HASH = "0".repeat(64);
-const MAX_ENTRIES = 10000;
+export const MAX_ENTRIES = 10000;
 
 /**
  * Schema version stamped on every entry this module writes.
@@ -55,12 +55,20 @@ const V2_REQUIRED_STRINGS = ["timestamp", "agentId", "action", "decision", "prev
 const V2_DIGEST_ALGORITHMS = new Set(["sha256", "hmac-sha256"]);
 const PRINCIPAL_ALLOWED_KEYS = new Set(["sub", "iss"]);
 
-export async function appendAuditEntry(auditPath, entry) {
-  const entries = await loadAuditEntries(auditPath);
-  if (!verifyAuditEntries(entries)) {
+export async function appendAuditEntry(auditPath, entry, options = {}) {
+  const { limit = MAX_ENTRIES } = options ?? {};
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new TypeError(
+      `Audit entry limit must be a positive integer, received ${String(limit)}.`,
+    );
+  }
+
+  const { seamHash, entries } = await loadAuditFile(auditPath);
+  if (!verifyAuditEntries(entries, seamHash)) {
     throw new Error(`Audit log at ${auditPath} failed hash-chain verification.`);
   }
-  const previousHash = entries.length > 0 ? entries[entries.length - 1].hash : GENESIS_HASH;
+  const previousHash =
+    entries.length > 0 ? entries[entries.length - 1].hash : seamHash ?? GENESIS_HASH;
   const timestamp = new Date().toISOString();
 
   // Only known fields are copied across; spreading the caller's object would
@@ -87,8 +95,21 @@ export async function appendAuditEntry(auditPath, entry) {
   }
 
   const nextEntry = { ...record, hash: hashCanonicalRecord(record) };
-  const nextEntries = [...entries, nextEntry].slice(-MAX_ENTRIES);
-  await writeAuditEntries(auditPath, nextEntries);
+
+  const combined = [...entries, nextEntry];
+  let nextSeam = seamHash;
+  let nextEntries = combined;
+  if (combined.length > limit) {
+    // Keep the hash of the last evicted entry as a seam, so the surviving head
+    // still has something to anchor to. Dropping it re-anchored the head to
+    // GENESIS, which failed verification on the next read and, because the
+    // plugin fails closed on audit errors, denied every request from then on.
+    const overflow = combined.length - limit;
+    nextSeam = combined[overflow - 1].hash;
+    nextEntries = combined.slice(overflow);
+  }
+
+  await writeAuditFile(auditPath, nextSeam, nextEntries);
   return nextEntry;
 }
 
@@ -248,8 +269,8 @@ function serializeCanonical(value, lenient, maxDepth, depth, ancestors) {
 
 export async function getAuditStatus(auditPath) {
   try {
-    const entries = await loadAuditEntries(auditPath);
-    const valid = verifyAuditEntries(entries);
+    const { seamHash, entries } = await loadAuditFile(auditPath);
+    const valid = verifyAuditEntries(entries, seamHash);
     return {
       count: entries.length,
       error: valid ? undefined : `Audit log at ${auditPath} failed hash-chain verification.`,
@@ -264,18 +285,34 @@ export async function getAuditStatus(auditPath) {
   }
 }
 
-export async function loadAuditEntries(auditPath) {
+/**
+ * Read the audit file in either shape it can take.
+ *
+ * A bare array is the format written before any rollover, and it is always
+ * anchored to GENESIS. Deriving a seam from its own head instead would let
+ * anyone delete a prefix of the log and still verify.
+ */
+export async function loadAuditFile(auditPath) {
   if (!auditPath || !existsSync(auditPath)) {
-    return [];
+    return { seamHash: null, entries: [] };
   }
 
   try {
     const text = await readFile(auditPath, "utf8");
     const value = JSON.parse(text);
-    if (!Array.isArray(value)) {
-      throw new Error(`Audit log at ${auditPath} is not a JSON array.`);
+    if (Array.isArray(value)) {
+      return { seamHash: null, entries: value };
     }
-    return value;
+    if (isObject(value) && Array.isArray(value.entries)) {
+      // A legacy array rewritten into this shape with a matching seam is
+      // accepted by design. The chain is unkeyed, so it cannot authenticate
+      // the format or catch someone who recomputes the anchor and the hashes.
+      return {
+        seamHash: typeof value.seamHash === "string" ? value.seamHash : null,
+        entries: value.entries,
+      };
+    }
+    throw new Error(`Audit log at ${auditPath} is not a recognised audit format.`);
   } catch (error) {
     throw new Error(
       `Audit log at ${auditPath} is unreadable or corrupt: ${error instanceof Error ? error.message : String(error)}`,
@@ -283,7 +320,11 @@ export async function loadAuditEntries(auditPath) {
   }
 }
 
-export function verifyAuditEntries(entries) {
+export async function loadAuditEntries(auditPath) {
+  return (await loadAuditFile(auditPath)).entries;
+}
+
+export function verifyAuditEntries(entries, seamHash = null) {
   if (!Array.isArray(entries)) {
     return false;
   }
@@ -292,7 +333,7 @@ export function verifyAuditEntries(entries) {
 
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
-    const expectedPrev = index === 0 ? GENESIS_HASH : entries[index - 1].hash;
+    const expectedPrev = index === 0 ? seamHash ?? GENESIS_HASH : entries[index - 1].hash;
     if (!isObject(entry) || entry.previousHash !== expectedPrev) {
       return false;
     }
@@ -469,9 +510,12 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
-async function writeAuditEntries(auditPath, entries) {
+async function writeAuditFile(auditPath, seamHash, entries) {
   await mkdir(dirname(auditPath), { recursive: true });
+  // Stay in the bare-array format until the first rollover, so a file that has
+  // never rolled over is byte-identical to what earlier releases wrote.
+  const payload = seamHash === null ? entries : { seamHash, entries };
   const tempPath = `${auditPath}.tmp-${process.pid}`;
-  await writeFile(tempPath, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+  await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   await rename(tempPath, auditPath);
 }

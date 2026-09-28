@@ -159,6 +159,14 @@ hashed over a canonical form with keys sorted by UTF-16 code unit, the ordering
 [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) specifies, so an external
 verifier can reproduce a hash without knowing property insertion order.
 
+**Rollover.** The log keeps the most recent 10,000 entries. When it rolls over,
+the file changes from a bare array to `{ "seamHash": "<hex>", "entries": [...] }`,
+where `seamHash` is the hash of the last evicted entry. The surviving head
+anchors to that seam instead of to the genesis hash, so the chain stays
+verifiable across an eviction. A file that has never rolled over stays a bare
+array and is always anchored to the genesis hash: deriving a seam from a bare
+array's own head would let anyone delete a prefix of the log and still verify.
+
 **The upgrade is one way.** Once a version 2 entry is written to a file, an
 older release cannot verify that file. Because a failed chain denies every
 request, downgrading after an upgrade means moving the audit file aside first.
