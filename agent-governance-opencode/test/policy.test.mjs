@@ -340,6 +340,17 @@ test("bundled recursive-delete policy denies common flag orderings", async (t) =
     "echo \"`rm -rf /srv`\"",
     'echo "$(echo "$(echo hi)")"; rm -rf /srv',
     'echo "`echo "`echo hi`"`"; rm -rf /srv',
+    "# don't run cleanup below\nrm -rf /srv",
+    "echo safe # don't run cleanup below\nrm -rf /srv",
+    "echo hi # \\\nrm -rf /srv",
+    "{ echo hi; }#\nrm -rf /srv",
+    "echo ${#x}; rm -rf /srv",
+    "if [ ${#arr[@]} -gt 0 ]; then rm -rf /srv; fi",
+    "echo $(echo hi)#; rm -rf /srv",
+    "echo `echo hi`#; rm -rf /srv",
+    "echo ${x}#; rm -rf /srv",
+    "echo `echo $(echo hi # c`; rm -rf /",
+    "echo `echo hi # c`; rm -rf /srv",
     "x=\"$(rm -rf /srv)\"",
     "sudo -u root rm -rf /srv",
     "sudo -Hu root rm -rf /srv",
@@ -384,11 +395,13 @@ test("bundled recursive-delete policy keeps command boundaries and safe cleanup 
     { command: "rm --one-file-system --force /srv", matchedRecursiveDelete: false },
     { command: "rm -rf --interactive=never node_modules", matchedRecursiveDelete: false },
     { command: "rm -rf node_modules 2>/dev/null", matchedRecursiveDelete: true },
+    { command: "rm -rf node_modules # safe cleanup", matchedRecursiveDelete: false },
     { command: "rm -r /tmp && rm -f /tmp", matchedRecursiveDelete: false },
     { command: "rm -rf node_modules", matchedRecursiveDelete: false },
     { command: "git rm -rf --cached dir", matchedRecursiveDelete: false },
     { command: "echo rm -rf /", matchedRecursiveDelete: false },
     { command: "echo '; rm -rf /'", matchedRecursiveDelete: false },
+    { command: "echo \"# don't rm -rf /srv\"", matchedRecursiveDelete: false },
     { command: "grep -r 'rm -rf' src", matchedRecursiveDelete: false },
     { command: "rm -rf node_modules /", matchedRecursiveDelete: true },
     { command: "rm -rf node_modules ~/*", matchedRecursiveDelete: true },
@@ -457,6 +470,49 @@ test("user recursive-delete rules retain their custom command patterns", async (
     assert.equal(result.effect, "deny", command);
     assert.match(result.reason, /Custom recursive-delete command is blocked/, command);
   }
+});
+
+test("advisory recursive-delete policy ignores quoted text in shell comments", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-commented-recursive-delete-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "advisory",
+      toolPolicies: {
+        allowedTools: ["bash"],
+        blockedTools: [],
+        reviewTools: [],
+        defaultEffect: "allow",
+      },
+      blockedToolCalls: [
+        {
+          id: "recursive-delete",
+          tool: "bash",
+          reason: "Recursive delete commands outside common build artifacts are blocked by AGT policy.",
+          effect: "deny",
+          commandPatterns: [],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  const state = await loadPolicy({
+    policyPath,
+    auditPath: join(root, "audit.json"),
+    homeDirectory: root,
+  });
+  const result = await evaluateOpenCodeTool(state, {
+    tool: "bash",
+    args: { command: "# don't run cleanup below\nrm -rf /srv" },
+    cwd: root,
+    sessionId: "commented-recursive-delete-session",
+  });
+
+  assert.equal(result.effect, "deny");
+  assert.match(result.reason, /Recursive delete commands outside common build artifacts/);
 });
 
 test("bundled recursive-delete matcher stays fast on multi-command scripts", async (t) => {

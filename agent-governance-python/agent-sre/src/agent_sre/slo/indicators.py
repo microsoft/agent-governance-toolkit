@@ -210,6 +210,14 @@ class ResponseLatency(SLI):
         idx = min(idx, len(sorted_vals) - 1)
         return sorted_vals[idx]
 
+    def compliance(self) -> float | None:
+        """Fraction of measurements at or below the target (lower is better)."""
+        values = self.values_in_window()
+        if not values:
+            return None
+        good = sum(1 for v in values if v.value <= self.target)
+        return good / len(values)
+
     def collect(self) -> SLIValue:
         val = self.current_value()
         return self.record(val if val is not None else 0.0)
@@ -234,6 +242,14 @@ class CostPerTask(SLI):
         self._task_count += 1
         avg = self._total_cost / self._task_count
         return self.record(avg, metadata)
+
+    def compliance(self) -> float | None:
+        """Fraction of measurements at or below the target (lower is better)."""
+        values = self.values_in_window()
+        if not values:
+            return None
+        good = sum(1 for v in values if v.value <= self.target)
+        return good / len(values)
 
     def collect(self) -> SLIValue:
         avg = self._total_cost / self._task_count if self._task_count > 0 else 0.0

@@ -136,6 +136,7 @@ EigenTrust
 Entra
 Errno
 Errorf
+Español
 FAKEFORTESTING
 FFDH
 FIPS
@@ -1292,7 +1293,13 @@ chrono
 pastey
 schemars
 
-# Healthcare identifier detection
+# --- Healthcare identifier terms used in HIPAA pattern matching and tests ---
 HPID
 hpid
 Luhn
+luhn
+NPPES
+xmrn
+
+# International Traffic in Arms Regulations
+ITAR

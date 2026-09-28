@@ -1454,6 +1454,37 @@ function tokenizeShellCommands(commandText) {
       continue;
     }
 
+    const hashFollowsExpansionSyntax = ["{", "}", ")", "`"].includes(input[index - 1]);
+    if (character === "#" && !tokenStarted && !hashFollowsExpansionSyntax) {
+      const insideBacktickSubstitution = substitutions.some(
+        (substitution) => substitution.type === "backtick",
+      );
+      let precedingBackslashes = 0;
+      while (index + 1 < input.length) {
+        const nextCharacter = input[index + 1];
+        if (
+          nextCharacter === "\n" ||
+          nextCharacter === "\r" ||
+          (insideBacktickSubstitution &&
+            nextCharacter === "`" &&
+            precedingBackslashes % 2 === 0)
+        ) {
+          break;
+        }
+        precedingBackslashes = nextCharacter === "\\" ? precedingBackslashes + 1 : 0;
+        index += 1;
+      }
+      finishCommand();
+      if (input[index + 1] === "\r" && input[index + 2] === "\n") {
+        hasControlOperator = true;
+        index += 2;
+      } else if (input[index + 1] === "\n" || input[index + 1] === "\r") {
+        hasControlOperator = true;
+        index += 1;
+      }
+      continue;
+    }
+
     if (character === "'" || character === '"') {
       quote = character;
       tokenStarted = true;

@@ -128,6 +128,9 @@ class NetworkTrustEngine:
         # Last positive signal time per agent
         self._last_positive: Dict[str, float] = {}
 
+        # Last time temporal decay was applied per agent
+        self._last_decay: Dict[str, float] = {}
+
         # Callbacks
         self._on_regime_change: List[Callable] = []
         self._on_score_change: List[Callable] = []
@@ -238,9 +241,15 @@ class NetworkTrustEngine:
         now = now or time.time()
         deltas: Dict[str, float] = {}
         for agent_did, score in list(self._scores.items()):
-            last = self._last_positive.get(agent_did, now)
+            # Measure from the later of the last positive signal and the last
+            # decay pass, so repeated calls don't charge the same hours again.
+            last = max(
+                self._last_positive.get(agent_did, now),
+                self._last_decay.get(agent_did, float("-inf")),
+            )
             hours_since = (now - last) / 3600
             if hours_since > 0:
+                self._last_decay[agent_did] = now
                 decay = self.decay_rate * hours_since
                 effective_decay = min(decay, max(0, score - 100))
                 if effective_decay > 0:

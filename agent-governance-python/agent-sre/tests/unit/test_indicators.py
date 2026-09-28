@@ -119,6 +119,14 @@ class TestResponseLatency:
         sli = ResponseLatency(percentile=0.99)
         assert sli.name == "response_latency_p99"
 
+    def test_compliance_lower_is_better(self) -> None:
+        sli = ResponseLatency(target_ms=5000)
+        for ms in [100, 200, 300, 9000]:
+            sli.record_latency(ms)
+
+        # 3 of 4 latencies are at or under the target
+        assert sli.compliance() == 0.75
+
 
 class TestCostPerTask:
     def test_average_cost(self) -> None:
@@ -136,6 +144,14 @@ class TestCostPerTask:
         sli.record_cost(1.0)
         val = sli.collect()
         assert val.value == 1.0
+
+    def test_compliance_lower_is_better(self) -> None:
+        sli = CostPerTask(target_usd=0.50)
+        sli.record_cost(0.10)  # running average 0.10
+        sli.record_cost(0.20)  # running average 0.15
+        sli.record_cost(3.00)  # running average 1.10, over the target
+
+        assert sli.compliance() == 2 / 3
 
 
 class TestPolicyCompliance:
