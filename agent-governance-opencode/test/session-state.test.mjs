@@ -16,7 +16,12 @@ import {
   getPolicyStatus,
   loadPolicy,
 } from "../lib/opencode-policy.mjs";
-import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "../lib/audit.mjs";
+import {
+  appendAuditEntry,
+  loadAuditEntries,
+  loadAuditFile,
+  verifyAuditEntries,
+} from "../lib/audit.mjs";
 
 const sessionStatePolicy = {
   maxPendingCallsPerSession: 8,
@@ -662,4 +667,52 @@ test("audit failure while committing staged state quarantines the session", asyn
   );
   assert.equal(subsequent.effect, "deny");
   assert.match(subsequent.reason, /quarantined until it is deleted/i);
+});
+
+test("session state still initializes after the audit log has rolled over", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-session-rollover-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = await writePolicy(root);
+  const auditPath = join(root, "audit.json");
+  const limit = 4;
+
+  // Fill past the limit so the file rolls over and grows a seam. loadPolicy
+  // verified without that seam before, reported a broken chain for a healthy
+  // log, and then denied every tool call in the session.
+  for (let i = 0; i < limit + 3; i += 1) {
+    await appendAuditEntry(auditPath, {
+      agentId: "opencode:filler",
+      action: `filler-${i}`,
+      decision: "allow",
+    }, { limit });
+  }
+
+  const { seamHash, entries } = await loadAuditFile(auditPath);
+  assert.match(seamHash, /^[0-9a-f]{64}$/, "the log must have rolled over for this test to mean anything");
+  assert.equal(verifyAuditEntries(entries, seamHash), true);
+
+  // A fresh process reading that same file.
+  const restarted = await loadState(root, policyPath, auditPath);
+
+  assert.equal(restarted.sessionStateError, undefined, restarted.sessionStateError?.message);
+  const status = await getPolicyStatus(restarted);
+  assert.equal(status.auditValid, true);
+
+  // The session-state backend is live rather than failing closed on every call.
+  const outbound = await evaluateOpenCodeTool(restarted, outboundInput("fresh-session"));
+  assert.equal(outbound.effect, "allow");
+
+  const afterRead = await evaluateOpenCodeTool(restarted, readInput("fresh-session"));
+  assert.equal(afterRead.effect, "allow");
+  await evaluateOpenCodeToolOutput(restarted, {
+    tool: "read",
+    output: "profile contents",
+    sessionId: "fresh-session",
+    callID: "read-call",
+  });
+  const blocked = await evaluateOpenCodeTool(restarted, {
+    ...outboundInput("fresh-session"),
+    callID: "outbound-2",
+  });
+  assert.equal(blocked.effect, "deny", "the latch must still work after a rollover");
 });
