@@ -832,7 +832,7 @@ test("a configured HMAC key switches the digest algorithm", async (t) => {
   assert.equal(JSON.stringify(status).includes("kkkk"), false);
 });
 
-test("a short HMAC key is a config error and fails closed in enforce mode", async (t) => {
+test("a short HMAC key is a config error and fails closed when denyOnPolicyError is on", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-shortkey-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const state = await loadPolicy({
@@ -898,7 +898,7 @@ test("no configured principal means the field is omitted", async (t) => {
   assert.equal(Object.hasOwn(entry, "principal"), false);
 });
 
-test("an invalid principal is a config error and fails closed in enforce mode", async (t) => {
+test("an invalid principal is a config error and fails closed when denyOnPolicyError is on", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-badprincipal-"));
   t.after(() => rm(root, { force: true, recursive: true }));
 
@@ -1015,4 +1015,96 @@ test("both audit config errors are reported together", async (t) => {
   assert.match(status.auditConfigError, /at least 32 bytes/);
   assert.match(status.auditConfigError, /non-empty sub/);
   assert.equal(AUDIT_HMAC_KEY_ENV, "AGT_OPENCODE_AUDIT_HMAC_KEY");
+});
+
+test("a denied direct-resource call does not persist the path or URL", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-no-leak-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, homeDirectory: root, policyPath: null });
+
+  // Distinctive, obviously fake markers. If the matched value is persisted,
+  // these turn up in the file.
+  const pathMarker = "leak-canary-path-value"; // gitleaks:allow
+  const urlMarker = "leak-canary-url-value"; // gitleaks:allow
+  const secretPath = join(root, `.env.${pathMarker}`);
+  // 169.254.169.254 is matched by the bundled metadata-endpoints URL rule, so
+  // this exercises the URL branch rather than the reviewTools deny for webfetch.
+  const deniedUrl = `https://169.254.169.254/latest/meta-data?token=${urlMarker}`;
+
+  const deniedPath = await evaluateOpenCodeTool(state, {
+    tool: "read",
+    args: { file_path: secretPath },
+    cwd: root,
+    sessionId: "s",
+  });
+  const deniedFetch = await evaluateOpenCodeTool(state, {
+    tool: "webfetch",
+    args: { url: deniedUrl },
+    cwd: root,
+    sessionId: "s",
+  });
+
+  assert.equal(deniedPath.effect, "deny");
+  assert.equal(deniedFetch.effect, "deny");
+
+  const contents = await readFile(auditPath, "utf8");
+  assert.equal(contents.includes(pathMarker), false, "path leaked into the audit log");
+  assert.equal(contents.includes(urlMarker), false, "url leaked into the audit log");
+  assert.equal(contents.includes("169.254.169.254"), false, "url host leaked into the audit log");
+
+  // Each denial still names the rule that produced it.
+  const entries = await loadAuditEntries(auditPath);
+  assert.match(entries[0].reason, /Matched path rule /);
+  assert.match(entries[1].reason, /Matched URL rule metadata-endpoints/);
+  assert.equal(verifyAuditEntries(entries), true);
+});
+
+test("a policy load error is reported alongside an audit config error", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-both-order-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    auditHmacKey: "short",
+    homeDirectory: root,
+    policyPath: join(root, "missing-policy.json"),
+  });
+
+  const result = await evaluateOpenCodePrompt(state, { prompt: "hi", sessionId: "s" });
+  assert.equal(result.effect, "deny");
+  assert.match(result.reason, /policy file not found/i);
+  assert.match(result.reason, /audit configuration is invalid/i);
+  // The policy error is the actionable one, so it comes first.
+  assert.ok(
+    result.reason.indexOf("not found") < result.reason.indexOf("audit configuration"),
+    "policy error should be reported before the audit config error",
+  );
+});
+
+test("with denyOnPolicyError off, a bad audit config still writes entries", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-advisory-config-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const auditPath = join(root, "audit.json");
+  const policyPath = join(root, "policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({ schemaVersion: 1, mode: "enforce", denyOnPolicyError: false }),
+    "utf8",
+  );
+
+  const state = await loadPolicy({
+    auditPath,
+    auditHmacKey: "short",
+    homeDirectory: root,
+    policyPath,
+    principal: { sub: "" },
+  });
+
+  await evaluateOpenCodeTool(state, { tool: "read", args: {}, cwd: root, sessionId: "s" });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  // The decision is still recorded, with an unkeyed digest and no principal.
+  assert.equal(entry.argsDigestAlg, "sha256");
+  assert.equal(Object.hasOwn(entry, "principal"), false);
 });

@@ -45,6 +45,7 @@ const V2_ALLOWED_KEYS = new Set([
   "argsDigest",
   "argsDigestAlg",
   "argsTruncated",
+  "argsUnserializable",
   "principal",
 ]);
 
@@ -77,6 +78,7 @@ export async function appendAuditEntry(auditPath, entry) {
     argsDigest: entry.argsDigest,
     argsDigestAlg: entry.argsDigestAlg,
     argsTruncated: entry.argsTruncated === true ? true : undefined,
+    argsUnserializable: entry.argsUnserializable === true ? true : undefined,
     principal: entry.principal,
   });
 
@@ -102,11 +104,12 @@ export async function appendAuditEntry(auditPath, entry) {
  *
  * @param {unknown} args
  * @param {{ hmacKey?: import("node:crypto").KeyObject | null }} [options]
- * @returns {{ argsDigest: string, argsDigestAlg: string, argsTruncated?: boolean }}
+ * @returns {{ argsDigest: string, argsDigestAlg: string, argsTruncated?: boolean, argsUnserializable?: boolean }}
  */
 export function computeArgsDigest(args, { hmacKey = null } = {}) {
   const algorithm = hmacKey ? "hmac-sha256" : "sha256";
   let truncated = false;
+  let unserializable = false;
   let payload;
 
   try {
@@ -118,7 +121,10 @@ export function computeArgsDigest(args, { hmacKey = null } = {}) {
     }
     payload = buffer;
   } catch {
+    // Every unserializable value digests to the same constant, so the entry
+    // says so rather than implying the digest identifies these arguments.
     payload = Buffer.from(UNSERIALIZABLE_SENTINEL, "utf8");
+    unserializable = true;
   }
 
   let argsDigest;
@@ -128,12 +134,15 @@ export function computeArgsDigest(args, { hmacKey = null } = {}) {
       : createHash("sha256").update(payload).digest("hex");
   } catch {
     argsDigest = createHash("sha256").update(UNSERIALIZABLE_SENTINEL, "utf8").digest("hex");
-    return { argsDigest, argsDigestAlg: "sha256" };
+    return { argsDigest, argsDigestAlg: "sha256", argsUnserializable: true };
   }
 
-  return truncated
-    ? { argsDigest, argsDigestAlg: algorithm, argsTruncated: true }
-    : { argsDigest, argsDigestAlg: algorithm };
+  return {
+    argsDigest,
+    argsDigestAlg: algorithm,
+    ...(truncated ? { argsTruncated: true } : {}),
+    ...(unserializable ? { argsUnserializable: true } : {}),
+  };
 }
 
 /**
@@ -406,8 +415,11 @@ function isValidV2Shape(entry) {
     return false;
   }
 
-  if (Object.hasOwn(entry, "argsTruncated") && entry.argsTruncated !== true) {
-    return false;
+  for (const key of ["argsTruncated", "argsUnserializable"]) {
+    // Present only to mean true, so absence and false cannot both appear.
+    if (Object.hasOwn(entry, key) && entry[key] !== true) {
+      return false;
+    }
   }
 
   if (Object.hasOwn(entry, "principal") && !isValidPrincipal(entry.principal)) {

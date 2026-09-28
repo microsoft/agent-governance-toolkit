@@ -66,6 +66,42 @@ test("the v1 hash is unchanged byte for byte", () => {
   );
 });
 
+test("the v2 preimage is pinned", () => {
+  // A fixed entry and the hash an external verifier must reproduce. Without
+  // this, dropping a field from the preimage still passes every structural
+  // test, because the writer and the verifier drop it together.
+  const entry = {
+    v: 2,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    agentId: "opencode:pinned",
+    action: "tool.bash",
+    decision: "deny",
+    previousHash: GENESIS_HASH,
+    policyVersion: "sha256:" + "0".repeat(64),
+    reason: "blocked by rule",
+    argsDigest: "a".repeat(64),
+    argsDigestAlg: "sha256",
+    principal: { sub: "user-1", iss: "https://idp.example" },
+  };
+
+  const preimage =
+    '{"action":"tool.bash","agentId":"opencode:pinned","argsDigest":"' + "a".repeat(64) +
+    '","argsDigestAlg":"sha256","decision":"deny","policyVersion":"sha256:' + "0".repeat(64) +
+    '","previousHash":"' + GENESIS_HASH +
+    '","principal":{"iss":"https://idp.example","sub":"user-1"},"reason":"blocked by rule",' +
+    '"timestamp":"2026-01-01T00:00:00.000Z","v":2}';
+
+  assert.equal(canonicalJson(entry), preimage, "canonical preimage drifted");
+
+  const hash = createHash("sha256").update(preimage, "utf8").digest("hex");
+  assert.equal(
+    hash,
+    "525187f667de119cb55772e2add4cadd937b37de577b4d1873ffa612a701680b",
+    "pinned v2 hash drifted",
+  );
+  assert.equal(verifyAuditEntries([{ ...entry, hash }]), true);
+});
+
 test("appending to a v1 log writes a v2 entry linked to the v1 tail", async (t) => {
   const path = await auditFile(t);
   const legacy = makeV1Entry();
@@ -212,6 +248,19 @@ test("canonicalJson lenient mode follows JSON semantics", () => {
   assert.equal(canonicalJson({ a: undefined, b: 1 }, { lenient: true }), '{"b":1}');
   assert.equal(canonicalJson([undefined], { lenient: true }), "[null]");
   assert.equal(canonicalJson(Number.NaN, { lenient: true }), "null");
+});
+
+test("unserializable arguments are flagged, not silently constant", () => {
+  const cyclic = {};
+  cyclic.self = cyclic;
+
+  const flagged = computeArgsDigest(cyclic);
+  assert.equal(flagged.argsUnserializable, true);
+
+  // Every unserializable value digests to the same constant, so without the
+  // flag the entry would imply the digest identifies these arguments.
+  assert.equal(computeArgsDigest({ big: 1n }).argsDigest, flagged.argsDigest);
+  assert.equal(Object.hasOwn(computeArgsDigest({ ok: 1 }), "argsUnserializable"), false);
 });
 
 test("computeArgsDigest never throws", () => {

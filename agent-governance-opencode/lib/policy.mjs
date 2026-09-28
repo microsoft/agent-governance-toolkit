@@ -438,16 +438,21 @@ function createGovernanceRuntime(policy, configuredAdditionalContext) {
 }
 
 function getPolicyLoadFailure(state) {
-  if (state.auditConfigError) {
-    return `AGT audit configuration is invalid: ${state.auditConfigError}`;
-  }
+  const failures = [];
   if (state.configuredPolicyError) {
-    return `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`;
+    failures.push(
+      `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`,
+    );
   }
   if (state.bundledDefaultError) {
-    return `AGT bundled default policy could not be loaded from ${state.path}: ${state.bundledDefaultError.message}`;
+    failures.push(
+      `AGT bundled default policy could not be loaded from ${state.path}: ${state.bundledDefaultError.message}`,
+    );
   }
-  return "";
+  if (state.auditConfigError) {
+    failures.push(`AGT audit configuration is invalid: ${state.auditConfigError}`);
+  }
+  return failures.join(" ");
 }
 
 function createCommandPatternBackend(policy) {
@@ -1341,7 +1346,7 @@ export function evaluateDirectResourceAccess(policy, context) {
 
     const result = {
       effect: rule.effect,
-      reason: `${rule.reason} Matched path ${matched.displayPath}.`,
+      reason: `${rule.reason} Matched path rule ${rule.id}.`,
     };
     if (rule.effect === "deny") {
       return result;
@@ -1359,7 +1364,7 @@ export function evaluateDirectResourceAccess(policy, context) {
 
     const result = {
       effect: rule.effect,
-      reason: `${rule.reason} Matched URL ${matched.normalizedUrl}.`,
+      reason: `${rule.reason} Matched URL rule ${rule.id}.`,
     };
     if (rule.effect === "deny") {
       return result;

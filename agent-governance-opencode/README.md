@@ -149,7 +149,8 @@ Each entry is a link in the audit hash chain and carries:
 | `policyVersion` | yes | `sha256:<hex>` over the active policy, so a decision can be tied to the policy that produced it. |
 | `reason` | when one exists | Why the decision was reached, flattened and capped at 1024 characters. |
 | `argsDigest`, `argsDigestAlg` | tool calls only | Identifies the attempted arguments without storing them. |
-| `argsTruncated` | only when `true` | Arguments exceeded 1 MiB and were digested in part. |
+| `argsTruncated` | only when `true` | Arguments exceeded 1 MiB and only the first 1 MiB was digested. |
+| `argsUnserializable` | only when `true` | Arguments could not be serialized, so the digest is a constant and identifies nothing. |
 | `principal` | when configured | `{ sub, iss? }`, the identity the agent acted for. |
 
 Entries are verified against the version they were written under, so a log
@@ -157,6 +158,31 @@ written by an earlier release keeps verifying after an upgrade. New entries are
 hashed over a canonical form with keys sorted by UTF-16 code unit, the ordering
 [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) specifies, so an external
 verifier can reproduce a hash without knowing property insertion order.
+
+**The upgrade is one way.** Once a version 2 entry is written to a file, an
+older release cannot verify that file. Because a failed chain denies every
+request, downgrading after an upgrade means moving the audit file aside first.
+
+**Reproducing a hash.** The preimage is the canonical JSON of the entry with
+`hash` removed, encoded as UTF-8:
+
+```
+hash = sha256(canonicalJson(entry without hash))
+```
+
+**Reproducing `argsDigest`.** The preimage is the canonical JSON of the tool
+arguments object, encoded as UTF-8, truncated to the first 1 MiB:
+
+```
+argsDigest = sha256(canonicalJson(args))          # HMAC-SHA256 when a key is set
+```
+
+Canonical JSON follows ordinary JSON semantics for the argument object, so a
+value JSON drops is dropped. If the arguments cannot be serialized at all, for
+example because they are cyclic, hold a bigint, or have a throwing getter, the
+digest is taken over the constant `[unserializable]` and the entry carries
+`argsUnserializable: true`. All such entries share one digest value, so it
+identifies nothing.
 
 **What the digest does and does not do.** `argsDigest` lets you match an entry
 against another system's record of the same call. It does not hide the
@@ -167,16 +193,32 @@ which makes digests unguessable without the key. A shorter key is refused
 rather than used. Verification never recomputes the digest, so rotating or
 losing the key leaves existing entries verifiable.
 
+The key is read from the OpenCode process environment, so tool subprocesses
+such as `bash` inherit it. An agent able to run a shell command can read it and
+forge digests. Treat it as raising the cost of guessing a digest, not as a
+secret the agent cannot reach.
+
 **Recording who the agent acted for.** `agentId` identifies the session, not the
 person who delegated the work. Set `AGT_OPENCODE_PRINCIPAL_SUB`, and optionally
 `AGT_OPENCODE_PRINCIPAL_ISS`, to record that identity alongside each decision.
 The principal is read only from operator configuration, never from tool
 arguments or model output, since a principal the agent can name is not
-evidence. A misconfigured principal or HMAC key fails closed in enforce mode
-rather than being silently dropped.
+evidence.
 
-**Limits.** `reason` can quote a matched path or URL from the request, so it is
-not free of request data. `policyVersion` covers the policy document, so it does
+**The principal is declared, not verified.** It records who the operator says
+the agent acted for. Nothing proves that person authorised any particular
+action, and on a single-user machine the same person whose actions are logged
+usually controls that environment. Read it as a label on the session, not as
+proof of approval.
+
+A misconfigured principal or HMAC key is refused rather than silently dropped.
+When `denyOnPolicyError` is on, which is the default, that refusal denies
+requests until the configuration is fixed. With it off, decisions are still
+recorded, but with an unkeyed digest and no principal.
+
+**Limits.** `reason` names the rule that matched and its description, not the
+value that matched it, so a denied read of a secret-bearing path does not write
+that path into the log. `policyVersion` covers the policy document, so it does
 not change when a package upgrade alters built-in defaults.
 
 ### Positive command and URL allowlists
