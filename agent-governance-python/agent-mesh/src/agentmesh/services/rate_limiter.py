@@ -74,6 +74,11 @@ class TokenBucket:
                 return True
             return False
 
+    def refund(self, tokens: int = 1) -> None:
+        """Return tokens taken by :meth:`consume`, up to the bucket capacity."""
+        with self._lock:
+            self._tokens = min(self._capacity, self._tokens + tokens)
+
     def tokens_available(self) -> float:
         """Current token count after refill."""
         with self._lock:
@@ -140,6 +145,8 @@ class RateLimiter:
         if not agent_bucket.consume():
             return False
         if not self._global_bucket.consume():
+            # The request is rejected, so it must not count against the agent's own limit.
+            agent_bucket.refund()
             return False
         return True
 

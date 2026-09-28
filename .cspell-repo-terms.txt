@@ -136,6 +136,7 @@ EigenTrust
 Entra
 Errno
 Errorf
+Español
 FAKEFORTESTING
 FFDH
 FIPS
