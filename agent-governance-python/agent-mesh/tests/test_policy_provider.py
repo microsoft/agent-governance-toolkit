@@ -181,6 +181,30 @@ class TestHandleCheck:
         result = handler.handle_check({})
         assert result["allowed"] is True
 
+    def test_engine_exception_returns_fail_closed(self):
+        engine = _make_engine()
+        engine.evaluate = MagicMock(side_effect=RuntimeError("backend down"))
+        handler = PolicyProviderHandler(engine)
+        result = handler.handle_check(
+            {"agent_id": "agent-7", "action": "read", "context": {}}
+        )
+        assert result["allowed"] is False
+        assert result["decision"] == "error"
+        assert "RuntimeError" in result["reason"]
+        assert result["trust_score"] is None
+        assert "evaluation_ms" in result
+
+    def test_engine_exception_logs_audit(self):
+        engine = _make_engine()
+        engine.evaluate = MagicMock(side_effect=RuntimeError("backend down"))
+        handler = PolicyProviderHandler(engine, audit_logger=MagicMock())
+        handler.handle_check(
+            {"agent_id": "agent-8", "action": "delete", "context": {}}
+        )
+        handler.audit_logger.log.assert_called_once_with(
+            "agent-8", "delete", "error"
+        )
+
 
 # =========================================================================
 # handle_health tests
@@ -279,3 +303,18 @@ class TestAsgiApp:
         )
         assert status == 404
         assert "error" in body
+
+    def test_check_engine_exception_returns_fail_closed(self):
+        engine = _make_engine()
+        engine.evaluate = MagicMock(side_effect=RuntimeError("backend down"))
+        handler = PolicyProviderHandler(engine)
+        app = handler.to_asgi_app()
+        payload = json.dumps(
+            {"agent_id": "a2", "action": "read", "context": {}}
+        ).encode()
+        status, body = asyncio.run(
+            _asgi_request(app, "POST", "/check", payload)
+        )
+        assert status == 200
+        assert body["allowed"] is False
+        assert body["decision"] == "error"

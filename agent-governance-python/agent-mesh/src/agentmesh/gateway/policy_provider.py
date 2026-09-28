@@ -33,7 +33,26 @@ class PolicyProviderHandler:
         context = request.get("context", {})
 
         start = time.monotonic()
-        decision = self.policy_engine.evaluate(action, context)
+        try:
+            decision = self.policy_engine.evaluate(action, context)
+        except Exception as exc:
+            duration_ms = (time.monotonic() - start) * 1000
+            decision_label = "error"
+            allowed = False
+            reason = f"policy evaluation failed: {type(exc).__name__}"
+
+            if self.audit_logger is not None:
+                try:
+                    self.audit_logger.log(agent_id, action, decision_label)
+                except Exception:  # noqa: S110 — intentional silent catch for audit logging
+                    pass
+            return {
+                "allowed": allowed,
+                "decision": decision_label,
+                "reason": reason,
+                "trust_score": None,
+                "evaluation_ms": round(duration_ms, 2),
+            }
         duration_ms = (time.monotonic() - start) * 1000
 
         trust_score = None
@@ -104,8 +123,18 @@ class PolicyProviderHandler:
                 body = json.dumps({"error": "invalid JSON"}).encode()
                 status = 400
             else:
-                body = json.dumps(self.handle_check(request)).encode()
-                status = 200
+                try:
+                    body = json.dumps(self.handle_check(request)).encode()
+                    status = 200
+                except Exception:
+                    body = json.dumps({
+                        "allowed": False,
+                        "decision": "error",
+                        "reason": "internal error",
+                        "trust_score": None,
+                        "evaluation_ms": 0,
+                    }).encode()
+                    status = 500
         else:
             body = json.dumps({"error": "not found"}).encode()
             status = 404
