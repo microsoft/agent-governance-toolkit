@@ -58,7 +58,7 @@ nono = [
     # nono-py is PyPI-classified Alpha (upstream always-further/nono).
     # Suitable for defense-in-depth and dev/CI; evaluate kernel-enforced
     # guarantees against your production bar before hard-boundary use.
-    "nono-py>=0.10.1,<0.11",
+    "nono-py>=0.10.1,<0.17",
 ]
 policy = [
     "agent-governance-toolkit-core>=5.0.0,<6.0",
