@@ -103,7 +103,7 @@ def test_native_acs_manifest_allows_and_denies_shell_actions() -> None:
     command, outcome = allow_skill.authorize_shell_command(
         ["git", "status"], api="test"
     )
-    assert command == ["git", "status"]
+    assert command == ("git", "status")  # approved command is returned frozen
     assert outcome.verdict.decision is acs.Decision.ALLOW
     assert allow_policy.invocations[0]["input"]["tool"]["name"] == "shell.execute"
 
@@ -132,7 +132,7 @@ def test_builds_canonical_pre_tool_call_snapshot(
         context={"task": "review"},
     )
 
-    assert command == ["git", "status"]
+    assert command == ("git", "status")  # approved command is returned frozen
     assert outcome.verdict.decision is acs.Decision.ALLOW
     point, snapshot, _ = control.requests[0]
     assert point.value == "pre_tool_call"
@@ -172,7 +172,7 @@ def test_permitting_verdicts_preserve_command(decision: acs.Decision) -> None:
     assert command is original
 
 
-def test_transform_replaces_argv_and_preserves_sequence_type() -> None:
+def test_transform_replaces_argv_with_an_immutable_tuple() -> None:
     target = {"argv": ["python", "-V"], "command": "python -V"}
     skill = GovernanceSkill(
         FakeControl([result(acs.Decision.TRANSFORM, transformed=target)])
@@ -421,6 +421,69 @@ def test_pathlike_and_bytes_arguments_are_normalized(tmp_path: Path) -> None:
     skill.authorize_shell_command((tmp_path / "tool", b"value"), api="test")
     args = skill.session.control.requests[0][1]["tool_call"]["args"]
     assert args["argv"] == [str(tmp_path / "tool"), "value"]
+
+
+def test_command_mutated_after_approval_executes_approved_value() -> None:
+    """The value ACS evaluated is the value that runs, not the caller's list."""
+    command = [sys.executable, "-c", "print('approved')"]
+
+    class MutatingControl(FakeControl):
+        async def evaluate_intervention_point(self, point, snapshot, mode):
+            # Another thread changes the caller's list after the snapshot.
+            command[2] = "print('mutated')"
+            return await super().evaluate_intervention_point(point, snapshot, mode)
+
+    skill = GovernanceSkill(MutatingControl())
+    with governed_shell(skill):
+        completed = subprocess.run(command, capture_output=True, text=True, check=True)
+    assert completed.stdout.strip() == "approved"
+    evaluated = skill.session.control.requests[0][1]["tool_call"]["args"]["argv"]
+    assert evaluated[2] == "print('approved')"
+
+
+def test_in_flight_call_survives_final_scope_teardown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A call already inside a wrapper completes after the last scope restores."""
+    import openshell_agentmesh.skill as skill_module
+
+    entered = threading.Event()
+    release = threading.Event()
+    real_authorize = skill_module._authorize_active_shell
+
+    def paused_authorize(*args: Any, **kwargs: Any) -> Any:
+        if threading.current_thread().name == "in-flight":
+            entered.set()
+            assert release.wait(timeout=10)
+        return real_authorize(*args, **kwargs)
+
+    monkeypatch.setattr(skill_module, "_authorize_active_shell", paused_authorize)
+    outcome: dict[str, Any] = {}
+
+    def in_flight() -> None:
+        try:
+            outcome["result"] = subprocess.run(
+                [sys.executable, "-c", "print('finished')"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except Exception as exc:  # recorded for the assertion below
+            outcome["error"] = exc
+
+    original_run = subprocess.run
+    with governed_shell(GovernanceSkill(FakeControl())):
+        worker = threading.Thread(target=in_flight, name="in-flight")
+        worker.start()
+        assert entered.wait(timeout=10)
+    # The last scope has exited and restored the originals while the call is
+    # still inside the wrapper.
+    assert subprocess.run is original_run
+    release.set()
+    worker.join(timeout=10)
+    assert not worker.is_alive()
+    assert "error" not in outcome, outcome.get("error")
+    assert outcome["result"].stdout.strip() == "finished"
 
 
 def test_cli_reports_allow(

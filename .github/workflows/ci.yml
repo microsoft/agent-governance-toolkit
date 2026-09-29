@@ -923,6 +923,38 @@ jobs:
           else
             echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
           fi
+      - name: Clean wheel install of the openshell extra
+        # The adapter imports agent_control_specification directly, so the
+        # [openshell] extra must bring ACS into an environment that has nothing
+        # else from this repository. ACS is supplied only through --find-links,
+        # so the install fails if the extra stops requiring it.
+        if: matrix.package == 'openshell-skill'
+        run: |
+          set -euo pipefail
+          WHEELS="$RUNNER_TEMP/openshell-wheels"
+          pip wheel --no-cache-dir --no-deps --no-build-isolation -w "$WHEELS" ./policy-engine/sdk/python
+          pip wheel --no-cache-dir --no-deps -w "$WHEELS" \
+            ./agent-governance-python/agent-governance-toolkit-core \
+            ./agent-governance-python/agent-governance-toolkit-integrations
+          python -m venv "$RUNNER_TEMP/openshell-clean"
+          CLEAN="$RUNNER_TEMP/openshell-clean/bin"
+          "$CLEAN/pip" install --no-cache-dir --find-links "$WHEELS" \
+            "$WHEELS"/agent_governance_toolkit_core-*.whl \
+            "$(ls "$WHEELS"/agent_governance_toolkit_integrations-*.whl)[openshell]"
+          "$CLEAN/python" - <<'PY'
+          from importlib.metadata import requires, version
+
+          declared = [
+              r for r in (requires("agent-governance-toolkit-integrations") or [])
+              if r.startswith("agent-control-specification")
+              and "extra ==" in r.replace('"', "'") and "'openshell'" in r.replace('"', "'")
+          ]
+          assert declared, "the [openshell] extra does not declare agent-control-specification"
+          import agent_control_specification  # noqa: F401
+          from openshell_agentmesh import GovernanceSkill, governed_shell  # noqa: F401
+          print("clean install OK:", declared[0], "installed", version("agent-control-specification"))
+          PY
+          "$CLEAN/openshell-governance" --help > /dev/null
       - name: Validate Python syntax
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |

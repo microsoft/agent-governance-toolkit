@@ -12,6 +12,7 @@ import threading
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Iterator, Mapping
 
 from agent_control_specification import (
@@ -79,6 +80,9 @@ class GovernanceSkill:
         cwd: Any = None,
         context: Mapping[str, Any] | None = None,
     ) -> tuple[Any, InterventionPointResult]:
+        # Evaluate and execute one immutable value: a caller's list could
+        # otherwise change between approval and execution.
+        command = _freeze_command(command)
         args = _command_args(command, shell=shell)
         command_context = dict(self.context)
         command_context.update(context or {})
@@ -133,7 +137,10 @@ def governed_shell(
 
 _SHELL_PATCH_LOCK = threading.RLock()
 _SHELL_PATCH_LOCAL = threading.local()
-_SHELL_ORIGINALS: dict[str, Any] = {}
+# Rebound as a whole on each first activation and never mutated, so a wrapper
+# already running keeps a valid reference after the last scope restores.
+_SHELL_ORIGINALS: Mapping[str, Any] = MappingProxyType({})
+_SHELL_PATCHED = False
 _PATCH_USERS = 0
 _ACTIVE_SHELL_SKILLS: contextvars.ContextVar[
     tuple[tuple[GovernanceSkill, dict[str, Any]], ...]
@@ -143,10 +150,10 @@ _ACTIVE_SHELL_SKILLS: contextvars.ContextVar[
 def _activate_shell_interception(
     skill: GovernanceSkill, context: Mapping[str, Any] | None
 ) -> None:
-    global _PATCH_USERS
+    global _PATCH_USERS, _SHELL_ORIGINALS, _SHELL_PATCHED
     with _SHELL_PATCH_LOCK:
-        if not _SHELL_ORIGINALS:
-            _SHELL_ORIGINALS.update(
+        if not _SHELL_PATCHED:
+            _SHELL_ORIGINALS = MappingProxyType(
                 {
                     "subprocess.run": subprocess.run,
                     "subprocess.Popen": subprocess.Popen,
@@ -158,6 +165,7 @@ def _activate_shell_interception(
             subprocess.Popen = _governed_subprocess_popen
             os.system = _governed_os_system
             os.popen = _governed_os_popen
+            _SHELL_PATCHED = True
         _PATCH_USERS += 1
     _ACTIVE_SHELL_SKILLS.set(
         (*_ACTIVE_SHELL_SKILLS.get(), (skill, dict(context or {})))
@@ -165,7 +173,7 @@ def _activate_shell_interception(
 
 
 def _deactivate_shell_interception(skill: GovernanceSkill) -> None:
-    global _PATCH_USERS
+    global _PATCH_USERS, _SHELL_PATCHED
     stack = list(_ACTIVE_SHELL_SKILLS.get())
     for index in range(len(stack) - 1, -1, -1):
         if stack[index][0] is skill:
@@ -173,11 +181,13 @@ def _deactivate_shell_interception(skill: GovernanceSkill) -> None:
             _ACTIVE_SHELL_SKILLS.set(tuple(stack))
             with _SHELL_PATCH_LOCK:
                 _PATCH_USERS = max(0, _PATCH_USERS - 1)
-                if _PATCH_USERS == 0 and _SHELL_ORIGINALS:
-                    subprocess.run = _SHELL_ORIGINALS.pop("subprocess.run")
-                    subprocess.Popen = _SHELL_ORIGINALS.pop("subprocess.Popen")
-                    os.system = _SHELL_ORIGINALS.pop("os.system")
-                    os.popen = _SHELL_ORIGINALS.pop("os.popen")
+                if _PATCH_USERS == 0 and _SHELL_PATCHED:
+                    originals = _SHELL_ORIGINALS
+                    subprocess.run = originals["subprocess.run"]
+                    subprocess.Popen = originals["subprocess.Popen"]
+                    os.system = originals["os.system"]
+                    os.popen = originals["os.popen"]
+                    _SHELL_PATCHED = False
             return
 
 
@@ -206,6 +216,7 @@ def _with_popen_bypass(callable_obj: Any, *args: Any, **kwargs: Any) -> Any:
 
 
 def _governed_subprocess_run(*popenargs: Any, **kwargs: Any) -> Any:
+    originals = _SHELL_ORIGINALS
     command = popenargs[0] if popenargs else kwargs.get("args")
     command = _authorize_active_shell(
         command,
@@ -217,12 +228,13 @@ def _governed_subprocess_run(*popenargs: Any, **kwargs: Any) -> Any:
         popenargs = (command, *popenargs[1:])
     else:
         kwargs["args"] = command
-    return _with_popen_bypass(_SHELL_ORIGINALS["subprocess.run"], *popenargs, **kwargs)
+    return _with_popen_bypass(originals["subprocess.run"], *popenargs, **kwargs)
 
 
 def _governed_subprocess_popen(*popenargs: Any, **kwargs: Any) -> Any:
+    originals = _SHELL_ORIGINALS
     if getattr(_SHELL_PATCH_LOCAL, "bypass", False):
-        return _SHELL_ORIGINALS["subprocess.Popen"](*popenargs, **kwargs)
+        return originals["subprocess.Popen"](*popenargs, **kwargs)
     command = popenargs[0] if popenargs else kwargs.get("args")
     command = _authorize_active_shell(
         command,
@@ -234,17 +246,39 @@ def _governed_subprocess_popen(*popenargs: Any, **kwargs: Any) -> Any:
         popenargs = (command, *popenargs[1:])
     else:
         kwargs["args"] = command
-    return _SHELL_ORIGINALS["subprocess.Popen"](*popenargs, **kwargs)
+    return originals["subprocess.Popen"](*popenargs, **kwargs)
 
 
 def _governed_os_system(command: Any) -> int:
+    originals = _SHELL_ORIGINALS
     transformed = _authorize_active_shell(command, api="os.system", shell=True)
-    return _SHELL_ORIGINALS["os.system"](transformed)
+    return originals["os.system"](transformed)
 
 
 def _governed_os_popen(command: Any, mode: str = "r", buffering: int = -1) -> Any:
+    originals = _SHELL_ORIGINALS
     transformed = _authorize_active_shell(command, api="os.popen", shell=True)
-    return _SHELL_ORIGINALS["os.popen"](transformed, mode, buffering)
+    return originals["os.popen"](transformed, mode, buffering)
+
+
+def _freeze_command(command: Any) -> Any:
+    """Return an immutable form of *command* for evaluation and execution.
+
+    A list becomes a tuple and any path-like element becomes its string, so
+    nothing the caller still holds can change what was approved. A tuple of
+    str/bytes is already immutable and is returned unchanged.
+    """
+    if isinstance(command, os.PathLike):
+        return _stringify_arg(command)
+    if isinstance(command, (list, tuple)):
+        frozen = tuple(
+            arg if isinstance(arg, (str, bytes)) else _stringify_arg(arg)
+            for arg in command
+        )
+        if isinstance(command, tuple) and all(a is b for a, b in zip(frozen, command)):
+            return command
+        return frozen
+    return command
 
 
 def _command_args(command: Any, *, shell: bool) -> list[str]:
@@ -295,6 +329,4 @@ def _transformed_command(
         raise PermissionError(
             "OpenShell command transform must provide a non-empty string argv"
         )
-    if isinstance(original, tuple):
-        return tuple(argv)
-    return argv
+    return tuple(argv)
