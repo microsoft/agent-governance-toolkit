@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { installPackage } from "../lib/cli.mjs";
 
 const PACKAGE_ROOT = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
+const REQUEST_TIMEOUT_MS = 5000;
 const STATELESS_META = {
   clientInfo: {
     name: "agt-parity-test",
@@ -325,7 +326,7 @@ test("bundled MCP server rejects a legacy frame without Content-Length", async (
   await withServer("agt-antigravity-mcp-legacy-bad-header-", async (child) => {
     const response = await requestFrame(
       child,
-      'X-Extension: 1\r\n\r\n{"jsonrpc":"2.0","id":36,"method":"ping"}',
+      'Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n\r\n{"jsonrpc":"2.0","id":36,"method":"ping"}',
     );
 
     assert.equal(response.error.code, -32700);
@@ -339,6 +340,32 @@ test("bundled MCP server rejects a malformed newline-delimited line", async () =
 
     assert.equal(response.error.code, -32700);
     assert.equal(response.error.message, "Invalid JSON payload.");
+  });
+});
+
+test("bundled MCP server answers a request after a stray header-like line", async () => {
+  await withServer("agt-antigravity-mcp-stray-header-", async (child) => {
+    const response = await requestFrame(child, "hello: world\n");
+
+    assert.equal(response.error.code, -32700);
+    assert.equal(response.error.message, "Invalid JSON payload.");
+    assert.deepEqual(
+      await request(child, { jsonrpc: "2.0", id: 37, method: "ping", params: {} }),
+      { jsonrpc: "2.0", id: 37, result: {} },
+    );
+  });
+});
+
+test("bundled MCP server reads an LF-only Content-Length line as JSON", async () => {
+  await withServer("agt-antigravity-mcp-lf-header-", async (child) => {
+    const response = await requestFrame(child, "Content-Length: 12\n");
+
+    assert.equal(response.error.code, -32700);
+    assert.equal(response.error.message, "Invalid JSON payload.");
+    assert.deepEqual(
+      await request(child, { jsonrpc: "2.0", id: 38, method: "ping", params: {} }),
+      { jsonrpc: "2.0", id: 38, result: {} },
+    );
   });
 });
 
@@ -364,12 +391,15 @@ function request(child, payload) {
   return requestFrame(child, encodeMessage(payload));
 }
 
-function requestFrame(child, frame) {
+function requestFrame(child, frame, returnRaw = false) {
+  const chunks = Array.isArray(frame) ? frame : [frame];
+  const requestLabel = JSON.stringify(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8").slice(0, 80));
   return new Promise((resolve, reject) => {
     let buffer = Buffer.alloc(0);
     let settled = false;
 
     const cleanup = () => {
+      clearTimeout(timer);
       child.stdout.off("data", onData);
       child.off("error", onError);
       child.off("exit", onExit);
@@ -383,28 +413,36 @@ function requestFrame(child, frame) {
       reject(error);
     };
     const onExit = (code, signal) => {
+      onError(new Error(`MCP server exited before answering ${requestLabel} (code=${code}, signal=${signal ?? "none"}).`));
+    };
+    const onData = (chunk) => {
       if (settled) {
         return;
       }
-      settled = true;
-      cleanup();
-      reject(new Error(`MCP server exited before responding (code=${code}, signal=${signal ?? "none"}).`));
-    };
-    const onData = (chunk) => {
       buffer = Buffer.concat([buffer, chunk]);
-      const response = tryDecodeMessage(buffer);
+      let response;
+      try {
+        response = tryDecodeMessage(buffer);
+      } catch (error) {
+        const line = JSON.stringify(buffer.toString("utf8").split("\n")[0].slice(0, 80));
+        onError(new Error(`Could not decode the response to ${requestLabel}: ${line}`, { cause: error }));
+        return;
+      }
       if (!response) {
         return;
       }
       settled = true;
       cleanup();
-      resolve(response);
+      resolve(returnRaw ? buffer.subarray(0, buffer.indexOf(0x0a) + 1).toString("utf8") : response);
     };
+    const timer = setTimeout(() => {
+      onError(new Error(`MCP server did not answer ${requestLabel} within ${REQUEST_TIMEOUT_MS} ms.`));
+    }, REQUEST_TIMEOUT_MS);
 
     child.stdout.on("data", onData);
     child.on("error", onError);
     child.on("exit", onExit);
-    void writeChunks(child, Array.isArray(frame) ? frame : [frame]);
+    void writeChunks(child, chunks).catch(onError);
   });
 }
 
@@ -441,29 +479,5 @@ function tryDecodeMessage(buffer) {
 }
 
 function rawResponse(child, payload) {
-  return new Promise((resolve, reject) => {
-    let buffer = Buffer.alloc(0);
-
-    const cleanup = () => {
-      child.stdout.off("data", onData);
-      child.off("error", onError);
-    };
-    const onError = (error) => {
-      cleanup();
-      reject(error);
-    };
-    const onData = (chunk) => {
-      buffer = Buffer.concat([buffer, chunk]);
-      const newlineIndex = buffer.indexOf(0x0a);
-      if (newlineIndex === -1) {
-        return;
-      }
-      cleanup();
-      resolve(buffer.subarray(0, newlineIndex + 1).toString("utf8"));
-    };
-
-    child.stdout.on("data", onData);
-    child.on("error", onError);
-    child.stdin.write(encodeMessage(payload));
-  });
+  return requestFrame(child, encodeMessage(payload), true);
 }
