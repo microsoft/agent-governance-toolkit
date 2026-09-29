@@ -54,6 +54,14 @@ def _discover_provider(group: str) -> Optional[Type]:
     return None
 
 
+def _no_community_fallback(getter: str, group: str, missing: str) -> NotImplementedError:
+    """Build the error raised when a slot has no community implementation."""
+    return NotImplementedError(
+        f"{getter}() has no community implementation ({missing} does not exist). "
+        f"Install a provider package that registers an entry point in the {group!r} group."
+    )
+
+
 def get_reward_engine(**kwargs: Any):
     """Get the best available reward engine.
 
@@ -86,42 +94,44 @@ def get_delegation_chain(**kwargs: Any):
     """Get the best available delegation chain.
 
     Advanced: Cryptographic delegation chains with attenuation.
-    Community: Simple parent-to-child scope passing.
+    Community: None yet; raises NotImplementedError unless an advanced provider is installed.
     """
     provider = _discover_provider(PROVIDER_GROUPS["delegation"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agentmesh.identity.delegation import DelegationChain
-    return DelegationChain(**kwargs)
+    raise _no_community_fallback(
+        "get_delegation_chain", PROVIDER_GROUPS["delegation"], "agentmesh.identity.delegation.DelegationChain"
+    )
 
 
 def get_audit_logger(**kwargs: Any):
     """Get the best available audit logger.
 
     Advanced: Merkle-chained audit with hash verification.
-    Community: Append-only JSON log file.
+    Community: None yet; raises NotImplementedError unless an advanced provider is installed.
     """
     provider = _discover_provider(PROVIDER_GROUPS["audit"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agentmesh.governance.audit import AuditLogger
-    return AuditLogger(**kwargs)
+    raise _no_community_fallback(
+        "get_audit_logger", PROVIDER_GROUPS["audit"], "agentmesh.governance.audit.AuditLogger"
+    )
 
 
 def get_trust_decay(**kwargs: Any):
     """Get the best available trust decay engine.
 
     Advanced: Trust contagion + KL divergence regime detection.
-    Community: Linear decay over time.
+    Community: NetworkTrustEngine (temporal decay, trust propagation and regime detection).
     """
     provider = _discover_provider(PROVIDER_GROUPS["trust_decay"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agentmesh.reward.trust_decay import TrustDecayEngine
-    return TrustDecayEngine(**kwargs)
+    from agentmesh.reward.trust_decay import NetworkTrustEngine
+    return NetworkTrustEngine(**kwargs)
 
 
 def get_capability_engine(**kwargs: Any):
@@ -134,8 +144,8 @@ def get_capability_engine(**kwargs: Any):
     if provider is not None:
         return provider(**kwargs)
 
-    from agentmesh.trust.capability import CapabilityEngine
-    return CapabilityEngine(**kwargs)
+    from agentmesh.trust.capability import CapabilityRegistry
+    return CapabilityRegistry(**kwargs)
 
 
 def list_providers() -> Dict[str, str]:

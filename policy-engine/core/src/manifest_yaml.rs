@@ -100,6 +100,75 @@ pub fn reject_removed_fields(manifest: &Manifest) -> Result<(), RuntimeError> {
     Ok(())
 }
 
+/// Reject a URL sourced manifest that declares a local filesystem path field.
+///
+/// Per `SPECIFICATION.md` section 2.3, a manifest fetched from a URL has no file
+/// system manifest root, so a rego `bundle`, a cedar `policy_path`,
+/// `entities_path`, or `schema_path`, or a `data`/`data_paths` document declared
+/// in a rego, custom, or test policy's `adapter_config` (or on a policy binding)
+/// would otherwise resolve against the process working directory at dispatch and
+/// let a remote manifest read local files. These fields are valid for a
+/// file-based manifest, so this check runs only on the URL load path (see the
+/// host SDK `manifest_from_url`), never in general validation. Fails closed with
+/// `runtime_error:manifest_invalid`.
+pub fn reject_url_manifest_local_fields(manifest: &Manifest) -> Result<(), RuntimeError> {
+    const DATA_PATH_KEYS: [&str; 2] = ["data", "data_paths"];
+
+    fn invalid(location: &str, field: &str) -> RuntimeError {
+        RuntimeError::ManifestInvalid(format!(
+            "{location} declares the local filesystem field '{field}', which a URL sourced \
+             manifest must not carry: it has no file system manifest root, so the path would \
+             resolve against the process working directory at dispatch and let a remote manifest \
+             read local files. Supply the value inline; see policy-engine/spec/SPECIFICATION.md \
+             section 2.3 and policy-engine/docs/acs-retarget.md."
+        ))
+    }
+
+    fn check_data_paths(
+        location: &str,
+        adapter: &std::collections::BTreeMap<String, JsonValue>,
+    ) -> Result<(), RuntimeError> {
+        for key in DATA_PATH_KEYS {
+            if adapter.contains_key(key) {
+                return Err(invalid(location, key));
+            }
+        }
+        Ok(())
+    }
+
+    for (name, policy) in &manifest.policies {
+        let location = format!("policy '{name}'");
+        match policy {
+            PolicyConfig::Rego(config) => {
+                if config.bundle.is_some() {
+                    return Err(invalid(&location, "bundle"));
+                }
+                check_data_paths(&location, &config.adapter_config)?;
+            }
+            PolicyConfig::Cedar(config) => {
+                if config.policy_path.is_some() {
+                    return Err(invalid(&location, "policy_path"));
+                }
+                if config.entities_path.is_some() {
+                    return Err(invalid(&location, "entities_path"));
+                }
+                if config.schema_path.is_some() {
+                    return Err(invalid(&location, "schema_path"));
+                }
+            }
+            PolicyConfig::Custom(config) => check_data_paths(&location, &config.adapter_config)?,
+            PolicyConfig::Test(config) => check_data_paths(&location, &config.adapter_config)?,
+        }
+    }
+    for (point, config) in &manifest.intervention_points {
+        check_data_paths(
+            &format!("intervention point '{}' policy binding", point.as_str()),
+            &config.policy.adapter_config,
+        )?;
+    }
+    Ok(())
+}
+
 /// The overlay-safe subset of manifest validation.
 ///
 /// `agent_control_spec` carries only the strict `Manifest::validate`,
@@ -825,8 +894,8 @@ fn json_string_size(value: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        reject_removed_fields, validate_manifest_overlay_yaml, validate_manifest_yaml,
-        REMOVED_MANIFEST_FIELDS,
+        parse_manifest_yaml_value, reject_removed_fields, reject_url_manifest_local_fields,
+        validate_manifest_overlay_yaml, validate_manifest_yaml, REMOVED_MANIFEST_FIELDS,
     };
     use agent_control_spec::Manifest;
 
@@ -1010,5 +1079,87 @@ mod tests {
         validate_manifest_yaml(&local_bundle).unwrap();
         validate_manifest_overlay_yaml(&local_bundle).unwrap();
         assert_eq!(REMOVED_MANIFEST_FIELDS.len(), 3);
+    }
+
+    #[test]
+    fn url_manifest_rejects_local_filesystem_path_fields() {
+        fn parse(input: &str) -> Manifest {
+            let value = parse_manifest_yaml_value(input).unwrap();
+            serde_json::from_value(value).unwrap()
+        }
+
+        // rego `bundle` is legal for a file manifest but not a URL one.
+        let bundle = parse(&rego_manifest("    bundle: ./policy\n"));
+        let error = reject_url_manifest_local_fields(&bundle).unwrap_err();
+        assert!(
+            error
+                .detail()
+                .starts_with("policy 'p' declares the local filesystem field 'bundle'"),
+            "{}",
+            error.detail()
+        );
+
+        // `data_paths` flattens into the rego adapter_config map.
+        let data_paths = parse(&rego_manifest("    data_paths:\n      - ./data.json\n"));
+        assert!(reject_url_manifest_local_fields(&data_paths)
+            .unwrap_err()
+            .detail()
+            .contains("'data_paths'"));
+
+        // cedar path fields.
+        let cedar = format!(
+            "{VERSION}policies:\n  p:\n    type: cedar\n    policy_path: ./p.cedar\n\
+             intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n"
+        );
+        assert!(reject_url_manifest_local_fields(&parse(&cedar))
+            .unwrap_err()
+            .detail()
+            .contains("'policy_path'"));
+
+        // rego `data` document, also flattened into adapter_config.
+        let rego_data = parse(&rego_manifest("    data: ./data.json\n"));
+        assert!(reject_url_manifest_local_fields(&rego_data)
+            .unwrap_err()
+            .detail()
+            .contains("'data'"));
+
+        // cedar `entities_path` and `schema_path`.
+        for (field, line) in [
+            ("entities_path", "    entities_path: ./e.json\n"),
+            ("schema_path", "    schema_path: ./s.json\n"),
+        ] {
+            let cedar = format!(
+                "{VERSION}policies:\n  p:\n    type: cedar\n{line}\
+                 intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n"
+            );
+            assert!(reject_url_manifest_local_fields(&parse(&cedar))
+                .unwrap_err()
+                .detail()
+                .contains(field));
+        }
+
+        // a custom policy carrying a data document.
+        let custom = format!(
+            "{VERSION}policies:\n  p:\n    type: custom\n    adapter: mine\n    data_paths:\n      - ./d.json\n\
+             intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n"
+        );
+        assert!(reject_url_manifest_local_fields(&parse(&custom))
+            .unwrap_err()
+            .detail()
+            .contains("'data_paths'"));
+
+        // a data document declared on an intervention-point policy binding.
+        let binding = format!(
+            "{VERSION}policies:\n  p:\n    type: rego\n    query: data.acs.result\n\
+             intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n      data:\n        x: ./d.json\n"
+        );
+        assert!(reject_url_manifest_local_fields(&parse(&binding))
+            .unwrap_err()
+            .detail()
+            .contains("'data'"));
+
+        // A manifest that supplies policy inline is accepted.
+        let inline = parse(&rego_manifest(""));
+        reject_url_manifest_local_fields(&inline).unwrap();
     }
 }

@@ -5,6 +5,27 @@ entries appear first.
 
 ---
 
+## URL sourced manifests are rejected if they declare a local filesystem path field
+
+**Date:** TBD
+
+A manifest loaded from a URL through `AgentControl::from_url` / `from_url` /
+`fromUrl` / `acs_builder_from_url` (Rust, Python, Node, and the C ABI all funnel
+through `manifest_from_url`) now fails closed with `runtime_error:manifest_invalid`
+if it declares a rego `bundle`, a cedar `policy_path`/`entities_path`/`schema_path`,
+or a `data`/`data_paths` document on a policy or intervention-point binding. Such a
+path has no manifest root to resolve against and would otherwise resolve against the
+process working directory at dispatch, letting a remote manifest read local files.
+
+**How to update:** a URL sourced manifest must supply its policy inline. From Rust,
+attach an in-memory Rego bundle with `Manifest::set_rego_bundle_in_memory`, or use a
+cedar `policy_set`. The Python, Node, and C ABI bindings have no in-memory Rego
+bundle API, so a URL sourced rego policy has no legal form from those hosts yet; load
+such a manifest from disk instead. These fields remain valid for a file-based
+manifest.
+
+---
+
 ## Python manifests declaring annotators require an explicit dispatcher
 
 **Date:** TBD
@@ -111,7 +132,7 @@ properties, so schema-only validators reject them as well.
 |--------|-------|
 | `system_prompt_file: prompts/judge.txt` | `system_prompt: <the file's text>` |
 | `system_prompt_url: {url: ..., sha256: ...}` | `system_prompt: <the fetched text>` |
-| `bundle_url: {url: ..., sha256: ...}` | `bundle: ./policy` shipped with the manifest, or a host policy dispatcher that fetches the bundle |
+| `bundle_url: {url: ..., sha256: ...}` | `bundle: ./policy` shipped with the manifest, or a host policy dispatcher that fetches the bundle (for a URL sourced manifest a local `bundle` is rejected; supply the bundle in memory or via a dispatcher) |
 
 See `policy-engine/docs/acs-retarget.md`, "Removed manifest fields".
 

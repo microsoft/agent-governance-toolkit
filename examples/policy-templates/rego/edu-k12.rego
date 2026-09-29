@@ -5,7 +5,18 @@ package agt.examples.templates.edu_k12
 
 import rego.v1
 
-context := input.policy_target.value if is_object(input.policy_target.value)
+context := {
+	"action": object.get(tool_call, "name", ""),
+	"args": object.get(tool_call, "args", {}),
+} if {
+	input.intervention_point == "pre_tool_call"
+	tool_call := object.get(object.get(input, "snapshot", {}), "tool_call", {})
+}
+
+context := input.policy_target.value if {
+	is_object(input.policy_target.value)
+	input.intervention_point != "pre_tool_call"
+}
 
 context := {"output": input.policy_target.value} if {
 	not is_object(input.policy_target.value)
@@ -15,6 +26,7 @@ context := {"output": input.policy_target.value} if {
 context := {"input": input.policy_target.value} if {
 	not is_object(input.policy_target.value)
 	input.intervention_point != "output"
+	input.intervention_point != "pre_tool_call"
 }
 
 candidates contains {"name": "asi01-prompt-injection-override", "action": "deny", "priority": 100, "message": "ASI-01: Prompt Injection — instruction override attempt detected"} if {

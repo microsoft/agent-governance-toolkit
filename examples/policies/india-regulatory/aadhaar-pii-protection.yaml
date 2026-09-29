@@ -20,3 +20,8 @@ intervention_points:
     policy:
       id: aadhaar_pii_protection
       query: data.agt_policies_india.aadhaar.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: aadhaar_pii_protection
+      query: data.agt_policies_india.aadhaar.acs_pre_tool_call_result

@@ -25,7 +25,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
@@ -120,6 +120,32 @@ def _search_issues(query: str, per_page: int = 30) -> list[dict]:
         if len(page_items) < per_page:
             break
     return items
+
+
+# The user repos endpoint returns at most 100 repos per page. Reading only the
+# first page caps every repo-based count at 100 and hides older forks from the
+# fork-burst checks, so page through the listing (newest first) until a page is
+# short or the page cap is hit. Older repos also affect the theme denominator.
+_REPO_PAGE_SIZE = 100
+_REPO_MAX_PAGES = 10
+
+
+def _list_user_repos(username: str) -> list[dict]:
+    """List up to 1,000 user repos, newest first, for repo-based signals."""
+    repos: list[dict] = []
+    for page in range(1, _REPO_MAX_PAGES + 1):
+        data = _api(f"/users/{username}/repos", {
+            "per_page": str(_REPO_PAGE_SIZE),
+            "sort": "created",
+            "direction": "desc",
+            "page": str(page),
+        })
+        if not isinstance(data, list) or not data:
+            break
+        repos.extend(data)
+        if len(data) < _REPO_PAGE_SIZE:
+            break
+    return repos
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +272,7 @@ def check_repo_themes(username: str, repos: list[dict] | None = None) -> list[Si
     """
     signals: list[Signal] = []
     if repos is None:
-        repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
+        repos = _list_user_repos(username)
     if not repos:
         return signals
 
@@ -589,7 +615,7 @@ def check_thin_credibility(
     signals: list[Signal] = []
 
     if repos is None:
-        repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
+        repos = _list_user_repos(username)
     if not repos:
         return signals
 
@@ -722,12 +748,15 @@ def check_spray_pattern(
     if len(unique_repos) >= 5:
         entries.sort(key=lambda e: e[0])
 
-        # Find the largest set of distinct repos hit within any 7-day window
+        # Find the largest set of distinct repos hit within any 7-day window.
+        # The window starts at each issue and runs 7 days forward; entries are
+        # sorted, so every later entry is at or after `d`.
+        window = timedelta(days=7)
         best_window_repos: set[str] = set()
         for i, (d, _) in enumerate(entries):
             window_repos = {
-                repo for d2, repo in entries
-                if abs((d2 - d).days) <= 7
+                repo for d2, repo in entries[i:]
+                if d2 - d <= window
             }
             if len(window_repos) > len(best_window_repos):
                 best_window_repos = window_repos
@@ -1023,7 +1052,7 @@ def check_contributor(username: str, target_repo: str | None = None) -> Reputati
     }
 
     # Shared data fetches (avoids redundant API calls across checkers)
-    repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"}) or []
+    repos = _list_user_repos(username)
     issues = _search_issues(f"author:{username} is:issue", per_page=100)
 
     # Run checks with shared data

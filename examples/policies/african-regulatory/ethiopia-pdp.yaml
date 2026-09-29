@@ -20,3 +20,8 @@ intervention_points:
     policy:
       id: ethiopia_pdp
       query: data.agt_policies_africa.ethiopia_pdp.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: ethiopia_pdp
+      query: data.agt_policies_africa.ethiopia_pdp.acs_pre_tool_call_result

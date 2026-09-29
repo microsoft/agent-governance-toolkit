@@ -115,6 +115,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Provider fallbacks on the default install.** Without an advanced provider,
+  `get_trust_decay()` and `get_capability_engine()` now return `NetworkTrustEngine`
+  and `CapabilityRegistry` instead of failing with an `ImportError` for classes that
+  never existed. `get_delegation_chain()` and `get_audit_logger()`, which have no
+  community implementation, raise a `NotImplementedError` naming the missing class
+  and the entry point group a provider package must register (#4152).
 - `AuditLog.export()` and `AuditLog.export_cloudevents()` now return all matching
   records instead of silently capping exports at 10,000 records.
 - **Empty policy sets are visible to readiness probes.** The policy server and

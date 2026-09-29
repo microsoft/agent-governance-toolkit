@@ -46,18 +46,27 @@ def _discover_provider(group: str) -> type | None:
     return None
 
 
+def _no_community_fallback(getter: str, group: str, missing: str) -> NotImplementedError:
+    """Build the error raised when a slot has no community implementation."""
+    return NotImplementedError(
+        f"{getter}() has no community implementation ({missing} does not exist). "
+        f"Install a provider package that registers an entry point in the {group!r} group."
+    )
+
+
 def get_slo_detector(**kwargs: Any):
     """Get the best available SLO detection engine.
 
     Advanced: Multi-signal SLO detection with agent SLIs.
-    Community: Threshold-based SLO monitoring.
+    Community: None yet; raises NotImplementedError unless an advanced provider is installed.
     """
     provider = _discover_provider(PROVIDER_GROUPS["slo_detection"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agent_sre.slo.detector import SLODetector
-    return SLODetector(**kwargs)
+    raise _no_community_fallback(
+        "get_slo_detector", PROVIDER_GROUPS["slo_detection"], "agent_sre.slo.detector.SLODetector"
+    )
 
 
 def get_replay_engine(**kwargs: Any):
@@ -78,14 +87,15 @@ def get_chaos_engine(**kwargs: Any):
     """Get the best available chaos engine.
 
     Advanced: Template-driven chaos with coverage analysis.
-    Community: Basic fault injection with scheduling.
+    Community: None yet; raises NotImplementedError unless an advanced provider is installed.
     """
     provider = _discover_provider(PROVIDER_GROUPS["chaos_engine"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agent_sre.chaos.engine import ChaosEngine
-    return ChaosEngine(**kwargs)
+    raise _no_community_fallback(
+        "get_chaos_engine", PROVIDER_GROUPS["chaos_engine"], "agent_sre.chaos.engine.ChaosEngine"
+    )
 
 
 def get_cost_optimizer(**kwargs: Any):

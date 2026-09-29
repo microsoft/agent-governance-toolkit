@@ -39,6 +39,15 @@ PII_PATTERNS: tuple[re.Pattern[str], ...] = (
     # ``(^|[^A-Za-z0-9])`` / ``([^A-Za-z0-9]|$)``, which consumes a character
     # and shifts the span offset that deny_if_pattern reports.
     re.compile(r"(?<![A-Za-z0-9])\d{3}[\s.-]\d{2}[\s.-]\d{4}(?![A-Za-z0-9])"),
+    # Cued-bare SSN: a nine-digit run next to an explicit cue (``SSN:``,
+    # ``ssn=``, ``social security number``) evaded the separator-required
+    # pattern above (issue #3592). Kept in lockstep with the gateway redactor
+    # (agent_os/credential_redactor.py, "US SSN"); RE2 Rego copies are separate.
+    re.compile(
+        r"(?i:\bssn\b|\bsocial[\s._-]+security(?:[\s._-]+(?:number|no\.?|#))?)"
+        r"[\s:=#.\-\"']{1,4}"
+        r"(?<!\d)\d{9}(?![A-Za-z0-9])"
+    ),
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
     re.compile(r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\b"),
     re.compile(
