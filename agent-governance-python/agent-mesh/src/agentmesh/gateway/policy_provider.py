@@ -10,8 +10,11 @@ without a framework dependency.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class PolicyProviderHandler:
@@ -27,6 +30,11 @@ class PolicyProviderHandler:
 
         Request: {"agent_id": "...", "action": "...", "context": {...}}
         Response: {"allowed": bool, "decision": "...", "reason": "...", "trust_score": float}
+
+        Policy evaluation failures are fail-closed: they return ``decision`` of
+        ``"deny"`` with an ``error`` key set to the exception class name. The
+        ``reason`` stays opaque to callers so internal exception details are not
+        exposed to API gateway clients; the full traceback goes to the log.
         """
         agent_id = request.get("agent_id", "")
         action = request.get("action", "")
@@ -37,19 +45,18 @@ class PolicyProviderHandler:
             decision = self.policy_engine.evaluate(action, context)
         except Exception as exc:
             duration_ms = (time.monotonic() - start) * 1000
-            decision_label = "error"
-            allowed = False
-            reason = f"policy evaluation failed: {type(exc).__name__}"
+            logger.error("Policy evaluation failed for agent %s: %s", agent_id, exc, exc_info=True)
 
             if self.audit_logger is not None:
                 try:
-                    self.audit_logger.log(agent_id, action, decision_label)
+                    self.audit_logger.log(agent_id, action, "deny")
                 except Exception:  # noqa: S110 — intentional silent catch for audit logging
                     pass
             return {
-                "allowed": allowed,
-                "decision": decision_label,
-                "reason": reason,
+                "allowed": False,
+                "decision": "deny",
+                "reason": "policy evaluation failed",
+                "error": type(exc).__name__,
                 "trust_score": None,
                 "evaluation_ms": round(duration_ms, 2),
             }
@@ -123,18 +130,15 @@ class PolicyProviderHandler:
                 body = json.dumps({"error": "invalid JSON"}).encode()
                 status = 400
             else:
-                try:
-                    body = json.dumps(self.handle_check(request)).encode()
-                    status = 200
-                except Exception:
-                    body = json.dumps({
-                        "allowed": False,
-                        "decision": "error",
-                        "reason": "internal error",
-                        "trust_score": None,
-                        "evaluation_ms": 0,
-                    }).encode()
-                    status = 500
+                if not isinstance(request, dict):
+                    body = json.dumps({"error": "request body must be a JSON object"}).encode()
+                    status = 400
+                else:
+                    result = self.handle_check(request)
+                    body = json.dumps(result).encode()
+                    # A policy engine failure is an unusable policy state, so mirror
+                    # server/policy_server.py and answer 503 rather than 200.
+                    status = 503 if "error" in result else 200
         else:
             body = json.dumps({"error": "not found"}).encode()
             status = 404

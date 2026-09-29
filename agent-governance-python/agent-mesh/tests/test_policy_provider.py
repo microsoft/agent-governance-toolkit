@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -189,10 +190,29 @@ class TestHandleCheck:
             {"agent_id": "agent-7", "action": "read", "context": {}}
         )
         assert result["allowed"] is False
-        assert result["decision"] == "error"
-        assert "RuntimeError" in result["reason"]
+        assert result["decision"] == "deny"
+        assert result["reason"] == "policy evaluation failed"
+        assert result["error"] == "RuntimeError"
         assert result["trust_score"] is None
         assert "evaluation_ms" in result
+
+    def test_engine_exception_reason_is_opaque(self, caplog):
+        """Internal exception detail must not leak into the client-facing reason."""
+        engine = _make_engine()
+        engine.evaluate = MagicMock(side_effect=RuntimeError("secret backend host"))
+        handler = PolicyProviderHandler(engine)
+        with caplog.at_level(logging.ERROR):
+            result = handler.handle_check({"agent_id": "a", "action": "read", "context": {}})
+        assert "secret backend host" not in result["reason"]
+        assert "secret backend host" in caplog.text
+
+    def test_engine_exception_logs_traceback(self, caplog):
+        engine = _make_engine()
+        engine.evaluate = MagicMock(side_effect=RuntimeError("backend down"))
+        handler = PolicyProviderHandler(engine)
+        with caplog.at_level(logging.ERROR):
+            handler.handle_check({"agent_id": "a", "action": "read", "context": {}})
+        assert any(r.exc_info for r in caplog.records)
 
     def test_engine_exception_logs_audit(self):
         engine = _make_engine()
@@ -202,7 +222,7 @@ class TestHandleCheck:
             {"agent_id": "agent-8", "action": "delete", "context": {}}
         )
         handler.audit_logger.log.assert_called_once_with(
-            "agent-8", "delete", "error"
+            "agent-8", "delete", "deny"
         )
 
 
@@ -304,7 +324,7 @@ class TestAsgiApp:
         assert status == 404
         assert "error" in body
 
-    def test_check_engine_exception_returns_fail_closed(self):
+    def test_check_engine_exception_returns_503(self):
         engine = _make_engine()
         engine.evaluate = MagicMock(side_effect=RuntimeError("backend down"))
         handler = PolicyProviderHandler(engine)
@@ -315,6 +335,16 @@ class TestAsgiApp:
         status, body = asyncio.run(
             _asgi_request(app, "POST", "/check", payload)
         )
-        assert status == 200
+        assert status == 503
         assert body["allowed"] is False
-        assert body["decision"] == "error"
+        assert body["decision"] == "deny"
+        assert body["error"] == "RuntimeError"
+
+    def test_check_non_object_body_returns_400(self):
+        handler = _make_handler()
+        app = handler.to_asgi_app()
+        status, body = asyncio.run(
+            _asgi_request(app, "POST", "/check", b"[1, 2]")
+        )
+        assert status == 400
+        assert "error" in body
