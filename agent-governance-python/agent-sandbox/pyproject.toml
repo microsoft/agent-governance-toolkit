@@ -43,7 +43,7 @@ docker = [
     "docker>=7.1.0,<8.0",
 ]
 hyperlight = [
-    "hyperlight-sandbox>=0.4.0,<0.5",
+    "hyperlight-sandbox>=0.4.0,<0.8",
 ]
 azure = [
     # Early-access Python SDK for Azure Container Apps sandboxes.
