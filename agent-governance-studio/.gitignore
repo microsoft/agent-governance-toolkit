@@ -1,0 +1,11 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Frontend
+web/node_modules/
+web/dist/
