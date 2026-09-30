@@ -461,7 +461,7 @@ class DenyInterpreterControl(FakeControl):
         dict.fromkeys,
         iter,
     ],
-    ids=["deque", "userlist", "dict-keys", "iterator"],
+    ids=["deque", "user-list", "dict-keys", "iterator"],
 )
 def test_non_list_iterable_is_evaluated_as_argv(wrap: Any, tmp_path: Path) -> None:
     """Popen runs any iterable as argv, so ACS must evaluate it as argv too."""
