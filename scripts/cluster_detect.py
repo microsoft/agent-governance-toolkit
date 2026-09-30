@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -82,9 +83,59 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
             raise
 
 
-def _search(endpoint: str, query: str, per_page: int = 30) -> list[dict]:
-    data = _api(f"/search/{endpoint}", {"q": query, "per_page": str(per_page)})
-    return data.get("items", []) if data else []
+# Both pagination helpers below share the same failure mode this file's docstring
+# warns about: a single unpaginated request only ever returns the first page, so an
+# account connected to more repos/forks/comments than fit on that page silently loses
+# edges on exactly the pages a real coordination cluster is most likely to produce.
+# `_MAX_PAGES` bounds total API calls per query (consistent with the "limit API calls"
+# caps already used throughout this file) rather than looping unboundedly.
+_MAX_PAGES = 10
+
+
+def _paginate(path: str, params: dict[str, str], per_page: int = 100) -> list[dict]:
+    """Page through a regular (non-Search) REST endpoint's `items`-less array response."""
+    items: list[dict] = []
+    page_params = dict(params)
+    page_params["per_page"] = str(per_page)
+    for page in range(1, _MAX_PAGES + 1):
+        page_params["page"] = str(page)
+        data = _api(path, page_params)
+        page_items = data if isinstance(data, list) else []
+        if not page_items:
+            break
+        items.extend(page_items)
+        if len(page_items) < per_page:
+            break
+    return items
+
+
+# GitHub's Search API caps results at 1000 total (documented at
+# https://docs.github.com/en/rest/search#about-search), unlike the regular REST
+# endpoints `_paginate` above handles. Page through the full result window instead of
+# trusting the first response alone.
+_SEARCH_RESULT_WINDOW = 1000
+
+
+def _search(endpoint: str, query: str, per_page: int = 30, max_results: int | None = None) -> list[dict]:
+    """Search `endpoint`, paginating up to GitHub's 1000-result window.
+
+    `max_results` caps how many results are actually wanted at a call site - callers
+    that only use a slice of the result (e.g. `issues[:20]`) should pass the same
+    number here, so pagination stops once enough pages are fetched instead of walking
+    the full 1000-result window and discarding most of what it fetched.
+    """
+    items: list[dict] = []
+    window_pages = max(1, _SEARCH_RESULT_WINDOW // per_page)
+    max_pages = window_pages if max_results is None else min(window_pages, math.ceil(max_results / per_page))
+    for page in range(1, max_pages + 1):
+        data = _api(f"/search/{endpoint}", {"q": query, "per_page": str(per_page), "page": str(page)})
+        page_items = data.get("items", []) if data else []
+        if not page_items:
+            break
+        items.extend(page_items)
+        if len(page_items) < per_page:
+            break
+    return items
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +213,7 @@ def detect_shared_forks(seed: str, known_accounts: set[str]) -> tuple[list[Edge]
     shared_forks: dict[str, list[str]] = defaultdict(list)
 
     # Get seed's repos
-    repos = _api(f"/users/{seed}/repos", {"per_page": "100", "type": "all"})
+    repos = _paginate(f"/users/{seed}/repos", {"type": "all"}, per_page=100)
     if not repos:
         return edges, dict(shared_forks)
 
@@ -189,7 +240,7 @@ def detect_shared_forks(seed: str, known_accounts: set[str]) -> tuple[list[Edge]
         repo_name = repo.get("full_name", "")
         if not repo_name:
             continue
-        forks = _api(f"/repos/{repo_name}/forks", {"per_page": "30"})
+        forks = _paginate(f"/repos/{repo_name}/forks", {}, per_page=30)
         if not forks:
             continue
         forkers = [f["owner"]["login"] for f in forks if isinstance(f, dict)]
@@ -213,8 +264,10 @@ def detect_co_comments(seed: str, limit: int = 50) -> list[Edge]:
     edges: list[Edge] = []
     co_commenters: dict[str, int] = defaultdict(int)
 
-    # Get issues authored by seed
-    issues = _search("issues", f"author:{seed} is:issue", per_page=30)
+    # Get issues authored by seed. max_results matches the issues[:20] slice below, so
+    # pagination stops once enough results are fetched instead of walking the full
+    # 1000-result window and discarding most of what it fetched.
+    issues = _search("issues", f"author:{seed} is:issue", per_page=20, max_results=20)
 
     for issue in issues[:20]:  # limit API calls
         issue_url = issue.get("url", "")
@@ -227,7 +280,7 @@ def detect_co_comments(seed: str, limit: int = 50) -> list[Edge]:
             continue
 
         path = comments_url.replace("https://api.github.com", "")
-        comments = _api(path, {"per_page": "50"})
+        comments = _paginate(path, {}, per_page=50)
         if not comments:
             continue
 
@@ -257,7 +310,9 @@ def detect_sync_filing(seed: str) -> list[Edge]:
     edges: list[Edge] = []
 
     # Get seed's issues
-    seed_issues = _search("issues", f"author:{seed} is:issue", per_page=50)
+    seed_issues = _search(
+        "issues", f"author:{seed} is:issue", per_page=100, max_results=100
+    )
     if not seed_issues:
         return edges
 
@@ -278,14 +333,21 @@ def detect_sync_filing(seed: str) -> list[Edge]:
             if not created:
                 continue
 
-            # Search for other governance-related issues in same repo around same time
+            seed_date = datetime.fromisoformat(created.replace("Z", "+00:00"))
+
+            # Search for other issues in the same repo within the 48h window this loop
+            # actually checks below - bounding by time keeps the query itself narrow
+            # (rather than fetching every issue -author:seed has ever filed in the repo
+            # and filtering client-side), which is what caused a repo with hundreds of
+            # issues to walk dozens of search pages per (repo, issue) pair here.
+            window_start = (seed_date - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            window_end = (seed_date + timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
             repo_issues = _search(
                 "issues",
-                f"repo:{repo} is:issue -author:{seed}",
+                f"repo:{repo} is:issue -author:{seed} created:{window_start}..{window_end}",
                 per_page=20,
+                max_results=20,
             )
-
-            seed_date = datetime.fromisoformat(created.replace("Z", "+00:00"))
 
             for other in repo_issues:
                 other_date = datetime.fromisoformat(

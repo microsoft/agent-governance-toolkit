@@ -15,12 +15,210 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import cluster_detect
 from cluster_detect import (
     Edge,
     AccountInfo,
     ClusterReport,
     format_report,
 )
+
+
+# ---------------------------------------------------------------------------
+# _search / _paginate pagination tests
+# ---------------------------------------------------------------------------
+
+class TestSearchPagination:
+    def test_paginates_across_multiple_pages(self):
+        """A short first page must still trigger a request for the next page,
+        not be treated as the end of the results."""
+        pages = {
+            "1": {"items": [{"number": i} for i in range(100)]},
+            "2": {"items": [{"number": i} for i in range(100, 150)]},
+        }
+
+        def fake_api(path, params=None):
+            return pages.get(params["page"])
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._search("issues", "author:x is:issue", per_page=100)
+
+        assert len(items) == 150
+        assert mock_api.call_count == 2
+
+    def test_stops_when_a_short_page_is_returned(self):
+        pages = {"1": {"items": [{"number": 1}, {"number": 2}]}}
+
+        def fake_api(path, params=None):
+            return pages.get(params["page"])
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._search("issues", "author:x is:issue", per_page=100)
+
+        assert len(items) == 2
+        assert mock_api.call_count == 1
+
+    def test_stops_at_github_search_result_window(self):
+        """GitHub's Search API never returns more than 1000 results for a
+        query; a subject with more than that must not cause unbounded
+        pagination."""
+        def fake_api(path, params=None):
+            return {"items": [{"number": i} for i in range(int(params["per_page"]))]}
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._search("issues", "author:x is:issue", per_page=100)
+
+        assert len(items) == 1000
+        assert mock_api.call_count == 10
+
+    def test_empty_first_page_returns_no_items(self):
+        with patch.object(cluster_detect, "_api", return_value=None) as mock_api:
+            items = cluster_detect._search("issues", "author:x is:issue", per_page=100)
+
+        assert items == []
+        assert mock_api.call_count == 1
+
+
+class TestPaginate:
+    """`_paginate` backs the regular (non-Search) REST calls in
+    detect_shared_forks/detect_co_comments (`/users/{x}/repos`, `/repos/{x}/forks`,
+    an issue's comments_url) — these return a bare JSON array, not a `{"items": [...]}`
+    envelope, and have no 1000-result Search API cap, only the `_MAX_PAGES` safety cap."""
+
+    def test_paginates_across_multiple_pages(self):
+        pages = {
+            "1": [{"id": i} for i in range(100)],
+            "2": [{"id": i} for i in range(100, 130)],
+        }
+
+        def fake_api(path, params=None):
+            return pages.get(params["page"])
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._paginate("/users/x/repos", {"type": "all"}, per_page=100)
+
+        assert len(items) == 130
+        assert mock_api.call_count == 2
+
+    def test_stops_when_a_short_page_is_returned(self):
+        pages = {"1": [{"id": 1}, {"id": 2}]}
+
+        def fake_api(path, params=None):
+            return pages.get(params["page"])
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._paginate("/repos/x/forks", {}, per_page=30)
+
+        assert len(items) == 2
+        assert mock_api.call_count == 1
+
+    def test_stops_at_max_pages_safety_cap(self):
+        """No Search-API-style 1000-result cap applies to these endpoints, so an
+        account with more pages than `_MAX_PAGES` must still terminate rather than
+        loop unboundedly."""
+        def fake_api(path, params=None):
+            return [{"id": i} for i in range(int(params["per_page"]))]
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            items = cluster_detect._paginate("/users/x/repos", {}, per_page=100)
+
+        assert len(items) == cluster_detect._MAX_PAGES * 100
+        assert mock_api.call_count == cluster_detect._MAX_PAGES
+
+    def test_empty_first_page_returns_no_items(self):
+        with patch.object(cluster_detect, "_api", return_value=None) as mock_api:
+            items = cluster_detect._paginate("/users/x/repos", {}, per_page=100)
+
+        assert items == []
+        assert mock_api.call_count == 1
+
+
+class TestDetectorCallBounds:
+    """detect_co_comments and detect_sync_filing both call _search inside a loop over
+    up to 20-30 items. Mocking _search/_paginate directly (as the tests above do) can't
+    see how many *underlying* _api calls actually happen when a real account has more
+    results than fit on a single page at every one of those call sites - that's
+    exactly the shape of regression a call-count-agnostic per-function mock would miss.
+    These tests mock _api itself and assert an upper bound on its call count against a
+    fake account that always has a full page of results available, at every endpoint,
+    forever."""
+
+    def test_detect_co_comments_bounds_api_calls(self):
+        def fake_api(path, params=None):
+            if path == "/search/issues":
+                page = int(params["page"])
+                per_page = int(params["per_page"])
+                # An account with far more issues than fit on any one page.
+                return {
+                    "items": [
+                        {
+                            "url": f"https://api.github.com/repos/x/y/issues/{page}-{i}",
+                            "comments_url": f"https://api.github.com/repos/x/y/issues/{page}-{i}/comments",
+                        }
+                        for i in range(per_page)
+                    ]
+                }
+            if path.endswith("/comments"):
+                # A short thread - stops _paginate after one call, isolating this
+                # assertion to the _search over-fetch-then-discard bug, not the
+                # (separate, expected) per-issue comments pagination.
+                return [{"user": {"login": "commenter"}}]
+            return None
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            cluster_detect.detect_co_comments("seed")
+
+        # Before the fix, the seed-issues search alone (per_page=30, no max_results)
+        # walked up to 33 pages before the result was sliced down to issues[:20] -
+        # 32 of those 33 calls were thrown away. With max_results=20 the search
+        # itself must stop within a page or two, so total calls (search + one
+        # comments call per issue) stays well under what 33 discarded search pages
+        # plus 20 comments calls (53) would require.
+        assert mock_api.call_count <= 25
+
+    def test_detect_sync_filing_bounds_api_calls(self):
+        def fake_api(path, params=None):
+            if path != "/search/issues":
+                return None
+            q = params["q"]
+            per_page = int(params["per_page"])
+            if "repo:" in q:
+                # A repo with far more matching issues than fit on any one page.
+                return {
+                    "items": [
+                        {
+                            "created_at": "2026-01-01T00:00:00Z",
+                            "user": {"login": f"other{i}"},
+                        }
+                        for i in range(per_page)
+                    ]
+                }
+            # The seed's own issues: a full page every time, spread across more
+            # repos than detect_sync_filing actually uses (it only looks at the
+            # first 10). Before max_results was added to this call site, an
+            # account with more issues than fit on one page walked every page
+            # in the 1000-result window fetching this.
+            return {
+                "items": [
+                    {
+                        "repository_url": f"https://api.github.com/repos/org/repo{i % 15}",
+                        "created_at": "2026-01-01T00:00:00Z",
+                    }
+                    for i in range(per_page)
+                ]
+            }
+
+        with patch.object(cluster_detect, "_api", side_effect=fake_api) as mock_api:
+            cluster_detect.detect_sync_filing("seed")
+
+        # Before either fix, the seed-issues search itself was unbounded (per_page=50,
+        # no max_results) and each of up to 30 (repo, issue) pairs below it ran its own
+        # unbounded search (per_page=20, no max_results, no time window) against a repo
+        # that always has a full page available - thousands of calls combined. With
+        # both fixes (max_results=100 on the seed-issues search, time-windowed query +
+        # max_results=20 per pair), the seed-issues search takes one call and each pair
+        # takes at most one, so the total stays near 1 + 10 repos * 3 issues = 31.
+        assert mock_api.call_count <= 35
 
 
 # ---------------------------------------------------------------------------
