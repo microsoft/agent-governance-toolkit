@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import os
 import subprocess
 import sys
@@ -439,6 +440,84 @@ def test_command_mutated_after_approval_executes_approved_value() -> None:
     assert completed.stdout.strip() == "approved"
     evaluated = skill.session.control.requests[0][1]["tool_call"]["args"]["argv"]
     assert evaluated[2] == "print('approved')"
+
+
+class DenyInterpreterControl(FakeControl):
+    """Denies any command whose evaluated executable is this interpreter."""
+
+    async def evaluate_intervention_point(self, point, snapshot, mode):
+        self.requests.append((point, snapshot, mode))
+        argv = snapshot["tool_call"]["args"]["argv"]
+        if argv and argv[0] == sys.executable:
+            return result(acs.Decision.DENY, reason="interpreter-denied")
+        return result(acs.Decision.ALLOW)
+
+
+@pytest.mark.parametrize(
+    "wrap",
+    [
+        collections.deque,
+        collections.UserList,
+        dict.fromkeys,
+        iter,
+    ],
+    ids=["deque", "userlist", "dict-keys", "iterator"],
+)
+def test_non_list_iterable_is_evaluated_as_argv(wrap: Any, tmp_path: Path) -> None:
+    """Popen runs any iterable as argv, so ACS must evaluate it as argv too."""
+    marker = tmp_path / "ran"
+    argv = [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    control = DenyInterpreterControl()
+    with (
+        governed_shell(GovernanceSkill(control)),
+        pytest.raises(ShellPolicyViolation, match="interpreter-denied"),
+    ):
+        subprocess.run(wrap(argv), check=True)
+    assert not marker.exists()
+    assert control.requests[0][1]["tool_call"]["args"]["argv"] == argv
+
+
+def test_deque_mutated_after_approval_executes_approved_value() -> None:
+    command = collections.deque([sys.executable, "-c", "print('approved')"])
+
+    class MutatingControl(FakeControl):
+        async def evaluate_intervention_point(self, point, snapshot, mode):
+            command[2] = "print('mutated')"
+            return await super().evaluate_intervention_point(point, snapshot, mode)
+
+    with governed_shell(GovernanceSkill(MutatingControl())):
+        completed = subprocess.run(command, capture_output=True, text=True, check=True)
+    assert completed.stdout.strip() == "approved"
+
+
+def test_mutable_pathlike_cwd_executes_evaluated_directory(tmp_path: Path) -> None:
+    approved = tmp_path / "approved"
+    other = tmp_path / "other"
+    approved.mkdir()
+    other.mkdir()
+
+    class ShiftingPath:
+        """Resolves to the approved directory once, then to another one."""
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def __fspath__(self) -> str:
+            self.calls += 1
+            return str(approved if self.calls == 1 else other)
+
+    skill = GovernanceSkill(FakeControl())
+    with governed_shell(skill):
+        completed = subprocess.run(
+            [sys.executable, "-c", "import os; print(os.getcwd())"],
+            cwd=ShiftingPath(),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    evaluated = skill.session.control.requests[0][1]["tool_call"]["args"]["cwd"]
+    assert evaluated == str(approved)
+    assert Path(completed.stdout.strip()).resolve() == approved.resolve()
 
 
 def test_in_flight_call_survives_final_scope_teardown(

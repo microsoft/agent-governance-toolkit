@@ -217,6 +217,8 @@ def _with_popen_bypass(callable_obj: Any, *args: Any, **kwargs: Any) -> Any:
 
 def _governed_subprocess_run(*popenargs: Any, **kwargs: Any) -> Any:
     originals = _SHELL_ORIGINALS
+    if "cwd" in kwargs:
+        kwargs["cwd"] = _freeze_cwd(kwargs["cwd"])
     command = popenargs[0] if popenargs else kwargs.get("args")
     command = _authorize_active_shell(
         command,
@@ -235,6 +237,8 @@ def _governed_subprocess_popen(*popenargs: Any, **kwargs: Any) -> Any:
     originals = _SHELL_ORIGINALS
     if getattr(_SHELL_PATCH_LOCAL, "bypass", False):
         return originals["subprocess.Popen"](*popenargs, **kwargs)
+    if "cwd" in kwargs:
+        kwargs["cwd"] = _freeze_cwd(kwargs["cwd"])
     command = popenargs[0] if popenargs else kwargs.get("args")
     command = _authorize_active_shell(
         command,
@@ -264,21 +268,31 @@ def _governed_os_popen(command: Any, mode: str = "r", buffering: int = -1) -> An
 def _freeze_command(command: Any) -> Any:
     """Return an immutable form of *command* for evaluation and execution.
 
-    A list becomes a tuple and any path-like element becomes its string, so
-    nothing the caller still holds can change what was approved. A tuple of
-    str/bytes is already immutable and is returned unchanged.
+    Any iterable other than str/bytes is argv, as it is to ``subprocess.Popen``
+    (a deque, a UserList, a mapping's keys, an iterator), so it becomes a tuple
+    and any path-like element becomes its string. Nothing the caller still
+    holds can change what was approved. A tuple of str/bytes is already
+    immutable and is returned unchanged.
     """
+    if command is None or isinstance(command, (str, bytes)):
+        return command
     if isinstance(command, os.PathLike):
         return _stringify_arg(command)
-    if isinstance(command, (list, tuple)):
-        frozen = tuple(
-            arg if isinstance(arg, (str, bytes)) else _stringify_arg(arg)
-            for arg in command
-        )
-        if isinstance(command, tuple) and all(a is b for a, b in zip(frozen, command)):
-            return command
-        return frozen
-    return command
+    try:
+        items = iter(command)
+    except TypeError:
+        return command
+    frozen = tuple(
+        arg if isinstance(arg, (str, bytes)) else _stringify_arg(arg) for arg in items
+    )
+    if isinstance(command, tuple) and all(a is b for a, b in zip(frozen, command)):
+        return command
+    return frozen
+
+
+def _freeze_cwd(cwd: Any) -> Any:
+    """Resolve a path-like *cwd* once, so the evaluated directory is the one used."""
+    return os.fspath(cwd) if isinstance(cwd, os.PathLike) else cwd
 
 
 def _command_args(command: Any, *, shell: bool) -> list[str]:
