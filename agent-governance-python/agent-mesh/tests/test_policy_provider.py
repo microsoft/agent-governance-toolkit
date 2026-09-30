@@ -192,7 +192,7 @@ class TestHandleCheck:
         assert result["allowed"] is False
         assert result["decision"] == "deny"
         assert result["reason"] == "policy evaluation failed"
-        assert result["error"] == "RuntimeError"
+        assert result["error"] == "policy evaluation failed"
         assert result["trust_score"] is None
         assert "evaluation_ms" in result
 
@@ -205,6 +205,16 @@ class TestHandleCheck:
             result = handler.handle_check({"agent_id": "a", "action": "read", "context": {}})
         assert "secret backend host" not in result["reason"]
         assert "secret backend host" in caplog.text
+
+    def test_engine_exception_error_carries_no_exception_detail(self):
+        """No part of the exception reaches the response -- not even the class name."""
+        engine = _make_engine()
+        engine.evaluate = MagicMock(side_effect=RuntimeError("secret backend host"))
+        handler = PolicyProviderHandler(engine)
+        result = handler.handle_check({"agent_id": "a", "action": "read", "context": {}})
+        assert "RuntimeError" not in json.dumps(result)
+        assert "secret backend host" not in json.dumps(result)
+        assert result["error"] == "policy evaluation failed"
 
     def test_engine_exception_logs_traceback(self, caplog):
         engine = _make_engine()
@@ -221,9 +231,23 @@ class TestHandleCheck:
         handler.handle_check(
             {"agent_id": "agent-8", "action": "delete", "context": {}}
         )
+        # "evaluation_error", not "deny": the engine never answered, so the
+        # audit trail must not read as a policy denial.
         handler.audit_logger.log.assert_called_once_with(
-            "agent-8", "delete", "deny"
+            "agent-8", "delete", "evaluation_error"
         )
+
+    def test_successful_denial_still_audits_as_deny(self):
+        """Only the engine-failure path uses "evaluation_error"."""
+        handler = _make_handler(
+            decision=_StubDecision(allowed=False, action="deny"),
+            with_audit=True,
+        )
+        result = handler.handle_check(
+            {"agent_id": "agent-9", "action": "read", "context": {}}
+        )
+        assert result["decision"] == "deny"
+        handler.audit_logger.log.assert_called_once_with("agent-9", "read", "deny")
 
 
 # =========================================================================
@@ -338,7 +362,7 @@ class TestAsgiApp:
         assert status == 503
         assert body["allowed"] is False
         assert body["decision"] == "deny"
-        assert body["error"] == "RuntimeError"
+        assert body["error"] == "policy evaluation failed"
 
     def test_check_non_object_body_returns_400(self):
         handler = _make_handler()

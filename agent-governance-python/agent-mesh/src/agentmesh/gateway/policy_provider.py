@@ -32,9 +32,16 @@ class PolicyProviderHandler:
         Response: {"allowed": bool, "decision": "...", "reason": "...", "trust_score": float}
 
         Policy evaluation failures are fail-closed: they return ``decision`` of
-        ``"deny"`` with an ``error`` key set to the exception class name. The
-        ``reason`` stays opaque to callers so internal exception details are not
-        exposed to API gateway clients; the full traceback goes to the log.
+        ``"deny"`` with a fixed ``error`` string. No part of the exception --
+        class name, message, or traceback -- reaches the response, so internal
+        exception details are not exposed to API gateway clients; the full
+        traceback goes to the log.
+
+        The audit trail records the failure as its own ``"evaluation_error"``
+        outcome rather than ``"deny"``, so an audit reader can tell an engine
+        outage apart from an actual policy denial. ``"deny"`` in the audit log
+        would read as "the policy said no", which is a claim this path cannot
+        make: the policy engine never answered.
         """
         agent_id = request.get("agent_id", "")
         action = request.get("action", "")
@@ -49,14 +56,19 @@ class PolicyProviderHandler:
 
             if self.audit_logger is not None:
                 try:
-                    self.audit_logger.log(agent_id, action, "deny")
+                    # "evaluation_error", not "deny": the engine never returned a
+                    # decision, so a "deny" here would attribute to the policy
+                    # something the policy did not say.
+                    self.audit_logger.log(agent_id, action, "evaluation_error")
                 except Exception:  # noqa: S110 — intentional silent catch for audit logging
                     pass
             return {
                 "allowed": False,
                 "decision": "deny",
                 "reason": "policy evaluation failed",
-                "error": type(exc).__name__,
+                # Fixed string, not type(exc).__name__: #4172 requires that no
+                # internal detail reach clients, and the class name is detail.
+                "error": "policy evaluation failed",
                 "trust_score": None,
                 "evaluation_ms": round(duration_ms, 2),
             }
