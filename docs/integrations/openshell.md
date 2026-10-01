@@ -1,6 +1,6 @@
 ---
 title: OpenShell integration
-last_reviewed: 2026-09-23
+last_reviewed: 2026-09-28
 owner: docs-team
 ---
 
@@ -37,7 +37,7 @@ for the current runtime and policy-authoring guidance.
 The v5 `openshell-agentmesh` package is retained only for compatibility.
 Importing `openshell_agentmesh` emits a `DeprecationWarning`; the v5 package
 does not provide the `GovernanceSkill`, `ShellPolicyViolation`, or
-`governed_shell` APIs. [Pull request #3728](https://github.com/microsoft/agent-governance-toolkit/pull/3728)
+`governed_shell` APIs. [Pull request #4166](https://github.com/microsoft/agent-governance-toolkit/pull/4166)
 proposes restoring the adapter and remains under review. Until that change
 merges, replace the integration with an ACS manifest and host-level
 intervention-point evaluation.
