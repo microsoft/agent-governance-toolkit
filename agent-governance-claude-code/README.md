@@ -33,7 +33,8 @@ It also exposes two MCP tools:
 - `agt_policy_status`
 - `agt_policy_check_text`
 
-The stdio server accepts `Content-Length` frames and newline-delimited JSON.
+The stdio server accepts `Content-Length` frames and newline-delimited JSON
+and always answers with newline-delimited JSON.
 Headers are limited to 8 KiB; JSON messages are limited to 5 MiB in UTF-8 bytes,
 including when a message arrives across multiple reads.
 

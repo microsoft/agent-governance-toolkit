@@ -97,3 +97,5 @@ The closest parity implementation is:
 1. Hooks for prompt/tool/tool-output enforcement
 2. A bundled local MCP server for deterministic `/agt:*` status and check operations
 3. Antigravity custom commands that instruct the model to call those MCP tools
+
+The bundled MCP server accepts `Content-Length` frames and newline-delimited JSON and always answers with newline-delimited JSON.

@@ -5,7 +5,9 @@ Provider Discovery System for AgentMesh
 
 Enables plug-and-play upgrades from Public Preview to Advanced implementations.
 When an advanced provider package is installed, factory functions automatically
-return the advanced implementation. Otherwise, Public Preview is used.
+return the advanced implementation. Otherwise, Public Preview is used where it
+exists; get_delegation_chain() and get_audit_logger() have no Public Preview
+implementation, so each raises NotImplementedError without an advanced provider.
 
 Usage:
     from agentmesh.providers import get_reward_engine, get_trust_bridge
@@ -30,6 +32,9 @@ PROVIDER_GROUPS = {
     "trust_decay": "agentmesh.providers.trust_decay",
     "capability": "agentmesh.providers.capability",
 }
+
+# Slots whose getter has no community implementation to fall back to.
+_NO_COMMUNITY_IMPLEMENTATION = frozenset({"delegation", "audit"})
 
 _provider_cache: Dict[str, Any] = {}
 
@@ -149,11 +154,21 @@ def get_capability_engine(**kwargs: Any):
 
 
 def list_providers() -> Dict[str, str]:
-    """List all provider slots and their current implementations."""
+    """List all provider slots and their current implementations.
+
+    Each slot maps to ``"advanced"`` when a provider package is installed,
+    ``"community"`` when the built-in fallback is used, or ``"unavailable"``
+    when there is neither.
+    """
     result = {}
     for name, group in PROVIDER_GROUPS.items():
         provider = _discover_provider(group)
-        result[name] = "advanced" if provider is not None else "community"
+        if provider is not None:
+            result[name] = "advanced"
+        elif name in _NO_COMMUNITY_IMPLEMENTATION:
+            result[name] = "unavailable"
+        else:
+            result[name] = "community"
     return result
 
 

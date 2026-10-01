@@ -4,6 +4,8 @@
 Provider Discovery System for Agent SRE
 
 Enables plug-and-play upgrades from Public Preview to Advanced implementations.
+get_slo_detector() and get_chaos_engine() have no Public Preview implementation,
+so each raises NotImplementedError unless an advanced provider is installed.
 """
 
 from __future__ import annotations
@@ -22,6 +24,9 @@ PROVIDER_GROUPS = {
     "delivery": "agent_sre.providers.delivery",
     "incident": "agent_sre.providers.incident",
 }
+
+# Slots whose getter has no community implementation to fall back to.
+_NO_COMMUNITY_IMPLEMENTATION = frozenset({"slo_detection", "chaos_engine"})
 
 _provider_cache: dict[str, Any] = {}
 
@@ -113,11 +118,21 @@ def get_cost_optimizer(**kwargs: Any):
 
 
 def list_providers() -> dict[str, str]:
-    """List all provider slots and their current implementations."""
+    """List all provider slots and their current implementations.
+
+    Each slot maps to ``"advanced"`` when a provider package is installed,
+    ``"community"`` when the built-in fallback is used, or ``"unavailable"``
+    when there is neither.
+    """
     result = {}
     for name, group in PROVIDER_GROUPS.items():
         provider = _discover_provider(group)
-        result[name] = "advanced" if provider is not None else "community"
+        if provider is not None:
+            result[name] = "advanced"
+        elif name in _NO_COMMUNITY_IMPLEMENTATION:
+            result[name] = "unavailable"
+        else:
+            result[name] = "community"
     return result
 
 
