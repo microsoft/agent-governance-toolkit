@@ -8,13 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
-- **Breaking: MCP signature canonicalization** (#3507): `MCPMessageSigner`
-  now signs a domain-separated v2 JSON array instead of delimiter-joined
-  fields. This prevents sender/payload and nonce/timestamp boundary
-  reframing, distinguishes absent from empty senders, and authenticates
-  timestamps at full microsecond precision. Both peers must upgrade together
-  and preserve timestamp precision; legacy signatures are rejected without
-  fallback. Malformed fields fail closed without consuming valid nonces.
+- **Breaking, Python-only: MCP signature canonicalization** (#3507):
+  Python's `MCPMessageSigner` now signs a domain-separated v2 JSON array
+  instead of delimiter-joined fields. This prevents sender/payload and
+  nonce/timestamp boundary reframing, distinguishes absent from empty senders,
+  and authenticates timestamps at full microsecond precision. Python peers
+  must upgrade together and preserve timestamp precision; legacy signatures
+  are rejected without fallback. Malformed fields fail closed without
+  consuming valid nonces. This does not migrate Rust's `agentmesh-mcp` signer,
+  which retains ambiguous colon framing and cannot interoperate with Python v2.
+  The blocking Rust migration and shared cross-SDK vectors are tracked in
+  #4199.
   For `None` or blank payloads, `sign_message` still raises `ValueError`, but
   its message is now `payload must be a non-empty string` rather than
   `payload must not be None` or `payload must not be empty`. Update callers

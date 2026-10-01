@@ -14,8 +14,10 @@ owner: agt-maintainers
 > Model Context Protocol (MCP), including tool call interception,
 > response scanning, message signing, session authentication, rate
 > limiting, auth enforcement, CVE feed integration, trust-gated
-> servers, schema drift detection, audit, and metrics. All SDK
-> implementations MUST conform to this specification.
+> servers, schema drift detection, audit, and metrics. SDK implementations
+> MUST conform to applicable requirements. Sections explicitly scoped to a
+> language or package do not establish API or wire-format compatibility
+> across SDKs.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
@@ -563,10 +565,24 @@ patterns and SHOULD log a warning indicating sample rules are in use.
 
 ### 7.1 Purpose
 
-MCPMessageSigner provides HMAC-based message signing and replay
-protection for MCP messages, ensuring message integrity and
-preventing replay attacks across the MCP transport layer.
-**[Pure Specification]**
+Python's `agent_os.mcp_message_signer.MCPMessageSigner` provides
+HMAC-based message signing and replay protection for MCP messages,
+ensuring message integrity and preventing replay attacks across the
+MCP transport layer.
+**[Python-specific specification]**
+
+**Implementation scope: Python only.** Section 7 specifies the Python
+envelope and canonical signature format. It does not specify another
+SDK's wire format or claim cross-SDK interoperability. The Rust
+`agentmesh-mcp` signer still uses the legacy
+`timestamp_secs:nonce:payload` framing. Because nonce and payload may
+contain `:`, distinct field tuples can produce the same MAC input; for
+example, `nonce="n", payload="x:y"` and `nonce="n:x", payload="y"`
+collide at the same timestamp. Rust and Python v2 signatures are not
+mutually verifiable. Do not rely on the current Rust signer for
+field-reframing resistance or assume Python/Rust interoperability until
+the [blocking Rust signing follow-up #4199](https://github.com/microsoft/agent-governance-toolkit/issues/4199)
+defines and tests a shared format.
 
 Successful verification establishes integrity under the shared key, not
 permission to execute the payload. Every holder of that key can sign any
