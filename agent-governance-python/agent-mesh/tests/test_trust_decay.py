@@ -255,6 +255,22 @@ class TestDecayOverTime:
 
         assert score_after_first > score_after_second
 
+    def test_periodic_decay_matches_single_decay(self):
+        """Decaying every minute for an hour equals one decay after the hour."""
+        periodic = NetworkTrustEngine(decay_rate=10.0)
+        single = NetworkTrustEngine(decay_rate=10.0)
+        t0 = time.time()
+        for e in (periodic, single):
+            e.set_score("a", 800.0)
+            e._last_positive["a"] = t0
+
+        for minute in range(1, 61):
+            periodic.apply_temporal_decay(now=t0 + minute * 60)
+        single.apply_temporal_decay(now=t0 + 3600)
+
+        assert single.get_score("a") == pytest.approx(790.0)
+        assert periodic.get_score("a") == pytest.approx(single.get_score("a"))
+
 
 # =============================================================================
 # Configurable decay rate

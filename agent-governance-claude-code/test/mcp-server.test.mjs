@@ -63,7 +63,7 @@ test("tools/call rejects invalid agt_policy_check_text arguments", async () => {
   assert.match(response.result.content[0].text, /requires a string 'text' argument/i);
 });
 
-test("encoded JSON-RPC messages include a content-length header", () => {
+test("encoded JSON-RPC messages are newline-delimited JSON", () => {
   const encoded = encodeJsonRpcMessage({
     jsonrpc: "2.0",
     id: 4,
@@ -72,8 +72,13 @@ test("encoded JSON-RPC messages include a content-length header", () => {
     },
   });
 
-  assert.match(encoded, /^Content-Length: \d+\r\n\r\n/);
-  assert.match(encoded, /"ok":true/);
+  assert.ok(encoded.endsWith("\n"));
+  assert.equal(encoded.indexOf("\n"), encoded.length - 1);
+  assert.deepEqual(JSON.parse(encoded), {
+    jsonrpc: "2.0",
+    id: 4,
+    result: { ok: true },
+  });
 });
 
 test("stdio server handles UTF-8 JSON-RPC frames", async () => {
@@ -94,7 +99,7 @@ test("stdio server handles a frame split inside its header", async () => {
     method: "ping",
     params: { note: "Привет" },
   };
-  const frame = Buffer.from(encodeJsonRpcMessage(payload), "utf8");
+  const frame = Buffer.from(encodeLegacyContentLengthFrame(payload), "utf8");
   const headerEnd = frame.indexOf(Buffer.from("\r\n\r\n", "utf8"));
   assert.notEqual(headerEnd, -1);
 
@@ -110,7 +115,7 @@ test("stdio server handles a frame split inside a UTF-8 character", async () => 
     method: "ping",
     params: { note: "Привет" },
   };
-  const frame = Buffer.from(encodeJsonRpcMessage(payload), "utf8");
+  const frame = Buffer.from(encodeLegacyContentLengthFrame(payload), "utf8");
   const characterStart = frame.indexOf(Buffer.from("Привет", "utf8"));
   assert.notEqual(characterStart, -1);
 
@@ -231,8 +236,10 @@ for (const prefix of ["{", "["]) {
   });
 }
 
+// The read side still accepts legacy LSP frames, so the split-frame tests above
+// drive the server with Content-Length input while it answers with NDJSON.
 async function requestOverStdio(payload, splitAt) {
-  const frame = Buffer.from(encodeJsonRpcMessage(payload), "utf8");
+  const frame = Buffer.from(encodeLegacyContentLengthFrame(payload), "utf8");
   const chunks =
     splitAt === undefined ? [frame] : [frame.subarray(0, splitAt), frame.subarray(splitAt)];
   const [response] = await requestChunksOverStdio(chunks);
@@ -272,27 +279,22 @@ async function requestChunksOverStdio(chunks) {
   return responses;
 }
 
+function encodeLegacyContentLengthFrame(message) {
+  const body = JSON.stringify(message);
+  return `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
+}
+
 function decodeJsonRpcMessages(frame) {
-  const separator = Buffer.from("\r\n\r\n", "utf8");
-  const messages = [];
-  let remaining = frame;
+  const text = frame.toString("utf8");
+  assert.ok(text.endsWith("\n"), "MCP server did not terminate its last response with a newline");
 
-  while (remaining.length > 0) {
-    const headerEnd = remaining.indexOf(separator);
-    assert.notEqual(headerEnd, -1, "MCP server did not return a framed response");
-
-    const header = remaining.subarray(0, headerEnd).toString("utf8");
-    const contentLength = Number(/Content-Length:\s*(\d+)/i.exec(header)?.[1]);
-    assert.ok(Number.isSafeInteger(contentLength));
-
-    const bodyStart = headerEnd + separator.length;
-    const bodyEnd = bodyStart + contentLength;
-    assert.ok(remaining.length >= bodyEnd);
-    messages.push(JSON.parse(remaining.subarray(bodyStart, bodyEnd).toString("utf8")));
-    remaining = remaining.subarray(bodyEnd);
-  }
-
-  return messages;
+  return text
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      assert.doesNotMatch(line, /^Content-Length:/i, "MCP server framed a response with an LSP header");
+      return JSON.parse(line);
+    });
 }
 
 test("server/discover matches legacy capability and tool declarations", async () => {
@@ -435,4 +437,41 @@ test("legacy lifecycle remains compatible and terminal outcomes stay distinct", 
   assert.notDeepEqual(allow.result, deny.error ?? deny.result);
   assert.notDeepEqual(allow.result, compatibilityFallback.result);
   assert.notDeepEqual(deny.error ?? deny.result, compatibilityFallback.result);
+});
+
+test("stdio server completes a newline-delimited JSON handshake", async () => {
+  const messages = [
+    { jsonrpc: "2.0", id: 30, method: "initialize", params: { protocolVersion: "2024-11-05" } },
+    { jsonrpc: "2.0", method: "notifications/initialized", params: {} },
+    { jsonrpc: "2.0", id: 31, method: "tools/list", params: {}, _meta: STATELESS_META },
+    { jsonrpc: "2.0", id: 32, method: "server/discover", params: {}, _meta: STATELESS_META },
+  ];
+  const responses = await requestChunksOverStdio([
+    Buffer.from(messages.map((message) => `${JSON.stringify(message)}\n`).join(""), "utf8"),
+  ]);
+
+  assert.deepEqual(
+    responses.map(({ id }) => id),
+    [30, 31, 32],
+  );
+  assert.equal(responses[0].result.protocolVersion, "2024-11-05");
+  assert.deepEqual(responses[1].result.tools.map(({ name }) => name), [
+    "agt_policy_status",
+    "agt_policy_check_text",
+  ]);
+  assert.equal(responses[2].result.protocolVersion, "2026-07-28");
+});
+
+test("stdio server answers a legacy Content-Length request with newline-delimited JSON", async () => {
+  const response = await requestOverStdio({ jsonrpc: "2.0", id: 33, method: "ping", params: {} });
+
+  assert.deepEqual(response, { jsonrpc: "2.0", id: 33, result: {} });
+});
+
+test("stdio server reports a malformed newline-delimited line", async () => {
+  const responses = await requestChunksOverStdio([Buffer.from("{not json}\n", "utf8")]);
+
+  assert.equal(responses.length, 1);
+  assert.equal(responses[0].error.code, -32700);
+  assert.equal(responses[0].error.message, "Parse error");
 });

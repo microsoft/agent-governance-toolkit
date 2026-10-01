@@ -46,12 +46,12 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@types/uuid": "11.0.0",
-    "@typescript-eslint/eslint-plugin": "8.70.0",
+    "@typescript-eslint/eslint-plugin": "8.70.1",
     "@typescript-eslint/parser": "8.70.0",
     "@vitest/coverage-v8": "4.1.10",
-    "eslint": "10.10.0",
+    "eslint": "10.11.0",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
   },

@@ -99,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subclasses overriding it must accept `**kwargs` or update their signature.
 
 ### Added
+- **Healthcare identifier detection** — added contextual detection for Medical Record Numbers (MRN) and Health Plan IDs as PHI, plus separate contextual and Luhn-validated detection for National Provider Identifiers (NPI), which remain non-PHI healthcare identifiers. Shared MRN semantics are now used by credential redaction and data classification.
 - `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
   credentials. These tokens remain valid for the life of the process unless
   revoked explicitly.

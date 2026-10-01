@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { randomUUID } from "node:crypto";
+import { createHash, createSecretKey, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -15,16 +15,32 @@ import {
   PromptDefenseEvaluator,
 } from "@microsoft/agent-governance-sdk";
 
-import { appendAuditEntry, getAuditStatus } from "./audit.mjs";
+import {
+  appendAuditEntry,
+  canonicalJson,
+  computeArgsDigest,
+  getAuditStatus,
+} from "./audit.mjs";
 import { safeJsonStringify, summarizeText } from "./poisoning.mjs";
 
 export const USER_POLICY_ENV = "AGT_OPENCODE_POLICY_PATH";
 export const AUDIT_PATH_ENV = "AGT_OPENCODE_AUDIT_PATH";
+export const AUDIT_HMAC_KEY_ENV = "AGT_OPENCODE_AUDIT_HMAC_KEY";
+export const PRINCIPAL_SUB_ENV = "AGT_OPENCODE_PRINCIPAL_SUB";
+export const PRINCIPAL_ISS_ENV = "AGT_OPENCODE_PRINCIPAL_ISS";
 export const SURFACE_NAME = "opencode";
 
 const USER_POLICY_RELATIVE_PATH = [".config", "opencode", "agt", "policy.json"];
 const USER_AUDIT_RELATIVE_PATH = [".config", "opencode", "agt", "audit-log.json"];
 const DEFAULT_AGENT_ID = "opencode";
+/** Upper bound on the decision reason copied into an audit entry. */
+const MAX_AUDIT_REASON_LENGTH = 1024;
+/** Upper bound on the error text copied into a failure audit entry. */
+const MAX_AUDIT_FAILURE_REASON_LENGTH = 256;
+/** Shortest HMAC key accepted, in bytes. Anything shorter weakens the digest. */
+const MIN_AUDIT_HMAC_KEY_BYTES = 32;
+/** Bounds on the principal subject and issuer recorded in an audit entry. */
+const MAX_PRINCIPAL_FIELD_LENGTH = 256;
 const DEFAULT_MIN_PROMPT_DEFENSE_GRADE = "B";
 const SUPPORTED_POLICY_SCHEMA_VERSION = 1;
 const DEFAULT_TOOL_EFFECT = "allow";
@@ -61,6 +77,8 @@ export async function loadPolicy({
   defaultPolicyPath = new URL("../config/default-policy.json", import.meta.url),
   policyPath = process.env[USER_POLICY_ENV],
   auditPath = process.env[AUDIT_PATH_ENV],
+  auditHmacKey = process.env[AUDIT_HMAC_KEY_ENV],
+  principal = principalFromEnvironment(),
   homeDirectory = homedir(),
 } = {}) {
   const bundledDefaultPath = normalizeFilePath(defaultPolicyPath);
@@ -99,7 +117,7 @@ export async function loadPolicy({
   }
 
   const runtime = createGovernanceRuntime(compiledPolicy, configuredAdditionalContext);
-  return {
+  const state = {
     auditPath: resolvedAuditPath,
     bundledDefaultError,
     configuredPolicyError,
@@ -111,6 +129,25 @@ export async function loadPolicy({
     source,
     ...runtime,
   };
+
+  // Resolved once per load rather than per write, and kept non-enumerable so
+  // it is not swept into a log line or a JSON dump of the state.
+  const resolvedHmacKey = resolveAuditHmacKey(auditHmacKey);
+  const resolvedPrincipal = resolvePrincipal(principal);
+  state.auditConfigError = [resolvedHmacKey.error, resolvedPrincipal.error]
+    .filter(Boolean)
+    .join(" ") || undefined;
+
+  Object.defineProperty(state, "auditContext", {
+    enumerable: false,
+    value: Object.freeze({
+      hmacKey: resolvedHmacKey.key,
+      policyVersion: computePolicyVersion(compiledPolicy.raw),
+      principal: resolvedPrincipal.principal,
+    }),
+  });
+
+  return state;
 }
 
 export function buildSessionStartResult(state, input = {}) {
@@ -167,6 +204,7 @@ export async function evaluatePromptSubmission(state, input = {}) {
     await recordAudit(state, {
       action: "prompt.submit",
       decision: decision.effectiveDecision,
+      reason,
       sessionId: input.session_id,
     });
 
@@ -194,6 +232,7 @@ export async function evaluatePromptSubmission(state, input = {}) {
       await recordFailureAudit(state, {
         action: "prompt.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.session_id,
       });
       return {
@@ -245,7 +284,9 @@ export async function evaluatePreToolUse(state, input = {}) {
     await recordAudit(state, {
       action: `tool.${toolName}`,
       decision: decision.effectiveDecision,
+      reason,
       sessionId: input.session_id,
+      toolArgs: input.tool_input,
     });
 
     if (decision.effectiveDecision === "deny") {
@@ -279,7 +320,9 @@ export async function evaluatePreToolUse(state, input = {}) {
       await recordFailureAudit(state, {
         action: "tool.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.session_id,
+        toolArgs: input.tool_input,
       });
       return {
         hookSpecificOutput: {
@@ -330,11 +373,17 @@ export function checkArbitraryText(state, text, sessionId = "adhoc-check") {
 
 export async function getPolicyStatus(state) {
   const auditStatus = await getAuditStatus(state.auditPath);
+  const auditContext = state.auditContext ?? {};
   return {
+    // Reports which digest is in force, never the key itself.
+    auditArgsDigestAlg: auditContext.hmacKey ? "hmac-sha256" : "sha256",
+    auditConfigError: state.auditConfigError,
     auditEntries: auditStatus.count,
+    auditPrincipal: auditContext.principal,
     auditError: auditStatus.error,
     auditPath: state.auditPath,
     auditValid: auditStatus.valid,
+    policyVersion: auditContext.policyVersion,
     bundledDefaultError: state.bundledDefaultError?.message,
     configuredPolicyError: state.configuredPolicyError?.message,
     configuredPolicyPath: state.configuredPolicyPath,
@@ -389,13 +438,21 @@ function createGovernanceRuntime(policy, configuredAdditionalContext) {
 }
 
 function getPolicyLoadFailure(state) {
+  const failures = [];
   if (state.configuredPolicyError) {
-    return `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`;
+    failures.push(
+      `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`,
+    );
   }
   if (state.bundledDefaultError) {
-    return `AGT bundled default policy could not be loaded from ${state.path}: ${state.bundledDefaultError.message}`;
+    failures.push(
+      `AGT bundled default policy could not be loaded from ${state.path}: ${state.bundledDefaultError.message}`,
+    );
   }
-  return "";
+  if (state.auditConfigError) {
+    failures.push(`AGT audit configuration is invalid: ${state.auditConfigError}`);
+  }
+  return failures.join(" ");
 }
 
 function createCommandPatternBackend(policy) {
@@ -628,13 +685,142 @@ function createContextDetector(policy) {
   });
 }
 
-async function recordAudit(state, { action, decision, sessionId }) {
+async function recordAudit(state, { action, decision, sessionId, reason, toolArgs }) {
   await mkdir(dirname(state.auditPath), { recursive: true });
+  const auditContext = state.auditContext ?? {};
   await appendAuditEntry(state.auditPath, {
     action,
     agentId: `${DEFAULT_AGENT_ID}:${sessionId ?? "unknown-session"}`,
     decision: toAuditDecision(decision),
+    policyVersion: auditContext.policyVersion,
+    principal: auditContext.principal,
+    reason: normalizeAuditReason(reason),
+    ...(toolArgs === undefined
+      ? {}
+      : computeArgsDigest(toolArgs, { hmacKey: auditContext.hmacKey })),
   });
+}
+
+/**
+ * Read the delegating principal from the environment.
+ *
+ * The principal answers "on whose behalf", which is the difference between an
+ * action the agent took by itself and one a human delegated. It comes only
+ * from operator configuration: taking it from tool arguments or model output
+ * would let the agent name its own authority, and then it is not evidence.
+ */
+function principalFromEnvironment() {
+  const sub = process.env[PRINCIPAL_SUB_ENV];
+  const iss = process.env[PRINCIPAL_ISS_ENV];
+  if (!sub && !iss) {
+    return undefined;
+  }
+  return { ...(sub ? { sub } : {}), ...(iss ? { iss } : {}) };
+}
+
+/**
+ * Validate the configured principal. Shaped after OIDC (`sub`, optional
+ * `iss`) so the record stays unambiguous when more than one identity provider
+ * is in play. An invalid principal is an error rather than a silent omission,
+ * because a missing principal and a misconfigured one mean different things to
+ * whoever reads the log later.
+ */
+function resolvePrincipal(principal) {
+  if (principal === undefined || principal === null) {
+    return { principal: undefined, error: undefined };
+  }
+
+  if (typeof principal !== "object" || Array.isArray(principal)) {
+    return { principal: undefined, error: "Audit principal must be an object with a sub." };
+  }
+
+  for (const key of Object.keys(principal)) {
+    if (key !== "sub" && key !== "iss") {
+      return { principal: undefined, error: `Audit principal has an unsupported field '${key}'.` };
+    }
+  }
+
+  const sub = principal.sub;
+  if (typeof sub !== "string" || sub.trim().length === 0) {
+    return {
+      principal: undefined,
+      error: `Audit principal requires a non-empty sub (set ${PRINCIPAL_SUB_ENV}).`,
+    };
+  }
+  if (sub.length > MAX_PRINCIPAL_FIELD_LENGTH) {
+    return { principal: undefined, error: "Audit principal sub is too long." };
+  }
+
+  if (Object.hasOwn(principal, "iss")) {
+    if (typeof principal.iss !== "string" || principal.iss.length > MAX_PRINCIPAL_FIELD_LENGTH) {
+      return { principal: undefined, error: "Audit principal iss must be a short string." };
+    }
+    return { principal: Object.freeze({ iss: principal.iss, sub }), error: undefined };
+  }
+
+  return { principal: Object.freeze({ sub }), error: undefined };
+}
+
+/**
+ * Resolve the optional key that turns the argument digest from a plain
+ * SHA-256 into an HMAC.
+ *
+ * A short key is refused rather than used, so a weak digest cannot be
+ * mistaken for a keyed one. The key is wrapped in a KeyObject, which
+ * serializes as `{}`, so it cannot leak through a log line or a status dump.
+ */
+function resolveAuditHmacKey(value) {
+  if (value === undefined || value === null || value === "") {
+    return { key: null, error: undefined };
+  }
+
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(String(value), "utf8");
+  if (buffer.byteLength < MIN_AUDIT_HMAC_KEY_BYTES) {
+    return {
+      key: null,
+      error:
+        `${AUDIT_HMAC_KEY_ENV} must be at least ${MIN_AUDIT_HMAC_KEY_BYTES} bytes; ` +
+        "falling back to an unkeyed digest.",
+    };
+  }
+
+  try {
+    return { key: createSecretKey(buffer), error: undefined };
+  } catch (error) {
+    return { key: null, error: `${AUDIT_HMAC_KEY_ENV} could not be used: ${error.message}` };
+  }
+}
+
+/**
+ * Reasons are operator-facing evidence, not free-form storage. Only strings are
+ * accepted, whitespace is flattened, and the text is capped, because a reason
+ * can quote a matched path or URL from the request.
+ */
+function normalizeAuditReason(reason) {
+  if (typeof reason !== "string") {
+    return undefined;
+  }
+  const summarized = summarizeText(reason, MAX_AUDIT_REASON_LENGTH);
+  return summarized.length > 0 ? summarized : undefined;
+}
+
+/** Reason recorded when governance itself failed rather than reached a verdict. */
+function failureReason(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return `policy_error: ${summarizeText(message, MAX_AUDIT_FAILURE_REASON_LENGTH)}`;
+}
+
+/**
+ * Identifies the policy that produced a decision. Derived from the active raw
+ * policy rather than a declared version field, so an edited policy always
+ * produces a different value.
+ */
+function computePolicyVersion(raw) {
+  try {
+    return `sha256:${createHash("sha256").update(canonicalJson(raw ?? null), "utf8").digest("hex")}`;
+  } catch {
+    return "sha256:unavailable";
+  }
 }
 
 async function recordFailureAudit(state, payload) {
@@ -1160,7 +1346,7 @@ export function evaluateDirectResourceAccess(policy, context) {
 
     const result = {
       effect: rule.effect,
-      reason: `${rule.reason} Matched path ${matched.displayPath}.`,
+      reason: `${rule.reason} Matched path rule ${rule.id}.`,
     };
     if (rule.effect === "deny") {
       return result;
@@ -1178,7 +1364,7 @@ export function evaluateDirectResourceAccess(policy, context) {
 
     const result = {
       effect: rule.effect,
-      reason: `${rule.reason} Matched URL ${matched.normalizedUrl}.`,
+      reason: `${rule.reason} Matched URL rule ${rule.id}.`,
     };
     if (rule.effect === "deny") {
       return result;
@@ -1454,6 +1640,37 @@ function tokenizeShellCommands(commandText) {
       continue;
     }
 
+    const hashFollowsExpansionSyntax = ["{", "}", ")", "`"].includes(input[index - 1]);
+    if (character === "#" && !tokenStarted && !hashFollowsExpansionSyntax) {
+      const insideBacktickSubstitution = substitutions.some(
+        (substitution) => substitution.type === "backtick",
+      );
+      let precedingBackslashes = 0;
+      while (index + 1 < input.length) {
+        const nextCharacter = input[index + 1];
+        if (
+          nextCharacter === "\n" ||
+          nextCharacter === "\r" ||
+          (insideBacktickSubstitution &&
+            nextCharacter === "`" &&
+            precedingBackslashes % 2 === 0)
+        ) {
+          break;
+        }
+        precedingBackslashes = nextCharacter === "\\" ? precedingBackslashes + 1 : 0;
+        index += 1;
+      }
+      finishCommand();
+      if (input[index + 1] === "\r" && input[index + 2] === "\n") {
+        hasControlOperator = true;
+        index += 2;
+      } else if (input[index + 1] === "\n" || input[index + 1] === "\r") {
+        hasControlOperator = true;
+        index += 1;
+      }
+      continue;
+    }
+
     if (character === "'" || character === '"') {
       quote = character;
       tokenStarted = true;
@@ -1615,6 +1832,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
     await recordAudit(state, {
       action: "prompt.submit",
       decision: effect,
+      reason,
       sessionId: input.sessionId,
     });
 
@@ -1627,6 +1845,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
       await recordFailureAudit(state, {
         action: "prompt.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.sessionId,
       });
       return {
@@ -1646,7 +1865,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
  *
  * @param {object} state Loaded policy state from {@link loadPolicy}.
  * @param {{ tool: string, args?: object, cwd?: string, sessionId?: string }} input
- * @returns {Promise<{ effect: "allow"|"review"|"deny", reason: string }>}
+ * @returns {Promise<{ effect: "allow"|"review"|"deny", reason: string, policyError?: boolean }>}
  */
 export async function evaluateOpenCodeTool(state, input = {}) {
   const policyLoadFailure = getPolicyLoadFailure(state);
@@ -1673,7 +1892,9 @@ export async function evaluateOpenCodeTool(state, input = {}) {
     await recordAudit(state, {
       action: `tool.${toolName}`,
       decision: effect,
+      reason,
       sessionId: input.sessionId,
+      toolArgs: input.args,
     });
 
     return {
@@ -1685,16 +1906,20 @@ export async function evaluateOpenCodeTool(state, input = {}) {
       await recordFailureAudit(state, {
         action: "tool.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.sessionId,
+        toolArgs: input.args,
       });
       return {
         effect: "deny",
         reason: `AGT tool evaluation failed closed: ${error instanceof Error ? error.message : String(error)}`,
+        policyError: true,
       };
     }
     return {
       effect: "allow",
       reason: `AGT advisory: tool evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
+      policyError: true,
     };
   }
 }
@@ -1718,6 +1943,8 @@ export async function evaluateOpenCodeToolOutput(state, input = {}) {
   await recordAudit(state, {
     action: `tool.${String(input.tool ?? "unknown")}.output`,
     decision: findings.length ? "review" : "allow",
+    // Pattern identifiers only. The matched text is never recorded.
+    reason: findings.length ? describeSecretFindings(findings) : undefined,
     sessionId: input.sessionId,
   });
 

@@ -37,6 +37,7 @@ pub use tool::{
 /// Python and Node bindings run this before building a runtime. See
 /// `docs/acs-retarget.md`, "Removed manifest fields".
 pub use agent_control_specification_core::reject_removed_manifest_fields;
+pub use agent_control_specification_core::reject_url_manifest_local_fields;
 
 /// Stands in for an annotator dispatcher when the manifest declares no
 /// annotators and the bundled dispatchers are not compiled in. The
@@ -326,6 +327,7 @@ pub fn manifest_from_url(
     })?;
     let manifest = Manifest::from_path_with_limits(path, limits)?;
     reject_removed_manifest_fields(&manifest)?;
+    reject_url_manifest_local_fields(&manifest)?;
     Ok(manifest)
 }
 
