@@ -76,6 +76,30 @@ test("user-prompt-submit hook blocks suspicious prompts", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+
+test("pre-tool-use hook denies recursive deletion without blocking literal text", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-claude-delete-hook-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const scriptPath = fileURLToPath(new URL("../hooks/pre-tool-use.mjs", import.meta.url));
+  const policyPath = fileURLToPath(new URL("../config/default-policy.json", import.meta.url));
+  for (const [command, expected] of [
+    ["rm -r -f src", "deny"],
+    ["rm -rf node_modules src/*", "deny"],
+    ['echo "rm -rf src"', "ask"],
+    ["rm -rf node_modules", "ask"],
+  ]) {
+    const output = await runNodeHook(scriptPath, {
+      cwd: root, hook_event_name: "PreToolUse", session_id: "recursive-delete-hook",
+      tool_name: "Bash", tool_input: { command },
+    }, { AGT_CLAUDE_POLICY_PATH: policyPath, AGT_CLAUDE_AUDIT_PATH: join(root, "audit.json") });
+    assert.equal(output.code, 0, output.stderr);
+    const decision = JSON.parse(output.stdout).hookSpecificOutput;
+    assert.equal(decision.permissionDecision, expected, command);
+    if (expected === "deny") assert.match(decision.permissionDecisionReason, /Recursive delete commands/, command);
+  }
+});
+
+
 function runNodeHook(scriptPath, input, extraEnv) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn("node", [scriptPath], {
