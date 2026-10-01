@@ -238,7 +238,7 @@ REGISTERED_NPM_PACKAGES = {
     "@types/glob", "@types/mocha", "@vscode/test-electron",
     "autoprefixer", "glob", "mocha", "postcss", "tailwindcss",
     # AGT Studio's official React/Vite toolchain (verified on npm).
-    "@tanstack/react-query", "@eslint/js", "@tailwindcss/vite",
+    "@tanstack/react-query", "@eslint/js",
     "@testing-library/dom", "@testing-library/react", "@vitejs/plugin-react",
     "globals", "jsdom", "typescript-eslint", "vite",
     # Vendored ACS policy-engine node SDK deps (all real npm packages)
