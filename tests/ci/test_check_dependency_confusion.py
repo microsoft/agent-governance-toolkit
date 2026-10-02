@@ -11,6 +11,7 @@ pre-commit mode and false-positive avoidance for echoed/commented
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -154,6 +155,14 @@ def test_pre_commit_extension_filter_includes_shell() -> None:
     src = SCRIPT_PATH.read_text(encoding="utf-8")
     assert '".sh"' in src
     assert '".bash"' in src
+
+
+def test_studio_manifest_dependencies_are_registered() -> None:
+    manifest = SCRIPT_PATH.parents[1] / "agent-governance-studio" / "web" / "package.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert data["dependencies"]
+    assert data["devDependencies"]
+    assert check_dep_conf.check_file(str(manifest)) == []
 
 
 @pytest.mark.parametrize("ext", [".py", ".md", ".txt", ".ipynb"])
