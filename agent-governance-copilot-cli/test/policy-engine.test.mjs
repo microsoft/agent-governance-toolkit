@@ -22,8 +22,19 @@ import {
   evaluatePreToolUse,
 } from "../assets/extensions/agt-global-policy/lib/policy.mjs";
 
+// Cases and expected behavior supplied by the contributor; encoded with AI assistance.
+const CONTRIBUTOR_DELETE_COMMANDS = [
+  'rm --recursive "$(pwd)/src" -f',
+  'echo "$(rm -r "$(pwd)/src" -f)"',
+];
+const CONTRIBUTOR_TEXT_COMMANDS = [
+  'echo rm "-r" "-f" src',
+  'echo "rm --recursive --force src"',
+];
+
 // Review regression inputs specify shell behavior independently of the parser.
 const SUBSTITUTION_DELETE_COMMANDS = [
+  ...CONTRIBUTOR_DELETE_COMMANDS,
   "rm -r \"$(pwd)/src\" -f",
   "rm -r x$(pwd) -f",
   "rm \"$(pwd)/src\" -rf",
@@ -37,7 +48,6 @@ const SUBSTITUTION_DELETE_COMMANDS = [
   "rm -r >\"$(pwd)/log\" -f src",
   "rm -r >$(pwd)/log -f src",
   "rm -rf \"$(pwd)/node_modules\"",
-  "echo \"$(rm -r \"$(pwd)/src\" -f)\"",
   "echo `rm -r \"$(pwd)/src\" -f`",
   "echo \"$(echo ready; rm -rf src)\"",
   "echo \"$(rm -rf src)\"",
@@ -48,6 +58,7 @@ const SUBSTITUTION_DELETE_COMMANDS = [
   "rm -r \"$(pwd)$(pwd)/src\" -f"
 ];
 const SUBSTITUTION_TEXT_COMMANDS = [
+  ...CONTRIBUTOR_TEXT_COMMANDS,
   "echo $(pwd) rm -rf src",
   "echo `pwd` rm -rf src",
   "echo \"$(pwd)\" rm -rf src",
@@ -720,4 +731,17 @@ test("deeply nested substitutions restore state without repeated stack copies", 
   assert.equal(matchesRecursiveDeleteCommand("rm -r " + nested + "/src -f"), true);
   assert.equal(matchesRecursiveDeleteCommand("echo " + "$(".repeat(20000) + "rm -rf src" + ")".repeat(20000)), true);
   assert.ok(performance.now() - start < 2000, "substitution restoration must stay bounded");
+});
+
+test("contributor cases detect recursive deletion across substitutions", () => {
+  for (const command of CONTRIBUTOR_DELETE_COMMANDS) {
+    assert.equal(matchesRecursiveDeleteCommand(command), true, command);
+    assert.equal(isSafeShellCleanupCommand(command), false, command);
+  }
+});
+
+test("contributor cases leave quoted echo arguments unmatched", () => {
+  for (const command of CONTRIBUTOR_TEXT_COMMANDS) {
+    assert.equal(matchesRecursiveDeleteCommand(command), false, command);
+  }
 });
