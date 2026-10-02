@@ -49,10 +49,16 @@ updates:
           - "pytest*"
           - "structlog"
           - "ruff"
-
   # npm packages
   - package-ecosystem: "npm"
-    directory: "/agent-governance-python/agent-os/extensions/mcp-server"
+    directories:
+      - "/agent-governance-python/agent-os/extensions/mcp-server"
+      - "/agent-governance-python/agent-os/extensions/copilot"
+      - "/agent-governance-copilot-cli"
+      - "/agent-governance-claude-code"
+      - "/agent-governance-typescript"
+      - "/agent-governance-antigravity-cli"
+      - "/agent-governance-studio/web"
     schedule:
       interval: "weekly"
     cooldown:

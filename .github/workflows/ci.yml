@@ -1207,7 +1207,7 @@ jobs:
 
       - name: Install frontend dependencies
         run: |
-          npm ci --prefix agent-governance-studio/web
+          npm ci --ignore-scripts --prefix agent-governance-studio/web
 
       - name: Run frontend lint
         run: |
