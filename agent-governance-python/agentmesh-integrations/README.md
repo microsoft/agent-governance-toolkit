@@ -12,7 +12,7 @@
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![PyPI](https://img.shields.io/badge/PyPI-multiple%20packages-lightgrey)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agentmesh-integrations)
+[![PyPI](https://img.shields.io/badge/PyPI-multiple%20packages-lightgrey)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations)
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh integrations.
 
@@ -34,7 +34,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 - **Release independently** — A Dify plugin update shouldn't require a core release
 - **Accept community contributions** — Lower barrier than modifying core
 
-> **Note:** Framework adapters that wrap agent frameworks with governance (LangChain, CrewAI, LlamaIndex) live inside [Agent OS](https://github.com/microsoft/agent-governance-toolkit/tree/main/src/agent_os/integrations) because they are tightly coupled to the kernel. This repo contains platform-specific *plugins* and external *trust providers*.
+> **Note:** Framework adapters that wrap agent frameworks with governance (LangChain, CrewAI, LlamaIndex) live inside [Agent OS](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/src/agent_os/integrations) because they are tightly coupled to the kernel. This repo contains platform-specific *plugins* and external *trust providers*.
 
 ## Available Integrations
 
@@ -43,13 +43,14 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 | [LangChain](langchain-agentmesh/) | `agentmesh-langchain` | ✅ Stable | Ed25519 identity, trust-gated tools, scope chains, callbacks |
 | [LangGraph](langgraph-trust/) | [`langgraph-trust`](https://pypi.org/project/langgraph-trust/) | ✅ Published (PyPI) | Trust-gated checkpoint nodes, governance policy enforcement, trust-aware routing |
 | [LlamaIndex](llamaindex-agentmesh/) | `llama-index-agent-agentmesh` | ✅ Merged Upstream | Trust-verified workers, identity-aware query engines, scope chains |
-| [Agent Lightning](https://github.com/microsoft/agent-governance-python/agent-lightning/tree/main/contrib/recipes/agentos) | — | ✅ Merged Upstream | Agent-OS governance adapters, reward shaping, governed RL training — maintained in [microsoft/agent-lightning](https://github.com/microsoft/agent-lightning) |
+| [Agent Lightning](../agent-lightning/) | — | ✅ Merged Upstream | Agent-OS governance adapters, reward shaping, governed RL training — maintained in [microsoft/agent-lightning](https://github.com/microsoft/agent-lightning) |
 | [Dify Plugin](dify-plugin/) | `agentmesh-trust-layer` | ✅ Stable | Packaged `.difypkg` with peer verification, step auth, trust scoring |
 | [Dify Middleware](dify/) | — | 📦 Archived | Flask middleware (archived — use the plugin instead) |
 | [Moltbook](moltbook/) | — | ✅ Stable | AgentMesh governance skill for [Moltbook](https://moltbook.com) agent registry |
 | [Nostr Web of Trust](nostr-wot/) | `agentmesh-nostr-wot` | 🚧 Scaffold | Trust scoring via [MaximumSats](https://github.com/joelklabo/maximumsats-mcp) NIP-85 WoT |
 | [OpenAI Agents](openai-agents-trust/) | [`agentmesh-openai-agents-trust`](https://pypi.org/project/agentmesh-openai-agents-trust/) | ✅ Published (PyPI) | Trust guardrails, policy enforcement, governance hooks, trust-gated handoffs for OpenAI Agents SDK |
 | [OpenClaw Skill](openclaw-skill/) | [`agentmesh-governance`](https://clawhub.ai/microsoft/agentmesh-governance) | ✅ Published (ClawHub) | Governance skill for [OpenClaw](https://openclaw.im) agents — policy enforcement, trust scoring, Ed25519 DIDs, hash-chain audit |
+| [Cedarling](cedarling-acs/) | `agent-governance-toolkit-integrations[cedarling]` | 🚧 Preview | Cedarling policy dispatcher for the ACS v5 extension point: JWT multi-issuer auth, in-process evaluation |
 
 ## Quick Start
 

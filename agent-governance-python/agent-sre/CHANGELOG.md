@@ -26,6 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SLI._measurements` is preserved as a backward-compatible alias pointing into
   the in-memory store's row list when the default backend is used.
 
+### Fixed
+- **Provider fallbacks on the default install.** Without an advanced provider,
+  `get_slo_detector()` and `get_chaos_engine()` raise a `NotImplementedError` naming
+  the missing class and the entry point group a provider package must register,
+  instead of an `ImportError` for classes that never existed (#4152).
+- `list_providers()` reports `"unavailable"` instead of `"community"` for the
+  `slo_detection` and `chaos_engine` slots when no advanced provider is installed,
+  since they have no community implementation.
+
 ## [0.3.0] - 2026-02-19
 
 ### Added

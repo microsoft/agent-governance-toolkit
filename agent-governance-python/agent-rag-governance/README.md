@@ -85,6 +85,10 @@ RAGPolicy(
 )
 ```
 
+With `block_pii`, SSNs with dash, space, or dot separators are blocked. Bare nine-digit SSNs are blocked only when an explicit cue such as `SSN:` or `social security number` immediately precedes them; unrelated nine-digit IDs are not treated as SSNs.
+
+The `agent-os` gateway and adapter detectors do not yet recognize cued bare SSNs (see #3592), so this RAG check does not imply parity across all three detectors.
+
 ## Audit Log Format
 
 Each retrieval call emits one JSON line:

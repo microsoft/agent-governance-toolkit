@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 14 — Kill Switch & Rate Limiting"
-last_reviewed: 2026-07-02
+last_reviewed: 2026-09-19
 owner: agt-maintainers
 ---
 
@@ -122,9 +122,9 @@ history. The rest of this tutorial covers every component in detail.
 **Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py`
 
 The `KillSwitch` provides immediate, hard termination of an agent with a full
-audit trail. In the public preview, all in-flight saga steps are
-automatically compensated (rolled back) — there is no handoff to substitute
-agents.
+audit trail. In-flight saga steps are handed off to a registered substitute
+when one is available. If no substitute is registered for the session, the
+steps are automatically compensated (rolled back).
 
 ### 3.1 Kill Reasons
 
@@ -143,13 +143,15 @@ print(list(KillReason))
 | `BEHAVIORAL_DRIFT` | `"behavioral_drift"` | Agent deviates from expected behavior patterns |
 | `RATE_LIMIT` | `"rate_limit"` | Agent exceeded rate limits repeatedly |
 | `RING_BREACH` | `"ring_breach"` | Agent attempted actions above its ring level |
+| `QUARANTINE_TIMEOUT` | `"quarantine_timeout"` | Agent remained quarantined past its allowed duration |
 | `MANUAL` | `"manual"` | Human operator triggered the kill |
 | `SESSION_TIMEOUT` | `"session_timeout"` | Session exceeded its `max_duration_seconds` |
 
 ### 3.2 Kill with In-Flight Saga Steps
 
 When you kill an agent that has in-flight saga steps (partially completed
-multi-step workflows), the kill switch compensates each step automatically:
+multi-step workflows), the kill switch compensates each step automatically
+when no substitute is registered for the session:
 
 ```python
 from hypervisor.security.kill_switch import (
@@ -176,10 +178,10 @@ result: KillResult = kill_switch.kill(
     details="Agent attempted Ring 0 operation from Ring 2",
 )
 
-# Every in-flight step is compensated (rolled back)
+# With no registered substitute, every in-flight step is compensated (rolled back)
 print(f"Handoffs:              {len(result.handoffs)}")           # 3
 print(f"Compensation triggered: {result.compensation_triggered}")  # True
-print(f"Handoff successes:     {result.handoff_success_count}")    # 0 (public preview)
+print(f"Handoff successes:     {result.handoff_success_count}")    # 0 (no substitute registered)
 
 for handoff in result.handoffs:
     print(f"  Step {handoff.step_id}: {handoff.status}")
@@ -188,7 +190,7 @@ for handoff in result.handoffs:
     # Step deploy-staging: compensated
     assert handoff.status == HandoffStatus.COMPENSATED
     assert handoff.from_agent == "did:example:deploy-agent"
-    assert handoff.to_agent is None  # public preview: no handoff
+    assert handoff.to_agent is None  # no substitute was registered
 ```
 
 ### 3.3 Handoff Status Lifecycle
@@ -198,17 +200,16 @@ Each `StepHandoff` tracks the status of a saga step during termination:
 | Status | Value | Meaning |
 |--------|-------|---------|
 | `PENDING` | `"pending"` | Handoff initiated, not yet processed |
-| `HANDED_OFF` | `"handed_off"` | Step transferred to substitute agent (enterprise) |
+| `HANDED_OFF` | `"handed_off"` | Step transferred to a registered substitute agent |
 | `FAILED` | `"failed"` | Handoff attempt failed |
 | `COMPENSATED` | `"compensated"` | Step rolled back via compensation action |
 
-In the public preview, all steps are always `COMPENSATED` — there is no
-substitute agent handoff. This is the safe default: roll back everything.
+When no substitute is registered, steps are `COMPENSATED`. When a substitute is
+available for the session, the steps are `HANDED_OFF` instead.
 
 ### 3.4 Substitute Agent Registration
 
-You can register backup agents that could take over work (enterprise edition
-enables actual handoff):
+Register a backup agent to take over in-flight work:
 
 ```python
 kill_switch = KillSwitch()
@@ -219,10 +220,21 @@ kill_switch.register_substitute(
     agent_did="did:example:backup-agent",
 )
 
-# Kill the primary agent — in public preview, steps are
-# still compensated (not handed off), but the substitute is
-# unregistered as part of the kill cleanup
+# Kill the primary agent and hand off its in-flight steps
 result = kill_switch.kill(
+    agent_did="did:example:primary-agent",
+    session_id="session-001",
+    reason=KillReason.QUARANTINE_TIMEOUT,
+    in_flight_steps=[
+        {"step_id": "step-1", "saga_id": "saga-1"},
+    ],
+)
+print([handoff.status.value for handoff in result.handoffs])  # ["handed_off"]
+print(result.handoff_success_count)                           # 1
+assert result.handoffs[0].to_agent == "did:example:backup-agent"
+
+# Killing a registered substitute removes it from the substitute registry.
+kill_switch.kill(
     agent_did="did:example:backup-agent",
     session_id="session-001",
     reason=KillReason.MANUAL,
@@ -242,8 +254,14 @@ Every kill is recorded and queryable:
 ```python
 kill_switch = KillSwitch()
 
-# Perform several kills
-kill_switch.kill("agent-a", "s1", KillReason.RATE_LIMIT)
+# Perform several kills, including one successful handoff
+kill_switch.register_substitute("s1", "agent-backup")
+kill_switch.kill(
+    "agent-a",
+    "s1",
+    KillReason.RATE_LIMIT,
+    in_flight_steps=[{"step_id": "step-1", "saga_id": "saga-1"}],
+)
 kill_switch.kill("agent-b", "s1", KillReason.RING_BREACH)
 kill_switch.kill("agent-c", "s2", KillReason.BEHAVIORAL_DRIFT)
 
@@ -254,8 +272,8 @@ print(f"Total kills: {kill_switch.total_kills}")  # 3
 for entry in history:
     print(f"  [{entry.timestamp}] {entry.agent_did} — {entry.reason}")
 
-# In public preview, handoff count is always 0
-print(f"Total handoffs: {kill_switch.total_handoffs}")  # 0
+# Total handoffs counts successfully handed-off in-flight steps
+print(f"Total handoffs: {kill_switch.total_handoffs}")  # 1
 ```
 
 ### 3.6 KillResult Reference

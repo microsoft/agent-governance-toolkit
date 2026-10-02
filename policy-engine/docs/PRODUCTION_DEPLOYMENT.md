@@ -22,7 +22,7 @@ Runtime failures become deny verdicts with reserved runtime error reasons. The h
 | Manifest, intervention point, path, and tool projection failures | `runtime_error:manifest_invalid`, `runtime_error:intervention_point_unknown`, `runtime_error:path_missing`, `runtime_error:path_type_mismatch`, `runtime_error:tool_unknown` |
 | Annotator failures | `runtime_error:annotation_failed`, `runtime_error:annotation_timeout` |
 | Policy dispatcher and output failures | `runtime_error:policy_invocation_failed`, `runtime_error:policy_output_invalid` |
-| Transform and approval failures | `runtime_error:transform_invalid`, `runtime_error:transform_target_forbidden`, legacy `runtime_error:effect_*` compatibility reasons, `runtime_error:approval_action_mismatch` |
+| Transform and approval failures | `runtime_error:transform_invalid` and `runtime_error:transform_target_forbidden` from the engine; `host_error:transform_invalid`, `host_error:transform_target_forbidden`, `host_error:approval_identity_mismatch`, `host_error:approval_resolver_failed` and `host_error:approval_unresolved` from the host |
 | Resource limits | `runtime_error:resource_limit_exceeded` |
 
 ## Host integration invariants

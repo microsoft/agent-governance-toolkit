@@ -3,17 +3,20 @@
 
 //! Lightweight integration, discovery, and prompt-defense helpers for embedding governance.
 
+use crate::skill_audit::{
+    build_skill_audit_metadata, SkillAuditMetadata, TrustedSkillMetadataSource,
+};
 use agent_control_specification::{
-    AgentControl, Decision, EnforcementMode, InterventionPoint, Manifest, RuntimeError,
+    AgentControl, Decision, EnforcementMode, InterceptionPoint, Manifest, RuntimeError,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::Instant;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn integration_now() -> u64 {
@@ -109,6 +112,8 @@ pub struct GovernanceEvent {
     pub action: String,
     pub message: String,
     pub timestamp_secs: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_audit_metadata: Option<SkillAuditMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,10 +256,7 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
     /// token and cost budgets stay at zero unless the host reports usage here
     /// after each model call. Elapsed time is tracked from construction.
     pub fn record_usage(&self, tokens: u64, cost_usd: f64) {
-        *self
-            .token_count
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) += tokens;
+        *self.token_count.lock().unwrap_or_else(|e| e.into_inner()) += tokens;
         *self.cost_usd.lock().unwrap_or_else(|e| e.into_inner()) += cost_usd;
     }
 
@@ -332,6 +334,39 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
         tool_name: Option<&str>,
         confidence: Option<f64>,
     ) -> FrameworkExecutionResult {
+        self.evaluate_request_with_skill_audit(request, tool_name, confidence, None)
+    }
+
+    /// Evaluate a request with optional trusted skill provenance.
+    ///
+    /// The request payload is hashed as context, but its contents are never
+    /// inspected for skill names or origins. Valid JSON is hashed structurally;
+    /// other payloads are hashed as strings.
+    pub fn evaluate_request_with_skill_audit(
+        &self,
+        request: ExecutionRequest,
+        tool_name: Option<&str>,
+        confidence: Option<f64>,
+        trusted_source: Option<&TrustedSkillMetadataSource>,
+    ) -> FrameworkExecutionResult {
+        let context_before = request.payload.as_ref().map(|payload| {
+            match serde_json::from_str::<serde_json::Value>(payload) {
+                Ok(value) => value,
+                Err(_) => serde_json::Value::String(payload.clone()),
+            }
+        });
+        let skill_audit_metadata =
+            build_skill_audit_metadata(trusted_source, context_before.as_ref(), None);
+        self.evaluate_request_with_metadata(request, tool_name, confidence, skill_audit_metadata)
+    }
+
+    fn evaluate_request_with_metadata(
+        &self,
+        request: ExecutionRequest,
+        tool_name: Option<&str>,
+        confidence: Option<f64>,
+        skill_audit_metadata: Option<SkillAuditMetadata>,
+    ) -> FrameworkExecutionResult {
         let tool_call_count = *self
             .tool_call_count
             .lock()
@@ -339,15 +374,16 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
         let token_count = *self.token_count.lock().unwrap_or_else(|e| e.into_inner());
         let cost_usd = *self.cost_usd.lock().unwrap_or_else(|e| e.into_inner());
         let elapsed_seconds = self.started_at.elapsed().as_secs_f64();
-        let mut events = vec![self.emit_event(
+        let mut events = vec![self.emit_event_with_skill_audit_metadata(
             GovernanceEventType::PolicyCheck,
             &request.actor,
             &request.action,
             "ACS evaluated request".to_string(),
+            skill_audit_metadata.clone(),
         )];
         let (intervention_point, snapshot) = match tool_name {
             Some(tool) => (
-                InterventionPoint::PreToolCall,
+                InterceptionPoint::PreToolCall,
                 serde_json::json!({
                     "envelope": {
                         "agent": {"id": request.actor},
@@ -368,7 +404,7 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
                 }),
             ),
             None => (
-                InterventionPoint::Input,
+                InterceptionPoint::Input,
                 serde_json::json!({
                     "envelope": {
                         "agent": {"id": request.actor},
@@ -394,14 +430,18 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
             snapshot,
             EnforcementMode::Enforce,
         );
-        let requires_human_approval = evaluation.verdict.decision == Decision::Escalate;
+        // agent-hooks has no `escalate` decision. An escalation is a
+        // liftable deny: `deny` carrying an `approval` block that the
+        // host resolves. A deny without one is final.
+        let requires_human_approval =
+            evaluation.verdict.decision == Decision::Deny && evaluation.verdict.approval.is_some();
         if !evaluation.verdict.decision.permits() {
             let reason = evaluation
                 .verdict
                 .reason
                 .clone()
                 .unwrap_or_else(|| "policy denied request".to_string());
-            events.push(self.emit_event(
+            events.push(self.emit_event_with_skill_audit_metadata(
                 if tool_name.is_some() {
                     GovernanceEventType::ToolCallBlocked
                 } else {
@@ -410,6 +450,7 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
                 &request.actor,
                 &request.action,
                 reason.clone(),
+                skill_audit_metadata,
             ));
             return FrameworkExecutionResult {
                 decision: ExecutionResponse {
@@ -493,12 +534,24 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
         action: &str,
         message: String,
     ) -> GovernanceEvent {
+        self.emit_event_with_skill_audit_metadata(event_type, actor, action, message, None)
+    }
+
+    fn emit_event_with_skill_audit_metadata(
+        &self,
+        event_type: GovernanceEventType,
+        actor: &str,
+        action: &str,
+        message: String,
+        skill_audit_metadata: Option<SkillAuditMetadata>,
+    ) -> GovernanceEvent {
         let event = GovernanceEvent {
             event_type,
             actor: actor.to_string(),
             action: action.to_string(),
             message,
             timestamp_secs: integration_now(),
+            skill_audit_metadata,
         };
         let mut log = self.event_log.lock().unwrap_or_else(|e| e.into_inner());
         log.push_back(event.clone());
@@ -1434,7 +1487,7 @@ mod tests {
             });
             if let Some(value) = self.transform {
                 output["transform"] = serde_json::json!({
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": value,
                 });
             }
@@ -1445,7 +1498,7 @@ mod tests {
     fn control(decision: &'static str, reason: Option<&'static str>) -> AgentControl {
         let manifest = Manifest::from_yaml_str(
             r#"
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 policies:
   integration:
     type: custom
@@ -1481,7 +1534,7 @@ tools:
     fn capturing_control(policy: CapturingPolicy) -> AgentControl {
         let manifest = Manifest::from_yaml_str(
             r#"
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 policies:
   integration:
     type: custom
@@ -1497,13 +1550,14 @@ tools:
 "#,
         )
         .unwrap();
-        AgentControl::from_manifest_with_dispatchers(manifest, None, Some(Arc::new(policy))).unwrap()
+        AgentControl::from_manifest_with_dispatchers(manifest, None, Some(Arc::new(policy)))
+            .unwrap()
     }
 
     fn transform_control(value: &'static str) -> AgentControl {
         let manifest = Manifest::from_yaml_str(
             r#"
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 policies:
   integration:
     type: custom
@@ -1545,6 +1599,70 @@ intervention_points:
             FrameworkGovernanceAdapter::new(FrameworkKind::Tower, DemoHook, control("allow", None));
         let result = adapter.execute("agent", "data.read", None);
         assert!(result.allowed);
+    }
+
+    #[test]
+    fn framework_adapter_uses_explicit_skill_metadata_not_payload_fields() {
+        let adapter =
+            FrameworkGovernanceAdapter::new(FrameworkKind::Tower, DemoHook, control("allow", None));
+        let trusted = TrustedSkillMetadataSource::new(Some("search"), Some("framework"))
+            .expect("trusted source");
+        let result = adapter.evaluate_request_with_skill_audit(
+            ExecutionRequest {
+                actor: "agent".into(),
+                action: "tools.call".into(),
+                payload: Some(r#"{"skill_name":"spoofed_skill","value":1}"#.into()),
+            },
+            Some("read_file"),
+            None,
+            Some(&trusted),
+        );
+        let metadata = result.events[0]
+            .skill_audit_metadata
+            .as_ref()
+            .expect("skill audit metadata");
+        assert_eq!(metadata.skill_name.as_deref(), Some("search"));
+        assert_eq!(metadata.skill_origin.as_deref(), Some("framework"));
+        assert_eq!(metadata.provenance_source_trust.as_deref(), Some("trusted"));
+        assert!(metadata.context_hash_before.is_some());
+        assert!(metadata.context_hash_after.is_none());
+
+        let reordered_result = adapter.evaluate_request_with_skill_audit(
+            ExecutionRequest {
+                actor: "agent".into(),
+                action: "tools.call".into(),
+                payload: Some(r#"{"value":1,"skill_name":"spoofed_skill"}"#.into()),
+            },
+            Some("read_file"),
+            None,
+            Some(&trusted),
+        );
+        let reordered_metadata = reordered_result.events[0]
+            .skill_audit_metadata
+            .as_ref()
+            .expect("reordered skill audit metadata");
+        assert_eq!(
+            metadata.context_hash_before,
+            reordered_metadata.context_hash_before
+        );
+
+        let untrusted_result = adapter.evaluate_request(
+            ExecutionRequest {
+                actor: "agent".into(),
+                action: "tools.call".into(),
+                payload: Some(r#"{"skill_name":"spoofed_skill","value":1}"#.into()),
+            },
+            Some("read_file"),
+            None,
+        );
+        let untrusted_metadata = untrusted_result.events[0]
+            .skill_audit_metadata
+            .as_ref()
+            .expect("context hash metadata");
+        assert!(untrusted_metadata.skill_name.is_none());
+        assert!(untrusted_metadata.skill_origin.is_none());
+        assert!(untrusted_metadata.provenance_source_trust.is_none());
+        assert!(untrusted_metadata.context_hash_before.is_some());
     }
 
     #[test]

@@ -13,7 +13,9 @@ from .._types import (
     InterventionPointResult,
 )
 from ._errors import AdapterUnsupportedError
+from .._host import SnapshotSource
 from ._shared import (
+    _default_snapshot,
     Execute,
     _merge_snapshot,
     _maybe_await,
@@ -177,13 +179,18 @@ def guard_tool(
     execute: Execute,
     *,
     tool_call_id: str | None = None,
-    snapshot: Mapping[str, JsonValue] | None = None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None = None,
     mode: EnforcementMode | str = EnforcementMode.ENFORCE,
     approval_resolver: ApprovalResolver | None = None,
 ) -> Callable[..., Awaitable[JsonValue]]:
-    """Return an async tool callable guarded by pre/post tool-call intervention points."""
+    """Return an async tool callable guarded by pre/post tool-call intervention points.
 
-    default_snapshot = dict(snapshot or {})
+    Pass a :class:`SnapshotBuilder` as ``snapshot`` to have each call read the
+    session's current counters and advance ``tool_call_count`` once the
+    pre-check permits it; a plain mapping is sent as-is on every call.
+    """
+
+    default_snapshot = _default_snapshot(snapshot)
 
     async def guarded(args_value: JsonValue, *args: Any, **kwargs: Any) -> JsonValue:
         per_call_snapshot = _pop_common_adapter_kwargs(kwargs)

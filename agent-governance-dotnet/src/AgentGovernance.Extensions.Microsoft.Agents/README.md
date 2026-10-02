@@ -105,6 +105,23 @@ This makes the MAF-to-AGT middleware bridge explicit while still using the same 
   - sets `FunctionInvocationContext.Terminate = true` when denied
   - returns a blocked tool result payload
 
+## Skill-aware audit metadata
+
+Set `TrustedSkillMetadataResolver` when the host can identify a skill from
+framework-owned agent or function metadata. The resolver's result is recorded
+with `provenance_source_trust = "trusted"`; skill names and origins in function
+arguments are never promoted to trusted metadata. Function arguments are
+canonicalized and recorded only as `context_hash_before`, and unsupported
+context values omit the hash without blocking governance.
+
+The .NET adapter emits these fields as flat snake_case keys in
+`GovernanceEvent.Data`. Context hashing is on by default for function calls with
+arguments, even when no trusted metadata resolver is configured; the resolver
+controls only skill identity and provenance fields. This adds JSON-serialization
+and hashing work and changes the default event shape. `GovernanceEvent` is not
+hash-chained, so these metadata fields are not covered by a tamper-evident audit
+chain.
+
 ## Important constraint
 
 `EnableFunctionMiddleware = true` only works for MAF agents backed by a function-calling pipeline that supports function invocation middleware (for example agents using a `FunctionInvokingChatClient`-compatible stack).

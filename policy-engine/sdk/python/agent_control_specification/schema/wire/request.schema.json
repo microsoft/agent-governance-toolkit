@@ -1,0 +1,43 @@
+{
+  "$id": "https://agent-control-specification.test/wire/request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Control Specification intervention point request envelope",
+  "description": "JSON request envelope accepted by native wire bindings such as the C ABI, PyO3, napi, and P/Invoke surfaces.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intervention_point",
+    "snapshot"
+  ],
+  "properties": {
+    "intervention_point": {
+      "$ref": "#/$defs/intervention_point"
+    },
+    "snapshot": {
+      "$ref": "https://agent-control-specification.test/wire/snapshot.schema.json"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "enforce",
+        "evaluate_only"
+      ],
+      "description": "Optional enforcement mode. Omitted mode defaults to enforce."
+    }
+  },
+  "$defs": {
+    "intervention_point": {
+      "type": "string",
+      "enum": [
+        "agent_startup",
+        "input",
+        "pre_model_call",
+        "post_model_call",
+        "pre_tool_call",
+        "post_tool_call",
+        "output",
+        "agent_shutdown"
+      ]
+    }
+  }
+}

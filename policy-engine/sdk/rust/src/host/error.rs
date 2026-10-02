@@ -1,16 +1,17 @@
-use crate::{InterventionPoint, InterventionPointResult, JsonValue};
+use super::HostEvaluation;
+use crate::{InterceptionPoint, JsonValue};
 use std::{error::Error, fmt};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentControlBlocked {
-    pub intervention_point: InterventionPoint,
-    pub intervention_point_result: Box<InterventionPointResult>,
+    pub intervention_point: InterceptionPoint,
+    pub intervention_point_result: Box<HostEvaluation>,
 }
 
 impl AgentControlBlocked {
     pub fn new(
-        intervention_point: InterventionPoint,
-        intervention_point_result: InterventionPointResult,
+        intervention_point: InterceptionPoint,
+        intervention_point_result: HostEvaluation,
     ) -> Self {
         Self {
             intervention_point,
@@ -24,7 +25,8 @@ impl fmt::Display for AgentControlBlocked {
         write!(
             f,
             "Agent Control blocked at {} with decision {}",
-            self.intervention_point, self.intervention_point_result.verdict.decision
+            self.intervention_point,
+            self.intervention_point_result.verdict.decision.as_str()
         )?;
         if let Some(reason) = &self.intervention_point_result.verdict.reason {
             write!(f, ": {reason}")?;
@@ -44,15 +46,15 @@ impl Error for AgentControlBlocked {}
 /// the already-produced result rather than re-executing the guarded operation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentControlSuspended {
-    pub intervention_point: InterventionPoint,
-    pub intervention_point_result: Box<InterventionPointResult>,
+    pub intervention_point: InterceptionPoint,
+    pub intervention_point_result: Box<HostEvaluation>,
     pub handle: Option<JsonValue>,
 }
 
 impl AgentControlSuspended {
     pub fn new(
-        intervention_point: InterventionPoint,
-        intervention_point_result: InterventionPointResult,
+        intervention_point: InterceptionPoint,
+        intervention_point_result: HostEvaluation,
         handle: Option<JsonValue>,
     ) -> Self {
         Self {
@@ -91,7 +93,7 @@ pub enum AgentControlInterruption {
 
 impl AgentControlInterruption {
     /// The intervention point whose verdict triggered this interruption.
-    pub fn intervention_point(&self) -> InterventionPoint {
+    pub fn intervention_point(&self) -> InterceptionPoint {
         match self {
             Self::Blocked(blocked) => blocked.intervention_point,
             Self::Suspended(suspended) => suspended.intervention_point,
@@ -99,7 +101,7 @@ impl AgentControlInterruption {
     }
 
     /// The intervention-point result that triggered this interruption.
-    pub fn intervention_point_result(&self) -> &InterventionPointResult {
+    pub fn intervention_point_result(&self) -> &HostEvaluation {
         match self {
             Self::Blocked(blocked) => &blocked.intervention_point_result,
             Self::Suspended(suspended) => &suspended.intervention_point_result,

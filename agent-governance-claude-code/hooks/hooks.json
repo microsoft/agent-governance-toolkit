@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agt-node",
+            "command": "node",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"
             ],
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agt-node",
+            "command": "node",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/user-prompt-submit.mjs"
             ],
@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/agt-node",
+            "command": "node",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use.mjs"
             ],

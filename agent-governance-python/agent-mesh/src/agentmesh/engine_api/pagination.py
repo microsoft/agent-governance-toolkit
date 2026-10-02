@@ -50,9 +50,9 @@ class PaginationParams:
 class Pagination(BaseModel):
     """The section 11.2 ``pagination`` object included in every paginated response."""
 
-    page: int = Field(..., description="Current page number (1-based)")
-    limit: int = Field(..., description="Items per page")
-    total: int = Field(..., description="Total number of items across all pages")
+    page: int = Field(..., ge=1, description="Current page number (1-based)")
+    limit: int = Field(..., ge=MIN_LIMIT, le=MAX_LIMIT, description="Items per page")
+    total: int = Field(..., ge=0, description="Total number of items across all pages")
     has_next: bool = Field(..., description="Whether more pages exist after this one")
 
 

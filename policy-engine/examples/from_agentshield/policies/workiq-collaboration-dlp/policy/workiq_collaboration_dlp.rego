@@ -151,7 +151,7 @@ post_tool_call_verdict := {
 	"decision": "transform",
 	"reason": "pii_redact_tool_output",
 	"message": "PII detected in tool result.",
-	"transform": {"path": "$policy_target.value", "value": replace(text, pii, "[PII REDACTED]")},
+	"transform": {"path": "$target.value", "value": replace(text, pii, "[PII REDACTED]")},
 } if {
 	text := object.get(object.get(input.policy_target, "value", {}), "value", "")
 	matches := regex.find_n(`\b(\d{3}-\d{2}-\d{4}|\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4})\b`, text, 1)
@@ -163,7 +163,7 @@ output_verdict := {
 	"decision": "transform",
 	"reason": "pii_redaction",
 	"message": "PII detected in agent output.",
-	"transform": {"path": "$policy_target.text", "value": replace(text, pii, "[REDACTED]")},
+	"transform": {"path": "$target.text", "value": replace(text, pii, "[REDACTED]")},
 } if {
 	text := object.get(object.get(input.policy_target, "value", {}), "text", "")
 	matches := regex.find_n(`\b(\d{3}-\d{2}-\d{4}|\d{16}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b`, text, 1)

@@ -438,7 +438,39 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IPolicyLab
             OptionalString(raw, "message"),
             MapTransform(raw),
             MapEvidence(raw),
-            resultLabels);
+            resultLabels,
+            MapWarnings(raw),
+            MapApproval(raw));
+    }
+
+    private static IReadOnlyList<Warning>? MapWarnings(JsonElement raw)
+    {
+        if (!raw.TryGetProperty("warnings", out var warnings) || warnings.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        return warnings
+            .EnumerateArray()
+            .Select(warning => new Warning(
+                OptionalString(warning, "reason"),
+                OptionalString(warning, "message")))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The approval block that makes a deny liftable. Its contents are opaque
+    /// to the SDK, so it rides through as raw JSON.
+    /// </summary>
+    private static JsonElement? MapApproval(JsonElement raw)
+    {
+        if (!raw.TryGetProperty("approval", out var approval)
+            || approval.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return approval.Clone();
     }
 
     private static Transform? MapTransform(JsonElement raw)

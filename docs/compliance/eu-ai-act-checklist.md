@@ -1,6 +1,6 @@
 ---
 title: EU AI Act Compliance Checklist
-last_reviewed: 2026-06-10
+last_reviewed: 2026-09-03
 owner: agt-maintainers
 ---
 
@@ -10,9 +10,9 @@ owner: agt-maintainers
 
 **How the Agent Governance Toolkit maps to the EU AI Act**
 
-> **Regulation**: [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng) -- Harmonised Rules on Artificial Intelligence
-> **Applicability**: Phased -- Art. 5 (prohibited practices) and Art. 4 (AI literacy) from 2 February 2025; GPAI obligations from 2 August 2025; **high-risk system obligations from 2 August 2026**
-> **Prepared**: 2026-04-03; **Last reviewed**: 2026-06-10
+> **Regulation**: [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng), as amended by Regulation (EU) 2026/1744 (Digital Omnibus on AI) -- Harmonised Rules on Artificial Intelligence
+> **Applicability**: Phased -- Art. 5 prohibited practices and Art. 4 AI literacy from 2 February 2025, except Art. 5(1) points (ba) and (bb), Art. 5(1a), and Art. 5(1b) from 2 December 2026; GPAI obligations from 2 August 2025; Art. 50 transparency from 2 August 2026; Art. 50(2) machine-readable marking from 2 December 2026 for generative systems already placed on the market before 2 August 2026; Annex III high-risk obligations / Art. 6(2) from 2 December 2027; Annex I high-risk obligations / Art. 6(1) from 2 August 2028
+> **Prepared**: 2026-04-03; **Last reviewed**: 2026-09-03
 > **Methodology**: 4-wave multi-agent investigation -- parallel discovery, adversarial conformity testing, citation validation, and strategic review. Article 11 was revalidated against the shipped Annex IV exporter and evidence pipeline.
 
 ---
@@ -58,11 +58,11 @@ The toolkit includes a risk classifier in `agent-governance-python/agent-mesh/ex
 
 ### Article 4: AI Literacy
 
-> *Providers and deployers shall ensure that their staff and other persons dealing with the operation and use of AI systems on their behalf are made AI literate.* -- Art. 4(1)
+> Providers and deployers must take measures to support the development of AI literacy of their staff and other persons dealing with the operation and use of AI systems on their behalf, taking relevant technical knowledge, experience, education, training, and use-context factors into account. -- Art. 4(1), paraphrased
 
 **Coverage**: Gap (out of scope)
 
-Article 4 is an organizational/HR obligation requiring training programs, competency assessments, and workforce readiness tracking. This is outside the scope of a runtime governance toolkit. No toolkit changes recommended.
+Article 4 is an organizational/HR obligation to support AI literacy for relevant staff and other persons who operate or use AI systems on behalf of a provider or deployer. It does not prescribe toolkit runtime controls or make the toolkit responsible for proving any individual's AI literacy level. Article 4 remains outside the runtime toolkit boundary. No toolkit changes recommended.
 
 **Deployer action required**: Implement AI literacy programs independently of the toolkit. Consider documenting completion in agent policy metadata (e.g., `operator_certified: true`).
 
@@ -188,7 +188,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 **Gaps**:
 
-- [ ] **No retention enforcement**: Art. 12(4) requires deployers to preserve logs for at least 6 months. The toolkit provides append-only logs but no retention enforcement, expiration management, or archival lifecycle.
+- [ ] **No retention enforcement**: Art. 19(1) requires providers, and Art. 26(6) deployers, to preserve logs for at least 6 months. The toolkit provides append-only logs but no retention enforcement, expiration management, or archival lifecycle.
 - [ ] **DeltaEngine chain verification is a stub**: `verify_chain()` at `delta.py:99` always returns `True` with comment "Public Preview: no chain verification." The hypervisor's audit trail has zero tamper evidence.
 - [ ] **FlightRecorder hash covers INSERT, not final state**: Hash is computed at insert time with `policy_verdict='pending'`, but the verdict is later updated to `'allowed'`/`'blocked'`. Tampering of the verdict field is not detectable by integrity verification.
 - [ ] **Anomaly detections not in tamper-evident chain**: `RogueAgentDetector` stores assessments in an in-memory list, not in the integrity-protected audit chain.
@@ -387,15 +387,15 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 | Art. 10 | Data governance (training data) | Gap | N/A | Out of scope |
 | Art. 11 | Technical documentation (Annex IV) | Partial | `annex_iv.py:35-514`, `evidence_pipeline.py:56-358` | Structured draft and evidence inventory shipped; incomplete coverage and provider-authored content remain |
 | Art. 12(1) | Automatic event logging | Partial | `audit.py:23-512`, `audit_logger.py:19-136`, `flight_recorder.py:33-79` | Multiple layers, but 3 of 4 have integrity defects |
-| Art. 12(4) | 6-month log retention | Gap | `policy_schema.json:215-218` (default 90, min 1) | **Violates minimum** |
+| Art. 19(1) | 6-month log retention (provider) | Gap | `policy_schema.json:215-218` (default 90, min 1) | **Violates minimum** |
 | Art. 13(1) | Output interpretability | Partial | `audit.py:90-128` (CloudEvents), `schema.py:52-58` (rule messages) | Basic; no structured explainability |
 | Art. 13(3) | Instructions for use | Gap | N/A | Not implemented |
 | Art. 14(1) | Effective human oversight | Partial | `escalation.py:48-583` | Escalation system with quorum and fatigue detection |
 | Art. 14(4)(d) | Decline/override/reverse | Partial | `escalation.py:120-213` (approve/deny) | Pre-execution only; no reversal |
 | Art. 14(4)(e) | Stop mechanism | Partial | `kill_switch.py:64-136` | Returns structured results; placeholder handoff, no process termination |
 | Art. 15(1) | Accuracy levels | Partial | `indicators.py:159-468` | SLIs exist; no formal declaration mechanism |
-| Art. 15(3) | Robustness | Partial | `engine.py:246`, `circuit_breaker.py:90` | Framework exists; no actual fault injection |
-| Art. 15(4) | Cybersecurity | Partial | `handshake.py:158-456`, `mcp_security.py:272+`, `audit_backends.py:61-87` | Ed25519, HMAC-SHA256 (symmetric key risk), MCP scanning (incomplete rules) |
+| Art. 15(4) | Robustness | Partial | `engine.py:246`, `circuit_breaker.py:90` | Framework exists; no actual fault injection |
+| Art. 15(5) | Cybersecurity | Partial | `handshake.py:158-456`, `mcp_security.py:272+`, `audit_backends.py:61-87` | Ed25519, HMAC-SHA256 (symmetric key risk), MCP scanning (incomplete rules) |
 | Art. 26(2) | Human oversight by competent persons | Partial | `escalation.py:120-583`, `kill_switch.py:64-136` | Mechanisms exist; no competency tracking |
 | Art. 26(6) | 6-month log retention | Gap | `policy_schema.json:218` (minimum: 1) | **Must-fix: default 90, minimum 1** |
 | Art. 50(1) | AI interaction disclosure | Gap | `compliance_checker.py:186-231` (example) | Config check only; no runtime delivery |
@@ -510,11 +510,11 @@ Fixing certain gaps yields improvements across multiple articles simultaneously:
 
 | Fix | Articles Improved | Leverage |
 |-----|-------------------|----------|
-| Retention enforcement (minimum 180 days + runtime) | Art. 12(4), Art. 26(6) | **Highest** -- single fix resolves two regulatory contradictions |
+| Retention enforcement (minimum 180 days + runtime) | Art. 19(1), Art. 26(6) | **Highest** -- single fix resolves two regulatory contradictions |
 | Promote example classifier to library code | Art. 6, Art. 9, Art. 50 | Risk tier drives classification, management, and transparency triggers |
 | Instructions-for-use exporter | Art. 11, Art. 13(3) | Both require structured system description artifacts |
 | KillSwitch actual termination | Art. 14(4)(e), Art. 26(2) | Stop mechanism and deployer oversight both depend on it |
-| Audit chain integrity (DeltaEngine, FlightRecorder hash) | Art. 12, Art. 15(4), Art. 26(6) | Tamper evidence underpins logging, cybersecurity, and retention |
+| Audit chain integrity (DeltaEngine, FlightRecorder hash) | Art. 12, Art. 15(5), Art. 26(6) | Tamper evidence underpins logging, cybersecurity, and retention |
 
 ## Defense-in-Depth Warnings
 
@@ -538,6 +538,7 @@ Several "Partial" ratings rely on a **single mechanism with no fallback**:
 ## Sources
 
 - [EU AI Act Official Text (EUR-Lex)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng)
+- [Regulation (EU) 2026/1744 (Digital Omnibus on AI, EUR-Lex)](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202601744)
 - [EU AI Act Explorer](https://artificialintelligenceact.eu/)
 - [EU AI Act Service Desk -- Article 26](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26)
 - [EU AI Act Service Desk -- Article 50](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-50)

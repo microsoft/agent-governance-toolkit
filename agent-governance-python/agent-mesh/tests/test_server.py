@@ -6,6 +6,8 @@ Tests for AgentMesh component server endpoints.
 Uses FastAPI TestClient for synchronous HTTP testing of all four servers.
 """
 
+import logging
+
 import pytest
 
 fastapi = pytest.importorskip("fastapi", reason="fastapi not installed (optional [server] extra)")
@@ -224,19 +226,35 @@ class TestPolicyServer:
     """Tests for the policy-server HTTP server."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
-        from agentmesh.server.policy_server import app
+    def setup(self, tmp_path, monkeypatch):
+        import agentmesh.server.policy_server as policy_server
 
-        self.client = TestClient(app)
+        monkeypatch.setattr(policy_server, "POLICY_DIR", str(tmp_path))
+        monkeypatch.setattr(policy_server, "_engine", policy_server.PolicyEngine())
+        monkeypatch.setattr(policy_server, "_trust_policies", [])
+        monkeypatch.setattr(policy_server, "_trust_evaluator", None)
+        monkeypatch.setattr(policy_server, "_loaded_count", 0)
+        monkeypatch.setattr(policy_server, "_effective_rule_count", 0)
+        monkeypatch.setattr(policy_server, "_load_warnings", [])
+        self.client = TestClient(policy_server.app)
 
     def test_healthz(self):
         resp = self.client.get("/healthz")
         assert resp.status_code == 200
         assert resp.json()["component"] == "policy-server"
 
-    def test_readyz(self):
-        resp = self.client.get("/readyz")
-        assert resp.status_code == 200
+    def test_readyz_reports_not_ready_without_policies(self):
+        from agentmesh.server import policy_server
+
+        with TestClient(policy_server.app) as client:
+            resp = client.get("/readyz")
+        assert resp.status_code == 503
+        data = resp.json()
+        assert data["status"] == "not-ready"
+        assert data["component"] == "policy-server"
+        assert data["total_loaded"] == 0
+        assert data["effective_rules"] == 0
+        assert data["load_warnings"]
 
     def test_evaluate_no_policies(self):
         resp = self.client.post("/api/v1/policy/evaluate", json={
@@ -260,6 +278,108 @@ class TestPolicyServer:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "reloaded"
+
+    def test_reload_missing_policy_dir_preserves_loaded_state(self, tmp_path):
+        from agentmesh.server import policy_server
+
+        policy_file = tmp_path / "policy.yaml"
+        policy_file.write_text(
+            "name: test-policy\n"
+            "version: '1.0'\n"
+            "rules:\n"
+            "  - name: deny-shell\n"
+            "    condition: \"action == 'shell.execute'\"\n"
+            "    action: deny\n"
+            "    reason: 'Shell execution blocked'\n"
+        )
+
+        policy_server.POLICY_DIR = str(tmp_path)
+        with TestClient(policy_server.app) as client:
+            loaded_before = policy_server._loaded_count
+            ready_resp = client.get("/readyz")
+
+        assert ready_resp.status_code == 200
+        assert ready_resp.json()["status"] == "ready"
+
+        missing_dir = tmp_path / "missing"
+        policy_server.POLICY_DIR = str(missing_dir)
+        with pytest.raises(RuntimeError, match="undefined policy set"):
+            policy_server._load_policies()
+
+        assert policy_server._loaded_count == loaded_before
+        assert policy_server._trust_evaluator is None
+        assert policy_server._engine.evaluate(
+            agent_did="did:mesh:test-agent",
+            context={"action": "shell.execute", "resource": "/bin/bash"},
+        ).action == "deny"
+
+    def test_list_policies_reports_load_warning_when_empty(self, caplog, tmp_path):
+        from agentmesh.server import policy_server
+
+        policy_server.POLICY_DIR = str(tmp_path)
+        with caplog.at_level(logging.WARNING):
+            with TestClient(policy_server.app) as client:
+                resp = client.get("/api/v1/policies")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_loaded"] == 0
+        assert data["effective_rules"] == 0
+        assert data["load_warnings"]
+        assert any("Policy load validation: no effective rules loaded" in msg for msg in caplog.messages)
+
+    def test_trust_policy_fallback_counts_effective_rules(self, tmp_path):
+        from agentmesh.server import policy_server
+        from agentmesh.governance.trust_policy import TrustCondition, TrustPolicy, TrustRule
+
+        TrustPolicy(
+            name="trust-policy",
+            rules=[
+                TrustRule(
+                    name="allow-trusted",
+                    condition=TrustCondition(
+                        field="trust_score",
+                        operator="gte",
+                        value=500,
+                    ),
+                    action="allow",
+                )
+            ],
+        ).to_yaml(tmp_path / "trust.yaml")
+        policy_server.POLICY_DIR = str(tmp_path)
+
+        with TestClient(policy_server.app) as client:
+            ready = client.get("/readyz")
+            trust = client.post(
+                "/api/v1/policy/trust/evaluate",
+                json={"context": {"trust_score": 700}},
+            )
+
+        assert ready.status_code == 200
+        assert ready.json()["effective_rules"] == 1
+        assert trust.status_code == 200
+
+    def test_readyz_reports_no_effective_rules(self, tmp_path):
+        from agentmesh.server import policy_server
+
+        (tmp_path / "disabled.yaml").write_text(
+            "name: disabled-policy\n"
+            "rules:\n"
+            "  - name: disabled-rule\n"
+            "    condition: \"action == 'read'\"\n"
+            "    action: deny\n"
+            "    enabled: false\n",
+            encoding="utf-8",
+        )
+        policy_server.POLICY_DIR = str(tmp_path)
+        with TestClient(policy_server.app) as client:
+            resp = client.get("/readyz")
+
+        assert resp.status_code == 503
+        data = resp.json()
+        assert data["total_loaded"] == 1
+        assert data["effective_rules"] == 0
+        assert data["load_warnings"]
 
     def test_trust_evaluate_no_policies(self):
         resp = self.client.post("/api/v1/policy/trust/evaluate", json={

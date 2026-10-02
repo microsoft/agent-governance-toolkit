@@ -25,12 +25,19 @@ export {
 } from './metrics';
 export { McpSecurityScanner, McpThreatType } from './mcp';
 export type { McpScanResult, McpThreat, McpToolDefinition } from './mcp';
+export { toFrameworkInvocation } from './webmcp';
+export type { WebMcpToolLike, WebMcpClientLike, WebMcpInvocationOptions } from './webmcp';
 export { LifecycleManager, LifecycleState } from './lifecycle';
 export type { LifecycleEvent } from './lifecycle';
 export { ShadowDiscovery } from './discovery';
 export { CedarBackend } from './policy-backends/cedar';
 export { OPABackend } from './policy-backends/opa';
 export { PromptDefenseEvaluator } from './prompt-defense';
+export { findHealthcareIdentifiers } from './healthcare-identifiers';
+export type {
+  HealthcareIdentifierKind,
+  HealthcareIdentifierMatch,
+} from './healthcare-identifiers';
 // Credential Vault & Injection (issue #2535 / #2481)
 export {
   CredentialVault,

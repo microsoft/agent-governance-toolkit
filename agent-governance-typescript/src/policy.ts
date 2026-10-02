@@ -34,8 +34,12 @@ function asPolicyAction(value: unknown): PolicyAction | undefined {
 const SCOPE_SPECIFICITY: Record<PolicyScope, number> = {
   [PolicyScope.Global]: 0,
   [PolicyScope.Tenant]: 1,
-  [PolicyScope.Agent]: 2,
+  [PolicyScope.Organization]: 2,
+  [PolicyScope.Agent]: 3,
 };
+
+/** Set of valid scope string values, derived from the enum. */
+const VALID_SCOPE_VALUES = new Set(Object.values(PolicyScope) as string[]);
 
 /**
  * Resolves conflicts between competing policy candidate decisions.
@@ -387,8 +391,18 @@ export class PolicyEngine {
 
   // ΓöÇΓöÇ Rich Policy API ΓöÇΓöÇ
 
-  /** Load a Policy document into the engine. */
+  /** Load a Policy document into the engine.
+   *
+   * Validates the scope value so typos surface at registration time
+   * rather than silently demoting at first evaluation (#3536).
+   */
   loadPolicy(policy: Policy): void {
+    if (policy.scope !== undefined && !VALID_SCOPE_VALUES.has(policy.scope as string)) {
+      throw new Error(
+        `Invalid policy scope '${policy.scope}' in policy '${policy.name}'. ` +
+        `Accepted values (case-sensitive): ${[...VALID_SCOPE_VALUES].sort().join(', ')}.`,
+      );
+    }
     this._policies.set(policy.name, policy);
   }
 
@@ -472,11 +486,21 @@ export class PolicyEngine {
       const candidates: CandidateDecision[] = [];
       for (const policy of applicable) {
         let scope: PolicyScope;
-        try {
-          scope = policy.scope as PolicyScope;
-          if (!Object.values(PolicyScope).includes(scope)) scope = PolicyScope.Global;
-        } catch {
-          scope = PolicyScope.Global;
+        const rawScope = policy.scope ?? PolicyScope.Global;
+        if (VALID_SCOPE_VALUES.has(rawScope as string)) {
+          scope = rawScope as PolicyScope;
+        } else {
+          // Defence-in-depth: dataToPolicy and loadPolicy already
+          // validate scope, but a direct loadPolicy() with a hand-built
+          // object may reach here.  Fail-closed: rank at Agent (max
+          // specificity) so a corrupted deny cannot lose to a global
+          // allow under MostSpecificWins (#3536 review feedback).
+          console.warn(
+            `Policy '${policy.name}' has unrecognised scope '${rawScope}' — ` +
+            `ranking at Agent (max specificity, fail-closed).  ` +
+            `Valid scopes: ${[...VALID_SCOPE_VALUES].sort().join(', ')}`,
+          );
+          scope = PolicyScope.Agent;
         }
 
         for (const rule of policy.rules) {
@@ -838,6 +862,15 @@ function dataToPolicy(data: Record<string, unknown>): Policy {
     }
   }
 
+  const rawScope = ((data.scope as string) ?? 'global');
+  if (!VALID_SCOPE_VALUES.has(rawScope)) {
+    throw new Error(
+      `Invalid policy scope '${rawScope}' in policy '${data.name ?? '(unnamed)'}'. ` +
+      `Accepted values (case-sensitive): ${[...VALID_SCOPE_VALUES].sort().join(', ')}. ` +
+      `Hint: scope must be lowercase; 'organisation' is not accepted — use 'organization'.`,
+    );
+  }
+
   return {
     apiVersion: (data.apiVersion as string) ?? 'governance.toolkit/v1',
     version: data.version as string | undefined,
@@ -845,7 +878,7 @@ function dataToPolicy(data: Record<string, unknown>): Policy {
     description: data.description as string | undefined,
     agent: data.agent as string | undefined,
     agents: data.agents as string[] | undefined,
-    scope: (data.scope as string) ?? 'global',
+    scope: rawScope as PolicyScope,
     rules,
     default_action: (data.default_action as 'allow' | 'deny') ?? 'deny',
   };

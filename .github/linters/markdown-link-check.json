@@ -43,6 +43,7 @@
     { "pattern": "maximumsats\\.com" },
     { "pattern": "stripe\\.com" },
     { "pattern": "mojar\\.ai" },
+    { "pattern": "provedit\\.ai" },
     { "pattern": "marketplace\\.visualstudio\\.com/manage" },
     { "pattern": "huggingface\\.co/datasets/microsoft" },
     { "pattern": "datatracker\\.ietf\\.org" },

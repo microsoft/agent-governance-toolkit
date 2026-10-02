@@ -348,4 +348,44 @@ mod tests {
             "[REDACTED_API_KEY]"
         );
     }
+
+    // ---------------------------------------------------------------
+    // Boundary regression tests for issue #3933: the full
+    // scan_text pipeline must catch credentials glued to _.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn scan_text_catches_aws_key_glued_to_underscore() {
+        let redactor = CredentialRedactor::new();
+        let scanner = McpResponseScanner::new(
+            redactor.clone(),
+            Arc::new(InMemoryAuditSink::new(redactor)),
+            McpMetricsCollector::default(),
+            Arc::new(SystemClock),
+        )
+        .unwrap();
+        let result = scanner
+            .scan_text("env_AKIAAAAAAAAAAAAAAAAA_old")
+            .unwrap();
+        assert!(result.modified);
+        assert!(result.sanitized.contains("[REDACTED_AWS_ACCESS_KEY]"));
+        assert!(!result.sanitized.contains("AKIAAAAAAAAAAAAAAAAA"));
+    }
+
+    #[test]
+    fn scan_text_catches_github_token_glued_to_underscore() {
+        let redactor = CredentialRedactor::new();
+        let scanner = McpResponseScanner::new(
+            redactor.clone(),
+            Arc::new(InMemoryAuditSink::new(redactor)),
+            McpMetricsCollector::default(),
+            Arc::new(SystemClock),
+        )
+        .unwrap();
+        let result = scanner
+            .scan_text("session_ghp_FAKEFORTESTING000000000000000000_rotated")
+            .unwrap();
+        assert!(result.modified);
+        assert!(result.sanitized.contains("[REDACTED_GITHUB_TOKEN]"));
+    }
 }

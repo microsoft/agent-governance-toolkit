@@ -103,6 +103,69 @@ def test_check_mode_passes_on_committed_tree():
     assert gen.main(["--check"]) == 0
 
 
+def test_check_mode_detects_composite_action_pin_drift(tmp_path, monkeypatch, capsys):
+    action_dir = tmp_path / "stale-action"
+    action_dir.mkdir()
+    (action_dir / "action.yml").write_text(
+        "runs:\n"
+        "  using: composite\n"
+        "  steps:\n"
+        "    - uses: actions/setup-python@0000000000000000000000000000000000000000 # v0.0.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", tmp_path)
+
+    assert gen.main(["--check"]) == 1
+    captured = capsys.readouterr()
+    assert "stale-action" in captured.err
+    assert "actions/setup-python" in captured.err
+
+
+def test_write_mode_syncs_composite_action_pins(tmp_path, monkeypatch):
+    action_dir = tmp_path / "stale-action"
+    action_dir.mkdir()
+    action_file = action_dir / "action.yaml"
+    action_file.write_text(
+        "runs:\n"
+        "  using: composite\n"
+        "  steps:\n"
+        "    - uses: actions/checkout@0000000000000000000000000000000000000000 # v0.0.0\n"
+        "      with:\n"
+        "        fetch-depth: 0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", tmp_path)
+    monkeypatch.setattr(gen, "build_outputs", lambda *_args: {})
+    actions = gen._load_actions(gen.ACTIONS_PATH)
+
+    assert gen.main(["--write"]) == 0
+    rewritten = action_file.read_text(encoding="utf-8")
+    assert f"uses: {actions['checkout']}\n" in rewritten
+    assert "with:\n        fetch-depth: 0\n" in rewritten
+
+
+def test_unregistered_composite_action_reference_fails_closed(tmp_path, monkeypatch):
+    action_dir = tmp_path / "unknown-action"
+    action_dir.mkdir()
+    action_file = action_dir / "action.yml"
+    original = (
+        "runs:\n"
+        "  using: composite\n"
+        "  steps:\n"
+        "    - uses: actions/checkout@0000000000000000000000000000000000000000 # v0.0.0\n"
+        "    - uses: unregistered/action@0000000000000000000000000000000000000000\n"
+    )
+    action_file.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", tmp_path)
+    actions = gen._load_actions(gen.ACTIONS_PATH)
+
+    issues = gen.check_composite_action_pins(actions)
+    assert any("unregistered/action" in issue for issue in issues)
+    with pytest.raises(gen.GenerationError, match="not registered"):
+        gen.sync_composite_action_pins(actions)
+    assert action_file.read_text(encoding="utf-8") == original
+
+
 def test_unpinned_action_is_rejected(tmp_path):
     bad = tmp_path / "actions.toml"
     bad.write_text('[checkout]\nuses = "actions/checkout@v4"\ncomment = "v4"\n', encoding="utf-8")

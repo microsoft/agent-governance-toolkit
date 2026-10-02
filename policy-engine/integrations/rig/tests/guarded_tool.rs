@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use agent_control_specification::{
     AgentControl, AnnotatorDispatcher, AnnotatorInvocation, ApprovalResolution, ApprovalResolver,
-    InterventionPoint, InterventionPointResult, JsonValue, Manifest, PolicyDispatcher,
+    HostEvaluation, InterceptionPoint, JsonValue, Manifest, PolicyDispatcher,
     PreparedPolicyInvocation, Runtime, RuntimeError,
 };
 use agent_control_specification_rig::AgentControlRigExt;
@@ -196,7 +196,7 @@ impl Tool for SmokeRigTool {
 }
 
 fn manifest() -> Manifest {
-    let yaml = r#"agent_control_specification_version: 0.3.1-beta
+    let yaml = r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   test_policy:
     type: test
@@ -230,7 +230,7 @@ fn control<I: IntoIterator<Item = JsonValue>>(verdicts: I) -> AgentControl {
 }
 
 fn ifc_ambient_control() -> AgentControl {
-    let yaml = r#"agent_control_specification_version: 0.3.1-beta
+    let yaml = r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   test_policy:
     type: test
@@ -274,17 +274,17 @@ fn replace(path: &str, value: JsonValue) -> JsonValue {
 }
 
 fn allow_resolver() -> ApprovalResolver {
-    Arc::new(|_: InterventionPoint, result: &InterventionPointResult| {
+    Arc::new(|_: InterceptionPoint, result: &HostEvaluation| {
         ApprovalResolution::allow(result.action_identity.clone().unwrap())
     })
 }
 
 fn deny_resolver() -> ApprovalResolver {
-    Arc::new(|_: InterventionPoint, _: &InterventionPointResult| ApprovalResolution::deny())
+    Arc::new(|_: InterceptionPoint, _: &HostEvaluation| ApprovalResolution::deny())
 }
 
 fn suspend_resolver() -> ApprovalResolver {
-    Arc::new(|_: InterventionPoint, result: &InterventionPointResult| {
+    Arc::new(|_: InterceptionPoint, result: &HostEvaluation| {
         ApprovalResolution::suspend(
             Some(json!({ "ticket": "T-1" })),
             result.action_identity.clone().unwrap(),
@@ -439,7 +439,7 @@ async fn pre_deny_fails_closed_without_calling_inner() {
 #[tokio::test]
 async fn pre_transform_rewrites_args_reaching_inner() {
     let seen = Arc::new(Mutex::new(Vec::new()));
-    let guarded = control([replace("$policy_target.query", json!("safe"))])
+    let guarded = control([replace("$target.query", json!("safe"))])
         .guard_rig_tool(Arc::new(EchoTool { seen: seen.clone() }));
 
     let output = guarded
@@ -456,7 +456,7 @@ async fn post_transform_rewrites_output() {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let guarded = control([
         json!({ "decision": "allow" }),
-        replace("$policy_target", json!("redacted")),
+        replace("$target", json!("redacted")),
     ])
     .guard_rig_tool(Arc::new(EchoTool { seen: seen.clone() }));
 

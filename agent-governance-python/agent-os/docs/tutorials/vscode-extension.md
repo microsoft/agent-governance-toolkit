@@ -130,7 +130,7 @@ Ctrl+Shift+P → "Agent OS: Open Policy Editor"
 ### Native Manifest Structure
 
 ```yaml
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: internal-only
 extends: []
@@ -494,11 +494,16 @@ on:
 jobs:
   policy-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
       
@@ -514,7 +519,7 @@ jobs:
         run: agent-os scan --path src/ --output sarif
       
       - name: Upload Results
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: agentos-results.sarif
 ```

@@ -14,13 +14,12 @@ Run:
 
 import random
 
-from agent_sre import SLO, ErrorBudget
 from agent_sre.slo.indicators import (
     ResponseLatency,
     TaskSuccessRate,
     ToolCallAccuracy,
 )
-from agent_sre.slo.objectives import ExhaustionAction, SLOStatus
+from agent_sre.slo.objectives import SLO, ErrorBudget, ExhaustionAction, SLOStatus
 
 # ── 1. Register SLIs ───────────────────────────────────────────────────
 

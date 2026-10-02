@@ -11,7 +11,7 @@ import type {
 
 export const DEFAULT_OTEL_METER_NAME = "agent_control_specification";
 
-const DECISION_WIRE_STRINGS = ["allow", "deny", "warn", "escalate", "transform"] as const;
+const DECISION_WIRE_STRINGS = ["allow", "deny", "transform"] as const;
 const MAX_REASON_CODE_BYTES = 96;
 const REASON_CODE_EXTRA_CHARS = new Set(["_", "-", ".", ":", "/"]);
 
@@ -183,7 +183,11 @@ export function errorClassFor(reason: string | null | undefined): string | null 
   if (reason !== null && reason !== undefined && typeof reason !== "string") {
     throw new TypeError("reason must be a string when provided");
   }
-  return reason?.startsWith("runtime_error:") ? "runtime_error" : null;
+  // Two reserved namespaces, two classes. Recognising only the engine one
+  // would leave every host synthesized failure unclassified in telemetry.
+  if (reason?.startsWith("runtime_error:")) return "runtime_error";
+  if (reason?.startsWith("host_error:")) return "host_error";
+  return null;
 }
 
 function isIdentifierReasonCode(reason: string): boolean {

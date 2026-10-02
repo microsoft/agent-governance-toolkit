@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-agent_control_specification_version: 0.3.1-beta
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: minimal-governance
   version: "1.0"
@@ -17,5 +17,9 @@ intervention_points:
       id: minimal_governance
   output:
     policy_target: $.output.content
+    policy:
+      id: minimal_governance
+  pre_tool_call:
+    policy_target: $.tool_call.args
     policy:
       id: minimal_governance

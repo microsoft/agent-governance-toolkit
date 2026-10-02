@@ -37,7 +37,7 @@ pre_model_call_verdict := {
     "reason": "large_transfer_instruction_added",
     "message": "A high-value transfer reminder was added before the model call.",
     "transform": {
-        "path": "$policy_target.messages",
+        "path": "$target.messages",
         "value": array.concat(input.policy_target.value.messages, [{
             "role": "system",
             "content": "Do not execute high-value transfers without explicit approval."
@@ -72,7 +72,7 @@ post_tool_call_verdict := {
     "reason": "tool_result_account_identifier_redacted",
     "message": "The account identifier was redacted before the result returned to the agent.",
     "transform": {
-        "path": "$policy_target.account_id",
+        "path": "$target.account_id",
         "value": "ACCOUNT-REDACTED"
     }
 } if {
@@ -85,7 +85,7 @@ output_verdict := {
     "reason": "output_account_identifier_redacted",
     "message": "The final response contained an account identifier and was redacted.",
     "transform": {
-        "path": "$policy_target.text",
+        "path": "$target.text",
         "value": regex.replace(input.policy_target.value.text, "CHK-[0-9]+", "ACCOUNT-REDACTED")
     }
 } if {

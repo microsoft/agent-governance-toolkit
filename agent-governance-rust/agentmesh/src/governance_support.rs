@@ -1538,13 +1538,14 @@ pub enum PolicyCategory {
     Spend,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum DataClassification {
     Public,
     Internal,
     Confidential,
     Restricted,
+    TopSecret,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2203,6 +2204,7 @@ mod tests {
             decision: "allow".into(),
             previous_hash: String::new(),
             hash: "abc123".into(),
+            skill_audit_metadata: None,
         })
         .unwrap();
 
@@ -2407,6 +2409,7 @@ mod tests {
             decision: "allow".into(),
             previous_hash: String::new(),
             hash: digest("0|2026-01-01T00:00:00Z|agent-1|data.read|allow|"),
+            skill_audit_metadata: None,
         };
         let second_prev = first.hash.clone();
         let second = AuditEntry {
@@ -2419,6 +2422,7 @@ mod tests {
             hash: digest(&format!(
                 "1|2026-01-01T00:00:01Z|agent-1|shell:rm|deny|{second_prev}"
             )),
+            skill_audit_metadata: None,
         };
 
         assert!(HashChainVerifier::verify(&[first, second]));

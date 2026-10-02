@@ -11,10 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **OpenCode audit logs no longer brick when they roll over.** `appendAuditEntry` kept the most recent 10,000 entries with `.slice(-MAX_ENTRIES)`, which dropped the entry the surviving head pointed at. The head was then re-anchored to the genesis hash, every later verification failed, and because the plugin fails closed on audit errors it denied every request from that point on. The hash of the last evicted entry is now kept as a seam and the file becomes `{ seamHash, entries }`, so the surviving chain stays verifiable. A log that has never rolled over keeps the bare-array format and is always anchored to genesis, so a bare array whose head does not anchor to genesis fails verification. The chain is unkeyed, so this raises the cost of editing a log rather than preventing it: someone who can rewrite the file can also rewrap it with a matching seam. Ports the fix already shipped for the TypeScript, Rust and Claude Code packages (#1838).
+- **`agt-policies`: deny rules using `ne`/`not_in` now fail closed when the checked field is absent.** The `_migrate_resolution` rule compiler used a chained `object.get` form that produced OPA `undefined` (not `null`) when an intermediate path segment was missing, causing `_match_i` to silently not fire and fall through to `default verdict := allow`. Additionally, the `_v != null` guard was applied unconditionally on `ne`/`not_in`, allowing a caller to bypass any such deny rule by omitting the field. Fixed by switching to the array-path `object.get(input.snapshot, [...], null)` form and making the null guard polarity-aware (dropped for `deny`, retained for `allow`). The `allow` polarity guard is critical: an `allow` rule that fires on a missing field can preempt a later `deny` in the first-match-wins chain.
+- **`agt-policies`: merge-layer overlap analysis no longer infers deny polarity from operand position.** `_scalar_conditions_disjoint` assumed the left operand was always the parent deny condition, but `_condition_unsatisfiable` compares the two siblings of an `and` as a peer pair, so deny `null` semantics leaked onto allow-side siblings and the result depended on sibling order. Polarity is now passed explicitly (`left_deny`/`right_deny` through `_conditions_disjoint`/`_scalar_conditions_disjoint`, `is_deny` through `_condition_unsatisfiable`); `deny_polarity` tracks the operator's rule rather than its position. This also closes an order-dependent fail-open where a deny rule whose condition was `and[eq null, ne/not_in …]` (eq-null sibling first) was wrongly judged unsatisfiable, so an overlapping child `allow` was not dropped.
+
 ### Added
+- **.NET `PolicyEngine.EvaluateAsync`** — added an async evaluation path so external policy backends whose work is I/O-bound (`IExternalPolicyBackend.EvaluateAsync`) are awaited instead of blocked on with `GetAwaiter().GetResult()`. Backends are evaluated sequentially to preserve registration order; the synchronous `Evaluate` keeps its exact prior behavior. The token is honored on entry and before each backend call, so an already-cancelled token throws `OperationCanceledException` (including on the no-backend in-memory path) and no `PolicyDecision` is produced; backend exceptions propagate rather than being turned into a deny, matching `Evaluate` (#3778).
+- **OpenCode audit entries carry decision evidence.** Entries now record the decision `reason`, an `argsDigest` identifying the attempted tool arguments without storing them, an optional `principal` (`{ sub, iss? }`) naming who the agent acted for, and a `policyVersion` tying a decision to the policy that produced it. Configured through `AGT_OPENCODE_AUDIT_HMAC_KEY`, `AGT_OPENCODE_PRINCIPAL_SUB` and `AGT_OPENCODE_PRINCIPAL_ISS`. The digest is SHA-256 by default and HMAC-SHA256 when a key of at least 32 bytes is set; a shorter key is refused. The principal is read only from operator configuration, never from tool arguments or model output, and is declared rather than verified (#3668).
+- **`AgentControlRuntimeError`** - engine runtime errors raised from the Python SDK now carry `reason` (the reserved `runtime_error:*` code) and `detail` as attributes. It subclasses `RuntimeError`, keeps the same message so existing `except RuntimeError` handlers and message matching are unaffected, and survives `pickle`.
+- **`ApprovalResolution.reason`** — a resolver that refuses can say why: `ApprovalResolution.deny(reason)` carries the explanation onto the denial verdict's `message` (through `AgentControl.enforce` and `HostSession`), while the verdict's `reason` keeps the policy's classified code.
+- **Codex CLI governance package** — added `@microsoft/agent-governance-codex-cli`, a first-party governance integration for the OpenAI Codex CLI. It adapts the Claude Code governance core over Codex's hook system (`SessionStart`, `UserPromptSubmit`, `PreToolUse`), mapping policy decisions onto Codex's supported `permissionDecision` schema (deny or allow-by-omission) with fail-closed error handling, and ships an installer (`agt-codex install/status/uninstall`), a default developer-protection policy, and tests. Implements RFC #3408 and adopts the in-flight core hardening for this package: the seam-based audit-log rollover fix (#3250, originally #1838), the recursive-delete policy tightening (#3251), and the secret-read pattern hardening incl. `/proc/self/environ` (#3295).
+- **Python SDK ships the `spec/schema` documents** — `agent_control_specification.schemas` exposes `names()`, `text()` and `load()` over the manifest, approval, `cedar_advice` and `wire/*` JSON schemas, so hosts validate against the shipped contract instead of a hand copy. The files are copies of `policy-engine/spec/schema`, guarded by a drift test.
 - **ACS artifact validation API** - added one bounded Rust-core validator for canonical manifest schema checks, typed ACS semantics, and OPA Rego parsing, exposed with the same structured result through Rust, Python, Node, and .NET. The `acs-generator` CLI now consumes this shared SDK surface.
+- **Go SDK context accumulation governance** - added workflow-scoped context envelopes, a data-classification sensitivity ladder, aggregation-rule evaluation with unknown-combination escalation, constrain-as-obligations policy mapping, grow-only restriction inheritance, and classified context-transition audit events for parity with the Python implementation (#3084).
+- **Rust SDK context accumulation governance** - added workflow-scoped context envelopes, `TopSecret` data classification, aggregation-rule evaluation with unknown-combination escalation, fail-closed action gating, grow-only restriction inheritance, and classified context-transition audit events for parity with the Python implementation (#3084).
+- **Healthcare identifier detection in Rust, Go, .NET, and TypeScript** - added separate context-cued detectors for MRNs, NPIs, and health-plan/member/policy identifiers. Health-plan cues accept `health plan` with optional `ID`; member cues accept both `member ID` and `member identification`. All ports use the same Unicode letter, number, and mark continuation boundary. Results carry identifier kinds and value ranges; NPI candidates must pass the 80840-prefixed Luhn check. Letter-initial values require a separator after the cue, and MRN/plan values must contain a digit. The design and initial test fixtures are adapted from Python PR #3754; this detection does not redact or classify data or establish HIPAA/SOC 2 compliance.
 
 ### Changed
+- **OpenCode audit entries are versioned, and the on-disk schema changed.** Entries written from now on carry `v: 2` and are hashed over a canonical form with keys sorted by UTF-16 code unit (RFC 8785 ordering), so an external verifier can reproduce a hash without knowing property insertion order. Entries without `v` are treated as version 1 and still verify byte for byte, so existing logs keep working and nothing is migrated. The upgrade is one way: once a version 2 entry is written to a file, an older release fails verification on that file and, because a failed chain denies every request, denies everything until the file is moved aside. Two rules close off downgrades: a version 1 entry must carry exactly its six keys, and versions only ever go up within a file (#3668).
+- **OpenCode direct-resource denials no longer record the matched path or URL.** The persisted `reason` names the rule that matched and its description instead of the value that matched it, so a denied read of a secret-bearing path or a URL with a token in its query no longer writes that value into the tamper-evident log (#3668).
+- **BREAKING: Rust audit entry and framework event struct literals require the new optional `skill_audit_metadata` field.** JSON deserialization remains compatible with payloads that omit it. This source-breaking API addition is intended for the next Rust SDK major release.
+- **Python `HostSession` honours the manifest approval timeout** — `AgentControl.approval_config` and `NativeRuntimeClient.approval_config` expose the manifest's top-level `approval` section, and `HostSession` now bounds its approval wait by, in order, the explicit `approval_timeout_seconds` argument, the manifest's `approval.timeout_seconds`, then the 300-second default. A manifest that already declares `timeout_seconds` waited 300 seconds before and is now bounded by its own value. The manifest's `on_timeout` is still not honoured; the session's `approval_on_timeout` decides.
+- **OpenCode URL policy hardening** — HTTP(S) forms such as `https:host` are canonicalized before existing `urlRules` are evaluated, and HTTP(S) URL authorities containing backslashes are denied regardless of `urlDefaultEffect` to avoid parser ambiguity.
 - **BREAKING: `acs-generator` is CLI-only in `0.4.0b0`.** Removed top-level library re-exports such as `GenerationEngine` and `FakeLanguageModel`. Reusable manifest and Rego validation now lives under `agent_control_specification.validation`; the Python SDK moves to `0.3.1b1`.
 - **BREAKING: Python policy runtime now uses native ACS only.** Removed the
   compatibility bridge, pre-ACS rule and result types, runtime folder
@@ -22,7 +41,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generators. Framework adapters require `AgentControl`; sandbox providers use
   `runtime=` plus explicit `SandboxConfig`.
 
+- **BREAKING: `register_supervisor` rejects levels above 1 000.** Calling
+  `SupervisorHierarchy.register_supervisor()` with a `level` exceeding
+  `MAX_SUPERVISOR_LEVEL` (1 000) now raises `ValueError`. Previously any
+  Python `int` was accepted, but a pathologically large level (e.g.
+  `10**100`) made `validate_hierarchy()` hang — a denial-of-service vector
+  when levels come from attacker-influenced configuration.
+  `TrustRoot.validate_supervisor` mirrors the bound. The constant lives in
+  `agent_os._supervisor_constants` so both modules import a single
+  definition. (#3788)
+
 ### Fixed
+- **`AgentControlBlocked` and `AgentControlSuspended` survive pickling** - both are rebuilt from their constructor arguments when loaded back from a pickle, so they propagate out of `multiprocessing` and `concurrent.futures` process workers instead of failing with a `TypeError`.
+- **Python tool adapters advance `tool_call_count`** — `guard_tool()`, `guard_mcp_tool()`, `guard_langchain_tool()`, the Semantic Kernel helpers, `guard_foundry_agent()` and `AgentControl.run_tool()` / `protect_tool()` accept a `SnapshotBuilder` as `snapshot=`. Each call is then evaluated against the builder's current envelope and `tool_call_count` advances once the pre-check permits it, so a `budgets` cap on tool calls no longer fails open, including for concurrent calls on one builder. A plain mapping is unchanged: the host advances the counters. Hosts must not also call `record_tool_call` for calls governed this way. The LiteLLM proxy guardrail is not covered and still evaluates from a fixed mapping.
+- **`agentmesh` package import cost** — `agentmesh/__init__.py` imported every
+  layer (client, identity, trust, reward, telemetry) eagerly at module level,
+  so `import agentmesh.governance` alone cost ~3.5s cold, dominated by
+  `agentmesh.identity`'s httpx-based external JWKS federation code pulled in
+  transitively through `agentmesh.client`. Every public name is now resolved
+  from its owning submodule on first access via a PEP 562 module
+  `__getattr__`, cutting a cold `import agentmesh.governance` to ~0.8s with no
+  API changes — existing `from agentmesh import AgentMeshClient`-style access
+  still works, just pays the cost on first access instead of at import time
+  (#3923).
+- **.NET numeric equality/inequality in policy-rule conditions** -- `PolicyRule` conditions such as `count == 5` and `score != 3.14` now evaluate numeric literals (integers, decimals, and negatives) instead of failing to match, and numeric `!=` matches when the field is missing or non-numeric so deny rules fail closed. Numeric operands are parsed with the invariant culture so evaluation is deterministic across host locales (#3205).
+- **`agent-governance-toolkit-core` and `[full]` no longer require `agt-policies`
+  as a base dependency.** `agt-policies>=5.1.0` (requiring an unpublished
+  `agent-control-specification>=0.4.0b0`) had become a base dependency, blocking
+  `pip install`. Moved `agt-policies` to an opt-in `migrate` extra, existing
+  `agt migrate` users now need `pip install agent-governance-toolkit-core[migrate]`,
+  and made `agent-control-specification>=0.4.0b0,<0.5.0` a direct base
+  dependency instead, matching the version `agent_os` actually requires. A
+  resolvable PyPI install of `agent-governance-toolkit-core` still depends on
+  `agent-control-specification` 0.4.0b0 and `agt-policies` 5.1.0 being
+  published, tracked in #4019.
+- **Credential redactor boundary anchors (TypeScript, Rust, Python)** ,
+  `AuditLogger` (TypeScript) and `CredentialRedactor` (Rust) contained
+  boundary anchors that treated `_` (and, for OpenAI/Google, `-`) as
+  boundary-blocking characters, so a valid secret annotated with `_old` or
+  preceded by `session_` passed through unredacted. TypeScript now uses
+  `(?<![A-Za-z0-9])` / `(?![A-Za-z0-9])` lookaround anchors; Rust
+  `is_left_boundary_char` / `is_right_boundary_char` now reject only ASCII
+  alphanumerics (plus `-` for Slack, with a Google hyphen superset exception).
+  In Python, the OpenAI right anchor is updated from `\b` to
+  `(?![A-Za-z0-9])` (the remaining boundary anchors were fixed on main by
+  #3853). The `content_scanner.py` SSN pattern in `agent-rag-governance` is
+  also updated to accept space and dot separators and use the consistent
+  lookaround anchor, closing the detection-disagreement gap with
+  `credential_redactor.py` (#3933, #3815). C# fixes will land separately
+  in #3934.
+- **BREAKING: `Policy.scope` is now validated at construction (Python, TS,
+  .NET).** A misspelled scope (e.g. `"organisation"`, `"Agent"`, `""`) was
+  silently demoted to `GLOBAL`, which under `most_specific_wins` could flip
+  a deny into an allow.  The fix rejects invalid scopes at load time and
+  logs a warning on the runtime fallback path.  The TypeScript `PolicyScope`
+  enum gains the `Organization` member for parity with Python and .NET.
+  Policies with misspelled scopes that were previously loaded (and silently
+  weakened) will now fail to load, this is the desired behavior.  (#3536)
 - **Spell check no longer reports the base branch's own history as a
   contributor's changes** — `scripts/ci/changed_lines.py` diffed from the tip of
   the base branch, so on a branch behind `main` every line `main` had since
@@ -31,6 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository-wide vocabulary. The base is now resolved to its merge base, and
   the depth-limited base fetch in `spell-check.yml` is gone because it truncated
   the history that resolution needs.
+- **Supervisor hierarchy gap scan no longer hangs and now reports all missing
+  levels** — `validate_hierarchy()` iterated `range(1, max_level + 1)`,
+  which was O(max_level). The gap scan now walks the sorted set of occupied
+  levels anchored at 0 (O(n log n + g), with g missing levels), so gaps below the
+  minimum occupied level are reported correctly. (#3788)
 
 ## [5.0.0] - 2026-06-25
 

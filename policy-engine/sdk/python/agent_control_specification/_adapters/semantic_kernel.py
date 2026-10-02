@@ -6,10 +6,12 @@ from typing import Any, TypeVar
 from .._orchestration import AgentControl
 from .._types import EnforcementMode, JsonValue
 from ._errors import AdapterUnsupportedError
+from .._host import SnapshotSource
 from ._shared import (
     Execute,
     TOOL_CALL_ID_KWARG,
     _maybe_await,
+    _default_snapshot,
     _merge_snapshot,
     _ObjectProxy,
     _pop_common_adapter_kwargs,
@@ -26,7 +28,7 @@ def guard_semantic_kernel_function(
     *,
     control: AgentControl | None = None,
     tool_call_id: str | None = None,
-    snapshot: Mapping[str, JsonValue] | None = None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None = None,
     mode: EnforcementMode | str = EnforcementMode.ENFORCE,
 ) -> AgentT:
     """Guard a duck-typed Semantic Kernel KernelFunction."""
@@ -64,7 +66,7 @@ def guard_semantic_kernel_function(
 def guard_semantic_kernel_filter(
     control: AgentControl,
     *,
-    snapshot: Mapping[str, JsonValue] | None = None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None = None,
     mode: EnforcementMode | str = EnforcementMode.ENFORCE,
 ) -> Callable[[Any, Execute], Awaitable[None]]:
     """Return a Semantic Kernel-style async function-invocation filter."""
@@ -74,7 +76,7 @@ def guard_semantic_kernel_filter(
             "guard_semantic_kernel_filter() requires an AgentControl instance."
         )
 
-    default_snapshot = dict(snapshot or {})
+    default_snapshot = _default_snapshot(snapshot)
 
     async def filter(context: Any, next: Execute) -> None:
         if not callable(next):
@@ -115,10 +117,10 @@ def _guard_semantic_kernel_function_method(
     method: Execute,
     *,
     tool_call_id: str | None,
-    snapshot: Mapping[str, JsonValue] | None,
+    snapshot: Mapping[str, JsonValue] | SnapshotSource | None,
     mode: EnforcementMode | str,
 ) -> Callable[..., Awaitable[JsonValue]]:
-    default_snapshot = dict(snapshot or {})
+    default_snapshot = _default_snapshot(snapshot)
 
     async def guarded(*args: Any, **kwargs: Any) -> JsonValue:
         per_call_snapshot = _pop_common_adapter_kwargs(kwargs)

@@ -47,8 +47,8 @@ discarded.
 
 Each surviving document MAY declare a `scope` field of type `string` (a glob
 pattern). For each document, compute the action path relative to root, normalize
-to forward slashes, and `fnmatch` against `scope`. Documents whose scope does
-not match are dropped.
+to forward slashes, and match it against `scope` using case-sensitive
+`fnmatchcase` semantics. Documents whose scope does not match are dropped.
 
 Documents with no `scope` always apply.
 
@@ -95,7 +95,7 @@ rules that share a name.
 Output manifest:
 
 ```yaml
-agent_control_specification_version: "0.3.0-alpha-agt"
+agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
   name: agt_resolved
   resolved_from:

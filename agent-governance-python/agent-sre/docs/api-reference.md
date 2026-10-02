@@ -24,7 +24,7 @@ Complete reference for all public classes in `agent-sre`.
 Service Level Objective for an AI agent. Combines multiple SLIs with targets and an error budget to define what "reliable" means.
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate
 
 slo = SLO(
@@ -71,7 +71,7 @@ print(slo.to_dict())
 Tracks error budget consumption and burn rate alerting.
 
 ```python
-from agent_sre import ErrorBudget
+from agent_sre.slo.objectives import ErrorBudget
 from agent_sre.slo.objectives import ExhaustionAction
 
 budget = ErrorBudget(
@@ -272,7 +272,7 @@ Measures scope chain depth (lower is better).
 Registry for discovering and managing SLI types and instances.
 
 ```python
-from agent_sre import SLIRegistry
+from agent_sre.slo.indicators import SLIRegistry
 from agent_sre.slo.indicators import TaskSuccessRate
 
 registry = SLIRegistry()

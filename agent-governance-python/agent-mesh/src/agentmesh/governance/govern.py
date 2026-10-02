@@ -18,21 +18,25 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import inspect
 import json
 import logging
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-from .policy import Policy, PolicyDecision, PolicyEngine
-from .audit import AuditLog
-from .trace_sink import TraceConfig, TRACEAuditSink
+from .advisory import AdvisoryCheck, AdvisoryDecision, AdvisoryMisconfiguredError
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
-from .advisory import AdvisoryCheck, AdvisoryDecision
-from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
 from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
+from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
+from .audit import AuditLog
+from .audit_backends import FileAuditSink
+from .policy import Policy, PolicyDecision, PolicyEngine
+from .trace_sink import TRACEAuditSink, TraceConfig
 
 if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
@@ -60,6 +64,110 @@ def _get_shared_breach_detector(agent_id: str, session_id: str) -> Any:
 def _reset_shared_breach_detectors() -> None:
     """Test-only helper to clear the shared detector registry."""
     _SHARED_BREACH_DETECTORS.clear()
+
+
+# Module-level shared audit sink, keyed by resolved audit_file path. Each
+# FileAuditSink tracks its own in-memory previous_hash; two sinks opened
+# independently on the same file would interleave their appends and
+# verify_integrity() would report a chain break that never happened from
+# any single writer's point of view. Sharing one sink per path is the fix.
+_AUDIT_SINK_REGISTRY_LOCK = threading.Lock()
+_AUDIT_SINK_REGISTRY: dict[Path, FileAuditSink] = {}
+
+# Env var read when audit_file is set but audit_secret_key is not.
+AUDIT_SECRET_KEY_ENV_VAR = "AGT_AUDIT_SECRET_KEY"
+
+# HMAC-SHA256's output size; NIST SP 800-107 recommends a key at least this
+# long. Also matches what this module used to auto-generate before that was
+# replaced with a caller-supplied key.
+_MIN_AUDIT_SECRET_KEY_BYTES = 32
+
+
+def _check_audit_secret_key_strength(key: bytes) -> None:
+    if len(key) < _MIN_AUDIT_SECRET_KEY_BYTES:
+        raise ValueError(
+            f"audit_secret_key must be at least {_MIN_AUDIT_SECRET_KEY_BYTES} "
+            f"bytes (got {len(key)}) - a short or empty key defeats the HMAC "
+            "integrity check it's meant to provide."
+        )
+
+
+def _resolve_audit_secret_key(
+    explicit_key: Optional[bytes], *, required: bool = True
+) -> Optional[bytes]:
+    """Resolve the HMAC key for a FileAuditSink, never by generating one.
+
+    A randomly generated per-instance key can never verify against a past
+    run, and if two govern() calls point at the same audit_file each
+    minting its own random key would make the chain unverifiable even
+    within one process, before a restart ever enters into it. So the key
+    must come from the caller, one way or another - except when *required*
+    is False (checking an *existing* sink for a mismatch): there, having no
+    key to compare isn't an error, it just means nothing to check against.
+    """
+    if explicit_key is not None:
+        _check_audit_secret_key_strength(explicit_key)
+        return explicit_key
+    env_value = os.environ.get(AUDIT_SECRET_KEY_ENV_VAR)
+    if env_value:
+        try:
+            key = bytes.fromhex(env_value)
+        except ValueError as exc:
+            raise ValueError(
+                f"{AUDIT_SECRET_KEY_ENV_VAR} must be a hex-encoded key"
+            ) from exc
+        _check_audit_secret_key_strength(key)
+        return key
+    if not required:
+        return None
+    raise ValueError(
+        "audit_file is set but no audit_secret_key was given and "
+        f"{AUDIT_SECRET_KEY_ENV_VAR} is not set. Pass audit_secret_key "
+        "explicitly, or set the environment variable, so the audit chain "
+        "is verifiable — a silently auto-generated key would not be."
+    )
+
+
+def _get_shared_audit_sink(path: str, secret_key: Optional[bytes]) -> FileAuditSink:
+    """Return the process-wide FileAuditSink for *path*, creating it once.
+
+    The symlink check happens here, before resolve(), not inside
+    FileAuditSink: Path.resolve() follows symlinks, so by the time a sink
+    would see a resolved path there is no longer a symlink component left
+    for its own O_NOFOLLOW open() to refuse — the check would already have
+    been silently defeated. lstat (Path.is_symlink()) is what actually
+    inspects *path* itself; the realpath is still what keys the registry,
+    so unrelated spellings of one non-symlinked file share one sink.
+    """
+    raw = Path(path).expanduser()
+    if raw.is_symlink():
+        raise ValueError(f"audit_file must not be a symlink: {raw}")
+    resolved = raw.resolve()
+    with _AUDIT_SINK_REGISTRY_LOCK:
+        sink = _AUDIT_SINK_REGISTRY.get(resolved)
+        if sink is None:
+            sink = FileAuditSink(resolved, _resolve_audit_secret_key(secret_key))
+            _AUDIT_SINK_REGISTRY[resolved] = sink
+        else:
+            # required=False: omitting secret_key with no env var set is
+            # still a valid "just reuse whatever's already open" call, not
+            # an error. But when a key *is* resolvable - explicit, or via
+            # AGT_AUDIT_SECRET_KEY - it must match the sink actually in use,
+            # checked here even when this call didn't pass the key
+            # explicitly, so a changed env var doesn't go unnoticed.
+            effective_key = _resolve_audit_secret_key(secret_key, required=False)
+            if effective_key is not None and not sink.matches_key(effective_key):
+                raise ValueError(
+                    f"audit_file {resolved} is already open with a different "
+                    "audit_secret_key (from an earlier govern() call in this "
+                    "process) — pass the same key, or omit it to reuse theirs."
+                )
+        return sink
+
+
+def _reset_shared_audit_sinks() -> None:
+    """Test-only helper to clear the shared audit sink registry."""
+    _AUDIT_SINK_REGISTRY.clear()
 
 
 # Resource-type inference uses exact-token match on action strings split by
@@ -103,7 +211,30 @@ class GovernanceConfig:
         agent_id: Agent identifier for policy evaluation. Defaults to "*".
         audit: Whether to enable audit logging. Defaults to True.
         audit_file: Path for file-based audit log. None = in-memory only.
+            Entries are hash-chained and HMAC-signed (see FileAuditSink).
+        audit_secret_key: HMAC signing key for audit_file, at least 32
+            bytes. Required whenever audit_file is set: pass it explicitly,
+            or set the AGT_AUDIT_SECRET_KEY environment variable
+            (hex-encoded). Not auto-generated — a random per-instance key
+            could never verify across a restart, and would make even two
+            govern() calls sharing one audit_file within the same process
+            unverifiable against each other.
         on_deny: Callback when a policy denies an action. Default: raise.
+        on_flag: Callback when the advisory layer returns
+            ``action="flag_for_review"`` (see ``agentmesh.governance.advisory``).
+            Unlike ``on_deny``, this never changes the outcome — the wrapped
+            call still executes either way, since a flag can only annotate,
+            never withhold, a deterministic allow. This holds even if the
+            callback itself raises: the exception is logged, recorded as
+            its own ``on_flag_callback_error`` audit event, and swallowed
+            rather than propagated, so a broken on_flag can't accidentally
+            start blocking execution while still being discoverable without
+            correlating application logs against audit timestamps. Receives
+            the evaluation ``context`` dict and the ``AdvisoryDecision``
+            that triggered it; return value is ignored. Default: ``None``
+            (no-op — the flag is still recorded in the audit trail's
+            ``advisory_check`` event either way, just with no caller-visible
+            effect beyond that).
         conflict_strategy: Policy conflict resolution strategy.
         ring: Optional execution ring for the agent. When set, ring-level
             resource constraints are enforced before policy evaluation and
@@ -116,7 +247,9 @@ class GovernanceConfig:
     agent_id: str = "*"
     audit: bool = True
     audit_file: Optional[str] = None
+    audit_secret_key: Optional[bytes] = None
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None
+    on_flag: Optional[Callable[[dict, AdvisoryDecision], Any]] = None
     approval_handler: Optional[ApprovalHandler] = None
     advisory: Optional[AdvisoryCheck] = None
     conflict_strategy: str = "deny_overrides"
@@ -136,6 +269,28 @@ class GovernanceConfig:
     # expiry) instead of the legacy handler. Requires a coordinator + chain.
     approval_transport: Optional[ApprovalTransport] = None
     trace: Optional[TraceConfig] = None
+    # Optional Rego policy loaded alongside the YAML/JSON one (see
+    # PolicyEngine.load_rego): YAML rules are checked first, and if none
+    # matches, the Rego policy is consulted. Needed for conditions the YAML
+    # DSL's regex-based matcher cannot express - it supports only
+    # field-vs-literal comparisons (==, !=, in [...], numeric >/</>=/<=,
+    # bare boolean truthiness), not field-vs-field ones, so a rule like
+    # "does the caller's attribute match the resource's attribute" silently
+    # never matches under the YAML engine (falls through to default_action)
+    # rather than raising a load-time error.
+    #
+    # What the Rego policy actually receives as `input`: _build_context()
+    # wraps every scalar kwarg as {"value": <kwarg>} (a dict kwarg is passed
+    # through as-is). A field-vs-field rule like `input.a == input.b` still
+    # matches correctly either way, since two identically-wrapped objects
+    # compare equal - but a field-vs-literal rule needs the accessor:
+    # `input.caller_role.value == "auditor"`, not `input.caller_role ==
+    # "auditor"` (which compares an object to a string and is always false,
+    # with nothing at load time or call time to say so - see govern()'s
+    # docstring for a worked example of both).
+    rego_path: Optional[str] = None
+    rego_content: Optional[str] = None
+    rego_package: str = "agentmesh"
 
 
 class GovernanceDenied(Exception):
@@ -153,13 +308,27 @@ class GovernedCallable:
     """Wraps any callable with policy enforcement and audit logging.
 
     This is the core primitive — framework-specific wrappers build on it.
+
+    Call it directly (``__call__``) for a synchronous ``fn`` and a
+    synchronous (or no) ``advisory``. Use ``acall()`` instead when either
+    ``fn`` is a coroutine function, or ``advisory`` needs to await real
+    I/O (an LLM call, an HTTP judge) via ``AdvisoryCheck.acheck()`` — see
+    ``acall()``'s own docstring for what is and isn't covered.
     """
 
     def __init__(self, fn: Callable, config: GovernanceConfig):
         self._fn = fn
         self._config = config
         self._engine = PolicyEngine(conflict_strategy=config.conflict_strategy)
-        self._audit = AuditLog() if config.audit else None
+        # audit_file was previously a documented no-op: this constructor
+        # always built a bare AuditLog() with no sink, so entries never
+        # left memory regardless of what the caller configured. The sink
+        # is shared per resolved path (see _get_shared_audit_sink) so two
+        # govern() calls writing the same file share one hash chain.
+        audit_sink = None
+        if config.audit and config.audit_file:
+            audit_sink = _get_shared_audit_sink(config.audit_file, config.audit_secret_key)
+        self._audit = AuditLog(sink=audit_sink) if config.audit else None
 
         # Load policy
         policy = config.policy
@@ -181,6 +350,12 @@ class GovernedCallable:
                 f"policy must be a file path, YAML string, or Policy object, "
                 f"got {type(policy).__name__}"
             )
+
+        # `is not None`, not truthiness: rego_path="" is a mistake worth
+        # load_rego() rejecting outright, not equivalent to "not configured"
+        # and silently skipped.
+        if config.rego_path is not None or config.rego_content is not None:
+            self._engine.load_rego(config.rego_path, config.rego_content, config.rego_package)
 
         # Hash of policy bundle bytes at load time — consumed by TRACEAuditSink (ADR-0032).
         self._policy_bundle_hash: str = (
@@ -293,9 +468,181 @@ class GovernedCallable:
                 if self._config.on_deny:
                     return self._config.on_deny(blocked)
                 raise GovernanceDenied(blocked)
+            if advisory_result and advisory_result.action == "flag_for_review":
+                # Flag is annotation-only — the audit trail already records
+                # it (see _run_advisory), but without this callback nothing
+                # else about the decision was ever reachable: it can only
+                # tighten, never withhold, a deterministic allow, so the
+                # wrapped call proceeds regardless of whether on_flag is set
+                # OR whether it raises — a broken on_flag callback must not
+                # be able to block execution any more than the flag itself
+                # can, or the "never changes the outcome" guarantee is fake.
+                if self._config.on_flag:
+                    try:
+                        self._config.on_flag(context, advisory_result)
+                    except Exception as e:
+                        logger.warning("on_flag callback failed", exc_info=True)
+                        # The flag itself is already in the advisory_check
+                        # entry above; a separate entry here means a failing
+                        # on_flag is visible in the audit trail too, not just
+                        # in application logs — on_flag is meant as a real
+                        # extension point (e.g. routing to a review queue),
+                        # so a silently-broken one is worth being able to
+                        # find without correlating timestamps against logs.
+                        if self._audit:
+                            self._audit.log(
+                                event_type="on_flag_callback_error",
+                                agent_did=self._config.agent_id,
+                                action=context.get("action", {}).get("type", "unknown"),
+                                outcome="error",
+                                data={
+                                    "classifier": advisory_result.classifier,
+                                    "error": str(e),
+                                },
+                            )
 
         # Allowed — execute the wrapped function
         return self._fn(*args, **kwargs)
+
+    async def acall(self, *args: Any, **kwargs: Any) -> Any:
+        """Async counterpart of ``__call__``.
+
+        Needed for two independent reasons, either of which is enough on
+        its own: (1) ``fn`` is a coroutine function (``__call__`` would
+        return the un-awaited coroutine object rather than its result),
+        or (2) ``advisory`` is configured with a classifier that does real
+        async I/O (an LLM call, an HTTP judge, a second sandbox round
+        trip) via ``AdvisoryCheck.acheck()`` - ``__call__`` calls
+        ``advisory.check()`` synchronously and has no way to await
+        anything.
+
+        Everything else (ring enforcement, deterministic policy
+        evaluation, audit logging) is unchanged from ``__call__`` and
+        stays fully synchronous - those paths do no I/O today, so there
+        is nothing to gain from awaiting them, and keeping them identical
+        between ``__call__`` and ``acall()`` avoids duplicating logic
+        that could drift out of sync. Both ``on_flag`` and ``on_deny``
+        may be a sync or async callable here; an async result is awaited
+        before being returned, the same way ``on_flag``'s result already
+        is - a caller-supplied async ``on_deny`` that isn't awaited would
+        otherwise make ``acall()`` return a bare, never-awaited coroutine.
+        """
+        context = self._build_context(args, kwargs)
+
+        if self._ring_enforcer is not None and self._config.ring is not None:
+            ring_denial = self._check_ring(context)
+            if ring_denial is not None:
+                if self._config.on_deny:
+                    return await self._invoke_on_deny_async(ring_denial)
+                raise GovernanceDenied(ring_denial)
+
+        start = time.monotonic()
+        decision = self._engine.evaluate(self._config.agent_id, context)
+        eval_ms = (time.monotonic() - start) * 1000
+
+        if decision.action == "require_approval":
+            decision = self._handle_approval(decision, context)
+
+        if self._audit:
+            self._audit.log(
+                event_type="policy_evaluation",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome=decision.action,
+                policy_decision=decision.action,
+                data={
+                    "rule": decision.matched_rule or "",
+                    "reason": decision.reason or "",
+                    "evaluation_ms": round(eval_ms, 3),
+                },
+            )
+
+        if not decision.allowed:
+            if self._config.on_deny:
+                return await self._invoke_on_deny_async(decision)
+            raise GovernanceDenied(decision)
+
+        if self._config.advisory and decision.allowed:
+            advisory_result = await self._run_advisory_async(context)
+            if advisory_result and advisory_result.action == "block":
+                blocked = PolicyDecision(
+                    allowed=False,
+                    action="deny",
+                    matched_rule=f"advisory:{advisory_result.classifier}",
+                    reason=f"[Advisory, non-deterministic] {advisory_result.reason}",
+                )
+                if self._config.on_deny:
+                    return await self._invoke_on_deny_async(blocked)
+                raise GovernanceDenied(blocked)
+            if advisory_result and advisory_result.action == "flag_for_review":
+                if self._config.on_flag:
+                    try:
+                        result = self._config.on_flag(context, advisory_result)
+                        if inspect.isawaitable(result):
+                            await result
+                    except Exception as e:
+                        logger.warning("on_flag callback failed", exc_info=True)
+                        if self._audit:
+                            self._audit.log(
+                                event_type="on_flag_callback_error",
+                                agent_did=self._config.agent_id,
+                                action=context.get("action", {}).get("type", "unknown"),
+                                outcome="error",
+                                data={
+                                    "classifier": advisory_result.classifier,
+                                    "error": str(e),
+                                },
+                            )
+
+        # Allowed — execute the wrapped function, awaiting it if it's a
+        # coroutine function (or if calling it returned an awaitable, e.g.
+        # a sync wrapper that itself returns a coroutine).
+        result = self._fn(*args, **kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
+    async def _invoke_on_deny_async(self, decision: PolicyDecision) -> Any:
+        """Call ``on_deny`` from ``acall()`` and await the result if it's
+        awaitable, mirroring how ``on_flag`` is already handled - without
+        this, a caller-supplied async ``on_deny`` would make ``acall()``
+        return a bare, never-awaited coroutine instead of its result."""
+        result = self._config.on_deny(decision)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
+    async def _run_advisory_async(self, context: dict) -> Optional[AdvisoryDecision]:
+        """Async counterpart of ``_run_advisory()`` - see that docstring
+        for the audit-write-outside-the-try and AdvisoryMisconfiguredError
+        rationale, both of which apply identically here."""
+        advisory = self._config.advisory
+        if not advisory:
+            return None
+
+        try:
+            decision = await advisory.acheck(context)
+        except AdvisoryMisconfiguredError:
+            raise
+        except Exception as e:
+            logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
+            return AdvisoryDecision(action="allow", reason=f"Error: {e}")
+
+        if self._audit:
+            self._audit.log(
+                event_type="advisory_check",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome=decision.action,
+                data={
+                    "classifier": decision.classifier,
+                    "reason": decision.reason,
+                    "confidence": decision.confidence,
+                    "deterministic": False,
+                },
+            )
+
+        return decision
 
     def _check_ring(self, context: dict) -> Optional[PolicyDecision]:
         """Enforce ring-level resource constraints and inject ring context.
@@ -583,7 +930,16 @@ class GovernedCallable:
         return str(value)
 
     def _build_context(self, args: tuple, kwargs: dict) -> dict:
-        """Build policy evaluation context from function arguments."""
+        """Build policy evaluation context from function arguments.
+
+        This is also what a Rego policy configured via rego_path/
+        rego_content sees as `input` (see policy.py's evaluate(), which
+        hands this same dict straight to the OPA evaluator). The {"value":
+        ...} wrapping below matters there: `input.role == "auditor"` never
+        matches a scalar kwarg wrapped this way, only `input.role.value ==
+        "auditor"` does - see GovernanceConfig.rego_path and govern()'s
+        docstring, where this bit anyone writing a Rego policy against it.
+        """
         context: dict[str, Any] = {}
 
         # If kwargs contains 'action', use it directly
@@ -607,33 +963,52 @@ class GovernedCallable:
         return context
 
     def _run_advisory(self, context: dict) -> Optional[AdvisoryDecision]:
-        """Run the optional advisory check (defense-in-depth)."""
+        """Run the optional advisory check (defense-in-depth).
+
+        Only advisory.check() itself fails open - it's non-deterministic,
+        defense-in-depth. The audit write below is deliberately outside
+        that try: it used to sit inside it, so an audit-sink failure (e.g.
+        the file-backed sink's own fail-closed errors - ENOSPC, EPERM,
+        ELOOP, a tamper-detected chain) was indistinguishable from the
+        classifier itself failing, silently turning a BLOCK into allow.
+        The deterministic policy_evaluation audit write a few lines up
+        already fails closed the same way (unguarded, propagates out of
+        __call__) - this matches that.
+
+        AdvisoryMisconfiguredError is deliberately NOT covered by that
+        fail-open: it signals a caller wiring bug (e.g. an async callback
+        passed to the sync check() path), not a transient classifier
+        failure, and converting it to "allow" here would silently degrade
+        every single call through a misconfigured advisory to a no-op
+        check - exactly the kind of bug that should surface immediately.
+        """
         advisory = self._config.advisory
         if not advisory:
             return None
 
         try:
             decision = advisory.check(context)
-
-            # Log advisory decision
-            if self._audit:
-                self._audit.log(
-                    event_type="advisory_check",
-                    agent_did=self._config.agent_id,
-                    action=context.get("action", {}).get("type", "unknown"),
-                    outcome=decision.action,
-                    data={
-                        "classifier": decision.classifier,
-                        "reason": decision.reason,
-                        "confidence": decision.confidence,
-                        "deterministic": False,
-                    },
-                )
-
-            return decision
+        except AdvisoryMisconfiguredError:
+            raise
         except Exception as e:
             logger.warning("Advisory check failed: %s — allowing (fail-open)", e)
             return AdvisoryDecision(action="allow", reason=f"Error: {e}")
+
+        if self._audit:
+            self._audit.log(
+                event_type="advisory_check",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome=decision.action,
+                data={
+                    "classifier": decision.classifier,
+                    "reason": decision.reason,
+                    "confidence": decision.confidence,
+                    "deterministic": False,
+                },
+            )
+
+        return decision
 
     @property
     def engine(self) -> PolicyEngine:
@@ -667,7 +1042,10 @@ def govern(
     policy: Union[str, Policy],
     agent_id: str = "*",
     audit: bool = True,
+    audit_file: Optional[str] = None,
+    audit_secret_key: Optional[bytes] = None,
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None,
+    on_flag: Optional[Callable[[dict, AdvisoryDecision], Any]] = None,
     approval_handler: Optional[ApprovalHandler] = None,
     advisory: Optional[AdvisoryCheck] = None,
     conflict_strategy: str = "deny_overrides",
@@ -678,6 +1056,9 @@ def govern(
     approval_ttl_seconds: float = 300.0,
     approval_transport: Optional[ApprovalTransport] = None,
     trace: Optional[TraceConfig] = None,
+    rego_path: Optional[str] = None,
+    rego_content: Optional[str] = None,
+    rego_package: str = "agentmesh",
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
 
@@ -687,10 +1068,47 @@ def govern(
             string, or a ``Policy`` object.
         agent_id: Agent identifier for policy evaluation. Default ``"*"``.
         audit: Enable audit logging. Default ``True``.
+        audit_file: Optional path to also persist audit entries as a
+            hash-chained, HMAC-signed JSON-lines file (see
+            ``FileAuditSink``). ``None`` (default) keeps entries in
+            memory only, lost on process exit.
+        audit_secret_key: HMAC key for ``audit_file``. Required (directly
+            or via the ``AGT_AUDIT_SECRET_KEY`` env var, hex-encoded)
+            whenever ``audit_file`` is set — see
+            ``GovernanceConfig.audit_secret_key``.
         on_deny: Optional callback on denial. Default: raise
             ``GovernanceDenied``.
+        on_flag: Optional callback when ``advisory`` returns
+            ``action="flag_for_review"``. Never changes the outcome — the
+            call still executes — see ``GovernanceConfig.on_flag``.
         conflict_strategy: Conflict resolution strategy. Default
             ``"deny_overrides"`` (any deny wins).
+        rego_path: Optional path to a ``.rego`` policy file, loaded
+            alongside ``policy`` (see ``PolicyEngine.load_rego``). YAML
+            rules are checked first; if none matches, Rego is consulted.
+            Use this for conditions the YAML DSL can't express - it's a
+            regex-based matcher limited to field-vs-literal comparisons
+            (``==``, ``!=``, ``in [...]``, numeric ``>``/``<``/``>=``/``<=``,
+            bare boolean truthiness); it has no field-vs-field comparison,
+            so a rule like "does the caller's attribute match the
+            resource's attribute" silently never matches (falls through to
+            ``default_action``) rather than raising an error. Requires the
+            ``opa`` CLI on PATH for local evaluation.
+
+            **Input shape**: every scalar kwarg reaches Rego as
+            ``{"value": <kwarg>}``, not the bare value - so
+            ``input.role == "auditor"`` never matches (comparing an object
+            to a string; nothing raises, it just always evaluates false),
+            while ``input.role.value == "auditor"`` does. A field-vs-field
+            rule (``input.a == input.b``) works either way, since two
+            identically-wrapped objects still compare equal - which is easy
+            to mistake for the wrapping not mattering, until the first
+            field-vs-literal rule in the same policy silently does nothing.
+            See the second example below.
+        rego_content: Inline Rego policy string, alternative to
+            ``rego_path``.
+        rego_package: Rego package name used to build the query path.
+            Default ``"agentmesh"``, matching ``PolicyEngine.load_rego``.
 
     Returns:
         A ``GovernedCallable`` that enforces policy before execution.
@@ -704,12 +1122,33 @@ def govern(
 
         safe_send = govern(send_email, policy="email-policy.yaml")
         safe_send(to="user@example.com", body="Hello")  # policy-checked
+
+    Example with a relational rule the YAML DSL can't express::
+
+        # policy.rego (v0 syntax - OPAEvaluator runs `opa eval
+        # --v0-compatible`; a v1-syntax `default allow := false` /
+        # `allow if ...` policy fails to compile under it):
+        #   package agentmesh
+        #   default allow = false
+        #   # Field-vs-field: works either wrapped or not, since both sides
+        #   # get the same {"value": ...} treatment.
+        #   allow { input.caller_mission == input.doc_mission }
+        #   # Field-vs-literal: needs .value - input.caller_role == "auditor"
+        #   # would silently never match.
+        #   allow { input.caller_role.value == "auditor" }
+        safe_read = govern(
+            read_doc, policy="allow-all.yaml", rego_path="policy.rego",
+        )
+        safe_read(caller_mission="ARIEL", doc_mission="ARIEL", caller_role="engineer")
     """
     config = GovernanceConfig(
         policy=policy,
         agent_id=agent_id,
         audit=audit,
+        audit_file=audit_file,
+        audit_secret_key=audit_secret_key,
         on_deny=on_deny,
+        on_flag=on_flag,
         approval_handler=approval_handler,
         advisory=advisory,
         conflict_strategy=conflict_strategy,
@@ -720,5 +1159,8 @@ def govern(
         approval_ttl_seconds=approval_ttl_seconds,
         approval_transport=approval_transport,
         trace=trace,
+        rego_path=rego_path,
+        rego_content=rego_content,
+        rego_package=rego_package,
     )
     return GovernedCallable(fn, config)

@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 04 — Audit Logging & Compliance"
-last_reviewed: 2026-04-26
+last_reviewed: 2026-09-19
 owner: agt-maintainers
 ---
 
@@ -385,6 +385,92 @@ The output file (`audit_trail.jsonl`) contains one JSON object per
 line. Each entry includes `content_hash`, `previous_hash`, and
 an HMAC `signature`.
 
+### 5.1.1 Verifying a File Without the SDK
+
+`FileAuditSink` writes `SignedAuditEntry` objects, rather than the
+`AuditEntry` objects returned by `audit.log()`. An external verifier can
+validate a JSONL file without importing AGT by reproducing the following
+algorithm for each row, in file order:
+
+1. Build a payload with exactly these fourteen fields:
+   `entry_id`, `timestamp`, `event_type`, `agent_did`, `action`, `resource`,
+   `target_did`, `data`, `outcome`, `policy_decision`, `matched_rule`,
+   `trace_id`, `session_id`, and `previous_hash`.
+2. Serialize that payload with
+   `json.dumps(payload, sort_keys=True, default=str)`, then calculate its
+   SHA-256 hexadecimal digest. The result must equal `content_hash`.
+3. Confirm that `previous_hash` equals the preceding row's `content_hash`.
+   The first row uses an empty string (`""`).
+4. Calculate HMAC-SHA256 using the audit secret as the key and the UTF-8
+   encoded *hexadecimal content-hash string* as the message. Its hexadecimal
+   digest must equal `signature`.
+
+`sandbox_id`, `environment`, and `compute_driver` are written to the file for
+observability, but are intentionally excluded from the canonical payload.
+`content_hash` and `signature` are also excluded because they are derived
+integrity fields. Including any of these five fields will produce a hash
+mismatch.
+
+```python
+import hashlib
+import hmac
+import json
+from pathlib import Path
+
+HASHED_FIELDS = (
+    "entry_id",
+    "timestamp",
+    "event_type",
+    "agent_did",
+    "action",
+    "resource",
+    "target_did",
+    "data",
+    "outcome",
+    "policy_decision",
+    "matched_rule",
+    "trace_id",
+    "session_id",
+    "previous_hash",
+)
+
+
+def verify_file(path: Path, secret_key: bytes) -> bool:
+    """Verify a FileAuditSink JSONL chain without importing AGT."""
+    previous_hash = ""
+
+    with path.open(encoding="utf-8") as audit_file:
+        for line in audit_file:
+            if not line.strip():
+                continue
+
+            row = json.loads(line)
+            payload = {field: row.get(field) for field in HASHED_FIELDS}
+            content_hash = hashlib.sha256(
+                json.dumps(payload, sort_keys=True, default=str).encode()
+            ).hexdigest()
+            signature = hmac.new(
+                secret_key, content_hash.encode(), hashlib.sha256
+            ).hexdigest()
+
+            if (
+                not hmac.compare_digest(content_hash, row["content_hash"])
+                or row["previous_hash"] != previous_hash
+                or not hmac.compare_digest(signature, row["signature"])
+            ):
+                return False
+
+            previous_hash = content_hash
+
+    return True
+```
+
+Unlike the SDK's `HashChainVerifier`, this sample treats an unparsable,
+non-blank line as an error and raises `json.JSONDecodeError`. The SDK instead
+skips that line after logging a warning. Catch `json.JSONDecodeError` around
+`json.loads()` and continue after appropriate logging if your verifier must
+match the SDK's recovery behavior.
+
 ### 5.2 Writing a Custom Sink
 
 Implement the `AuditSink` protocol to push entries to a database,
@@ -729,6 +815,15 @@ jobs:
 ## 8 — AuditEntry Reference
 
 Every call to `audit.log()` returns an `AuditEntry` with these fields:
+
+> **Note:** `FileAuditSink` serializes a `SignedAuditEntry`, not this
+> `AuditEntry`. The file omits `entry_hash`, `arguments_hash`, `approver_did`,
+> `policy_version`, `issued_at`, and `completed_at`. It uses its own integrity
+> fields: `content_hash` (a separate SHA-256 over the 14-field payload below),
+> `previous_hash` (the file-chain link, not the in-memory Merkle-chain link),
+> and `signature`. `content_hash` and `entry_hash` differ; do not compare
+> them. See [Verifying a File Without the SDK](#511-verifying-a-file-without-the-sdk)
+> for the on-disk format.
 
 | Field | Type | Description |
 |-------|------|-------------|

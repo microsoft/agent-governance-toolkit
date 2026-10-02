@@ -1,4 +1,4 @@
-agent_control_specification_version: "0.3.1-beta"
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: "bank-agent"
 extends: []
@@ -31,7 +31,7 @@ intervention_points:
     policy_target_kind: model_request
     annotations:
       model_request_classifier:
-        from: "$policy_target.messages"
+        from: "$target.messages"
     policy:
       id: bank_agent_rego
       query: data.agent_control_specification.bank_agent_rego.pre_model_call_verdict
@@ -40,7 +40,7 @@ intervention_points:
     policy_target_kind: model_response
     annotations:
       model_response_classifier:
-        from: "$policy_target.message.content"
+        from: "$target.message.content"
     policy:
       id: bank_agent_rego
       query: data.agent_control_specification.bank_agent_rego.post_model_call_verdict
@@ -50,7 +50,7 @@ intervention_points:
     tool_name_from: "$.tool_call.name"
     annotations:
       tool_args_classifier:
-        from: "$policy_target"
+        from: "$target"
     policy:
       id: bank_agent_rego
       query: data.agent_control_specification.bank_agent_rego.pre_tool_call_verdict
@@ -60,7 +60,7 @@ intervention_points:
     tool_name_from: "$.tool_call.name"
     annotations:
       tool_result_classifier:
-        from: "$policy_target"
+        from: "$target"
     policy:
       id: bank_agent_rego
       query: data.agent_control_specification.bank_agent_rego.post_tool_call_verdict
@@ -69,7 +69,7 @@ intervention_points:
     policy_target_kind: assistant_output
     annotations:
       output_classifier:
-        from: "$policy_target.text"
+        from: "$target.text"
     policy:
       id: bank_agent_rego
       query: data.agent_control_specification.bank_agent_rego.output_verdict
@@ -78,7 +78,7 @@ intervention_points:
     policy_target_kind: shutdown_summary
     annotations:
       shutdown_classifier:
-        from: "$policy_target"
+        from: "$target"
     policy:
       id: bank_agent_rego
       query: data.agent_control_specification.bank_agent_rego.agent_shutdown_verdict

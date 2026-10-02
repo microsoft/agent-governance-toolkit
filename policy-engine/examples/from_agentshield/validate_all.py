@@ -76,12 +76,12 @@ def validate_verdict(point: str, verdict: dict) -> None:
         raise RuntimeError(f"{point}: unsupported decision {verdict.get('decision')!r}")
     # AGT-M3 round-2 CONCERN F: AGT D1.1 removed the verdict ``effects``
     # array and replaced it with a single ``transform`` object whose
-    # ``path`` must be rooted at ``$policy_target``. The legacy
+    # ``path`` must be rooted at ``$target``. The legacy
     # ``effects[]`` validator walked an array that the Rust core now
     # rejects with ``runtime_error:policy_output_invalid``, so it can
     # never see a valid value. Validate the new transform shape
     # instead: required when ``decision == "transform"``, forbidden
-    # otherwise, with the same ``$policy_target``-rooted path
+    # otherwise, with the same ``$target``-rooted path
     # restriction the old per-effect check enforced.
     if "effects" in verdict:
         raise RuntimeError(
@@ -99,9 +99,9 @@ def validate_verdict(point: str, verdict: dict) -> None:
             raise RuntimeError(
                 f"{point}: transform.path must be a string, got {path!r}"
             )
-        if path != "$policy_target" and not path.startswith("$policy_target."):
+        if path != "$target" and not path.startswith("$target."):
             raise RuntimeError(
-                f"{point}: transform.path outside $policy_target: {path!r}"
+                f"{point}: transform.path outside $target: {path!r}"
             )
         if "value" not in transform:
             raise RuntimeError(

@@ -37,7 +37,11 @@ class InboxStore(Protocol):
     """Protocol for relay inbox persistence."""
 
     def store(self, msg: StoredMessage) -> bool:
-        """Store a message. Returns False if duplicate (by message_id)."""
+        """Store a message.
+
+        Returns ``False`` only when the message ID is already present in the
+        recipient's mailbox. The same ID may be used in different mailboxes.
+        """
         ...
 
     def fetch_pending(self, recipient_did: str) -> list[StoredMessage]:
@@ -52,7 +56,8 @@ class InboxStore(Protocol):
         When ``recipient_did`` is supplied, the message is deleted only if it
         is addressed to that recipient (spec 12.3: only the *recipient* may
         acknowledge). Returns True if a message was deleted; False if the id is
-        unknown or the caller is not the message's recipient.
+        unknown, ambiguous across recipients, or the caller is not the
+        message's recipient.
         """
         ...
 
@@ -66,17 +71,18 @@ class InMemoryInboxStore:
 
     def __init__(self, ttl: timedelta = DEFAULT_TTL) -> None:
         self._ttl = ttl
-        self._messages: dict[str, StoredMessage] = {}
+        self._messages: dict[tuple[str, str], StoredMessage] = {}
         self._by_recipient: dict[str, list[str]] = defaultdict(list)
         self._lock = threading.Lock()
 
     def store(self, msg: StoredMessage) -> bool:
         with self._lock:
-            if msg.message_id in self._messages:
+            key = (msg.recipient_did, msg.message_id)
+            if key in self._messages:
                 return False  # duplicate
             if msg.expires_at is None:
                 msg.expires_at = msg.stored_at + self._ttl
-            self._messages[msg.message_id] = msg
+            self._messages[key] = msg
             self._by_recipient[msg.recipient_did].append(msg.message_id)
             return True
 
@@ -86,7 +92,7 @@ class InMemoryInboxStore:
             ids = self._by_recipient.get(recipient_did, [])
             result = []
             for mid in ids:
-                msg = self._messages.get(mid)
+                msg = self._messages.get((recipient_did, mid))
                 if msg and (msg.expires_at is None or msg.expires_at > now):
                     result.append(msg)
             return sorted(result, key=lambda m: m.stored_at)
@@ -95,7 +101,17 @@ class InMemoryInboxStore:
         self, message_id: str, recipient_did: str | None = None
     ) -> bool:
         with self._lock:
-            msg = self._messages.get(message_id)
+            if recipient_did is not None:
+                key = (recipient_did, message_id)
+            else:
+                matches = [key for key in self._messages if key[1] == message_id]
+                # A legacy caller may omit the recipient, but must not delete
+                # an arbitrary mailbox when the ID is shared by recipients.
+                if len(matches) != 1:
+                    return False
+                key = matches[0]
+
+            msg = self._messages.get(key)
             if msg is None:
                 return False
             # Access control (spec 12.3): only the message's own recipient may
@@ -104,7 +120,7 @@ class InMemoryInboxStore:
             # message queued for a different agent.
             if recipient_did is not None and msg.recipient_did != recipient_did:
                 return False
-            self._messages.pop(message_id, None)
+            self._messages.pop(key, None)
             ids = self._by_recipient.get(msg.recipient_did, [])
             if message_id in ids:
                 ids.remove(message_id)
@@ -114,14 +130,14 @@ class InMemoryInboxStore:
         with self._lock:
             now = _utcnow()
             expired = [
-                mid for mid, msg in self._messages.items()
+                key for key, msg in self._messages.items()
                 if msg.expires_at and msg.expires_at <= now
             ]
-            for mid in expired:
-                msg = self._messages.pop(mid)
+            for key in expired:
+                msg = self._messages.pop(key)
                 ids = self._by_recipient.get(msg.recipient_did, [])
-                if mid in ids:
-                    ids.remove(mid)
+                if msg.message_id in ids:
+                    ids.remove(msg.message_id)
             return len(expired)
 
     @property

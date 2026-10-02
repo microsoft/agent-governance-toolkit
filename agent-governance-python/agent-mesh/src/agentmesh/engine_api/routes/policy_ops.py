@@ -101,11 +101,31 @@ def _safe_policy_dir(request: Request, override: str | None) -> str:
     return candidate
 
 
+def _replay_target(policy_dir: str) -> str:
+    """Resolve a policy directory to an ACS manifest when one is present.
+
+    Older test doubles accept a directory directly. The real
+    ``agent_compliance.policy_test.replay`` API accepts a manifest file, so a directory
+    target is upgraded only when it contains an unambiguous manifest.
+    """
+    path = Path(policy_dir)
+    if path.is_file():
+        return str(path)
+    manifests = sorted(
+        candidate
+        for pattern in ("manifest.yaml", "manifest.yml", "manifest.json")
+        for candidate in path.glob(pattern)
+        if candidate.is_file()
+    )
+    return str(manifests[0]) if len(manifests) == 1 else policy_dir
+
+
 @router.post(
     "/api/v1/policy/validate",
     operation_id="validatePolicy",
     tags=["policy"],
     response_model=ValidateResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def validate_policy(body: ValidateRequest) -> ValidateResponse:
@@ -133,7 +153,7 @@ async def validate_policy(body: ValidateRequest) -> ValidateResponse:
     lint_errors = validate_policy_schema(body.content)
     return ValidateResponse(
         valid=not lint_errors,
-        errors=[PolicyValidationError(line=0, col=0, message=msg) for msg in lint_errors],
+        errors=[PolicyValidationError(message=msg) for msg in lint_errors],
     )
 
 
@@ -142,6 +162,7 @@ async def validate_policy(body: ValidateRequest) -> ValidateResponse:
     operation_id="testPolicy",
     tags=["policy"],
     response_model=TestResponse,
+    response_model_exclude_none=True,
 )
 @capability_flags(runtime_mutating=False, user_intent_required=False, read_only_surface=True)
 async def test_policy(request: Request, body: TestRequest) -> TestResponse:
@@ -152,6 +173,7 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
     ``503 ENGINE_UNAVAILABLE`` when the policy-test engine is not installed, and
     ``422 FIXTURE_LOAD_ERROR`` when fixtures or policies cannot be loaded.
     """
+    policy_dir = _safe_policy_dir(request, body.policy_dir)
     try:
         replay = _load_replay()
     except ImportError:
@@ -162,14 +184,21 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
             {"package": "agent-compliance"},
         )
 
-    policy_dir = _safe_policy_dir(request, body.policy_dir)
+    replay_target = _replay_target(policy_dir)
     fixtures_payload = [fixture.model_dump() for fixture in body.fixtures]
 
     with tempfile.TemporaryDirectory(prefix="agt-policy-test-") as tmp:
         fixtures_file = Path(tmp) / "fixtures.json"
         fixtures_file.write_text(json.dumps(fixtures_payload), encoding="utf-8")
         try:
-            report = replay(policy_dir, fixtures_file)
+            report = replay(replay_target, fixtures_file)
+        except ImportError as exc:
+            raise ApiError(
+                503,
+                ENGINE_UNAVAILABLE,
+                "Policy-test engine dependencies are not installed",
+                {"package": "agent-compliance"},
+            ) from exc
         except (
             FileNotFoundError,
             ValueError,
@@ -191,10 +220,10 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
             passed=item.passed,
             expected_verdict=item.expected_verdict,
             actual_verdict=item.actual_verdict,
-            expected_rule=item.expected_rule,
-            actual_rule=item.actual_rule,
-            fixture_path=item.fixture_path or None,
-            resolution_metadata=item.resolution_metadata,
+            expected_rule=getattr(item, "expected_rule", None),
+            actual_rule=getattr(item, "actual_rule", None),
+            fixture_path=getattr(item, "fixture_path", "") or None,
+            resolution_metadata=getattr(item, "resolution_metadata", None),
         )
         for item in report.results
     ]

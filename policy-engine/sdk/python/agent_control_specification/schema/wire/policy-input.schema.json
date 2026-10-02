@@ -1,0 +1,188 @@
+{
+  "$id": "https://agent-control-specification.test/wire/policy-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Control Specification policy input",
+  "description": "Canonical JSON input passed to policy dispatchers by the Rust core.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intervention_point",
+    "policy_target",
+    "snapshot",
+    "annotations",
+    "tool"
+  ],
+  "properties": {
+    "intervention_point": {
+      "$ref": "#/$defs/intervention_point"
+    },
+    "policy_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": true
+      }
+    },
+    "snapshot": {
+      "$ref": "#/$defs/snapshot"
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "tool": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/tool_projection"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "intervention_point": {
+      "type": "string",
+      "enum": [
+        "agent_startup",
+        "input",
+        "pre_model_call",
+        "post_model_call",
+        "pre_tool_call",
+        "post_tool_call",
+        "output",
+        "agent_shutdown"
+      ]
+    },
+    "tool_projection": {
+      "description": "Projected manifest tool fields with the invoked tool name inserted by the runtime.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "snapshot": {
+      "description": "Explicit host supplied facts for one intervention point. Ambient context remains in this object.",
+      "type": "object",
+      "additionalProperties": true,
+      "anyOf": [
+        {
+          "required": [
+            "agent"
+          ]
+        },
+        {
+          "required": [
+            "input"
+          ]
+        },
+        {
+          "required": [
+            "model_request"
+          ]
+        },
+        {
+          "required": [
+            "model_response"
+          ]
+        },
+        {
+          "required": [
+            "tool_call"
+          ],
+          "properties": {
+            "tool_call": {
+              "$ref": "#/$defs/pre_tool_call"
+            }
+          }
+        },
+        {
+          "required": [
+            "tool_call",
+            "tool_result"
+          ],
+          "properties": {
+            "tool_call": {
+              "$ref": "#/$defs/post_tool_call"
+            }
+          }
+        },
+        {
+          "required": [
+            "output"
+          ]
+        }
+      ],
+      "properties": {
+        "agent": true,
+        "input": true,
+        "model_request": true,
+        "model_response": true,
+        "tool_call": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "tool_result": true,
+        "output": true,
+        "actor": true,
+        "tenant": true,
+        "conversation": true,
+        "messages": true,
+        "approvals": true,
+        "prior_decisions": true,
+        "transport": true,
+        "metadata": true,
+        "reason": true
+      }
+    },
+    "pre_tool_call": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "id": true,
+        "name": true,
+        "args": true
+      }
+    },
+    "post_tool_call": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "id": true,
+        "name": true,
+        "args": true
+      }
+    }
+  }
+}

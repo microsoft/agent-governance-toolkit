@@ -486,4 +486,197 @@ rules:
         Assert.False(decision.Allowed);
         Assert.Equal("deny-write", decision.MatchedRule);
     }
+
+    /// <summary>Records whether the sync or async path was invoked.</summary>
+    private sealed class AsyncTrackingBackend : IExternalPolicyBackend
+    {
+        public string Name => "async-tracking";
+
+        public int SyncCalls { get; private set; }
+
+        public int AsyncCalls { get; private set; }
+
+        public ExternalPolicyDecision Evaluate(IReadOnlyDictionary<string, object> context)
+        {
+            SyncCalls++;
+            return Decision();
+        }
+
+        public Task<ExternalPolicyDecision> EvaluateAsync(IReadOnlyDictionary<string, object> context, CancellationToken cancellationToken = default)
+        {
+            AsyncCalls++;
+            return Task.FromResult(Decision());
+        }
+
+        private ExternalPolicyDecision Decision() => new()
+        {
+            Backend = Name,
+            Allowed = true,
+            Reason = "ok"
+        };
+    }
+
+    [Fact]
+    public async Task PolicyEngine_EvaluateAsync_UsesBackendAsyncPath()
+    {
+        var backend = new AsyncTrackingBackend();
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(backend);
+
+        var decision = await engine.EvaluateAsync("did:agentmesh:test", new Dictionary<string, object>
+        {
+            ["tool_name"] = "anything"
+        });
+
+        Assert.True(decision.Allowed);
+        Assert.Equal(1, backend.AsyncCalls);
+        Assert.Equal(0, backend.SyncCalls);
+    }
+
+    [Fact]
+    public void PolicyEngine_Evaluate_UsesBackendSyncPath()
+    {
+        var backend = new AsyncTrackingBackend();
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(backend);
+
+        var decision = engine.Evaluate("did:agentmesh:test", new Dictionary<string, object>
+        {
+            ["tool_name"] = "anything"
+        });
+
+        Assert.True(decision.Allowed);
+        Assert.Equal(1, backend.SyncCalls);
+        Assert.Equal(0, backend.AsyncCalls);
+    }
+
+    [Fact]
+    public async Task PolicyEngine_EvaluateAsync_FailsClosedOnBackendError()
+    {
+        var stub = new StubExternalBackend("stub-error", _ => new ExternalPolicyDecision
+        {
+            Backend = "stub-error",
+            Allowed = true, // even if the backend says allow, a non-empty Error must fail closed
+            Reason = "transport failure",
+            Error = "connection refused"
+        });
+
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(stub);
+
+        var decision = await engine.EvaluateAsync("did:agentmesh:test", new Dictionary<string, object>
+        {
+            ["tool_name"] = "anything"
+        });
+
+        Assert.False(decision.Allowed);
+    }
+
+    /// <summary>Backend whose async path cooperatively honours the cancellation token.</summary>
+    private sealed class CancellationAwareBackend : IExternalPolicyBackend
+    {
+        public string Name => "cancellation-aware";
+
+        public ExternalPolicyDecision Evaluate(IReadOnlyDictionary<string, object> context) => new()
+        {
+            Backend = Name,
+            Allowed = true,
+            Reason = "ok"
+        };
+
+        public Task<ExternalPolicyDecision> EvaluateAsync(IReadOnlyDictionary<string, object> context, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Evaluate(context));
+        }
+    }
+
+    /// <summary>Backend whose async path throws a non-cancellation exception.</summary>
+    private sealed class ThrowingBackend : IExternalPolicyBackend
+    {
+        public string Name => "throwing";
+
+        public ExternalPolicyDecision Evaluate(IReadOnlyDictionary<string, object> context)
+            => throw new InvalidOperationException("backend boom");
+
+        public Task<ExternalPolicyDecision> EvaluateAsync(IReadOnlyDictionary<string, object> context, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("backend boom");
+    }
+
+    [Fact]
+    public async Task PolicyEngine_EvaluateAsync_PreCancelledToken_Throws()
+    {
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(new CancellationAwareBackend());
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => engine.EvaluateAsync(
+            "did:agentmesh:test",
+            new Dictionary<string, object> { ["tool_name"] = "anything" },
+            cts.Token));
+    }
+
+    [Fact]
+    public async Task PolicyEngine_EvaluateAsync_PreCancelledToken_NoBackends_Throws()
+    {
+        // With no external backends the in-memory path would otherwise return a decision; the entry-point
+        // token check must still throw so "no PolicyDecision on cancellation" holds for every path.
+        var engine = new PolicyEngine();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => engine.EvaluateAsync(
+            "did:agentmesh:test",
+            new Dictionary<string, object> { ["tool_name"] = "anything" },
+            cts.Token));
+    }
+
+    [Fact]
+    public async Task PolicyEngine_EvaluateAsync_BackendException_Propagates()
+    {
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(new ThrowingBackend());
+
+        // A backend exception is not turned into a deny; it propagates to the caller, as in Evaluate.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => engine.EvaluateAsync(
+            "did:agentmesh:test",
+            new Dictionary<string, object> { ["tool_name"] = "anything" }));
+    }
+
+    [Fact]
+    public async Task PolicyEngine_EvaluateAsync_MixedBackends_PreservesRegistrationOrder()
+    {
+        // First backend overrides EvaluateAsync; second relies on the default sync-wrapping implementation.
+        var asyncBackend = new AsyncTrackingBackend();
+        var syncBackend = new StubExternalBackend("stub-default-async", _ => new ExternalPolicyDecision
+        {
+            Backend = "stub-default-async",
+            Allowed = true,
+            Reason = "ok"
+        });
+
+        var engine = new PolicyEngine();
+        engine.AddExternalBackend(asyncBackend);
+        engine.AddExternalBackend(syncBackend);
+
+        var decision = await engine.EvaluateAsync("did:agentmesh:test", new Dictionary<string, object>
+        {
+            ["tool_name"] = "anything"
+        });
+
+        Assert.True(decision.Allowed);
+        Assert.Equal(1, asyncBackend.AsyncCalls);
+        Assert.Equal(0, asyncBackend.SyncCalls);
+        Assert.Equal(1, syncBackend.CallCount); // reached via the default EvaluateAsync -> Evaluate wrapper
+
+        var backends = Assert.IsAssignableFrom<IEnumerable<object>>(decision.Metadata!["external_backends"])
+            .Cast<Dictionary<string, object>>()
+            .Select(entry => (string)entry["backend"])
+            .ToList();
+
+        Assert.Equal(new[] { asyncBackend.Name, syncBackend.Name }, backends);
+    }
 }

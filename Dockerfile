@@ -55,6 +55,15 @@ RUN cd /workspace/agent-governance-typescript \
 # by any source change, but the `npm ci` above is preserved.
 COPY . /workspace
 
+# Install the native SDK before resolving any package depending on agt-policies.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cargo/registry \
+    bash scripts/ci/install_pinned_rust.sh \
+    && . "$HOME/.cargo/env" \
+    && python -m pip install maturin==1.8.7 \
+    && python -m pip install --no-build-isolation ./policy-engine/sdk/python \
+    && python -c "import agent_control_specification; print('agent_control_specification OK')"
+
 # Stage 3: Python editable installs. A BuildKit cache mount on the pip
 # download cache preserves wheel downloads across rebuilds even when
 # this layer is re-executed (editable installs need source, so the
@@ -94,23 +103,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         -e "agent-governance-python/agent-lightning[agent-os,dev]" \
     && python -m pip install \
         -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt
-
-# Stage 4: build and install the native Agent Control Specification Python SDK
-# (`agent_control_specification`). agt-policies' v5 runtime bridge hard-requires
-# this compiled binding — without it every adapter that routes a check through
-# the bridge raises at runtime. Mirrors the `test (agent-os)` CI matrix job,
-# which builds the same wheel via maturin. The C toolchain (gcc, build-essential)
-# is already provided by the base stage; only Rust + maturin are added here.
-# Scorecard: rustup installer is fetched over pinned TLS; the toolchain channel
-# is pinned to `stable` and the SDK is built from the in-repo source checkout.
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=cache,target=/root/.cargo/registry \
-    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
-        | sh -s -- -y --profile minimal --default-toolchain stable \
-    && . "$HOME/.cargo/env" \
-    && python -m pip install maturin==1.8.7 \
-    && python -m pip install --no-build-isolation ./policy-engine/sdk/python \
-    && python -c "import agent_control_specification; print('agent_control_specification OK')"
 
 # Run as non-root for the developer workflow. The compose `dev` and
 # `dashboard` services bind-mount the repo at /workspace; running the

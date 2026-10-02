@@ -194,21 +194,28 @@ class ResponseLatency(SLI):
     ) -> None:
         super().__init__(f"response_latency_p{int(percentile * 100)}", target_ms, window, store=store)
         self.percentile = percentile
-        self._latencies: list[float] = []
 
     def record_latency(self, latency_ms: float, metadata: dict[str, Any] | None = None) -> SLIValue:
         """Record a response latency in milliseconds."""
-        self._latencies.append(latency_ms)
         return self.record(latency_ms, metadata)
 
     def current_value(self) -> float | None:
-        """Get the percentile latency value."""
-        if not self._latencies:
+        """Get the percentile latency within the configured measurement window."""
+        values = self.values_in_window()
+        if not values:
             return None
-        sorted_vals = sorted(self._latencies)
+        sorted_vals = sorted(v.value for v in values)
         idx = int(len(sorted_vals) * self.percentile)
         idx = min(idx, len(sorted_vals) - 1)
         return sorted_vals[idx]
+
+    def compliance(self) -> float | None:
+        """Fraction of measurements at or below the target (lower is better)."""
+        values = self.values_in_window()
+        if not values:
+            return None
+        good = sum(1 for v in values if v.value <= self.target)
+        return good / len(values)
 
     def collect(self) -> SLIValue:
         val = self.current_value()
@@ -234,6 +241,14 @@ class CostPerTask(SLI):
         self._task_count += 1
         avg = self._total_cost / self._task_count
         return self.record(avg, metadata)
+
+    def compliance(self) -> float | None:
+        """Fraction of measurements at or below the target (lower is better)."""
+        values = self.values_in_window()
+        if not values:
+            return None
+        good = sum(1 for v in values if v.value <= self.target)
+        return good / len(values)
 
     def collect(self) -> SLIValue:
         avg = self._total_cost / self._task_count if self._task_count > 0 else 0.0

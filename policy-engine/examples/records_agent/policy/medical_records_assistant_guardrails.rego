@@ -36,7 +36,7 @@ post_model_call_verdict := {
     "reason": "phi_redacted",
     "message": "",
     "transform": {
-        "path": "$policy_target.value",
+        "path": "$target.value",
         "value": "[REDACTED PHI]"
     }
 } if {
@@ -80,7 +80,7 @@ post_tool_call_verdict := {
     "reason": "phi_redacted",
     "message": "",
     "transform": {
-        "path": "$policy_target.value",
+        "path": "$target.value",
         "value": "[REDACTED PHI]"
     }
 } if {
@@ -94,7 +94,7 @@ output_verdict := {
     "reason": "phi_redacted",
     "message": "",
     "transform": {
-        "path": "$policy_target.value",
+        "path": "$target.value",
         "value": "[REDACTED PHI]"
     }
 } if {

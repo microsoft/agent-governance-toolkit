@@ -35,6 +35,7 @@ cargo test --release --workspace
 - Do not weaken governance checks, signing guarantees, or credential redaction behavior.
 - Do not add unpublished or obscure dependencies without a clear OSS need.
 - Keep crates.io metadata aligned with the repository and documentation.
+- Credential boundary functions (`is_left_boundary_char` / `is_right_boundary_char` in `redactor.rs`) must only reject ASCII alphanumerics (plus `-` for `SlackToken`, whose value class includes it). `_` must not block detection — a secret annotated `_old` or preceded by `session_` must still be caught.
 
 ## Validation
 

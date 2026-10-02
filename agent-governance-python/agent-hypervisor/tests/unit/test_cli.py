@@ -31,13 +31,13 @@ def hv() -> Hypervisor:
 @pytest.fixture
 async def session_hv(hv: Hypervisor):
     """Hypervisor with one active session containing two agents."""
-    session = await hv.create_session(
+    session = hv.create_session(
         config=SessionConfig(max_participants=5),
         creator_did="did:mesh:admin",
     )
-    await hv.join_session(session.sso.session_id, "did:mesh:agent-1", sigma_raw=0.75)
-    await hv.join_session(session.sso.session_id, "did:mesh:agent-2", sigma_raw=0.80)
-    await hv.activate_session(session.sso.session_id)
+    hv.join_session(session.sso.session_id, "did:mesh:agent-1", sigma_raw=0.75)
+    hv.join_session(session.sso.session_id, "did:mesh:agent-2", sigma_raw=0.80)
+    hv.activate_session(session.sso.session_id)
     return hv, session.sso.session_id
 
 

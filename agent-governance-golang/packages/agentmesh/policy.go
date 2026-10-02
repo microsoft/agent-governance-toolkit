@@ -5,6 +5,7 @@ package agentmesh
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -14,13 +15,40 @@ import (
 )
 
 // PolicyScope represents the scope at which a policy rule applies.
+//
+// Specificity order (most → least): Agent > Organization > Tenant > Global.
 type PolicyScope string
 
 const (
-	Global PolicyScope = "global"
-	Tenant PolicyScope = "tenant"
-	Agent  PolicyScope = "agent"
+	Global       PolicyScope = "global"
+	Tenant       PolicyScope = "tenant"
+	Organization PolicyScope = "organization"
+	Agent        PolicyScope = "agent"
 )
+
+// ValidScopes is the set of accepted PolicyScope values.  Use it to reject
+// typos at load time rather than silently demoting to Global.
+var ValidScopes = map[PolicyScope]bool{
+	Global:       true,
+	Tenant:       true,
+	Organization: true,
+	Agent:        true,
+}
+
+// ValidateScope checks whether s is a recognised PolicyScope value.
+// It returns a non-nil error for misspelled, empty, or capitalised values.
+//
+// The Go SDK does not yet have a Policy document model (see #3680), so
+// callers that build PolicyRule values from YAML/JSON should call
+// ValidateScope before passing rules to NewPolicyEngine.
+func ValidateScope(s PolicyScope) error {
+	if !ValidScopes[s] {
+		return fmt.Errorf(
+			"invalid policy scope %q: accepted values (case-sensitive): global, tenant, organization, agent; "+
+				"hint: 'organisation' is not accepted — use 'organization'", s)
+	}
+	return nil
+}
 
 // PolicyRule defines a single governance rule.
 type PolicyRule struct {
@@ -50,9 +78,13 @@ type PolicyEngine struct {
 }
 
 // NewPolicyEngine creates a PolicyEngine with the supplied rules.
+// Rules with an invalid Scope are corrected to "agent" (max specificity,
+// fail-closed) rather than silently demoting to "global" (#3536).
+// The input slice is not mutated; a defensive copy is made.
 func NewPolicyEngine(rules []PolicyRule) *PolicyEngine {
+	validated := validateAndCorrectRules(rules)
 	return &PolicyEngine{
-		rules:      rules,
+		rules:      validated,
 		rateLimits: make(map[string]*rateLimitState),
 		backends:   make([]ExternalPolicyBackend, 0),
 	}
@@ -196,11 +228,31 @@ func (pe *PolicyEngine) checkRateLimit(rule PolicyRule, context map[string]inter
 	return Allow
 }
 
+// validateAndCorrectRules copies the input slice and corrects any invalid
+// Scope to "agent" (fail-closed, max specificity) — the same behaviour as
+// NewPolicyEngine.  The input slice is never mutated.
+func validateAndCorrectRules(rules []PolicyRule) []PolicyRule {
+	validated := make([]PolicyRule, len(rules))
+	copy(validated, rules)
+	for i := range validated {
+		if validated[i].Scope != "" {
+			if err := ValidateScope(validated[i].Scope); err != nil {
+				log.Printf("[WARN] rule %d (%q): %v -- ranking at agent (fail-closed)", i, validated[i].Action, err)
+				validated[i].Scope = "agent"
+			}
+		}
+	}
+	return validated
+}
+
 // LoadFromYAML replaces the engine's rule set with the rules from a YAML
 // file. Existing rules are discarded on success; on parse or I/O error the
 // previous rule set is left intact. This matches the natural semantics of a
 // "load" verb and prevents the rule set from doubling when the same file is
 // re-read (e.g. on config reload).
+//
+// Rules with an invalid Scope are corrected to "agent" (fail-closed, #3536),
+// matching NewPolicyEngine behaviour.
 //
 // To extend the rule set without replacing it, use MergeFromYAML.
 func (pe *PolicyEngine) LoadFromYAML(path string) error {
@@ -209,24 +261,28 @@ func (pe *PolicyEngine) LoadFromYAML(path string) error {
 		return err
 	}
 
+	validated := validateAndCorrectRules(rules)
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
-	pe.rules = rules
+	pe.rules = validated
 	return nil
 }
 
 // MergeFromYAML appends rules from a YAML file to the engine's existing rule
 // set. Use this when composing rules from multiple files; use LoadFromYAML
 // when reloading a single canonical rule set.
+//
+// Rules with an invalid Scope are corrected to "agent" (fail-closed, #3536).
 func (pe *PolicyEngine) MergeFromYAML(path string) error {
 	rules, err := readPolicyRulesFromYAML(path)
 	if err != nil {
 		return err
 	}
 
+	validated := validateAndCorrectRules(rules)
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
-	pe.rules = append(pe.rules, rules...)
+	pe.rules = append(pe.rules, validated...)
 	return nil
 }
 

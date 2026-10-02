@@ -77,6 +77,27 @@ def test_unwrap_lockfile_path(key, expected):
     assert cis._unwrap_lockfile_path(key) == expected
 
 
+# --------------------------- _split_npm_alias ---------------------------
+
+@pytest.mark.parametrize(
+    "spec,expected",
+    [
+        ("npm:react-is@18.3.1", ("react-is", "18.3.1")),
+        ("npm:@ai-sdk/provider@2.0.3", ("@ai-sdk/provider", "2.0.3")),
+        # Ranges cannot be resolved from the spec alone.
+        ("npm:react-is@^18.3.1", None),
+        ("npm:react-is@*", None),
+        # No version, no package, not an alias at all.
+        ("npm:react-is", None),
+        ("npm:@1.0.0", None),
+        ("18.3.1", None),
+        ("npm:bad name@1.0.0", None),
+    ],
+)
+def test_split_npm_alias(spec, expected):
+    assert cis._split_npm_alias(spec) == expected
+
+
 # --------------------------- _extract_lockfile_pairs ---------------------------
 
 def test_lockfile_v3_packages_form():
@@ -110,6 +131,75 @@ def test_lockfile_v3_nested_node_modules_extracted():
     out = cis._extract_lockfile_pairs(tree)
     assert ("sus", "0.0.1") in out
     assert out[("sus", "0.0.1")] is True
+
+
+def test_lockfile_v3_alias_entry_queries_real_package():
+    """jest 30.5 shape: node_modules/@jest/react-is-18 with name react-is."""
+    tree = {
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "root"},
+            "node_modules/@jest/react-is-18": {
+                "name": "react-is",
+                "version": "18.3.1",
+                "resolved": "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz",
+                "hasInstallScript": False,
+            },
+            "node_modules/@jest/react-is-19": {
+                "name": "react-is",
+                "version": "19.2.8",
+            },
+        },
+    }
+    out = cis._extract_lockfile_pairs(tree)
+    assert out == {("react-is", "18.3.1"): False, ("react-is", "19.2.8"): None}
+
+
+def test_lockfile_v3_alias_via_npm_version_spec():
+    tree = {
+        "lockfileVersion": 3,
+        "packages": {
+            "node_modules/provider-v5": {"version": "npm:@ai-sdk/provider@2.0.3"},
+        },
+    }
+    out = cis._extract_lockfile_pairs(tree)
+    assert list(out) == [("@ai-sdk/provider", "2.0.3")]
+
+
+def test_lockfile_v3_name_equal_to_path_is_not_an_alias():
+    tree = {
+        "lockfileVersion": 3,
+        "packages": {
+            "node_modules/@scope/pkg": {"name": "@scope/pkg", "version": "1.0.0"},
+        },
+    }
+    assert list(cis._extract_lockfile_pairs(tree)) == [("@scope/pkg", "1.0.0")]
+
+
+def test_lockfile_v3_alias_with_unsafe_target_rejected():
+    tree = {
+        "lockfileVersion": 3,
+        "packages": {
+            "node_modules/alias": {"name": "evil name", "version": "1.0.0"},
+        },
+    }
+    with pytest.raises(cis.InvalidAlias):
+        cis._extract_lockfile_pairs(tree)
+
+
+def test_lockfile_v1_alias_version_spec_queries_real_package():
+    tree = {
+        "lockfileVersion": 1,
+        "dependencies": {
+            "react-is-18": {"version": "npm:react-is@18.3.1"},
+            "outer": {
+                "version": "1.0.0",
+                "dependencies": {"provider-v5": {"version": "npm:@ai-sdk/provider@2.0.3"}},
+            },
+        },
+    }
+    out = cis._extract_lockfile_pairs(tree)
+    assert set(out) == {("react-is", "18.3.1"), ("outer", "1.0.0"), ("@ai-sdk/provider", "2.0.3")}
 
 
 def test_lockfile_v1_legacy_dependencies_recursive():
@@ -222,6 +312,25 @@ def test_collect_candidates_combines_pkgjson_and_lockfile():
     assert ("sus", "0.1.0", True) in triples
     # axios hint comes from lockfile (False).
     assert ("axios", "1.14.0", False) in triples
+
+
+def test_collect_candidates_alias_resolves_to_real_package():
+    json_map = {
+        ("origin/main", "package-lock.json"): {"lockfileVersion": 3, "packages": {}},
+        ("HEAD", "package-lock.json"): {
+            "lockfileVersion": 3,
+            "packages": {
+                "node_modules/@jest/react-is-18": {
+                    "name": "react-is",
+                    "version": "18.3.1",
+                    "hasInstallScript": False,
+                },
+            },
+        },
+    }
+    with _mock_changed(["package-lock.json"]), _mock_json(json_map):
+        out = cis.collect_candidates("origin/main")
+    assert out == [("react-is", "18.3.1", False, "package-lock.json")]
 
 
 def test_collect_candidates_dedupes_across_lockfiles():
@@ -415,3 +524,38 @@ def test_main_deadline_unscanned_becomes_finding():
             "--strict",
         ])
     assert rc == 1
+
+
+@pytest.mark.parametrize("metadata", [
+    {"name": "../react-is"}, {"name": ""}, {"name": None},
+    {"name": "react-is\n"}, {"version": "npm:react-is@^18"},
+])
+def test_malformed_alias_fails_install_cli_without_registry(metadata):
+    tree = {"packages": {"node_modules/react-is": {
+        "version": "18.3.1", "hasInstallScript": True, **metadata,
+    }}}
+    with patch.object(common, "changed_manifests", return_value=["package-lock.json"]), \
+         patch.object(common, "load_json_at", side_effect=lambda rev, path: tree if rev == "HEAD" else {}), \
+         patch.object(cis, "fetch_install_scripts") as fetch:
+        assert cis.main_with_args(["--strict"]) == 1
+        fetch.assert_not_called()
+
+
+def test_repaired_alias_is_checked_even_when_base_is_invalid():
+    def load(rev, path):
+        return {"packages": {"node_modules/alias": {
+            "name": "react-is" if rev == "HEAD" else "../react-is",
+            "version": "18.3.1", "hasInstallScript": True,
+        }}}
+    with patch.object(common, "changed_manifests", return_value=["package-lock.json"]), \
+         patch.object(common, "load_json_at", side_effect=load), \
+         patch.object(cis, "fetch_install_scripts", return_value={}) as fetch:
+        assert cis.main_with_args(["--strict"]) == 0
+        fetch.assert_called_once_with("react-is", "18.3.1")
+
+
+def test_malformed_legacy_alias_is_rejected():
+    with pytest.raises(cis.InvalidAlias):
+        cis._extract_lockfile_pairs({"dependencies": {
+            "alias": {"version": "npm:react-is@^18"},
+        }})

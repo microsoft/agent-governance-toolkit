@@ -24,6 +24,7 @@ them into this package workspace.
 - Do not move apps or monorepo-only tooling here just for symmetry.
 - If a package is foundational and consumed across multiple Python surfaces, prefer extracting it
   here rather than nesting it under a larger application/runtime package.
+- Credential-detection patterns (in `agent-os/src/agent_os/credential_redactor.py`) must use `(?<![A-Za-z0-9])` / `(?![A-Za-z0-9])` lookaround anchors, not `\b`. Word boundaries treat `_` as a word character, which silently misses secrets annotated `_old` or preceded by `session_`. The `content_scanner.py` SSN pattern must match the same separator forms as `credential_redactor.py`.
 
 ## Validation
 

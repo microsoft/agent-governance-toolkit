@@ -73,6 +73,36 @@ policies:
 }
 ```
 
+## Healthcare Identifier Detection
+
+`agentmesh` exposes a context-aware detector for MRNs, NPIs, and health-plan,
+member, or policy identifiers. It returns byte ranges for identifier values;
+it does not classify or redact data.
+
+```rust
+use agentmesh::{find_healthcare_identifiers, HealthcareIdentifierKind};
+
+let text = "Patient MRN: A123456789; Provider NPI: 1234567893";
+for matched in find_healthcare_identifiers(text) {
+    let value = &text[matched.start..matched.end];
+    match matched.kind {
+        HealthcareIdentifierKind::MedicalRecordNumber => println!("MRN: {value}"),
+        HealthcareIdentifierKind::NationalProviderIdentifier => println!("NPI: {value}"),
+        HealthcareIdentifierKind::HealthPlanIdentifier => println!("Plan ID: {value}"),
+    }
+}
+```
+
+Detection requires an explicit cue (`MRN`/`medical record`, `NPI`/`provider
+ID`, or `HPID`/`health plan` with optional `ID`/`member ID`/`member
+identification`/`policy ID`). MRNs are limited to 6-12 ASCII letters or
+digits and health-plan identifiers to 8-15; both must contain a digit.
+Letter-initial values require a separator after the cue, while digits-only
+values may follow immediately. NPIs must be 10 digits with a valid
+80840-prefixed Luhn check digit. An NPI identifies a provider and is not
+inherently PHI. These patterns neither identify every healthcare
+identifier nor establish HIPAA or SOC 2 compliance.
+
 ## OpenTelemetry Policy Spans
 
 Policy-evaluation spans are available behind the opt-in `telemetry` feature. The
@@ -383,6 +413,52 @@ YAML-based policy engine with four-way decisions (allow / deny / requires-approv
 | `engine.load_from_file(path)` | Load rules from a YAML file |
 | `engine.evaluate(action, context)` | Evaluate an action against loaded policy |
 
+### Accumulated Context (`context.rs`, `context_audit.rs`)
+
+Workflow-scoped governance that folds actual result labels after execution, then gates later
+actions against the accumulated sensitivity and restrictions. Transition audit events record
+only the envelope delta and carry the higher of the before/after sensitivity classifications.
+
+```rust
+use agentmesh::context::{
+    accumulate, decide_next, to_policy_decision, AggregationRule, ContextEnvelope,
+};
+use agentmesh::{DataClassification, PolicyDecision};
+
+let rules = [AggregationRule::new(
+    "customer_profile",
+    ["pii", "financial"],
+    DataClassification::Restricted,
+)
+.expect("aggregation rules require labels")
+.with_restrictions(["no_external_export"])];
+
+let envelope = ContextEnvelope::new("env-1", "workflow-1");
+let envelope = accumulate(
+    &envelope,
+    ["pii", "financial"],
+    DataClassification::Confidential,
+    &rules,
+    3,
+);
+let decision = decide_next(
+    &envelope,
+    "export",
+    &rules,
+    3,
+    DataClassification::Restricted,
+);
+
+assert!(matches!(
+    to_policy_decision(&decision, false),
+    PolicyDecision::Deny(_)
+));
+
+// A host with an obligation channel must enforce `decision.obligations` out of band
+// before treating the mapped Allow as permission to proceed.
+assert_eq!(to_policy_decision(&decision, true), PolicyDecision::Allow);
+```
+
 ### Trust (`trust.rs`)
 
 Integer trust scoring (0–1000) across five tiers with optional JSON persistence.
@@ -414,8 +490,18 @@ SHA-256 hash-chained audit log for tamper detection.
 |---|---|
 | `AuditLogger::new()` | Create an audit logger |
 | `logger.log(agent_id, action, decision)` | Append an audit entry |
+| `logger.log_with_skill_audit_metadata(...)` | Append trusted skill provenance and hash-only context snapshots |
 | `logger.verify()` | Verify chain integrity |
 | `logger.get_entries(filter)` | Query entries by filter |
+
+Use `TrustedSkillMetadataSource::new(...)` only with framework-owned skill
+metadata. `AuditEntry` serializes it as a nested snake_case
+`skill_audit_metadata` object and includes it in the versioned hash chain;
+metadata-free entries retain the legacy hash format. The framework adapter
+hashes request payloads by default when present, parsing valid JSON structurally
+and hashing other payloads as strings. Payload skill fields are never trusted.
+Framework `GovernanceEvent` values themselves are not hash-chained; use
+`AuditLogger` when tamper-evident storage is required.
 
 ### Identity (`identity.rs`)
 

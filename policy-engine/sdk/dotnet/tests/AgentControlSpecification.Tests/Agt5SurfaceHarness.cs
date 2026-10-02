@@ -39,7 +39,7 @@ internal static class Agt5SurfaceHarness
                 pre_tool_call := {
                   "decision": "transform",
                   "reason": "secret_redacted",
-                  "transform": {"path": "$policy_target", "value": "REDACTED"},
+                  "transform": {"path": "$target", "value": "REDACTED"},
                 } if {
                   input.intervention_point == "pre_tool_call"
                   input.snapshot.tool_call.args.command == "leak"
@@ -50,7 +50,7 @@ internal static class Agt5SurfaceHarness
             File.WriteAllText(
                 manifestPath,
                 $$"""
-                agent_control_specification_version: "0.3.0-alpha"
+                agent_control_specification_version: "0.4.0-alpha.1"
                 policies:
                   demo:
                     type: rego
@@ -79,7 +79,7 @@ internal static class Agt5SurfaceHarness
             AssertEqual(Decision.Transform, result.Verdict.Decision, "OPA transform verdict should map to Decision.Transform.");
             AssertEqual("secret_redacted", result.Verdict.Reason, "OPA transform verdict should preserve the reason string.");
             Assert(result.Verdict.Transform is not null, "OPA transform verdict should carry the transform payload.");
-            AssertEqual("$policy_target", result.Verdict.Transform!.Path, "transform path should round-trip from the Rego policy.");
+            AssertEqual("$target", result.Verdict.Transform!.Path, "transform path should round-trip from the Rego policy.");
             Assert(result.TransformedPolicyTarget.HasValue, "OPA transform verdict should populate transformed_policy_target.");
             AssertEqual("REDACTED", result.TransformedPolicyTarget!.Value.GetString(), "transformed_policy_target should hold the rewritten value.");
             Assert(result.InputIdentity is not null, "OPA transform verdict should surface input_identity.");
@@ -96,7 +96,7 @@ internal static class Agt5SurfaceHarness
     private static async Task BisectedIdentityOnEscalateAsync()
     {
         var manifest = """
-            agent_control_specification_version: 0.3.0-alpha
+            agent_control_specification_version: 0.4.0-alpha.1
             policies:
               demo:
                 type: custom
@@ -141,7 +141,9 @@ internal static class Agt5SurfaceHarness
             "escalate-call-1");
 
         AssertEqual("ok", run.Value, "approved escalate should execute the tool with the original args.");
-        AssertEqual(Decision.Escalate, run.PreToolCallResult.Verdict.Decision, "pre_tool_call should escalate.");
+        // An escalation is a liftable deny: a deny carrying an approval block.
+        AssertEqual(Decision.Deny, run.PreToolCallResult.Verdict.Decision, "pre_tool_call should escalate.");
+        AssertEqual(true, run.PreToolCallResult.Verdict.Approval is not null, "an escalation must be liftable.");
         AssertEqual(Decision.Allow, run.PostToolCallResult.Verdict.Decision, "post_tool_call should allow.");
 
         Assert(run.PreToolCallResult.InputIdentity is not null, "escalate result should surface input_identity.");
@@ -175,7 +177,7 @@ internal static class Agt5SurfaceHarness
     private static async Task EvidenceRoundTripAsync()
     {
         var manifest = """
-            agent_control_specification_version: 0.3.0-alpha
+            agent_control_specification_version: 0.4.0-alpha.1
             policies:
               evidence:
                 type: custom

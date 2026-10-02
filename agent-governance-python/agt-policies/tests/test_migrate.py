@@ -474,7 +474,9 @@ policy = GovernancePolicy(
     # The bridge output MUST validate against the AGT-MANIFEST-1.0 shape
     # (version string, empty extends, every binding policy_id is declared,
     # bundle directory exists on disk).
-    assert data["agent_control_specification_version"].endswith("-agt")
+    # agent-control-spec accepts exactly one manifest version; the old
+    # "-agt" suffixed variants are not in its supported list.
+    assert data["agent_control_specification_version"] == "0.4.0-alpha.1"
     assert data["extends"] == []
     assert data["intervention_points"], "manifest needs at least one binding"
     declared = set(data["policies"].keys())
@@ -513,6 +515,30 @@ policy = GovernancePolicy()
     assert '"token_count": 4096' in rego
     assert '"tool_call_count": 10' in rego
     assert "deny_if_low_confidence(0.8)" in rego
+
+
+def test_confidence_threshold_advisory_survives_write_once(tmp_path: Path) -> None:
+    """The inert confidence rule warning remains visible without duplication."""
+    src = tmp_path / "confidence_bot.py"
+    _write_source(
+        src,
+        "from agent_os.integrations.base import GovernancePolicy\n"
+        "policy = GovernancePolicy(confidence_threshold=0.65)\n",
+    )
+
+    dry_run = migrate_mod.migrate_project(tmp_path, write=False)
+    dry_finding = dry_run.governance_policies[0]
+    assert len(dry_finding.notes) == 1
+    note = dry_finding.notes[0]
+    assert "threshold is not enforced until you do" in note
+
+    written = migrate_mod.migrate_project(tmp_path, write=True)
+    written_finding = written.governance_policies[0]
+    assert written_finding.notes == [note]
+
+    rendered = migrate_mod.render_report(written)
+    assert "**Notes:**" in rendered
+    assert rendered.count(note) == 1
 
 
 def test_substring_patterns_stay_case_insensitive(tmp_path: Path) -> None:
@@ -714,9 +740,10 @@ def test_approval_stays_scoped_to_tool_calls(tmp_path: Path) -> None:
         assert result.verdict.decision.value == "allow", label
     verdict = session.pre_tool_call(tool_name="t", args={}).verdict
     # The escalation fires only here; with no approver configured the
-    # session resolves it to a denial.
+    # session fails closed. agent-hooks reserves a name for exactly this,
+    # so it is no longer an invented `approval_denied`.
     assert verdict.decision.value == "deny"
-    assert verdict.reason == "approval_denied"
+    assert verdict.reason == "host_error:approval_unresolved"
 
 
 def test_tool_call_budget_gates_only_the_next_tool_call(tmp_path: Path) -> None:

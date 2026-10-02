@@ -1,10 +1,8 @@
 {
   "schema_version": 1,
   "source": [
-    "core/src/verdict.rs Decision",
-    "core/src/verdict.rs normalize_policy_output",
-    "docs/stateless-runtime.md Evaluation flow",
-    "policy-engine/spec/SPECIFICATION.md §14"
+    "agent-hooks-sdk 0.1.0-alpha.3 Decision",
+    "agent-control-spec 0.4.0-alpha.1 verdict normalization"
   ],
   "rows": [
     {
@@ -27,22 +25,27 @@
       "expected_error_reason": null
     },
     {
-      "id": "warn",
+      "id": "allow-with-warning",
       "input": {
-        "decision": "warn",
-        "reason": "policy_warned"
+        "decision": "allow",
+        "warnings": [
+          {
+            "reason": "policy_warned"
+          }
+        ]
       },
-      "normalized_decision": "warn",
+      "normalized_decision": "allow",
       "permits": true,
       "expected_error_reason": null
     },
     {
-      "id": "escalate",
+      "id": "liftable-deny",
       "input": {
-        "decision": "escalate",
-        "reason": "approval_required"
+        "decision": "deny",
+        "reason": "approval_required",
+        "approval": {}
       },
-      "normalized_decision": "escalate",
+      "normalized_decision": "deny",
       "permits": false,
       "expected_error_reason": null
     },
@@ -52,7 +55,7 @@
         "decision": "transform",
         "reason": "redacted",
         "transform": {
-          "path": "$policy_target.flag",
+          "path": "$target.flag",
           "value": true
         }
       },
@@ -76,7 +79,7 @@
         "effects": [
           {
             "type": "replace",
-            "path": "$policy_target.flag",
+            "path": "$target.flag",
             "value": true
           }
         ]

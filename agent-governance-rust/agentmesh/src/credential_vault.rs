@@ -23,7 +23,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use hmac::{Hmac, Mac};
-use rand::RngCore;
+use rand::rand_core::UnwrapErr;
+use rand::rngs::SysRng;
+use rand::Rng;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -276,11 +278,11 @@ impl CredentialVault {
         Ok(vault)
     }
 
-    /// Generate a fresh AES-256-GCM key (32 random bytes).
+    /// Generate a fresh AES-256-GCM key (32 random bytes) from OS entropy.
     #[must_use]
     pub fn generate_key() -> [u8; KEY_LENGTH] {
         let mut k = [0u8; KEY_LENGTH];
-        rand::thread_rng().fill_bytes(&mut k);
+        UnwrapErr(SysRng).fill_bytes(&mut k);
         k
     }
 
@@ -546,7 +548,7 @@ impl Default for CredentialVault {
 fn encrypt(key: &[u8; KEY_LENGTH], plaintext: &[u8]) -> Result<Vec<u8>, CredentialError> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let mut nonce_bytes = [0u8; NONCE_LENGTH];
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    rand::rng().fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ct = cipher
         .encrypt(nonce, plaintext)
@@ -724,7 +726,10 @@ impl<'v> CredentialInjector<'v> {
         let requested = collect_placeholders(&payload);
 
         // 1. Reject anything outside the workflow-supplied allowlist.
-        let outside: Vec<&String> = requested.iter().filter(|n| !allowlist.contains(n.as_str())).collect();
+        let outside: Vec<&String> = requested
+            .iter()
+            .filter(|n| !allowlist.contains(n.as_str()))
+            .collect();
         if !outside.is_empty() {
             let event = VaultAuditEvent {
                 timestamp: now_seconds(),
@@ -857,10 +862,7 @@ fn substitute(payload: serde_json::Value, resolved: &HashMap<String, String>) ->
     })
 }
 
-fn map_strings<F: Fn(&str) -> String>(
-    payload: serde_json::Value,
-    fn_: &F,
-) -> serde_json::Value {
+fn map_strings<F: Fn(&str) -> String>(payload: serde_json::Value, fn_: &F) -> serde_json::Value {
     match payload {
         serde_json::Value::String(s) => serde_json::Value::String(fn_(&s)),
         serde_json::Value::Array(arr) => {
@@ -887,8 +889,7 @@ fn map_strings<F: Fn(&str) -> String>(
 /// resolved credential values.
 #[must_use]
 pub fn audit_digest(events: &[VaultAuditEvent], key: &[u8]) -> String {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key)
-        .expect("HMAC accepts any key length");
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC accepts any key length");
     for ev in events {
         let json = serde_json::to_vec(ev).unwrap_or_default();
         mac.update(&json);

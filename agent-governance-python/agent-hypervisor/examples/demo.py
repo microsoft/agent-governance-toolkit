@@ -71,25 +71,25 @@ async def demo_session_lifecycle() -> None:
         enable_audit=True,
         consistency_mode=ConsistencyMode.EVENTUAL,
     )
-    session = await hv.create_session(config, creator_did="did:mesh:admin")
+    session = hv.create_session(config, creator_did="did:mesh:admin")
     step(f"Session created: {session.sso.session_id[:16]}...")
 
     # Join agents with different trust scores
-    ring_high = await hv.join_session(
+    ring_high = hv.join_session(
         session.sso.session_id,
         "did:mesh:trusted-agent",
         sigma_raw=0.95,
     )
     step(f"Trusted agent -> {ring_high.name} (sigma=0.95)")
 
-    ring_mid = await hv.join_session(
+    ring_mid = hv.join_session(
         session.sso.session_id,
         "did:mesh:standard-agent",
         sigma_raw=0.65,
     )
     step(f"Standard agent -> {ring_mid.name} (sigma=0.65)")
 
-    ring_low = await hv.join_session(
+    ring_low = hv.join_session(
         session.sso.session_id,
         "did:mesh:sandbox-agent",
         sigma_raw=0.20,
@@ -97,7 +97,7 @@ async def demo_session_lifecycle() -> None:
     step(f"Sandbox agent -> {ring_low.name} (sigma=0.20)")
 
     # Activate
-    await hv.activate_session(session.sso.session_id)
+    hv.activate_session(session.sso.session_id)
     step(f"Session activated -- {len(session.sso.participants)} participants")
 
     # Capture some deltas for the audit trail
@@ -116,7 +116,7 @@ async def demo_session_lifecycle() -> None:
     step("Delta captured: /workspace/report.md")
 
     # Terminate and get the audit hash root
-    hash_chain_root = await hv.terminate_session(session.sso.session_id)
+    hash_chain_root = hv.terminate_session(session.sso.session_id)
     step(f"Session terminated -- audit log root: {hash_chain_root[:16]}...")
 
     print(f"\n  {BOLD}Ring assignments show trust-based isolation:{RESET}")
@@ -133,9 +133,9 @@ async def demo_saga() -> None:
 
     hv = Hypervisor()
     config = SessionConfig(enable_audit=True)
-    session = await hv.create_session(config, creator_did="did:mesh:admin")
-    await hv.join_session(session.sso.session_id, "did:mesh:worker", sigma_raw=0.85)
-    await hv.activate_session(session.sso.session_id)
+    session = hv.create_session(config, creator_did="did:mesh:admin")
+    hv.join_session(session.sso.session_id, "did:mesh:worker", sigma_raw=0.85)
+    hv.activate_session(session.sso.session_id)
 
     saga_orch = session.saga
 
@@ -193,10 +193,10 @@ async def demo_audit() -> None:
 
     hv = Hypervisor()
     config = SessionConfig(enable_audit=True)
-    session = await hv.create_session(config, creator_did="did:mesh:admin")
-    await hv.join_session(session.sso.session_id, "did:mesh:agent-a", sigma_raw=0.80)
-    await hv.join_session(session.sso.session_id, "did:mesh:agent-b", sigma_raw=0.75)
-    await hv.activate_session(session.sso.session_id)
+    session = hv.create_session(config, creator_did="did:mesh:admin")
+    hv.join_session(session.sso.session_id, "did:mesh:agent-a", sigma_raw=0.80)
+    hv.join_session(session.sso.session_id, "did:mesh:agent-b", sigma_raw=0.75)
+    hv.activate_session(session.sso.session_id)
 
     # Agents make changes
     changes = [
@@ -222,7 +222,7 @@ async def demo_audit() -> None:
 
     step(f"Total deltas: {session.delta_engine.turn_count}")
 
-    audit_log = await hv.terminate_session(session.sso.session_id)
+    audit_log = hv.terminate_session(session.sso.session_id)
     step(f"audit log root: {audit_log}")
 
     print(f"\n  {BOLD}Audit guarantees:{RESET}")
@@ -282,24 +282,24 @@ async def demo_integrations() -> None:
     hv = Hypervisor(nexus=nexus, policy_check=policy_check, iatp=iatp)
 
     config = SessionConfig(enable_audit=True)
-    session = await hv.create_session(config, creator_did="did:mesh:admin")
+    session = hv.create_session(config, creator_did="did:mesh:admin")
 
     # Join with Nexus auto-resolution
-    ring_verified = await hv.join_session(
+    ring_verified = hv.join_session(
         session.sso.session_id,
         "did:mesh:verified",
         agent_history={"tasks_completed": 500, "violations": 0},
     )
     step(f"Verified partner -> {ring_verified.name} (Nexus score: 920)")
 
-    ring_standard = await hv.join_session(
+    ring_standard = hv.join_session(
         session.sso.session_id,
         "did:mesh:standard",
         agent_history={"tasks_completed": 50, "violations": 2},
     )
     step(f"Standard agent -> {ring_standard.name} (Nexus score: 650)")
 
-    ring_unknown = await hv.join_session(
+    ring_unknown = hv.join_session(
         session.sso.session_id,
         "did:mesh:unknown",
     )
@@ -312,7 +312,7 @@ async def demo_integrations() -> None:
         "trust_level": "standard",
         "reversibility": {"write_file": "reversible", "execute_code": "non_reversible"},
     }
-    ring_manifest = await hv.join_session(
+    ring_manifest = hv.join_session(
         session.sso.session_id,
         "did:mesh:manifest-agent",
         manifest=manifest,

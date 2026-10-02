@@ -151,10 +151,13 @@ public sealed class AgentFrameworkGovernanceAdapter
         ArgumentNullException.ThrowIfNull(next);
 
         var agentId = ResolveAgentId(agent, session: null);
+        var toolArguments = ResolveToolArguments(context);
+        var trustedSkillMetadata = Options.TrustedSkillMetadataResolver?.Invoke(agent, context);
         var decision = Kernel.EvaluateToolCall(
             agentId,
             context.Function.Name,
-            ResolveToolArguments(context));
+            toolArguments,
+            trustedSkillMetadata);
 
         if (!decision.Allowed)
         {

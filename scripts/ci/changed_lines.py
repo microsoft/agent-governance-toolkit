@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -31,10 +32,26 @@ def pathspecs_for_extensions(extensions: Iterable[str]) -> list[str]:
 
 
 def extract_added_lines(diff_text: str) -> str:
-    """Extract only added content lines from a unified diff."""
+    """Extract only added content lines from a unified diff.
+
+    The `+++ b/path` file header is skipped by position rather than by prefix.
+    A prefix test cannot tell it apart from a genuinely added line whose own
+    content starts with `++`, which arrives as `+++...` and would be dropped:
+    the content would then never be checked, and a check that silently skips
+    input fails in the direction of missing what it exists to find. File
+    headers only appear before the first `@@` hunk of each file, so tracking
+    whether a hunk is open distinguishes them exactly.
+    """
     added_lines: list[str] = []
+    in_hunk = False
     for line in diff_text.splitlines():
-        if line.startswith("+++"):
+        if line.startswith("@@"):
+            in_hunk = True
+            continue
+        if line.startswith("diff --git "):
+            in_hunk = False
+            continue
+        if not in_hunk and line.startswith("+++"):
             continue
         if line.startswith("+"):
             added_lines.append(line[1:])
@@ -75,10 +92,15 @@ def resolve_merge_base(repo: Path, base: str) -> str:
         # stderr, not stdout: without `--output` this script emits its result on
         # stdout, so a warning printed there is read back as one of the changed
         # file names (or as an added line) by whatever consumes it.
-        print(
-            f"warning: cannot resolve merge base with {base} ({message}); diffing against its tip instead",
-            file=sys.stderr,
-        )
+        text = f"cannot resolve merge base with {base} ({message}); diffing against its tip instead"
+        print(f"warning: {text}", file=sys.stderr)
+        # Also surface it as a workflow annotation. On stderr alone this notice
+        # is buried in the step log, so an over-reporting run is indistinguishable
+        # from a correctly scoped one at the point where someone reads the check
+        # result -- which is why the scoping regression this guards against went
+        # unnoticed while it failed unrelated PRs.
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            print(f"::warning::changed_lines: {text}", file=sys.stderr)
         return base
     return result.stdout.strip() or base
 

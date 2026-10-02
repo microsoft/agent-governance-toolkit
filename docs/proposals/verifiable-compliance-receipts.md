@@ -1,6 +1,6 @@
 ---
 title: "Proposal: Independently Verifiable Compliance Receipts"
-last_reviewed: 2026-04-26
+last_reviewed: 2026-09-23
 owner: agt-maintainers
 ---
 
@@ -35,7 +35,19 @@ authorizationHash + authorizationSignature: Signed before execution. Proves the 
 
 resultHash + resultSignature: Signed after execution. Binds the actual outcome. Post-execution proof.
 
-Both signatures use the same Ed25519 key (signerKeyId), so a verifier confirms they came from the same agent process.
+The base profile uses one Ed25519 key (signerKeyId), so a verifier confirms the
+record came from the declared signing process. This is **self-attestation**:
+it detects later tampering but does not prove that an independent party evaluated
+the action.
+
+The optional **external-authorization** profile adds an authorizer identity and
+public key, expiration, nonce, and a second Ed25519 signature. That signature binds
+the exact receipt payload before execution and cryptographically identifies the
+authorizer key. A verifier accepts this profile only when the authorizer key is
+configured as trusted and differs from the receipt signer key.
+
+The nonce is an auditable correlation value. Deployments that require replay
+prevention across receipt chains or sessions must maintain replay state.
 
 previousReceiptHash: Links to the previous receipt. Change any receipt and every receipt after it breaks.
 
@@ -47,8 +59,18 @@ A verifier checks three things:
 1. Signature validity. Ed25519 signatures valid against the declared signer key.
 2. Chain integrity. Each previousReceiptHash matches the hash of the receipt before it.
 3. Policy binding. Each covenantHash matches the expected policy.
+4. When required, external authorization validity. The authorization is unexpired,
+   binds the exact receipt payload and nonce, and is signed by a configured trusted
+   authorizer key distinct from the receipt signer.
 
-No access to the operator's infrastructure needed. Signatures and hashes are self-contained.
+Offline verification evaluates expiration at the signed receipt timestamp. A live
+adapter evaluates expiration at execution time and fails closed when authorization
+has expired.
+
+No access to the operator's infrastructure is needed to validate the cryptographic
+claims. Whether an authorizer is operationally independent remains a deployment
+and key-custody property; different keys alone cannot prove organizational
+independence.
 
 ## How this maps to AGT
 
@@ -69,6 +91,11 @@ Cross-verified between Nobulex (TypeScript) and AgentLedger (Python). Three test
 When agt verify runs, it optionally emits a receipt wrapping the compliance grade in a signed envelope.
 
 Operators who don't need verifiability keep using AGT as-is. Regulated environments turn on receipts and hand them to auditors.
+
+Operators that need an independently authorized decision configure the
+external-authorization profile with a separately operated authorization service and
+its trusted public keys. The receipt adapter fails closed if that authorization is
+missing, expired, untrusted, malformed, or signed by the receipt signer key.
 
 ## Cross-framework status
 

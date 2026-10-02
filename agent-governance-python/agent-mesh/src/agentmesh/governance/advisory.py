@@ -23,16 +23,42 @@ Usage::
         return AdvisoryDecision(action="allow")
 
     advisory = CallbackAdvisory(my_classifier)
+
+Async classifiers (an LLM call, an HTTP judge, a second sandbox round
+trip) work the same way - pass an ``async def`` callback and call the
+governed function via ``GovernedCallable.acall()`` instead of ``__call__``::
+
+    async def my_async_classifier(context):
+        verdict = await call_judge_model(context)
+        return AdvisoryDecision(action="block" if verdict.unsafe else "allow")
+
+    advisory = CallbackAdvisory(my_async_classifier)
+    safe_send = govern(send_email, policy="email-policy.yaml", advisory=advisory)
+    await safe_send.acall(to="user@example.com", body="Hello")
 """
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional, Union
 
 logger = logging.getLogger(__name__)
+
+
+class AdvisoryMisconfiguredError(TypeError):
+    """Raised when an ``AdvisoryCheck`` is wired up incorrectly - e.g. an
+    async callback handed to the sync ``check()`` path instead of
+    ``acheck()``. Deliberately a distinct type from a classifier's own
+    runtime failures: ``govern.py``'s ``_run_advisory()``/
+    ``_run_advisory_async()`` let this propagate rather than converting it
+    to fail-open the way an ordinary classifier error is, since this is a
+    caller wiring bug that should surface immediately rather than being
+    silently degraded to "allow" on every call.
+    """
 
 
 _BLOCKED_HOSTS = frozenset({
@@ -91,19 +117,45 @@ class AdvisoryCheck(ABC):
             An ``AdvisoryDecision``. Return ``action="allow"`` to pass through.
         """
 
+    async def acheck(self, context: dict) -> AdvisoryDecision:
+        """Async counterpart of ``check()``, used by ``GovernedCallable.acall()``.
+
+        The default implementation just calls the sync ``check()`` directly
+        (not via a thread) - correct for classifiers that don't do I/O
+        (``PatternAdvisory``, ``CompositeAdvisory`` of those), but a
+        subclass that performs real I/O (an HTTP call, an LLM call, a
+        second sandbox round trip) should override this to actually await
+        that work rather than block the event loop. ``CallbackAdvisory``
+        and ``HttpAdvisory`` below both override it for exactly that
+        reason.
+        """
+        return self.check(context)
+
 
 class CallbackAdvisory(AdvisoryCheck):
     """Advisory check backed by a custom callback function.
 
     Args:
-        callback: Function receiving context dict, returning AdvisoryDecision.
+        callback: Function receiving context dict, returning an
+            AdvisoryDecision - either directly, or as an
+            ``Awaitable[AdvisoryDecision]`` (an ``async def`` callback, or
+            a sync function returning one) for use via ``acheck()``/
+            ``GovernedCallable.acall()``. A coroutine-returning callback
+            passed to the sync ``check()`` raises ``AdvisoryMisconfiguredError``
+            instead of silently returning the coroutine object as if it
+            were a decision - and, since that's a caller wiring bug rather
+            than a transient failure, ``govern()`` lets it propagate rather
+            than converting it to fail-open the way an ordinary classifier
+            error is (see ``AdvisoryMisconfiguredError``'s own docstring). The
+            same applies to a callback returning anything else that isn't
+            a real ``AdvisoryDecision``.
         name: Classifier name for audit trail. Default: "callback".
         on_error: Action when callback fails. Default: "allow" (fail-open).
     """
 
     def __init__(
         self,
-        callback: Callable[[dict], AdvisoryDecision],
+        callback: Callable[[dict], Union[AdvisoryDecision, Awaitable[AdvisoryDecision]]],
         name: str = "callback",
         on_error: str = "allow",
     ):
@@ -114,8 +166,6 @@ class CallbackAdvisory(AdvisoryCheck):
     def check(self, context: dict) -> AdvisoryDecision:
         try:
             decision = self._callback(context)
-            decision.classifier = self._name
-            return decision
         except Exception as e:
             logger.warning(
                 "Advisory check '%s' failed: %s — defaulting to %s",
@@ -127,6 +177,55 @@ class CallbackAdvisory(AdvisoryCheck):
                 confidence=0.0,
                 classifier=self._name,
             )
+
+        if inspect.isawaitable(decision):
+            if inspect.iscoroutine(decision):
+                decision.close()  # avoid a "coroutine was never awaited" warning
+            # Deliberately outside the try/except above: this is a caller
+            # wiring bug (an async callback handed to the sync check() path),
+            # not a transient classifier failure - it must not be silently
+            # converted to fail-open the same way an actual runtime error in
+            # the callback is. AdvisoryMisconfiguredError (not a plain TypeError)
+            # so govern.py's _run_advisory()/_run_advisory_async() can let
+            # this one propagate instead of catching it as an ordinary
+            # Exception - see that class's docstring.
+            raise AdvisoryMisconfiguredError(
+                f"CallbackAdvisory '{self._name}' callback returned an "
+                "awaitable but check() was called synchronously - use "
+                "acheck() (via GovernedCallable.acall()) for an async "
+                "callback instead."
+            )
+
+        # Also outside the try/except: a callback returning something that
+        # isn't an AdvisoryDecision (missing .classifier) is the same class
+        # of caller bug as the awaitable case above, not a transient
+        # failure - it should raise (AttributeError), not fail open.
+        decision.classifier = self._name
+        return decision
+
+    async def acheck(self, context: dict) -> AdvisoryDecision:
+        try:
+            decision = self._callback(context)
+            if inspect.isawaitable(decision):
+                decision = await decision
+        except Exception as e:
+            logger.warning(
+                "Advisory check '%s' failed: %s — defaulting to %s",
+                self._name, e, self._on_error,
+            )
+            return AdvisoryDecision(
+                action=self._on_error,
+                reason=f"Classifier error: {e}",
+                confidence=0.0,
+                classifier=self._name,
+            )
+
+        # Outside the try/except, matching check(): a malformed callback
+        # return value (missing .classifier) is a caller bug, not a
+        # transient failure, and should raise rather than fail open - same
+        # reasoning as check()'s own isawaitable/AdvisoryMisconfiguredError case.
+        decision.classifier = self._name
+        return decision
 
 
 class HttpAdvisory(AdvisoryCheck):
@@ -187,6 +286,15 @@ class HttpAdvisory(AdvisoryCheck):
                 confidence=0.0,
                 classifier=self._name,
             )
+
+    async def acheck(self, context: dict) -> AdvisoryDecision:
+        # check() uses blocking urllib.request - offloading to a thread
+        # keeps the event loop free for other work during the request,
+        # rather than stalling it for up to timeout_seconds. Not a true
+        # async HTTP client (no new dependency added for this), but it
+        # solves the actual problem: GovernedCallable.acall() awaiting
+        # this must not block the loop.
+        return await asyncio.to_thread(self.check, context)
 
 
 class PatternAdvisory(AdvisoryCheck):
@@ -250,6 +358,18 @@ class CompositeAdvisory(AdvisoryCheck):
     def check(self, context: dict) -> AdvisoryDecision:
         for checker in self._checks:
             decision = checker.check(context)
+            if decision.action != "allow":
+                return decision
+        return AdvisoryDecision(action="allow", classifier="composite")
+
+    async def acheck(self, context: dict) -> AdvisoryDecision:
+        # Uses each sub-check's own acheck() (not check()), so an
+        # async-capable check in the chain (e.g. CallbackAdvisory wrapping
+        # an async classifier, or HttpAdvisory) actually gets to run
+        # asynchronously instead of silently falling back to its blocking
+        # sync path.
+        for checker in self._checks:
+            decision = await checker.acheck(context)
             if decision.action != "allow":
                 return decision
         return AdvisoryDecision(action="allow", classifier="composite")

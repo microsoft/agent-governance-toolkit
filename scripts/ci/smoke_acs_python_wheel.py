@@ -27,10 +27,10 @@ def _exercise_installed_package(install_dir: Path) -> Path:
     native = importlib.import_module("agent_control_specification._native")
 
     parse_manifest = cast(Callable[[str], object], native.parse_manifest)
-    parsed = parse_manifest(
-        "agent_control_specification_version: 0.3.1-beta\n"
-        "metadata:\n  name: wheel-smoke\n"
-    )
+    # The grammar the pinned engine accepts; `parse_manifest` does not check
+    # the version, so `validate_manifest_overlay` below does.
+    manifest_source = "agent_control_specification_version: 0.4.0-alpha.1\nmetadata:\n  name: wheel-smoke\n"
+    parsed = parse_manifest(manifest_source)
     if not isinstance(parsed, Mapping):
         raise RuntimeError("native manifest parser did not return a mapping")
     parsed_mapping = cast(Mapping[str, object], parsed)
@@ -40,6 +40,8 @@ def _exercise_installed_package(install_dir: Path) -> Path:
     metadata_mapping = cast(Mapping[str, object], metadata)
     if metadata_mapping.get("name") != "wheel-smoke":
         raise RuntimeError("native manifest parser returned an unexpected result")
+    validate_manifest_overlay = cast(Callable[[str], None], native.validate_manifest_overlay)
+    validate_manifest_overlay(manifest_source)
     native_file = getattr(native, "__file__", None)
     return Path(native_file) if native_file is not None else resolved_install_dir
 

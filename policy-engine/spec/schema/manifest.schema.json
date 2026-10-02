@@ -212,44 +212,8 @@
               "minLength": 1
             },
             "bundle_url": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "url"
-              ],
-              "properties": {
-                "url": {
-                  "type": "string",
-                  "minLength": 1,
-                  "pattern": "^https://"
-                },
-                "integrity": {
-                  "type": "string",
-                  "pattern": "^sha256-[A-Za-z0-9+/_=-]+$"
-                },
-                "sha256": {
-                  "type": "string",
-                  "pattern": "^[A-Fa-f0-9]{64}$"
-                }
-              },
-              "anyOf": [
-                {
-                  "required": [
-                    "integrity"
-                  ]
-                },
-                {
-                  "required": [
-                    "sha256"
-                  ]
-                }
-              ],
-              "not": {
-                "required": [
-                  "integrity",
-                  "sha256"
-                ]
-              }
+              "not": {},
+              "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
             },
             "data_paths": {
               "$ref": "#/$defs/string_array"
@@ -347,6 +311,10 @@
         },
         "data_paths": {
           "$ref": "#/$defs/string_array"
+        },
+        "bundle_url": {
+          "not": {},
+          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
         }
       },
       "additionalProperties": true
@@ -364,6 +332,14 @@
       "properties": {
         "from": {
           "$ref": "#/$defs/path"
+        },
+        "system_prompt_file": {
+          "not": {},
+          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
+        },
+        "system_prompt_url": {
+          "not": {},
+          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
         }
       },
       "additionalProperties": true
@@ -443,48 +419,12 @@
           "minLength": 1
         },
         "system_prompt_file": {
-          "type": "string",
-          "minLength": 1
+          "not": {},
+          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
         },
         "system_prompt_url": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "url"
-          ],
-          "properties": {
-            "url": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "^https://"
-            },
-            "integrity": {
-              "type": "string",
-              "pattern": "^sha256-[A-Za-z0-9+/_=-]+$"
-            },
-            "sha256": {
-              "type": "string",
-              "pattern": "^[A-Fa-f0-9]{64}$"
-            }
-          },
-          "anyOf": [
-            {
-              "required": [
-                "integrity"
-              ]
-            },
-            {
-              "required": [
-                "sha256"
-              ]
-            }
-          ],
-          "not": {
-            "required": [
-              "integrity",
-              "sha256"
-            ]
-          }
+          "not": {},
+          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
         },
         "timeout_ms": {
           "type": "integer",

@@ -3,6 +3,9 @@
 
 //! Append-only hash-chain audit log with SHA-256 integrity verification.
 
+use crate::skill_audit::{
+    build_skill_audit_metadata, SkillAuditMetadata, TrustedSkillMetadataSource,
+};
 use crate::types::{AuditEntry, AuditFilter};
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
@@ -10,8 +13,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Append-only hash-chained audit logger.
 ///
-/// Each entry's hash covers `seq|timestamp|agent_id|action|decision|prev_hash`,
-/// creating a tamper-evident chain from the genesis entry.
+/// Metadata-free entries retain the legacy `seq|timestamp|agent_id|action|decision|prev_hash`
+/// encoding. Skill-aware entries use a separate length-prefixed hash version that also
+/// covers the skill metadata.
 pub struct AuditLogger {
     state: Mutex<AuditState>,
     max_entries: Option<usize>,
@@ -51,6 +55,32 @@ impl AuditLogger {
 
     /// Append a new entry to the audit chain and return it.
     pub fn log(&self, agent_id: &str, action: &str, decision: &str) -> AuditEntry {
+        self.log_with_skill_audit_metadata(agent_id, action, decision, None, None, None)
+    }
+
+    /// Append a skill-aware audit entry. Skill identity is taken only from the
+    /// explicit trusted source; contexts are stored as hashes.
+    pub fn log_with_skill_audit_metadata(
+        &self,
+        agent_id: &str,
+        action: &str,
+        decision: &str,
+        trusted_source: Option<&TrustedSkillMetadataSource>,
+        context_before: Option<&serde_json::Value>,
+        context_after: Option<&serde_json::Value>,
+    ) -> AuditEntry {
+        let skill_audit_metadata =
+            build_skill_audit_metadata(trusted_source, context_before, context_after);
+        self.log_with_metadata(agent_id, action, decision, skill_audit_metadata)
+    }
+
+    fn log_with_metadata(
+        &self,
+        agent_id: &str,
+        action: &str,
+        decision: &str,
+        skill_audit_metadata: Option<SkillAuditMetadata>,
+    ) -> AuditEntry {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let seq = state.entries.len() as u64;
         let prev_hash = state
@@ -61,21 +91,17 @@ impl AuditLogger {
             .unwrap_or_default();
         let timestamp = iso8601_now();
 
-        let hash_input = format!(
-            "{}|{}|{}|{}|{}|{}",
-            seq, timestamp, agent_id, action, decision, prev_hash
-        );
-        let hash = sha256_hex(&hash_input);
-
-        let entry = AuditEntry {
+        let mut entry = AuditEntry {
             seq,
             timestamp,
             agent_id: agent_id.to_string(),
             action: action.to_string(),
             decision: decision.to_string(),
             previous_hash: prev_hash,
-            hash,
+            hash: String::new(),
+            skill_audit_metadata,
         };
+        entry.hash = compute_hash(&entry);
 
         state.entries.push(entry.clone());
 
@@ -163,7 +189,16 @@ pub(crate) fn verify_audit_entries(entries: &[AuditEntry], seam_hash: Option<&st
         if entry.previous_hash != expected_prev {
             return false;
         }
-        let hash_input = format!(
+        if entry.hash != compute_hash(entry) {
+            return false;
+        }
+    }
+    true
+}
+
+fn compute_hash(entry: &AuditEntry) -> String {
+    let Some(metadata) = &entry.skill_audit_metadata else {
+        let legacy_input = format!(
             "{}|{}|{}|{}|{}|{}",
             entry.seq,
             entry.timestamp,
@@ -172,16 +207,50 @@ pub(crate) fn verify_audit_entries(entries: &[AuditEntry], seam_hash: Option<&st
             entry.decision,
             entry.previous_hash
         );
-        if entry.hash != sha256_hex(&hash_input) {
-            return false;
-        }
+        return sha256_hex(&legacy_input);
+    };
+
+    let mut input = b"agentmesh.audit.skill.v2\0".to_vec();
+    for field in [
+        entry.seq.to_string(),
+        entry.timestamp.clone(),
+        entry.agent_id.clone(),
+        entry.action.clone(),
+        entry.decision.clone(),
+        entry.previous_hash.clone(),
+    ] {
+        append_hash_field(&mut input, field.as_bytes());
     }
-    true
+    append_optional_hash_field(&mut input, metadata.skill_name.as_deref());
+    append_optional_hash_field(&mut input, metadata.skill_origin.as_deref());
+    append_optional_hash_field(&mut input, metadata.provenance_source_trust.as_deref());
+    append_optional_hash_field(&mut input, metadata.context_hash_before.as_deref());
+    append_optional_hash_field(&mut input, metadata.context_hash_after.as_deref());
+    sha256_hex_bytes(&input)
+}
+
+fn append_hash_field(input: &mut Vec<u8>, value: &[u8]) {
+    input.extend_from_slice(&(value.len() as u64).to_be_bytes());
+    input.extend_from_slice(value);
+}
+
+fn append_optional_hash_field(input: &mut Vec<u8>, value: Option<&str>) {
+    match value {
+        Some(value) => {
+            input.push(1);
+            append_hash_field(input, value.as_bytes());
+        }
+        None => input.push(0),
+    }
 }
 
 fn sha256_hex(input: &str) -> String {
+    sha256_hex_bytes(input.as_bytes())
+}
+
+fn sha256_hex_bytes(input: &[u8]) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(input.as_bytes());
+    hasher.update(input);
     let result = hasher.finalize();
     hex_encode(&result)
 }
@@ -240,6 +309,64 @@ mod tests {
         logger.log("agent-2", "deploy.prod", "requires_approval");
         assert!(logger.verify());
         assert_eq!(logger.entries().len(), 3);
+    }
+
+    #[test]
+    fn skill_audit_metadata_is_hashed_and_keeps_context_private() {
+        let logger = AuditLogger::new();
+        let trusted = TrustedSkillMetadataSource::new(Some("search"), Some("framework"))
+            .expect("trusted metadata");
+        let before = serde_json::json!({
+            "skill_name": "spoofed",
+            "query": "private query"
+        });
+        let entry = logger.log_with_skill_audit_metadata(
+            "agent-1",
+            "tool.search",
+            "allow",
+            Some(&trusted),
+            Some(&before),
+            None,
+        );
+
+        let metadata = entry.skill_audit_metadata.as_ref().expect("skill metadata");
+        assert_eq!(metadata.skill_name.as_deref(), Some("search"));
+        assert_eq!(metadata.skill_origin.as_deref(), Some("framework"));
+        assert_eq!(metadata.provenance_source_trust.as_deref(), Some("trusted"));
+        assert!(metadata.context_hash_before.is_some());
+        assert!(metadata.context_hash_after.is_none());
+        assert!(entry.timestamp.ends_with('Z'));
+        assert!(logger.verify());
+
+        let serialized = serde_json::to_string(&entry).expect("entry should serialize");
+        assert!(!serialized.contains("private query"));
+        assert!(!serialized.contains("spoofed"));
+    }
+
+    #[test]
+    fn tampering_with_skill_metadata_invalidates_the_audit_chain() {
+        let logger = AuditLogger::new();
+        let trusted =
+            TrustedSkillMetadataSource::new(Some("search"), None).expect("trusted metadata");
+        logger.log_with_skill_audit_metadata(
+            "agent-1",
+            "tool.search",
+            "allow",
+            Some(&trusted),
+            None,
+            None,
+        );
+        assert!(logger.verify());
+
+        {
+            let mut state = logger.state.lock().unwrap();
+            state.entries[0]
+                .skill_audit_metadata
+                .as_mut()
+                .expect("stored skill metadata")
+                .skill_name = Some("tampered".to_string());
+        }
+        assert!(!logger.verify());
     }
 
     #[test]

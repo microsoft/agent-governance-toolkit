@@ -121,12 +121,12 @@ def build_manifest(plan: PolicyPlan, tool_inventory: dict[str, dict[str, Any]]) 
         # Start from any explicit plan bindings, then add every annotator the
         # point's rules actually read so no reference is left dead-wired.
         annotations = {
-            binding.annotator: {"from": binding.from_path or "$policy_target"}
+            binding.annotator: {"from": binding.from_path or "$target"}
             for binding in plan.annotations
             if binding.point == point_name and binding.annotator
         }
         for name in sorted(annotators_by_point.get(point_name, set())):
-            annotations.setdefault(name, {"from": "$policy_target"})
+            annotations.setdefault(name, {"from": "$target"})
         if annotations:
             config["annotations"] = annotations
         manifest["intervention_points"][point_name] = config

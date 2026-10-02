@@ -90,6 +90,64 @@ class TestMcpAuthPolicy:
         # HTTP rejected
         assert not policy.check("secure", auth_method="oauth2", url="http://api.example.com").allowed
 
+    @pytest.mark.parametrize("require_tls", [True, False], ids=["tls-required", "tls-not-required"])
+    @pytest.mark.parametrize(
+        ("caller_url", "configured_url", "allowed_when_tls_required"),
+        [
+            pytest.param("", "", True, id="empty-caller-empty-config"),
+            pytest.param("", "https://configured.example", True, id="empty-caller-https-config"),
+            pytest.param("", "http://configured.example", False, id="empty-caller-http-config"),
+            pytest.param("https://caller.example", "", True, id="https-caller-empty-config"),
+            pytest.param(
+                "https://caller.example",
+                "https://configured.example",
+                True,
+                id="https-caller-https-config",
+            ),
+            pytest.param(
+                "https://caller.example",
+                "http://configured.example",
+                True,
+                id="https-caller-http-config",
+            ),
+            pytest.param("http://caller.example", "", False, id="http-caller-empty-config"),
+            pytest.param(
+                "http://caller.example",
+                "https://configured.example",
+                False,
+                id="http-caller-https-config",
+            ),
+            pytest.param(
+                "http://caller.example",
+                "http://configured.example",
+                False,
+                id="http-caller-http-config",
+            ),
+        ],
+    )
+    def test_tls_enforcement_uses_caller_url_or_configured_fallback(
+        self,
+        require_tls,
+        caller_url,
+        configured_url,
+        allowed_when_tls_required,
+    ):
+        policy = McpAuthPolicy(
+            servers=[
+                McpServerEntry(
+                    name="secure",
+                    url=configured_url,
+                    allowed_auth_methods=["oauth2"],
+                    require_tls=require_tls,
+                ),
+            ]
+        )
+
+        result = policy.check("secure", auth_method="oauth2", url=caller_url)
+
+        expected_allowed = allowed_when_tls_required if require_tls else True
+        assert result.allowed is expected_allowed
+
     def test_add_remove_server(self):
         policy = McpAuthPolicy()
         policy.add_server(McpServerEntry(name="new", allowed_auth_methods=["api_key"]))
@@ -105,6 +163,24 @@ class TestMcpAuthPolicy:
         assert result.auth_method == "oauth2"
         assert result.allowed
         assert len(result.reason) > 0
+
+    def test_unregistered_server_with_url_still_requires_tls(self):
+        # Regression for #3814: a server name absent from the allowlist used
+        # to skip the TLS gate entirely, even with a plain-http URL.
+        policy = McpAuthPolicy()
+        result = policy.check("typo-d-server", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert not result.allowed
+        assert "tls" in result.reason.lower()
+
+    def test_unregistered_server_with_https_url_is_allowed(self):
+        policy = McpAuthPolicy()
+        result = policy.check("new-server", auth_method="oauth2", url="https://mcp.internal/tools")
+        assert result.allowed
+
+    def test_unregistered_server_default_tls_floor_can_be_disabled(self):
+        policy = McpAuthPolicy(default_require_tls=False)
+        result = policy.check("legacy-server", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert result.allowed
 
 
 class TestFromYaml:
@@ -130,3 +206,20 @@ mcp_auth_policy:
     def test_empty_yaml(self):
         policy = McpAuthPolicy.from_yaml("")
         assert policy.check("s", auth_method="oauth2").allowed
+
+    def test_yaml_default_require_tls_defaults_true(self):
+        policy = McpAuthPolicy.from_yaml("""
+mcp_auth_policy:
+  default_allowed_methods: [oauth2]
+""")
+        result = policy.check("unregistered", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert not result.allowed
+
+    def test_yaml_default_require_tls_false_disables_the_floor(self):
+        policy = McpAuthPolicy.from_yaml("""
+mcp_auth_policy:
+  default_allowed_methods: [oauth2]
+  default_require_tls: false
+""")
+        result = policy.check("legacy-server", auth_method="oauth2", url="http://mcp.internal/tools")
+        assert result.allowed

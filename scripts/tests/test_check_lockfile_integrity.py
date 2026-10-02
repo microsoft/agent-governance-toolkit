@@ -155,6 +155,88 @@ def test_parse_npm_lockfile_rejects_log_injection_name():
     assert cli.parse_npm_lockfile(content, "x.json") == []
 
 
+def test_parse_npm_lockfile_captures_resolved():
+    sri = _sri(b"x")
+    content = _make_npm_lock(("left-pad", "1.3.0", sri))
+    entries = cli.parse_npm_lockfile(content, "x.json")
+    assert entries[0].resolved == "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"
+
+
+def test_parse_npm_lockfile_resolved_defaults_empty_when_absent():
+    sri = _sri(b"x")
+    content = json.dumps({
+        "packages": {"node_modules/x": {"version": "1.0.0", "integrity": sri}},
+    })
+    entries = cli.parse_npm_lockfile(content, "x.json")
+    assert entries[0].resolved == ""
+
+
+def test_parse_npm_lockfile_resolves_alias_via_name_field():
+    """Lockfile v3: the path key is the alias, ``name`` is the registry package."""
+    sri = _sri(b"react-is-18.3.1")
+    content = json.dumps({
+        "packages": {
+            "": {"name": "root"},
+            "node_modules/@jest/react-is-18": {
+                "name": "react-is",
+                "version": "18.3.1",
+                "resolved": "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz",
+                "integrity": sri,
+                "dev": True,
+            },
+        }
+    })
+    entries = cli.parse_npm_lockfile(content, "x.json")
+    assert len(entries) == 1
+    assert entries[0].name == "react-is"
+    assert entries[0].version == "18.3.1"
+    assert entries[0].resolved == "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz"
+    # Diagnostics still point at the alias path so reviewers can find it.
+    assert entries[0].location == "x.json::node_modules/@jest/react-is-18"
+
+
+def test_parse_npm_lockfile_resolves_alias_via_npm_version_spec():
+    """Lockfile v1/v2 shape: ``version: npm:<pkg>@<ver>``, scoped target."""
+    sri = _sri(b"y")
+    content = json.dumps({
+        "packages": {
+            "node_modules/provider-v5": {
+                "version": "npm:@ai-sdk/provider@2.0.3",
+                "integrity": sri,
+            },
+        }
+    })
+    entries = cli.parse_npm_lockfile(content, "x.json")
+    assert [(e.name, e.version) for e in entries] == [("@ai-sdk/provider", "2.0.3")]
+
+
+def test_parse_npm_lockfile_name_field_equal_to_path_is_not_an_alias():
+    sri = _sri(b"z")
+    content = json.dumps({
+        "packages": {
+            "node_modules/@scope/pkg": {"name": "@scope/pkg", "version": "1.0.0", "integrity": sri},
+        }
+    })
+    entries = cli.parse_npm_lockfile(content, "x.json")
+    assert [(e.name, e.version) for e in entries] == [("@scope/pkg", "1.0.0")]
+
+
+def test_parse_npm_lockfile_rejects_alias_with_unsafe_target():
+    sri = _sri(b"z")
+    content = json.dumps({
+        "packages": {
+            "node_modules/alias": {"name": "evil\n\x1b[31m", "version": "1.0.0", "integrity": sri},
+            "node_modules/alias2": {"version": "npm:bad name@1.0.0", "integrity": sri},
+            "node_modules/alias3": {"version": "npm:react-is@^18", "integrity": sri},
+        }
+    })
+    entries = cli.parse_npm_lockfile(content, "x.json")
+    report = cli.Report()
+    cli.verify_entries(entries, report)
+    assert len(report.errors) == 3
+    assert all(e.ecosystem == "npm-alias-invalid" for e in entries)
+
+
 # ---------------------------------------------------------------------------
 # npm comparison + fetch
 # ---------------------------------------------------------------------------
@@ -177,6 +259,45 @@ def test_compare_npm_mismatch():
 
 def test_compare_npm_rejects_garbage():
     assert not cli.compare_npm("garbage", _sri(b"x"))
+
+
+def test_compare_npm_resolved_exact_match():
+    url = "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz"
+    assert cli.compare_npm_resolved(url, url)
+    assert cli.compare_npm_resolved(f"  {url} ", url)
+
+
+def test_compare_npm_resolved_mismatch_and_empty():
+    url = "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz"
+    assert not cli.compare_npm_resolved("https://evil.example/react-is-18.3.1.tgz", url)
+    assert not cli.compare_npm_resolved("", url)
+
+
+def test_fetch_npm_dist_returns_integrity_and_tarball(monkeypatch):
+    seen = {}
+
+    def fake_get_json(url, *, allowed_hosts):
+        seen["url"] = url
+        return {
+            "dist": {
+                "integrity": _sri(b"react-is"),
+                "tarball": "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz",
+            }
+        }
+
+    monkeypatch.setattr(cli, "_http_get_json", fake_get_json)
+    dist = cli.fetch_npm_dist("react-is", "18.3.1")
+    assert seen["url"] == "https://registry.npmjs.org/react-is/18.3.1"
+    assert dist.integrity == _sri(b"react-is")
+    assert dist.tarball == "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz"
+
+
+def test_fetch_npm_dist_falls_back_to_shasum_without_tarball(monkeypatch):
+    shasum = hashlib.sha1(b"old").hexdigest()
+    monkeypatch.setattr(cli, "_http_get_json", lambda url, *, allowed_hosts: {"dist": {"shasum": shasum}})
+    dist = cli.fetch_npm_dist("old", "0.0.1")
+    assert dist.integrity == f"sha1-{base64.b64encode(bytes.fromhex(shasum)).decode('ascii')}"
+    assert dist.tarball == ""
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +486,13 @@ def test_diff_entries_detects_integrity_change():
     assert cli.diff_entries(old, new) == new
 
 
+def test_diff_entries_detects_resolved_change():
+    sri = _sri(b"same")
+    old = cli.LockEntry("npm", "x", "1.0.0", sri, "loc", resolved="https://registry.npmjs.org/x/-/x-1.0.0.tgz")
+    new = cli.LockEntry("npm", "x", "1.0.0", sri, "loc", resolved="https://evil.example/x-1.0.0.tgz")
+    assert cli.diff_entries([old], [new]) == [new]
+
+
 def test_diff_entries_no_change():
     e = cli.LockEntry("npm", "a", "1.0.0", _sri(b"a"), "x")
     assert cli.diff_entries([e], [e]) == []
@@ -423,6 +551,123 @@ def test_verify_entries_registry_404_is_error():
     cli.verify_entries(entries, report, npm_fetcher=boom)
     assert len(report.errors) == 1
     assert "could not verify" in report.errors[0].message
+
+
+def test_verify_entries_npm_dist_match_including_tarball():
+    sri = _sri(b"x")
+    url = "https://registry.npmjs.org/x/-/x-1.0.0.tgz"
+    entries = [cli.LockEntry("npm", "x", "1.0.0", sri, "loc", resolved=url)]
+    report = cli.Report()
+    cli.verify_entries(entries, report, npm_fetcher=lambda n, v: cli.NpmDist(sri, url))
+    assert report.findings == []
+
+
+def test_verify_entries_npm_resolved_mismatch_is_error():
+    sri = _sri(b"x")
+    entries = [cli.LockEntry(
+        "npm", "x", "1.0.0", sri, "loc",
+        resolved="https://evil.example/x-1.0.0.tgz",
+    )]
+    report = cli.Report()
+    cli.verify_entries(
+        entries, report,
+        npm_fetcher=lambda n, v: cli.NpmDist(sri, "https://registry.npmjs.org/x/-/x-1.0.0.tgz"),
+    )
+    assert len(report.errors) == 1
+    assert "resolved URL mismatch" in report.errors[0].message
+
+
+def test_verify_entries_npm_integrity_mismatch_reported_before_resolved():
+    entries = [cli.LockEntry(
+        "npm", "x", "1.0.0", _sri(b"local"), "loc",
+        resolved="https://evil.example/x-1.0.0.tgz",
+    )]
+    report = cli.Report()
+    cli.verify_entries(
+        entries, report,
+        npm_fetcher=lambda n, v: cli.NpmDist(_sri(b"upstream"), "https://registry.npmjs.org/x/-/x-1.0.0.tgz"),
+    )
+    assert len(report.errors) == 1
+    assert "integrity mismatch" in report.errors[0].message
+
+
+def test_verify_entries_npm_skips_tarball_check_when_either_side_missing():
+    sri = _sri(b"x")
+    report = cli.Report()
+    cli.verify_entries(
+        [cli.LockEntry("npm", "x", "1.0.0", sri, "loc", resolved="")],
+        report, npm_fetcher=lambda n, v: cli.NpmDist(sri, "https://registry.npmjs.org/x/-/x-1.0.0.tgz"),
+    )
+    cli.verify_entries(
+        [cli.LockEntry("npm", "x", "1.0.0", sri, "loc", resolved="https://registry.npmjs.org/x/-/x-1.0.0.tgz")],
+        report, npm_fetcher=lambda n, v: cli.NpmDist(sri, ""),
+    )
+    assert report.findings == []
+    assert report.checked == 2
+
+
+def test_verify_entries_npm_alias_looks_up_real_package():
+    """End to end on the jest 30.5 lockfile shape: @jest/react-is-18 -> react-is."""
+    sri18 = _sri(b"react-is-18.3.1")
+    sri19 = _sri(b"react-is-19.2.8")
+    lock = json.dumps({
+        "name": "demo",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "demo", "devDependencies": {"pretty-format": "30.5.1"}},
+            "node_modules/@jest/react-is-18": {
+                "name": "react-is",
+                "version": "18.3.1",
+                "resolved": "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz",
+                "integrity": sri18,
+                "dev": True,
+                "license": "MIT",
+            },
+            "node_modules/@jest/react-is-19": {
+                "name": "react-is",
+                "version": "19.2.8",
+                "resolved": "https://registry.npmjs.org/react-is/-/react-is-19.2.8.tgz",
+                "integrity": sri19,
+                "dev": True,
+                "license": "MIT",
+            },
+            "node_modules/pretty-format": {
+                "version": "30.5.1",
+                "resolved": "https://registry.npmjs.org/pretty-format/-/pretty-format-30.5.1.tgz",
+                "integrity": _sri(b"pretty-format-30.5.1"),
+                "dev": True,
+                "dependencies": {
+                    "@jest/react-is-18": "npm:react-is@^18.3.1",
+                    "@jest/react-is-19": "npm:react-is@^19.2.5",
+                },
+            },
+        },
+    })
+    registry = {
+        ("react-is", "18.3.1"): cli.NpmDist(sri18, "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz"),
+        ("react-is", "19.2.8"): cli.NpmDist(sri19, "https://registry.npmjs.org/react-is/-/react-is-19.2.8.tgz"),
+        ("pretty-format", "30.5.1"): cli.NpmDist(
+            _sri(b"pretty-format-30.5.1"),
+            "https://registry.npmjs.org/pretty-format/-/pretty-format-30.5.1.tgz",
+        ),
+    }
+    asked: list[tuple[str, str]] = []
+
+    def fake_registry(name, version):
+        asked.append((name, version))
+        try:
+            return registry[(name, version)]
+        except KeyError:
+            raise cli.RegistryError(f"http 404 for https://registry.npmjs.org/{name}/{version}")
+
+    entries = cli.parse_npm_lockfile(lock, "agent-governance-typescript/package-lock.json")
+    report = cli.Report()
+    cli.verify_entries(entries, report, npm_fetcher=fake_registry)
+    assert report.checked == 3
+    assert report.findings == []
+    assert ("react-is", "18.3.1") in asked
+    assert ("react-is", "19.2.8") in asked
+    assert not any(name.startswith("@jest/react-is") for name, _ in asked)
 
 
 # ---------------------------------------------------------------------------
@@ -537,14 +782,14 @@ def test_main_validates_max_deps():
 def test_main_returns_two_on_cap(monkeypatch, tmp_path):
     pkgs = [(f"p{i}", "1.0.0", _sri(f"x{i}".encode())) for i in range(3)]
     path = _write(tmp_path, "package-lock.json", _make_npm_lock(*pkgs))
-    monkeypatch.setattr(cli, "fetch_npm_integrity", lambda n, v: _sri(b"u"))
+    monkeypatch.setattr(cli, "fetch_npm_dist", lambda n, v: _sri(b"u"))
     rc = cli.main(["--max-deps", "1", "--base", "", path])
     assert rc == 2
 
 
 def test_main_returns_one_on_mismatch(monkeypatch, tmp_path):
     path = _write(tmp_path, "package-lock.json", _make_npm_lock(("x", "1.0.0", _sri(b"local"))))
-    monkeypatch.setattr(cli, "fetch_npm_integrity", lambda n, v: _sri(b"upstream"))
+    monkeypatch.setattr(cli, "fetch_npm_dist", lambda n, v: _sri(b"upstream"))
     rc = cli.main(["--base", "", path])
     assert rc == 1
 
@@ -552,7 +797,7 @@ def test_main_returns_one_on_mismatch(monkeypatch, tmp_path):
 def test_main_returns_zero_on_match(monkeypatch, tmp_path):
     sri = _sri(b"x")
     path = _write(tmp_path, "package-lock.json", _make_npm_lock(("x", "1.0.0", sri)))
-    monkeypatch.setattr(cli, "fetch_npm_integrity", lambda n, v: sri)
+    monkeypatch.setattr(cli, "fetch_npm_dist", lambda n, v: sri)
     rc = cli.main(["--base", "", path])
     assert rc == 0
 
@@ -803,3 +1048,21 @@ def test_run_git_caps_stdout(monkeypatch):
     # more bytes; we don't assert exact length because git's own output
     # is short.
     assert len(out.encode("utf-8")) <= cli.MAX_GIT_STDOUT_BYTES + 64
+
+
+@pytest.mark.parametrize("metadata", [
+    {"name": "../react-is"}, {"name": ""}, {"name": None},
+    {"name": "react-is\n"}, {"version": "npm:react-is@^18"},
+])
+def test_malformed_alias_produces_integrity_error_without_registry(metadata):
+    tree = {"packages": {"node_modules/react-is": {
+        "version": "18.3.1", "integrity": _sri(b"payload"), **metadata,
+    }}}
+    entries = cli.parse_npm_lockfile(json.dumps(tree), "package-lock.json")
+    report = cli.Report()
+    def no_fetch(*args):
+        pytest.fail("malformed alias must not reach registry")
+    cli.verify_entries(entries, report, npm_fetcher=no_fetch)
+    assert report.checked == 1
+    assert len(report.errors) == 1
+    assert "invalid npm alias" in report.errors[0].message

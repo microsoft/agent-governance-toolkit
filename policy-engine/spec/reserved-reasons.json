@@ -1,90 +1,126 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "note": "Two namespaces, two producers. `runtime_error:*` is emitted by the agent-control-spec engine AGT depends on; the list below tracks agent-control-spec 0.4.0-alpha.1. `host_error:*` is host only: AGT synthesizes these and an interceptor MUST NOT emit them. Both are closed sets defined by the agent-hooks contract, section 11; AGT mints no new names in either.",
   "reasons": [
     {
       "reason": "runtime_error:manifest_invalid",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "The manifest failed validation or bound an undefined policy."
     },
     {
       "reason": "runtime_error:intervention_point_unknown",
-      "producer": "core-runtime",
-      "cause": "The request named an intervention point the manifest does not configure."
+      "producer": "acs-engine",
+      "cause": "The request named an interception point the manifest does not configure."
     },
     {
       "reason": "runtime_error:path_missing",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "A required path did not resolve."
     },
     {
       "reason": "runtime_error:path_type_mismatch",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "A path segment met an incompatible JSON type."
     },
     {
       "reason": "runtime_error:tool_unknown",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "The projected tool name is absent from the catalog."
     },
     {
       "reason": "runtime_error:annotation_failed",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "An annotator dispatch failed."
     },
     {
       "reason": "runtime_error:annotation_timeout",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "An annotator dispatch timed out."
     },
     {
       "reason": "runtime_error:policy_invocation_failed",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "Policy preparation or dispatch failed."
     },
     {
       "reason": "runtime_error:policy_output_invalid",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "The dispatcher output could not be normalized."
     },
     {
-      "reason": "runtime_error:effect_invalid",
-      "producer": "core-runtime",
-      "cause": "An effect was malformed or did not apply to its target."
+      "reason": "runtime_error:transform_invalid",
+      "producer": "acs-engine",
+      "cause": "A transform was malformed or did not apply to its target. Replaces the retired effects plane reason `runtime_error:effect_invalid`."
     },
     {
-      "reason": "runtime_error:effect_target_forbidden",
-      "producer": "core-runtime",
-      "cause": "An effect path pointed outside $policy_target."
+      "reason": "runtime_error:transform_target_forbidden",
+      "producer": "acs-engine",
+      "cause": "A transform path pointed outside $target. Replaces the retired effects plane reason `runtime_error:effect_target_forbidden`."
     },
     {
       "reason": "runtime_error:resource_limit_exceeded",
-      "producer": "core-runtime",
+      "producer": "acs-engine",
       "cause": "Evaluation or manifest loading exceeded a configured resource limit."
     },
     {
-      "reason": "runtime_error:approval_action_mismatch",
-      "producer": "core-runtime",
-      "cause": "An approved action identity did not match the current action identity."
+      "reason": "runtime_error:resolution_cycle",
+      "producer": "acs-engine",
+      "cause": "Manifest `extends` resolution met a cycle."
     },
     {
-      "reason": "runtime_error:approval_resolver_failed",
-      "producer": "sdk-approval",
-      "cause": "An SDK approval resolver raised, returned an unrecognized result, or otherwise failed closed."
+      "reason": "runtime_error:resolution_merge_conflict",
+      "producer": "acs-engine",
+      "cause": "Two manifests in an `extends` chain defined the same key incompatibly."
     },
     {
-      "reason": "runtime_error:streaming_unsupported",
-      "producer": "sdk-streaming",
-      "cause": "An SDK streaming helper could not assemble a complete response snapshot for evaluation and failed closed."
+      "reason": "runtime_error:resolution_path_traversal",
+      "producer": "acs-engine",
+      "cause": "An `extends` reference escaped its base directory."
     },
     {
-      "reason": "runtime_error:adapter_unsupported",
-      "producer": "sdk-adapter",
-      "cause": "An SDK adapter detected an unmediated framework method or unsupported call shape and failed closed instead of invoking upstream code."
+      "reason": "runtime_error:resolution_invalid_governance",
+      "producer": "acs-engine",
+      "cause": "A resolved manifest chain produced an invalid governance block."
     },
     {
-      "reason": "runtime_error:request_invalid",
-      "producer": "sdk-wire",
-      "cause": "A JSON wire binding received a malformed intervention request envelope and failed closed before policy input construction."
+      "reason": "host_error:transform_target_forbidden",
+      "producer": "agt-host",
+      "cause": "The host refused a transform that arrived at an interception point where the contract does not permit one, such as agent_startup or agent_shutdown. Distinct from the engine's runtime_error twin, which covers a path pointing outside $target."
+    },
+    {
+      "reason": "host_error:transform_invalid",
+      "producer": "agt-host",
+      "cause": "The host could not apply a transform: the body was missing after normalization, or the path did not resolve against the policy target."
+    },
+    {
+      "reason": "host_error:approval_identity_mismatch",
+      "producer": "agt-host",
+      "cause": "The enforced identity rederived from the current policy input did not match the identity the approval was granted against. Approval resolution is a host obligation, so this is a host_error rather than the engine's former `runtime_error:approval_action_mismatch`."
+    },
+    {
+      "reason": "host_error:approval_resolver_failed",
+      "producer": "agt-host",
+      "cause": "An approval resolver raised, returned an unrecognized result, or otherwise failed closed."
+    },
+    {
+      "reason": "host_error:approval_unresolved",
+      "producer": "agt-host",
+      "cause": "A liftable deny required approval but no approval resolver was configured, so the host failed closed."
+    },
+    {
+      "reason": "host_error:adapter_unsupported",
+      "producer": "agt-host",
+      "cause": "An adapter detected an unmediated framework method or unsupported call shape and failed closed instead of invoking upstream code."
+    },
+    {
+      "reason": "host_error:streaming_unsupported",
+      "producer": "agt-host",
+      "cause": "A streaming helper could not assemble a complete response snapshot for evaluation and failed closed."
+    },
+    {
+      "reason": "host_error:context_invalid",
+      "producer": "agt-host",
+      "cause": "A JSON wire binding received a malformed request envelope and failed closed before policy input construction. Replaces AGT's former unreserved `runtime_error:request_invalid`."
     }
   ]
 }

@@ -34,7 +34,7 @@ An SLO (Service Level Objective) defines how reliable your AI agent needs to be.
 - **Actions** — What happens when the budget runs out
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask, HallucinationRate
 
 slo = SLO(
@@ -162,7 +162,7 @@ sli.record_rating(rating=4.5)
 ### Python API
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, HallucinationRate
 
 slo = SLO(
@@ -280,7 +280,7 @@ Copy-paste templates for common agent types. Adjust targets based on your requir
 High accuracy, low hallucination, moderate cost tolerance.
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import (
     TaskSuccessRate, HallucinationRate, CostPerTask,
     Latency, PolicyCompliance, UserSatisfaction,

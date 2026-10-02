@@ -2,24 +2,24 @@
 // Licensed under the MIT License.
 //! Integration tests for wire-protocol-aware policy evaluation.
 
+use agentmesh::policy_data::{Mapping, Value};
 use agentmesh::PolicyEngine;
-use serde_yaml::Value;
 use std::collections::HashMap;
 
 fn ctx_with_sql(query: &str) -> HashMap<String, Value> {
-    let mut sub = serde_yaml::Mapping::new();
-    sub.insert(Value::String("query".into()), Value::String(query.into()));
+    let mut sub = Mapping::new();
+    sub.insert("query".into(), Value::String(query.into()));
     let mut ctx = HashMap::new();
-    ctx.insert("sql".to_string(), Value::Mapping(sub));
+    ctx.insert("sql".to_string(), Value::Object(sub));
     ctx
 }
 
 fn ctx_with_k8s(method: &str, path: &str) -> HashMap<String, Value> {
-    let mut sub = serde_yaml::Mapping::new();
-    sub.insert(Value::String("method".into()), Value::String(method.into()));
-    sub.insert(Value::String("path".into()), Value::String(path.into()));
+    let mut sub = Mapping::new();
+    sub.insert("method".into(), Value::String(method.into()));
+    sub.insert("path".into(), Value::String(path.into()));
     let mut ctx = HashMap::new();
-    ctx.insert("k8s".to_string(), Value::Mapping(sub));
+    ctx.insert("k8s".to_string(), Value::Object(sub));
     ctx
 }
 
@@ -83,7 +83,10 @@ policies:
     engine.load_from_yaml(yaml).expect("load");
     let decision = engine.evaluate(
         "k8s.request",
-        Some(&ctx_with_k8s("POST", "/api/v1/namespaces/prod/pods/web/exec")),
+        Some(&ctx_with_k8s(
+            "POST",
+            "/api/v1/namespaces/prod/pods/web/exec",
+        )),
     );
     assert!(
         matches!(decision, agentmesh::PolicyDecision::Deny(_)),
@@ -108,12 +111,12 @@ policies:
     engine.load_from_yaml(yaml).expect("load");
     let decision = engine.evaluate(
         "k8s.request",
-        Some(&ctx_with_k8s("DELETE", "/api/v1/namespaces/production/pods/web")),
+        Some(&ctx_with_k8s(
+            "DELETE",
+            "/api/v1/namespaces/production/pods/web",
+        )),
     );
-    assert!(matches!(
-        decision,
-        agentmesh::PolicyDecision::Deny(_)
-    ));
+    assert!(matches!(decision, agentmesh::PolicyDecision::Deny(_)));
 }
 
 #[test]
@@ -134,10 +137,7 @@ policies:
         "db.exec",
         Some(&ctx_with_sql("INSERT INTO protected SELECT * FROM staging")),
     );
-    assert!(matches!(
-        decision,
-        agentmesh::PolicyDecision::Deny(_)
-    ));
+    assert!(matches!(decision, agentmesh::PolicyDecision::Deny(_)));
 }
 
 #[test]
@@ -150,10 +150,7 @@ policies: []
     let engine = PolicyEngine::new();
     engine.load_from_yaml(yaml).expect("load");
     let decision = engine.evaluate("anything", None);
-    assert!(matches!(
-        decision,
-        agentmesh::PolicyDecision::Allow
-    ));
+    assert!(matches!(decision, agentmesh::PolicyDecision::Allow));
 }
 
 #[test]
@@ -168,6 +165,8 @@ policies: []
     let ctx = ctx_with_sql("SELECT 1");
     let snapshot = ctx.clone();
     let _ = engine.evaluate("x", Some(&ctx));
-    assert_eq!(ctx, snapshot, "PolicyEngine.evaluate must not mutate caller context");
+    assert_eq!(
+        ctx, snapshot,
+        "PolicyEngine.evaluate must not mutate caller context"
+    );
 }
-

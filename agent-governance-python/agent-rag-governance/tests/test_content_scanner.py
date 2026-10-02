@@ -195,3 +195,121 @@ class TestUnicodeBypassPII:
     def test_clean_unicode_text_does_not_false_positive(self):
         text = "重要的产品文档 — 没有个人信息 — 仅用于参考。"
         assert self.scanner.scan([text])[0].blocked is False
+
+
+# ---------------------------------------------------------------
+# SSN separator and boundary tests for issue #3815
+# The content_scanner SSN pattern must agree with
+# credential_redactor.py's PII_PATTERNS: dash, space, and dot
+# separators are all valid. Bare nine-digit forms are not matched
+# (hard-block category, false-positive risk).
+# ---------------------------------------------------------------
+
+
+class TestSSNSeparatorParity:
+    """Regression: content_scanner previously only matched ``\\d{3}-\\d{2}-\\d{4}``
+    (dash form), while ``credential_redactor.py`` matched dash, space, and dot.
+    This caused the two detectors to disagree: content passing rag-governance
+    scanning would be blocked at the MCP gateway (issue #3815)."""
+
+    def setup_method(self):
+        self.scanner = ContentScanner(["block_pii"])
+
+    def test_ssn_dash_form_blocked(self):
+        results = self.scanner.scan(["Employee SSN: 123-45-6789"])
+        assert results[0].blocked is True
+        assert results[0].category == "pii"
+        assert results[0].pattern_matched == "SSN"
+
+    def test_ssn_space_form_blocked(self):
+        results = self.scanner.scan(["Employee SSN: 123 45 6789"])
+        assert results[0].blocked is True
+        assert results[0].category == "pii"
+        assert results[0].pattern_matched == "SSN"
+
+    def test_ssn_dot_form_blocked(self):
+        results = self.scanner.scan(["Employee SSN: 123.45.6789"])
+        assert results[0].blocked is True
+        assert results[0].category == "pii"
+        assert results[0].pattern_matched == "SSN"
+
+    def test_ssn_glued_to_underscore_blocked(self):
+        """An SSN adjacent to ``_`` must be detected. The lookaround anchor
+        ensures ``_`` is not treated as a boundary blocker."""
+        results = self.scanner.scan(["employee_123-45-6789"])
+        assert results[0].blocked is True
+        assert results[0].pattern_matched == "SSN"
+
+    def test_bare_nine_digits_not_blocked(self):
+        """A bare nine-digit run without separators must not be blocked —
+        it is too likely to be a tracking number, ZIP+4, or ABA code."""
+        for text in [
+            "Tracking: 123456789",
+            "order_123456789",
+            "ZIP 12345-6789",
+            "ABA 021000021",
+        ]:
+            results = self.scanner.scan([text])
+            assert results[0].blocked is False, f"Should not block: {text}"
+
+
+class TestContextCuedSSN:
+    def setup_method(self):
+        self.scanner = ContentScanner(["block_pii"])
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "SSN: 745102386",
+            "ssn=745102386",
+            "ssn 745102386",
+            "social security number 745102386",
+            "Social Security 745102386",
+            "social security num 745102386",
+            "social security no 745102386",
+            "social security # 745102386",
+            "soc sec 745102386",
+            "socsec 745102386",
+            "session_ssn:745102386",
+            "SSN: ７４５１０２３８６",
+            "ＳＳＮ:\u200b745102386",
+            "SSN" + " " * 10 + "745102386",
+            '{"ssn": "745102386"}',
+            "ssn='745102386'",
+            "**SSN**: 745102386",
+            "| SSN | 745102386 |",
+            "SSN# 745102386",
+            "SSN: (745102386)",
+            "<ssn>745102386</ssn>",
+            "SSN: -- 745102386",
+        ],
+    )
+    def test_cued_bare_ssn_blocked(self, text):
+        result = self.scanner.scan([text])[0]
+        assert result.blocked is True
+        assert result.category == "pii"
+        assert result.pattern_matched == "SSN"
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Tracking: 745102386",
+            "invoice 745102386",
+            "ABA 021000021",
+            "Homeowners Assn: 745102386",
+            "ISSN 745102386",
+            "ssn_lookup_id=745102386",
+            "no ssn on file; case 745102386",
+            "SSN" + " " * 11 + "745102386",
+            'SSN: "' + " " * 9 + "745102386",
+            "SSN: a745102386",
+            "SSN: 745102386a",
+        ],
+    )
+    def test_unrelated_nine_digit_numbers_pass(self, text):
+        result = self.scanner.scan([text])[0]
+        assert result.blocked is False, f"Should not block: {text}"
+
+    def test_cued_bare_ssn_passes_without_pii_policy(self):
+        result = ContentScanner(["block_injections"]).scan(["SSN: 745102386"])[0]
+        assert result.blocked is False

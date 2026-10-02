@@ -10,8 +10,15 @@ const SERVER_INFO = {
   version: "3.3.0",
 };
 const PROTOCOL_VERSION = "2024-11-05";
+const STATELESS_PROTOCOL_VERSION = "2026-07-28";
 const JSONRPC_VERSION = "2.0";
 const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
+// Other header-like lines must not stall later JSON messages waiting for a header separator.
+const HEADER_LINE_PATTERN = /^[ \t]*(?:Content-Length|Content-Type):/i;
+// Only the start of the buffer is inspected, so a large JSON line is never
+// decoded just to decide which framing it uses.
+const HEADER_PROBE_BYTES = 256;
+const NEWLINE = 0x0a;
 const extensionRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const tools = [
@@ -48,40 +55,70 @@ process.stdin.on("data", (chunk) => {
   void drainInputBuffer();
 });
 
+// The MCP stdio transport is newline-delimited JSON. Legacy callers may still
+// send LSP Content-Length frames, so both are accepted on the read side.
 async function drainInputBuffer() {
-  while (true) {
-    const headerEnd = inputBuffer.indexOf(HEADER_SEPARATOR);
-    if (headerEnd === -1) {
-      return;
-    }
+  while (inputBuffer.length > 0) {
+    if (startsWithHeaderLine(inputBuffer)) {
+      const headerEnd = inputBuffer.indexOf(HEADER_SEPARATOR);
+      if (headerEnd === -1) {
+        return;
+      }
 
-    const headerText = inputBuffer.subarray(0, headerEnd).toString("utf8");
-    const contentLength = getContentLength(headerText);
-    if (contentLength === null) {
-      inputBuffer = Buffer.alloc(0);
-      writeError(null, -32700, "Missing or invalid Content-Length header.");
-      return;
-    }
+      const headerText = inputBuffer.subarray(0, headerEnd).toString("utf8");
+      const contentLength = getContentLength(headerText);
+      if (contentLength === null) {
+        inputBuffer = Buffer.alloc(0);
+        writeError(null, -32700, "Missing or invalid Content-Length header.");
+        return;
+      }
 
-    const messageStart = headerEnd + HEADER_SEPARATOR.length;
-    const messageEnd = messageStart + contentLength;
-    if (inputBuffer.length < messageEnd) {
-      return;
-    }
+      const messageStart = headerEnd + HEADER_SEPARATOR.length;
+      const messageEnd = messageStart + contentLength;
+      if (inputBuffer.length < messageEnd) {
+        return;
+      }
 
-    const payload = inputBuffer.subarray(messageStart, messageEnd).toString("utf8");
-    inputBuffer = inputBuffer.subarray(messageEnd);
-
-    let message;
-    try {
-      message = JSON.parse(payload);
-    } catch {
-      writeError(null, -32700, "Invalid JSON payload.");
+      const payload = inputBuffer.subarray(messageStart, messageEnd).toString("utf8");
+      inputBuffer = inputBuffer.subarray(messageEnd);
+      await handlePayload(payload);
       continue;
     }
 
-    await handleMessage(message);
+    const newlineIndex = inputBuffer.indexOf(NEWLINE);
+    if (newlineIndex === -1) {
+      return;
+    }
+
+    const line = inputBuffer.subarray(0, newlineIndex).toString("utf8").trim();
+    inputBuffer = inputBuffer.subarray(newlineIndex + 1);
+    if (line.length === 0) {
+      continue;
+    }
+
+    await handlePayload(line);
   }
+}
+
+function startsWithHeaderLine(buffer) {
+  const newlineIndex = buffer.indexOf(NEWLINE);
+  if (newlineIndex !== -1 && (newlineIndex === 0 || buffer[newlineIndex - 1] !== 0x0d)) {
+    return false;
+  }
+
+  return HEADER_LINE_PATTERN.test(buffer.subarray(0, HEADER_PROBE_BYTES).toString("utf8"));
+}
+
+async function handlePayload(payload) {
+  let message;
+  try {
+    message = JSON.parse(payload);
+  } catch {
+    writeError(null, -32700, "Invalid JSON payload.");
+    return;
+  }
+
+  await handleMessage(message);
 }
 
 function getContentLength(headerText) {
@@ -107,6 +144,18 @@ async function handleMessage(message) {
   }
 
   try {
+    if (message.method === "server/discover") {
+      writeResult(message.id, {
+        protocolVersion: STATELESS_PROTOCOL_VERSION,
+        capabilities: {
+          tools: {},
+        },
+        serverInfo: SERVER_INFO,
+        tools,
+      });
+      return;
+    }
+
     if (message.method === "initialize") {
       writeResult(message.id, {
         protocolVersion: PROTOCOL_VERSION,
@@ -123,13 +172,29 @@ async function handleMessage(message) {
       return;
     }
 
+    const requestMeta =
+      message.method === "tools/list" || message.method === "tools/call"
+        ? validateStatelessRequestMeta(message)
+        : undefined;
+    if (requestMeta === null) {
+      writeError(
+        message.id ?? null,
+        -32001,
+        "Invalid stateless request metadata: _meta.clientInfo requires non-empty name and version, and _meta.capabilities must be an object.",
+      );
+      return;
+    }
+
     if (message.method === "tools/list") {
       writeResult(message.id, { tools });
       return;
     }
 
     if (message.method === "tools/call") {
-      writeResult(message.id, await callTool(message.params ?? {}));
+      writeResult(
+        message.id,
+        withRequestMeta(await callTool(message.params ?? {}), requestMeta),
+      );
       return;
     }
 
@@ -196,6 +261,49 @@ async function callTool(params) {
   };
 }
 
+function validateStatelessRequestMeta(request) {
+  if (!Object.prototype.hasOwnProperty.call(request, "_meta")) {
+    return undefined;
+  }
+
+  const meta = request._meta;
+  if (
+    !isObject(meta) ||
+    !isObject(meta.clientInfo) ||
+    !isNonEmptyString(meta.clientInfo.name) ||
+    !isNonEmptyString(meta.clientInfo.version) ||
+    !isObject(meta.capabilities)
+  ) {
+    return null;
+  }
+
+  return {
+    clientInfo: {
+      name: meta.clientInfo.name,
+      version: meta.clientInfo.version,
+    },
+    capabilities: meta.capabilities,
+  };
+}
+
+function withRequestMeta(result, requestMeta) {
+  if (requestMeta === undefined) {
+    return result;
+  }
+  return {
+    ...result,
+    _meta: requestMeta,
+  };
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function writeResult(id, result) {
   if (id === undefined || id === null) {
     return;
@@ -219,6 +327,6 @@ function writeError(id, code, message) {
 }
 
 function writeMessage(payload) {
-  const body = JSON.stringify(payload);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
+  // MCP stdio transport: newline-delimited JSON, not LSP Content-Length framing.
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
 }

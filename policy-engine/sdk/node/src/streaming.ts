@@ -402,7 +402,7 @@ function rawToBytes(raw: Uint8Array | ArrayBuffer | string): Uint8Array {
 
 function failClosed(message: string, cause?: unknown): AgentControlBlockedError {
   const blocked = new AgentControlBlockedError(InterventionPoint.PostModelCall, {
-    verdict: { decision: Decision.Deny, reason: "runtime_error:streaming_unsupported", message },
+    verdict: { decision: Decision.Deny, reason: "host_error:streaming_unsupported", message },
   });
   (blocked as { cause?: unknown }).cause = cause;
   return blocked;

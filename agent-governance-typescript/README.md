@@ -175,6 +175,32 @@ const risky = results.filter((r) => !r.safe);
 | `hidden_instruction` | Zero-width Unicode characters or homoglyphs |
 | `rug_pull` | Abnormally long descriptions containing instruction-like patterns |
 
+### Healthcare Identifier Detection
+
+The SDK also exposes a separate detector for context-labeled MRNs, NPIs, and
+health-plan/member/policy identifiers:
+
+```typescript
+import { findHealthcareIdentifiers } from '@microsoft/agent-governance-sdk';
+
+const text = 'Patient MRN: A123456789; Provider NPI: 1234567893';
+const matches = findHealthcareIdentifiers(text);
+for (const match of matches) {
+  console.log(match.kind, text.slice(match.start, match.end));
+}
+```
+
+Supported cues are `MRN`/`medical record`, `NPI`/`provider ID`, and
+`HPID`/`health plan` (with or without `ID`)/`member ID`/`member identification`/
+`policy ID`. MRNs are limited to 6-12 ASCII letters or digits and health-plan
+identifiers to 8-15; both must contain a digit. Letter-initial values require a
+separator after the cue, while digits-only values may follow immediately. NPIs
+must be 10 digits with a valid 80840-prefixed Luhn check digit. Ranges use
+UTF-16 string indexes and cover only identifier values. NPIs identify providers
+and are not inherently PHI. Detection is context-cued and does not classify or
+redact data, verify NPI issuance, identify every healthcare identifier, or
+establish HIPAA/SOC 2 compliance.
+
 ### `LifecycleManager`
 
 Govern agent state transitions with an enforced state machine and event log.
@@ -348,6 +374,35 @@ Framework-specific integrations can also call `beginInvocation()` and `complete(
 The adapter is now **identity-bound** to the `AgentMeshClient` you construct it with. If an invocation supplies `agentId`, it must match `client.identity.did`; mismatches are denied fail-closed before the handler runs, and audit/trace data stays anchored to the bound client identity.
 
 **Migration guidance:** if you previously reused one `GenericFrameworkAdapter` across multiple runtime identities and passed per-call `agentId` values, create a separate `AgentMeshClient`/`GenericFrameworkAdapter` pair for each real agent identity instead of relying on caller-asserted IDs.
+
+### `toFrameworkInvocation` (WebMCP)
+
+[WebMCP](https://github.com/webmachinelearning/webmcp) lets a web page register client-side tools for a browser agent via `document.modelContext.registerTool()`. A tool's `execute()` callback runs in the page itself and typically calls back into the site's own backend to do its real work. `toFrameworkInvocation()` maps that backend call onto a `FrameworkInvocation` so it can be governed with the same `GenericFrameworkAdapter` used for any other framework integration — this does not run governance inside the browser page.
+
+```typescript
+import {
+  AgentMeshClient,
+  GenericFrameworkAdapter,
+  toFrameworkInvocation,
+} from '@microsoft/agent-governance-sdk';
+
+// Backend handler for the WebMCP tool's execute() callback, e.g. POST /api/draft
+const client = AgentMeshClient.create('site-webmcp-agent', {
+  policyRules: [{ action: 'webmcp.email.createDraft', effect: 'allow' }],
+});
+const adapter = new GenericFrameworkAdapter(client);
+
+const invocation = toFrameworkInvocation(
+  { name: 'email.createDraft', annotations: { readOnlyHint: false } },
+  { to: 'someone@example.com' },
+);
+
+const result = await adapter.run(invocation, async () => createDraft());
+```
+
+Only the two annotations merged into the WebMCP spec today (`readOnlyHint`, `untrustedContentHint`) are read explicitly; any other annotation (including proposed-but-unmerged hints like `consequentialHint`, [webmachinelearning/webmcp#217](https://github.com/webmachinelearning/webmcp/issues/217)) is passed through under `attributes.webmcpAnnotations`, namespaced so a page-supplied annotation name can never shadow `attributes.assertedAgentOrigin` in the audit trace.
+
+**This namespacing protects audit-trail integrity only — it is not an origin-verification mechanism, and policy conditions never see it.** `attributes` are attached to the trace span, but policy decisions are made against `action` and `input` alone. Since `input` is the tool call's own page-controlled arguments, a page can put any key it wants there — including something shaped like `assertedAgentOrigin` — and a policy condition keyed on that field would match the forged value regardless of what this module does with `attributes`. If you need to gate governance on the calling page's origin, that verification must happen in your own backend code *before* calling `toFrameworkInvocation`/`adapter.run()` — WebMCP does not yet define a verified client/origin binding ([webmachinelearning/webmcp#96](https://github.com/webmachinelearning/webmcp/issues/96), [#105](https://github.com/webmachinelearning/webmcp/issues/105)), so `client.agentOrigin` is only ever a best-effort hint. See `examples/webmcp-tool-governance.ts` for a full example.
 
 ## Development
 

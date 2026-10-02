@@ -36,6 +36,7 @@ print(f"Signed: {receipt.signature is not None}")
 - **Ed25519 signatures**: Non-repudiable receipt signing with HMAC-SHA256 fallback
 - **Canonical JSON hashing**: JCS-style deterministic serialization for verifiable receipts
 - **Receipt store**: In-memory audit trail with filtering by agent, tool, or decision
+- **External authorization profile**: Optional trusted, pre-execution authorization from a separate signer
 - **Zero required dependencies**: Works with stdlib only; Ed25519 signing available via `pip install agentmesh-mcp-receipts[crypto]`
 
 ## Installation
@@ -82,6 +83,44 @@ MCP Tool Call
 └────────────────────┘
 ```
 
+## Receipt assurance profiles
+
+Receipt generation supports unsigned receipts when no signing key is configured.
+Both `verify_receipt_chain()` and `scripts/verify_receipts.py` require valid
+signatures: an unsigned receipt fails verification. The CLI exits with code 1,
+reports `"passed": false` in its JSON summary, and records an error for each
+unsigned receipt.
+
+For receipt signer trust, `verify_receipt_chain(..., trusted_keys=None)` verifies
+signatures without restricting the signer keys. An explicit `trusted_keys` list
+accepts only those keys; `trusted_keys=[]` rejects every signer. Signature validity
+alone does not establish trust in a signer or authorization to execute an action.
+
+By default, receipts are **self-attested**: a configured receipt signer records its
+own policy decision. This detects later modification but does not establish that an
+independent party approved the action.
+
+For actions that require independent pre-execution approval, configure an
+`external_authorizer` and its `trusted_authorizer_keys`. The authorizer must return
+the same receipt after calling `authorize_receipt()`. The adapter fails closed unless
+the authorization:
+
+- is signed by a configured trusted authorizer key;
+- binds the exact receipt payload, authorizer identity, expiration, and nonce; and
+- uses a key distinct from the receipt signer key.
+
+Keep the authorizer signing key in an independently operated service or hardware
+boundary. Different keys alone cannot prove organizational independence.
+The nonce is an auditable correlation value; deployments need durable replay
+tracking if they require replay prevention across receipt chains or sessions.
+
+Offline consumers can require this profile with
+`verify_receipt_chain(..., trusted_authorizer_keys=[...],
+require_external_authorization=True)`. The command-line verifier accepts the
+equivalent `--trusted-authorizer-key` and `--require-external-authorization`
+options. Offline verification evaluates expiration against the signed receipt
+timestamp; a live adapter evaluates it against the current time before execution.
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](../../../LICENSE).

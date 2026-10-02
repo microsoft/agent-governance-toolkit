@@ -26,8 +26,8 @@ except ImportError:
     HAS_RUNTIME = False
 
 try:
-    from agent_sre import SLO, ErrorBudget
     from agent_sre.slo.indicators import TaskSuccessRate
+    from agent_sre.slo.objectives import SLO, ErrorBudget
     HAS_SRE = True
 except ImportError:
     HAS_SRE = False
@@ -57,7 +57,7 @@ async def main():
     # --- Layer 3: Agent Runtime ---
     if HAS_RUNTIME:
         runtime = AgentRuntime()
-        session = await runtime.create_session(
+        session = runtime.create_session(
             config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL),
             creator_did=identity.did,
         )

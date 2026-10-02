@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import pickle
 import unittest
 from pathlib import Path
 
 from agent_control_specification import (
+    action_identity,
     AgentControl,
+    AgentControlRuntimeError,
     Decision,
+    DEFAULT_APPROVAL_TIMEOUT_SECONDS,
+    EnforcementMode,
+    HostSession,
     InterventionPoint,
-    PerfTelemetry,
     parse_manifest,
+    PerfTelemetry,
     validate_manifest,
     validate_manifest_overlay,
 )
@@ -22,7 +28,7 @@ else:
     _NATIVE_AVAILABLE = True
 
 
-MANIFEST_YAML = """agent_control_specification_version: 0.3.1-beta
+MANIFEST_YAML = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: basic-host-example
 policies:
@@ -42,6 +48,19 @@ annotators:
   prompt_classifier:
     type: classifier
 """
+
+MANIFEST_WITH_APPROVAL_YAML = (
+    MANIFEST_YAML
+    + """approval:
+  default_resolver: webhook
+  timeout_seconds: 120
+  on_timeout: deny
+  resolvers:
+    webhook:
+      type: webhook
+      url: https://example.com/approve
+"""
+)
 
 
 class MockAnnotator:
@@ -66,7 +85,7 @@ class MockPolicy:
                 "reason": "account_number_redacted",
                 "message": "Account number was redacted before continuing.",
                 "transform": {
-                    "path": "$policy_target.text",
+                    "path": "$target.text",
                     "value": "Please summarize account [REDACTED].",
                 },
             }
@@ -75,9 +94,49 @@ class MockPolicy:
 
 @unittest.skipUnless(_NATIVE_AVAILABLE, "agent_control_specification._native extension is not built")
 class NativeRuntimeTests(unittest.TestCase):
+    def test_transform_budget_includes_ambient_snapshot_in_both_modes(self):
+        class GrowingPolicy:
+            def evaluate(self, invocation):
+                return {
+                    "decision": "transform",
+                    "transform": {"path": "$target.text", "value": "b" * 40_000},
+                }
+
+        async def run(mode):
+            control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), GrowingPolicy())
+            return await control.evaluate_intervention_point(
+                InterventionPoint.INPUT,
+                {"input": {"text": "x"}, "ambient": "a" * 1_020_000},
+                mode,
+            )
+
+        for mode in [EnforcementMode.ENFORCE, EnforcementMode.EVALUATE_ONLY]:
+            with self.subTest(mode=mode):
+                result = asyncio.run(run(mode))
+                self.assertEqual(result.verdict.decision, Decision.DENY)
+                self.assertEqual(result.verdict.reason, "host_error:transform_invalid")
+                self.assertIsNone(result.transformed_policy_target)
+
+    def test_manifest_approval_section_drives_the_host_session_timeout(self):
+        control = AgentControl.from_native(MANIFEST_WITH_APPROVAL_YAML, MockAnnotator(), MockPolicy())
+
+        self.assertEqual(control.approval_config["timeout_seconds"], 120)
+        self.assertEqual(control.approval_config["on_timeout"], "deny")
+        self.assertEqual(control.approval_config["resolvers"]["webhook"]["type"], "webhook")
+        self.assertEqual(HostSession(control)._approval_timeout_seconds, 120.0)
+        self.assertEqual(
+            HostSession(control, approval_timeout_seconds=7)._approval_timeout_seconds, 7
+        )
+
+    def test_manifest_without_approval_section_keeps_the_default_timeout(self):
+        control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), MockPolicy())
+
+        self.assertEqual(dict(control.approval_config), {})
+        self.assertEqual(HostSession(control)._approval_timeout_seconds, DEFAULT_APPROVAL_TIMEOUT_SECONDS)
+
     def test_parse_manifest_uses_native_yaml_semantics(self):
         parsed = parse_manifest(
-            """agent_control_specification_version: 0.3.1-beta
+            """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   on: 0b1010
   date: 2026-07-16
@@ -90,14 +149,64 @@ metadata:
     def test_validate_manifest_rejects_duplicate_keys(self):
         with self.assertRaisesRegex(RuntimeError, "duplicate manifest mapping key"):
             validate_manifest(
-                """agent_control_specification_version: 0.3.0-alpha
-agent_control_specification_version: 0.3.1-beta
+                """agent_control_specification_version: 0.4.0-alpha.1
+agent_control_specification_version: 0.4.0-alpha.1
 """
             )
 
+    def test_removed_manifest_fields_fail_closed_everywhere(self):
+        # agent-control-spec 0.4.0-alpha.3 parses these fields into open config
+        # maps and has nothing behind them, so without this check a manifest
+        # declaring them was accepted with the feature silently missing.
+        bundle_url = """agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: rego
+    query: data.acs.result
+    bundle_url:
+      url: https://bundles.example/b.tar.gz
+      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+intervention_points:
+  input:
+    policy_target: $.input
+    policy:
+      id: p
+"""
+        prompt_file = """agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: custom
+    adapter: mock
+annotators:
+  judge:
+    type: llm
+    system_prompt_file: prompts/judge.txt
+intervention_points:
+  input:
+    policy_target: $.input
+    policy:
+      id: p
+    annotations:
+      judge:
+        from: $.input
+"""
+        for manifest, field in ((bundle_url, "bundle_url"), (prompt_file, "system_prompt_file")):
+            with self.subTest(field=field, entry="validate_manifest"):
+                with self.assertRaisesRegex(RuntimeError, f"'{field}'.*acs-retarget"):
+                    validate_manifest(manifest)
+            with self.subTest(field=field, entry="validate_manifest_overlay"):
+                with self.assertRaisesRegex(RuntimeError, f"'{field}'.*acs-retarget"):
+                    validate_manifest_overlay(manifest)
+            with self.subTest(field=field, entry="from_native"):
+                with self.assertRaisesRegex(RuntimeError, f"runtime_error:manifest_invalid.*'{field}'"):
+                    AgentControl.from_native(manifest, MockAnnotator(), MockPolicy())
+            with self.subTest(field=field, entry="from_manifest_chain"):
+                with self.assertRaisesRegex(RuntimeError, f"runtime_error:manifest_invalid.*'{field}'"):
+                    AgentControl.from_manifest_chain([manifest], MockAnnotator(), MockPolicy())
+
     def test_validate_manifest_overlay_checks_version_without_requiring_points(self):
         validate_manifest_overlay(
-            """agent_control_specification_version: 0.3.1-beta
+            """agent_control_specification_version: 0.4.0-alpha.1
 extends:
   - base.yaml
 """
@@ -111,7 +220,7 @@ extends:
             )
 
     def test_basic_host_scenario_through_native_runtime(self):
-        async def run():
+        async def run(mode):
             control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), MockPolicy())
             return await control.evaluate_intervention_point(
                 InterventionPoint.INPUT,
@@ -120,15 +229,38 @@ extends:
                     "actor": {"id": "user-123"},
                     "transport": {"kind": "api_gateway", "route": "/chat"},
                 },
+                mode,
             )
 
-        result = asyncio.run(run())
-
-        self.assertEqual(result.verdict.decision, Decision.TRANSFORM)
-        self.assertEqual(
-            result.transformed_policy_target,
-            {"text": "Please summarize account [REDACTED]."},
-        )
+        for mode in (EnforcementMode.ENFORCE, EnforcementMode.EVALUATE_ONLY):
+            with self.subTest(mode=mode):
+                result = asyncio.run(run(mode))
+                self.assertEqual(result.verdict.decision, Decision.TRANSFORM)
+                self.assertIsNotNone(result.input_identity)
+                self.assertIsNotNone(result.enforced_identity)
+                self.assertEqual(result.input_identity, action_identity(result.policy_input))
+                self.assertEqual(result.action_identity, result.enforced_identity)
+                if mode == EnforcementMode.ENFORCE:
+                    self.assertEqual(
+                        result.transformed_policy_target,
+                        {"text": "Please summarize account [REDACTED]."},
+                    )
+                    self.assertTrue(result.transformed_policy_target_applied)
+                    self.assertNotEqual(result.input_identity, result.enforced_identity)
+                    self.assertEqual(
+                        result.enforced_identity,
+                        action_identity({
+                            **result.policy_input,
+                            "policy_target": {
+                                **result.policy_input["policy_target"],
+                                "value": result.transformed_policy_target,
+                            },
+                        }),
+                    )
+                else:
+                    self.assertIsNone(result.transformed_policy_target)
+                    self.assertFalse(result.transformed_policy_target_applied)
+                    self.assertEqual(result.input_identity, result.enforced_identity)
 
     def test_annotator_exception_details_are_sanitized(self):
         class ThrowingAnnotator:
@@ -166,8 +298,54 @@ extends:
         self.assertEqual(result.verdict.decision, Decision.ALLOW)
         self.assertEqual(list(result.verdict.result_labels), ["confidential"])
 
+    def test_native_runtime_preserves_warnings_and_approval_without_rewriting_decisions(self):
+        class WarningPolicy:
+            def evaluate(self, invocation):
+                return {
+                    "decision": "allow",
+                    "warnings": [
+                        {
+                            "reason": "review_recommended",
+                            "message": "A reviewer should inspect this action.",
+                        },
+                        {"reason": "secondary_signal"},
+                    ],
+                }
+
+        class ApprovalPolicy:
+            def evaluate(self, invocation):
+                return {
+                    "decision": "deny",
+                    "reason": "human_review_required",
+                    "approval": {"channel": "security"},
+                }
+
+        async def evaluate(policy):
+            control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), policy)
+            return await control.evaluate_intervention_point(
+                InterventionPoint.INPUT,
+                {"input": {"text": "hello"}},
+            )
+
+        warning_result = asyncio.run(evaluate(WarningPolicy()))
+        self.assertEqual(warning_result.verdict.decision, Decision.ALLOW)
+        self.assertEqual(
+            [(item.reason, item.message) for item in warning_result.verdict.warnings],
+            [
+                (
+                    "review_recommended",
+                    "A reviewer should inspect this action.",
+                ),
+                ("secondary_signal", None),
+            ],
+        )
+
+        approval_result = asyncio.run(evaluate(ApprovalPolicy()))
+        self.assertEqual(approval_result.verdict.decision, Decision.DENY)
+        self.assertEqual(approval_result.verdict.approval, {"channel": "security"})
+
     def test_native_runtime_preserves_explicit_null_transform(self):
-        manifest = """agent_control_specification_version: 0.3.1-beta
+        manifest = """agent_control_specification_version: 0.4.0-alpha.1
 policies:
   p:
     type: custom
@@ -189,7 +367,7 @@ intervention_points:
                     return {"decision": "allow"}
                 return {
                     "decision": "transform",
-                    "transform": {"path": "$policy_target", "value": None},
+                    "transform": {"path": "$target", "value": None},
                 }
 
         async def run():
@@ -235,7 +413,7 @@ intervention_points:
             with self.subTest(request=request):
                 result = runtime.evaluate(request)
                 self.assertEqual(result["verdict"]["decision"], "deny")
-                self.assertEqual(result["verdict"]["reason"], "runtime_error:request_invalid")
+                self.assertEqual(result["verdict"]["reason"], "host_error:context_invalid")
                 self.assertIsNone(result["policy_input"])
 
     def test_high_level_unknown_mode_fails_closed(self):
@@ -249,7 +427,7 @@ intervention_points:
 
         result = asyncio.run(run())
         self.assertEqual(result.verdict.decision, Decision.DENY)
-        self.assertEqual(result.verdict.reason, "runtime_error:request_invalid")
+        self.assertEqual(result.verdict.reason, "host_error:context_invalid")
 
     def test_from_manifest_chain_threads_perf_telemetry(self):
         # Regression guard: the high level facade must accept and thread
@@ -257,7 +435,7 @@ intervention_points:
         # from_native and the other SDKs. A live audit found these loaders had
         # dropped the perf_telemetry argument.
         chain_child = (
-            "agent_control_specification_version: 0.3.1-beta\n"
+            "agent_control_specification_version: 0.4.0-alpha.1\n"
             "tools:\n"
             "  noop_tool:\n"
             "    clearance: public\n"
@@ -292,7 +470,7 @@ _SUPPORT_MANIFEST = (
     Path(__file__).resolve().parents[3] / "examples/support_agent/manifest.yaml"
 )
 
-NON_REGO_MANIFEST = """agent_control_specification_version: 0.3.1-beta
+NON_REGO_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: zero-config-non-rego
 policies:
@@ -307,7 +485,7 @@ intervention_points:
     policy_target: $.input
 """
 
-REGO_MANIFEST = """agent_control_specification_version: 0.3.1-beta
+REGO_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: zero-config-rego
 policies:
@@ -326,14 +504,14 @@ intervention_points:
 
 @unittest.skipUnless(_NATIVE_AVAILABLE, "agent_control_specification._native extension is not built")
 class ZeroConfigDefaultsTests(unittest.TestCase):
-    @unittest.skipUnless(_opa_available(), "opa binary not available")
-    def test_from_path_builds_with_no_dispatchers(self):
-        # A Rego manifest with a relative `bundle` resolves against the manifest
-        # directory and wires the bundled OPA + annotator defaults with no host
-        # dispatcher wiring.
+    def test_from_path_requires_explicit_annotator_dispatcher_by_default(self):
+        # The bundled annotator dispatcher can read host credentials and is now
+        # opt-in. A manifest that declares annotators must supply a host
+        # dispatcher unless the native extension is built with the
+        # `bundled-dispatchers` feature.
         self.assertTrue(_SUPPORT_MANIFEST.exists())
-        control = AgentControl.from_path(str(_SUPPORT_MANIFEST))
-        self.assertIsNotNone(control._runtime_client._native)
+        with self.assertRaisesRegex(RuntimeError, "bundled dispatchers are not enabled"):
+            AgentControl.from_path(str(_SUPPORT_MANIFEST))
 
     def test_from_url_rejects_non_https_and_fails_closed(self):
         # The top level manifest URL loader reuses the extends trust gate, so a
@@ -342,6 +520,29 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx:
             AgentControl.from_url("http://policy.example/manifest.yaml")
         self.assertIn("runtime_error:manifest_invalid", str(ctx.exception))
+
+    def test_runtime_errors_carry_the_reason_code(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            AgentControl.from_url("http://policy.example/manifest.yaml")
+        error = ctx.exception
+        self.assertIsInstance(error, AgentControlRuntimeError)
+        self.assertEqual(error.reason, "runtime_error:manifest_invalid")
+        self.assertIn("unsupported URL scheme", error.detail)
+        # The message is unchanged, so string-matching callers keep working.
+        self.assertIn("runtime_error:manifest_invalid", str(error))
+        self.assertIn(error.detail, str(error))
+
+    def test_runtime_errors_survive_pickling(self):
+        # Hosts that build controls in process-pool workers get the error back
+        # through pickle; the attributes must survive the round trip.
+        with self.assertRaises(AgentControlRuntimeError) as ctx:
+            AgentControl.from_url("http://policy.example/manifest.yaml")
+        error = ctx.exception
+        restored = pickle.loads(pickle.dumps(error))
+        self.assertIsInstance(restored, AgentControlRuntimeError)
+        self.assertEqual(restored.reason, error.reason)
+        self.assertEqual(restored.detail, error.detail)
+        self.assertEqual(str(restored), str(error))
 
     def test_from_url_pin_is_optional(self):
         # The pin is optional, mirroring URL extends. Omitting it still reaches

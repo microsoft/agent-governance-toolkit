@@ -23,15 +23,18 @@ Usage:
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 from mcp_receipt_governed.receipt import (
     GovernanceReceipt,
+    ReceiptAuthorizationError,
     ReceiptSigningError,
     ReceiptStore,
     hash_tool_args,
     sign_receipt,
+    verify_receipt_authorization,
 )
 
 _logger = logging.getLogger(__name__)
@@ -87,11 +90,22 @@ class McpReceiptAdapter:
         signing_key_hex: Optional[str] = None,
         store: Optional[ReceiptStore] = None,
         session_id: Optional[str] = None,
+        external_authorizer: Optional[Callable[[GovernanceReceipt], GovernanceReceipt]] = None,
+        trusted_authorizer_keys: Optional[List[str]] = None,
     ) -> None:
+        if external_authorizer is not None and not signing_key_hex:
+            raise ValueError("External authorization requires a receipt signing_key_hex.")
+        if external_authorizer is not None and not trusted_authorizer_keys:
+            raise ValueError("External authorization requires trusted_authorizer_keys.")
+        if external_authorizer is None and trusted_authorizer_keys:
+            raise ValueError("trusted_authorizer_keys requires an external_authorizer.")
+
         self._evaluator = CedarPolicyEvaluator(policy_content=cedar_policy, policy_id=cedar_policy_id)
         self._policy_id = cedar_policy_id
         self._signing_key = signing_key_hex
         self._session_id = session_id or str(uuid.uuid4())
+        self._external_authorizer = external_authorizer
+        self._trusted_authorizer_keys = tuple(trusted_authorizer_keys or ())
         self.store = store or ReceiptStore()
 
     def govern_tool_call(
@@ -125,6 +139,45 @@ class McpReceiptAdapter:
                 raise ReceiptSigningError(
                     f"Receipt signing failed for tool={tool_name}: {type(exc).__name__}: {exc}"
                 ) from exc
+
+        if self._external_authorizer is not None:
+            original_receipt = (
+                receipt.payload_hash(),
+                receipt.signature,
+                receipt.signer_public_key,
+            )
+            signer_public_key = receipt.signer_public_key.lower()
+            trusted_authorizer_keys = {
+                key.lower() for key in self._trusted_authorizer_keys if isinstance(key, str)
+            }
+            if signer_public_key in trusted_authorizer_keys:
+                raise ReceiptAuthorizationError(
+                    "trusted_authorizer_keys must not contain the receipt signer key."
+                )
+
+            authorized_receipt = self._external_authorizer(receipt)
+            if authorized_receipt is not receipt:
+                raise ReceiptAuthorizationError(
+                    "External authorizer must return the original receipt after authorizing it."
+                )
+            if original_receipt != (
+                receipt.payload_hash(),
+                receipt.signature,
+                receipt.signer_public_key,
+            ):
+                raise ReceiptAuthorizationError(
+                    "External authorizer modified the signed receipt or replaced its signer."
+                )
+            authorization_errors = verify_receipt_authorization(
+                receipt,
+                trusted_authorizer_keys=list(self._trusted_authorizer_keys),
+                now=time.time(),
+            )
+            if authorization_errors:
+                raise ReceiptAuthorizationError(
+                    f"External authorization failed for tool={tool_name}: "
+                    f"{'; '.join(authorization_errors)}"
+                )
 
         self.store.add(receipt)
         return receipt

@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 21 — Rust SDK (agent-governance-rust/ workspace)"
-last_reviewed: 2026-05-16
+last_reviewed: 2026-09-18
 owner: agt-maintainers
 ---
 
@@ -15,10 +15,10 @@ reward primitives, execution control, and lifecycle management. The companion
 `agentmesh-mcp` crate keeps MCP-focused security functionality available as a
 smaller standalone dependency.
 
-> **Target runtime:** Rust 1.75+ (2021 edition)
+> **Target runtime:** Rust 1.89+ (2021 edition)
 > **Workspace:** `agent-governance-rust/`
 > **Crates:** `agentmesh` and `agentmesh-mcp`
-> **Dependencies:** `serde`, `serde_yaml`, `sha2`, `ed25519-dalek`, `thiserror`
+> **Dependencies:** `serde`, `serde_json`, `serde-saphyr`, `sha2`, `ed25519-dalek`, `thiserror`
 
 ---
 
@@ -365,7 +365,7 @@ policies:
 
 ```rust
 use std::collections::HashMap;
-use serde_yaml::Value;
+use agentmesh::policy_data::Value;
 
 let engine = PolicyEngine::new();
 engine.load_from_yaml(yaml)?;

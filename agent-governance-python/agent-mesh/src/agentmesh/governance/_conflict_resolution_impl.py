@@ -40,6 +40,10 @@ class PolicyScope(str, Enum):
     AGENT = "agent"
 
 
+# The set of valid scope strings, derived from the enum so callers that
+# validate user input do not need to hard-code their own list.
+VALID_SCOPES: frozenset[str] = frozenset(s.value for s in PolicyScope)
+
 # Specificity rank: higher = more specific
 _SCOPE_SPECIFICITY: dict[Any, int] = {
     PolicyScope.GLOBAL: 0,
@@ -196,6 +200,7 @@ class PolicyConflictResolver:
 __all__ = [
     "ConflictResolutionStrategy",
     "PolicyScope",
+    "VALID_SCOPES",
     "CandidateDecision",
     "ResolutionResult",
     "PolicyConflictResolver",

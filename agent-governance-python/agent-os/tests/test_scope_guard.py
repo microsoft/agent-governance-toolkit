@@ -11,12 +11,10 @@ import pytest
 
 from agent_os.integrations.scope_guard import (
     ScopeConfig,
-    ScopeEvaluation,
     ScopeGuard,
     _escalate,
     _get_diff_stats,
 )
-
 
 # ── ScopeConfig defaults ──────────────────────────────────────
 
@@ -227,7 +225,7 @@ class TestScopeGuardPolicyEngine:
 class TestEvaluateFromGit:
     @patch("agent_os.integrations.scope_guard._get_diff_stats")
     def test_delegates_to_evaluate(self, mock_stats):
-        mock_stats.return_value = (["a.py", "b.py"], 100, 50)
+        mock_stats.return_value = (["a.py", "b.py"], 100, 50, None)
         guard = ScopeGuard()
         cfg = ScopeConfig(max_files=10, max_lines=500)
         result = guard.evaluate_from_git("agent-1", cfg, "/repo", "main")
@@ -235,6 +233,81 @@ class TestEvaluateFromGit:
         assert result.lines_changed == 150
         assert result.decision == "PASS"
 
+    @patch("agent_os.integrations.scope_guard._get_diff_stats")
+    def test_measurement_error_hard_fails(self, mock_stats):
+        mock_stats.return_value = ([], 0, 0, "git diff exited with status 128")
+        guard = ScopeGuard()
+        cfg = ScopeConfig(max_files=10, max_lines=500)
+
+        result = guard.evaluate_from_git("agent-1", cfg, "/repo", "main")
+
+        assert result.decision == "HARD_FAIL"
+        assert result.files_changed == 0
+        assert result.lines_changed == 0
+        assert result.error == "git diff exited with status 128"
+        assert "Unable to measure git diff" in result.reason
+
+    @patch("agent_os.integrations.scope_guard._get_diff_stats")
+    def test_mode_off_ignores_measurement_error(self, mock_stats):
+        mock_stats.return_value = ([], 0, 0, "git diff exited with status 128")
+        guard = ScopeGuard()
+        cfg = ScopeConfig(max_files=10, max_lines=500, mode="off")
+
+        result = guard.evaluate_from_git("agent-1", cfg, "/repo", "main")
+
+        assert result.decision == "PASS"
+        assert result.error is None
+        assert "disabled" in result.reason.lower()
+        mock_stats.assert_not_called()
+
+    @patch("agent_os.integrations.scope_guard._get_diff_stats")
+    def test_measurement_error_is_recorded(self, mock_stats):
+        mock_stats.return_value = ([], 0, 0, "git diff exited with status 128")
+        engine = MagicMock()
+        guard = ScopeGuard(policy_engine=engine)
+        cfg = ScopeConfig(max_files=10, max_lines=500)
+
+        guard.evaluate_from_git("agent-1", cfg, "/repo", "main")
+
+        event = engine.record_event.call_args[0][0]
+        assert event["decision"] == "HARD_FAIL"
+        assert event["error"] == "git diff exited with status 128"
+
+    @pytest.mark.parametrize("base_branch", ["--stat", "b.py"])
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_option_like_or_path_like_base_branch_hard_fails(
+        self, mock_run, base_branch
+    ):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=128, stdout="", stderr="fatal: bad revision\n",
+        )
+        guard = ScopeGuard()
+        cfg = ScopeConfig(max_files=10, max_lines=500)
+
+        result = guard.evaluate_from_git("agent-1", cfg, "/repo", base_branch)
+
+        assert result.decision == "HARD_FAIL"
+        if base_branch.startswith("-"):
+            mock_run.assert_not_called()
+        else:
+            assert mock_run.call_args.args[0] == [
+                "git",
+                "diff",
+                "--numstat",
+                "--end-of-options",
+                base_branch,
+                "--",
+            ]
+
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_sentinel_base_branch_hard_fails_before_git(self, mock_run):
+        files, insertions, deletions, error = _get_diff_stats("/repo", "--")
+
+        assert files == []
+        assert insertions == 0
+        assert deletions == 0
+        assert error == "invalid base_branch '--'"
+        mock_run.assert_not_called()
 
 # ── _get_diff_stats ───────────────────────────────────────────
 
@@ -246,10 +319,11 @@ class TestGetDiffStats:
             args=[], returncode=0,
             stdout="10\t5\tsrc/main.py\n20\t3\tsrc/util.py\n",
         )
-        files, ins, dels = _get_diff_stats("/repo", "main")
+        files, ins, deletions, error = _get_diff_stats("/repo", "main")
         assert files == ["src/main.py", "src/util.py"]
         assert ins == 30
-        assert dels == 8
+        assert deletions == 8
+        assert error is None
 
     @patch("agent_os.integrations.scope_guard.subprocess.run")
     def test_handles_binary_dashes(self, mock_run):
@@ -257,27 +331,101 @@ class TestGetDiffStats:
             args=[], returncode=0,
             stdout="-\t-\timage.png\n",
         )
-        files, ins, dels = _get_diff_stats("/repo")
+        files, ins, deletions, error = _get_diff_stats("/repo")
         assert files == ["image.png"]
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
+        assert error is None
 
     @patch("agent_os.integrations.scope_guard.subprocess.run")
     def test_empty_output(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="",
         )
-        files, ins, dels = _get_diff_stats("/repo")
+        files, ins, deletions, error = _get_diff_stats("/repo")
         assert files == []
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
+        assert error is None
 
     @patch(
         "agent_os.integrations.scope_guard.subprocess.run",
         side_effect=FileNotFoundError("git not found"),
     )
     def test_handles_missing_git(self, mock_run):
-        files, ins, dels = _get_diff_stats("/repo")
+        files, ins, deletions, error = _get_diff_stats("/repo")
         assert files == []
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
+        assert "git not found" in error
+
+    @patch(
+        "agent_os.integrations.scope_guard.subprocess.run",
+        side_effect=NotADirectoryError("not a repository"),
+    )
+    def test_handles_invalid_repo_path(self, mock_run):
+        files, ins, deletions, error = _get_diff_stats("/not-a-repo")
+        assert files == []
+        assert ins == 0
+        assert deletions == 0
+        assert "not a repository" in error
+
+    @patch(
+        "agent_os.integrations.scope_guard.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(["git", "diff"], 30),
+    )
+    def test_handles_diff_timeout(self, mock_run):
+        files, ins, deletions, error = _get_diff_stats("/repo")
+        assert files == []
+        assert ins == 0
+        assert deletions == 0
+        assert "TimeoutExpired" in error
+
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_handles_nonzero_git_exit(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=128, stdout="", stderr="fatal: bad revision 'main'\n",
+        )
+
+        files, ins, deletions, error = _get_diff_stats("/repo", "main")
+
+        assert files == []
+        assert ins == 0
+        assert deletions == 0
+        assert error == "git diff exited with status 128: fatal: bad revision 'main'"
+
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_truncates_git_error_output(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=129,
+            stdout="",
+            stderr="fatal: not a repository\n" + ("usage: git diff\n" * 1000),
+        )
+
+        files, ins, deletions, error = _get_diff_stats("/repo")
+
+        assert files == []
+        assert ins == 0
+        assert deletions == 0
+        assert error == "git diff exited with status 129: fatal: not a repository"
+
+    @pytest.mark.parametrize(
+        "stdout",
+        [
+            "10\t5\n",
+            "not-a-number\t5\tsrc/main.py\n",
+        ],
+    )
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_handles_unparseable_diff_row(self, mock_run, stdout):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=stdout,
+        )
+
+        files, ins, deletions, error = _get_diff_stats("/repo")
+
+        assert files == []
+        assert ins == 0
+        assert deletions == 0
+        assert "unparseable" in error

@@ -21,9 +21,12 @@
 #![cfg_attr(test, allow(deprecated))]
 
 pub mod audit;
+pub mod context;
+pub mod context_audit;
 pub mod control_support;
 pub mod credential_vault;
 pub mod governance_support;
+pub mod healthcare_identifiers;
 pub mod identity;
 pub mod identity_support;
 pub mod integration_support;
@@ -45,6 +48,7 @@ pub mod mcp {
 }
 pub mod normalize;
 pub mod policy;
+pub mod policy_data;
 pub mod prompt_injection;
 pub mod prompt_injection_embedding;
 pub mod protocol_facets;
@@ -52,6 +56,7 @@ pub(crate) mod regex_cache;
 pub mod reward_support;
 pub mod rings;
 pub mod sandbox;
+pub mod skill_audit;
 #[cfg(feature = "telemetry")]
 pub mod telemetry;
 pub mod trust;
@@ -80,6 +85,9 @@ pub use governance_support::{
     PolicyDiagnosticSeverity, PolicyEvaluator, PolicyRuleTrace, RiskLevel as GovernanceRiskLevel,
     ShadowMode, ShadowResult, SignedAuditEntry, TechnicalDocumentationExporter, TrustCondition,
     TrustDefaults, TrustInfo, TrustPolicy, TrustPolicyDecision, TrustRule,
+};
+pub use healthcare_identifiers::{
+    find_healthcare_identifiers, HealthcareIdentifierKind, HealthcareIdentifierMatch,
 };
 pub use identity::{AgentIdentity, PublicIdentity};
 pub use identity_support::{
@@ -122,6 +130,9 @@ pub use reward_support::{
     RewardSignal, RewardStrategy, RewardTrustScore, TrustEvent, TrustWeightedStrategy,
 };
 pub use rings::{Ring, RingEnforcer};
+pub use skill_audit::{
+    build_skill_audit_metadata, hash_context, SkillAuditMetadata, TrustedSkillMetadataSource,
+};
 pub use trust::{TrustConfig, TrustManager};
 pub use trust_support::{
     CapabilityGrant, CapabilityRegistry, CapabilityScope, CardRegistry, HandshakeChallenge,
@@ -193,7 +204,7 @@ impl AgentMeshClient {
     pub fn execute_with_governance(
         &self,
         action: &str,
-        context: Option<&HashMap<String, serde_yaml::Value>>,
+        context: Option<&HashMap<String, policy_data::Value>>,
     ) -> GovernanceResult {
         #[cfg(feature = "telemetry")]
         let policy_start = std::time::Instant::now();

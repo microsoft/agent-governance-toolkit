@@ -14,6 +14,7 @@ from agent_control_specification import (
     InterventionPointResult,
     Transform,
     Verdict,
+    Warning,
     action_identity,
 )
 
@@ -39,14 +40,10 @@ class VerdictMappingTests(unittest.TestCase):
         self.assertTrue(Decision.TRANSFORM.applies_transform)
 
     def test_only_transform_applies_transform(self):
-        # AGT D1: every non-transform permitting decision (allow, warn)
-        # MUST NOT mutate the policy target. Deny and escalate also do
-        # not mutate. Only transform mutates.
+        # AGT D1: only transform mutates the policy target.
         for decision, should_transform in [
             (Decision.ALLOW, False),
-            (Decision.WARN, False),
             (Decision.DENY, False),
-            (Decision.ESCALATE, False),
             (Decision.TRANSFORM, True),
         ]:
             self.assertEqual(decision.applies_transform, should_transform, decision.value)
@@ -67,12 +64,12 @@ class VerdictMappingTests(unittest.TestCase):
             {
                 "decision": "transform",
                 "reason": "redacted",
-                "transform": {"path": "$policy_target.text", "value": "[REDACTED]"},
+                "transform": {"path": "$target.text", "value": "[REDACTED]"},
             }
         )
         self.assertEqual(verdict.decision, Decision.TRANSFORM)
         self.assertIsInstance(verdict.transform, Transform)
-        self.assertEqual(verdict.transform.path, "$policy_target.text")
+        self.assertEqual(verdict.transform.path, "$target.text")
         self.assertEqual(verdict.transform.value, "[REDACTED]")
 
     def test_from_mapping_parses_evidence_payload(self):
@@ -98,6 +95,41 @@ class VerdictMappingTests(unittest.TestCase):
                 "policy_registry": "https://example.com/policies/v1/",
             },
         )
+
+    def test_from_mapping_preserves_warnings_and_approval(self):
+        warning_verdict = Verdict.from_mapping(
+            {
+                "decision": "allow",
+                "warnings": [
+                    {
+                        "reason": "review_recommended",
+                        "message": "A reviewer should inspect this action.",
+                    },
+                    {"reason": "secondary_signal"},
+                ],
+            }
+        )
+        self.assertEqual(warning_verdict.decision, Decision.ALLOW)
+        self.assertEqual(
+            warning_verdict.warnings,
+            (
+                Warning(
+                    reason="review_recommended",
+                    message="A reviewer should inspect this action.",
+                ),
+                Warning(reason="secondary_signal"),
+            ),
+        )
+
+        approval_verdict = Verdict.from_mapping(
+            {
+                "decision": "deny",
+                "reason": "human_review_required",
+                "approval": {"channel": "security"},
+            }
+        )
+        self.assertEqual(approval_verdict.decision, Decision.DENY)
+        self.assertEqual(approval_verdict.approval, {"channel": "security"})
 
     def test_from_mapping_rejects_non_mapping_evidence(self):
         with self.assertRaises(ValueError):
@@ -150,7 +182,7 @@ class TransformEndToEndTests(unittest.IsolatedAsyncioTestCase):
     """AGT D1.1: TRANSFORM verdicts flow the engine's transformed payload."""
 
     async def test_run_uses_transformed_policy_target_in_enforce(self):
-        transform = Transform(path="$policy_target.text", value="redacted")
+        transform = Transform(path="$target.text", value="redacted")
         runtime = QueueRuntime(
             [
                 InterventionPointResult(
@@ -175,7 +207,7 @@ class TransformEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.value, {"answer": "ok"})
 
     async def test_run_evaluate_only_does_not_apply_transform(self):
-        transform = Transform(path="$policy_target.text", value="redacted")
+        transform = Transform(path="$target.text", value="redacted")
         runtime = QueueRuntime(
             [
                 InterventionPointResult(
@@ -199,14 +231,17 @@ class TransformEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen, [{"text": "raw"}])
         self.assertEqual(result.value, {"text": "raw"})
 
-    async def test_warn_does_not_apply_transformed_policy_target(self):
+    async def test_allow_with_warning_does_not_apply_transformed_policy_target(self):
         # Defence-in-depth: even if a runtime mistakenly attaches a
         # transformed_policy_target to a non-transform verdict, the SDK
         # MUST NOT apply it under AGT D1.
         runtime = QueueRuntime(
             [
                 InterventionPointResult(
-                    Verdict(Decision.WARN, reason="audited"),
+                    Verdict(
+                        Decision.ALLOW,
+                        warnings=(Warning(reason="audited"),),
+                    ),
                     transformed_policy_target={"text": "leaked"},
                 ),
                 InterventionPointResult(Verdict(Decision.ALLOW)),
@@ -235,7 +270,7 @@ class EvidenceRoundTripTests(unittest.TestCase):
                 "decision": "transform",
                 "reason": "redact_account_number",
                 "transform": {
-                    "path": "$policy_target.text",
+                    "path": "$target.text",
                     "value": "Please summarize account [REDACTED].",
                 },
                 "evidence": {
@@ -259,7 +294,7 @@ class EvidenceRoundTripTests(unittest.TestCase):
             enforced_identity=raw.get("enforced_identity"),
         )
         self.assertEqual(result.verdict.decision, Decision.TRANSFORM)
-        self.assertEqual(result.verdict.transform.path, "$policy_target.text")
+        self.assertEqual(result.verdict.transform.path, "$target.text")
         self.assertIsNotNone(result.verdict.evidence)
         self.assertEqual(result.verdict.evidence.artefact, "sha256:proof")
         self.assertEqual(

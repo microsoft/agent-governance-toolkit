@@ -17,7 +17,7 @@ Every production agent needs reliability targets. Agent-SRE gives you three prim
 - **Error Budget** — How much failure is acceptable before you freeze deploys
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask, HallucinationRate
 
 # Define indicators

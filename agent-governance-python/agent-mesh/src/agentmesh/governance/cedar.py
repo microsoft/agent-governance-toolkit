@@ -6,6 +6,11 @@ Cedar Policy Adapter
 Evaluates policies written in Cedar (AWS's authorization policy language)
 alongside the existing YAML/JSON and OPA/Rego engines.
 
+CedarPolicyBackend is a standalone adapter: BackendRegistry registration only
+makes it available for explicit lookup and evaluation. It does not configure
+govern() or PolicyEngine. To use Cedar with an engine you manage, call its
+load_cedar() method; govern() has no corresponding Cedar configuration argument.
+
 Three modes:
   1. **cedarpy** — Python bindings to the Rust Cedar engine (fastest, requires ``pip install cedarpy``)
   2. **CLI** — Calls ``cedar authorize`` subprocess (requires Cedar CLI installed)
@@ -404,12 +409,16 @@ def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
 class CedarPolicyBackend:
     """Adapter wrapping CedarEvaluator to satisfy ExternalPolicyBackend protocol.
 
+    Registration enables lookup only. The caller must evaluate the backend
+    and enforce its decision; govern() does not consult BackendRegistry.
+
     Usage:
         from agentmesh.governance.cedar import CedarPolicyBackend
         from agentmesh.governance.backend import BackendRegistry
 
         backend = CedarPolicyBackend(policy_content=MY_CEDAR_POLICY)
         BackendRegistry.register(backend)
+        decision = BackendRegistry.get("cedar").evaluate("ReadData", context)
     """
 
     def __init__(

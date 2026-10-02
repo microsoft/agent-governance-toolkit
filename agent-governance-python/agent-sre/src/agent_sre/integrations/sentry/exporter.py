@@ -196,7 +196,7 @@ class SentryExporter:
                 message,
                 level=level,
                 tags=tags,
-                context=context,
+                contexts=self._to_sentry_contexts(context),
             )
         except Exception as e:
             logger.warning(f"Failed to send message to Sentry: {e}")
@@ -211,9 +211,18 @@ class SentryExporter:
         if client is None:
             return
         try:
-            client.capture_exception(error, tags=tags, context=context)
+            client.capture_exception(
+                error,
+                tags=tags,
+                contexts=self._to_sentry_contexts(context),
+            )
         except Exception as e:
             logger.warning(f"Failed to send exception to Sentry: {e}")
+
+    @staticmethod
+    def _to_sentry_contexts(context: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
+        """Nest context under a named key, as sentry-sdk expects for ``contexts``."""
+        return {"agent_sre": context} if context else None
 
     def _init_client(self, dsn: str, environment: str, release: str) -> Any | None:
         """Initialize sentry_sdk if installed; otherwise stay offline."""

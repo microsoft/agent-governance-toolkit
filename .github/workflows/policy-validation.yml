@@ -15,7 +15,7 @@ jobs:
     outputs:
       policies: ${{ steps.filter.outputs.policies }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
@@ -25,17 +25,28 @@ jobs:
               - '**/*.yml'
               - 'agent-governance-python/agt-policies/**'
               - 'agent-governance-python/agent-compliance/src/agent_compliance/lint_policy.py'
+              - 'scripts/check_example_intervention_points.py'
+              - 'scripts/tests/test_check_example_intervention_points.py'
 
   validate-policies:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.policies == 'true'
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+
+      - name: Check example manifest intervention-point coverage
+        # Fail closed when a shipped rego example omits an adapter-evaluated
+        # intervention point (e.g. pre_tool_call); the engine denies unbound
+        # points, breaking the manifest on the first matching interception.
+        run: |
+          pip install --no-cache-dir pyyaml==6.0.2 pytest==8.3.4  # Scorecard: version-pinned
+          python scripts/check_example_intervention_points.py
+          pytest scripts/tests/test_check_example_intervention_points.py
 
       - name: Build native ACS SDK
         # agent-compliance's manifest linter calls the native
@@ -96,7 +107,7 @@ jobs:
     needs: [changes, validate-policies]
     if: always() && needs.validate-policies.result != 'failure'
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: needs.changes.outputs.policies == 'true'
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

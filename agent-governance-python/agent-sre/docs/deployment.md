@@ -60,7 +60,7 @@ CMD ["python", "your_agent.py"]
 Agent-SRE is a Python library, not a separate service. Embed it directly in your agent code:
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask
 
 # Create SLO alongside your agent

@@ -286,24 +286,49 @@ with governor.monitor(agent_id="research-bot"):
 **Implementation:**
 
 ```python
-from agent_sre import CircuitBreaker, SLOManager
+import time
+
+from agent_sre.cascade.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitOpenError,
+)
+from agent_sre.slo.indicators import ResponseLatency, TaskSuccessRate
+from agent_sre.slo.objectives import SLO, ErrorBudget
 
 # Circuit breaker prevents cascade failures
 breaker = CircuitBreaker(
-    failure_threshold=5,
-    recovery_timeout=60,
-    half_open_requests=3
+    agent_id="research-bot",
+    config=CircuitBreakerConfig(
+        failure_threshold=5,
+        recovery_timeout_seconds=60,
+        half_open_max_calls=3,
+    ),
 )
 
 # SLO enforcement with error budgets
-slo = SLOManager()
-slo.define("agent-availability", target=0.999, window="30d")
-slo.define("agent-latency-p99", target_ms=500, window="30d")
+availability = TaskSuccessRate(target=0.999, window="30d")
+latency_p99 = ResponseLatency(target_ms=500, percentile=0.99, window="30d")
+slo = SLO(
+    name="agent-availability",
+    indicators=[availability, latency_p99],
+    error_budget=ErrorBudget(total=0.001),
+)
 
-@breaker.protect
 def call_agent(task):
-    return agent.run(task)
-    # → CircuitOpen after 5 consecutive failures; auto-recovers after 60s
+    started = time.monotonic()
+    try:
+        result = breaker.call(agent.run, task)
+    except CircuitOpenError:
+        raise  # open after 5 failures; half-open trial calls after 60s
+    except Exception:
+        availability.record_task(success=False)
+        slo.record_event(good=False)
+        raise
+    availability.record_task(success=True)
+    latency_p99.record_latency((time.monotonic() - started) * 1000)
+    slo.record_event(good=True)
+    return result
 ```
 
 **Alternatives:** [Resilience4j](https://resilience4j.readme.io/) (Java), [Polly](https://github.com/App-vNext/Polly) (.NET), custom retry/circuit-breaker patterns.

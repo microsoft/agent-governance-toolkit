@@ -15,8 +15,10 @@ can consume the same un-disguised content.
 
 Design goals:
 
-* **Deterministic & idempotent**: ``normalize(normalize(x).text).text ==
-  normalize(x).text``.
+* **Deterministic & idempotent when complete**: ``normalize(normalize(x).text).text
+  == normalize(x).text``. If nesting exceeds ``max_decode_depth``, the result is
+  tagged :attr:`Transform.DECODE_DEPTH_CAPPED` and may contain another encoded
+  layer.
 * **Benign-safe**: every aggressive transform fires only under a guard, so
   legitimate inputs (percentages, ``&amp;``, real base64, code, structured
   data) pass through unchanged. Decoders additionally require a printable-
@@ -337,7 +339,7 @@ def _try_decode_once(s: str, cfg: NormalizeConfig) -> Optional[tuple[str, Transf
         if (
             dec is not None
             and _printable_ratio(dec) >= cfg.printable_min_ratio
-            and _english_score(dec) > _english_score(trimmed)
+            and _has_decode_benefit(trimmed, dec, cfg)
         ):
             return dec, Transform.PERCENT
 
@@ -347,7 +349,7 @@ def _try_decode_once(s: str, cfg: NormalizeConfig) -> Optional[tuple[str, Transf
         if (
             dec != trimmed
             and _printable_ratio(dec) >= cfg.printable_min_ratio
-            and _english_score(dec) > _english_score(trimmed)
+            and _has_decode_benefit(trimmed, dec, cfg)
         ):
             return dec, Transform.UNICODE_ESCAPE
 
@@ -357,13 +359,26 @@ def _try_decode_once(s: str, cfg: NormalizeConfig) -> Optional[tuple[str, Transf
         if (
             dec != trimmed
             and _printable_ratio(dec) >= cfg.printable_min_ratio
-            and _english_score(dec) > _english_score(trimmed)
+            and _has_decode_benefit(trimmed, dec, cfg)
         ):
             return dec, Transform.HTML_ENTITY
 
-    # base64 / hex: only on a CONTIGUOUS blob (no whitespace) so ordinary prose
-    # is never treated as a payload. Acceptance = printable ratio only, so nested
-    # encodings unwrap.
+    return _try_decode_blob(trimmed, cfg)
+
+
+def _has_decode_benefit(before: str, after: str, cfg: NormalizeConfig) -> bool:
+    """Accept an English gain or a blob the next decode layer can unwrap."""
+    if _english_score(after) > _english_score(before):
+        return True
+    return _try_decode_blob(after, cfg) is not None
+
+
+def _try_decode_blob(s: str, cfg: NormalizeConfig) -> Optional[tuple[str, Transform]]:
+    """Decode a contiguous base64 or hex blob under the normal printable guard."""
+    trimmed = s.strip()
+    # A contiguous blob (no whitespace) keeps ordinary prose from being treated
+    # as a payload. The printable-ratio guard also makes this safe to use when
+    # checking whether an ambiguous outer decode exposed a real next layer.
     if trimmed and not any(c.isspace() for c in trimmed) and len(trimmed) >= 16:
         if _is_base64(trimmed) and len(trimmed) % 4 == 0:
             try:

@@ -23,7 +23,12 @@ VERSION = "0.3.0"
 _start_time: float = 0.0
 
 
-def create_base_app(component: str, description: str) -> FastAPI:
+def create_base_app(
+    component: str,
+    description: str,
+    *,
+    include_readyz: bool = True,
+) -> FastAPI:
     """Create a FastAPI app with standard health/metrics endpoints."""
     global _start_time
     _start_time = time.monotonic()
@@ -40,9 +45,11 @@ def create_base_app(component: str, description: str) -> FastAPI:
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "component": component}
 
-    @app.get("/readyz", tags=["health"])
-    async def readyz() -> dict[str, str]:
-        return {"status": "ready", "component": component}
+    if include_readyz:
+
+        @app.get("/readyz", tags=["health"])
+        async def readyz() -> dict[str, str]:
+            return {"status": "ready", "component": component}
 
     @app.get("/metrics", tags=["observability"])
     async def metrics() -> PlainTextResponse:

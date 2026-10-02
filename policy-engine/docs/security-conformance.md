@@ -18,6 +18,6 @@ Annotator isolation. Annotator output is stored only under `annotations.<name>`.
 
 Resource limits. Snapshot size, policy input depth, annotator count, annotator output size, extends depth, and merged manifest size are covered. All breaches use `runtime_error:resource_limit_exceeded` except annotator output size, which uses `runtime_error:annotation_failed`.
 
-Approval identity. Core evaluation exposes a stable action identity over canonical policy input. SDK approval replay tests enforce mutation rejection with `runtime_error:approval_action_mismatch`, while this gate verifies the core identity and reserved reason mapping.
+Approval identity. Core evaluation exposes a stable action identity over canonical policy input. SDK approval replay tests enforce mutation rejection with `host_error:approval_identity_mismatch`, while this gate verifies the core identity and reserved reason mapping.
 
 Evaluate only mode. A would be deny is recorded as a deny verdict with decision telemetry in `evaluate_only` mode. The runtime does not produce a transformed policy target in this mode.

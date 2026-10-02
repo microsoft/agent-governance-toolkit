@@ -38,8 +38,11 @@ classifiers = [
 
 # Merged dependencies from agent-os-kernel, agentmesh-primitives,
 # agentmesh-runtime, agent-hypervisor, and agentmesh-platform.
+#
+# agent-control-specification is declared directly: agent_os (force-included
+# below) imports it, and it previously arrived only transitively via agt-policies.
 dependencies = [
-    "agt-policies>=5.0.0,<6.0",
+    "agent-control-specification>=0.4.0b0,<0.5.0",
     "pydantic[email]>=2.5.0,<3.0",
     "pyyaml>=6.0,<7.0",
     "rich>=13.0.0,<16.0",
@@ -98,6 +101,13 @@ websocket = ["websockets>=12.0,<17.0"]
 grpc = [
     "grpcio>=1.60.0,<2.0",
     "grpcio-tools>=1.60.0,<2.0",
+]
+
+# agt-policies backs only the `agt migrate` CLI; the govern() runtime doesn't import it.
+# This pin is currently unresolvable on its own (agt-policies>=5.1.0 is not published);
+# see #4019.
+migrate = [
+    "agt-policies>=5.1.0,<6.0",
 ]
 
 # --- Bundles ---

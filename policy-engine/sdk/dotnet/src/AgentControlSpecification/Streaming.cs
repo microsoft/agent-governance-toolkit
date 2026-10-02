@@ -116,7 +116,7 @@ public static class AgentControlStreamingExtensions
     private static AgentControlBlockedException FailClosed(string message, Exception exception) =>
         new(
             InterventionPoint.PostModelCall,
-            new InterventionPointResult(new Verdict(Decision.Deny, Reason: "runtime_error:streaming_unsupported", Message: message)),
+            new InterventionPointResult(new Verdict(Decision.Deny, Reason: "host_error:streaming_unsupported", Message: message)),
             exception);
 }
 

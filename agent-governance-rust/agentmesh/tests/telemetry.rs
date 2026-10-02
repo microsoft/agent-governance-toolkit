@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 #![cfg(feature = "telemetry")]
 
 use agentmesh::telemetry::{
@@ -79,7 +82,7 @@ fn telemetry_event_does_not_expose_denied_reason_or_context_values() {
     let mut context = HashMap::new();
     context.insert(
         "token".to_string(),
-        serde_yaml::Value::String("SECRET-TOKEN-123".to_string()),
+        agentmesh::policy_data::Value::String("SECRET-TOKEN-123".to_string()),
     );
 
     let result = client.execute_with_governance("shell:rm", Some(&context));

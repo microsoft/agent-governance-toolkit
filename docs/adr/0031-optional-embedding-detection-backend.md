@@ -1,12 +1,12 @@
 ---
 title: "ADR 0031: Optional embedding evidence backend for prompt-injection detection"
-last_reviewed: 2026-06-15
+last_reviewed: 2026-09-06
 owner: agt-maintainers
 ---
 
 # ADR 0031: Optional embedding evidence backend for prompt-injection detection
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-06-13
 
 ## Context
@@ -80,6 +80,7 @@ for in-process telemetry and aggregation.
 
 ## References
 
+- [PR #3014](https://github.com/microsoft/agent-governance-toolkit/pull/3014): Python and Rust implementation.
 - ADR-0015 (pluggable external policy backends) — the pattern this follows.
 - #2918 — the embedding-signal proposal and the "connect it to the pipeline" gap.
 - RFC #2957 / PR #2991 — content normalization, upstream of any backend.

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import unittest
 from collections import deque
 
@@ -44,7 +43,7 @@ class QueueRuntime:
 
 
 class AdapterMediationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_langchain_mediation_and_sync_bypass_block(self):
+    async def test_langchain_mediation_on_sync_and_async_paths(self):
         class Runnable:
             def __init__(self):
                 self.calls = []
@@ -62,14 +61,18 @@ class AdapterMediationTests(unittest.IsolatedAsyncioTestCase):
             await guard_langchain_runnable(AgentControl(QueueRuntime([verdict(Decision.DENY)])), denied).ainvoke({"q": "raw"})
         self.assertEqual(denied.calls, [])
 
-        runtime = QueueRuntime([verdict(transformed_policy_target={"q": "safe"}), verdict(transformed_policy_target={"answer": "checked"})])
+        runtime = QueueRuntime([
+            verdict(transformed_policy_target={"q": "safe"}), verdict(transformed_policy_target={"answer": "checked"}),
+            verdict(transformed_policy_target={"q": "sync"}), verdict(),
+        ])
         runnable = Runnable()
         guarded = guard_langchain_runnable(AgentControl(runtime), runnable)
         self.assertEqual(await guarded.ainvoke({"q": "raw"}), {"answer": "checked"})
         self.assertEqual(runnable.calls, [({"q": "safe"}, None)])
         self.assertEqual([r.intervention_point for r in runtime.requests], [InterventionPoint.INPUT, InterventionPoint.OUTPUT])
-        with self.assertRaises(AdapterUnsupportedError):
-            guarded.invoke({"q": "raw"})
+        self.assertEqual(guarded.invoke({"q": "raw"}), {"q": "sync"})
+        self.assertEqual(runnable.calls[1], ({"q": "sync"}, "sync"))
+        self.assertEqual([r.intervention_point for r in runtime.requests], [InterventionPoint.INPUT, InterventionPoint.OUTPUT] * 2)
 
     async def test_openai_and_anthropic_clients_mediate_model_calls(self):
         class Endpoint:

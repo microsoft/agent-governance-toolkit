@@ -1,10 +1,10 @@
 ---
 title: "🛡️ OWASP MCP Top 10 — Compliance Mapping"
-last_reviewed: 2026-07-07
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 # 🛡️ OWASP MCP Top 10 — Compliance Mapping
 
@@ -399,14 +399,14 @@ Three MCP risks have partial coverage today with planned enhancements targeting 
 | [OWASP Agentic Top 10 (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) | Mappings in place across all ASI risk categories — see [OWASP ASI coverage](owasp-agentic-top10-architecture.md) |
 | OWASP MCP Security Cheat Sheet (§1–§12) | 11/12 covered — §11 (Consent UI) out of scope for server-side SDKs |
 | [NIST AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) | Agent identity (IATP), authentication, audit trails |
-| [EU AI Act (Aug 2026)](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | Risk classification, audit trails, human oversight |
+| [EU AI Act (phased high-risk obligations)](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | Risk classification, audit trails, human oversight |
 
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 *Last updated: April 2026 · OWASP MCP Top 10 v0.1 (Phase 3 Beta)*
 
-**[⬅ Back to README](../../README.md)** · **[🛡️ Agentic Top 10 Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)**
+**[⬅ Back to README](../index.md)** · **[🛡️ Agentic Top 10 Mapping](owasp-agentic-top10-architecture.md)**
 
 </div>

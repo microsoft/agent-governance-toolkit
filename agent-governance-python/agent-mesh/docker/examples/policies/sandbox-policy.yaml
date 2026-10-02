@@ -3,27 +3,19 @@
 # for sandbox-level agents.
 name: demo-sandbox-policy
 version: "1.0"
+agents: ["*"]
 rules:
   - name: allow-file-read
     description: Allow reading files in /data
-    condition:
-      field: action
-      operator: eq
-      value: file.read
+    condition: "action == 'file.read'"
     action: allow
 
   - name: deny-shell-execute
     description: Deny shell execution for sandboxed agents
-    condition:
-      field: action
-      operator: eq
-      value: shell.execute
+    condition: "action == 'shell.execute'"
     action: deny
 
   - name: deny-network-egress
     description: Deny outbound network access
-    condition:
-      field: action
-      operator: eq
-      value: network.egress
+    condition: "action == 'network.egress'"
     action: deny

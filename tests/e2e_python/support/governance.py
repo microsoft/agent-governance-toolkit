@@ -41,6 +41,11 @@ class PolicyDecision:
     allowed: bool
     verdict: str
     reason: str | None
+    #: True when the verdict is a deny the host may lift through an approval
+    #: seam. agent-hooks has no separate ``escalate`` decision: an escalation
+    #: is a ``deny`` carrying an ``approval`` block, and a deny without one is
+    #: final. Flattening the decision alone cannot tell the two apart.
+    requires_approval: bool = False
 
 
 class _RulePolicy:
@@ -135,6 +140,9 @@ def evaluate_pre_tool_call(
         allowed=verdict.decision is Decision.ALLOW,
         verdict=verdict.decision.name.lower(),
         reason=verdict.reason,
+        requires_approval=(
+            verdict.decision is Decision.DENY and verdict.approval is not None
+        ),
     )
 
 

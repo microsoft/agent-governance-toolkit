@@ -1,12 +1,12 @@
 ---
 title: "ADR 0007: External JWKS federation for cross-org agent identity"
-last_reviewed: 2026-05-18
+last_reviewed: 2026-09-06
 owner: agt-maintainers
 ---
 
 # ADR 0007: External JWKS federation for cross-org agent identity
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-04-23
 
 ## Context
@@ -249,9 +249,17 @@ This aligns with ADR-0001 (Ed25519 for agent identity) — the same key type and
 - Explicit-allowlist default means operators must configure each federation partner. This is intentionally conservative but adds operational overhead for large federations.
 - DNS/WebPKI trust anchor inherits the web's trust model, including its limitations (CA compromise, domain hijacking). DNSSEC and Certificate Transparency mitigate but do not eliminate these risks.
 
-**Follow-up work:**
+**Implementation:**
 
-- **Implementation PR:** `ExternalJWKSProvider` in `agentmesh/identity/` alongside the existing SPIFFE and Entra modules.
+- [PR #2380](https://github.com/microsoft/agent-governance-toolkit/pull/2380)
+  added `ExternalJWKSProvider`, delegation claims, federation policy, caching,
+  and revocation checks.
+- [PR #3094](https://github.com/microsoft/agent-governance-toolkit/pull/3094)
+  integrated external JWKS resolution into the handshake through
+  `IdentityProviderChain`.
+
+**Remaining follow-up work:**
+
 - **Federation policy configuration:** YAML/JSON schema for `FederationPolicy`, loadable from AGT's existing config system.
 - **Discovery registry:** Optional lightweight service for publishing and discovering federation endpoints across the ecosystem.
 - **DIF MCP-I alignment:** Map the provider interface to DIF's Mandatory DID + VC delegation chain (L2 standard) as that specification stabilizes.

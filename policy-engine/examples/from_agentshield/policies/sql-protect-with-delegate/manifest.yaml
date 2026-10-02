@@ -1,4 +1,4 @@
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: "sql-protect-with-delegate"
 extends: []
@@ -20,7 +20,7 @@ intervention_points:
     tool_name_from: "$.tool_call.name"
     annotations:
       sql_intent:
-        from: "$policy_target"
+        from: "$target"
     policy:
       id: sql_protect_delegate
       query: data.agent_control_specification.sql_protect_delegate.pre_tool_call_verdict

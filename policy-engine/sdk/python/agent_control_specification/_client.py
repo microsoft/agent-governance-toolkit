@@ -34,7 +34,7 @@ class RuntimeClient(Protocol):
 
 
 def parse_manifest(manifest: str | bytes) -> JsonValue:
-    """Parse manifest text with the same serde_yaml implementation as the Rust runtime."""
+    """Parse manifest text with AGT's bounded serde-saphyr parser."""
 
     try:
         from agent_control_specification import _native
@@ -79,6 +79,25 @@ def validate_manifest_overlay(manifest: str | bytes) -> None:
     if not isinstance(manifest_str, str):
         raise TypeError("manifest must be a string or bytes")
     _native.validate_manifest_overlay(manifest_str)
+
+
+def _is_stub_dispatcher(dispatcher: object | None, name: str, hook: str) -> bool:
+    """Return whether ``dispatcher`` is the bare ``object()`` test stub.
+
+    ``None`` and any object with a callable ``hook`` method are valid and return
+    False. Anything else is rejected here, so a bound method passed in place of
+    its dispatcher, or swapped annotator and policy arguments, fail at
+    construction instead of at the first ``evaluate_intervention_point``.
+    """
+
+    if dispatcher is None or callable(getattr(dispatcher, hook, None)):
+        return False
+    if type(dispatcher) is object:
+        return True
+    hint = f"; pass the dispatcher object rather than its {hook} method" if callable(dispatcher) else ""
+    raise TypeError(
+        f"{name} must provide a callable {hook}() method, got {type(dispatcher).__name__}{hint}"
+    )
 
 
 class NativeRuntimeClient:
@@ -156,16 +175,13 @@ class NativeRuntimeClient:
     ) -> None:
         self._annotator_dispatcher = annotator_dispatcher
         self._policy_dispatcher = policy_dispatcher
-        # A provided dispatcher that lacks its hook method is a pure-Python test
-        # stub; fall back to the not-implemented async path. A `None` dispatcher
-        # opts into the bundled native default supplied by the Rust core.
-        annotator_unusable = annotator_dispatcher is not None and not hasattr(
-            annotator_dispatcher, "dispatch"
-        )
-        policy_unusable = policy_dispatcher is not None and not hasattr(
-            policy_dispatcher, "evaluate"
-        )
-        if annotator_unusable or policy_unusable:
+        # A `None` dispatcher opts into the bundled native default supplied by
+        # the Rust core. A bare `object()` is the pure-Python test stub and takes
+        # the not-implemented async path. Anything else must carry its hook
+        # method, or the mistake would only surface at the first evaluation.
+        annotator_stub = _is_stub_dispatcher(annotator_dispatcher, "annotator_dispatcher", "dispatch")
+        policy_stub = _is_stub_dispatcher(policy_dispatcher, "policy_dispatcher", "evaluate")
+        if annotator_stub or policy_stub:
             self._native = None
             return
 
@@ -254,3 +270,22 @@ class NativeRuntimeClient:
         except Exception:  # noqa: BLE001 - label lookup must never break construction
             return {}
         return labels if isinstance(labels, dict) else {}
+
+    def approval_config(self) -> dict[str, object]:
+        """The merged manifest's top-level ``approval`` section.
+
+        Sourced from the native runtime so it is populated on every
+        constructor, including ``from_path`` with ``extends`` parents,
+        ``from_url`` and ``from_manifest_chain``. Returns an empty mapping when
+        the manifest declares no ``approval`` section, when the native
+        extension is unavailable, or on a native build without the accessor.
+        """
+
+        native = self._native
+        if native is None or not hasattr(native, "approval_config"):
+            return {}
+        try:
+            approval = native.approval_config()
+        except Exception:  # noqa: BLE001 - best effort, like policy_labels
+            return {}
+        return approval if isinstance(approval, dict) else {}

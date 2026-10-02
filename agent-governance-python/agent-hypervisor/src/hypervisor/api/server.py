@@ -211,7 +211,7 @@ async def create_session(req: CreateSessionRequest) -> CreateSessionResponse:
         min_eff_score=req.min_eff_score,
         enable_audit=req.enable_audit,
     )
-    managed = await _hv().create_session(config=config, creator_did=req.creator_did)
+    managed = _hv().create_session(config=config, creator_did=req.creator_did)
     return CreateSessionResponse(
         session_id=managed.sso.session_id,
         state=managed.sso.state.value,
@@ -275,7 +275,7 @@ async def join_session(session_id: str, req: JoinSessionRequest) -> JoinSessionR
     if req.actions:
         actions = [ActionDescriptor(**a) for a in req.actions]
     try:
-        ring = await hv.join_session(
+        ring = hv.join_session(
             session_id=session_id,
             agent_did=req.agent_did,
             actions=actions,
@@ -298,7 +298,7 @@ async def join_session(session_id: str, req: JoinSessionRequest) -> JoinSessionR
 async def activate_session(session_id: str) -> dict[str, str]:
     """Activate a session after handshaking is complete."""
     try:
-        await _hv().activate_session(session_id)
+        _hv().activate_session(session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -311,7 +311,7 @@ async def activate_session(session_id: str) -> dict[str, str]:
 async def terminate_session(session_id: str) -> dict[str, Any]:
     """Terminate a session and commit audit trail."""
     try:
-        hash_chain_root = await _hv().terminate_session(session_id)
+        hash_chain_root = _hv().terminate_session(session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

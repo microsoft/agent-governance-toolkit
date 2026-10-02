@@ -81,7 +81,23 @@ _PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         "phone number",
     ),
     (
-        re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+        # Accept dash, space and dot separators so the scanner agrees with
+        # ``credential_redactor.py``'s PII_PATTERNS (issue #3815 / #3239).
+        # Use ``(?<![A-Za-z0-9])`` / ``(?![A-Za-z0-9])`` anchors rather
+        # than ``\b`` so an SSN glued to ``_`` is still detected.
+        re.compile(r"(?<![A-Za-z0-9])\d{3}[\s.-]\d{2}[\s.-]\d{4}(?![A-Za-z0-9])"),
+        "SSN",
+    ),
+    (
+        # A bare nine-digit run is blocked only after an explicit SSN cue.
+        # Bound the punctuation gap to avoid treating a later, unrelated ID
+        # as an SSN, while accepting quotes and markup around the cue.
+        re.compile(
+            r"(?<![A-Za-z0-9])"
+            r"(?:social\s+security(?:\s+(?:number|num|no|#))?|soc(?:ial)?\s*sec|ssn)"
+            r"[^A-Za-z0-9]{0,10}\d{9}(?![A-Za-z0-9])",
+            re.IGNORECASE,
+        ),
         "SSN",
     ),
     (

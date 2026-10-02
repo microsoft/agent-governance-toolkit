@@ -54,8 +54,8 @@ class Hypervisor:
 
     Usage (basic — sigma_raw passed directly):
         hv = Hypervisor()
-        session = await hv.create_session(config, creator_did="did:mesh:admin")
-        await hv.join_session(session.sso.session_id, "did:mesh:agent-1", sigma_raw=0.85)
+        session = hv.create_session(config, creator_did="did:mesh:admin")
+        hv.join_session(session.sso.session_id, "did:mesh:agent-1", sigma_raw=0.85)
 
     Usage (enriched — adapters resolve sigma and parse manifests):
         hv = Hypervisor(
@@ -89,7 +89,7 @@ class Hypervisor:
         # Index of session IDs still requiring monitoring (non-archived/terminating)
         self._active_ids: set[str] = set()
 
-    async def create_session(
+    def create_session(
         self,
         config: SessionConfig,
         creator_did: str,
@@ -102,7 +102,7 @@ class Hypervisor:
         self._active_ids.add(sso.session_id)
         return managed
 
-    async def join_session(
+    def join_session(
         self,
         session_id: str,
         agent_did: str,
@@ -183,12 +183,12 @@ class Hypervisor:
 
         return ring
 
-    async def activate_session(self, session_id: str) -> None:
+    def activate_session(self, session_id: str) -> None:
         """Activate a session after handshaking is complete."""
         managed = self._get_session(session_id)
         managed.sso.activate()
 
-    async def terminate_session(self, session_id: str) -> str | None:
+    def terminate_session(self, session_id: str) -> str | None:
         """
         Terminate a session and finalize the audit hash chain.
 
@@ -218,7 +218,7 @@ class Hypervisor:
     def get_session(self, session_id: str) -> ManagedSession | None:
         return self._sessions.get(session_id)
 
-    async def verify_behavior(
+    def verify_behavior(
         self,
         session_id: str,
         agent_did: str,
@@ -292,7 +292,7 @@ class Hypervisor:
             raise ValueError(f"Session {session_id} not found")
         return managed
 
-    async def monitor_sessions(
+    def monitor_sessions(
         self,
         drift_threshold: float = 0.5,
     ) -> list[dict[str, Any]]:

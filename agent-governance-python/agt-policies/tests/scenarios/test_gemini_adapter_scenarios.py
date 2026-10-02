@@ -42,7 +42,7 @@ from agent_control_specification import (  # noqa: E402
 )
 
 
-_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: gemini_adapter_scenarios
 extends: []
@@ -213,7 +213,7 @@ def test_generate_content_transform_path_redacts_outbound_prompt(tmp_path: Path)
                 "decision": "transform",
                 "reason": "pii_redaction",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": "Customer SSN is [REDACTED]",
                 },
             },
@@ -310,7 +310,7 @@ def test_function_call_transform_rewrites_args(tmp_path: Path) -> None:
                 "decision": "transform",
                 "reason": "args_sanitized",
                 "transform": {
-                    "path": "$policy_target",
+                    "path": "$target",
                     "value": {"city": "[REDACTED]"},
                 },
             },

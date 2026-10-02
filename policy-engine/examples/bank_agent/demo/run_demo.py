@@ -39,12 +39,12 @@ def load_json(relative_path: str) -> Any:
 
 
 def path_tokens(path: str) -> list[str | int]:
-    if path == "$policy_target":
+    if path == "$target":
         return []
-    if not path.startswith("$policy_target"):
-        raise ValueError(f"effect path must be rooted at $policy_target: {path}")
+    if not path.startswith("$target"):
+        raise ValueError(f"effect path must be rooted at $target: {path}")
     tokens: list[str | int] = []
-    rest = path[len("$policy_target"):]
+    rest = path[len("$target"):]
     while rest:
         if rest.startswith("."):
             rest = rest[1:]
@@ -89,7 +89,7 @@ def apply_effects(policy_target: Any, effects: list[dict[str, Any]]) -> Any:
 def account_redaction_effect(text: str) -> dict[str, Any] | None:
     raise AssertionError(
         "AGT D1 rejected effects[]; the output stage now emits a "
-        "transform decision that replaces $policy_target.text."
+        "transform decision that replaces $target.text."
     )
 
 
@@ -141,7 +141,7 @@ def evaluate_policy(policy_input: dict[str, Any]) -> dict[str, Any]:
             "reason": "large_transfer_instruction_added",
             "message": "A high-value transfer reminder was added before the model call.",
             "transform": {
-                "path": "$policy_target.messages",
+                "path": "$target.messages",
                 "value": appended,
             },
         }
@@ -168,7 +168,7 @@ def evaluate_policy(policy_input: dict[str, Any]) -> dict[str, Any]:
             "reason": "tool_result_account_identifier_redacted",
             "message": "The account identifier was redacted before the result returned to the agent.",
             "transform": {
-                "path": "$policy_target.account_id",
+                "path": "$target.account_id",
                 "value": "ACCOUNT-REDACTED",
             },
         }
@@ -184,7 +184,7 @@ def evaluate_policy(policy_input: dict[str, Any]) -> dict[str, Any]:
                 "reason": "output_account_identifier_redacted",
                 "message": "The final response contained an account identifier and was redacted.",
                 "transform": {
-                    "path": "$policy_target.text",
+                    "path": "$target.text",
                     "value": re.sub(r"CHK-[0-9]+", "ACCOUNT-REDACTED", text),
                 },
             }

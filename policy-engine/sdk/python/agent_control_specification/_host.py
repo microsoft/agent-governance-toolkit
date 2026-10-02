@@ -25,9 +25,10 @@ from __future__ import annotations
 import asyncio
 import math
 import threading
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Any, Awaitable
+from typing import Any, Awaitable, Protocol, runtime_checkable
 
 from ._types import (
     AgentControlBlocked,
@@ -77,18 +78,31 @@ def run_sync(coro: Awaitable[Any], *, timeout: float | None = None) -> Any:
     return outcome.get("value")
 
 DEFAULT_APPROVAL_TIMEOUT_SECONDS = 300.0
-"""Bound on the approval wait when the caller does not set one.
+"""Bound on the approval wait when neither the caller nor the manifest sets one.
 
 An unbounded wait is a fail-open: CPython cannot interrupt a resolver blocked
 in synchronous code, so a hung approval would hold the calling agent forever
 instead of denying.
 
-The manifest's ``approval.timeout_seconds`` does not drive this yet. The core
-treats that section as opaque host configuration (SPECIFICATION §17.1), and
-:class:`AgentControl` does not surface it, so a session cannot read it without
-a new accessor across the native boundary. Pass ``approval_timeout_seconds``
-to honour a manifest value in the meantime.
+A manifest that declares ``approval.timeout_seconds`` (SPECIFICATION §24)
+replaces this default through :attr:`AgentControl.approval_config`. An
+explicit ``approval_timeout_seconds`` argument wins over both.
 """
+
+
+def _manifest_approval_timeout(control: Any) -> float | None:
+    """Return the control manifest's ``approval.timeout_seconds``, if declared.
+
+    The native runtime validates the field as a positive integer, so
+    anything else can only come from a custom control and is ignored.
+    """
+    approval = getattr(control, "approval_config", None)
+    if not isinstance(approval, Mapping):
+        return None
+    timeout = approval.get("timeout_seconds")
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+        return None
+    return float(timeout)
 
 
 def _utcnow_iso() -> str:
@@ -165,6 +179,14 @@ class SnapshotBuilder:
         _check_counter("elapsed_seconds", seconds)
         self.elapsed_seconds += float(seconds)
 
+    def release_tool_call(self, count: int = 1) -> None:
+        """Give back ``count`` reservations for tool calls that did not go ahead."""
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError(f"count must be a non-negative integer, got {count!r}")
+        if count > self.tool_call_count:
+            raise ValueError(f"cannot release {count} tool calls; only {self.tool_call_count} recorded")
+        self.tool_call_count -= count
+
     def reset_counters(self) -> None:
         """Zero the four counters."""
         self.tool_call_count = 0
@@ -211,12 +233,68 @@ class SnapshotBuilder:
         self, intervention_point: str, **body: JsonValue
     ) -> dict[str, Any]:
         """Return a full snapshot: the envelope plus whatever the hook carries."""
+        return self.build_snapshot(intervention_point, body)
+
+    def build_snapshot(
+        self, intervention_point: str, body: Mapping[str, JsonValue]
+    ) -> dict[str, Any]:
+        """Like :meth:`snapshot`, with the hook body as a mapping so any key is allowed."""
         snapshot: dict[str, Any] = dict(body)
         # The envelope carries host-asserted identity, session and budget
         # counters that policies trust. Write it last so no hook body can
         # replace it and forge an identity or reset a budget.
         snapshot["envelope"] = self.envelope(intervention_point)
         return snapshot
+
+@runtime_checkable
+class SnapshotSource(Protocol):
+    """Builds the snapshot for each evaluation and owns the budget counters.
+
+    :class:`SnapshotBuilder` is the host-side implementation. The tool
+    adapters and :meth:`AgentControl.run_tool` accept one in place of a frozen
+    mapping so that ``tool_call_count`` advances between calls: they reserve a
+    slot with ``record_tool_call`` before a call is evaluated and give it back
+    with ``release_tool_call`` when the call does not go ahead. Hosts call
+    neither for calls the SDK governs.
+    """
+
+    def build_snapshot(
+        self, intervention_point: str, body: Mapping[str, JsonValue]
+    ) -> dict[str, Any]: ...
+
+    def record_tool_call(self, count: int = 1) -> None: ...
+
+    def release_tool_call(self, count: int = 1) -> None: ...
+
+
+class _AmbientSnapshotSource:
+    """A view over a source that folds fixed ambient data into every snapshot."""
+
+    def __init__(self, source: SnapshotSource, ambient: Mapping[str, JsonValue]) -> None:
+        self._source = source
+        self._ambient = dict(ambient)
+
+    def build_snapshot(
+        self, intervention_point: str, body: Mapping[str, JsonValue]
+    ) -> dict[str, Any]:
+        return self._source.build_snapshot(intervention_point, {**self._ambient, **body})
+
+    def record_tool_call(self, count: int = 1) -> None:
+        self._source.record_tool_call(count)
+
+    def release_tool_call(self, count: int = 1) -> None:
+        self._source.release_tool_call(count)
+
+
+def merge_snapshot(
+    default: Mapping[str, JsonValue] | SnapshotSource | None,
+    per_call: Mapping[str, JsonValue] | None,
+) -> dict[str, JsonValue] | SnapshotSource:
+    """Layer per-call ambient data over a default mapping or snapshot source."""
+    if isinstance(default, SnapshotSource):
+        return default if not per_call else _AmbientSnapshotSource(default, per_call)
+    return {**dict(default or {}), **dict(per_call or {})}
+
 
 def _with_decision(
     result: InterventionPointResult, decision: Decision, reason: str | None
@@ -241,6 +319,9 @@ class HostSession:
 
     Counters advance only when the host says so, through ``record_*`` on
     :attr:`builder`, because only the host knows whether a call completed.
+    The exception is a tool call governed through the SDK: when
+    :attr:`builder` is handed to a tool adapter or to ``run_tool``, the SDK
+    counts that call itself, so do not also call ``record_tool_call`` for it.
     """
 
     def __init__(
@@ -256,10 +337,14 @@ class HostSession:
     ) -> None:
         self._control = control
         self._mode = EnforcementMode(mode)
-        self._approval_timeout_seconds = (
-            DEFAULT_APPROVAL_TIMEOUT_SECONDS
-            if approval_timeout_seconds is None
-            else approval_timeout_seconds
+        if approval_timeout_seconds is None:
+            approval_timeout_seconds = _manifest_approval_timeout(control)
+        if approval_timeout_seconds is None:
+            approval_timeout_seconds = DEFAULT_APPROVAL_TIMEOUT_SECONDS
+        # The core accepts any u64, but a float past this bound makes
+        # ``Thread.join`` raise OverflowError instead of waiting.
+        self._approval_timeout_seconds = min(
+            float(approval_timeout_seconds), threading.TIMEOUT_MAX
         )
         self._approval_on_timeout = approval_on_timeout
         self.builder = builder or SnapshotBuilder(
@@ -288,7 +373,8 @@ class HostSession:
         )
         if (
             self._mode is EnforcementMode.ENFORCE
-            and result.verdict.decision is Decision.ESCALATE
+            and result.verdict.decision is Decision.DENY
+            and result.verdict.approval is not None
         ):
             return self._resolve_escalation(intervention_point, result)
         return result
@@ -311,14 +397,28 @@ class HostSession:
             if self._approval_on_timeout == "allow":
                 return _with_decision(result, Decision.ALLOW, "approval_timeout")
             return _with_decision(
-                result, Decision.DENY, "runtime_error:approval_timeout"
+                result, Decision.DENY, "host_error:approval_unresolved"
             )
         except AgentControlSuspended:
             return result
-        except AgentControlBlocked:
-            return _with_decision(result, Decision.DENY, "approval_denied")
+        except AgentControlBlocked as blocked:
+            # The blocking result already carries a classified reason, either
+            # the policy's own or a reserved host_error the enforcement layer
+            # synthesized. Overwriting it with a name of our own destroyed
+            # that and invented a reason outside the closed set.
+            blocked_verdict = blocked.result.verdict
+            message = blocked_verdict.message
+            if message is None:
+                message = result.verdict.message
+            return _with_decision(
+                replace(result, verdict=replace(result.verdict, message=message)),
+                Decision.DENY,
+                blocked_verdict.reason,
+            )
         except Exception:  # noqa: BLE001 - a broken resolver must not permit
-            return _with_decision(result, Decision.DENY, "approval_failed")
+            return _with_decision(
+                result, Decision.DENY, "host_error:approval_resolver_failed"
+            )
         return _with_decision(result, Decision.ALLOW, result.verdict.reason)
 
     def agent_startup(self, agent: JsonValue | None = None) -> InterventionPointResult:

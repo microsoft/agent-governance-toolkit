@@ -37,7 +37,7 @@ class TestListPolicies:
         body = client.get("/api/v1/policies").json()
         beta = next(i for i in body["items"] if i["id"] == "beta")
         assert beta["name"] == "Beta Policy"
-        assert beta["description"] is None
+        assert "description" not in beta
         assert beta["format"] == "json"
 
     def test_pagination_metadata(self, client):

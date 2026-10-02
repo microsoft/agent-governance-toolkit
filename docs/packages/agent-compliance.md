@@ -1,10 +1,10 @@
 ---
 title: "Agent Governance"
-last_reviewed: 2026-06-08
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 # Agent Governance
 
@@ -143,7 +143,7 @@ pip install agent-governance-toolkit[sre]
 
 ### Star the ecosystem
 
-<p align="center">
+<p align="center" markdown="1">
 
 [![Agent OS Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20OS&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![AgentMesh Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=AgentMesh&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
@@ -271,7 +271,7 @@ MIT — see [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob
 
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 **[github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)** · **[Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)** · **[GitHub](https://github.com/microsoft/agent-governance-toolkit)**
 

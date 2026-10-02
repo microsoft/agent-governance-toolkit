@@ -27,7 +27,9 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from flowise_agentmesh import AuditNode, GovernanceNode, RateLimiterNode
+from flowise_agentmesh.audit_node import AuditNode
+from flowise_agentmesh.governance_node import GovernanceNode
+from flowise_agentmesh.rate_limiter_node import RateLimiterNode
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("flowise_governance")

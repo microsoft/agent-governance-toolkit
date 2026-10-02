@@ -3,9 +3,9 @@
 """Deprecation + strict mode for unsafe legacy approval behaviors (ADR-0030 step 5)."""
 
 import json
-import time
 import urllib.request
 import warnings
+from types import SimpleNamespace
 
 import pytest
 
@@ -54,13 +54,23 @@ class TestCallbackTimeoutDeprecation:
         with pytest.raises(ValueError, match="on_timeout"):
             CallbackApproval(_cb(), on_timeout="allow", strict=False)
 
-    def test_timeout_always_denies(self):
-        # Behavior unchanged: a timeout denies regardless of on_timeout.
+    def test_timeout_always_denies(self, monkeypatch):
+        # Patch the exact function-global clock so the test is deterministic
+        # even when package consolidation loads the implementation elsewhere.
+        ticks = iter((100.0, 100.001))
+        monkeypatch.setitem(
+            CallbackApproval.request_approval.__globals__,
+            "time",
+            SimpleNamespace(monotonic=lambda: next(ticks)),
+        )
+
         handler = CallbackApproval(
-            lambda r: (time.sleep(0.005) or ApprovalDecision(approved=True, approver="x")),
+            lambda r: ApprovalDecision(approved=True, approver="x"),
             timeout_seconds=0,
         )
+
         decision = handler.request_approval(_req())
+
         assert not decision.approved
         assert decision.approver == "system:timeout"
 

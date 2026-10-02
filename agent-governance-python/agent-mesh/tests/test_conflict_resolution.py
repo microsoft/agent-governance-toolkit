@@ -302,3 +302,48 @@ rules:
     def test_scope_defaults_to_global(self):
         policy = Policy(name="test")
         assert policy.scope == "global"
+
+    def test_organization_scope_in_yaml(self):
+        """'organization' is a valid scope and must survive a YAML round-trip."""
+        yaml_content = """
+apiVersion: governance.toolkit/v1
+name: org-policy
+scope: organization
+agents: ["*"]
+rules:
+  - name: org-rule
+    condition: "data.contains_pii"
+    action: deny
+    priority: 10
+"""
+        engine = PolicyEngine()
+        policy = engine.load_yaml(yaml_content)
+        assert policy.scope == "organization"
+
+    def test_invalid_scope_in_yaml_rejected(self):
+        yaml_content = """
+apiVersion: governance.toolkit/v1
+name: bad-scope
+scope: organisation
+agents: ["*"]
+rules:
+  - name: r1
+    condition: "data.x"
+    action: deny
+"""
+        engine = PolicyEngine()
+        with pytest.raises(ValueError, match="Invalid policy scope"):
+            engine.load_yaml(yaml_content)
+
+    def test_organization_specificity_between_tenant_and_agent(self):
+        """ORGANIZATION must rank between TENANT (1) and AGENT (3)."""
+        org = CandidateDecision(
+            action="deny", scope=PolicyScope.ORGANIZATION, rule_name="o"
+        )
+        tenant = CandidateDecision(
+            action="deny", scope=PolicyScope.TENANT, rule_name="t"
+        )
+        agent = CandidateDecision(
+            action="deny", scope=PolicyScope.AGENT, rule_name="a"
+        )
+        assert tenant.specificity < org.specificity < agent.specificity

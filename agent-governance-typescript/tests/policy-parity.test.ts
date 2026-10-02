@@ -578,3 +578,189 @@ rules:
   });
 });
 
+// ── Scope validation parity tests (#3536) ───────────────────
+
+describe('PolicyScope validation (issue #3536)', () => {
+  it('accepts all four valid scopes', () => {
+    for (const scope of ['global', 'tenant', 'organization', 'agent']) {
+      const engine = new PolicyEngine();
+      const yaml = `
+apiVersion: governance.toolkit/v1
+name: test-${scope}
+scope: ${scope}
+agents: ["*"]
+rules:
+  - name: r1
+    condition: "action.type == 'read'"
+    action: deny
+`;
+      expect(() => engine.loadYaml(yaml)).not.toThrow();
+    }
+  });
+
+  it('rejects misspelled scope at load time', () => {
+    const engine = new PolicyEngine();
+    const yaml = `
+apiVersion: governance.toolkit/v1
+name: bad-scope
+scope: organisation
+agents: ["*"]
+rules:
+  - name: r1
+    condition: "action.type == 'read'"
+    action: deny
+`;
+    expect(() => engine.loadYaml(yaml)).toThrow(/Invalid policy scope/);
+  });
+
+  it('rejects capitalised scope at load time', () => {
+    const engine = new PolicyEngine();
+    const yaml = `
+apiVersion: governance.toolkit/v1
+name: bad-case
+scope: Agent
+agents: ["*"]
+rules:
+  - name: r1
+    condition: "action.type == 'read'"
+    action: deny
+`;
+    expect(() => engine.loadYaml(yaml)).toThrow(/Invalid policy scope/);
+  });
+
+  it('rejects empty scope at load time', () => {
+    const engine = new PolicyEngine();
+    const json = JSON.stringify({
+      apiVersion: 'governance.toolkit/v1',
+      name: 'empty-scope',
+      scope: '',
+      rules: [],
+    });
+    expect(() => engine.loadJson(json)).toThrow(/Invalid policy scope/);
+  });
+
+  it('Organization scope ranks between Tenant and Agent', () => {
+    const engine = new PolicyEngine(
+      undefined,
+      ConflictResolutionStrategy.MostSpecificWins,
+    );
+    engine.loadPolicy({
+      apiVersion: 'governance.toolkit/v1',
+      name: 'org-deny',
+      scope: PolicyScope.Organization,
+      agents: ['*'],
+      rules: [
+        {
+          name: 'org-block',
+          condition: "action.type == 'export'",
+          ruleAction: 'deny',
+          priority: 1,
+        },
+      ],
+      default_action: 'deny',
+    });
+    engine.loadPolicy({
+      apiVersion: 'governance.toolkit/v1',
+      name: 'tenant-allow',
+      scope: PolicyScope.Tenant,
+      agents: ['*'],
+      rules: [
+        {
+          name: 'tenant-permit',
+          condition: "action.type == 'export'",
+          ruleAction: 'allow',
+          priority: 100,
+        },
+      ],
+      default_action: 'deny',
+    });
+
+    const result = engine.evaluatePolicy('did:x', {
+      action: { type: 'export' },
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.matchedRule).toBe('org-block');
+  });
+
+  it('loadPolicy rejects invalid scope at registration time', () => {
+    const engine = new PolicyEngine();
+    expect(() =>
+      engine.loadPolicy({
+        apiVersion: 'governance.toolkit/v1',
+        name: 'bad-scope-direct',
+        scope: 'organisation' as PolicyScope,
+        agents: ['*'],
+        rules: [],
+        default_action: 'deny',
+      }),
+    ).toThrow(/Invalid policy scope/);
+  });
+
+  it('loadPolicy rejects empty-string scope', () => {
+    const engine = new PolicyEngine();
+    expect(() =>
+      engine.loadPolicy({
+        apiVersion: 'governance.toolkit/v1',
+        name: 'empty-scope',
+        scope: '' as PolicyScope,
+        agents: ['*'],
+        rules: [],
+        default_action: 'deny',
+      }),
+    ).toThrow(/Invalid policy scope/);
+  });
+
+  it('evaluatePolicy does not warn when scope is omitted', () => {
+    const engine = new PolicyEngine();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    engine.loadPolicy({
+      apiVersion: 'governance.toolkit/v1',
+      name: 'no-scope',
+      agents: ['*'],
+      rules: [{ name: 'r', ruleAction: 'allow' }],
+      default_action: 'allow',
+    });
+    engine.evaluatePolicy('did:test', {});
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('unrecognised scope'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('mutated-scope deny beats global allow under MostSpecificWins', () => {
+    const engine = new PolicyEngine(
+      undefined,
+      ConflictResolutionStrategy.MostSpecificWins,
+    );
+    // Load a valid deny policy, then simulate post-registration corruption
+    const denyPolicy = {
+      apiVersion: 'governance.toolkit/v1' as const,
+      name: 'agent-deny',
+      scope: PolicyScope.Agent,
+      agents: ['*'],
+      rules: [{ name: 'block', ruleAction: 'deny' as const }],
+      default_action: 'deny' as const,
+    };
+    engine.loadPolicy(denyPolicy);
+    // Simulate post-registration scope corruption (e.g. serialization round-trip
+    // that introduces a typo).  The runtime fallback must rank the corrupted
+    // scope at Agent (fail-closed) so the deny is never demoted below global.
+    (denyPolicy as any).scope = 'typo';
+    engine.loadPolicy({
+      apiVersion: 'governance.toolkit/v1',
+      name: 'global-allow',
+      scope: PolicyScope.Global,
+      agents: ['*'],
+      rules: [{ name: 'permit', ruleAction: 'allow', priority: 100 }],
+      default_action: 'allow',
+    });
+    const result = engine.evaluatePolicy('did:test', {});
+    // Deny has no explicit priority (0), allow has priority 100.
+    // Under MostSpecificWins, deny can only win if its scope (Agent,
+    // from the fail-closed fallback) outranks Global.  If the fallback
+    // were Global, allow would win on priority.
+    expect(result.allowed).toBe(false);
+    expect(result.matchedRule).toBe('block');
+  });
+});
+

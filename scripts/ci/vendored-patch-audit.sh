@@ -7,8 +7,8 @@
 # Exception (issue #2975): routine Dependabot patch/minor bumps cannot author
 # that doc by construction, so they are exempt when the caller sets
 # PR_ACTOR=dependabot[bot] and DEPENDABOT_UPDATE_TYPE to a non-major update.
-# This mirrors auto-merge-dependabot.yml, which already auto-merges exactly that
-# set. Human PRs and Dependabot major bumps still require the doc.
+# The exemption is deliberately limited to that routine set; human PRs and
+# Dependabot major bumps still require the doc and full maintainer review.
 set -euo pipefail
 
 BASE_REF="${1:-origin/main}"
@@ -50,8 +50,7 @@ if [ "$LOCK_TOUCHED" = false ]; then
   exit 0
 fi
 
-# Exempt routine Dependabot patch/minor bumps (issue #2975). "Not major"
-# matches the auto-merge policy in auto-merge-dependabot.yml. Human PRs (no
+# Exempt routine Dependabot patch/minor bumps (issue #2975). Human PRs (no
 # PR_ACTOR match) and Dependabot major bumps fall through and still need a doc.
 if [ "$PR_ACTOR" = "dependabot[bot]" ] && \
    [ -n "$DEPENDABOT_UPDATE_TYPE" ] && \
@@ -63,15 +62,50 @@ fi
 # Check for an audit doc
 AUDIT_DOC=$(grep -E '^docs/dependency-audits/[0-9]{4}-[0-9]{2}-[0-9]{2}-.+\.md$' <<< "$CHANGED_FILES" || true)
 
+emit_audit_template() {
+  local audit_path audit_date template
+  audit_date=$(date +%Y-%m-%d)
+  audit_path="docs/dependency-audits/${audit_date}-<description>.md"
+  template=$(cat <<EOF
+## Dependency audit template
+
+Create \`${audit_path}\` with:
+
+\`\`\`markdown
+---
+title: <dependency change summary>
+last_reviewed: ${audit_date}
+owner: <github-handle>
+---
+
+# <dependency change summary>
+
+## Which dependencies changed and why
+
+- <dependency>: <old version> -> <new version>
+- Reason: <why this update is needed>
+
+## Security advisory relevance
+
+- <CVE / advisory relevance, or "No known advisory addressed">
+
+## Breaking change risk assessment
+
+- <compatibility risk and validation performed>
+\`\`\`
+EOF
+)
+
+  printf '%s\n' "$template"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    printf '%s\n' "$template" >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
+
 if [ -z "$AUDIT_DOC" ]; then
   echo "❌ vendored-patch-audit: lockfiles changed but no dependency audit doc found."
   echo ""
-  echo "Please add: docs/dependency-audits/$(date +%Y-%m-%d)-<description>.md"
-  echo ""
-  echo "The audit doc should cover:"
-  echo "  - Which dependencies changed and why"
-  echo "  - Security advisory relevance (CVE numbers if applicable)"
-  echo "  - Breaking change risk assessment"
+  emit_audit_template
   exit 1
 fi
 

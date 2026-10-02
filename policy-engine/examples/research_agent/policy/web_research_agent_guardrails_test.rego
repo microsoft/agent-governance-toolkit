@@ -20,7 +20,7 @@ test_post_tool_call_secret_transform_replaces_match if {
 	}
 	verdict.decision == "transform"
 	verdict.reason == "secret_redacted"
-	verdict.transform.path == "$policy_target"
+	verdict.transform.path == "$target"
 	verdict.transform.value == "logs [REDACTED_SECRET] trailing"
 }
 

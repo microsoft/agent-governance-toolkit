@@ -31,6 +31,7 @@ from .otel_observability import (
 from .advisory import (
     AdvisoryCheck,
     AdvisoryDecision,
+    AdvisoryMisconfiguredError,
     CallbackAdvisory,
     HttpAdvisory,
     PatternAdvisory,
@@ -39,6 +40,7 @@ from .advisory import (
 from .conflict_resolution import (
     ConflictResolutionStrategy,
     PolicyScope,
+    VALID_SCOPES,
     PolicyConflictResolver,
     CandidateDecision,
     ResolutionResult,
@@ -150,6 +152,7 @@ __all__ = [
     # Advisory layer (issue #1377)
     "AdvisoryCheck",
     "AdvisoryDecision",
+    "AdvisoryMisconfiguredError",
     "CallbackAdvisory",
     "HttpAdvisory",
     "PatternAdvisory",
@@ -162,6 +165,7 @@ __all__ = [
     "PolicyDecision",
     "ConflictResolutionStrategy",
     "PolicyScope",
+    "VALID_SCOPES",
     "PolicyConflictResolver",
     "CandidateDecision",
     "ResolutionResult",

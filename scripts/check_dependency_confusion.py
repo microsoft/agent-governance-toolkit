@@ -63,6 +63,7 @@ REGISTERED_PACKAGES = {
     "agt-policies", "agt_policies",
     "agent-control-specification", "agent_control_specification",
     "acs-generator", "acs_generator",
+    "k8s-agent-sandbox", "k8s_agent_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
@@ -117,7 +118,8 @@ REGISTERED_PACKAGES = {
     "agentmesh", "pydantic-ai", "haystack", "haystack-ai", "respx",
     "langfuse", "arize", "arize-phoenix", "llamaindex", "braintrust", "helicone",
     "datadog", "langsmith", "wandb", "mlflow", "agentops",
-    "typer", "jsonschema", "anyio", "pre-commit", "import-linter",
+    "typer", "jsonschema", "jsonschema-specifications", "referencing", "attrs",
+    "rpds-py", "anyio", "pre-commit", "import-linter",
     "mkdocs", "mkdocs-material", "mkdocs-minify-plugin", "mkdocstrings", "datasets", "sqlglot",
     "aio-pika", "aiokafka",
     # Cedar/OPA policy backends
@@ -136,6 +138,8 @@ REGISTERED_PACKAGES = {
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",
+    # Microsoft Agent Learning (real PyPI package, used by agent-learning governance)
+    "agent-learning", "agent_learning",
     # Azure Functions Python worker (used in foundry-ai-gateway-pdp example)
     "azure-functions", "azure_functions",
     # Azure SDK core libs (used by agent-sandbox ACASandboxProvider)
@@ -241,10 +245,18 @@ REGISTERED_NPM_PACKAGES = {
 # Known Cargo crate names
 REGISTERED_CARGO_PACKAGES = {
     "serde", "serde_json", "serde_yaml", "sha2", "ed25519-dalek",
+    # Published 1.2.0 verified against crates.io on 2026-09-15.
+    "serde-saphyr",
     "rand", "thiserror", "tempfile", "agentmesh",
     "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
     "opentelemetry", "regex", "regorus",
     "assert_cmd", "predicates",
+    # Upstream crates AGT depends on after the policy engine was extracted.
+    # Both are published; the pinned versions, verified against the crates.io
+    # API on 2026-09-13:
+    #   agent-control-spec  =0.4.0-alpha.3
+    #   agent-hooks-sdk     =0.1.0-alpha.5
+    "agent-control-spec", "agent-hooks-sdk",
     # Vendored ACS policy-engine crate deps (all real crates.io crates)
     "url", "ureq", "jsonschema", "criterion", "tokio", "rmcp",
     "async-openai", "rig-core", "napi", "napi-derive", "napi-build",

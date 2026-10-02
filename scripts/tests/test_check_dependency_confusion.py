@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from check_dependency_confusion import check_pyproject_toml
+from check_dependency_confusion import check_cargo_toml, check_pyproject_toml
 
 
 def _write_pyproject(tmp_path, content: str) -> str:
@@ -129,3 +129,23 @@ dependencies = ["agent-primitives>=0.1"]
     findings = check_pyproject_toml(pyproject)
 
     assert findings == []
+
+
+def test_registered_yaml_parser_is_accepted_in_cargo_dependencies(tmp_path):
+    manifest = tmp_path / "Cargo.toml"
+    for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+        manifest.write_text(
+            f'[{section}]\nserde-saphyr = "=1.2.0"\n', encoding="utf-8"
+        )
+        assert check_cargo_toml(str(manifest)) == []
+
+
+def test_unregistered_cargo_names_are_still_rejected(tmp_path):
+    manifest = tmp_path / "Cargo.toml"
+    for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+        manifest.write_text(
+            f'[{section}]\nserde-saphyr-unregistered = "=1.2.0"\n', encoding="utf-8"
+        )
+        findings = check_cargo_toml(str(manifest))
+        assert len(findings) == 1
+        assert "serde-saphyr-unregistered" in findings[0]

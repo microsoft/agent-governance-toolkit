@@ -241,13 +241,15 @@ public sealed class GovernanceKernel : IDisposable
     /// <param name="agentId">The DID of the agent requesting the tool call.</param>
     /// <param name="toolName">The name of the tool being called.</param>
     /// <param name="args">Optional arguments to the tool call.</param>
+    /// <param name="trustedSkillMetadata">Optional skill metadata sourced from framework-owned state.</param>
     /// <returns>A <see cref="ToolCallResult"/> indicating whether the call is allowed.</returns>
     public ToolCallResult EvaluateToolCall(
         string agentId,
         string toolName,
-        Dictionary<string, object>? args = null)
+        Dictionary<string, object>? args = null,
+        TrustedSkillMetadataSource? trustedSkillMetadata = null)
     {
-        return Middleware.EvaluateToolCall(agentId, toolName, args);
+        return Middleware.EvaluateToolCall(agentId, toolName, args, trustedSkillMetadata);
     }
 
     /// <summary>

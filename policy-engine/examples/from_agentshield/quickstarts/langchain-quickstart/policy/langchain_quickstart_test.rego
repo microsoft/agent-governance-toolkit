@@ -16,7 +16,7 @@ test_output_ssn_transform if {
 	}
 	verdict.decision == "transform"
 	verdict.reason == "redact_ssn_in_response"
-	verdict.transform.path == "$policy_target.text"
+	verdict.transform.path == "$target.text"
 	verdict.transform.value == "ssn [SSN-REDACTED] here"
 }
 

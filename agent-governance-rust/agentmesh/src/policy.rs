@@ -32,7 +32,7 @@ pub struct PolicyRule {
     #[serde(default)]
     pub window: String,
     #[serde(default)]
-    pub conditions: HashMap<String, serde_yaml::Value>,
+    pub conditions: crate::policy_data::Context,
     /// Rule priority — higher values are evaluated first.
     #[serde(default)]
     pub priority: u32,
@@ -173,7 +173,7 @@ impl PolicyEngine {
     /// papered over by a silent fallback during evaluation.
     pub fn load_from_yaml(&self, yaml: &str) -> Result<(), PolicyError> {
         let profile: PolicyProfile =
-            serde_yaml::from_str(yaml).map_err(PolicyError::InvalidYaml)?;
+            crate::policy_data::from_yaml(yaml).map_err(PolicyError::InvalidYaml)?;
         for rule in &profile.policies {
             if rule.rule_type == "rate_limit" && rule.max_calls > 0 {
                 parse_duration(&rule.window).map_err(|reason| PolicyError::InvalidDuration {
@@ -206,7 +206,7 @@ impl PolicyEngine {
         }
 
         let canonical = std::fs::canonicalize(requested).map_err(PolicyError::Io)?;
-        let yaml = std::fs::read_to_string(&canonical).map_err(PolicyError::Io)?;
+        let yaml = crate::policy_data::read_yaml(&canonical).map_err(PolicyError::Io)?;
         self.load_from_yaml(&yaml)
     }
 
@@ -217,12 +217,12 @@ impl PolicyEngine {
     pub fn evaluate(
         &self,
         action: &str,
-        context: Option<&HashMap<String, serde_yaml::Value>>,
+        context: Option<&crate::policy_data::Context>,
     ) -> PolicyDecision {
         // Enrich a copy of the context with wire-protocol facets (sql.*, k8s.*)
         // so existing condition matching can reference protocol-level fields
         // without any rule-schema changes. We never mutate the caller's map.
-        let enriched: Option<HashMap<String, serde_yaml::Value>> = context.map(|c| {
+        let enriched: Option<crate::policy_data::Context> = context.map(|c| {
             let mut owned = c.clone();
             extract_protocol_facets(&mut owned);
             owned
@@ -344,7 +344,7 @@ impl Default for PolicyEngine {
 #[derive(Debug, thiserror::Error)]
 pub enum PolicyError {
     #[error("invalid YAML: {0}")]
-    InvalidYaml(serde_yaml::Error),
+    InvalidYaml(crate::policy_data::YamlError),
     #[error("I/O error: {0}")]
     Io(std::io::Error),
     #[error("validation error: {0}")]
@@ -372,8 +372,8 @@ fn action_matches(action: &str, pattern: &str) -> bool {
 }
 
 fn conditions_match(
-    conditions: &HashMap<String, serde_yaml::Value>,
-    context: Option<&HashMap<String, serde_yaml::Value>>,
+    conditions: &crate::policy_data::Context,
+    context: Option<&crate::policy_data::Context>,
 ) -> bool {
     // Condition matching is **case-sensitive** for both keys and values.
     // Wire-protocol extractors (`protocol_facets`) emit canonical casing:
@@ -404,7 +404,7 @@ fn conditions_match(
         // surface needed for wire-protocol rules like
         //   sql.verb: [DROP, TRUNCATE, DELETE]
         // while preserving existing exact-match semantics.
-        if let serde_yaml::Value::Sequence(seq) = expected {
+        if let crate::policy_data::Value::Array(seq) = expected {
             if !seq.iter().any(|v| v == actual) {
                 return false;
             }
@@ -703,7 +703,7 @@ policies:
     allowed_actions:
       - "data.read"
 "#;
-        let profile: PolicyProfile = serde_yaml::from_str(yaml).unwrap();
+        let profile: PolicyProfile = crate::policy_data::from_yaml(yaml).unwrap();
         let rule = &profile.policies[0];
         assert_eq!(rule.priority, 0);
         assert_eq!(rule.scope, PolicyScope::Global);
@@ -722,7 +722,7 @@ policies:
     priority: 10
     scope: agent
 "#;
-        let profile: PolicyProfile = serde_yaml::from_str(yaml).unwrap();
+        let profile: PolicyProfile = crate::policy_data::from_yaml(yaml).unwrap();
         let rule = &profile.policies[0];
         assert_eq!(rule.priority, 10);
         assert_eq!(rule.scope, PolicyScope::Agent);
@@ -839,7 +839,7 @@ policies:
         let mut context = HashMap::new();
         context.insert(
             "environment".to_string(),
-            serde_yaml::Value::String("production".to_string()),
+            crate::policy_data::Value::String("production".to_string()),
         );
         let decision = engine.evaluate("deploy.app", Some(&context));
         assert!(matches!(decision, PolicyDecision::Deny(_)));
@@ -863,7 +863,7 @@ policies:
         let mut context = HashMap::new();
         context.insert(
             "environment".to_string(),
-            serde_yaml::Value::String("staging".to_string()),
+            crate::policy_data::Value::String("staging".to_string()),
         );
         // Conditions don't match, rule is skipped, falls through to Allow
         let decision = engine.evaluate("deploy.app", Some(&context));

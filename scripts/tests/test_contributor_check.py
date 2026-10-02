@@ -14,15 +14,15 @@ import os
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import contributor_check
 from contributor_check import (
     Signal,
     ReputationReport,
     check_account_shape,
     check_contributor,
+    check_credential_spray,
     check_feature_overlap,
     check_thin_credibility,
     check_spray_pattern,
@@ -30,7 +30,6 @@ from contributor_check import (
     _check_fork_burst,
     _check_batch_naming,
     _check_self_promotion,
-    _fork_has_outgoing_pr,
     _apply_allowlist,
     _is_allowlisted,
     _load_allowlist,
@@ -283,7 +282,7 @@ class TestForkBurst:
             {"name": f"awesome-list-{i}", "fork": True, "description": "curated list", "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
             for i in range(5)
         ]
-        signals = _check_fork_burst(repos, username="testuser")
+        signals = _check_fork_burst(repos, username="sample-user")
         names = [s.name for s in signals]
         assert "awesome_fork_burst" not in names
 
@@ -296,7 +295,7 @@ class TestForkBurst:
             for i in range(4)
         ]
         # 4 forks, 1 has PR -> 3 remain, which hits >= 3 threshold
-        signals = _check_fork_burst(repos, username="testuser")
+        signals = _check_fork_burst(repos, username="sample-user")
         names = [s.name for s in signals]
         assert "awesome_fork_burst" in names
 
@@ -807,3 +806,175 @@ class TestApplyAllowlist:
         _apply_allowlist(report)
         assert report.risk == "HIGH"
         assert any(s.name == "allowlist_blocked" for s in report.signals)
+
+
+# ---------------------------------------------------------------------------
+# check_credential_spray two-query pinning
+# ---------------------------------------------------------------------------
+# cspell:ignore spray
+
+class TestCheckCredentialSprayTwoQuery:
+    """Pin the two-query (is:issue + is:pr) behavior of check_credential_spray."""
+
+    def test_two_queries_issued_and_pr_citation_detected(self):
+        """check_credential_spray must issue two searches and detect a PR citation."""
+        pr_item = {
+            "html_url": "https://github.com/other-org/other-repo/pull/7",
+            "repository_url": "https://api.github.com/repos/other-org/other-repo",
+            "body": "We integrated microsoft/agent-governance-toolkit via pr #42 merged last week",
+            "pull_request": {"url": "https://api.github.com/repos/other-org/other-repo/pulls/7"},
+        }
+
+        with patch("contributor_check._search_issues", side_effect=[[], [pr_item]]) as mock_search:
+            signals = check_credential_spray(
+                "spray-user", "microsoft/agent-governance-toolkit",
+            )
+
+        # Must have called _search_issues exactly twice
+        assert mock_search.call_count == 2
+
+        # Verify the two query strings
+        calls = [c.args[0] for c in mock_search.call_args_list]
+        assert calls[0] == "author:spray-user is:issue"
+        assert calls[1] == "author:spray-user is:pr"
+
+        # Should detect credential_citation from the PR item
+        assert len(signals) == 1
+        assert signals[0].name == "credential_citation"
+
+
+# ---------------------------------------------------------------------------
+# _search_issues pagination
+# ---------------------------------------------------------------------------
+
+class TestSearchIssuesPagination:
+    """Mirrors credential_audit.py's identical fix: _search_issues must page
+    through GitHub's full search result window, not just the first page."""
+
+    @patch("contributor_check._api")
+    def test_paginates_across_multiple_pages(self, mock_api):
+        pages = {
+            "1": {"items": [{"number": i} for i in range(100)]},
+            "2": {"items": [{"number": i} for i in range(100, 150)]},
+        }
+        mock_api.side_effect = lambda path, params=None: pages.get(params["page"])
+
+        items = contributor_check._search_issues("author:x is:issue", per_page=100)
+
+        assert len(items) == 150
+        assert mock_api.call_count == 2
+
+    @patch("contributor_check._api")
+    def test_stops_when_a_short_page_is_returned(self, mock_api):
+        pages = {"1": {"items": [{"number": 1}, {"number": 2}]}}
+        mock_api.side_effect = lambda path, params=None: pages.get(params["page"])
+
+        items = contributor_check._search_issues("author:x is:issue", per_page=100)
+
+        assert len(items) == 2
+        assert mock_api.call_count == 1
+
+    @patch("contributor_check._api")
+    def test_stops_at_github_search_result_window(self, mock_api):
+        mock_api.side_effect = lambda path, params=None: {
+            "items": [{"number": i} for i in range(int(params["per_page"]))]
+        }
+
+        items = contributor_check._search_issues("author:x is:issue", per_page=100)
+
+        assert len(items) == 1000
+        assert mock_api.call_count == 10
+
+    @patch("contributor_check._api", return_value=None)
+    def test_empty_first_page_returns_no_items(self, mock_api):
+        items = contributor_check._search_issues("author:x is:issue", per_page=100)
+
+        assert items == []
+        assert mock_api.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Repo pagination and the spray window
+# ---------------------------------------------------------------------------
+
+def _iso(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class TestRepoListingPagination:
+    @patch("contributor_check._api")
+    def test_recent_repo_burst_counts_past_first_page(self, mock_api):
+        now = datetime.now(timezone.utc)
+        all_repos = [
+            {"name": f"repo-{i}", "fork": False, "description": "",
+             "created_at": _iso(now - timedelta(hours=i))}
+            for i in range(130)
+        ]
+
+        def fake_api(path, params=None):
+            if path == "/users/busy/repos":
+                page = int((params or {}).get("page", "1"))
+                size = int(params["per_page"])
+                return all_repos[(page - 1) * size: page * size]
+            return None
+
+        mock_api.side_effect = fake_api
+        signals = contributor_check.check_repo_themes("busy")
+        burst = [s for s in signals if s.name == "recent_repo_burst"]
+        assert burst and burst[0].value == 130
+
+    @patch("contributor_check._api")
+    def test_old_repos_on_later_pages_affect_theme_denominator(self, mock_api):
+        old = _iso(datetime.now(timezone.utc) - timedelta(days=120))
+        repos = [
+            {"name": f"governance-{i}" if i < 60 else f"repo-{i}",
+             "fork": False, "description": "", "created_at": old}
+            for i in range(200)
+        ]
+        mock_api.side_effect = lambda path, params: repos[
+            (int(params["page"]) - 1) * 100:int(params["page"]) * 100
+        ]
+
+        signals = contributor_check.check_repo_themes("busy")
+
+        assert all(s.name != "governance_theme_concentration" for s in signals)
+        assert mock_api.call_count == 3
+
+    @patch("contributor_check._api", return_value=None)
+    def test_missing_user_returns_empty(self, mock_api):
+        assert contributor_check._list_user_repos("ghost") == []
+
+
+class TestSprayWindow:
+    @staticmethod
+    def _issues(days: list[float]) -> list[dict]:
+        base = datetime.now(timezone.utc) - timedelta(days=20)
+        return [
+            {"created_at": _iso(base + timedelta(days=d)),
+             "repository_url": f"https://api.github.com/repos/org{i}/repo{i}",
+             "title": "", "body": ""}
+            for i, d in enumerate(days)
+        ]
+
+    def test_five_repos_over_thirteen_days_is_not_spray(self):
+        # Every issue is within 7 days of the middle one, but no 7-day span
+        # holds more than three of them.
+        signals = check_spray_pattern(
+            "u", issues=self._issues([0, 3, 6, 10, 13]), user_repos=[]
+        )
+        assert all(s.name != "cross_repo_spray" for s in signals)
+
+    def test_five_repos_within_seven_days_is_spray(self):
+        signals = check_spray_pattern(
+            "u", issues=self._issues([0, 1.5, 3, 5, 7]), user_repos=[]
+        )
+        spray = [s for s in signals if s.name == "cross_repo_spray"]
+        assert spray and spray[0].value == 5
+
+    def test_window_is_seven_days_not_eight(self):
+        # 7 days and 20 hours apart: `.days` truncates this to 7 but it is
+        # outside a 7-day window.
+        signals = check_spray_pattern(
+            "u", issues=self._issues([0, 1, 2, 3, 7 + 20 / 24]), user_repos=[]
+        )
+        assert all(s.name != "cross_repo_spray" for s in signals)

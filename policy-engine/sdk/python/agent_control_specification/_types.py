@@ -6,10 +6,11 @@ import hashlib
 import json
 import warnings
 from enum import Enum, IntEnum
-from typing import Any, Mapping, MutableMapping, Sequence, Union
+from typing import Mapping, MutableMapping, Sequence, TypeAlias, Union
 
-JsonValue = Any
-JsonObject = MutableMapping[str, JsonValue]
+# Read-only containers so narrower caller payloads (dict[str, str], tuples) still type-check.
+JsonValue: TypeAlias = bool | int | float | str | None | Sequence["JsonValue"] | Mapping[str, "JsonValue"]
+JsonObject: TypeAlias = MutableMapping[str, JsonValue]
 
 
 class InterventionPoint(str, Enum):
@@ -35,7 +36,11 @@ class EnforcementMode(str, Enum):
 class Decision(str, Enum):
     ALLOW = "allow"
     DENY = "deny"
+    # Deprecated compatibility member. The engine never produces this value;
+    # a warning is an allow carrying ``warnings[]``.
     WARN = "warn"
+    # Deprecated compatibility member. The engine never produces this value;
+    # escalation is a deny carrying an ``approval`` block.
     ESCALATE = "escalate"
     TRANSFORM = "transform"
 
@@ -43,9 +48,15 @@ class Decision(str, Enum):
     def permits(self) -> bool:
         """True for decisions whose execution side proceeds with the action.
 
-        Mirrors `core/src/verdict.rs::Decision::permits`: ``allow``, ``warn``,
-        and ``transform`` permit execution; ``deny`` and ``escalate`` halt it
-        until the host's approval path resolves an ``escalate``.
+        The engine produces only ``allow``, ``deny``, and ``transform``, of
+        which allow and transform permit execution.
+
+        ``WARN`` stays in the permitting set. It is a deprecated member the
+        engine never returns, but it means "allow, and record a warning", so a
+        caller still holding one expects the action to proceed. Dropping it
+        turns every retained warn into a block, which is a behaviour change
+        rather than a safety improvement. ``ESCALATE`` is a deny and does not
+        permit.
         """
         return self in {Decision.ALLOW, Decision.WARN, Decision.TRANSFORM}
 
@@ -92,7 +103,7 @@ class PerfTelemetry(IntEnum):
 class Transform:
     """AGT D1.1 single-target replacement payload.
 
-    The runtime applies ``value`` at ``path`` rooted at ``$policy_target``
+    The runtime applies ``value`` at ``path`` rooted at ``$target``
     before propagating the result. SDK consumers can persist this object to
     capture what the policy asked for, independent of the
     ``transformed_policy_target`` snapshot.
@@ -144,6 +155,24 @@ class Evidence:
 
 
 @dataclass(frozen=True)
+class Warning:
+    reason: str | None = None
+    message: str | None = None
+
+    @classmethod
+    def from_mapping(cls, value: JsonValue) -> "Warning":
+        if not isinstance(value, Mapping):
+            raise ValueError("warning must be a mapping")
+        reason = value.get("reason")
+        message = value.get("message")
+        if reason is not None and not isinstance(reason, str):
+            raise ValueError("warning.reason must be a string when present")
+        if message is not None and not isinstance(message, str):
+            raise ValueError("warning.message must be a string when present")
+        return cls(reason=reason, message=message)
+
+
+@dataclass(frozen=True)
 class Verdict:
     decision: Decision
     reason: str | None = None
@@ -151,9 +180,21 @@ class Verdict:
     transform: Transform | None = None
     evidence: Evidence | None = None
     result_labels: Sequence[str] = field(default_factory=tuple)
+    warnings: Sequence[Warning] = field(default_factory=tuple)
+    approval: Mapping[str, JsonValue] | None = None
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, JsonValue]) -> "Verdict":
+        decision = Decision(value["decision"])
+        reason = value.get("reason")
+        message = value.get("message")
+        raw_warnings = value.get("warnings") or ()
+        if not isinstance(raw_warnings, Sequence) or isinstance(raw_warnings, (str, bytes)):
+            raise ValueError("verdict warnings must be a sequence")
+        parsed_warnings = tuple(Warning.from_mapping(item) for item in raw_warnings)
+        raw_approval = value.get("approval")
+        if raw_approval is not None and not isinstance(raw_approval, Mapping):
+            raise ValueError("verdict approval must be a mapping when present")
         raw_labels = value.get("result_labels") or ()
         if not isinstance(raw_labels, Sequence) or isinstance(raw_labels, (str, bytes)):
             raise ValueError("verdict result_labels must be a sequence")
@@ -170,12 +211,14 @@ class Verdict:
                 raise ValueError("verdict evidence must be a mapping when present")
             evidence = Evidence.from_mapping(raw_evidence)
         return cls(
-            decision=Decision(value["decision"]),
-            reason=value.get("reason"),
-            message=value.get("message"),
+            decision=decision,
+            reason=reason,
+            message=message,
             transform=transform,
             evidence=evidence,
             result_labels=tuple(raw_labels),
+            warnings=parsed_warnings,
+            approval=raw_approval,
         )
 
 
@@ -225,6 +268,25 @@ class ToolRunResult:
     post_tool_call_result: InterventionPointResult
 
 
+class AgentControlRuntimeError(RuntimeError):
+    """An engine ``RuntimeError`` with its reserved reason code attached.
+
+    ``reason`` is the ``runtime_error:*`` code the engine reports and
+    ``detail`` its detail text. ``str(exc)`` is unchanged, so callers that
+    match on the message keep working; new callers branch on ``reason``.
+    """
+
+    def __init__(self, message: str, reason: str, detail: str = "") -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.detail = detail
+
+    # ``args`` holds only the message, so the default reduce cannot rebuild the
+    # three-argument constructor when a process pool loads the pickled error.
+    def __reduce__(self):
+        return (type(self), (str(self), self.reason, self.detail))
+
+
 class AgentControlInterruption(RuntimeError):
     """Base for control-flow interruptions raised by enforcing wrappers.
 
@@ -247,6 +309,10 @@ class AgentControlBlocked(AgentControlInterruption):
         self.result = result
         reason = f" ({result.verdict.reason})" if result.verdict.reason else ""
         super().__init__(f"Agent Control Specification blocked {intervention_point.value}{reason}.")
+
+    # Rebuild from the constructor arguments so the error survives pickling.
+    def __reduce__(self):
+        return (type(self), (self.intervention_point, self.result))
 
 
 class AgentControlSuspended(AgentControlInterruption):
@@ -272,6 +338,9 @@ class AgentControlSuspended(AgentControlInterruption):
             f"Agent Control Specification suspended {intervention_point.value} pending approval{reason}."
         )
 
+    def __reduce__(self):
+        return (type(self), (self.intervention_point, self.result, self.handle))
+
 
 class ApprovalOutcome(str, Enum):
     """Outcome of resolving an ``escalate`` verdict through an approval resolver."""
@@ -288,19 +357,24 @@ class ApprovalResolution:
     ``handle`` is an opaque, host-owned value carried on
     :class:`AgentControlSuspended` so the host can later resume the suspended
     interaction. The runtime never stores or interprets it.
+
+    ``reason`` is the resolver's explanation for a refusal. Enforcement copies
+    it onto the denial verdict's ``message``; the verdict's ``reason`` stays
+    the policy's own classified code.
     """
 
     outcome: ApprovalOutcome
     handle: JsonValue | None = None
     action_identity: str | None = None
+    reason: str | None = None
 
     @classmethod
     def allow(cls, action_identity: str) -> "ApprovalResolution":
         return cls(ApprovalOutcome.ALLOW, action_identity=action_identity)
 
     @classmethod
-    def deny(cls) -> "ApprovalResolution":
-        return cls(ApprovalOutcome.DENY)
+    def deny(cls, reason: str | None = None) -> "ApprovalResolution":
+        return cls(ApprovalOutcome.DENY, reason=reason)
 
     @classmethod
     def suspend(cls, handle: JsonValue | None = None, action_identity: str | None = None) -> "ApprovalResolution":

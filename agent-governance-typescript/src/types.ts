@@ -70,10 +70,15 @@ export enum ConflictResolutionStrategy {
   MostSpecificWins = 'most_specific_wins',
 }
 
-/** Policy scope for conflict resolution specificity. */
+/** Policy scope for conflict resolution specificity.
+ *
+ * Specificity order (most → least): Agent > Organization > Tenant > Global.
+ * The Organization level was added for parity with the Python and .NET SDKs.
+ */
 export enum PolicyScope {
   Global = 'global',
   Tenant = 'tenant',
+  Organization = 'organization',
   Agent = 'agent',
 }
 
@@ -253,6 +258,17 @@ export interface RingViolation {
 export interface KillSwitchConfig {
   enabled?: boolean;
   defaultSubstituteAgentId?: string;
+  /**
+   * Wall-clock budget for a single termination or compensation callback, in
+   * milliseconds. A callback that exceeds it is abandoned and reported as not
+   * executed, so a hung callback cannot stall the kill flow.
+   *
+   * Defaults to 5000, matching `DEFAULT_CALLBACK_TIMEOUT_SECONDS` in the
+   * Python kill switch. A non-finite or non-positive value (including `0` and
+   * `Infinity`, which cannot mean "no timeout" here) falls back to that
+   * default, and anything above the 2^31-1 ms timer ceiling is clamped to it.
+   */
+  callbackTimeoutMs?: number;
 }
 
 export interface KillSwitchResult {
@@ -260,7 +276,20 @@ export interface KillSwitchResult {
   action?: string;
   reason: string;
   killedAt: string;
+  /**
+   * True only when every registered termination handler ran to completion
+   * within `callbackTimeoutMs`. This does not independently confirm that an
+   * execution process stopped — it reports only that the handlers finished.
+   *
+   * A handler that rejects, throws, or exceeds its budget is reported as not
+   * executed rather than propagating, so `kill()` always settles and always
+   * records the attempt. An agent with no registered handler, or one where any
+   * handler failed or hung, reports `false`.
+   */
+  terminated: boolean;
+  /** Termination handlers that completed within `callbackTimeoutMs`. */
   callbacksExecuted: number;
+  /** Compensation handlers that completed within `callbackTimeoutMs`. */
   compensationsExecuted: number;
   handoffAgentId?: string;
 }

@@ -1,14 +1,14 @@
 # Pinned GitHub Actions registry for the CI workflow generator.
 #
-# Every action referenced by a generated workflow MUST resolve to an entry here.
+# Every action referenced by a generated workflow or a local composite action
+# under .github/actions MUST resolve to an entry here.
 # Each entry pins a full commit SHA plus a human readable version comment, which
-# is the repository convention enforced across .github/workflows. The generator
-# fails closed when a workflow references an action key that is missing here or
-# when an entry is not pinned to a 40 character SHA.
+# is the repository-wide convention enforced by the generator. It fails closed
+# when a workflow or composite action uses an unknown action or an invalid pin.
 
 [checkout]
-uses = "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10"
-comment = "v6.0.3"
+uses = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+comment = "v7.0.1"
 
 [setup-python]
 uses = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97"

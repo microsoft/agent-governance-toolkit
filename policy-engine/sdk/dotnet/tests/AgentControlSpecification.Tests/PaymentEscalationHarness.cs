@@ -64,7 +64,7 @@ internal static class PaymentEscalationHarness
         }
         catch (AgentControlBlockedException ex)
         {
-            Equal("runtime_error:approval_action_mismatch", ex.Result.Verdict.Reason, "stale approval should fail closed.");
+            Equal("host_error:approval_identity_mismatch", ex.Result.Verdict.Reason, "stale approval should fail closed.");
         }
 
         var firstIdentity = PaymentRuntime.IdentityFor(new PaymentArgs(40_000, "acct-3", "memo"), "stable", PropertyOrder.AmountFirst);
@@ -107,7 +107,7 @@ internal static class PaymentEscalationHarness
         }
         catch (AgentControlBlockedException ex)
         {
-            Equal("runtime_error:approval_resolver_failed", ex.Result.Verdict.Reason, "resolver failure should use the reserved reason.");
+            Equal("host_error:approval_resolver_failed", ex.Result.Verdict.Reason, "resolver failure should use the reserved reason.");
         }
     }
 
@@ -165,7 +165,12 @@ internal sealed class PaymentRuntime : IAgentControlRuntime
         // to come from a separate Transform verdict.
         return ValueTask.FromResult(WithIdentity(
             request,
-            new Verdict(Decision.Escalate, Reason: "large_transfer")));
+            // An escalation is a liftable deny: a deny carrying an approval
+            // block, which is what the engine normalizes `escalate` into.
+            new Verdict(
+                Decision.Deny,
+                Reason: "large_transfer",
+                Approval: JsonSerializer.SerializeToElement(new Dictionary<string, object>()))));
     }
 
     public static string IdentityFor(PaymentArgs args, string callId, PropertyOrder order)

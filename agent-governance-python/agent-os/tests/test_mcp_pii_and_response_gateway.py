@@ -301,3 +301,61 @@ class TestGatewayResponseEdgeCases:
         assert ResponsePolicy.BLOCK.value == 'block'
         assert ResponsePolicy.SANITIZE.value == 'sanitize'
         assert ResponsePolicy.LOG.value == 'log'
+
+
+# ---------------------------------------------------------------
+# Boundary regression tests for issue #3933: credentials glued to
+# underscore must be caught by the full MCP gateway pipeline under
+# both BLOCK and SANITIZE policies.
+# ---------------------------------------------------------------
+
+
+class TestGatewayBoundaryCredentials:
+    """Credentials annotated with ``_old``, ``_deprecated``, etc. must be
+    caught by the gateway response pipeline, not silently passed through."""
+
+    def test_block_policy_catches_aws_key_with_underscore_suffix(self):
+        gw = _make_gateway(response_policy=ResponsePolicy.BLOCK)
+        decision = gw.intercept_tool_response(
+            'agent-1', 'tool', 'key AKIAIOSFODNN7EXAMPLE_old stored'
+        )
+        assert decision.allowed is False
+        assert 'credential' in decision.reason.lower()
+
+    def test_block_policy_catches_github_token_with_underscore_prefix(self):
+        gw = _make_gateway(response_policy=ResponsePolicy.BLOCK)
+        decision = gw.intercept_tool_response(
+            'agent-1', 'tool',
+            'session_ghp_FAKEFORTESTING000000000000000000 active'
+        )
+        assert decision.allowed is False
+
+    def test_sanitize_policy_redacts_google_key_with_underscore_suffix(self):
+        gw = _make_gateway(response_policy=ResponsePolicy.SANITIZE)
+        decision = gw.intercept_tool_response(
+            'agent-1', 'tool', f'svc_{_FAKE_GOOGLE_KEY}_deprecated'
+        )
+        assert decision.allowed is True
+        assert _FAKE_GOOGLE_KEY not in decision.content
+        assert '[REDACTED]' in decision.content
+
+    def test_sanitize_policy_redacts_openai_token_with_underscore_edges(self):
+        token = 'sk-abcdefghijklmnopqrstuvwxyz0123'
+        gw = _make_gateway(response_policy=ResponsePolicy.SANITIZE)
+        decision = gw.intercept_tool_response(
+            'agent-1', 'tool', f'session_{token}_bak'
+        )
+        assert decision.allowed is True
+        assert token not in decision.content
+
+    def test_sanitize_policy_redacts_multiple_glued_credentials(self):
+        aws = 'AKIAIOSFODNN7EXAMPLE'
+        github = 'ghp_FAKEFORTESTING000000000000000000'
+        gw = _make_gateway(response_policy=ResponsePolicy.SANITIZE)
+        decision = gw.intercept_tool_response(
+            'agent-1', 'tool',
+            f'env_{aws}_old cfg_{github}_rotated'
+        )
+        assert decision.allowed is True
+        assert aws not in decision.content
+        assert github not in decision.content

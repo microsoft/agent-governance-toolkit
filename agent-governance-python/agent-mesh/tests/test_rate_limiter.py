@@ -110,6 +110,21 @@ class TestRateLimiter:
         # Global bucket exhausted
         assert limiter.allow("did:mesh:d") is False
 
+    def test_global_rejection_does_not_consume_agent_tokens(self) -> None:
+        limiter = RateLimiter(
+            global_rate=0,
+            global_capacity=1,
+            per_agent_rate=0,
+            per_agent_capacity=5,
+        )
+        # Another agent uses up the global bucket
+        assert limiter.allow("did:mesh:noisy") is True
+        for _ in range(5):
+            assert limiter.allow("did:mesh:victim") is False
+
+        # The rejected requests leave the victim's own tokens untouched
+        assert limiter.get_status("did:mesh:victim")["agent_tokens"] == 5
+
     def test_get_status_global(self) -> None:
         limiter = RateLimiter()
         status = limiter.get_status()

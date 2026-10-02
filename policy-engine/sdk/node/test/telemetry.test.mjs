@@ -65,8 +65,9 @@ test("emits exactly one redaction-safe decision event per evaluation", async () 
   const control = makeControl(
     () => ({
       verdict: {
-        decision: Decision.Warn,
+        decision: Decision.Allow,
         reason: "rate_limited",
+        warnings: [{ reason: "rate_limited", message: "Requests are arriving too quickly." }],
         evidence: {
           artefact: "sha256:proofblob",
           verificationPointers: {
@@ -91,12 +92,15 @@ test("emits exactly one redaction-safe decision event per evaluation", async () 
     { tool_call: { name: "search", args: { q: "secret" } } },
   );
 
-  assert.equal(result.verdict.decision, Decision.Warn);
+  assert.equal(result.verdict.decision, Decision.Allow);
+  assert.deepEqual(result.verdict.warnings, [
+    { reason: "rate_limited", message: "Requests are arriving too quickly." },
+  ]);
   assert.equal(sink.events.length, 1);
   const event = sink.events[0];
   assert.equal(event.eventType, TelemetryEventType.Decision);
   assert.equal(event.interventionPoint, InterventionPoint.PreToolCall);
-  assert.equal(event.decision, Decision.Warn);
+  assert.equal(event.decision, Decision.Allow);
   assert.equal(event.reasonCode, "rate_limited");
   assert.equal(event.errorClass, null);
   assert.equal(event.enforcementMode, EnforcementMode.Enforce);
@@ -108,14 +112,8 @@ test("emits exactly one redaction-safe decision event per evaluation", async () 
   assert.ok(event.durationMs >= 0);
 });
 
-test("InMemoryTelemetrySink captures allow deny warn escalate and transform", async () => {
-  const decisions = [
-    Decision.Allow,
-    Decision.Deny,
-    Decision.Warn,
-    Decision.Escalate,
-    Decision.Transform,
-  ];
+test("InMemoryTelemetrySink captures every engine decision", async () => {
+  const decisions = [Decision.Allow, Decision.Deny, Decision.Transform];
   const sink = new InMemoryTelemetrySink();
   const control = makeControl(
     () => ({ verdict: { decision: decisions[sink.events.length] } }),
@@ -312,7 +310,7 @@ test("the default no-sink path emits nothing and preserves the result", async ()
 
 test("fromNative labels events with native-resolved policy id and annotators", async () => {
   const manifest = {
-    agent_control_specification_version: "0.3.1-beta",
+    agent_control_specification_version: "0.4.0-alpha.1",
     policies: {
       input_policy: {
         type: "custom",
@@ -366,7 +364,7 @@ test("fromManifestChain labels events (previously null policy id)", async () => 
   // manifest text it never had for merged sources. Labels now come from the
   // native merged manifest via policyLabels.
   const base = [
-    "agent_control_specification_version: 0.3.1-beta",
+    "agent_control_specification_version: 0.4.0-alpha.1",
     "metadata:",
     "  name: base",
     "policies:",
@@ -383,11 +381,11 @@ test("fromManifestChain labels events (previously null policy id)", async () => 
     "      id: content_policy",
     "    annotations:",
     "      prompt_classifier:",
-    "        from: $policy_target.text",
+    "        from: $target.text",
     "",
   ].join("\n");
   const overlay = [
-    "agent_control_specification_version: 0.3.1-beta",
+    "agent_control_specification_version: 0.4.0-alpha.1",
     "intervention_points:",
     "  output:",
     "    policy_target: $.output",

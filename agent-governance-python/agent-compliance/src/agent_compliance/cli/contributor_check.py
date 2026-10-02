@@ -25,7 +25,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -151,10 +151,57 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
     return None
 
 
+# GitHub's search endpoints cap results at 1000 total (the "Search API"
+# result-window limit, documented at
+# https://docs.github.com/en/rest/search#about-search). A single request
+# only ever returns one page of up to `per_page` items, so a subject with
+# more issues/PRs than fit on the first page silently loses coverage on
+# exactly the pages most likely to contain the later, farther-out signal
+# a real spray/laundering pattern would produce. Page through the full
+# result window instead of trusting the first response alone. Mirrors the
+# identical fix already applied to credential_audit.py's `_search`.
+_SEARCH_RESULT_WINDOW = 1000
+
+
 def _search_issues(query: str, per_page: int = 30) -> list[dict]:
     """Search GitHub issues/PRs."""
-    data = _api("/search/issues", {"q": query, "per_page": str(per_page)})
-    return data.get("items", []) if data else []
+    items: list[dict] = []
+    max_pages = max(1, _SEARCH_RESULT_WINDOW // per_page)
+    for page in range(1, max_pages + 1):
+        data = _api("/search/issues", {"q": query, "per_page": str(per_page), "page": str(page)})
+        page_items = data.get("items", []) if data else []
+        if not page_items:
+            break
+        items.extend(page_items)
+        if len(page_items) < per_page:
+            break
+    return items
+
+
+# The user repos endpoint returns at most 100 repos per page. Reading only the
+# first page caps every repo-based count at 100 and hides older forks from the
+# fork-burst checks, so page through the listing (newest first) until a page is
+# short or the page cap is hit. Older repos also affect the theme denominator.
+_REPO_PAGE_SIZE = 100
+_REPO_MAX_PAGES = 10
+
+
+def _list_user_repos(username: str) -> list[dict]:
+    """List up to 1,000 user repos, newest first, for repo-based signals."""
+    repos: list[dict] = []
+    for page in range(1, _REPO_MAX_PAGES + 1):
+        data = _api(f"/users/{username}/repos", {
+            "per_page": str(_REPO_PAGE_SIZE),
+            "sort": "created",
+            "direction": "desc",
+            "page": str(page),
+        })
+        if not isinstance(data, list) or not data:
+            break
+        repos.extend(data)
+        if len(data) < _REPO_PAGE_SIZE:
+            break
+    return repos
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +336,7 @@ def check_repo_themes(username: str, repos: list[dict] | None = None) -> list[Si
     """
     signals: list[Signal] = []
     if repos is None:
-        repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
+        repos = _list_user_repos(username)
     if not repos:
         return signals
 
@@ -624,7 +671,7 @@ def check_thin_credibility(
     signals: list[Signal] = []
 
     if repos is None:
-        repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
+        repos = _list_user_repos(username)
     if not repos:
         return signals
 
@@ -757,12 +804,15 @@ def check_spray_pattern(
     if len(unique_repos) >= 5:
         entries.sort(key=lambda e: e[0])
 
-        # Find the largest set of distinct repos hit within any 7-day window
+        # Find the largest set of distinct repos hit within any 7-day window.
+        # The window starts at each issue and runs 7 days forward; entries are
+        # sorted, so every later entry is at or after `d`.
+        window = timedelta(days=7)
         best_window_repos: set[str] = set()
         for i, (d, _) in enumerate(entries):
             window_repos = {
-                repo for d2, repo in entries
-                if abs((d2 - d).days) <= 7
+                repo for d2, repo in entries[i:]
+                if d2 - d <= window
             }
             if len(window_repos) > len(best_window_repos):
                 best_window_repos = window_repos
@@ -873,10 +923,22 @@ def _check_self_promotion(
 
 
 def check_credential_spray(username: str, target_repo: str | None = None) -> list[Signal]:
-    """Check if user cites merges from one repo in issues across other repos."""
+    """Check if user cites merges from one repo in issues or pull requests across other repos."""
     signals: list[Signal] = []
 
-    issues = _search_issues(f"author:{username} is:issue", per_page=50)
+    issue_items = _search_issues(f"author:{username} is:issue", per_page=50)
+    pr_items = _search_issues(f"author:{username} is:pr", per_page=50)
+
+    seen_urls = set()
+    issues = []
+    for item in issue_items + pr_items:
+        url = item.get("html_url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            issues.append(item)
+        elif not url:
+            issues.append(item)
+
     if not issues:
         return signals
 
@@ -908,14 +970,14 @@ def check_credential_spray(username: str, target_repo: str | None = None) -> lis
         signals.append(Signal(
             name="credential_laundering",
             severity="HIGH",
-            detail=f"Cites {target_repo} merges in issues across {len(repos_with_citations)} repos",
+            detail=f"Cites {target_repo} merges in issues and pull requests across {len(repos_with_citations)} repos",
             value=credential_citations,
         ))
     elif credential_citations >= 1:
         signals.append(Signal(
             name="credential_citation",
             severity="MEDIUM",
-            detail=f"Cites {target_repo} in issues across {len(repos_with_citations)} other repos",
+            detail=f"Cites {target_repo} in issues and pull requests across {len(repos_with_citations)} other repos",
             value=credential_citations,
         ))
 
@@ -959,7 +1021,7 @@ def check_contributor(username: str, target_repo: str | None = None) -> Reputati
     }
 
     # Shared data fetches (avoids redundant API calls across checkers)
-    repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"}) or []
+    repos = _list_user_repos(username)
     issues = _search_issues(f"author:{username} is:issue", per_page=100)
 
     # Run checks with shared data

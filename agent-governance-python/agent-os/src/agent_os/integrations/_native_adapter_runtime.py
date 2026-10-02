@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 
-
 class _ContextLike(Protocol):
     agent_id: str
     session_id: str
@@ -184,9 +183,20 @@ class NativeAdapterResult:
         return None if transform is None else transform.value
 
     @property
+    def approval_required(self) -> bool:
+        """Whether the denial can be lifted by an approval.
+
+        The engine no longer emits an ``escalate`` decision. An escalation is
+        a ``deny`` carrying an ``approval`` block, which the host resolves;
+        one that reaches an adapter unresolved is still blocked, but the
+        caller should be told approval is the way through.
+        """
+        return getattr(self.evaluation.verdict, "approval", None) is not None
+
+    @property
     def public_message(self) -> str:
         """A denial message that leaks neither policy nor user content."""
-        if self.verdict == "escalate":
+        if self.approval_required:
             return "Request requires policy approval."
         if self.reason.startswith("runtime_error:"):
             return "Policy evaluation failed closed."
@@ -197,6 +207,7 @@ class NativeAdapterResult:
         return {
             "schema_version": "agt.policy_evaluation.v1",
             "verdict": self.verdict,
+            "approval_required": self.approval_required,
             "reason_code": self.reason,
             "message": str(self.evaluation.verdict.message or ""),
             "input_identity": self.input_identity,

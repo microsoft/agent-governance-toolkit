@@ -17,10 +17,10 @@ It uses `@microsoft/agent-governance-sdk` as the runtime dependency for the inst
 
 ## Why this package exists
 
-The repo also contains `examples/copilot-cli-agt`, which remains the tutorial and scenario-driven
-reference implementation. This package exists so production installs do **not** depend on:
+The repo also contains `examples/copilot-cli-agt`, which provides the scenario-driven tutorial.
+This package owns the extension source, policy profiles, installer, and tests so production
+installs do **not** depend on:
 
-- example-local scripts
 - repo-local SDK builds
 - `npm install` side effects that mutate `~/.copilot`
 
@@ -43,7 +43,7 @@ From the repo during development:
 
 ```powershell
 cd agent-governance-copilot-cli
-npm install
+npm ci
 node .\bin\agt-copilot.mjs install
 node .\bin\agt-copilot.mjs update --force-policy
 ```
@@ -71,6 +71,44 @@ Then reload Copilot CLI with:
 /clear
 /agt status
 ```
+
+## Recursive-delete protection for Bash
+
+<!-- cspell:ignore talosrobotics -->
+The bundled `recursive-delete` rule uses a quote-aware command tokenizer and
+flag parser adapted from the OpenCode implementation and shell-comment handling
+in PRs #4129 and #4142 by Ricky-G (MIT). PR #3834 by talosrobotics was the
+earlier Claude Code regex fix for this rule.
+It denies `rm` invocations with both recursive and force flags, including `-rf`,
+`-fr`, `-r -f`, `--recursive --force`, quoted flags, and common wrappers such as
+`sudo`, `env`, `command`, and `timeout`. It respects command boundaries, comments,
+and the `--` end-of-options marker. Substitutions are scanned independently while
+preserving the enclosing command and word, so `rm -r "$(pwd)/src" -f` is denied. Substitution output remains
+unknown rather than being evaluated. Literal text such as `echo $(pwd) rm -rf src`
+or `echo "rm -rf src"` does not trigger this rule. Redirection operators and their filenames are separated
+from command arguments, so a filename such as `-rf` is not treated as a deletion
+flag. Lookup, help, and list modes such as `command -v` do not count as execution.
+
+The cleanup exception applies only to a single command whose targets are all
+recognized relative build artifacts, such as `node_modules` or `dist`. Mixed
+safe/unsafe targets, wildcard or variable targets, redirections, and incomplete
+shell syntax do not qualify. For example, `rm -rf node_modules src/*` is denied.
+Exempt commands still pass through the rest of the policy, including Bash review.
+
+The built-in matcher applies to rules with `id: "recursive-delete"` and a Bash
+tool name, using the configured rule effect. Bundled Bash rules have
+`commandPatterns: []`; explicit user patterns continue to run alongside the
+built-in matcher. Existing policies containing the old regex gain the parser's
+coverage, but their explicit regex can still produce false positives. Remove
+that obsolete pattern from the Bash rule to use only the built-in matcher.
+
+This is a bounded tokenizer, not a full shell evaluator. It does not resolve
+brace or variable expansions, shell strings passed to `eval` or `sh -c`, indirect
+deletion through `find` or `xargs`, remote/container execution, or every wrapper.
+Escaped nested backticks are not fully supported, and command text inside a
+heredoc can conservatively trigger a denial. Recursive deletion without force
+(for example, `rm -r src`) remains subject to the rest of the configured policy.
+Keep Bash review enabled for forms outside this matcher's coverage.
 
 ## Commands
 
@@ -140,10 +178,12 @@ The packaged default policy is a developer-protection baseline that:
 - scans fetched-content tools for poisoning and exfiltration cues
 - inspects `bash` and `powershell` output in advisory mode so suspicious output is surfaced without being silently dropped
 
-For this PR, the package keeps that strict baseline as the shipped default. Example profile
-starting points for `strict`, `balanced`, and `advisory` live under:
+The package ships that strict baseline as the default. The `strict`, `balanced`, and `advisory`
+profiles live under:
 
-- `examples/copilot-cli-agt/config/profiles/`
+- `assets/extensions/agt-global-policy/config/profiles/`
+
+Apply a bundled profile with `agt-copilot policy apply --profile <name>`.
 
 ## Notes
 
@@ -158,5 +198,11 @@ starting points for `strict`, `balanced`, and `advisory` live under:
 
 For a concrete walkthrough and test prompts, see:
 
-- `examples/copilot-cli-agt`
-- `examples/copilot-cli-agt/scenarios/guarded-repo-triage`
+- [`examples/copilot-cli-agt`](../examples/copilot-cli-agt/README.md)
+- [the guarded repo-triage scenario](../examples/copilot-cli-agt/scenarios/guarded-repo-triage/README.md)
+
+## Design references
+
+The extension packaging and user experience were informed by
+[`DamianEdwards/copilot-cli-cost`](https://github.com/DamianEdwards/copilot-cli-cost) and the
+[`htek.dev` Copilot CLI extensions guide](https://htek.dev/articles/github-copilot-cli-extensions-complete-guide).

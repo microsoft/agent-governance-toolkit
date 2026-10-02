@@ -78,7 +78,10 @@ class InMemoryMeasurementStore(MeasurementStore):
     def query(self, name: str, since: float) -> list[_Row]:
         """Return rows for *name* with timestamp >= *since* (thread-safe)."""
         with self._lock:
-            return [r for r in self._rows if r.name == name and r.timestamp >= since]
+            return sorted(
+                (r for r in self._rows if r.name == name and r.timestamp >= since),
+                key=lambda r: r.timestamp,
+            )
 
     def clear(self, name: str | None = None) -> None:
         """Delete measurements (thread-safe). Pass *name* to delete one SLI only."""

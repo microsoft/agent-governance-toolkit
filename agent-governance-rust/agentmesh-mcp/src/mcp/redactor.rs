@@ -210,8 +210,9 @@ impl CredentialRedactor {
         for candidate in pattern.find_iter(input) {
             let previous = input[..candidate.start()].chars().next_back();
             let next = input[candidate.end()..].chars().next();
+            let last_consumed = input[..candidate.end()].chars().next_back();
             if previous.is_some_and(|ch| Self::is_left_boundary_char(kind, ch))
-                || next.is_some_and(|ch| Self::is_right_boundary_char(kind, ch))
+                || next.is_some_and(|ch| Self::is_right_boundary_char(kind, ch, last_consumed))
             {
                 continue;
             }
@@ -230,23 +231,42 @@ impl CredentialRedactor {
         }
     }
 
+    /// Returns true when `ch` means the candidate token is embedded in
+    /// a larger alphanumeric word and should be skipped. Only ASCII
+    /// letters and digits block a match; `_`, `-`, `.` and other
+    /// separators do *not*, because a real secret glued to a preceding
+    /// separator (e.g. `session_sk-…`) must still be detected. The
+    /// SlackToken prefix (`xox[baprs]-`) can appear inside a dashed
+    /// identifier, so `-` is additionally a blocking character for
+    /// that kind.
     fn is_left_boundary_char(kind: CredentialKind, ch: char) -> bool {
         match kind {
-            CredentialKind::GitHubToken => ch.is_ascii_alphanumeric() || ch == '_',
-            CredentialKind::OpenAiToken | CredentialKind::GoogleApiKey => {
-                ch.is_ascii_alphanumeric() || ch == '_' || ch == '-'
-            }
             CredentialKind::SlackToken => ch.is_ascii_alphanumeric() || ch == '-',
-            CredentialKind::AwsAccessKey => ch.is_ascii_alphanumeric(),
-            _ => ch.is_ascii_alphanumeric() || ch == '_',
+            _ => ch.is_ascii_alphanumeric(),
         }
     }
 
-    fn is_right_boundary_char(kind: CredentialKind, ch: char) -> bool {
+    /// Returns true when `ch` following the candidate means the match
+    /// should be skipped. For most kinds an ASCII alphanumeric follower
+    /// means the candidate is embedded in a longer token and should not
+    /// match, mirroring the `(?![A-Za-z0-9])` lookahead used by the
+    /// TypeScript and Python SDKs. `SlackToken` additionally blocks `-`
+    /// (its value class includes `-`). `GoogleApiKey` accepts a trailing
+    /// `-` followed by anything (strict superset of the old `\b`
+    /// behaviour, mirroring `(?:(?![A-Za-z0-9])|(?<=-))` in the regex
+    /// SDKs, see #3934).
+    fn is_right_boundary_char(kind: CredentialKind, ch: char, last_consumed: Option<char>) -> bool {
         match kind {
-            CredentialKind::OpenAiToken => ch.is_ascii_alphanumeric() || ch == '_' || ch == '-',
             CredentialKind::SlackToken => ch.is_ascii_alphanumeric() || ch == '-',
-            _ => false,
+            CredentialKind::GoogleApiKey => {
+                // Superset rule: if the key's last consumed char is '-',
+                // never skip -- mirrors (?<=-)  in the regex SDKs.
+                if last_consumed == Some('-') {
+                    return false;
+                }
+                ch.is_ascii_alphanumeric()
+            }
+            _ => ch.is_ascii_alphanumeric(),
         }
     }
 
@@ -384,12 +404,17 @@ mod tests {
     }
 
     #[test]
-    fn does_not_redact_embedded_github_token_lookalikes() {
+    fn redacts_github_token_glued_to_underscore_prefix() {
+        // The updated left boundary treats `_` as a valid edge, so a
+        // GitHub token preceded by `prefix_` is now detected. This is
+        // the correct behaviour: `_` is a separator, not part of the
+        // token, and secrets annotated with prefixes like `session_` or
+        // `env_` must be caught (issue #3933).
         let redactor = CredentialRedactor::new();
         for text in ["prefix_ghp_FAKEFORTESTING000000000000000000"] {
             let result = redactor.redact(text);
-            assert_eq!(result.sanitized, text);
-            assert!(result.detected.is_empty());
+            assert_eq!(result.sanitized, "prefix_[REDACTED_GITHUB_TOKEN]");
+            assert!(result.detected.contains(&CredentialKind::GitHubToken));
         }
     }
 
@@ -473,5 +498,165 @@ mod tests {
             assert_eq!(result.sanitized, text);
             assert!(result.detected.is_empty());
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Boundary regression tests for issue #3933
+    // A valid credential glued to a preceding or following _
+    // must still be detected and redacted.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn redacts_github_token_glued_to_underscore_right_edge() {
+        let redactor = CredentialRedactor::new();
+        let result = redactor.redact("ghp_FAKEFORTESTING000000000000000000_old");
+        assert_eq!(result.sanitized, "[REDACTED_GITHUB_TOKEN]_old");
+        assert!(result.detected.contains(&CredentialKind::GitHubToken));
+    }
+
+    #[test]
+    fn redacts_github_token_glued_to_underscore_left_edge() {
+        let redactor = CredentialRedactor::new();
+        let result = redactor.redact("session_ghp_FAKEFORTESTING000000000000000000");
+        assert_eq!(
+            result.sanitized,
+            "session_[REDACTED_GITHUB_TOKEN]"
+        );
+        assert!(result.detected.contains(&CredentialKind::GitHubToken));
+    }
+
+    #[test]
+    fn redacts_aws_key_glued_to_underscore_both_edges() {
+        let redactor = CredentialRedactor::new();
+        let result = redactor.redact("env_AKIAAAAAAAAAAAAAAAAA_old");
+        assert_eq!(result.sanitized, "env_[REDACTED_AWS_ACCESS_KEY]_old");
+        assert!(result.detected.contains(&CredentialKind::AwsAccessKey));
+    }
+
+    #[test]
+    fn redacts_aws_key_glued_to_underscore_left_edge() {
+        let redactor = CredentialRedactor::new();
+        let result = redactor.redact("session_AKIAAAAAAAAAAAAAAAAA");
+        assert_eq!(result.sanitized, "session_[REDACTED_AWS_ACCESS_KEY]");
+        assert!(result.detected.contains(&CredentialKind::AwsAccessKey));
+    }
+
+    #[test]
+    fn redacts_aws_key_glued_to_underscore_right_edge() {
+        let redactor = CredentialRedactor::new();
+        let result = redactor.redact("AKIAAAAAAAAAAAAAAAAA_deprecated");
+        assert_eq!(
+            result.sanitized,
+            "[REDACTED_AWS_ACCESS_KEY]_deprecated"
+        );
+        assert!(result.detected.contains(&CredentialKind::AwsAccessKey));
+    }
+
+    #[test]
+    fn redacts_google_key_glued_to_underscore_left_edge() {
+        let redactor = CredentialRedactor::new();
+        let key = format!("AIza{}", "A".repeat(35));
+        let result = redactor.redact(&format!("svc_{key}"));
+        assert!(result.sanitized.contains("[REDACTED_GOOGLE_API_KEY]"));
+        assert!(!result.sanitized.contains(&key));
+        assert!(result.detected.contains(&CredentialKind::GoogleApiKey));
+    }
+
+    #[test]
+    fn redacts_google_key_glued_to_underscore_right_edge() {
+        let redactor = CredentialRedactor::new();
+        let key = format!("AIza{}", "A".repeat(35));
+        let result = redactor.redact(&format!("{key}_old"));
+        assert!(result.sanitized.contains("[REDACTED_GOOGLE_API_KEY]"));
+        assert!(!result.sanitized.contains(&key));
+        assert!(result.detected.contains(&CredentialKind::GoogleApiKey));
+    }
+
+    #[test]
+    fn redacts_openai_token_glued_to_underscore_left_edge() {
+        let redactor = CredentialRedactor::new();
+        let token = format!("sk-FAKEFORTESTING{}", "x".repeat(20));
+        let result = redactor.redact(&format!("session_{token}"));
+        assert!(result.sanitized.contains("[REDACTED_OPENAI_TOKEN]"));
+        assert!(!result.sanitized.contains(&token));
+        assert!(result.detected.contains(&CredentialKind::OpenAiToken));
+    }
+
+    #[test]
+    fn redacts_openai_token_glued_to_underscore_right_edge() {
+        let redactor = CredentialRedactor::new();
+        let token = format!("sk-FAKEFORTESTING{}", "x".repeat(20));
+        let result = redactor.redact(&format!("{token}_bak"));
+        assert!(result.sanitized.contains("[REDACTED_OPENAI_TOKEN]"));
+        assert!(!result.sanitized.contains(&token));
+        assert!(result.detected.contains(&CredentialKind::OpenAiToken));
+    }
+
+    #[test]
+    fn redacts_openai_token_preceded_by_hyphen_left_edge_widening() {
+        // Pinning test: hyphen-prefixed OpenAI keys ARE redacted, aligning
+        // with the Python SDK's (?<![A-Za-z0-9]) anchor.  See audit doc
+        // "OpenAI left-edge widening" section.
+        let redactor = CredentialRedactor::new();
+        let token = format!("sk-FAKEFORTESTING{}", "x".repeat(20));
+        let result = redactor.redact(&format!("my-{token}"));
+        assert!(result.sanitized.contains("[REDACTED_OPENAI_TOKEN]"));
+        assert!(!result.sanitized.contains(&token));
+        assert!(result.detected.contains(&CredentialKind::OpenAiToken));
+    }
+
+    #[test]
+    fn redacts_google_api_key_ending_in_hyphen_when_glued() {
+        // Superset rule: a key whose last value char is '-' followed by
+        // alnum must still be redacted, mirroring (?:(?![A-Za-z0-9])|(?<=-))
+        // in the regex SDKs.
+        let redactor = CredentialRedactor::new();
+        let key = format!("AIza{}-", "A".repeat(34));
+        let input = format!("{key}X");
+        let result = redactor.redact(&input);
+        assert!(
+            result.sanitized.contains("[REDACTED_GOOGLE_API_KEY]"),
+            "Google key ending in '-' followed by 'X' should be redacted: got '{}'",
+            result.sanitized
+        );
+    }
+
+    #[test]
+    fn still_rejects_alphanumeric_embedded_credentials() {
+        // The fix must not create false positives: a token prefix
+        // embedded inside a contiguous alphanumeric word is not a
+        // real credential.
+        let redactor = CredentialRedactor::new();
+        for text in [
+            "fooghp_FAKEFORTESTING000000000000000000",
+            "0AKIAAAAAAAAAAAAAAAAA",
+        ] {
+            let result = redactor.redact(text);
+            assert_eq!(result.sanitized, text);
+            assert!(result.detected.is_empty());
+        }
+    }
+
+    #[test]
+    fn redacts_multiple_underscore_glued_credentials_in_one_pass() {
+        let redactor = CredentialRedactor::new();
+        let aws = format!("AKIA{}", "A".repeat(16));
+        let github = "ghp_FAKEFORTESTING000000000000000000";
+        let google = format!("AIza{}", "A".repeat(35));
+        let openai = format!("sk-FAKEFORTESTING{}", "x".repeat(20));
+
+        let input = format!(
+            "env_{aws}_old cfg_{github}_rotated svc_{google}_deprecated session_{openai}_bak"
+        );
+        let result = redactor.redact(&input);
+
+        assert!(!result.sanitized.contains(&aws));
+        assert!(!result.sanitized.contains(github));
+        assert!(!result.sanitized.contains(&google));
+        assert!(!result.sanitized.contains(&openai));
+        assert!(result.detected.contains(&CredentialKind::AwsAccessKey));
+        assert!(result.detected.contains(&CredentialKind::GitHubToken));
+        assert!(result.detected.contains(&CredentialKind::GoogleApiKey));
+        assert!(result.detected.contains(&CredentialKind::OpenAiToken));
     }
 }

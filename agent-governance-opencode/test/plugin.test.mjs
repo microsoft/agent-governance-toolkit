@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -16,7 +16,7 @@ const injectionFixture = Buffer.from(
   "base64",
 ).toString("utf8");
 
-async function loadPlugin(directory) {
+async function loadPlugin(directory, { client, policyPath } = {}) {
   // Force the plugin to read its policy from an isolated path so tests do
   // not collide with the user's real ~/.config/opencode/agt config. We do
   // this by setting AGT_OPENCODE_AUDIT_PATH and AGT_OPENCODE_POLICY_PATH
@@ -24,13 +24,17 @@ async function loadPlugin(directory) {
   const previousAudit = process.env.AGT_OPENCODE_AUDIT_PATH;
   const previousPolicy = process.env.AGT_OPENCODE_POLICY_PATH;
   process.env.AGT_OPENCODE_AUDIT_PATH = join(directory, "audit.json");
-  delete process.env.AGT_OPENCODE_POLICY_PATH;
+  if (policyPath) {
+    process.env.AGT_OPENCODE_POLICY_PATH = policyPath;
+  } else {
+    delete process.env.AGT_OPENCODE_POLICY_PATH;
+  }
 
   try {
     const plugin = await AgtGovernance({
       directory,
       worktree: directory,
-      client: { app: { log: async () => {} } },
+      client: client ?? { app: { log: async () => {} } },
     });
     return plugin;
   } finally {
@@ -39,7 +43,9 @@ async function loadPlugin(directory) {
     } else {
       process.env.AGT_OPENCODE_AUDIT_PATH = previousAudit;
     }
-    if (previousPolicy !== undefined) {
+    if (previousPolicy === undefined) {
+      delete process.env.AGT_OPENCODE_POLICY_PATH;
+    } else {
       process.env.AGT_OPENCODE_POLICY_PATH = previousPolicy;
     }
   }
@@ -56,6 +62,107 @@ test("plugin exports the expected OpenCode contract surface", async () => {
     assert.equal(typeof plugin["tool.execute.after"], "function");
     assert.equal(typeof plugin.tool.agt_policy_status.execute, "function");
     assert.equal(typeof plugin.tool.agt_policy_check_text.execute, "function");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("plugin initialization fails loudly for an invalid configured policy", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-policy-error-"));
+  try {
+    const policyPath = join(root, "invalid-policy.json");
+    await writeFile(policyPath, "{invalid json}\n", "utf8");
+
+    await assert.rejects(loadPlugin(root, { policyPath }), /policy could not be loaded|JSON/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("plugin initialization fails loudly for a missing configured policy", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-policy-missing-"));
+  try {
+    const policyPath = join(root, "missing-policy.json");
+
+    await assert.rejects(loadPlugin(root, { policyPath }), /policy could not be loaded|not found/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("plugin registers fail-closed hooks when session-state restoration fails", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-session-state-init-error-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "session-policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: { allowedTools: ["read"], defaultEffect: "deny" },
+      sessionState: {
+        attributes: ["sensitive_data_read"],
+        transitions: [
+          { id: "sensitive-read", tool: "read", attribute: "sensitive_data_read" },
+        ],
+        rules: [
+          {
+            id: "deny-reads-after-sensitive-read",
+            tools: ["read"],
+            requires: ["sensitive_data_read"],
+            effect: "deny",
+            reason: "The session already read sensitive data.",
+          },
+        ],
+      },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(root, "audit.json"),
+    JSON.stringify([
+      {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        agentId: "opencode:broken-audit-session",
+        action: "session.state.set:sensitive_data_read",
+        decision: "allow",
+        previousHash: "1".repeat(64),
+        hash: "2".repeat(64),
+      },
+    ]),
+    "utf8",
+  );
+
+  const plugin = await loadPlugin(root, { policyPath });
+  assert.equal(typeof plugin.event, "function");
+  assert.equal(typeof plugin["tool.execute.before"], "function");
+  const status = JSON.parse(await plugin.tool.agt_policy_status.execute({}));
+  assert.equal(status.sessionState.configured, true);
+  assert.equal(status.sessionState.enabled, false);
+  assert.match(status.sessionState.error, /failed hash-chain verification/i);
+
+  await assert.rejects(
+    plugin["tool.execute.before"](
+      { tool: "read", sessionID: "broken-audit-session", callID: "blocked-call" },
+      { args: { filePath: "C:\\data\\public\\readme.txt" } },
+    ),
+    /session-scoped policy could not be initialized/i,
+  );
+});
+
+test("failed initialization does not suppress later registrations", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-retry-"));
+  const client = { app: { log: async () => {} } };
+  try {
+    const policyPath = join(root, "invalid-policy.json");
+    await writeFile(policyPath, "{invalid json}\n", "utf8");
+
+    await assert.rejects(loadPlugin(root, { client, policyPath }), /policy could not be loaded|JSON/i);
+    await assert.rejects(loadPlugin(root, { client, policyPath }), /policy could not be loaded|JSON/i);
+
+    const plugin = await loadPlugin(root, { client });
+    assert.equal(typeof plugin["tool.execute.before"], "function");
+    assert.deepEqual(await loadPlugin(root, { client }), {});
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -91,14 +198,127 @@ test("tool.execute.before allows safe read calls", async () => {
   }
 });
 
-test("tool.execute.before marks review tools with __agt_review_reason", async () => {
+test("plugin stages session latches around tool execution and clears them on deletion", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-session-state-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "session-policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: {
+        allowedTools: ["read", "webfetch"],
+        defaultEffect: "deny",
+      },
+      sessionState: {
+        maxSessions: 8,
+        maxPendingCallsPerSession: 8,
+        attributes: ["sensitive_data_read"],
+        transitions: [
+          {
+            id: "sensitive-path-read",
+            tool: "read",
+            attribute: "sensitive_data_read",
+            pathPatterns: [{ source: "(^|/)(?:personal|private)(/|$)", flags: "i" }],
+          },
+        ],
+        rules: [
+          {
+            id: "deny-outbound-after-sensitive-read",
+            tools: ["webfetch"],
+            requires: ["sensitive_data_read"],
+            effect: "deny",
+            reason: "Outbound tools are blocked after a sensitive file read.",
+          },
+        ],
+      },
+    }),
+    "utf8",
+  );
+
+  try {
+    const plugin = await loadPlugin(root, { policyPath });
+    const sessionID = "plugin-session";
+    const readArgs = { filePath: "C:\\data\\personal\\profile.txt" };
+    const status = JSON.parse(await plugin.tool.agt_policy_status.execute({}));
+    assert.equal(status.sessionState.enabled, true);
+
+    await plugin["tool.execute.before"](
+      { tool: "read", sessionID, callID: "plugin-read-call" },
+      { args: readArgs },
+    );
+    await assert.rejects(
+      plugin["tool.execute.before"](
+        { tool: "webfetch", sessionID, callID: "plugin-outbound-call" },
+        { args: { url: "https://example.com/upload" } },
+      ),
+      /sensitive file read/i,
+    );
+
+    await plugin["tool.execute.after"](
+      { tool: "read", sessionID, callID: "plugin-read-call", args: readArgs },
+      { output: "profile contents", metadata: {}, title: "Read profile" },
+    );
+    await assert.rejects(
+      plugin["tool.execute.before"](
+        { tool: "webfetch", sessionID, callID: "plugin-later-outbound-call" },
+        { args: { url: "https://example.com/upload" } },
+      ),
+      /sensitive file read/i,
+    );
+
+    await plugin.event({
+      event: {
+        type: "session.deleted",
+        properties: { info: { id: sessionID } },
+      },
+    });
+    await plugin["tool.execute.before"](
+      { tool: "webfetch", sessionID, callID: "plugin-after-delete-call" },
+      { args: { url: "https://example.com/upload" } },
+    );
+
+    const idleSessionID = "plugin-idle-session";
+    await plugin["tool.execute.before"](
+      { tool: "read", sessionID: idleSessionID, callID: "plugin-idle-read-call" },
+      { args: readArgs },
+    );
+    await plugin.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: idleSessionID },
+      },
+    });
+    await assert.rejects(
+      plugin["tool.execute.before"](
+        { tool: "webfetch", sessionID: idleSessionID, callID: "plugin-idle-egress-call" },
+        { args: { url: "https://example.com/upload" } },
+      ),
+      /sensitive file read/i,
+    );
+    await plugin.event({
+      event: {
+        type: "session.deleted",
+        properties: { info: { id: idleSessionID } },
+      },
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("tool.execute.before blocks enforce-mode review tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-review-"));
   try {
     const plugin = await loadPlugin(root);
     const output = { args: { file_path: join(root, "package.json"), content: "{}" } };
 
-    await plugin["tool.execute.before"]({ tool: "write", sessionID: "review-session" }, output);
-    assert.ok(typeof output.args.__agt_review_reason === "string");
+    await assert.rejects(
+      plugin["tool.execute.before"]({ tool: "write", sessionID: "review-session" }, output),
+      /review|required|AGT/i,
+    );
+    assert.equal(output.args.__agt_review_reason, undefined);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -133,6 +353,40 @@ test("event hook blocks prompt-injection messages", async () => {
       }),
       /prompt injection|poisoning|inject|reveal/i,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("event hook surfaces prompt denials before failing closed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-event-visible-"));
+  const toasts = [];
+  const logs = [];
+  try {
+    const plugin = await loadPlugin(root, {
+      client: {
+        app: { log: async (entry) => logs.push(entry) },
+        tui: { showToast: async (toast) => toasts.push(toast) },
+      },
+    });
+
+    await assert.rejects(
+      plugin.event({
+        event: {
+          type: "message.part.updated",
+          properties: {
+            sessionID: "visible-denial-session",
+            part: { type: "text", text: injectionFixture },
+          },
+        },
+      }),
+      /prompt injection|poisoning|inject|reveal/i,
+    );
+
+    assert.equal(toasts.length, 1);
+    assert.equal(toasts[0].body.variant, "error");
+    assert.match(toasts[0].body.message, /prompt injection|poisoning|inject|reveal/i);
+    assert.ok(logs.some((entry) => entry.body.level === "warn"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,10 +1,10 @@
 ---
 title: "Agent SRE"
-last_reviewed: 2026-07-16
+last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 # Agent SRE
 
@@ -147,7 +147,7 @@ pip install agent-sre
 ```
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask, HallucinationRate
 
 # Define what "reliable" means for your agent
@@ -236,7 +236,7 @@ Traditional SRE defines SLOs for services (99.9% uptime). Agent SRE defines SLOs
 | **Hallucination Rate** | < 1% factual errors | Confident wrong answers |
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask, HallucinationRate
 
 slo = SLO(
@@ -664,7 +664,7 @@ MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob
 
 ---
 
-<div align="center">
+<div align="center" markdown="1">
 
 **Observability tells you what happened. Agent SRE tells you if it was within budget.**
 

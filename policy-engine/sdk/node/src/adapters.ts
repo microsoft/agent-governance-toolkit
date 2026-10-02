@@ -46,7 +46,7 @@ function unsupportedAdapterMethod(
   return new AgentControlBlockedError(interventionPoint, {
     verdict: {
       decision: Decision.Deny,
-      reason: "runtime_error:adapter_unsupported",
+      reason: "host_error:adapter_unsupported",
       message: `${label} method ${method} is not guarded by this adapter.`,
     },
   });
@@ -114,7 +114,7 @@ function rejectStreamingModelRequest(request: JsonValue): void {
   throw new AgentControlBlockedError(InterventionPoint.PreModelCall, {
     verdict: {
       decision: Decision.Deny,
-      reason: "runtime_error:streaming_unsupported",
+      reason: "host_error:streaming_unsupported",
       message: "Streaming model requests are not guarded by this adapter; use runModelStream for SSE buffering.",
     },
   });
@@ -454,7 +454,7 @@ function failClosedIfAnthropicStreaming(request: JsonValue): void {
   throw new AgentControlBlockedError(InterventionPoint.PostModelCall, {
     verdict: {
       decision: Decision.Deny,
-      reason: "runtime_error:streaming_unsupported",
+      reason: "host_error:streaming_unsupported",
       message: "Anthropic streaming responses are not guarded by this adapter.",
     },
   });
@@ -593,7 +593,7 @@ export function createUnsupportedFrameworkAdapter(frameworkName: string) {
       throw new AgentControlBlockedError(InterventionPoint.Input, {
         verdict: {
           decision: Decision.Deny,
-          reason: "runtime_error:adapter_unsupported",
+          reason: "host_error:adapter_unsupported",
           message: `Full-coverage ${frameworkName} adapter is not implemented yet; ` +
             "use AgentControl.run() or AgentControl.protectTool() with explicit hooks.",
         },
@@ -603,7 +603,7 @@ export function createUnsupportedFrameworkAdapter(frameworkName: string) {
       throw new AgentControlBlockedError(InterventionPoint.Input, {
         verdict: {
           decision: Decision.Deny,
-          reason: "runtime_error:adapter_unsupported",
+          reason: "host_error:adapter_unsupported",
           message: `Model middleware for ${frameworkName} is not implemented yet.`,
         },
       });
