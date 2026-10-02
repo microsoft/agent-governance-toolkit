@@ -1306,3 +1306,8 @@ ITAR
 bssn
 uncued
 undelimited
+
+tseslint
+autoprefixer
+vite
+vitejs
