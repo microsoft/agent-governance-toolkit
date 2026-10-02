@@ -7,7 +7,7 @@
  * Implements against: docs/specs/AGENTMESH-WIRE-1.0.md
  */
 
-import { ed25519 } from "@noble/curves/ed25519";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   X3DHKeyManager,
   generateX25519KeyPair,
