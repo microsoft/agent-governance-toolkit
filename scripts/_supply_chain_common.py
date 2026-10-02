@@ -25,6 +25,10 @@ Defensive contracts upheld here:
 * **Pathspec coverage.** ``changed_manifests()`` queries both ``**/X`` and
   the repo-root form so a manifest at the repository root is *also* matched
   (git pathspecs treat ``**/X`` as "at least one directory segment").
+* **Reviewed npm aliases.** Direct and transitive lockfile aliases must map
+  to explicitly approved registry names. A dependency bump that introduces
+  a new alias (including ``-cjs`` aliases) fails closed until its name/target
+  pair is reviewed and added to ``APPROVED_NPM_TRANSITIVE_ALIASES``.
 
 This module is import-safe and dependency-free (stdlib only, Python 3.11+).
 """
@@ -36,13 +40,14 @@ import re
 import subprocess
 import sys
 import time
-import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
+
+import tomllib
 
 USER_AGENT = (
     "agent-governance-toolkit-supply-chain-check/2.0 "
@@ -73,6 +78,33 @@ SAFE_VERSION_RE = re.compile(r"\A[0-9A-Za-z][0-9A-Za-z.\-+_]*\Z")
 
 # Strict accepted package-name syntax (npm-scoped names included).
 SAFE_NAME_RE = re.compile(r"\A@?[A-Za-z0-9][A-Za-z0-9._/-]*\Z")
+NPM_NAME_RE = re.compile(r"\A(?:@[A-Za-z0-9][A-Za-z0-9._-]*/)?[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+NPM_ALIAS_RE = re.compile(
+    r"\Anpm:(?P<name>(?:@[A-Za-z0-9][A-Za-z0-9._-]*/)?[A-Za-z0-9][A-Za-z0-9._-]*)@"
+    r"(?P<version>[^@]+)\Z"
+)
+NPM_ALIAS_RANGE_RE = re.compile(r"\A[0-9A-Za-z^~*><=| ._+-]{1,128}\Z")
+NPM_EXACT_VERSION_RE = re.compile(r"\A[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z][0-9A-Za-z._-]*)?\Z")
+APPROVED_NPM_MANIFEST_ALIASES = {
+    "@typescript/native": "typescript",
+    "typescript": "@typescript/typescript6",
+}
+APPROVED_NPM_TRANSITIVE_ALIASES = {
+    "@ai-sdk/provider-utils-v5": "@ai-sdk/provider-utils",
+    "@ai-sdk/provider-utils-v6": "@ai-sdk/provider-utils",
+    "@ai-sdk/provider-v5": "@ai-sdk/provider",
+    "@ai-sdk/provider-v6": "@ai-sdk/provider",
+    "@ai-sdk/ui-utils-v5": "@ai-sdk/ui-utils",
+    "@jest/react-is-18": "react-is",
+    "@jest/react-is-19": "react-is",
+    "@typescript/old": "typescript",
+    "react-is-18": "react-is",
+    "react-is-19": "react-is",
+    "string-width-cjs": "string-width",
+    "strip-ansi-cjs": "strip-ansi",
+    "wrap-ansi-cjs": "wrap-ansi",
+    "zod-from-json-schema-v3": "zod-from-json-schema",
+}
 
 
 @dataclass
@@ -130,6 +162,110 @@ def is_safe_version(version: str) -> bool:
 def is_safe_name(name: str) -> bool:
     """True if ``name`` is safe to embed in a registry URL path."""
     return bool(name) and bool(SAFE_NAME_RE.match(name))
+
+
+def parse_npm_alias(spec: str, *, exact: bool = False) -> tuple[str, str] | None:
+    """Parse an npm alias into its registry name and version/specifier."""
+    if not spec.startswith("npm:"):
+        return None
+    match = NPM_ALIAS_RE.fullmatch(spec)
+    if not match or not NPM_ALIAS_RANGE_RE.fullmatch(match["version"]):
+        raise ValueError(f"invalid npm alias spec: {spec!r}")
+    name, version = match["name"], match["version"]
+    if exact and not NPM_EXACT_VERSION_RE.fullmatch(version):
+        raise ValueError(f"npm alias must pin an exact safe version: {spec!r}")
+    return name, version
+
+
+def resolve_npm_manifest_pin(name: str, spec: str) -> tuple[str, str]:
+    """Resolve only explicitly approved direct npm aliases to registry pins."""
+    parsed = parse_npm_alias(spec, exact=True)
+    if parsed is None:
+        return name, spec
+    target, version = parsed
+    if APPROVED_NPM_MANIFEST_ALIASES.get(name) != target:
+        raise ValueError(f"unapproved npm alias: {name!r} -> {target!r}")
+    return target, version
+
+
+def npm_alias_declarations(packages: dict) -> dict[str, set[tuple[str, str, bool]]]:
+    """Index lockfile alias declarations once, including transitive ranges."""
+    declarations: dict[str, set[tuple[str, str, bool]]] = {}
+    for parent_key, parent in packages.items():
+        if not isinstance(parent, dict):
+            continue
+        for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+            deps = parent.get(section)
+            if not isinstance(deps, dict):
+                continue
+            for alias, spec in deps.items():
+                if isinstance(alias, str) and isinstance(spec, str) and spec.startswith("npm:"):
+                    parsed = parse_npm_alias(spec)
+                    approved = (
+                        APPROVED_NPM_MANIFEST_ALIASES if parent_key == ""
+                        else APPROVED_NPM_TRANSITIVE_ALIASES
+                    )
+                    if approved.get(alias) != parsed[0]:
+                        raise ValueError(f"unapproved npm lockfile alias: {alias!r} -> {parsed[0]!r}")
+                    declarations.setdefault(alias, set()).add((*parsed, parent_key == ""))
+    return declarations
+
+
+def resolve_npm_lockfile_name(
+    alias: str, info: dict, declarations: dict[str, set[tuple[str, str, bool]]],
+    *, top_level: bool = True,
+) -> str:
+    """Verify an alias's declared target, metadata name and registry tarball."""
+    if not NPM_NAME_RE.fullmatch(alias) or len(alias) > 256:
+        raise ValueError(f"invalid npm lockfile package name: {alias!r}")
+    specs = declarations.get(alias, set())
+
+    actual = info.get("name")
+    if not specs and ("name" not in info or actual == alias):
+        return alias
+    if not isinstance(actual, str) or {target for target, _, _ in specs} != {actual}:
+        raise ValueError(f"npm alias {alias!r} has no matching canonical declaration/name")
+    if not NPM_NAME_RE.fullmatch(actual) or len(actual) > 256:
+        raise ValueError(f"invalid npm alias target: {actual!r}")
+    version = info.get("version")
+    if not isinstance(version, str) or not is_safe_version(version):
+        raise ValueError(f"invalid npm alias version: {version!r}")
+    if top_level and any(is_root and NPM_EXACT_VERSION_RE.fullmatch(pin) and pin != version
+           for _, pin, is_root in specs):
+        raise ValueError(f"npm alias {alias!r} does not match its direct version pin")
+    tarball = f"https://registry.npmjs.org/{actual}/-/{actual.rsplit('/', 1)[-1]}-{version}.tgz"
+    if info.get("resolved") != tarball:
+        raise ValueError(f"npm alias {alias!r} is not resolved to its canonical registry tarball")
+    return actual
+
+
+def resolve_npm_lockfile_package(
+    alias: str, info: dict, declarations: dict[str, set[tuple[str, str, bool]]],
+    *, top_level: bool = True,
+) -> tuple[str, str | None]:
+    """Resolve an approved npm alias, including legacy exact ``npm:`` versions."""
+    version = info.get("version")
+    if isinstance(version, str) and version.startswith("npm:"):
+        parsed = parse_npm_alias(version, exact=True)
+        if parsed is None:
+            raise ValueError(f"invalid npm alias version: {version!r}")
+        target, version = parsed
+        approved = (
+            APPROVED_NPM_MANIFEST_ALIASES.get(alias) == target
+            or APPROVED_NPM_TRANSITIVE_ALIASES.get(alias) == target
+        )
+        if not approved or ("name" in info and info["name"] != target):
+            raise ValueError(f"unapproved npm lockfile alias: {alias!r} -> {target!r}")
+        # The embedded spec is a declaration, but still check its tarball
+        # against the canonical registry path and any other declarations.
+        declarations = {**declarations, alias: declarations.get(alias, set()) | {(target, version, False)}}
+        name = resolve_npm_lockfile_name(
+            alias, {**info, "name": target, "version": version}, declarations,
+            top_level=top_level,
+        )
+        return name, version
+    name = resolve_npm_lockfile_name(alias, info, declarations, top_level=top_level)
+    return name, version if isinstance(version, str) else None
 
 
 def safe_url_path(*parts: str) -> str:

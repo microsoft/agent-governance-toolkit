@@ -20,7 +20,8 @@ Manifest sources are parsed *structurally*, not via diff-line regex:
   the base and HEAD ref, then resolved dep maps are compared. This is
   immune to the ``++ b/<path>`` diff-injection class (where a triple-quoted
   string in another file confuses a diff-line parser into re-attributing
-  the current file).
+  the current file). Approved direct npm aliases are checked at their
+  canonical registry name and exact pinned version.
 * ``Cargo.toml`` and ``pyproject.toml`` — parsed via stdlib ``tomllib``,
   which correctly handles multi-line tables like
   ``[dependencies.foo]\\nversion="x"``. This was the H2 finding from the
@@ -125,7 +126,12 @@ def _resolve_pkgjson_deps(tree: dict | None) -> dict[str, str]:
                 "^", "~", ">", "<", "=", "*",
             )):
                 continue
-            if not common.is_safe_name(name) or not common.is_safe_version(ver):
+            if not common.is_safe_name(name):
+                continue
+            if ver.startswith("npm:"):
+                out[name] = ver
+                continue
+            if not common.is_safe_version(ver):
                 continue
             out[name] = ver
     return out
@@ -300,9 +306,10 @@ def collect_candidates(base: str) -> list[tuple[str, str, str, str]]:
         if bn == "package.json":
             base_map = _resolve_pkgjson_deps(common.load_json_at(base, path))
             head_map = _resolve_pkgjson_deps(common.load_json_at("HEAD", path))
-            for name, ver in head_map.items():
-                if base_map.get(name) == ver:
+            for alias, spec in head_map.items():
+                if base_map.get(alias) == spec:
                     continue
+                name, ver = common.resolve_npm_manifest_pin(alias, spec)
                 key = ("npm", name, ver)
                 if key in seen:
                     continue
@@ -383,6 +390,8 @@ def fetch_release_time(ecosystem: str, package: str, version: str) -> datetime |
         data = common.fetch_json(url)
         if data is None:
             return None
+        if not isinstance(data, dict) or data.get("name") != package or data.get("version") != version:
+            raise LookupError(f"npm registry identity mismatch for {package}@{version}")
         # The per-version endpoint embeds ``time`` only on some mirrors; the
         # canonical signal is the version doc itself with a top-level
         # ``time`` field on the parent (which we don't fetch). When the
@@ -484,7 +493,11 @@ def main_with_args(argv: list[str]) -> int:
                 return 2
             candidates.append((eco, pkg, ver, "(explicit)"))
     else:
-        candidates = collect_candidates(args.base)
+        try:
+            candidates = collect_candidates(args.base)
+        except ValueError as exc:
+            print(f"::error::invalid npm alias: {exc}", file=sys.stderr)
+            return 1
 
     if not candidates:
         print("OK: no exact-pinned dependency additions or bumps to check.")
