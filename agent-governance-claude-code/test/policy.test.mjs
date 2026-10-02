@@ -113,6 +113,7 @@ test("evaluatePreToolUse denies Windows-style secret reads", async () => {
 });
 
 test("evaluatePreToolUse denies direct URL metadata access regardless of parameter key name", async () => {
+  // cspell:ignore denypath
   const root = await mkdtemp(join(tmpdir(), "agt-claude-url-denypath-"));
   const auditPath = join(root, "audit.json");
   const state = await loadPolicy({ auditPath });
@@ -201,7 +202,53 @@ test("bundled policy load failures block prompt submission in enforce mode", asy
   await rm(root, { recursive: true, force: true });
 });
 
+// Review regression inputs specify shell behavior independently of the parser.
+const SUBSTITUTION_DELETE_COMMANDS = [
+  "rm -r \"$(pwd)/src\" -f",
+  "rm -r x$(pwd) -f",
+  "rm \"$(pwd)/src\" -rf",
+  "rm -r \"`pwd`/src\" -f",
+  "rm -r x`pwd` -f",
+  "rm \"`pwd`/src\" -rf",
+  "rm -r \"$(echo \"$(pwd)\")/src\" -f",
+  "sudo rm -r \"$(pwd)/src\" -f",
+  "rm -r <(pwd) -f",
+  "rm -r >(pwd) -f",
+  "rm -r >\"$(pwd)/log\" -f src",
+  "rm -r >$(pwd)/log -f src",
+  "rm -rf \"$(pwd)/node_modules\"",
+  "echo \"$(rm -r \"$(pwd)/src\" -f)\"",
+  "echo `rm -r \"$(pwd)/src\" -f`",
+  "echo \"$(echo ready; rm -rf src)\"",
+  "echo \"$(rm -rf src)\"",
+  "rm -rf $(pwd",
+  "rm -rf \"$(pwd",
+  "rm -rf `pwd",
+  "rm -r \"$(pwd)/src\" -f; echo done",
+  "rm -r \"$(pwd)$(pwd)/src\" -f"
+];
+const SUBSTITUTION_TEXT_COMMANDS = [
+  "echo $(pwd) rm -rf src",
+  "echo `pwd` rm -rf src",
+  "echo \"$(pwd)\" rm -rf src",
+  "echo \"$(echo \"$(pwd)\")\" rm -rf src",
+  "echo x$(pwd) rm -rf src",
+  "echo <(pwd) rm -rf src",
+  "echo >(pwd) rm -rf src",
+  "echo >$(pwd)/log rm -rf src",
+  "echo \"$(pwd)rm -rf src\"",
+  "echo \"$(pwd)$(pwd)\" rm -rf src",
+  "rm -r$(pwd) -f src",
+  "rm -r \"$(pwd)-f\" src",
+  "$(pwd)rm -rf src",
+  "\"$(pwd)/rm\" -rf src",
+  "echo '$(rm -rf src)'",
+  "echo \"$(pwd # ignored rm -rf src\n)\" rm -rf src"
+];
+
+// cspell:ignore uroot ualice Huroot
 const RECURSIVE_DELETE_DENY_COMMANDS = [
+  ...SUBSTITUTION_DELETE_COMMANDS,
   "rm -rf src",
   "rm -fr src",
   "rm -r -f src",
@@ -270,6 +317,7 @@ const RECURSIVE_DELETE_DENY_COMMANDS = [
   "2>log rm -rf src"
 ];
 const RECURSIVE_DELETE_SAFE_COMMANDS = [
+  ...SUBSTITUTION_TEXT_COMMANDS,
   "echo hello",
   "rm -f file",
   "rm -r src",
@@ -351,12 +399,12 @@ test("recursive-delete still denies with an allow fallback and keeps custom patt
   const policyPath = join(root, "policy.json");
   await writeFile(policyPath, JSON.stringify(policy));
   const state = await loadPolicy({ policyPath, auditPath: join(root, "audit.json"), homeDirectory: root });
-  for (const command of ["rm -rf src", "rm -rf node_modules src/*", "npx rimraf src"]) {
+  for (const command of [...SUBSTITUTION_DELETE_COMMANDS, "rm -rf src", "rm -rf node_modules src/*", "npx rimraf src"]) {
     const result = await evaluatePreToolUse(state, { tool_name: "Bash", tool_input: { command }, cwd: root });
     assert.equal(result.hookSpecificOutput.permissionDecision, "deny", command);
     assert.match(result.hookSpecificOutput.permissionDecisionReason, /Recursive delete commands/, command);
   }
-  for (const command of ['echo "rm -rf src"', "rm -rf node_modules"]) {
+  for (const command of [...SUBSTITUTION_TEXT_COMMANDS, 'echo "rm -rf src"', "rm -rf node_modules"]) {
     const result = await evaluatePreToolUse(state, { tool_name: "Bash", tool_input: { command }, cwd: root });
     assert.equal(result.hookSpecificOutput.permissionDecision, undefined, command);
   }
@@ -373,4 +421,25 @@ test("recursive-delete stays bounded on deeply nested malformed comments", () =>
   assert.equal(matchesRecursiveDeleteCommand(command), false);
   assert.equal(isSafeShellCleanupCommand(command), false);
   assert.ok(performance.now() - start < 2000, "nested comment scanning must stay bounded");
+});
+
+test("substitutions preserve outer invocations and scan inner commands", () => {
+  const failures = [];
+  for (const [commands, expected] of [[SUBSTITUTION_DELETE_COMMANDS, true], [SUBSTITUTION_TEXT_COMMANDS, false]]) {
+    for (const command of commands) {
+      const actual = matchesRecursiveDeleteCommand(command);
+      if (actual !== expected) failures.push({ command, expected, actual });
+      assert.equal(isSafeShellCleanupCommand(command), false, command);
+    }
+  }
+  assert.deepEqual(failures, []);
+});
+
+test("deeply nested substitutions restore state without repeated stack copies", () => {
+  const nested = "$(".repeat(20000) + "pwd" + ")".repeat(20000);
+  const start = performance.now();
+  assert.equal(matchesRecursiveDeleteCommand("echo " + nested + " rm -rf src"), false);
+  assert.equal(matchesRecursiveDeleteCommand("rm -r " + nested + "/src -f"), true);
+  assert.equal(matchesRecursiveDeleteCommand("echo " + "$(".repeat(20000) + "rm -rf src" + ")".repeat(20000)), true);
+  assert.ok(performance.now() - start < 2000, "substitution restoration must stay bounded");
 });

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -99,6 +99,36 @@ test("pre-tool-use hook denies recursive deletion without blocking literal text"
   }
 });
 
+
+test("hook retains the enclosing command across substitutions with either fallback", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-claude-substitution-hook-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const scriptPath = fileURLToPath(new URL("../hooks/pre-tool-use.mjs", import.meta.url));
+  const bundledPath = fileURLToPath(new URL("../config/default-policy.json", import.meta.url));
+  const policy = JSON.parse(await readFile(bundledPath, "utf8"));
+  policy.toolPolicies.reviewTools = [];
+  policy.toolPolicies.defaultEffect = "allow";
+  const allowPath = join(root, "allow.json");
+  await writeFile(allowPath, JSON.stringify(policy));
+  for (const policyPath of [bundledPath, allowPath]) {
+    for (const [command, blocked] of [
+      ['rm -r "$(pwd)/src" -f', true],
+      ['rm -r "`pwd`/src" -f', true],
+      ['echo "$(rm -rf src)"', true],
+      ["echo $(pwd) rm -rf src", false],
+      ["echo `pwd` rm -rf src", false],
+    ]) {
+      const output = await runNodeHook(scriptPath, {
+        cwd: root, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command },
+      }, { AGT_CLAUDE_POLICY_PATH: policyPath, AGT_CLAUDE_AUDIT_PATH: join(root, "audit.json") });
+      assert.equal(output.code, 0, output.stderr);
+      const result = JSON.parse(output.stdout).hookSpecificOutput;
+      assert.equal(result.permissionDecision, blocked ? "deny" : policyPath === bundledPath ? "ask" : undefined, command);
+      if (blocked) assert.match(result.permissionDecisionReason, /Recursive delete commands/, command);
+      else assert.doesNotMatch(result.permissionDecisionReason ?? "", /Recursive delete commands/, command);
+    }
+  }
+});
 
 function runNodeHook(scriptPath, input, extraEnv) {
   return new Promise((resolvePromise, reject) => {

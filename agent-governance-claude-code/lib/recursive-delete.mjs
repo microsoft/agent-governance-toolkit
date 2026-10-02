@@ -1,9 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-// Adapted from the OpenCode recursive-delete parser introduced in AGT PR #4129.
+// cspell:ignore talosrobotics
+// Parser and shell-comment handling adapted from AGT PRs #4129 and #4142
+// by Ricky-G (MIT). Earlier Claude Code rule fix: PR #3834 by talosrobotics.
 // This is a bounded shell tokenizer, not a shell evaluator. Keep both packaged
 // copies in sync; neither package can import runtime files from its sibling.
+// A substitution contributes an unknown fragment to its enclosing shell word.
+// NUL cannot occur in a shell argument; it keeps dynamic names/options opaque.
+const DYNAMIC_WORD_FRAGMENT = "\0";
+
 const SAFE_CLEANUP_TARGETS = new Set([
   "node_modules", "dist", "build", ".next", "target", "__pycache__",
   ".pytest_cache", ".venv", "venv", "coverage", ".turbo", "out",
@@ -91,6 +97,10 @@ function getShellCommandInvocation(tokens) {
   let index = 0;
   while (index < tokens.length) {
     const token = tokens[index];
+    // Assignment values may be dynamic; an executable name may not be inferred.
+    if (token.includes(DYNAMIC_WORD_FRAGMENT) && !/^[a-z_][a-z0-9_]*=/i.test(token)) {
+      return undefined;
+    }
     const commandName = getLastPathSegment(token.replace(/\\/g, "/")).toLowerCase();
     if (
       ["if", "then", "do", "else", "elif", "while", "until", "in"].includes(commandName) ||
@@ -214,6 +224,7 @@ function parseSudoWrapperOption(option) {
     if ("lV".includes(letter)) {
       return { nonExecuting: true, takesArgument: false };
     }
+    // cspell:ignore ughp
     if ("ughpCDRTrt".includes(letter)) {
       // Any remaining characters belong to the argument, not to more flags.
       return { nonExecuting: false, takesArgument: index === option.length - 2 };
@@ -223,7 +234,7 @@ function parseSudoWrapperOption(option) {
 }
 
 function parseRmOption(token) {
-  if (token === "-" || !token.startsWith("-")) {
+  if (token.includes(DYNAMIC_WORD_FRAGMENT) || token === "-" || !token.startsWith("-")) {
     return undefined;
   }
 
@@ -255,6 +266,7 @@ function parseRmOption(token) {
   const optionLetters = token.slice(1).toLowerCase();
   return {
     force: optionLetters.includes("f"),
+    // cspell:ignore firdv
     recognized: [...optionLetters].every((letter) => "firdv".includes(letter)),
     recursive: optionLetters.includes("r"),
   };
@@ -264,7 +276,7 @@ function addSafeCleanupTargets(candidateTargets, token) {
   // Never discard an uncertain target: doing so can exempt a mixed-target delete.
   // Commas are literal filename characters in a POSIX shell, not list separators.
   const cleaned = token.replace(/\/+$/, "");
-  if (!cleaned || /[\\*?\[\]{}$<>`]/.test(cleaned)) {
+  if (!cleaned || cleaned.includes(DYNAMIC_WORD_FRAGMENT) || /[\\*?\[\]{}$<>`]/.test(cleaned)) {
     return false;
   }
   candidateTargets.push(cleaned);
@@ -306,10 +318,26 @@ function tokenizeShellCommands(commandText) {
   };
 
   const startSubstitution = (frame) => {
-    frame.resumeRedirectionTarget = redirectionTargetPending;
-    finishCommand();
-    redirectionTargetPending = false;
+    // Keep references to the enclosing state: copying at every nesting level
+    // would make deep substitutions quadratic. Inner commands are scanned on
+    // their own, then the outer word resumes with an opaque dynamic fragment.
+    frame.enclosing = { command, token, tokenStarted, tokenWasQuoted, quote, redirectionTargetPending };
     substitutions.push(frame);
+    command = [];
+    token = "";
+    tokenStarted = false;
+    tokenWasQuoted = false;
+    quote = undefined;
+    redirectionTargetPending = false;
+  };
+  const finishSubstitution = () => {
+    finishCommand();
+    const frame = substitutions.pop();
+    ({ command, token, tokenStarted, tokenWasQuoted, quote, redirectionTargetPending } = frame.enclosing);
+    token += DYNAMIC_WORD_FRAGMENT;
+    tokenStarted = true;
+    tokenWasQuoted = true;
+    if (frame.type === "backtick") backtickSubstitutionDepth -= 1;
   };
 
   for (let index = 0; index < input.length; index += 1) {
@@ -317,17 +345,14 @@ function tokenizeShellCommands(commandText) {
     if (quote) {
       if (quote === '"' && character === "`") {
         hasControlOperator = true;
-        quote = undefined;
-        startSubstitution({ resumeDoubleQuote: true, type: "backtick" });
+        startSubstitution({ type: "backtick" });
         backtickSubstitutionDepth += 1;
         continue;
       }
       if (quote === '"' && character === "$" && input[index + 1] === "(") {
         hasControlOperator = true;
-        quote = undefined;
         startSubstitution({
           depth: 1,
-          resumeDoubleQuote: true,
           type: "command",
         });
         index += 1;
@@ -353,26 +378,18 @@ function tokenizeShellCommands(commandText) {
     const activeSubstitution = substitutions.at(-1);
     if (character === "`" && activeSubstitution?.type === "backtick") {
       hasControlOperator = true;
-      finishCommand();
-      substitutions.pop();
-      redirectionTargetPending = activeSubstitution.resumeRedirectionTarget;
-      backtickSubstitutionDepth -= 1;
-      if (activeSubstitution.resumeDoubleQuote) {
-        quote = '"';
-        tokenStarted = true;
-        tokenWasQuoted = true;
-      }
+      finishSubstitution();
       continue;
     }
     if (character === "`") {
       hasControlOperator = true;
-      startSubstitution({ resumeDoubleQuote: false, type: "backtick" });
+      startSubstitution({ type: "backtick" });
       backtickSubstitutionDepth += 1;
       continue;
     }
     if (["<", ">"].includes(character) && input[index + 1] === "(") {
       hasControlOperator = true;
-      startSubstitution({ depth: 1, resumeDoubleQuote: false, type: "command" });
+      startSubstitution({ depth: 1, type: "command" });
       index += 1;
       continue;
     }
@@ -380,7 +397,6 @@ function tokenizeShellCommands(commandText) {
       hasControlOperator = true;
       startSubstitution({
         depth: 1,
-        resumeDoubleQuote: false,
         type: "command",
       });
       index += 1;
@@ -394,17 +410,9 @@ function tokenizeShellCommands(commandText) {
     }
     if (activeSubstitution?.type === "command" && character === ")") {
       hasControlOperator = true;
-      finishCommand();
       activeSubstitution.depth -= 1;
-      if (activeSubstitution.depth === 0) {
-        substitutions.pop();
-        redirectionTargetPending = activeSubstitution.resumeRedirectionTarget;
-      }
-      if (activeSubstitution.depth === 0 && activeSubstitution.resumeDoubleQuote) {
-        quote = '"';
-        tokenStarted = true;
-        tokenWasQuoted = true;
-      }
+      if (activeSubstitution.depth === 0) finishSubstitution();
+      else finishCommand();
       continue;
     }
 
@@ -522,13 +530,12 @@ function tokenizeShellCommands(commandText) {
     token += character;
     tokenStarted = true;
   }
+  const hasUnterminatedSyntax = Boolean(quote || substitutions.length || redirectionTargetPending);
+  // Keep static outer flags visible even if an inner substitution never closes.
+  // The malformed-syntax flag still prohibits the cleanup exception.
+  while (substitutions.length > 0) finishSubstitution();
   finishCommand();
-  return {
-    commands,
-    hasControlOperator,
-    hasRedirection,
-    hasUnterminatedSyntax: Boolean(quote || substitutions.length || redirectionTargetPending),
-  };
+  return { commands, hasControlOperator, hasRedirection, hasUnterminatedSyntax };
 }
 
 function isSafeCleanupTarget(target) {
