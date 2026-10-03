@@ -101,6 +101,23 @@ def test_cargo_skips_workspace_inheritance():
     assert cra._resolve_cargo_deps(tree) == {}
 
 
+def test_cargo_skips_path_and_git_dependencies():
+    # A path crate's version lives in-tree; bumping it (e.g. a local shim
+    # from 0.3.1 to 0.3.2) must not trigger a registry lookup that 404s.
+    tree = {
+        "dependencies": {
+            "local_core": {"version": "=0.3.2-beta.0", "path": "../../core"},
+            "pinned_fork": {
+                "version": "1.2.3",
+                "git": "https://github.com/example/fork",
+                "rev": "0123abcd",
+            },
+            "serde": "1.0.228",
+        }
+    }
+    assert cra._resolve_cargo_deps(tree) == {"serde": "1.0.228"}
+
+
 def test_cargo_skips_range_specifiers():
     tree = {
         "dependencies": {
