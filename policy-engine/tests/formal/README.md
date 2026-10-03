@@ -1,6 +1,11 @@
 # ACS mediation formal model
 
-This directory contains a Quint model for ACS stateless mediation.
+This directory contains a legacy Quint model of AGT's pre-retarget,
+five-decision mediation flow. It has not been ported to the current
+three-decision engine contract and must not be presented as conformance
+evidence for the registry-backed runtime. The current contracts are maintained
+in [ACS](https://github.com/responsibleai/agent-control-spec) and
+[Agent Hooks](https://github.com/responsibleai/agent-hooks).
 
 The model covers one host supplied snapshot at one configured intervention point. It abstracts manifest validation, path resolution, annotation dispatch, policy dispatch, transform validation, policy output normalization, resource limits, and host approval routing into explicit inputs. Each run mediates one activity and reaches one terminal verdict.
 
@@ -33,7 +38,7 @@ The model intentionally excludes stateful concepts. It has no variables, resolve
 From the repository root.
 
 ```bash
-quint typecheck tests/formal/acs_mediation.qnt
-quint run tests/formal/acs_mediation.qnt --invariant RuntimeErrorsDeny --verbosity=0
-quint run tests/formal/acs_mediation.qnt --invariants RuntimeErrorsDeny NoTransformOnDenyWarnAllowOrEscalate TransformOnlyForTransformVerdict EscalateWithoutValidApprovalDenies EscalateRequiresApprovalRouting ExactlyOneVerdict ExplicitAllowRequired --verbosity=0
+quint typecheck policy-engine/tests/formal/acs_mediation.qnt
+quint run policy-engine/tests/formal/acs_mediation.qnt --invariant RuntimeErrorsDeny --verbosity=0
+quint run policy-engine/tests/formal/acs_mediation.qnt --invariants RuntimeErrorsDeny NoTransformOnDenyWarnAllowOrEscalate TransformOnlyForTransformVerdict EscalateWithoutValidApprovalDenies EscalateRequiresApprovalRouting ExactlyOneVerdict ExplicitAllowRequired --verbosity=0
 ```

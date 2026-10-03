@@ -196,7 +196,7 @@ fn build_without_enabling_defaults_still_requires_a_policy_dispatcher() {
 }
 
 #[test]
-fn set_url_fetch_limits_rejects_unavailable_configuration() {
+fn set_url_fetch_limits_checks_builder_pointer() {
     let mut err: *mut c_char = ptr::null_mut();
     assert_eq!(
         unsafe { acs_builder_set_url_fetch_limits(ptr::null_mut(), 4096, 1000, 0, &mut err) },
@@ -214,12 +214,12 @@ fn set_url_fetch_limits_rejects_unavailable_configuration() {
     assert!(!builder.is_null(), "builder construction failed");
     assert_eq!(
         unsafe { acs_builder_set_url_fetch_limits(builder, 4096, 1000, 2, &mut err) },
-        -1,
-        "unavailable URL fetch limits must fail closed"
+        0,
+        "published engine supports URL fetch limits"
     );
     assert!(
-        take_err(err).contains("URL fetch limits are unavailable"),
-        "unavailable-limit error should explain the pinned upstream limitation"
+        err.is_null(),
+        "setting valid limits must not report an error"
     );
     unsafe { acs_builder_free(builder) };
 }

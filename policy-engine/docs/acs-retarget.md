@@ -1,423 +1,208 @@
-# Retarget onto agent-control-spec
+# AGT and the upstream ACS engine
 
-AGT's policy decision runtime is no longer vendored here. It ships from the registry as
-`agent-control-spec`, rebased on the [agent-hooks](https://github.com/responsibleai/agent-hooks)
-control contract. This note records what changed, what is still open, and what a
-contributor needs to know before touching the policy plane.
+AGT used to carry its own policy decision engine in `policy-engine/core`.
+That engine now lives in
+[`responsibleai/agent-control-spec`](https://github.com/responsibleai/agent-control-spec).
+AGT depends on its published crate instead of maintaining a second copy.
+Engine fixes can ship upstream and reach AGT through a dependency update.
+AGT still owns its host APIs, framework adapters and policy authoring tools.
 
-Pinned versions are `agent-control-spec = "=0.4.0-alpha.3"` and
-`agent-hooks-sdk = "=0.1.0-alpha.5"`, the latest published releases verified on
-September 8, 2026. The same pair is resolved in the policy workspace, the
-standalone Rust consumer and the coding-agent example.
+[Agent Hooks](https://github.com/responsibleai/agent-hooks) defines the
+interception contract. ACS makes the policy decision. The host applies
+transforms, resolves approvals and decides whether the guarded action runs.
+Moving the engine did not move those host responsibilities out of AGT.
 
-As of September 8, 2026, ACS 0.4.0-alpha.3 and agent-hooks 0.1.0-alpha.5 are
-published. ACS's newer bindings provide manifest and artifact tooling, host
-dispatchers and streaming APIs, and its default Rego backend runs in process.
-Those releases invalidate the original assumption that bindings expose only
-`AcsInterceptor`, but do not make them drop-in replacements for AGT's
-`AgentControl` and `HostSession` APIs. This PR retains AGT's native bindings
-over the pinned Rust engine.
+## Versions and package names
 
-### Backend compatibility
-
-AGT's legacy `AgentControl`, Python/Node bindings and .NET ABI explicitly use
-the OPA dispatcher. All direct ACS dependencies disable upstream default
-features, and the host constructs `OpaPolicyDispatcher` rather than calling
-the feature-dependent upstream default factory. Enabling in-process Rego
-elsewhere in a consumer's Cargo graph therefore cannot silently change these
-APIs' executable selection, bundle handling or policy behavior.
-
-Alpha.3 has a compile-time feature-gating defect when neither `opa` nor `rego`
-is enabled. The core shim and telemetry crate therefore enable the lightweight
-OPA feature even in isolated, data-only builds. This does not pull in Regorus
-or require an OPA executable for telemetry. CI checks these
-crates independently so sibling workspace features cannot hide the defect.
-
-Direct users of ACS's `AcsInterceptor` and `ActivatedPolicy` follow ACS's own
-feature selection. Switching the legacy host's default backend is a separate
-behavior change, not a side effect of upgrading its dependency.
-
-The core compatibility shim forwards the optional `rego` and `streaming`
-features to ACS. Enable `rego` to use the in-process dispatcher through
-`agent_control_specification_core::rego`, or `streaming` to use
-`agent_control_specification_core::stream_session`. Both are disabled by
-default. Only these module paths are forwarded, not the upstream root-level
-Rego and streaming type re-exports.
-The shim retains its OPA dependency feature for alpha.3 compatibility,
-and these opt-ins do not change the legacy host's explicit OPA dispatcher.
-
-The committed lockfiles retain `ureq` 3.4.0 and `ureq-proto` 0.6.1, both
-published August 8. Their September 6 successors are inside the seven-day
-cooling-off window and are not used in these builds.
-
-## What moved
-
-| Was | Now |
+| Surface | Version |
 | --- | --- |
-| `policy-engine/core/src` (the engine) | the `agent-control-spec` crate |
+| `agent-control-spec` Rust dependency | `=0.4.0-alpha.4` |
+| `agent-hooks-sdk` Rust dependency | `=0.1.0-alpha.5` |
+| Existing manifest contract | `0.4.0-alpha.1` |
+| Opt-in annotator dependency contract | `0.5.0-alpha.1` |
+
+Package versions and manifest versions are independent. Keep existing
+manifests on `0.4.0-alpha.1` unless they need annotator chaining. Move an entire
+`extends` chain together when adopting `0.5.0-alpha.1`. In that contract,
+`needs` on an annotation binding declares dependencies, and a dependent
+annotator can read their outputs through `$pi.annotations`.
+
+The upstream packages are `agent-control-spec` on crates.io and PyPI,
+`@responsibleai/agent-control-spec` on npm, and
+`ResponsibleAI.AgentControlSpec` on NuGet. The upstream Python import is
+`agent_control_spec`.
+
+AGT keeps `agent_control_specification` for its Rust host crate and Python
+import, `agent-control-specification` for its Python and Node distributions,
+and `AgentControlSpecification` for its .NET package. These packages preserve
+AGT's `AgentControl` and adapter APIs. Installing an upstream package is not
+a drop-in replacement for them.
+
+The [upstream specification](https://github.com/responsibleai/agent-control-spec/blob/main/spec/SPECIFICATION.md)
+defines engine behavior. AGT's [compatibility profile](../spec/SPECIFICATION.md)
+records the host contract and local restrictions. The
+[Python SDK guide](../sdk/python/README.md),
+[Node SDK guide](../sdk/node/README.md) and
+[.NET SDK guide](../sdk/dotnet/README.md) describe the retained APIs.
+
+## Compatibility
+
+| Historical name or behavior | Current equivalent |
+| --- | --- |
 | `InterventionPoint` | `agent_hooks::InterceptionPoint` |
-| `InterventionPointRequest` | `runtime::EvaluationRequest` |
-| `InterventionPointResult` | `runtime::EvaluationResult` |
+| `InterventionPointRequest` | ACS `EvaluationRequest` |
+| Engine `InterventionPointResult` | ACS `EvaluationResult` |
 | `verdict::normalize_policy_output` | `policy_output::normalize_policy_output` |
-| `verdict::{Decision, Evidence, Transform, Verdict}` | `agent_hooks::{...}` |
-| the effects plane | gone. `transform` is the only value changing decision |
-| the C ABI in `core/src/ffi.rs` | moved to `sdk/rust/src/ffi.rs`. See "The .NET SDK" below |
+| Engine verdict types | Agent Hooks verdict types |
+| `warn` | `allow` with `warnings[]` |
+| `escalate` | A liftable `deny` with `approval` |
+| The effects plane | A single `transform` verdict |
 
-`policy-engine/core` survives as a deprecation shim for one release cycle. Rust ignores
-`#[deprecated]` on a `pub use` re-export, so the shim declares deprecated type aliases and
-wrapper functions instead, which do warn at the call site. Preserving a name
-does not preserve its old signatures, manifest grammar or verdict semantics.
-Traits cannot be aliased on stable Rust, so trait re-exports carry the notice
-in documentation only.
+The core shim retains deprecated aliases for one release cycle. A preserved
+name does not preserve the old signature, manifest grammar or verdict
+semantics. Rust deprecation attributes on plain re-exports do not warn at
+the call site, so the shim uses type aliases and wrapper functions where
+possible. Trait re-exports carry their notice in documentation.
 
-## Verdicts are three, not five
+`SUPPORTED_VERSIONS` is the engine's complete manifest-version list.
+`SUPPORTED_MANIFEST_VERSIONS` retains its historical `[&str; 1]` type and
+contains only the legacy `0.4.0-alpha.1` contract. Validators use the complete
+list. New callers should do the same.
 
-`Decision` is `Allow`, `Deny`, `Transform`. Translate as follows.
+Manifest paths use `$target`, not `$policy_target`. Agent Hooks still accepts
+the latter on transform paths, but that does not make it a manifest-path
+alias. Legacy host `WARN` and `ESCALATE` enum members remain available where
+the SDK already exposed them. The engine returns only three decisions.
 
-| Old | New |
-| --- | --- |
-| `warn` | `allow` plus `warnings[]`. `Verdict::warn` is the constructor sugar |
-| `escalate` | a liftable `deny` carrying an `approval` block |
+## Backend and host behavior
 
-Reason namespaces are split. The engine emits `runtime_error:*`. The `host_error:*`
-namespace is reserved for hosts and an interceptor must never emit it. AGT's host SDK is a
-host, so it does synthesize `host_error:*` for approval resolver failure, approval identity
-mismatch, unresolved approval, and streaming refusal. These names come from the
-agent-hooks reserved set.
+AGT's legacy host, Python/Node bindings and .NET C ABI explicitly select OPA
+for their default Rego dispatcher. Enabling upstream in-process Rego elsewhere
+in a Cargo dependency graph must not change that selection. An explicit
+`ACS_OPA_PATH` remains authoritative.
 
-## Host obligations
+The core shim forwards opt-in `rego` and `streaming` modules to ACS.
+These features do not switch the legacy host backend. Direct upstream
+`AcsInterceptor` and `ActivatedPolicy` consumers follow upstream feature
+selection instead.
 
-Under AGENT-HOOKS-0.1 sections 8 to 10 the engine returns a verdict and nothing else. The
-host applies transforms, honours `evaluate_only`, resolves approvals, and computes
-identity. In this tree that is `sdk/rust/src/host/evaluation.rs`, which turns an
-`EvaluationResult` into a `HostEvaluation` carrying `transformed_policy_target` and the
-identity trio. Never push that logic back into the policy plane.
+Alpha.4 fixes the upstream no-backend compilation defect. The compatibility
+core and telemetry crate no longer force the OPA feature for data-only builds.
 
-Before returning a transform, the host reconstructs the complete effective
-snapshot using `policy_target.path` and validates its byte and depth limits.
-This check runs in both enforcement and evaluate-only mode. Validating only
-the replacement target would omit ambient state and permit oversized actions.
-The shared helper serves Rust, Python, Node and the .NET C ABI.
+`HostEvaluation` applies transforms and derives AGT's identity fields. Before
+returning a transform, it reconstructs the complete effective snapshot and
+checks its size and depth limits. Evaluate-only mode validates the proposed
+transform but does not apply it. AGT retains its historical policy-input
+digests rather than claiming the Agent Hooks default context identity profile.
 
-The compatibility identity fields retain AGT's historical policy-input
-digests. They are not a claim to implement agent-hooks' default context
-identity profile.
+The C ABI lives in `sdk/rust/src/ffi.rs` and builds
+`libagent_control_specification.so` on Linux. It belongs to the host SDK because
+it applies host behavior before returning a result to .NET. A liftable deny
+without an approval resolver fails closed with `host_error:approval_unresolved`.
+An adapter reaching the engine is not, by itself, an Agent Hooks conformance
+claim. Such a claim still needs the host CTK.
 
-## Manifests
+## Restored source fields and download limits
 
-Three breaking changes, all already applied across this repository.
+Alpha.4 implements `bundle_url` for the OPA dispatcher and
+`system_prompt_url` for LLM annotators. Both require HTTPS and exactly one
+SHA-256 or SRI integrity pin. A bundle cannot specify both `bundle` and
+`bundle_url`. A prompt cannot specify a URL together with `system_prompt`
+or its `prompt` alias. The upstream engine validates these combinations.
 
-1. `agent_control_specification_version` must be `0.4.0-alpha.1`. The engine accepts no
-   other value and rejects at parse time.
-2. The path root `$policy_target` is now `$target`. The manifest grammar ships no alias
-   and rejects the old root as `unknown path root`. Note that agent-hooks does accept
-   `$policy_target` as a deprecated alias on *transform* paths, so the two layers differ.
-3. `bundle_url`, `system_prompt_file` and `system_prompt_url` are removed. See the next
-   section.
+`system_prompt_file` is still unsupported. AGT rejects it in declarations
+and bindings instead of allowing a judge to use its default prompt.
+The historical `reject_removed_manifest_fields` helper now rejects that
+field only. `REMOVED_MANIFEST_FIELDS` keeps its original array for source
+compatibility and describes the initial retarget, not the current support set.
 
-### Removed manifest fields
+AGT passes host download limits to its default OPA and annotator dispatchers.
+The C ABI's `acs_builder_set_url_fetch_limits` configures pinned bundle and
+prompt downloads after construction. It cannot retroactively constrain a
+manifest fetch that already happened. Inference POST requests retain their
+provider timeout settings, and custom dispatchers own their I/O limits.
 
-The embedded engine implemented three fields that `agent-control-spec`
-0.4.0-alpha.3 never had (`git log -S bundle_url` on the upstream engine is
-empty): a rego `bundle_url` (remote bundle, fetched and pin-checked at
-dispatch), and the `llm` annotator's `system_prompt_file` and
-`system_prompt_url` prompt sources. Upstream's `RegoPolicyConfig::adapter_config`,
-`PolicyBinding::adapter_config`, `AnnotatorConfig::fields` and
-`AnnotationConfig::fields` are open maps, so a manifest declaring one of these
-keys parsed and validated cleanly while the feature was silently absent: the
-annotator ran with `DEFAULT_SYSTEM_PROMPT`, and the rego policy denied every
-request with `runtime_error:policy_invocation_failed` and no diagnostic. Every
-fail-closed check the old engine had for them (`bundle` with `bundle_url`, an
-unpinned or non-HTTPS URL, inline and file prompt together) had turned into a
-silent accept.
+Schema validation, typed validation and actual downloads are separate checks.
+Accepting a pinned URL in an authoring report does not fetch the artifact or
+prove that the remote bundle compiles.
 
-AGT now fails closed instead. `agent_control_specification_core::reject_removed_manifest_fields`
-walks each policy definition, each annotator declaration, and each intervention
-point's policy binding and annotation bindings, and returns
-`runtime_error:manifest_invalid` naming the location and the field. It runs in
-`validate_manifest_yaml`, `validate_manifest_overlay_yaml`, every `AgentControl`
-constructor, `manifest_from_url`, every C ABI `acs_builder_from_*` loader, and
-the Python and Node `from_*` constructors. Both copies of `manifest.schema.json`
-keep the three keys as `not: {}` properties (on the rego policy, the policy
-binding, the annotator and the annotation binding), because the enclosing
-objects allow additional properties and dropping the keys would accept them
-silently.
+## URL provenance and destination checks
 
-Migration: inline the value. A `system_prompt_file` becomes `system_prompt`
-with the file's text; a `system_prompt_url` becomes `system_prompt` as well; a
-`bundle_url` becomes a local `bundle` path shipped with the manifest, or a host
-supplied policy dispatcher that fetches the bundle itself. Restoring a remote
-prompt or bundle source is an upstream proposal against `agent-control-spec`.
-`SPECIFICATION.md` sections 2.3, 10 and 12.1 and the schema record the removal.
+Alpha.4 restores the URL provenance checks tracked in
+[#20](https://github.com/responsibleai/agent-control-spec/issues/20).
+The upstream loader retains provenance through `extends` and merging. It
+rejects fetched documents that request local files, host environment
+credentials, approval configuration or arbitrary executable Rego queries.
+Bundled annotators also check provenance before reading host credentials.
+Remote bundle and prompt URLs require a pinned manifest chain.
 
-`core/src/manifest_yaml.rs` re-exports the engine's public `SUPPORTED_VERSIONS`.
-Its legacy `SUPPORTED_MANIFEST_VERSIONS` array is derived from that list, with
-a compile-time cardinality check to prevent drift while preserving its type.
-URL-loader scaffolding uses the upstream list directly. Package version alpha.3
-does not imply manifest version alpha.3; the accepted grammar remains alpha.1.
+Keep manifests typed through construction. Serializing a fetched manifest
+and parsing it again as host-authored text loses provenance. A host that
+fetches a document itself must use upstream `mark_url_sourced` before
+composing it. That API has stricter constraints than the upstream URL loader.
 
-## Gaps in the pinned upstream release
+These checks do not make arbitrary network destinations safe. AGT's
+`manifest_from_url` also rejects blocked IP literals and local hostnames using
+the same `url` parser as the fetcher. It blocks loopback, unspecified,
+broadcast, link-local, private, shared-address and local IPv6 ranges, including
+supported embedded-IPv4 forms. Internal hosting by a private IP literal is
+therefore rejected.
 
-These limitations were rechecked against the published alpha.3 crate. New
-upstream APIs replace compatibility code only when their behavior and wire
-shapes match the legacy consumer contract.
+The destination guard covers the caller's URL, not DNS resolution or nested
+URL parents. AGT continues to disable redirects on this entry point because
+the fetcher offers no AGT per-hop destination callback. A zero redirect budget
+does not contact the redirect target. Local manifests, custom dispatchers and
+their endpoints still require a host trust decision.
 
-| Gap | Issue |
-| --- | --- |
-| URL sourced manifests can read host environment credentials | [#20](https://github.com/responsibleai/agent-control-spec/issues/20) |
-| The selected `agent-control-spec` release cannot pass `Limits` to bundled dispatchers | [#21](https://github.com/responsibleai/agent-control-spec/issues/21), resolved upstream but not yet eligible for adoption |
-| Telemetry sink cannot be set after `Runtime` construction | [#22](https://github.com/responsibleai/agent-control-spec/issues/22) |
-| `from_url`, `policy_labels`, `validate_overlay` have no equivalent | [#23](https://github.com/responsibleai/agent-control-spec/issues/23) |
-| Original binding validation gap, resolved upstream after alpha.1 | [#14](https://github.com/responsibleai/agent-control-spec/issues/14) |
-| Publisher provenance and organization ownership review condition | [#24](https://github.com/responsibleai/agent-control-spec/issues/24) |
-| `bundle_url`, `system_prompt_file`, `system_prompt_url` have no implementation; AGT rejects them | none filed; restoring them is a proposal, see "Removed manifest fields" |
+The legacy top-level URL helper creates a `0.4.0-alpha.1` wrapper manifest.
+For a `0.5.0-alpha.1` URL parent, use a local root manifest declaring that
+version and its `extends` reference, then load it through `from_path`.
+This keeps version selection explicit and uses upstream composition without
+rewriting fetched content.
 
-### Security, unresolved
+## What still belongs in AGT
 
-`agent-control-spec` 0.4.0-alpha.1 dropped the `url_sourced` provenance gate. AGT used it
-to withhold host environment credentials from a manifest fetched over the network, in
-three places in the old `dispatchers/llm.rs`. The crate still supports URL sourced
-`extends` through `ManifestUrlExtends`, so the capability that creates the risk survived
-while the mitigation did not.
-The alpha.3 dispatchers still do not carry that provenance gate.
+The compatibility layer retains generic bounded YAML-to-JSON tooling,
+overlay checks, source-located OPA artifact diagnostics and legacy telemetry
+projection. Upstream now has bounded typed parsing too, but those APIs do not
+all return the same shape or diagnostics as AGT's tooling. A replacement needs
+behavioral parity, not just a matching function name.
 
-The credential-reading path is the bundled *annotator* dispatcher, which resolves
-`api_key_env` against the host environment. `sdk/rust` therefore installs it only under
-the off-by-default `bundled-dispatchers` feature; without that feature a manifest that
-declares annotators fails closed with a message naming the feature, and a manifest that
-declares none gets a fail-closed no-op. The bundled *policy* dispatcher stays on by
-default so the zero-config Rego path keeps working.
+Runtime manifest and policy-dispatcher getters avoid duplicate construction
+state. The host still retains the inputs needed to rebuild a runtime with a
+telemetry sink. The remaining upstream API requests are
+[#22](https://github.com/responsibleai/agent-control-spec/issues/22) and
+[#23](https://github.com/responsibleai/agent-control-spec/issues/23).
+The old binding-validation gap
+[#14](https://github.com/responsibleai/agent-control-spec/issues/14) and
+dispatcher-limit gap
+[#21](https://github.com/responsibleai/agent-control-spec/issues/21) are resolved.
 
-The production Python wheel and default Rust SDK leave bundled annotators
-disabled. The .NET native build and Node test build explicitly enable
-`bundled-dispatchers` for their existing zero-config integrations. These builds
-require trusted manifests and trusted transitive configuration. The feature
-switch is not a substitute for the missing provenance gate. Do not enable it
-for manifests supplied by an untrusted party.
+The legacy Quint model still describes five decisions. It is labelled as
+historical and is not evidence of conformance to the current engine.
 
-Leaving the policy dispatcher on is a narrower guarantee than "the policy plane is safe".
-`agent-control-spec` spawns `opa` without clearing the environment, and Rego reads the
-inherited environment through `opa.runtime().env`, so a manifest that controls the query
-can read a host secret:
+## Publication and provenance
 
-```console
-$ ACS_SENTINEL=x opa eval --format json --stdin-input 'opa.runtime().env.ACS_SENTINEL' <<<'{}'
-... "value": "x" ...
-```
+The alpha.4 crate has a trusted-publishing record bound to upstream commit
+`e56d0050c5c1f462be6bde3b389e56ae4f04fdc8`. Its registry checksum is
+`ce7cef7009046fda4752cf68911b6fa4076b6a7dcb5f6e0ef629b45dab7006f8`.
+Organization ownership remains tracked in
+[#24](https://github.com/responsibleai/agent-control-spec/issues/24).
+The landed retarget recorded the maintainer's acceptance of the ownership
+state. A dependency update does not resolve that registry-side request.
 
-This is not a retarget regression: the previous embedded engine spawned `opa` the same
-way. Closing it needs `env_clear` at the spawn site upstream, so raise it there.
+AGT's compatibility packages have their own release order. The Python SDK and
+generator are `0.4.0b0`; `agt-policies` requires the new SDK. Publish the SDK
+before those consumers and the consolidated core. The core shim is
+`0.3.2-beta.0`, separate from the upstream engine version. Do not republish
+changed code under an existing version.
 
-Do not read the annotator gate as a credential boundary. It is not. The gated annotator
-path reaches one named variable through `api_key_env`; the ungated policy path reaches
-the whole environment, because a manifest supplies the `query` string and
-`agent-control-spec` passes it to `opa eval` as an arbitrary Rego expression
-(`src/opa.rs`, `command.arg(&invocation.query)`). That needs no bundle, no annotators and
-no `bundled-dispatchers` feature:
+The .NET packages require the complete native asset matrix before release.
+The npm wrapper requires matching native and OPA platform packages.
+Existing ESRP dependency ordering, single-package GitHub publication and
+supply-chain checks remain in place. This update does not publish packages.
 
-```console
-$ OPENAI_API_KEY=sk-SECRET123 opa eval --format json --stdin-input \
-    '{"decision":"allow","reason":opa.runtime().env.OPENAI_API_KEY}' <<<'{}'
-... "value": {"decision": "allow", "reason": "sk-SECRET123"} ...
-```
-
-That output normalizes into a valid `allow` verdict, and the secret does not stop at the
-verdict. `safe_telemetry_reason_code` passes any reason under 96 bytes made of
-alphanumerics and `_-.:/` through unchanged, which most API key formats satisfy, so the
-value is written verbatim to every telemetry sink as `reason_code`. A caller that never
-reads `verdict.reason` still exports it.
-
-The practical consequence is a constraint on `manifest_from_url`: under the default
-feature set, do not point it at a URL you do not control. A manifest is trusted input to
-the policy plane, which was equally true before this change but is easier to reach now
-that loading one over the network is a first class API.
-
-### Capability gaps
-
-- The alpha.1 Python, Node and .NET ACS packages exposed only `AcsInterceptor`.
-  Manifest validation landed upstream in #15, closing #14, and later releases
-  added further tooling. AGT's PyO3 and napi bindings instead consume its Rust
-  host SDK, preserving the richer legacy host API. Replacing those bindings
-  with the standalone packages requires a separate consumer migration.
-- `Manifest::from_url` and `Runtime::policy_labels` are gone. `sdk/rust` reimplements
-  both over the public surface: `manifest_from_url` writes a synthetic one-entry
-  `extends` manifest to a temp dir and loads it with `Manifest::from_path_with_limits`,
-  which reuses the crate's own fetcher, redirect and size limits, and sha256 pin
-  verification rather than adding an HTTP client here; `policy_labels` reads
-  `manifest.intervention_points`.
-- `Manifest::validate_overlay` is not exported. `core/src/manifest_yaml.rs` reimplements
-  the overlay safe subset over the public manifest surface. The bounded YAML
-  parser also remains because upstream parsing does not provide AGT's expanded
-  node and byte limits.
-- `TelemetrySink` has no `force_flush`, and `TelemetryEvent` has no `to_json`.
-  Alpha.3 provides `wire::telemetry_event_json`, but it lowercases Rust debug
-  names, losing underscores in interception points and evaluate-only mode.
-  `core/src/telemetry_sinks.rs` therefore retains the canonical legacy wire
-  projection and its flush methods.
-- `Runtime` now exposes its manifest, policy dispatcher and performance
-  telemetry. The host uses those getters rather than retaining duplicate
-  construction state. Annotator and limit accessors and a telemetry setter are
-  still absent, so `with_telemetry` retains those inputs and still requires a
-  manifest-based constructor.
-- Upstream artifact diagnostics use the in-process backend and a different
-  shape. AGT retains its bounded, source-located OPA lint diagnostics and
-  explicit executable selection rather than silently changing that API.
-- The selected `agent-control-spec` release does not expose limits-aware bundled
-  dispatchers. `acs_builder_set_url_fetch_limits` therefore fails closed instead of
-  reporting a successful configuration it cannot enforce. The C ABI retains the symbol
-  for compatibility until AGT can adopt the upstream fix after its supply-chain
-  stabilization period.
-
-Raise these as issues or proposals on the upstream repositories rather than forking
-contract semantics here. See `docs/proposals/README.md` in the agent-hooks repository for
-the process.
-
-## Work remaining in this repository
-
-`SPECIFICATION.md` sections beyond the verdict set, host obligations, approval
-path and reason tables were retargeted alongside them, and sections 2.3, 10 and
-12.1 now record the removed remote prompt and bundle fields. For a URL sourced
-manifest the pinned engine skips relative path resolution, so the host SDK
-`manifest_from_url` rejects its filesystem path fields (rego `bundle`, cedar
-`policy_path`/`entities_path`/`schema_path`, and `data`/`data_paths` in a policy
-or binding adapter config) with `runtime_error:manifest_invalid`, since such a
-path would otherwise resolve against the working directory and let a remote
-manifest read local files. The top-level URL case is covered; a file manifest
-whose `extends` names a URL parent, and the annotator `api_key_env`/`aws_*_env`
-secret fields spec 2.3 also forbids on a URL manifest, remain to be addressed. The AgentDojo benchmark policy
-computes its own redacted value and returns a single `transform`. The transform a
-host applies is revalidated against `Limits`, and `manifest_from_url` runs an
-SSRF guard over the URL before anything is fetched.
-
-### The `manifest_from_url` guard
-
-The guard parses the URL with the `url` crate, the same parser the upstream
-loader canonicalizes the fetch target with, and evaluates `Url::host()`. An
-earlier port hand-split the authority and called `str::parse::<IpAddr>`, which
-accepts only dotted-quad literals; `127.1`, `2130706433`, `0x7f000001`,
-`0177.0.0.1` and `127.0.0<TAB>.1` passed it and were then canonicalized to
-`127.0.0.1` by the fetcher, which connected. The test
-`manifest_from_url_blocks_ssrf_targets` now carries every one of those forms,
-and `manifest_from_url_never_connects_to_a_blocked_literal` binds a loopback
-listener and asserts no connection arrives.
-
-Blocked destinations: loopback, the unspecified address and `0.0.0.0/8`,
-broadcast, link-local (`169.254.0.0/16`, `fe80::/10`), RFC 1918 private
-ranges, the shared address space `100.64.0.0/10`, IPv6 unique-local
-`fc00::/7` and site-local `fec0::/10`, and the names `localhost`,
-`*.localhost` and `*.local`. IPv4-mapped, IPv4-compatible and NAT64
-well-known-prefix IPv6 literals are checked on their embedded IPv4 address.
-The pre-retarget engine allowed RFC 1918 and unique-local literals so a policy
-could be hosted on an internal HTTPS server by IP; that is no longer allowed,
-and internal hosting must use a hostname.
-
-What the guard does not do, all of it the same upstream gap as issue #20:
-
-- Hostnames other than the three blocked patterns are not resolved. A name that
-  resolves into a blocked range, and DNS rebinding between the check and the
-  connect, need a resolution-time check inside the fetcher.
-- Redirect hops are not re-checked. `agent-control-spec` 0.4.0-alpha.3 hands
-  redirect following to its HTTP client (`max_redirects` from
-  `Limits::max_manifest_url_redirects`, default 5) and exposes no hook to
-  intercept a hop, so a vetted public URL can redirect to a blocked address.
-  The pre-retarget engine followed redirects itself and re-ran each hop through
-  the guard. Because the pinned engine cannot re-validate a hop,
-  `manifest_from_url` fails closed by zeroing the redirect budget. A
-  redirecting URL is not followed. `ureq` returns the 3xx response instead of
-  following it and the upstream fetcher only rejects status codes of 400 and
-  above, so the 3xx body reaches the SHA-256 check and the manifest YAML parse
-  and fails there; the redirect target is never contacted, so the hop is
-  closed. The `max_url_redirects` (Python) and `maxRedirects` (Node) arguments
-  now have no effect on URL sourcing. A direct 2xx URL still loads.
-  Re-enabling redirects needs the upstream per-hop hook (issue #20), not an
-  AGT-side bypass.
-- A nested `extends` URL inside the fetched manifest resolves through the
-  upstream loader with no destination check at all.
-
-Treat the guard as a barrier against the obvious case and not as a boundary.
-
-### Registry ownership decision
-
-The review asked for trusted publishing, repository metadata and an
-organization or team co-owner for `agent-control-spec`. Registry APIs checked on
-September 13, 2026 show repository metadata and a trusted-publishing attestation
-for the pinned alpha.3 artifact (GitHub Actions, `responsibleai/agent-control-spec`,
-commit `4c47b57033b98c0d2ccf1b94624f058815db0a9c`), and the downloaded crate
-checksum and unpacked source match the registry and that commit. The same holds
-for `agent-hooks-sdk` 0.1.0-alpha.5.
-
-Both crates still list one individual owner and no team. In August 2026 the
-maintainer accepted that as the state to merge on: the
-sole owner is the same account that maintains this integration, publication is
-bound to a public commit through trusted publishing rather than to that
-account's token, and adding an organization owner is a registry-side change
-that does not alter any byte this tree builds against. Adding the team owner
-stays tracked upstream in
-[#24](https://github.com/responsibleai/agent-control-spec/issues/24); revisit
-this paragraph when it closes.
-
-### Release and upgrade order
-
-The Python SDK and generator are versioned 0.4.0b0, and `agt-policies` 5.1.0
-requires `agent-control-specification>=0.4.0b0,<0.5.0`. The old 0.3.1b1 wheel
-cannot satisfy this requirement. Publish the new SDK distribution before
-publishing its generator and migration-tool consumers. The consolidated core
-requires `agt-policies>=5.1.0,<6.0`, so its CLI cannot pull in the old engine
-through the previous migration-tool release. Release that core change with the
-next repository-wide version bump, after publishing the policy dependencies.
-CI builds these dependencies from this checkout rather than requiring an
-unpublished release from PyPI.
-
-ESRP's PyPI jobs wait for prerequisites selected in the same run before
-publishing consumers. If a prerequisite is omitted, it must already be
-published. GitHub publication accepts one Python package per manual publish
-run, in the same dependency order. Bulk GitHub dry-runs still build all
-artifacts, but actual bulk PyPI publication must use the ordered ESRP pipeline.
-
-The .NET package family moves to 0.4.0-beta.0. ESRP builds
-`agent_control_specification` with `opa,bundled-dispatchers` for all five RIDs,
-matching the local MSBuild target. Package the complete native asset matrix
-before publishing the managed SDK and adapters.
-
-Rust's core shim and npm's package family still need coordinated release
-preparation. Do not publish their modified code under existing 0.3.1 versions.
-Publish a newly versioned core shim, then update the SDK's exact registry
-requirement and publish dependent Rust crates. For npm, publish newly versioned
-native and OPA platform packages, then update and publish the wrapper with
-matching exact optional dependencies. The supply-chain checks must accept those
-versions before the dependency updates merge. Do not bypass them or confuse a
-successful workspace build with a registry-install test.
-
-## The .NET SDK
-
-`sdk/dotnet` retains AGT's C ABI and `AgentControl` host API. The original
-alpha.1 NuGet package did not expose its needed policy-plane functions. Newer
-NuGet releases add APIs and native assets, but migrating the legacy host API
-to them is outside this pinned-engine retarget.
-
-The ABI lives in `sdk/rust/src/ffi.rs` and ships as
-`libagent_control_specification.so`. It belongs in the SDK rather than the core
-shim for two reasons. It discharges the host obligations through `HostEvaluation`
-before crossing the boundary, so the managed side receives a verdict that has
-already had its transform applied and its identities derived. And a core that
-depended on the SDK could not be packaged, since the SDK version it would pin is
-not on any registry.
-
-The managed side carries the three-verdict contract: `Verdict` gained `Warnings`
-and `Approval`, and enforcement routes on a deny that holds an approval block.
-`Decision.Warn` and `Decision.Escalate` remain declared and keep their documented
-meanings, so a caller still holding one gets the behaviour it expects rather than
-a refusal.
-
-A liftable deny without an approval resolver returns
-`host_error:approval_unresolved` before execution. The blocked result preserves
-the original policy input and identity for host-side records.
-
-## Rebuild the Python wheel after retargeting
-
-The manifests in this repository now pin `0.4.0-alpha.1`, which the previously published
-`agent_control_specification` wheel (0.3.1b1, built from the old engine) rejects at parse
-time. A stale copy in `site-packages` shadows the retargeted tree and makes suites in
-`agt-policies`, `agent-compliance` and `agent-os` fail with `unsupported
-agent_control_specification_version '0.4.0-alpha.1'`. Rebuild and reinstall the wheel
-from `sdk/python` before reading those results.
+As checked October 3, PyPI's `agent-control-specification` is still `0.3.1b1`.
+Build and install the wheel from this checkout before testing AGT's host API.
+A stale installed wheel can reject the new manifest grammar even when the
+source tree is correct.

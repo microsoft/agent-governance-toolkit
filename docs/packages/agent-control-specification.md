@@ -1,6 +1,6 @@
 ---
 title: Agent Control Specification
-last_reviewed: 2026-07-31
+last_reviewed: 2026-10-03
 owner: docs-team
 ---
 
@@ -12,15 +12,23 @@ owner: docs-team
 [![Rust](https://img.shields.io/badge/core-Rust-orange.svg)](https://www.rust-lang.org/)
 
 !!! important "Public Preview"
-    Agent Control Specification is vendored into AGT under `policy-engine/` as the
-    AGT 5.0 policy layer. APIs and manifest details may change before GA.
+    AGT depends on the published
+    [agent-control-spec](https://github.com/responsibleai/agent-control-spec)
+    engine. `policy-engine/` contains AGT's compatibility SDKs and host
+    integration. APIs and manifest details may change before GA.
 
 ## What ACS is
 
-Agent Control Specification, or ACS, is AGT's stateless, deterministic,
-fail-closed policy decision runtime. At each intervention point, a host sends a
-policy manifest and complete snapshot to ACS. ACS returns a normalized verdict;
-the host enforces it.
+Agent Control Specification, or ACS, is the upstream policy decision runtime
+used by AGT. A host configures a manifest and supplies a complete snapshot for
+each evaluation. ACS returns a normalized verdict and the host enforces it.
+[Agent Hooks](https://github.com/responsibleai/agent-hooks) defines the
+interception contract shared by the engine and its hosts.
+
+The engine moved upstream so fixes to policy evaluation can be shared through
+registry releases. AGT keeps its host APIs and framework integrations. That
+lets the engine and the adapters evolve without maintaining two copies of the
+decision logic.
 
 The Rust core exposes bindings through C-ABI, PyO3, napi, and P-Invoke. AGT
 includes SDKs for Python, Node.js, .NET, and Rust.
@@ -52,7 +60,7 @@ retained runtime state.
 | Property | Runtime contract |
 | --- | --- |
 | Stateless | The runtime retains no mutable state that influences later verdicts. The host supplies the complete snapshot for every call. |
-| Deterministic | The same manifest, snapshot, mode, and dispatcher outputs produce the same verdict and transformed policy target. |
+| Deterministic | The same manifest, snapshot and dispatcher outputs produce the same verdict. The host applies enforcement mode and any transform. |
 | Fail-closed | Runtime errors return `deny`, use a reserved runtime-error reason, and apply no transform. |
 
 ## Verdict types
@@ -60,11 +68,11 @@ retained runtime state.
 | Verdict | Meaning |
 | --- | --- |
 | `allow` | The host may proceed with the policy target. |
-| `warn` | The host may proceed while recording or surfacing a warning. |
-| `deny` | The host must block the action. |
-| `escalate` | The host must route the action to an approval backend or fail closed if none is available. |
-| `transform` | The host receives a transformed policy target, such as redacted output, and applies it instead of the original target. |
+| `deny` | The host must block the action. A deny carrying `approval` is liftable only through the host's approval resolution. |
+| `transform` | The host validates and applies the proposed replacement before proceeding in enforce mode. |
 
+Policy intents `warn` and `escalate` normalize to `allow` with `warnings[]`
+and `deny` with `approval`. They are not additional normalized decisions.
 Verdicts may include optional evidence fields that propagate into telemetry.
 
 ## Policy types
@@ -76,9 +84,9 @@ Verdicts may include optional evidence fields that propagate into telemetry.
 | `test` | Provides fixed test-double behavior for runtime and conformance tests. |
 | `custom` | Calls a host dispatcher identified by adapter configuration. |
 
-The AGT variant uses the `transform` verdict instead of upstream effects,
-attaches optional `evidence` fields to verdicts and telemetry, and adds a
-top-level `approval` section for escalation backends.
+Transforms, evidence and approval metadata belong to the upstream contract.
+AGT's compatibility layer retains its host result shape, approval resolver
+APIs and explicit OPA selection for the default Rego path.
 
 ## Manifest shape
 
@@ -101,25 +109,36 @@ The Rust core emits structured telemetry through a `TelemetrySink`. Telemetry is
 
 ## Where it lives in AGT
 
-AGT owns the vendored ACS source under
+AGT's compatibility shim, host SDKs and policy tooling live under
 [`policy-engine/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine).
-The language SDKs connect hosts and adapters to that runtime. Agent OS adapters
-preserve framework integration behavior while routing policy decisions through
-ACS.
+The decision engine source lives in
+[`responsibleai/agent-control-spec`](https://github.com/responsibleai/agent-control-spec).
+AGT consumes a registry release rather than maintaining a second engine.
+See the [retarget guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/docs/acs-retarget.md) for the
+exact pin and compatibility restrictions.
 
 ## How Python hosts call ACS
 
-`agent-control-specification` is the canonical Python SDK for ACS. It provides
+`agent-control-specification` is AGT's compatibility Python SDK. It provides
 the host concerns that remain outside the stateless engine:
 
 - manifest loading through `AgentControl`
 - complete intervention-point snapshots through `SnapshotBuilder`
 - synchronous host callbacks through `HostSession`
-- native `InterventionPointResult` values for `allow`, `warn`, `deny`,
-  `escalate`, and `transform`
+- `InterventionPointResult` values containing the three-decision verdict and
+  AGT's host result fields
+
+The standalone upstream Python distribution is `agent-control-spec`, imported
+as `agent_control_spec`. It provides interceptor and activation APIs rather
+than AGT's `AgentControl` and `HostSession` API. Installing it does not replace
+AGT's compatibility package.
+
+As verified October 3, 2026, PyPI's `agent-control-specification` release is
+still `0.3.1b1`, built against the old engine. For this checkout's host API,
+install from the repository root rather than using that stale release.
 
 ```bash
-pip install agent-control-specification
+python -m pip install ./policy-engine/sdk/python
 ```
 
 `agt-policies` is a separate migration package. It converts AGT v4 projects to
@@ -134,9 +153,13 @@ ACS manifests with `agt migrate v4-to-v5`.
 | Node.js SDK | [`policy-engine/sdk/node/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/node) |
 | .NET SDK | [`policy-engine/sdk/dotnet/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/dotnet) |
 | Rust SDK | [`policy-engine/sdk/rust/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/rust) |
-| Normative specification | [`policy-engine/spec/SPECIFICATION.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/SPECIFICATION.md) |
+| Upstream engine specification | [`agent-control-spec/spec/SPECIFICATION.md`](https://github.com/responsibleai/agent-control-spec/blob/main/spec/SPECIFICATION.md) |
+| Host/interceptor contract | [`agent-hooks`](https://github.com/responsibleai/agent-hooks) |
+| AGT compatibility profile | [`policy-engine/spec/SPECIFICATION.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/SPECIFICATION.md) |
 
-The Python SDK distribution is named `agent-control-specification` in `policy-engine/sdk/python/pyproject.toml` and is built with maturin from the vendored source.
+The Python host distribution is named `agent-control-specification` in
+`policy-engine/sdk/python/pyproject.toml`. Maturin builds its native binding
+against AGT's Rust host SDK, which depends on the registry engine.
 
 ## Trusted by partners
 

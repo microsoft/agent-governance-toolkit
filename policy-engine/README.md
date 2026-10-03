@@ -1,10 +1,16 @@
 # Agent Control Specification (ACS)
 
-Agent Control Specification, ACS, is the policy layer of the Agent Governance Toolkit. It is a stateless, deterministic, fail closed policy decision runtime for agent security. A host acts as the policy enforcement point and calls ACS at defined intervention points with a complete JSON snapshot. ACS acts as the policy decision point, evaluates the bound policy and optional annotations through a pure logic Rust core, and returns a normalized verdict that the host enforces.
+AGT depends on the published
+[`agent-control-spec`](https://github.com/responsibleai/agent-control-spec)
+decision engine. The engine evaluates a complete snapshot and returns an
+`allow`, `deny`, or `transform` verdict. AGT's host SDKs enforce that verdict.
+The interception contract belongs to
+[`agent-hooks`](https://github.com/responsibleai/agent-hooks).
 
-Define once. Enforce everywhere.
-
-ACS lives in this `policy-engine/` directory as AGT owned source. It is folded into AGT as the AGT 5.0 policy layer, and the directory is named for that role inside AGT.
+This directory contains AGT's compatibility shim, host SDKs, adapters, policy
+tooling and examples. It does not contain the upstream decision engine.
+See [the retarget guide](docs/acs-retarget.md) for exact dependency versions
+and compatibility restrictions.
 
 ## Why a unified policy layer
 
@@ -54,8 +60,8 @@ AGT is the host and policy enforcement point around the ACS decision core. The i
 | Layer | Role in the integration |
 | --- | --- |
 | AGT host adapters | Framework adapters in `agent-os` intercept the agent loop, build the snapshot for each intervention point, call the policy layer, and enforce the returned verdict. |
-| `agt-policies` bridge | The Python `agent_control_specification` package mediates between AGT host calls and the ACS runtime and normalizes verdicts for host consumption. |
-| ACS native runtime | The `agent_control_specification` Python SDK over the Rust core performs the deterministic decision and is built from `sdk/python` with maturin. |
+| AGT host SDK | The Python `agent_control_specification` package and the Rust, Node and .NET host SDKs apply transforms, enforcement mode and approval handling around engine results. `agt-policies` is separate migration tooling. |
+| ACS native runtime | The registry dependency `agent-control-spec` evaluates policy. AGT's native bindings reach it through the Rust host SDK. |
 
 The runtime consumes native ACS/AGT manifests and resolves ACS `extends`.
 Legacy governance folder discovery is available only through the one-way
@@ -86,17 +92,21 @@ Security boundaries and host obligations are described in [`docs/security-model.
 
 `pre_tool_call` and `post_tool_call` are the only tool intervention points and the only points that accept `tool_name_from`.
 
-## Divergences from upstream ACS
+## Upstream contract and AGT compatibility
 
-These behaviors are part of the normative [`spec/SPECIFICATION.md`](spec/SPECIFICATION.md), which is the single authoritative contract for this engine. The table below is a quick summary.
+The [upstream ACS specification](https://github.com/responsibleai/agent-control-spec/blob/main/spec/SPECIFICATION.md)
+defines engine semantics. The
+[agent-hooks specification](https://github.com/responsibleai/agent-hooks)
+defines the host/interceptor contract. AGT's
+[`spec/SPECIFICATION.md`](spec/SPECIFICATION.md) records its compatibility
+profile, not a separate upstream engine specification.
 
-| Divergence | AGT contract |
+| Surface | Ownership |
 | --- | --- |
-| Verdict mutation | Effects are removed and replaced by a `transform` verdict type. |
-| Evidence | Verdicts and telemetry carry optional evidence fields. |
-| Cedar | `policies.type` includes `cedar` as a built in policy type. |
-| Approval | The manifest has a top level `approval` section for escalation backend configuration. |
-| Manifest resolution | AGT folder discovery, scope, and merge pre-resolve manifests before this engine sees them. |
+| Verdicts and evidence | ACS returns the three-decision agent-hooks contract, including warnings and approval metadata. |
+| Transforms and approvals | AGT applies transforms and resolves liftable denies before allowing the guarded action. |
+| Policy backends | ACS provides backend implementations. AGT's legacy host explicitly selects OPA for its default Rego path. |
+| Compatibility API | AGT retains historical package names, host result fields and adapter entry points. They are not aliases for the standalone upstream SDK APIs. |
 
 ## Manifest schema overview
 
@@ -145,7 +155,7 @@ A policy binding selects one policy by `policy.id`. Rego policies require a quer
 
 | Verdict member | Meaning |
 | --- | --- |
-| `decision` | Required value of `allow`, `deny`, `warn`, `escalate`, or `transform`. |
+| `decision` | Normalized value of `allow`, `deny`, or `transform`. Policy intents `warn` and `escalate` normalize to `allow` with warnings and `deny` with approval metadata. |
 | `reason` | Optional low cardinality code. Policy output must not use the runtime error prefix. |
 | `message` | Optional host facing text. |
 | `transform` | Optional body required only for `transform` decisions. |
@@ -158,10 +168,10 @@ The core declares annotator types and dispatches through host owned implementati
 
 | Integration | Path |
 | --- | --- |
-| Reference classifier dispatcher | `core/src/dispatchers/classifier.rs` |
-| Reference LLM judge dispatcher | `core/src/dispatchers/llm.rs` |
+| Reference classifier dispatcher | [Upstream ACS dispatchers](https://github.com/responsibleai/agent-control-spec/tree/main/engine/src/dispatchers) |
+| Reference LLM judge dispatcher | [Upstream ACS dispatchers](https://github.com/responsibleai/agent-control-spec/tree/main/engine/src/dispatchers) |
 | LLM provider preset guide | [`docs/llm-annotator-providers.md`](docs/llm-annotator-providers.md) |
-| Reference endpoint dispatcher | `core/src/dispatchers/endpoint.rs` |
+| Reference endpoint dispatcher | [Upstream ACS dispatchers](https://github.com/responsibleai/agent-control-spec/tree/main/engine/src/dispatchers) |
 
 ## Information flow control
 
@@ -211,7 +221,8 @@ In Rust the core owns emission, so installing a sink is enough and the manifest-
 
 ## Build
 
-The ACS Cargo workspace is embedded inside the top level AGT Cargo workspace. To build just this engine, run the scoped workspace commands from `policy-engine/`.
+`policy-engine/` is a separate Cargo workspace. From the repository root, build
+the compatibility crates and host SDKs with these commands.
 
 ```sh
 cd policy-engine
@@ -219,22 +230,15 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-The same crates are also reachable from the repository root through package specific Cargo commands.
-
-```sh
-cargo build -p agt_core_engine
-cargo test -p agt_core_engine
-```
-
 ## Layout
 
 | Path | Role |
 | --- | --- |
-| `core/` | Rust runtime renamed from `agent_control_specification_core` to `agt_core_engine` in M2. |
-| `sdk/` | Language SDK bindings for Rust, Python through PyO3, Node through napi, .NET through P/Invoke, and Go added in M4. |
-| `policy/lib/` | Stock Rego library and stock Cedar library added in M4. |
+| `core/` | Deprecated `agent_control_specification_core` compatibility shim plus AGT artifact diagnostics, bounded tooling and telemetry helpers. |
+| `sdk/` | Rust host SDK and compatibility bindings for Python through PyO3, Node through napi and .NET through P/Invoke. |
+| `policy/` | Rego policies in `lib/` and Cedar policies in `cedar-lib/`. |
 | `integrations/` | Reference annotators, OTEL bridge, and Rig adapter. |
-| `spec/` | Normative ACS derived spec docs and JSON schemas. |
+| `spec/` | AGT compatibility documentation, schemas and host snapshot contracts. |
 | `generator/` | `acs-generate` CLI. |
 | `examples/` | Reference host implementations. |
 | `tests/` | Conformance, parity, and formal model assets. |
