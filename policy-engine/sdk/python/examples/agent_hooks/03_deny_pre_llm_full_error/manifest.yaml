@@ -1,0 +1,16 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "acs-deny-pre-llm-full-error"
+extends: []
+policies:
+  prompt_firewall:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.deny_pre_llm.verdict
+intervention_points:
+  pre_model_call:
+    policy_target: "$.messages"
+    policy_target_kind: model_messages
+    policy:
+      id: prompt_firewall
+      query: data.agent_control_specification.deny_pre_llm.pre_model_call_verdict

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ._errors import AdapterUnsupportedError
+from .agent_hooks import AcsInterceptor, AgentContext, WireVerdict
 from ._generic import (
     AgentT,
     FullCoverageAgentAdapter,
@@ -65,10 +66,13 @@ from .anthropic import guard_anthropic_client
 from .foundry import guard_azure_ai_agents, guard_foundry_agent
 
 __all__ = [
+    "AcsInterceptor",
     "AdapterUnsupportedError",
+    "AgentContext",
     "AgentControlLiteLLMGuardrail",
     "AgentT",
     "Execute",
+    "WireVerdict",
     "FullCoverageAgentAdapter",
     "LiteLLMProxyMiddleware",
     "ModelCallResult",
