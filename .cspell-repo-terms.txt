@@ -637,6 +637,7 @@ imran
 inheritdoc
 initialisation
 initialised
+injective
 innererror
 inspectable
 interp
@@ -1073,6 +1074,7 @@ testserver
 textwrap
 thiserror
 timedelta
+timespec
 tinyrainbow
 tinystr
 tinytemplate
@@ -1131,6 +1133,7 @@ userinfo
 usize
 utcfromtimestamp
 utcnow
+utcoffset
 uvicorn
 venv
 venvs
