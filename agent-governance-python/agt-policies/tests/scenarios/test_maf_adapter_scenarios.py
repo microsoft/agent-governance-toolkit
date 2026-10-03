@@ -135,6 +135,8 @@ def _make_function_ctx(
     return SimpleNamespace(
         function=SimpleNamespace(name=func_name),
         arguments=arguments if arguments is not None else {"query": "weather"},
+        metadata={"call_id": "maf-scenario-call"},
+        session=None,
         result=None,
     )
 
@@ -321,6 +323,7 @@ def test_capability_guard_transform_path_rewrites_arguments(tmp_path: Path) -> N
 
     # The wrapped tool MUST receive the AGT-redacted arguments.
     assert captured["args"] == {"query": "[SANITIZED]"}
+    assert _policy.invocations[0]["input"]["snapshot"]["tool_call"]["id"] == "maf-scenario-call"
 
 
 def test_policy_middleware_refuses_a_replacement_it_cannot_write(

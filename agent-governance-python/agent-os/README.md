@@ -1146,6 +1146,36 @@ pytest
 
 ---
 
+## Microsoft Agent Framework execution identity
+
+`create_governance_middleware` creates one adapter-owned execution state shared by
+the runtime and capability middleware. Create a separate stack for each independent
+agent run; reusing a stack shares its session counters. Standalone middleware
+instances create independent unique execution IDs.
+
+The capability guard passes MAF's exact `context.metadata["call_id"]` to policy
+evaluation. Missing or invalid call IDs block before evaluation and tool execution.
+Native call/session identifiers must be non-empty printable ASCII strings of at
+most 256 characters and are preserved without normalization. A missing or invalid
+`context.session.session_id` is omitted from audit and does not block execution.
+Neither native identifier is an authenticated principal or a HostSession cache key.
+
+Capability deny/start/complete/error audit records carry native identifiers and
+available ACS input/enforced identities in hash-covered `data["correlation"]`.
+Terminal records reference their start entry even when the tool raises or is
+cancelled. Capability completion records omit raw result previews. The optional
+keyword-only `AuditLog.log(session_id=...)` argument also projects session identity
+into the existing query/CloudEvents field; this top-level field is outside the
+v1.0 hash, so the nested correlation object is the integrity-covered copy.
+
+Upgrade considerations: merging the two adapter sessions consolidates their
+accounting, so configured limits can be reached sooner. Native call IDs replace
+counter-derived policy inputs and change ACS action digests; finish in-flight
+approvals before upgrade or reissue them afterward. An ACS digest is not a stable
+retry/resume key because policy inputs also include timestamps and running budgets.
+This adapter mapping does not implement checkpoint correlation or attest that
+caller-supplied native identifiers are truthful.
+
 ## License
 
 MIT — See [LICENSE](LICENSE)
