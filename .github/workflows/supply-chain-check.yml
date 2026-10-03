@@ -185,7 +185,7 @@ jobs:
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          python3 scripts/check_install_scripts.py --base "origin/${BASE_REF}" --strict
+          python3 scripts/check_install_scripts.py --base "origin/${BASE_REF}" --strict --max-deps 2000
 
   # ------------------------------------------------------------------
   # G3 (H5): build-hook (setup.py / build.rs) addition flagger.
