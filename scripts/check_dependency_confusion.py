@@ -170,6 +170,8 @@ REGISTERED_PACKAGES = {
     "pyatr",
     # agentrust-trace: TRACE v0.2 Trust Record library (real PyPI package; runtime dep for TRACE emission)
     "agentrust-trace", "agentrust_trace",
+    # agent-evidence-vectors: observed-effect record reader and corpus (real PyPI package; agent-mesh dev dep)
+    "agent-evidence-vectors", "agent_evidence_vectors",
     # flowise-agentmesh: AGT governance nodes for Flowise (first-party package in this repo)
     "flowise-agentmesh", "flowise_agentmesh",
     # OS-native (Landlock / Seatbelt) capability sandbox (real PyPI package, Alpha; agt-sandbox[nono])

@@ -1306,3 +1306,7 @@ ITAR
 bssn
 uncued
 undelimited
+
+# agent-mesh retry-effect tests
+observedeffect
+recomputable
