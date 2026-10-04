@@ -12,7 +12,7 @@ Automated compliance mapping for:
 Every action is mapped to relevant controls automatically.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 from enum import Enum
@@ -129,11 +129,19 @@ class ComplianceReport(BaseModel):
         period_end: End of the reporting period.
         organization_id: Optional organisation scope.
         agents_covered: Agent DIDs included in the report.
-        total_controls: Total number of controls evaluated.
-        controls_met: Number of controls fully satisfied.
+        total_controls: Number of controls defined for the framework.
+        controls_met: Number of controls that were assessed during the
+            period and have no recorded violation. A control that was never
+            assessed is not counted as met.
         controls_partial: Number of controls partially satisfied.
         controls_failed: Number of controls with violations.
-        compliance_score: Overall score from 0 to 100.
+        controls_unassessed: Number of controls with no recorded assessment
+            during the period (and agent scope). ``None`` means unknown, e.g.
+            a report serialised before assessment tracking existed.
+        unassessed_controls: IDs of the controls counted in
+            ``controls_unassessed``.
+        compliance_score: Overall score from 0 to 100, computed as
+            ``controls_met / total_controls * 100``.
         violations: List of violations found during the period.
         evidence_items: Count of evidence artefacts collected.
         recommendations: Actionable remediation recommendations (max 10).
@@ -156,6 +164,8 @@ class ComplianceReport(BaseModel):
     controls_met: int = 0
     controls_partial: int = 0
     controls_failed: int = 0
+    controls_unassessed: Optional[int] = None
+    unassessed_controls: list[str] = Field(default_factory=list)
     compliance_score: float = 0.0  # 0-100
 
     # Violations
@@ -187,6 +197,13 @@ class ComplianceEngine:
         self._controls: dict[str, ComplianceControl] = {}
         self._mappings: dict[str, ComplianceMapping] = {}
         self._violations: list[ComplianceViolation] = []
+
+        # Assessment coverage: which controls check_compliance() actually
+        # evaluated, so reports can tell "assessed and passed" apart from
+        # "never assessed". Aggregated per (control_id, agent_did, UTC day)
+        # as (first, last) timestamps, so memory grows with distinct triples
+        # rather than with call volume.
+        self._assessments: dict[tuple[str, str, date], tuple[datetime, datetime]] = {}
 
         # Load default controls
         self._load_default_controls()
@@ -373,7 +390,8 @@ class ComplianceEngine:
         """Check an action for compliance violations.
 
         Evaluates the action against all mapped controls for the given
-        action type and records any violations found.
+        action type, records that each of those controls was assessed, and
+        records any violations found.
 
         Args:
             agent_did: DID of the agent performing the action.
@@ -389,10 +407,13 @@ class ComplianceEngine:
         if not mapping:
             return violations
 
+        now = datetime.now(timezone.utc)
         for control_id in mapping.controls:
             control = self._controls.get(control_id)
             if not control:
                 continue
+
+            self._record_assessment(control.control_id, agent_did, now)
 
             # Check requirements
             violation = self._check_control(agent_did, action_type, control, context)
@@ -401,6 +422,42 @@ class ComplianceEngine:
                 self._violations.append(violation)
 
         return violations
+
+    def _record_assessment(self, control_id: str, agent_did: str, at: datetime) -> None:
+        """Record that ``control_id`` was assessed for ``agent_did`` at ``at``.
+
+        "Assessed" means ``check_compliance()`` ran the control's checks for an
+        action mapped to it. ``_check_control`` has no specific rules for SOC 2
+        or EU AI Act controls, so for those it means the action was mapped to
+        the control and no violation was raised.
+        """
+        key = (control_id, agent_did, at.date())
+        seen = self._assessments.get(key)
+        if seen is None:
+            self._assessments[key] = (at, at)
+        else:
+            self._assessments[key] = (min(seen[0], at), max(seen[1], at))
+
+    def _assessed_control_ids(
+        self,
+        period_start: datetime,
+        period_end: datetime,
+        agent_ids: Optional[list[str]],
+    ) -> set[str]:
+        """Return IDs of controls assessed within the period and agent scope.
+
+        A day bucket counts only when its first or last assessment falls inside
+        the period. This can under-report coverage for a period shorter than a
+        day whose bounds both fall between the day's first and last assessment,
+        but it never reports an unassessed control as assessed.
+        """
+        assessed: set[str] = set()
+        for (control_id, agent_did, _day), (first, last) in self._assessments.items():
+            if agent_ids and agent_did not in agent_ids:
+                continue
+            if period_start <= first <= period_end or period_start <= last <= period_end:
+                assessed.add(control_id)
+        return assessed
 
     def _check_control(
         self,
@@ -452,10 +509,18 @@ class ComplianceEngine:
     ) -> ComplianceReport:
         """Generate a compliance report for a framework and time period.
 
+        A control counts as met only if ``check_compliance()`` assessed it
+        within the period (and agent scope) and no violation was recorded for
+        it. Controls that were never assessed are reported in
+        ``controls_unassessed`` / ``unassessed_controls`` and do not count
+        towards ``controls_met`` or the score.
+
         Args:
             framework: The compliance framework to report on.
-            period_start: Start of the reporting window.
-            period_end: End of the reporting window.
+            period_start: Start of the reporting window. Naive datetimes are
+                interpreted as UTC.
+            period_end: End of the reporting window. Naive datetimes are
+                interpreted as UTC.
             agent_ids: Optional list of agent DIDs to scope the report.
                 When ``None``, all agents are included.
 
@@ -463,6 +528,13 @@ class ComplianceEngine:
             A ``ComplianceReport`` with score, violations, and recommendations.
         """
         import uuid
+
+        # Recorded timestamps are UTC-aware; comparing them with naive bounds
+        # would raise TypeError.
+        if period_start.tzinfo is None:
+            period_start = period_start.replace(tzinfo=timezone.utc)
+        if period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=timezone.utc)
 
         # Filter violations
         violations = [
@@ -478,11 +550,18 @@ class ComplianceEngine:
             if c.framework == framework
         ]
 
-        # Calculate compliance score
+        # Calculate compliance score. A recorded violation is itself evidence
+        # that its control was assessed.
         violated_controls = set(v.control_id for v in violations)
+        assessed_controls = (
+            self._assessed_control_ids(period_start, period_end, agent_ids) | violated_controls
+        )
+        unassessed = [
+            c.control_id for c in framework_controls if c.control_id not in assessed_controls
+        ]
         total = len(framework_controls)
         failed = len(violated_controls)
-        met = total - failed
+        met = total - failed - len(unassessed)
 
         score = (met / total * 100) if total > 0 else 100.0
 
@@ -503,6 +582,8 @@ class ComplianceEngine:
             total_controls=total,
             controls_met=met,
             controls_failed=failed,
+            controls_unassessed=len(unassessed),
+            unassessed_controls=unassessed,
             compliance_score=score,
             violations=violations,
             recommendations=recommendations[:10],  # Top 10

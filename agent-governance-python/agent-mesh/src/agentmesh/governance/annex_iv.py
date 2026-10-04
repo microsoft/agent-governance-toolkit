@@ -201,9 +201,11 @@ class TechnicalDocumentationExporter:
             latest = eu_reports[-1]
             lines.append("")
             lines.append(f"**Compliance score:** {latest.compliance_score:.1f}/100")
-            lines.append(f"**Controls evaluated:** {latest.total_controls}")
+            lines.append(f"**Controls defined:** {latest.total_controls}")
             lines.append(f"**Controls met:** {latest.controls_met}")
             lines.append(f"**Controls failed:** {latest.controls_failed}")
+            if latest.controls_unassessed is not None:
+                lines.append(f"**Controls not assessed:** {latest.controls_unassessed}")
             sources.append("ComplianceReport")
 
         placeholder = ""
