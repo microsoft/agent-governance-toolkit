@@ -1,3 +1,9 @@
+---
+title: Dependency audit — AGT Studio web package lockfile
+last_reviewed: 2026-10-04
+owner: agt-maintainers
+---
+
 # Dependency audit — AGT Studio web package lockfile
 
 ## Which dependencies changed and why

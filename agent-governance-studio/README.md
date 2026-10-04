@@ -14,6 +14,7 @@ This package provides the initial Python package and frontend scaffold for AGT S
 
 - [AGT Studio Epic #2729](https://github.com/microsoft/agent-governance-toolkit/issues/2729)
 - [ADR 0028 — AGT Studio unified UI](../../docs/adr/0028-agt-studio-unified-ui.md)
+- [Studio sidecar security posture](../../docs/studio/sidecar-security-posture.md)
 
 ## Development
 
