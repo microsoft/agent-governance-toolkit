@@ -19,21 +19,21 @@ This package provides the initial Python package and frontend scaffold for AGT S
 
 ### Python
 
-`ash
+```bash
 python -m build agent-governance-studio
 python -m pytest agent-governance-studio/tests -q
 ruff check agent-governance-studio/src agent-governance-studio/tests --select E,F,W --ignore E501
-`
+```
 
 ### Frontend
 
-`ash
+```bash
 npm ci --prefix agent-governance-studio/web
 npm run lint --prefix agent-governance-studio/web
 npm test --prefix agent-governance-studio/web
 npm run build --prefix agent-governance-studio/web
-`
+```
 
 ## Deferred work
 
-The initial scaffold does not include gt ui, gt serve, Engine API calls, transport abstractions, policy screens, navigation, or operational write-path actions. These are addressed by subsequent AGT Studio issues.
+The initial scaffold does not include `agt ui`, `agt serve`, Engine API calls, transport abstractions, policy screens, navigation, or operational write-path actions. These are addressed by subsequent AGT Studio issues.

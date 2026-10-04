@@ -1292,13 +1292,17 @@ jobs:
           pip install --no-cache-dir --require-hashes \
             -r agent-governance-python/requirements/ci-build.txt
 
+      - name: Install Studio package
+        run: |
+          pip install --no-cache-dir -e agent-governance-studio
+
       - name: Run Python lint
         run: |
           ruff check agent-governance-studio/src agent-governance-studio/tests --select E,F,W --ignore E501
 
       - name: Run Python tests
         run: |
-          python -m pytest agent-governance-studio/tests -q
+          python -m pytest agent-governance-studio/tests -q --maxfail=1
 
       - name: Build Python package
         run: |
@@ -1311,7 +1315,7 @@ jobs:
 
       - name: Install frontend dependencies
         run: |
-          npm ci --prefix agent-governance-studio/web
+          npm ci --ignore-scripts --prefix agent-governance-studio/web
 
       - name: Run frontend lint
         run: |
