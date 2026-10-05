@@ -1311,3 +1311,4 @@ autoprefixer
 vite
 vitejs
 tanstack
+maxfail

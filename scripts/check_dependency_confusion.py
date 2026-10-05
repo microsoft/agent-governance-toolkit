@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """Pre-commit hook: detect unregistered PyPI package names in pip install commands.
@@ -225,7 +225,8 @@ REGISTERED_NPM_PACKAGES = {
     # npm deps from agent-governance-studio
     "@tanstack/react-query", "@eslint/js", "@vitejs/plugin-react",
     "typescript-eslint", "vite",
-    # npm deps from extensions/chrome    "react", "react-dom", "webextension-polyfill",
+    # npm deps from extensions/chrome
+    "react", "react-dom", "webextension-polyfill",
     "@types/chrome", "@types/react", "@types/react-dom",
     "copy-webpack-plugin", "css-loader", "eslint-plugin-react",
     "eslint-plugin-react-hooks", "html-webpack-plugin", "style-loader",
@@ -666,7 +667,7 @@ def main() -> int:
             all_findings.extend(check_cargo_toml(cargo))
 
     if all_findings:
-        print("âš ï¸  Potential dependency confusion detected:")
+        print("⚠️  Potential dependency confusion detected:")
         print()
         for finding in all_findings:
             print(finding)
