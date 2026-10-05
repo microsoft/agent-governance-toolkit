@@ -38,6 +38,40 @@ from agt.cli._migrate_resolution.build import (
 # ── discover_policies ────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize("error_type", [PermissionError, FileNotFoundError])
+def test_resolve_reports_governance_read_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_type: type[OSError]
+) -> None:
+    governance = tmp_path / "governance.yaml"
+    governance.write_text("rules: []\n", encoding="utf-8")
+    original_open = Path.open
+
+    def fail_governance_read(path, *args, **kwargs):
+        if path == governance:
+            raise error_type("cannot read governance file")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", fail_governance_read)
+    bundle = tmp_path / "bundle"
+    with pytest.raises(ResolutionError) as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert isinstance(exc.value.__cause__, error_type)
+    assert not bundle.exists()
+
+
+def test_resolve_reports_invalid_utf8_governance(tmp_path: Path) -> None:
+    (tmp_path / "governance.yaml").write_bytes(b"rules: []\n# \xff\n")
+    bundle = tmp_path / "bundle"
+    with pytest.raises(ResolutionError) as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert isinstance(exc.value.__cause__, UnicodeDecodeError)
+    assert not bundle.exists()
+
+
 def test_discover_returns_root_first_order(tmp_path: Path) -> None:
     root = tmp_path
     deep = root / "a" / "b" / "c"

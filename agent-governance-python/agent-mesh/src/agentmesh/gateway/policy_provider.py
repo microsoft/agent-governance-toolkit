@@ -10,8 +10,11 @@ without a framework dependency.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class PolicyProviderHandler:
@@ -27,6 +30,19 @@ class PolicyProviderHandler:
 
         Request: {"agent_id": "...", "action": "...", "context": {...}}
         Response: {"allowed": bool, "decision": "...", "reason": "...", "trust_score": float}
+
+        Engine exceptions propagate to the caller: a failure is not a
+        decision, so it is never converted into an allow or deny here.
+        Direct callers of this method receive the evaluation exception
+        itself; the ASGI boundary is responsible for converting that
+        failure into a structured 503 error response.
+
+        Audit trade-off: because no decision was reached, no allow/deny
+        record is written to the decision audit stream. Recording a deny
+        would be misleading, so the failure is represented by server-side
+        exception logging instead. Callers that rely exclusively on
+        decision audit records will not see a record for a failed
+        evaluation.
         """
         agent_id = request.get("agent_id", "")
         action = request.get("action", "")
@@ -104,8 +120,27 @@ class PolicyProviderHandler:
                 body = json.dumps({"error": "invalid JSON"}).encode()
                 status = 400
             else:
-                body = json.dumps(self.handle_check(request)).encode()
-                status = 200
+                # Valid JSON is not necessarily a valid check request:
+                # only an object has the agent_id/action/context fields.
+                if not isinstance(request, dict):
+                    body = json.dumps({"error": "invalid request"}).encode()
+                    status = 400
+                else:
+                    try:
+                        body = json.dumps(self.handle_check(request)).encode()
+                    except Exception:
+                        # Engine failure is not a decision: report a 503 with the
+                        # same {"error": ...} shape as the other error responses.
+                        # 503 rather than 500 because unusable policy state is a
+                        # transient, retryable condition (consistent with
+                        # server/policy_server.py). Diagnostics stay server-side
+                        # via exc_info; the client sees only a fixed message,
+                        # and never an allow.
+                        logger.exception("Policy evaluation failed")
+                        body = json.dumps({"error": "policy evaluation failed"}).encode()
+                        status = 503
+                    else:
+                        status = 200
         else:
             body = json.dumps({"error": "not found"}).encode()
             status = 404

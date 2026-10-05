@@ -475,6 +475,25 @@ class TestVerifyReceiptChain:
         errors = verify_receipt_chain([r], trusted_keys=["deadbeef" * 4])
         assert any("rejected" in e for e in errors)
 
+    def test_empty_trusted_keys_rejects_every_signed_receipt(self, signing_key):
+        receipts = _make_chain("r1", "r2", "r3", sign_with=signing_key)
+
+        errors = verify_receipt_chain(receipts, trusted_keys=[])
+
+        assert len(errors) == len(receipts)
+        for index, error in enumerate(errors):
+            assert error.startswith(f"[{index}] Untrusted signer")
+            assert "receipt rejected" in error
+
+    def test_none_trusted_keys_keeps_signature_verification(self, signing_key):
+        receipts = _make_chain("r1", "r2", sign_with=signing_key)
+        assert verify_receipt_chain(receipts, trusted_keys=None) == []
+
+        receipts[-1].tool_name = "tampered"
+        errors = verify_receipt_chain(receipts, trusted_keys=None)
+        assert len(errors) == 1
+        assert "Ed25519 signature invalid" in errors[0]
+
     def test_duplicate_receipt_id_flagged(self, signing_key):
         r1 = GovernanceReceipt(receipt_id="same", timestamp=1.0)
         sign_receipt(r1, signing_key)

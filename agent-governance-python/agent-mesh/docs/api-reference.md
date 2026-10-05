@@ -422,7 +422,7 @@ Trust-specific policy definitions and evaluation.
 | `HandshakeResponse` | `trust.handshake` | `challenge_id`, `responder_did`, `signature`, `capabilities`, `trust_score` |
 | `PolicyDecision` | `governance.policy` | `allowed`, `policy_name`, `matched_rules`, `reason`, `timestamp` |
 | `ComplianceViolation` | `governance.compliance` | `violation_id`, `framework`, `control_id`, `agent_did`, `severity` |
-| `ComplianceReport` | `governance.compliance` | `framework`, `period_start`, `period_end`, `total_controls`, `violations` |
+| `ComplianceReport` | `governance.compliance` | `framework`, `period_start`, `period_end`, `total_controls`, `controls_met`, `controls_unassessed`, `unassessed_controls`, `violations` |
 | `AuditEntry` | `governance.audit` | `entry_id`, `event_type`, `agent_did`, `action`, `resource`, `outcome`, `hash` |
 | `ShadowResult` | `governance.shadow` | `action_id`, `shadow_decision`, `production_decision`, `diverged` |
 | `OPADecision` | `governance.opa` | `result`, `allowed`, `reason` |

@@ -85,6 +85,17 @@ MCP Tool Call
 
 ## Receipt assurance profiles
 
+Receipt generation supports unsigned receipts when no signing key is configured.
+Both `verify_receipt_chain()` and `scripts/verify_receipts.py` require valid
+signatures: an unsigned receipt fails verification. The CLI exits with code 1,
+reports `"passed": false` in its JSON summary, and records an error for each
+unsigned receipt.
+
+For receipt signer trust, `verify_receipt_chain(..., trusted_keys=None)` verifies
+signatures without restricting the signer keys. An explicit `trusted_keys` list
+accepts only those keys; `trusted_keys=[]` rejects every signer. Signature validity
+alone does not establish trust in a signer or authorization to execute an action.
+
 By default, receipts are **self-attested**: a configured receipt signer records its
 own policy decision. This detects later modification but does not establish that an
 independent party approved the action.
@@ -112,4 +123,4 @@ timestamp; a live adapter evaluates it against the current time before execution
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](../../../LICENSE).

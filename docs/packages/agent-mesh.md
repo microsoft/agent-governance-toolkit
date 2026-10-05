@@ -567,12 +567,15 @@ violations = compliance.check_compliance(
 )
 
 # Generate compliance report
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+now = datetime.now(timezone.utc)
 report = compliance.generate_report(
     framework=ComplianceFramework.SOC2,
-    period_start=datetime.utcnow() - timedelta(days=30),
-    period_end=datetime.utcnow(),
+    period_start=now - timedelta(days=30),
+    period_end=now,
 )
+# Controls never exercised by check_compliance() are not counted as met
+print(report.controls_met, report.unassessed_controls)
 ```
 
 ### EU AI Act Risk Classification
