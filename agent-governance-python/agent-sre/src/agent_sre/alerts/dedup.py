@@ -13,6 +13,7 @@ Closes #52.
 from __future__ import annotations
 
 import hashlib
+import json
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -36,8 +37,8 @@ def alert_fingerprint(alert: Alert, fields: Sequence[str] = ("agent_id", "title"
     parts = []
     for f in fields:
         val = getattr(alert, f, "")
-        parts.append(f"{f}={val}")
-    raw = "|".join(parts)
+        parts.append((f, str(val)))
+    raw = json.dumps(parts)
     return hashlib.sha256(raw.encode()).hexdigest()
 
 

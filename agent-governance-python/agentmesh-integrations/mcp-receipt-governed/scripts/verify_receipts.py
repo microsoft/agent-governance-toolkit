@@ -99,7 +99,9 @@ def verify_chain(
                 print(f"      [FAIL] {msg}")
                 errs.append(msg)
         else:
-            print("      [WARN] Unsigned receipt")
+            msg = "Unsigned receipt - missing Ed25519 signature"
+            print(f"      [FAIL] {msg}")
+            errs.append(msg)
 
         if r.assurance_level == "externally_authorized":
             authorization_errors = verify_receipt_authorization(

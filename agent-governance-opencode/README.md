@@ -47,13 +47,15 @@ governance tools from external workflows.
 
 This initial package enforces:
 
-- `session.start`           — injects AGT governance context into the session
+- `session.created`         — best-effort status logging; no context injection
 - `event` (chat-style)      — scans submitted prompts; throws to block
 - `tool.execute.before`     — allow / review / deny tool calls
 - `tool.execute.after`      — scans tool output and redacts known secret
                               patterns (AWS, GitHub PAT, OpenAI, JWT, PEM
                               private keys, Azure storage keys)
-- `tool.execute.error`      — records audit entry for failed tool calls
+
+There is no failed-tool hook in this plugin. A failed call that never reaches
+`tool.execute.after` does not receive an output audit entry.
 
 It also exposes two custom tools (in-process **and** via the stdio MCP server):
 
@@ -81,8 +83,12 @@ npm run check
 OpenCode loads plugins from:
 
 1. `opencode.json` `plugin` entries (npm specifiers)
-2. `~/.config/opencode/plugins/*.{ts,js,mjs}` (user-global)
-3. `.opencode/plugins/*.{ts,js,mjs}` (workspace-local)
+2. `~/.config/opencode/{plugin,plugins}/*.{ts,js}` (user-global)
+3. `.opencode/{plugin,plugins}/*.{ts,js}` (workspace-local)
+
+Use Option A for a normal installation. Workspace files must use `.js` or `.ts`;
+OpenCode does not auto-discover `.mjs` plugin files. The package's internal
+`.mjs` entry point is loaded through its npm export instead.
 
 Configure AGT through **one** of these plugin-loading paths for a workspace. Do
 not keep duplicate AGT shims or load the package both from `opencode.json` and a
@@ -90,7 +96,9 @@ workspace plugin file. Duplicate registrations for the same OpenCode client and
 workspace are suppressed and emit a warning, but removing the duplicate source
 keeps startup configuration unambiguous.
 
-### Option A — workspace `opencode.json`
+### Option A — workspace `opencode.json` (recommended)
+
+OpenCode installs the configured npm package and its dependencies at startup.
 
 ```json
 {
@@ -99,15 +107,51 @@ keeps startup configuration unambiguous.
 }
 ```
 
-### Option B — workspace plugin file (no install required)
+### Option B — workspace plugin file with an installed package
 
-Create `.opencode/plugins/agt.mjs`:
+From your project root, install the package into the OpenCode config directory:
 
-```js
-export { default } from "../../agent-governance-opencode/src/index.mjs";
+```powershell
+npm install --prefix .opencode @microsoft/agent-governance-opencode
 ```
 
-### Option C — install the bundled MCP server
+Create `.opencode/plugins/agt.js` (the singular `.opencode/plugin/` directory
+also works):
+
+```js
+export { default } from "@microsoft/agent-governance-opencode";
+```
+
+This imports the installed package from `.opencode/node_modules`; it does not
+require an AGT repository checkout or a copied source directory.
+
+### Verify plugin discovery
+
+From the same project root, run this command without invoking a model:
+
+```powershell
+opencode debug config
+```
+
+Inspect the resolved `plugin` array. Option A should include the AGT npm
+specifier; Option B should include a file URL ending in `/agt.js`. If neither
+appears, stop and correct the configuration before using the agent.
+
+Discovery alone does not prove that the module imports, initializes, or runs
+its governance hooks. A broken re-export can still appear in this list. Review
+startup errors and check the loaded plugin's `agt_policy_status` before use;
+policy validity and plugin discovery are separate checks. Out-of-band runtime
+activation evidence is tracked in issue #3708.
+
+### Optional MCP server installation
+
+The MCP server exposes inspection tools. Configuring it alone does not install
+the in-process governance hooks from Option A or B. Install the package in your
+project before using this path:
+
+```powershell
+npm install @microsoft/agent-governance-opencode
+```
 
 In `opencode.json`:
 

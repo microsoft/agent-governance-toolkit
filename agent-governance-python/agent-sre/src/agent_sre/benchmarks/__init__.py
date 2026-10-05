@@ -316,11 +316,11 @@ class BenchmarkRunner:
         scenario: BenchmarkScenario,
     ) -> ScenarioRun:
         """Run a single scenario."""
-        start = time.time()
+        start = time.perf_counter()
         try:
             raw_result = agent_fn(scenario.input_data)
 
-            elapsed_ms = (time.time() - start) * 1000
+            elapsed_ms = (time.perf_counter() - start) * 1000
 
             # Parse agent response
             if isinstance(raw_result, dict):
@@ -367,7 +367,7 @@ class BenchmarkRunner:
             )
 
         except Exception as exc:
-            elapsed_ms = (time.time() - start) * 1000
+            elapsed_ms = (time.perf_counter() - start) * 1000
             return ScenarioRun(
                 scenario_name=scenario.name,
                 category=scenario.category,

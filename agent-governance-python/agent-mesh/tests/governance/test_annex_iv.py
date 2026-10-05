@@ -224,6 +224,31 @@ class TestExporterWithData:
         assert "80.0" in s1.content
         assert "ComplianceReport" in s1.source_artifacts
 
+    def test_section_1_reports_unassessed_controls(self) -> None:
+        exp = TechnicalDocumentationExporter(system_name="S", provider="P")
+        exp.add_compliance_report(
+            _make_compliance_report(
+                total_controls=2,
+                controls_met=0,
+                controls_failed=0,
+                controls_unassessed=2,
+                unassessed_controls=["EUAI-ART9", "EUAI-ART13"],
+                compliance_score=0.0,
+            )
+        )
+        s1 = exp.export().sections[0]
+        assert "**Controls defined:** 2" in s1.content
+        assert "**Controls not assessed:** 2" in s1.content
+        assert "Controls evaluated" not in s1.content
+
+    def test_section_1_omits_unassessed_line_when_unknown(
+        self, exporter: TechnicalDocumentationExporter
+    ) -> None:
+        # Reports that predate assessment tracking leave controls_unassessed
+        # as None; don't render a number we don't have.
+        s1 = exporter.export().sections[0]
+        assert "Controls not assessed" not in s1.content
+
     def test_section_2_lists_policies(self, exporter: TechnicalDocumentationExporter) -> None:
         doc = exporter.export()
         s2 = doc.sections[1]

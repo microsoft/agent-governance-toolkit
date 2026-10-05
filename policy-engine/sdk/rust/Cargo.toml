@@ -55,7 +55,7 @@ crate-type = ["lib", "cdylib"]
 agent-control-spec = { version = "=0.4.0-alpha.3", default-features = false, features = ["opa", "cedar", "default-dispatchers"] }
 agent-hooks-sdk = "=0.1.0-alpha.5"
 # Carries the AGT-only artifact validation the C ABI exposes.
-agent_control_specification_core = { version = "=0.3.1-beta.0", path = "../../core", default-features = false }
+agent_control_specification_core = { version = "=0.3.2-beta.0", path = "../../core", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "=0.10.9"

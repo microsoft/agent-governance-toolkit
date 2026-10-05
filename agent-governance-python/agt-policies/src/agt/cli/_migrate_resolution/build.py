@@ -41,6 +41,10 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         raise ResolutionError.invalid_governance(
             f"failed to parse {path}: {exc}"
         ) from exc
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ResolutionError.invalid_governance(
+            f"failed to read governance file {path} ({type(exc).__name__})"
+        ) from exc
     if data is None:
         return {}
     if not isinstance(data, dict):

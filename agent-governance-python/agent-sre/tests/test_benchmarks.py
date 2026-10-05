@@ -5,6 +5,9 @@
 from __future__ import annotations
 
 import time
+from unittest.mock import patch
+
+import pytest
 
 from agent_sre.benchmarks import (
     BenchmarkCategory,
@@ -136,6 +139,24 @@ class TestBenchmarkSuite:
 # ---------------------------------------------------------------------------
 
 class TestRunnerGoodAgent:
+    @pytest.mark.parametrize(
+        "agent_fn, expected_result",
+        [(good_agent, ScenarioResult.FAILED), (error_agent, ScenarioResult.ERROR)],
+    )
+    def test_elapsed_time_does_not_depend_on_wall_clock(self, agent_fn, expected_result):
+        suite = BenchmarkSuite(name="clock-test")
+        suite.add(BenchmarkScenario(
+            name="test", category=BenchmarkCategory.LATENCY, timeout_seconds=0.1
+        ))
+        with (
+            patch("agent_sre.benchmarks.time.time", return_value=1000),
+            patch("agent_sre.benchmarks.time.perf_counter", side_effect=[1, 1.125]),
+        ):
+            report = BenchmarkRunner(suite).run(agent_fn)
+
+        assert report.runs[0].latency_ms == 125
+        assert report.runs[0].result == expected_result
+
     def test_run_all(self):
         suite = BenchmarkSuite.default()
         runner = BenchmarkRunner(suite)
