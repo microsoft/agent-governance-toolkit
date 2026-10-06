@@ -41,8 +41,10 @@ class RateLimiter:
     def check(self, agent_id: str, limit: int) -> bool:
         """Return ``True`` if the agent is within its limit, ``False`` if exceeded.
 
-        Records the current call timestamp regardless of the outcome so that
-        callers can decide whether to raise or simply skip.
+        Records the current call timestamp only when the call is allowed (i.e.
+        when ``True`` is returned). Rejected calls are not recorded, so a caller
+        that keeps retrying while over the limit does not extend its own lockout
+        past the sliding window.
 
         Args:
             agent_id: Unique identifier for the agent making the retrieval.
