@@ -289,3 +289,15 @@ describe('ContextPoisoningDetector', () => {
     });
   });
 });
+
+describe('ContextPoisoningDetector — per-session cap', () => {
+  it('honours maxEntriesPerSession instead of the hard-coded ceiling', () => {
+    const cap = 3;
+    const detector = new ContextPoisoningDetector({ maxEntriesPerSession: cap });
+    for (let i = 0; i < cap + 2; i++) {
+      detector.addEntry(makeEntry({ entryId: `e-${i}`, content: `benign message ${i}` }));
+    }
+    // All entries share one agent:session key; only `cap` should be retained.
+    expect(detector.scan().entriesScanned).toBe(cap);
+  });
+});
