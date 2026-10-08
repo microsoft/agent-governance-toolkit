@@ -474,13 +474,18 @@ All data is stored locally in the `AGENTOS_DATA_DIR`:
 
 ### Local Development
 
+Development tooling requires Node.js `^22.12.0`, `^24.0.0`, or `>=26.0.0`
+for Vitest 5. Keep `vitest` and `@vitest/coverage-v8` on the same exact
+version. Vite is an explicit development dependency because Vitest 5 makes
+it a required peer dependency; CI installs with `--legacy-peer-deps`.
+
 ```bash
 # Clone the repository
 git clone https://github.com/microsoft/agent-governance-toolkit
 cd agent-governance-python/agent-os/extensions/mcp-server
 
 # Install dependencies
-npm install
+npm ci --legacy-peer-deps --ignore-scripts
 
 # Build
 npm run build
@@ -535,6 +540,11 @@ agent-governance-python/agent-os/extensions/mcp-server/
 npm test
 npm run test:coverage
 ```
+
+Both commands run once and fail if no tests are discovered. The suite checks
+the installed runner/coverage versions, the explicit Vite dependency, and
+template-library behavior. Coverage exercises the imported template-library
+service; it is not a whole-server coverage claim.
 
 ## 📊 Performance
 
