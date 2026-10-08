@@ -300,4 +300,18 @@ describe('ContextPoisoningDetector — per-session cap', () => {
     // All entries share one agent:session key; only `cap` should be retained.
     expect(detector.scan().entriesScanned).toBe(cap);
   });
+
+  it('falls back to the default cap for non-finite or non-positive values', () => {
+    // NaN / 0 / negative must not disable eviction (NaN would make
+    // `length >= cap` always false). They resolve to the default (200), so the
+    // absolute ceiling still holds.
+    const defaultCap = 200;
+    for (const bad of [NaN, 0, -5]) {
+      const detector = new ContextPoisoningDetector({ maxEntriesPerSession: bad });
+      for (let i = 0; i < defaultCap + 5; i++) {
+        detector.addEntry(makeEntry({ entryId: `e-${bad}-${i}`, content: `benign ${i}` }));
+      }
+      expect(detector.scan().entriesScanned).toBe(defaultCap);
+    }
+  });
 });
