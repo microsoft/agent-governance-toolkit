@@ -1,8 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-/** @type {import('ts-jest').JestConfigWithTsJest} */
+
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
@@ -17,7 +16,13 @@ module.exports = {
     'node_modules/(?!(@noble)/)',
   ],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-    '.*@noble.+\\.js$': ['ts-jest', { tsconfig: { allowJs: true } }],
+    '^.+\\.tsx?$': ['@swc/jest', {
+      jsc: { parser: { syntax: 'typescript' }, target: 'es2022' },
+      module: { type: 'commonjs' },
+    }],
+    '^.+\\.js$': ['@swc/jest', {
+      jsc: { target: 'es2022' },
+      module: { type: 'commonjs' },
+    }],
   },
 };

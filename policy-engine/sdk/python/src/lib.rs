@@ -1,9 +1,9 @@
 use agent_control_specification::{
-    default_host_annotator_dispatcher, default_host_policy_dispatcher, manifest_from_url,
-    policy_labels, reject_removed_manifest_fields, runtime_error_verdict, AnnotatorDispatcher,
-    AnnotatorInvocation, EnforcementMode, HostError, HostEvaluation, InterceptionPoint, JsonValue,
-    Limits, Manifest, NoopTelemetrySink, PerfTelemetry, PolicyDispatcher, PreparedPolicyInvocation,
-    Runtime, RuntimeError, Verdict,
+    default_host_annotator_dispatcher_with_limits, default_host_policy_dispatcher_with_limits,
+    manifest_from_url, policy_labels, reject_removed_manifest_fields, runtime_error_verdict,
+    AnnotatorDispatcher, AnnotatorInvocation, EnforcementMode, HostError, HostEvaluation,
+    InterceptionPoint, JsonValue, Limits, Manifest, NoopTelemetrySink, PerfTelemetry,
+    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use agent_control_specification_core::{
     parse_manifest_yaml_value, validate_acs_artifacts as validate_artifacts_core,
@@ -425,11 +425,13 @@ impl NativeRuntime {
             .ok_or_else(|| PyValueError::new_err("perf_telemetry must be 0, 1, or 2"))?;
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_cb {
             Some(cb) => Arc::new(PyAnnotatorDispatcher { cb }),
-            None => default_host_annotator_dispatcher(&manifest).map_err(runtime_error)?,
+            None => default_host_annotator_dispatcher_with_limits(&manifest, limits)
+                .map_err(runtime_error)?,
         };
         let policy: Arc<dyn PolicyDispatcher> = match policy_cb {
             Some(cb) => Arc::new(PyPolicyDispatcher { cb }),
-            None => default_host_policy_dispatcher(&manifest).map_err(runtime_error)?,
+            None => default_host_policy_dispatcher_with_limits(&manifest, limits)
+                .map_err(runtime_error)?,
         };
         let labels = policy_labels(&manifest);
         let approval = serde_json::to_value(&manifest.approval)

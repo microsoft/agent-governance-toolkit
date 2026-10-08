@@ -7,9 +7,9 @@ Scans staged files for `pip install <name>` where <name> is not a known
 registered package. Prevents dependency confusion attacks.
 
 Usage:
-    # Install as pre-commit hook
-    cp scripts/check_dependency_confusion.py .git/hooks/pre-commit
-    chmod +x .git/hooks/pre-commit
+    # Invoke from a pre-commit hook in the repository root; do not copy this
+    # file, since it imports the sibling _supply_chain_common module.
+    python scripts/check_dependency_confusion.py
 
     # Or run manually
     python scripts/check_dependency_confusion.py [files...]
@@ -22,6 +22,9 @@ import re
 import subprocess
 import sys
 from typing import Any
+
+import _supply_chain_common as common
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback
@@ -216,6 +219,7 @@ REGISTERED_NPM_PACKAGES = {
     "@anthropic-ai/sdk", "@types/node", "@types/ws", "@types/express",
     # Common npm dev dependencies
     "eslint", "@typescript-eslint/parser", "@typescript-eslint/eslint-plugin",
+    "@typescript/typescript6", "@swc/core", "@swc/jest",
     "ts-jest", "@types/jest", "jest", "rimraf", "prettier",
     "axios", "@types/vscode", "@vscode/vsce", "webpack", "webpack-cli",
     "ts-node", "nodemon", "concurrently", "dotenv",
@@ -566,10 +570,24 @@ def check_package_json(filepath: str) -> list[str]:
 
     registered_lower = {p.lower() for p in REGISTERED_NPM_PACKAGES}
     for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
-        for pkg in data.get(section, {}):
-            if pkg.lower() not in registered_lower:
+        block = data.get(section, {})
+        if not isinstance(block, dict):
+            findings.append(f"  {filepath}: npm {section} must be an object")
+            continue
+        for pkg, spec in block.items():
+            if not isinstance(spec, str):
+                findings.append(f"  {filepath}: npm '{pkg}' ({section}) has an invalid specifier")
+                continue
+            try:
+                target, _ = common.resolve_npm_manifest_pin(pkg, spec)
+            except ValueError:
                 findings.append(
-                    f"  {filepath}: npm '{pkg}' ({section}) may not be registered"
+                    f"  {filepath}: npm '{pkg}' ({section}) has an invalid or unapproved alias"
+                )
+                continue
+            if target.lower() not in registered_lower:
+                findings.append(
+                    f"  {filepath}: npm '{target}' ({section}) may not be registered"
                 )
     return findings
 

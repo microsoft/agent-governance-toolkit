@@ -38,12 +38,10 @@
 //!
 //! # Security note
 //!
-//! AGT gated host environment credential reads on manifest provenance, so
-//! a manifest fetched over the network could not reach host credentials.
-//! `agent-control-spec` 0.4.0-alpha.3 does not carry that gate while it
-//! still supports URL sourced `extends`. Do not enable the bundled
-//! dispatcher features until that is restored upstream. See
-//! `docs/acs-retarget.md`.
+//! Alpha.4 restores URL provenance checks before host credential reads.
+//! Bundled annotators remain opt-in. Local manifests, custom dispatchers
+//! and network destinations still need a host trust decision. See
+//! `docs/acs-retarget.md` for the separate destination-check restrictions.
 
 /// Convenience alias for the JSON document type used across the runtime.
 pub type JsonValue = serde_json::Value;

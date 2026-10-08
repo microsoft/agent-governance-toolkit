@@ -1,18 +1,26 @@
 # Agent Control Specification Node SDK
 
-Phase A exposes the synchronous Rust core through a thin napi-rs binding. Build the native addon before using the package locally:
+This `agent-control-specification` package preserves AGT's Node host API through
+a napi-rs binding over the Rust host SDK and published
+[`agent-control-spec`](https://github.com/responsibleai/agent-control-spec)
+engine. The standalone upstream package is
+`@responsibleai/agent-control-spec`. Its interceptor API is not a drop-in
+replacement for AGT's `AgentControl` adapters. Build the native addon before
+using this package locally:
 
 ```sh
 npm install
 npm run build
 ```
 
+The normal build and published native packages leave bundled annotators
+disabled. A manifest with annotators must supply an annotator dispatcher.
+Manifests without annotators can use the default OPA policy dispatcher.
+
 ```js
 const { AgentControl, InterventionPoint } = require("agent-control-specification");
 
-// Zero-config. With no dispatcher arguments the bundled OPA policy dispatcher and
-// annotator dispatcher are wired from the manifest, so a Rego-policy host needs no
-// dispatcher code.
+// This Rego manifest declares no annotators. OPA is the default policy backend.
 const agentControl = AgentControl.fromPath("manifest.yaml");
 
 const result = await agentControl.evaluateInterventionPoint(
@@ -31,7 +39,8 @@ const validation = await validateArtifacts(manifestYaml, {
 });
 ```
 
-Supply host-specific dispatchers when annotators are local or policy outputs need post-processing. The dispatcher arguments are optional and default independently, so a host can override the annotator dispatcher while keeping the bundled OPA policy default:
+Supply an annotator dispatcher for a manifest that declares annotators. You can
+keep the OPA policy default or supply a policy dispatcher too:
 
 ```js
 const agentControl = AgentControl.fromNative(manifestYamlOrJson, {
@@ -41,7 +50,17 @@ const agentControl = AgentControl.fromNative(manifestYamlOrJson, {
 });
 ```
 
-`NativeRuntimeClient` accepts a manifest string or JSON value plus optional async-capable annotator and policy dispatchers, falling back to the bundled defaults when a dispatcher is omitted. The native layer calls the Rust core off the Node main thread and bridges dispatcher promises back into the synchronous core. `AgentControl.run`, `protectTool`, and `runTool` mirror the Python SDK orchestration. The zero-config construction section in the root README describes when to supply custom dispatchers.
+`NativeRuntimeClient` accepts a manifest string or JSON value and async-capable
+dispatchers. The native layer runs the engine off the Node main thread and
+bridges dispatcher promises into the synchronous engine.
+`AgentControl.run`, `protectTool`, and `runTool` provide host orchestration.
+
+The `bundled-dispatchers` Cargo feature opts into upstream annotators,
+including pinned prompt downloads. `npm test` runs the bundled integration
+suite, then rebuilds the normal release artifact and checks its default-feature
+behavior. `npm run test:production` runs that second check on its own. Custom dispatchers
+own their downloads and credentials; they do not inherit the bundled
+dispatcher's URL limits.
 
 ## Bundled OPA binary
 

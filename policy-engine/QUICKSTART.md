@@ -95,11 +95,21 @@ verdict := {
 }
 ```
 
-A verdict must carry a `decision` of `allow`, `deny`, `warn`, `escalate`, or `transform`. The optional `reason` is a low cardinality code, and `message` is host facing text. A policy may return a `transform` body only with the `transform` decision; `allow`, `warn`, `deny`, and `escalate` never mutate the policy target. Reasons must not use the reserved `runtime_error:` prefix.
+A policy may express `allow`, `deny`, `transform`, or the intents `warn` and
+`escalate`. ACS normalizes `warn` to `allow` with `warnings[]` and `escalate`
+to `deny` with an `approval` block. The engine returns only three decisions.
+The optional `reason` is a low cardinality code, and `message` is host facing
+text. Only a `transform` decision may carry a transform body. Policy reasons
+must not use the reserved `runtime_error:` or `host_error:` prefixes.
 
 ## Step 4. Construct the runtime
 
-Use the zero-config `from_path` constructor. With no dispatcher arguments it wires the bundled OPA policy dispatcher against the manifest relative Rego bundle, so a Rego host needs no dispatcher code. See [Zero-config construction](README.md#zero-config-construction) for when to supply your own dispatchers.
+Use the `from_path` constructor. With no policy dispatcher argument it wires
+the OPA dispatcher against the manifest relative Rego bundle. Annotator
+defaults depend on the SDK build. See the
+[Python dispatcher requirements](sdk/python/README.md#annotator-dispatchers)
+and the [Node](sdk/node/README.md) and [.NET](sdk/dotnet/README.md) SDK guides
+before using a manifest that declares annotators.
 
 ```rust
 use agent_control_specification::AgentControl;
@@ -176,12 +186,16 @@ The Rust SDK takes the `EnforcementMode` on `evaluate_intervention_point`. The P
 | Decision | Host action |
 | --- | --- |
 | `allow` | Proceed with the original policy target. |
-| `warn` | Proceed with the original policy target, but record the warning. |
-| `deny` | Block the action. Surface `reason` and `message`. |
-| `escalate` | Suspend the action and ask a human or an external authority for approval before proceeding. |
+| `deny` | Block the action. A deny carrying `approval` may proceed only after the host resolves that approval. |
 | `transform` | Proceed only with the returned transformed policy target. |
 
-When a policy returns `transform`, the runtime validates the transform path, applies it to the policy target in `enforce` mode, and exposes the transformed value on the result. Read the transformed policy target rather than the original before executing a tool, sending a model request, storing a tool result, or disclosing output. Redaction is the common case, but the core never mutates on `allow`, `warn`, `deny`, or `escalate`.
+Record `warnings[]` on an allow verdict without changing its decision.
+When ACS returns `transform`, the AGT host SDK validates and applies it in
+`enforce` mode and exposes the transformed value on its result. The engine
+itself does not rewrite the snapshot. Read the transformed target before
+executing a tool, sending a model request or releasing output. In
+`evaluate_only` mode the host validates the proposed transform but does not
+apply it.
 
 ## Step 7. Mediate the whole agent loop
 
@@ -255,8 +269,8 @@ File based `extends` stays inside the top level manifest root. Place a parent ma
 
 ## Next steps
 
-- Read the normative contract in [`spec/SPECIFICATION.md`](spec/SPECIFICATION.md).
+- Read the [upstream ACS contract](https://github.com/responsibleai/agent-control-spec/blob/main/spec/SPECIFICATION.md) and AGT's [compatibility profile](spec/SPECIFICATION.md).
 - Review host obligations and boundaries in [`docs/security-model.md`](docs/security-model.md).
 - Pick the right SDK surface with [`docs/sdk-surfaces.md`](docs/sdk-surfaces.md).
-- Wrap a real agent framework using [`docs/adapter-matrix.md`](docs/adapter-matrix.md) and the [Framework adapters](README.md#framework-adapters) section of the README.
+- Choose an AGT framework adapter using [`docs/adapter-matrix.md`](docs/adapter-matrix.md).
 - Study runnable hosts under repository checkout path `examples/`.
