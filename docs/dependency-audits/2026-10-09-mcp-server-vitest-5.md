@@ -256,6 +256,27 @@ These structural and tarball checks do not waive independent upstream
 registry verification. No scanner, alias rule, hash rule, allowlist,
 permission or conditional-approval requirement is changed.
 
+The unchanged gates were run on the committed proposal from the repository
+root. Network-dependent failures below are not successful verifications:
+
+| Command | Result |
+|---|---|
+| `bash scripts\ci\vendored-patch-audit.sh origin/main` | Passed: the changed lockfile has this genuine audit document |
+| `bash scripts\ci\no-stubs.sh origin/main` | Passed |
+| `bash scripts\ci\no-custom-crypto.sh origin/main` | Passed |
+| `bash scripts\ci\security-audit-required.sh origin/main` | Passed: no capability paths changed |
+| `bash scripts\ci\no-unauthed-registration.sh origin/main` | Passed: no Python files changed |
+| `python scripts\check_build_hooks.py --base origin/main --strict` | Passed |
+| `python scripts\check_release_age.py --base origin/main --min-age-days 7` | Blocked, exit 1: three direct pins unverifiable through primary-registry TLS |
+| `python scripts\check_install_scripts.py --base origin/main --strict --max-deps 2000` | Blocked, exit 1: 24 candidates unverifiable through primary-registry TLS |
+| `python scripts\check_lockfile_integrity.py --base origin/main --max-deps 2000` | Blocked, exit 1: all 304 affected-entry findings are primary-registry network failures; zero alias/weak-digest findings |
+| `python scripts\check_dependency_scorecard.py --base-ref origin/main --head-ref HEAD --min-score 5.0 --max-deps 50` | Exit 0, warn-only: Vite score lookup remains TLS-unverified |
+| Scoped strict dependency-confusion command below | Failed, exit 1: the existing registered-name catalog omits `vite` |
+
+```powershell
+python scripts\check_dependency_confusion.py --strict agent-governance-python\agent-os\extensions\mcp-server\package.json agent-governance-python\agent-os\extensions\mcp-server\package-lock.json agent-governance-python\agent-os\extensions\mcp-server\README.md docs\dependency-audits\2026-10-09-mcp-server-vitest-5.md
+```
+
 The unmodified primary-registry lookups in the repository age and
 integrity validators also fail TLS handshake validation locally.
 The explicit runner/coverage age command is therefore blocked:
@@ -270,6 +291,17 @@ Keep the PR in draft and both originals open until those checks really
 pass; a draft is not permission to release a failing graph. Local TLS
 limitations and unsupported npm signing verification are disclosed rather
 than counted as successful checks.
+
+There is also a narrowly scoped shared catalog prerequisite:
+`REGISTERED_NPM_PACKAGES` in `scripts/check_dependency_confusion.py` omits
+the genuine registered package `vite`, although Vite 8.0.16 is already in
+main's transitive graph. CI runs this checker with `--strict`, so the
+necessary new explicit declaration will be rejected until a separately
+owned catalog correction records that verified package name and its
+regression coverage. This replacement does not edit the shared checker,
+add skip flags, remove Vite, or reduce check severity to hide the failure.
+The prerequisite has been reported to the coordinator for separate
+maintainer ownership.
 
 ## Attribution, sources, and rollback
 
