@@ -65,6 +65,16 @@ class TestAlertFingerprint:
 
 
 class TestAlertDeduplicator:
+    def test_field_delimiters_do_not_merge_distinct_alerts(self):
+        d = AlertDeduplicator(window_seconds=60)  # cspell:words Deduplicator
+        first = Alert(agent_id="agent|title=worker", title="Breach", message="first")
+        second = Alert(agent_id="agent", title="worker|title=Breach", message="second")
+
+        assert d.consume(first) is True
+        assert d.consume(second) is True
+        assert d.consume(first) is False
+        assert d.consume(second) is False
+
     def test_first_alert_passes(self):
         d = AlertDeduplicator(window_seconds=60)
         a = Alert(title="Breach", message="x", agent_id="a1")

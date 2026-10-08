@@ -194,18 +194,17 @@ class ResponseLatency(SLI):
     ) -> None:
         super().__init__(f"response_latency_p{int(percentile * 100)}", target_ms, window, store=store)
         self.percentile = percentile
-        self._latencies: list[float] = []
 
     def record_latency(self, latency_ms: float, metadata: dict[str, Any] | None = None) -> SLIValue:
         """Record a response latency in milliseconds."""
-        self._latencies.append(latency_ms)
         return self.record(latency_ms, metadata)
 
     def current_value(self) -> float | None:
-        """Get the percentile latency value."""
-        if not self._latencies:
+        """Get the percentile latency within the configured measurement window."""
+        values = self.values_in_window()
+        if not values:
             return None
-        sorted_vals = sorted(self._latencies)
+        sorted_vals = sorted(v.value for v in values)
         idx = int(len(sorted_vals) * self.percentile)
         idx = min(idx, len(sorted_vals) - 1)
         return sorted_vals[idx]

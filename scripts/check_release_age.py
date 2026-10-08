@@ -142,7 +142,8 @@ def _resolve_cargo_deps(tree: dict | None) -> dict[str, str]:
 
     Workspace inheritance (``foo = { workspace = true }``) is skipped: the
     actual version is pinned in the root workspace Cargo.toml, which we'll
-    also see if it changed.
+    also see if it changed. ``path`` and ``git`` dependencies are skipped too:
+    they never come from the registry, so there is no publish date to check.
     """
     if not isinstance(tree, dict):
         return {}
@@ -159,6 +160,14 @@ def _resolve_cargo_deps(tree: dict | None) -> dict[str, str]:
                 ver = spec.strip()
             elif isinstance(spec, dict):
                 if spec.get("workspace") is True:
+                    continue
+                # ``path`` and ``git`` dependencies are not fetched from the
+                # registry, so a registry age lookup cannot apply (a ``path``
+                # crate's bumped version 404s on crates.io, which the hard-fail
+                # rule would misread as an unpublished version). The source
+                # of such a crate is in the same diff or pinned by git rev and
+                # is reviewed there instead.
+                if "path" in spec or "git" in spec:
                     continue
                 raw = spec.get("version")
                 if isinstance(raw, str):

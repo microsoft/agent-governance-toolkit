@@ -26,3 +26,8 @@ intervention_points:
     policy:
       id: bvn_nin_protection
       query: data.agt_policies_nigeria.bvn_nin.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: bvn_nin_protection
+      query: data.agt_policies_nigeria.bvn_nin.acs_pre_tool_call_result

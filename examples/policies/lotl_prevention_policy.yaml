@@ -15,3 +15,13 @@ intervention_points:
     policy:
       id: lotl_prevention
       query: data.agt.examples.lotl.result
+  output:
+    policy_target: $.output.content
+    policy:
+      id: lotl_prevention
+      query: data.agt.examples.lotl.result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: lotl_prevention
+      query: data.agt.examples.lotl.result

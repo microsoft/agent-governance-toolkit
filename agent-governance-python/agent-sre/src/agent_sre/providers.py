@@ -4,6 +4,8 @@
 Provider Discovery System for Agent SRE
 
 Enables plug-and-play upgrades from Public Preview to Advanced implementations.
+get_slo_detector() and get_chaos_engine() have no Public Preview implementation,
+so each raises NotImplementedError unless an advanced provider is installed.
 """
 
 from __future__ import annotations
@@ -22,6 +24,9 @@ PROVIDER_GROUPS = {
     "delivery": "agent_sre.providers.delivery",
     "incident": "agent_sre.providers.incident",
 }
+
+# Slots whose getter has no community implementation to fall back to.
+_NO_COMMUNITY_IMPLEMENTATION = frozenset({"slo_detection", "chaos_engine"})
 
 _provider_cache: dict[str, Any] = {}
 
@@ -46,18 +51,27 @@ def _discover_provider(group: str) -> type | None:
     return None
 
 
+def _no_community_fallback(getter: str, group: str, missing: str) -> NotImplementedError:
+    """Build the error raised when a slot has no community implementation."""
+    return NotImplementedError(
+        f"{getter}() has no community implementation ({missing} does not exist). "
+        f"Install a provider package that registers an entry point in the {group!r} group."
+    )
+
+
 def get_slo_detector(**kwargs: Any):
     """Get the best available SLO detection engine.
 
     Advanced: Multi-signal SLO detection with agent SLIs.
-    Community: Threshold-based SLO monitoring.
+    Community: None yet; raises NotImplementedError unless an advanced provider is installed.
     """
     provider = _discover_provider(PROVIDER_GROUPS["slo_detection"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agent_sre.slo.detector import SLODetector
-    return SLODetector(**kwargs)
+    raise _no_community_fallback(
+        "get_slo_detector", PROVIDER_GROUPS["slo_detection"], "agent_sre.slo.detector.SLODetector"
+    )
 
 
 def get_replay_engine(**kwargs: Any):
@@ -78,14 +92,15 @@ def get_chaos_engine(**kwargs: Any):
     """Get the best available chaos engine.
 
     Advanced: Template-driven chaos with coverage analysis.
-    Community: Basic fault injection with scheduling.
+    Community: None yet; raises NotImplementedError unless an advanced provider is installed.
     """
     provider = _discover_provider(PROVIDER_GROUPS["chaos_engine"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agent_sre.chaos.engine import ChaosEngine
-    return ChaosEngine(**kwargs)
+    raise _no_community_fallback(
+        "get_chaos_engine", PROVIDER_GROUPS["chaos_engine"], "agent_sre.chaos.engine.ChaosEngine"
+    )
 
 
 def get_cost_optimizer(**kwargs: Any):
@@ -103,11 +118,21 @@ def get_cost_optimizer(**kwargs: Any):
 
 
 def list_providers() -> dict[str, str]:
-    """List all provider slots and their current implementations."""
+    """List all provider slots and their current implementations.
+
+    Each slot maps to ``"advanced"`` when a provider package is installed,
+    ``"community"`` when the built-in fallback is used, or ``"unavailable"``
+    when there is neither.
+    """
     result = {}
     for name, group in PROVIDER_GROUPS.items():
         provider = _discover_provider(group)
-        result[name] = "advanced" if provider is not None else "community"
+        if provider is not None:
+            result[name] = "advanced"
+        elif name in _NO_COMMUNITY_IMPLEMENTATION:
+            result[name] = "unavailable"
+        else:
+            result[name] = "community"
     return result
 
 

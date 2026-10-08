@@ -115,6 +115,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Compliance reports no longer count unassessed controls as met.**
+  `ComplianceEngine.generate_report()` derived `controls_met` as
+  `total_controls - violated`, so a framework that `check_compliance()` never
+  exercised reported every control as met with a score of 100. The engine now
+  records which controls each check assessed, and `controls_met` counts only
+  controls assessed in the period (and agent scope) without a violation. New
+  `controls_unassessed` and `unassessed_controls` fields report the rest.
+  `compliance_score` is still `controls_met / total_controls * 100`, so scores
+  drop for frameworks with unassessed controls. The Annex IV export labels
+  `total_controls` as "Controls defined" instead of "Controls evaluated" and
+  adds a "Controls not assessed" line. `generate_report()` also accepts naive
+  period bounds (read as UTC) instead of raising `TypeError` once a violation
+  exists (#3957).
+- **Provider fallbacks on the default install.** Without an advanced provider,
+  `get_trust_decay()` and `get_capability_engine()` now return `NetworkTrustEngine`
+  and `CapabilityRegistry` instead of failing with an `ImportError` for classes that
+  never existed. `get_delegation_chain()` and `get_audit_logger()`, which have no
+  community implementation, raise a `NotImplementedError` naming the missing class
+  and the entry point group a provider package must register (#4152).
+- `list_providers()` reports `"unavailable"` instead of `"community"` for the
+  `delegation` and `audit` slots when no advanced provider is installed, since they
+  have no community implementation.
 - `AuditLog.export()` and `AuditLog.export_cloudevents()` now return all matching
   records instead of silently capping exports at 10,000 records.
 - **Empty policy sets are visible to readiness probes.** The policy server and

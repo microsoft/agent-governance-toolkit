@@ -6,8 +6,11 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import AgtGovernance from "../src/index.mjs";
+
+const BUNDLED_POLICY_PATH = fileURLToPath(new URL("../config/default-policy.json", import.meta.url));
 
 // Prompt-injection fixture — intentionally malicious for detector testing.
 // Encoded to avoid triggering detectors on the literal string in source.
@@ -20,15 +23,12 @@ async function loadPlugin(directory, { client, policyPath } = {}) {
   // Force the plugin to read its policy from an isolated path so tests do
   // not collide with the user's real ~/.config/opencode/agt config. We do
   // this by setting AGT_OPENCODE_AUDIT_PATH and AGT_OPENCODE_POLICY_PATH
-  // before the policy is loaded the first time.
+  // (the bundled default when the test supplies none) before the policy is
+  // loaded the first time.
   const previousAudit = process.env.AGT_OPENCODE_AUDIT_PATH;
   const previousPolicy = process.env.AGT_OPENCODE_POLICY_PATH;
   process.env.AGT_OPENCODE_AUDIT_PATH = join(directory, "audit.json");
-  if (policyPath) {
-    process.env.AGT_OPENCODE_POLICY_PATH = policyPath;
-  } else {
-    delete process.env.AGT_OPENCODE_POLICY_PATH;
-  }
+  process.env.AGT_OPENCODE_POLICY_PATH = policyPath ?? BUNDLED_POLICY_PATH;
 
   try {
     const plugin = await AgtGovernance({

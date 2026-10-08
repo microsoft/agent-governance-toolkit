@@ -13,7 +13,8 @@ const PROTOCOL_VERSION = "2024-11-05";
 const STATELESS_PROTOCOL_VERSION = "2026-07-28";
 const JSONRPC_VERSION = "2.0";
 const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
-const HEADER_LINE_PATTERN = /^[ \t]*[A-Za-z-]+:/;
+// Other header-like lines must not stall later JSON messages waiting for a header separator.
+const HEADER_LINE_PATTERN = /^[ \t]*(?:Content-Length|Content-Type):/i;
 // Only the start of the buffer is inspected, so a large JSON line is never
 // decoded just to decide which framing it uses.
 const HEADER_PROBE_BYTES = 256;
@@ -100,6 +101,11 @@ async function drainInputBuffer() {
 }
 
 function startsWithHeaderLine(buffer) {
+  const newlineIndex = buffer.indexOf(NEWLINE);
+  if (newlineIndex !== -1 && (newlineIndex === 0 || buffer[newlineIndex - 1] !== 0x0d)) {
+    return false;
+  }
+
   return HEADER_LINE_PATTERN.test(buffer.subarray(0, HEADER_PROBE_BYTES).toString("utf8"));
 }
 

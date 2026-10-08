@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 """Tests for the SLI collector framework."""
 
-
+from unittest.mock import patch
 
 from agent_sre.slo.indicators import (
     SLI,
@@ -16,6 +16,7 @@ from agent_sre.slo.indicators import (
     TimeWindow,
     ToolCallAccuracy,
 )
+from agent_sre.slo.persistence import SQLiteMeasurementStore
 
 
 class TestTimeWindow:
@@ -105,6 +106,30 @@ class TestToolCallAccuracy:
 
 
 class TestResponseLatency:
+    def test_percentile_excludes_expired_measurements(self) -> None:
+        sli = ResponseLatency(window="1h")
+        with patch("agent_sre.slo.indicators.time.time", return_value=1000):
+            sli.record_latency(10000)
+        with patch("agent_sre.slo.indicators.time.time", return_value=4601):
+            sli.record_latency(200)
+            assert sli.current_value() == 200
+
+    def test_percentile_is_none_after_window_expires(self) -> None:
+        sli = ResponseLatency(window="1h")
+        with patch("agent_sre.slo.indicators.time.time", return_value=1000):
+            sli.record_latency(200)
+        with patch("agent_sre.slo.indicators.time.time", return_value=4601):
+            assert sli.current_value() is None
+
+    def test_percentile_restored_from_persistent_store(self, tmp_path) -> None:
+        db_path = tmp_path / "latency.db"
+        sli = ResponseLatency(store=SQLiteMeasurementStore(db_path))
+        for ms in [100, 200, 300]:
+            sli.record_latency(ms)
+
+        restored = ResponseLatency(store=SQLiteMeasurementStore(db_path))
+        assert restored.current_value() == 300
+
     def test_percentile(self) -> None:
         sli = ResponseLatency(target_ms=5000, percentile=0.95)
         for ms in [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,

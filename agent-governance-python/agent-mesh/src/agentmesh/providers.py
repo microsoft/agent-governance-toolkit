@@ -5,7 +5,9 @@ Provider Discovery System for AgentMesh
 
 Enables plug-and-play upgrades from Public Preview to Advanced implementations.
 When an advanced provider package is installed, factory functions automatically
-return the advanced implementation. Otherwise, Public Preview is used.
+return the advanced implementation. Otherwise, Public Preview is used where it
+exists; get_delegation_chain() and get_audit_logger() have no Public Preview
+implementation, so each raises NotImplementedError without an advanced provider.
 
 Usage:
     from agentmesh.providers import get_reward_engine, get_trust_bridge
@@ -31,6 +33,9 @@ PROVIDER_GROUPS = {
     "capability": "agentmesh.providers.capability",
 }
 
+# Slots whose getter has no community implementation to fall back to.
+_NO_COMMUNITY_IMPLEMENTATION = frozenset({"delegation", "audit"})
+
 _provider_cache: Dict[str, Any] = {}
 
 
@@ -52,6 +57,14 @@ def _discover_provider(group: str) -> Optional[Type]:
 
     _provider_cache[group] = None
     return None
+
+
+def _no_community_fallback(getter: str, group: str, missing: str) -> NotImplementedError:
+    """Build the error raised when a slot has no community implementation."""
+    return NotImplementedError(
+        f"{getter}() has no community implementation ({missing} does not exist). "
+        f"Install a provider package that registers an entry point in the {group!r} group."
+    )
 
 
 def get_reward_engine(**kwargs: Any):
@@ -86,42 +99,44 @@ def get_delegation_chain(**kwargs: Any):
     """Get the best available delegation chain.
 
     Advanced: Cryptographic delegation chains with attenuation.
-    Community: Simple parent-to-child scope passing.
+    Community: None yet; raises NotImplementedError unless an advanced provider is installed.
     """
     provider = _discover_provider(PROVIDER_GROUPS["delegation"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agentmesh.identity.delegation import DelegationChain
-    return DelegationChain(**kwargs)
+    raise _no_community_fallback(
+        "get_delegation_chain", PROVIDER_GROUPS["delegation"], "agentmesh.identity.delegation.DelegationChain"
+    )
 
 
 def get_audit_logger(**kwargs: Any):
     """Get the best available audit logger.
 
     Advanced: Merkle-chained audit with hash verification.
-    Community: Append-only JSON log file.
+    Community: None yet; raises NotImplementedError unless an advanced provider is installed.
     """
     provider = _discover_provider(PROVIDER_GROUPS["audit"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agentmesh.governance.audit import AuditLogger
-    return AuditLogger(**kwargs)
+    raise _no_community_fallback(
+        "get_audit_logger", PROVIDER_GROUPS["audit"], "agentmesh.governance.audit.AuditLogger"
+    )
 
 
 def get_trust_decay(**kwargs: Any):
     """Get the best available trust decay engine.
 
     Advanced: Trust contagion + KL divergence regime detection.
-    Community: Linear decay over time.
+    Community: NetworkTrustEngine (temporal decay, trust propagation and regime detection).
     """
     provider = _discover_provider(PROVIDER_GROUPS["trust_decay"])
     if provider is not None:
         return provider(**kwargs)
 
-    from agentmesh.reward.trust_decay import TrustDecayEngine
-    return TrustDecayEngine(**kwargs)
+    from agentmesh.reward.trust_decay import NetworkTrustEngine
+    return NetworkTrustEngine(**kwargs)
 
 
 def get_capability_engine(**kwargs: Any):
@@ -134,16 +149,26 @@ def get_capability_engine(**kwargs: Any):
     if provider is not None:
         return provider(**kwargs)
 
-    from agentmesh.trust.capability import CapabilityEngine
-    return CapabilityEngine(**kwargs)
+    from agentmesh.trust.capability import CapabilityRegistry
+    return CapabilityRegistry(**kwargs)
 
 
 def list_providers() -> Dict[str, str]:
-    """List all provider slots and their current implementations."""
+    """List all provider slots and their current implementations.
+
+    Each slot maps to ``"advanced"`` when a provider package is installed,
+    ``"community"`` when the built-in fallback is used, or ``"unavailable"``
+    when there is neither.
+    """
     result = {}
     for name, group in PROVIDER_GROUPS.items():
         provider = _discover_provider(group)
-        result[name] = "advanced" if provider is not None else "community"
+        if provider is not None:
+            result[name] = "advanced"
+        elif name in _NO_COMMUNITY_IMPLEMENTATION:
+            result[name] = "unavailable"
+        else:
+            result[name] = "community"
     return result
 
 

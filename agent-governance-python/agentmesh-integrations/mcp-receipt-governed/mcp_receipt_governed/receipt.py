@@ -405,12 +405,15 @@ def verify_receipt_chain(
     Checks: no-parent on first receipt, contiguous parent hashes, no duplicate
     receipt IDs, valid signatures, trusted receipt signers, and externally
     authorized receipts (when present or required).
+
+    ``trusted_keys=None`` verifies signatures without restricting receipt signers.
+    An explicit list accepts only the listed keys; an empty list trusts no signer.
     """
     if not receipts:
         return []
 
     errors: List[str] = []
-    trusted_set = set(trusted_keys) if trusted_keys else None
+    trusted_set = set(trusted_keys) if trusted_keys is not None else None
     seen_ids: set = set()
 
     for i, r in enumerate(receipts):
@@ -435,7 +438,7 @@ def verify_receipt_chain(
                 errors.append(f"[{i}] Malformed signer_public_key for receipt {r.receipt_id}")
             elif not verify_receipt(r):
                 errors.append(f"[{i}] Ed25519 signature invalid for receipt {r.receipt_id}")
-            elif trusted_set and key not in trusted_set:
+            elif trusted_set is not None and key not in trusted_set:
                 errors.append(f"[{i}] Untrusted signer {key[:16]}… — receipt rejected")
         else:
             errors.append(f"[{i}] Unsigned receipt — missing Ed25519 signature")

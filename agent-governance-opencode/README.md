@@ -47,13 +47,15 @@ governance tools from external workflows.
 
 This initial package enforces:
 
-- `session.start`           — injects AGT governance context into the session
+- `session.created`         — best-effort status logging; no context injection
 - `event` (chat-style)      — scans submitted prompts; throws to block
 - `tool.execute.before`     — allow / review / deny tool calls
 - `tool.execute.after`      — scans tool output and redacts known secret
                               patterns (AWS, GitHub PAT, OpenAI, JWT, PEM
                               private keys, Azure storage keys)
-- `tool.execute.error`      — records audit entry for failed tool calls
+
+There is no failed-tool hook in this plugin. A failed call that never reaches
+`tool.execute.after` does not receive an output audit entry.
 
 It also exposes two custom tools (in-process **and** via the stdio MCP server):
 
@@ -61,7 +63,8 @@ It also exposes two custom tools (in-process **and** via the stdio MCP server):
 - `agt_policy_check_text` — inspect arbitrary text for prompt-injection and
   context-poisoning findings
 
-The stdio server accepts `Content-Length` frames and newline-delimited JSON.
+The stdio server accepts `Content-Length` frames and newline-delimited JSON
+and always answers with newline-delimited JSON.
 Headers are limited to 8 KiB; JSON messages are limited to 5 MiB in UTF-8 bytes,
 including when a message arrives across multiple reads.
 
@@ -80,8 +83,12 @@ npm run check
 OpenCode loads plugins from:
 
 1. `opencode.json` `plugin` entries (npm specifiers)
-2. `~/.config/opencode/plugins/*.{ts,js,mjs}` (user-global)
-3. `.opencode/plugins/*.{ts,js,mjs}` (workspace-local)
+2. `~/.config/opencode/{plugin,plugins}/*.{ts,js}` (user-global)
+3. `.opencode/{plugin,plugins}/*.{ts,js}` (workspace-local)
+
+Use Option A for a normal installation. Workspace files must use `.js` or `.ts`;
+OpenCode does not auto-discover `.mjs` plugin files. The package's internal
+`.mjs` entry point is loaded through its npm export instead.
 
 Configure AGT through **one** of these plugin-loading paths for a workspace. Do
 not keep duplicate AGT shims or load the package both from `opencode.json` and a
@@ -89,7 +96,9 @@ workspace plugin file. Duplicate registrations for the same OpenCode client and
 workspace are suppressed and emit a warning, but removing the duplicate source
 keeps startup configuration unambiguous.
 
-### Option A — workspace `opencode.json`
+### Option A — workspace `opencode.json` (recommended)
+
+OpenCode installs the configured npm package and its dependencies at startup.
 
 ```json
 {
@@ -98,15 +107,51 @@ keeps startup configuration unambiguous.
 }
 ```
 
-### Option B — workspace plugin file (no install required)
+### Option B — workspace plugin file with an installed package
 
-Create `.opencode/plugins/agt.mjs`:
+From your project root, install the package into the OpenCode config directory:
 
-```js
-export { default } from "../../agent-governance-opencode/src/index.mjs";
+```powershell
+npm install --prefix .opencode @microsoft/agent-governance-opencode
 ```
 
-### Option C — install the bundled MCP server
+Create `.opencode/plugins/agt.js` (the singular `.opencode/plugin/` directory
+also works):
+
+```js
+export { default } from "@microsoft/agent-governance-opencode";
+```
+
+This imports the installed package from `.opencode/node_modules`; it does not
+require an AGT repository checkout or a copied source directory.
+
+### Verify plugin discovery
+
+From the same project root, run this command without invoking a model:
+
+```powershell
+opencode debug config
+```
+
+Inspect the resolved `plugin` array. Option A should include the AGT npm
+specifier; Option B should include a file URL ending in `/agt.js`. If neither
+appears, stop and correct the configuration before using the agent.
+
+Discovery alone does not prove that the module imports, initializes, or runs
+its governance hooks. A broken re-export can still appear in this list. Review
+startup errors and check the loaded plugin's `agt_policy_status` before use;
+policy validity and plugin discovery are separate checks. Out-of-band runtime
+activation evidence is tracked in issue #3708.
+
+### Optional MCP server installation
+
+The MCP server exposes inspection tools. Configuring it alone does not install
+the in-process governance hooks from Option A or B. Install the package in your
+project before using this path:
+
+```powershell
+npm install @microsoft/agent-governance-opencode
+```
 
 In `opencode.json`:
 
@@ -158,6 +203,24 @@ written by an earlier release keeps verifying after an upgrade. New entries are
 hashed over a canonical form with keys sorted by UTF-16 code unit, the ordering
 [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) specifies, so an external
 verifier can reproduce a hash without knowing property insertion order.
+
+**Rollover.** The log keeps the most recent 10,000 entries. When it rolls over,
+the file changes from a bare array to `{ "seamHash": "<hex>", "entries": [...] }`,
+where `seamHash` is the hash of the last evicted entry. The surviving head
+anchors to that seam instead of to the genesis hash, so the chain stays
+verifiable across an eviction. A file that has never rolled over stays a bare
+array and is always anchored to the genesis hash, so a bare array whose head
+does not anchor to genesis fails verification.
+
+The chain is unkeyed, so this raises the cost of editing a log rather than
+preventing it. Someone who can rewrite the file can also rewrap it as
+`{ "seamHash": "<hash of the entry before the new head>", "entries": [...] }`
+and it will verify. Detecting that needs a signature or an external anchor,
+neither of which this format has.
+
+If a log was already broken by the earlier rollover behaviour, it stays
+unverifiable and appends keep failing, which is intended. Move that file aside
+and let a new one start.
 
 **The upgrade is one way.** Once a version 2 entry is written to a file, an
 older release cannot verify that file. Because a failed chain denies every
@@ -303,7 +366,8 @@ reference policy at `config/session-state-policy.example.json` allows a
 - Committed and pending latch events are written to the hash-chained AGT audit
   log and replayed on plugin initialization. Keep that audit log to preserve
   state across restarts. An invalid audit chain or invalid session-state policy
-  fails closed.
+  fails closed. Replay only covers the retained window, so a latch older than
+  the retention limit is lost on restart; see the retention note below.
 - State is held per OpenCode session, with `maxSessions` defaulting to 1024
   (maximum 4096) and `maxPendingCallsPerSession` defaulting to 64 (maximum
   256); pending attribute references are additionally capped at 256 per
@@ -321,13 +385,16 @@ reference policy at `config/session-state-policy.example.json` allows a
   the same audit file; the audit writer does not coordinate cross-process
   read-modify-write updates.
 
-The audit writer retains at most 10,000 entries but currently does not preserve
-a verifiable prefix anchor when it trims the oldest entry. The append that
-crosses that limit makes the retained chain unverifiable, and subsequent
-governance evaluations fail closed rather than resetting session latches.
-Repairing audit-chain rollover is outside this change and must be addressed in
-the shared audit implementation before relying on higher-volume persistent
-session state.
+The audit writer retains at most 10,000 entries. Rollover now preserves a
+verifiable anchor, so the chain stays valid across the trim and governance
+keeps working past that point. See "Audit evidence" above for the file shape.
+
+Replay only sees the retained window, so a latch whose events have scrolled
+out of it is not restored on restart. A session that read sensitive data more
+than 10,000 entries ago therefore comes back without that latch and its
+outbound tools are allowed again. On a busy log, treat the retention limit as
+the lifetime of persisted session state, and lower the limit or export the log
+if a latch needs to outlive it.
 
 ## Important parity notes
 

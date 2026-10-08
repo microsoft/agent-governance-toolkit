@@ -20,3 +20,8 @@ intervention_points:
     policy:
       id: agent_pii_leakage
       query: data.agt_policies_agent.pii_leakage.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: agent_pii_leakage
+      query: data.agt_policies_agent.pii_leakage.acs_pre_tool_call_result

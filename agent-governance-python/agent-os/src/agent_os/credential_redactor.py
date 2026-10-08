@@ -283,6 +283,22 @@ class CredentialRedactor:
             pattern=re.compile(r"(?<![A-Za-z0-9])\d{3}[\s.-]\d{2}[\s.-]\d{4}(?![A-Za-z0-9])"),
         ),
         CredentialPattern(
+            name="US SSN",
+            # A bare nine-digit SSN placed next to an explicit cue (``SSN:``,
+            # ``ssn=``, ``social security number``) evaded the separator-required
+            # pattern above, so cued tool output passed the gateway and adapter
+            # gates unredacted (issue #3592). Match a case-insensitive cue within
+            # a short window before an undelimited nine-digit run. The bare-uncued
+            # forms (tracking, ABA, ZIP+4) stay non-matching, so pii_leak does not
+            # hard-block ordinary traffic. Kept in lockstep with the adapter copy
+            # in integrations/base.py.
+            pattern=re.compile(
+                r"(?i:\bssn\b|\bsocial[\s._-]+security(?:[\s._-]+(?:number|no\.?|#))?)"
+                r"[\s:=#.\-\"']{1,4}"
+                r"(?<!\d)\d{9}(?![A-Za-z0-9])"
+            ),
+        ),
+        CredentialPattern(
             name="Credit card number",
             pattern=re.compile(r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b"),
         ),

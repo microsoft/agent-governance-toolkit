@@ -5,7 +5,7 @@ import { isIP } from "node:net";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { appendAuditEntry, loadAuditEntries, verifyAuditEntries } from "./audit.mjs";
+import { appendAuditEntry, loadAuditFile, verifyAuditEntries } from "./audit.mjs";
 import {
   evaluateDirectResourceAccess,
   evaluateOpenCodePrompt as evaluateBaseOpenCodePrompt,
@@ -65,8 +65,11 @@ export async function loadPolicy(options = {}) {
   try {
     const sessionStatePolicy = compileSessionStatePolicy(state.policy.raw?.sessionState);
     if (sessionStatePolicy) {
-      const auditEntries = await loadAuditEntries(state.auditPath);
-      if (!verifyAuditEntries(auditEntries)) {
+      // Read the seam as well. After a rollover the surviving head anchors to
+      // it, and verifying without it reports a broken chain for a healthy log,
+      // which would fail session-state setup and deny every tool call.
+      const { seamHash, entries: auditEntries } = await loadAuditFile(state.auditPath);
+      if (!verifyAuditEntries(auditEntries, seamHash)) {
         throw new Error(`Audit log at ${state.auditPath} failed hash-chain verification.`);
       }
 
