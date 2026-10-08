@@ -49,7 +49,7 @@ updates:
           - "ruff"
 
   # npm packages share one multi-directory entry so the PR limit applies to the
-  # JavaScript workspace as a whole instead of multiplying across seven entries.
+  # JavaScript workspace as a whole instead of multiplying across eight entries.
   # Related development tools move together, while other compatible patch and
   # minor updates are grouped by dependency name across directories.
   - package-ecosystem: "npm"
@@ -61,6 +61,7 @@ updates:
       - "/agent-governance-typescript"
       - "/agent-governance-antigravity-cli"
       - "/agent-governance-codex-cli"
+      - "/agent-governance-studio/web"
     schedule:
       interval: "weekly"
     cooldown:

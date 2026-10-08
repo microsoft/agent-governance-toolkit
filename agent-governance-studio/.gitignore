@@ -1,0 +1,9 @@
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+__pycache__/
+web/node_modules/
+web/dist/
+web/coverage/
+web/*.tsbuildinfo

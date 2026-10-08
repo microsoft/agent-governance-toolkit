@@ -1292,6 +1292,12 @@ alexhancock
 chrono
 pastey
 schemars
+# --- AGT Studio toolchain and Python archive API ---
+getnames
+tanstack
+vite
+vitejs
+jsdom
 
 # --- Healthcare identifier terms used in HIPAA pattern matching and tests ---
 HPID
