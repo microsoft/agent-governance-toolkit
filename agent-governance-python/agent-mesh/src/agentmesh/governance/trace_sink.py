@@ -68,6 +68,7 @@ def session_to_trust_record(
     """Map an AGT session's AuditLog to an unsigned TRACE v0.2 Trust Record dict.
 
     Pass the returned dict to agentrust_trace.sign_record() before writing.
+    Unanchored records omit the optional transparency receipt URI.
     """
     entries, root = audit_log._chain._snapshot()
     return _snapshot_to_trust_record(agent_did, entries, root, policy_bundle_hash, config)
@@ -129,10 +130,6 @@ def _snapshot_to_trust_record(
             "status": "affirming",
             "verifier": config.appraisal_verifier,
         },
-        # None, not "": this sink does not anchor to a transparency log, so there
-        # is no receipt URI. An empty string looks populated and resolves to
-        # nothing. Conformance requires this at Level 2 only, where TR-ANC runs.
-        "transparency": None,
     }
 
     if config.model_version:
@@ -200,7 +197,7 @@ class TRACEAuditSink:
         except ImportError as exc:
             raise RuntimeError(
                 "agentrust-trace is required for TRACE emission. "
-                "Install it with: pip install 'agentrust-trace>=0.5.1,<0.6.0'"
+                "Install it with: pip install 'agentrust-trace>=0.11.0,<0.12.0'"
             ) from exc
 
         record = _snapshot_to_trust_record(
