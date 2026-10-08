@@ -119,7 +119,19 @@ export class ContextPoisoningDetector {
   addEntry(entry: ContextEntry): void {
     const key = `${entry.agentId}:${entry.sessionId}`;
     const entries = this.contextStore.get(key) ?? [];
-    if (entries.length >= ContextPoisoningDetector.MAX_ENTRIES_PER_KEY) {
+    // Honour the configured per-session cap (maxEntriesPerSession), bounded by
+    // the absolute MAX_ENTRIES_PER_KEY ceiling so an over-large config can't
+    // grow unbounded. Previously this was hard-coded to MAX_ENTRIES_PER_KEY, so
+    // a custom maxEntriesPerSession was silently ignored. A non-finite or
+    // non-positive value falls back to the default (not NaN/1), so eviction and
+    // the absolute ceiling always hold — mirrors resolveTimeoutMs in sandbox.ts.
+    const configured = this.config.maxEntriesPerSession;
+    const resolved =
+      Number.isFinite(configured) && configured > 0
+        ? configured
+        : DEFAULT_CONFIG.maxEntriesPerSession;
+    const perSessionCap = Math.min(resolved, ContextPoisoningDetector.MAX_ENTRIES_PER_KEY);
+    while (entries.length >= perSessionCap) {
       entries.shift();
     }
     entries.push(entry);
