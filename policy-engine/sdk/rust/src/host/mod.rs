@@ -28,14 +28,8 @@ pub use tool::{
     UnsupportedFrameworkAdapter, UnsupportedFrameworkAdapterError,
 };
 
-/// Reject a manifest that declares `bundle_url`, `system_prompt_file` or
-/// `system_prompt_url`.
-///
-/// `agent-control-spec` 0.4.0-alpha.3 has no implementation of these
-/// pre-retarget fields and its open config maps accept them, so the feature
-/// would be silently absent. Every host constructor, the C ABI and the
-/// Python and Node bindings run this before building a runtime. See
-/// `docs/acs-retarget.md`, "Removed manifest fields".
+/// Reject unsupported `system_prompt_file` fields. The historical helper name
+/// remains, but alpha.4 implements and validates the two URL source fields.
 pub use agent_control_specification_core::reject_removed_manifest_fields;
 pub use agent_control_specification_core::reject_url_manifest_local_fields;
 
@@ -72,13 +66,22 @@ impl AnnotatorDispatcher for NoAnnotatorDispatcher {
 pub fn default_host_annotator_dispatcher(
     manifest: &Manifest,
 ) -> Result<Arc<dyn AnnotatorDispatcher>, RuntimeError> {
+    default_host_annotator_dispatcher_with_limits(manifest, Limits::default())
+}
+
+/// Select the host-safe annotator default with explicit artifact download limits.
+pub fn default_host_annotator_dispatcher_with_limits(
+    manifest: &Manifest,
+    limits: Limits,
+) -> Result<Arc<dyn AnnotatorDispatcher>, RuntimeError> {
     #[cfg(feature = "bundled-dispatchers")]
     {
         let _ = manifest;
-        Ok(agent_control_spec::dispatchers::default_annotator_dispatcher())
+        Ok(agent_control_spec::dispatchers::default_annotator_dispatcher_with_limits(limits))
     }
     #[cfg(not(feature = "bundled-dispatchers"))]
     {
+        let _ = limits;
         if manifest.annotators.is_empty() {
             Ok(Arc::new(NoAnnotatorDispatcher))
         } else {
@@ -96,6 +99,14 @@ pub fn default_host_annotator_dispatcher(
 pub fn default_host_policy_dispatcher(
     manifest: &Manifest,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
+    default_host_policy_dispatcher_with_limits(manifest, Limits::default())
+}
+
+/// Select the OPA policy default with explicit artifact download limits.
+pub fn default_host_policy_dispatcher_with_limits(
+    manifest: &Manifest,
+    limits: Limits,
+) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
     for (name, policy) in &manifest.policies {
         let engine = policy.engine_type();
         if engine != "rego" {
@@ -108,7 +119,7 @@ pub fn default_host_policy_dispatcher(
     // AGT's existing API promises OPA executable selection and bundle behavior.
     Ok(Arc::new(
         agent_control_spec::OpaPolicyDispatcher::with_runner(
-            agent_control_spec::OpaRegoRunner::from_environment(),
+            agent_control_spec::OpaRegoRunner::from_environment().with_limits(limits),
         ),
     ))
 }
@@ -442,11 +453,9 @@ impl AgentControl {
     /// policy input size, annotators per interception point), and the manifest
     /// `extends` URL fetch performed at load time.
     ///
-    /// It does **not** bound a dispatch time fetch. `agent-control-spec`
-    /// 0.4.0-alpha.3 constructs the bundled dispatchers without limits, so
-    /// any request an annotator dispatcher makes (an `llm` or `endpoint`
-    /// call) uses that crate's own defaults regardless of what is set here.
-    /// Do not rely on this to cap outbound requests from a dispatcher.
+    /// The bundled dispatchers also use these limits for pinned prompt and
+    /// bundle downloads. Inference calls retain their provider timeout
+    /// configuration. Custom dispatchers own their I/O limits.
     ///
     /// Fails closed with `runtime_error:manifest_invalid` when the manifest
     /// declares a field the pinned engine dropped; see
@@ -458,37 +467,14 @@ impl AgentControl {
         limits: Limits,
     ) -> Result<Self, RuntimeError> {
         reject_removed_manifest_fields(&manifest)?;
-        // Falling back to the bundled annotator dispatcher would hand a
-        // URL sourced manifest a path to host environment credentials,
-        // which is the exposure `bundled-dispatchers` gates. A manifest
-        // that declares no annotators never reaches a dispatcher, so it
-        // keeps working without the feature.
         let annotations = match annotations {
             Some(annotations) => annotations,
-            #[cfg(feature = "bundled-dispatchers")]
-            None => agent_control_spec::dispatchers::default_annotator_dispatcher(),
-            #[cfg(not(feature = "bundled-dispatchers"))]
-            None if manifest.annotators.is_empty() => Arc::new(NoAnnotatorDispatcher),
-            #[cfg(not(feature = "bundled-dispatchers"))]
-            None => {
-                return Err(RuntimeError::PolicyInvocationFailed(format!(
-                    "manifest declares {} annotator(s) but no annotator dispatcher was \
-                     supplied and the bundled dispatchers are not enabled; register one \
-                     explicitly, or build with the `bundled-dispatchers` feature, which \
-                     reads host environment credentials",
-                    manifest.annotators.len()
-                )))
-            }
+            None => default_host_annotator_dispatcher_with_limits(&manifest, limits)?,
         };
         let policy = match policy {
             Some(policy) => policy,
-            None => default_host_policy_dispatcher(&manifest)?,
+            None => default_host_policy_dispatcher_with_limits(&manifest, limits)?,
         };
-        // `Limits` carries the engine resource budget (snapshot size,
-        // policy input size, annotators per point), so it must reach the
-        // runtime rather than be dropped. It does not reach the bundled
-        // dispatchers, whose URL fetch budget stays at their own
-        // defaults; tracked in docs/acs-retarget.md.
         let runtime = Runtime::with_limits(
             manifest.clone(),
             Arc::clone(&annotations),

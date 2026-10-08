@@ -44,7 +44,8 @@ mod host;
 mod streaming;
 pub use host::{
     create_unsupported_framework_adapter, default_host_annotator_dispatcher,
-    default_host_policy_dispatcher, identity, manifest_from_url, policy_labels,
+    default_host_annotator_dispatcher_with_limits, default_host_policy_dispatcher,
+    default_host_policy_dispatcher_with_limits, identity, manifest_from_url, policy_labels,
     reject_removed_manifest_fields, with_transformed_target, AgentControl, AgentControlBlocked,
     AgentControlError, AgentControlInterruption, AgentControlSuspended, ApprovalOutcome,
     ApprovalResolution, ApprovalResolver, GuardedRigLikeTool, HostEvaluation, ModelRunResult,

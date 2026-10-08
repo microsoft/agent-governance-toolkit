@@ -57,12 +57,14 @@ pub struct AcsBuilder {
     annotations: Option<Arc<dyn AnnotatorDispatcher>>,
     policy: Option<Arc<dyn PolicyDispatcher>>,
     perf_telemetry: PerfTelemetry,
+    limits: Limits,
     enable_default_annotations: bool,
     enable_default_policy: bool,
 }
 
 pub struct AcsRuntime {
     runtime: Runtime,
+    limits: Limits,
 }
 
 pub type AcsFreeResultCallback = unsafe extern "C" fn(ptr: *mut c_char, user_data: *mut c_void);
@@ -177,6 +179,7 @@ fn builder_from_manifest(manifest: Manifest) -> *mut AcsBuilder {
         annotations: None,
         policy: None,
         perf_telemetry: PerfTelemetry::default(),
+        limits: Limits::default(),
         enable_default_annotations: false,
         enable_default_policy: false,
     }))
@@ -516,13 +519,11 @@ pub unsafe extern "C" fn acs_builder_set_perf_telemetry(
     })
 }
 
-/// Report that configuring bundled-dispatcher URL fetch limits is unavailable.
+/// Configure pinned bundle and prompt downloads for bundled dispatchers.
 ///
-/// `agent-control-spec` 0.4.0-alpha.3 does not expose a way to pass limits to
-/// its bundled dispatchers. Returning an error prevents callers from relying
-/// on a budget that cannot be enforced. The ABI symbol remains available for
-/// compatibility until AGT can adopt an eligible upstream release with the
-/// limits-aware dispatcher constructors.
+/// Manifest loading has already completed when the builder exists. These
+/// limits do not retroactively bound that fetch or replace inference timeouts.
+/// Custom dispatchers own their I/O limits.
 ///
 /// # Safety
 /// `b` must be a live builder returned by ACS and not concurrently mutated. If
@@ -530,9 +531,9 @@ pub unsafe extern "C" fn acs_builder_set_perf_telemetry(
 #[no_mangle]
 pub unsafe extern "C" fn acs_builder_set_url_fetch_limits(
     b: *mut AcsBuilder,
-    _max_bytes: u64,
-    _timeout_ms: u64,
-    _max_redirects: u32,
+    max_bytes: u64,
+    timeout_ms: u64,
+    max_redirects: u32,
     err: *mut *mut c_char,
 ) -> i32 {
     ffi_guard!(code_with_err, err, -1, {
@@ -540,13 +541,17 @@ pub unsafe extern "C" fn acs_builder_set_url_fetch_limits(
             unsafe { write_err(err, "null builder") };
             return -1;
         }
-        unsafe {
-            write_err(
-                err,
-                "URL fetch limits are unavailable: agent-control-spec 0.4.0-alpha.3 cannot apply them to bundled dispatchers",
-            )
+        let (Ok(max_bytes), Ok(max_redirects)) =
+            (usize::try_from(max_bytes), usize::try_from(max_redirects))
+        else {
+            unsafe { write_err(err, "URL fetch limits exceed this platform's size range") };
+            return -1;
         };
-        -1
+        let builder = unsafe { &mut *b };
+        builder.limits.max_manifest_url_bytes = max_bytes;
+        builder.limits.manifest_url_timeout_ms = timeout_ms;
+        builder.limits.max_manifest_url_redirects = max_redirects;
+        0
     })
 }
 
@@ -581,16 +586,12 @@ fn resolve_default_annotator_dispatcher(
         }
         return Ok(None);
     }
-    // SECURITY: the bundled annotator dispatcher resolves `api_key_env`
-    // against the host environment. Upstream dropped the provenance gate that
-    // withheld those credentials from a network sourced manifest, so a caller
-    // asking for it opts into that exposure. It no longer takes `Limits`;
-    // its URL fetch budget is its own default.
     #[cfg(feature = "bundled-dispatchers")]
     {
-        let _ = builder;
         Ok(Some(
-            agent_control_spec::dispatchers::default_annotator_dispatcher(),
+            agent_control_spec::dispatchers::default_annotator_dispatcher_with_limits(
+                builder.limits,
+            ),
         ))
     }
     #[cfg(not(feature = "bundled-dispatchers"))]
@@ -608,8 +609,7 @@ fn resolve_default_policy_dispatcher(
     }
     #[cfg(all(feature = "bundled-dispatchers", feature = "opa"))]
     {
-        let _ = builder;
-        crate::default_host_policy_dispatcher(manifest)
+        crate::host::default_host_policy_dispatcher_with_limits(manifest, builder.limits)
             .map(Some)
             .map_err(|error| error.to_string())
     }
@@ -673,8 +673,11 @@ pub unsafe extern "C" fn acs_builder_build(
                 }
             },
         };
-        match Runtime::with_perf_telemetry(manifest, annotations, policy, builder.perf_telemetry) {
-            Ok(runtime) => Box::into_raw(Box::new(AcsRuntime { runtime })),
+        match Runtime::with_limits(manifest, annotations, policy, builder.limits) {
+            Ok(runtime) => Box::into_raw(Box::new(AcsRuntime {
+                runtime: runtime.with_perf_telemetry_level(builder.perf_telemetry),
+                limits: builder.limits,
+            })),
             Err(error) => {
                 unsafe { write_err(err, &format!("build failed: {error}")) };
                 std::ptr::null_mut()
@@ -776,7 +779,12 @@ pub unsafe extern "C" fn acs_runtime_evaluate(
         // discharged through HostEvaluation before it crosses the ABI. The
         // response shape is unchanged, so the .NET side keeps parsing it.
         let engine = runtime.runtime.evaluate_point(intervention_point, snapshot);
-        let result = match HostEvaluation::from_engine(intervention_point, engine, mode) {
+        let result = match HostEvaluation::from_engine_with_limits(
+            intervention_point,
+            engine,
+            mode,
+            runtime.limits,
+        ) {
             Ok(result) => result,
             Err((error, detail)) => {
                 return json_to_c(&json!({
@@ -1000,5 +1008,73 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
         message.clone()
     } else {
         "unknown panic".to_string()
+    }
+}
+
+#[cfg(all(test, feature = "bundled-dispatchers", feature = "opa"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ffi_builder_applies_timeout_to_both_default_dispatchers() {
+        let manifest = Manifest::from_yaml_str(
+            "agent_control_specification_version: 0.4.0-alpha.1\n\
+                 policies:\n  p: {type: rego, query: data.p.verdict}\n\
+                 intervention_points:\n  input: {policy_target: $.input, policy: {id: p}}\n",
+        )
+        .unwrap();
+        let builder = builder_from_manifest(manifest.clone());
+        let mut error = std::ptr::null_mut();
+        unsafe {
+            assert_eq!(
+                acs_builder_set_url_fetch_limits(builder, 4096, 0, 0, &mut error),
+                0
+            );
+            assert_eq!(
+                acs_builder_enable_default_annotator_dispatcher(builder, &mut error),
+                0
+            );
+            assert_eq!(
+                acs_builder_enable_default_policy_dispatcher(builder, &mut error),
+                0
+            );
+        }
+        let builder = unsafe { Box::from_raw(builder) };
+        let prompt_source = json!({
+            "url": "https://prompts.example/prompt.txt", "sha256": "a".repeat(64),
+        });
+        let annotator = AnnotatorInvocation {
+            fields: std::collections::BTreeMap::from([
+                ("type".into(), json!("llm")),
+                ("provider".into(), json!("openai")),
+                ("api_key".into(), json!("test-key")),
+                ("system_prompt_url".into(), prompt_source.clone()),
+            ]),
+            ..Default::default()
+        };
+        let annotations = resolve_default_annotator_dispatcher(&builder, &manifest)
+            .unwrap()
+            .unwrap();
+        let error = annotations
+            .dispatch("judge", &annotator, &json!({}))
+            .unwrap_err();
+        assert!(error.detail().contains("timeout of 0 ms"), "{error}");
+
+        let policy = resolve_default_policy_dispatcher(&builder, &manifest)
+            .unwrap()
+            .unwrap();
+        let invocation = PreparedPolicyInvocation::Rego(crate::RegoPolicyInvocation {
+            query: "data.p.verdict".into(),
+            bundle: None,
+            inline_bundle: None,
+            adapter_config: std::collections::BTreeMap::from([(
+                "bundle_url".into(),
+                prompt_source,
+            )]),
+            input: json!({}),
+            canonical_input: "{}".into(),
+        });
+        let error = policy.evaluate(&invocation).unwrap_err();
+        assert!(error.detail().contains("timeout of 0 ms"), "{error}");
     }
 }

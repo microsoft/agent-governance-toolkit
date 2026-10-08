@@ -154,10 +154,7 @@ agent_control_specification_version: 0.4.0-alpha.1
 """
             )
 
-    def test_removed_manifest_fields_fail_closed_everywhere(self):
-        # agent-control-spec 0.4.0-alpha.3 parses these fields into open config
-        # maps and has nothing behind them, so without this check a manifest
-        # declaring them was accepted with the feature silently missing.
+    def test_restored_bundle_url_and_unsupported_file_prompt(self):
         bundle_url = """agent_control_specification_version: 0.4.0-alpha.1
 policies:
   p:
@@ -190,7 +187,11 @@ intervention_points:
       judge:
         from: $.input
 """
-        for manifest, field in ((bundle_url, "bundle_url"), (prompt_file, "system_prompt_file")):
+        validate_manifest(bundle_url)
+        validate_manifest_overlay(bundle_url)
+        AgentControl.from_native(bundle_url, MockAnnotator(), MockPolicy())
+        AgentControl.from_manifest_chain([bundle_url], MockAnnotator(), MockPolicy())
+        for manifest, field in ((prompt_file, "system_prompt_file"),):
             with self.subTest(field=field, entry="validate_manifest"):
                 with self.assertRaisesRegex(RuntimeError, f"'{field}'.*acs-retarget"):
                     validate_manifest(manifest)

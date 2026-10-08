@@ -8,33 +8,9 @@ description = "Rust SDK for the Agent Control Specification runtime."
 readme = "../../README.md"
 
 [features]
-# SECURITY: the bundled annotator dispatchers read host environment
-# credentials. AGT gated that on manifest provenance through a
-# `url_sourced` flag, so a manifest fetched over the network could not
-# reach host credentials. agent-control-spec dropped the gate in
-# 0.4.0-alpha.1 and the pinned 0.4.0-alpha.3 still has none, while URL
-# `extends` remains supported, so the complete chain
-# remote manifest -> llm/endpoint annotator -> attacker endpoint ->
-# `api_key_env: <host secret>` is reachable.
-#
-# What is gated here is installing the bundled *annotator* dispatcher,
-# which is that credential-reading path. The bundled *policy* dispatcher
-# stays on so the zero-config Rego default keeps working.
-#
-# That is a narrower guarantee than "the policy dispatcher is safe". It
-# shells out to `opa` without clearing the environment, and Rego can read
-# the inherited environment through `opa.runtime().env`, so a manifest
-# that controls the query can read a host secret. Verified:
-#   ACS_SENTINEL=x opa eval --format json --stdin-input \
-#     'opa.runtime().env.ACS_SENTINEL' <<<'{}'
-# returns "x". This predates the retarget; the previous embedded engine
-# spawned `opa` the same way. Fixing it needs `env_clear` at the spawn
-# site inside agent-control-spec, so it is an upstream issue rather than
-# something AGT can close from here. Treat a manifest as trusted input to
-# the policy plane.
-#
-# Off by default. A host that opts in accepts that exposure until the
-# provenance gate is restored upstream. See docs/acs-retarget.md.
+# Bundled annotators remain opt-in even though alpha.4 restores URL provenance
+# checks. Local manifests and custom dispatchers remain trusted inputs. OPA
+# executable and bundle behavior remain explicit host choices.
 default = []
 opa = ["agent_control_specification_core/opa"]
 bundled-dispatchers = [
@@ -52,7 +28,7 @@ bundled-dispatchers = [
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-agent-control-spec = { version = "=0.4.0-alpha.3", default-features = false, features = ["opa", "cedar", "default-dispatchers"] }
+agent-control-spec = { version = "=0.4.0-alpha.4", default-features = false, features = ["opa", "cedar", "default-dispatchers"] }
 agent-hooks-sdk = "=0.1.0-alpha.5"
 # Carries the AGT-only artifact validation the C ABI exposes.
 agent_control_specification_core = { version = "=0.3.2-beta.0", path = "../../core", default-features = false }
