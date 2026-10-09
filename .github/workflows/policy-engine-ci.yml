@@ -176,3 +176,33 @@ jobs:
           dotnet pack src/AgentControlSpecification.AutoGen/AgentControlSpecification.AutoGen.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
           dotnet pack src/AgentControlSpecification.SemanticKernel/AgentControlSpecification.SemanticKernel.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
           ls -la "$RUNNER_TEMP/acs-dotnet-pack"
+
+  java:
+    name: Java SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: policy-engine
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Install OPA
+        run: |
+          curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/opa"
+          echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/opa" version
+      - name: Build the native library
+        run: |
+          cargo build --release -p agent_control_specification --features opa,bundled-dispatchers
+      - name: Build and test the Java SDK
+        run: |
+          cd sdk/java
+          export JAVA_HOME="${JAVA_HOME_25_X64:?JDK 25 is not installed on this runner}"
+          ./gradlew build --no-daemon -Pacs.native.library="$GITHUB_WORKSPACE/policy-engine/target/release/libagent_control_specification.so"
