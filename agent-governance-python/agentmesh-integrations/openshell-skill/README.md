@@ -1,19 +1,28 @@
-# openshell-agentmesh
+# OpenShell AgentMesh integration
 
-This compatibility package is deprecated. The OpenShell governance skill
-(`GovernanceSkill`, `ShellPolicyViolation`, `governed_shell`) was removed in
-the v5 ACS migration and has no OpenShell-specific replacement: importing
-`openshell_agentmesh` now only emits a `DeprecationWarning`.
-
-To govern an OpenShell-hosted agent, build an `AgentControl` from an ACS
-manifest and evaluate intervention points in the host:
+This adapter applies Agent Control Specification policy to process creation by
+Python agents hosted in an OpenShell sandbox. It intercepts `subprocess.run`,
+`subprocess.Popen`, `os.system`, and `os.popen` in an explicit context and
+evaluates each command at the `pre_tool_call` intervention point as the
+`shell.execute` tool.
 
 ```python
-from agent_control_specification import AgentControl
+import subprocess
 
-control = AgentControl.from_path("policies/agt-manifest.yaml")
+from openshell_agentmesh import GovernanceSkill, governed_shell
+
+skill = GovernanceSkill.from_manifest("openshell-policy.yaml")
+with governed_shell(skill):
+    subprocess.run(["git", "status"], check=True)
 ```
 
-See
-[BREAKING_CHANGES.md](../../../BREAKING_CHANGES.md)
-for the removed-symbols record and migration guidance.
+The ACS policy target contains `executable`, `argv`, `command`, `shell`, `api`,
+`cwd`, OpenShell sandbox metadata, and caller-supplied context. Deny and
+unresolved escalation verdicts stop execution. Transform verdicts may replace
+the command. Policy evaluation errors fail closed.
+
+Install the adapter through the consolidated integrations distribution.
+
+```bash
+pip install "agent-governance-toolkit-integrations[openshell]"
+```
