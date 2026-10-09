@@ -1,6 +1,6 @@
 ---
 title: "MCP Security Gateway -- Version 1.0"
-last_reviewed: 2026-09-24
+last_reviewed: 2026-09-25
 owner: agt-maintainers
 ---
 
@@ -14,8 +14,10 @@ owner: agt-maintainers
 > Model Context Protocol (MCP), including tool call interception,
 > response scanning, message signing, session authentication, rate
 > limiting, auth enforcement, CVE feed integration, trust-gated
-> servers, schema drift detection, audit, and metrics. All SDK
-> implementations MUST conform to this specification.
+> servers, schema drift detection, audit, and metrics. SDK implementations
+> MUST conform to applicable requirements. Sections explicitly scoped to a
+> language or package do not establish API or wire-format compatibility
+> across SDKs.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
@@ -563,10 +565,31 @@ patterns and SHOULD log a warning indicating sample rules are in use.
 
 ### 7.1 Purpose
 
-MCPMessageSigner provides HMAC-based message signing and replay
-protection for MCP messages, ensuring message integrity and
-preventing replay attacks across the MCP transport layer.
-**[Pure Specification]**
+Python's `agent_os.mcp_message_signer.MCPMessageSigner` provides
+HMAC-based message signing and replay protection for MCP messages,
+ensuring message integrity and preventing replay attacks across the
+MCP transport layer.
+**[Python-specific specification]**
+
+**Implementation scope: Python only.** Section 7 specifies the Python
+envelope and canonical signature format. It does not specify another
+SDK's wire format or claim cross-SDK interoperability. The Rust
+`agentmesh-mcp` signer still uses the legacy
+`timestamp_secs:nonce:payload` framing. Because nonce and payload may
+contain `:`, distinct field tuples can produce the same MAC input; for
+example, `nonce="n", payload="x:y"` and `nonce="n:x", payload="y"`
+collide at the same timestamp. Rust and Python v2 signatures are not
+mutually verifiable. Do not rely on the current Rust signer for
+field-reframing resistance or assume Python/Rust interoperability until
+the [blocking Rust signing follow-up #4199](https://github.com/microsoft/agent-governance-toolkit/issues/4199)
+defines and tests a shared format.
+
+Successful verification establishes integrity under the shared key, not
+permission to execute the payload. Every holder of that key can sign any
+sender identifier. Consumers MUST bind the key to the expected authenticated
+peer, authorize the verified sender, and apply policy and content checks to
+the verified payload before execution. A valid signature does not make
+prompt-injection content safe.
 
 ### 7.2 Signing Key Requirements
 
@@ -584,25 +607,58 @@ A signed envelope MUST contain:
 
 | Field | Type | Required | Default | Constraints |
 | --- | --- | --- | --- | --- |
-| `payload` | string | Yes | -- | The message payload (JSON string) |
-| `nonce` | string | Yes | -- | Unique nonce for replay protection |
-| `timestamp` | string | Yes | -- | ISO 8601 UTC timestamp |
-| `signature` | string | Yes | -- | HMAC-SHA256 signature (hex-encoded) |
+| `payload` | string | Yes | -- | Non-blank serialized message payload |
+| `nonce` | string | Yes | -- | Non-blank, unique nonce for replay protection |
+| `timestamp` | string | Yes | -- | ISO 8601 timestamp with timezone and full microsecond precision |
+| `signature` | string | Yes | -- | HMAC-SHA256 signature (base64-encoded) |
 | `sender_id` | string or null | No | null | Optional sender identifier |
 
 **[Pure Specification]**
 
+The Python envelope stores `timestamp` as a timezone-aware `datetime`;
+transport adapters MUST preserve its full precision. Text fields MUST be
+valid UTF-8 strings. Empty and absent senders are distinct values. Invalid
+field types or encodings MUST fail closed without exposing a verified
+payload or sender.
+
 ### 7.4 Signature Computation
 
-The HMAC-SHA256 signature MUST be computed over a canonical string
-constructed by concatenating the following fields with a separator:
+The HMAC-SHA256 signature MUST be computed over the UTF-8 encoding of this
+fixed-order JSON array, using compact separators, no ASCII-only escaping,
+and no payload or Unicode normalization:
 
-```
-canonical = payload + nonce + timestamp + (sender_id or "")
-signature = HMAC-SHA256(signing_key, canonical)
+```python
+canonical = json.dumps(
+    [
+        "agent-os:mcp-message:v2",
+        nonce,
+        timestamp.astimezone(timezone.utc).isoformat(timespec="microseconds"),
+        sender_id,
+        payload,
+    ],
+    ensure_ascii=False,
+    separators=(",", ":"),
+)
+signature = base64.b64encode(
+    hmac.new(signing_key, canonical.encode("utf-8"), hashlib.sha256).digest()
+).decode("ascii")
 ```
 
-The signature MUST be hex-encoded. **[Pure Specification]**
+The fixed first element binds the signature to this protocol and encoding
+version. JSON string escaping protects every field boundary; a null sender
+MUST encode as `null`, not `""`. UTC timestamps include exactly six fractional
+digits and the `+00:00` offset. Equivalent timezone representations denote
+the same signed instant, but truncating microseconds changes the signature.
+Invalid Unicode surrogate code points MUST be rejected rather than replaced.
+The signature MUST be base64-encoded. **[Pure Specification]**
+
+**Breaking migration:** senders and receivers MUST upgrade together. Legacy
+delimiter-based signatures MUST NOT be accepted as a fallback, including for
+apparently separator-free envelopes: doing so preserves the reframing
+vulnerability reported in #3507. Outstanding legacy envelopes must be
+discarded and, if still authorized, reissued by an upgraded sender. The
+envelope's field names are unchanged; there is no caller-controlled version
+selector or downgrade mode.
 
 ### 7.5 Sign Message
 
