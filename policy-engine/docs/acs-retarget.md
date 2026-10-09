@@ -113,8 +113,9 @@ or its `prompt` alias. The upstream engine validates these combinations.
 `system_prompt_file` is still unsupported. AGT rejects it in declarations
 and bindings instead of allowing a judge to use its default prompt.
 The historical `reject_removed_manifest_fields` helper now rejects that
-field only. `REMOVED_MANIFEST_FIELDS` keeps its original array for source
-compatibility and describes the initial retarget, not the current support set.
+field only. `UNSUPPORTED_MANIFEST_FIELDS` names the current set. `REMOVED_MANIFEST_FIELDS`
+is deprecated: it keeps its original array for source compatibility and
+describes the initial retarget, not what the engine rejects today.
 
 AGT passes host download limits to its default OPA and annotator dispatchers.
 The C ABI's `acs_builder_set_url_fetch_limits` configures pinned bundle and
@@ -153,6 +154,19 @@ URL parents. AGT continues to disable redirects on this entry point because
 the fetcher offers no AGT per-hop destination callback. A zero redirect budget
 does not contact the redirect target. Local manifests, custom dispatchers and
 their endpoints still require a host trust decision.
+
+The guard also does not cover dispatcher-time downloads. Since alpha.4 the
+bundled OPA and LLM dispatchers fetch `bundle_url` and `system_prompt_url`
+when a policy or annotator runs. Those fetches go through the upstream pinned
+fetcher, which requires `https` and a matching pin, but they do not pass
+through `reject_blocked_fetch_host`, and they follow the host's redirect budget
+(`Limits::max_manifest_url_redirects`, five by default) rather than the zero
+budget used for the manifest itself. A local or pinned-chain manifest can
+therefore make the host send a GET to an internal `https` destination. The pin
+check means the response is unusable unless it matches, so the exposure is a
+blind request, not data disclosure. Hosts that must not reach internal
+addresses should set the redirect budget to zero through the limits API,
+restrict egress, or keep such manifests out of the trusted set.
 
 The legacy top-level URL helper creates a `0.4.0-alpha.1` wrapper manifest.
 For a `0.5.0-alpha.1` URL parent, use a local root manifest declaring that

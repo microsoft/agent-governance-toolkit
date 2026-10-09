@@ -24,9 +24,21 @@ pub use agent_control_spec::SUPPORTED_VERSIONS;
 /// Use [`SUPPORTED_VERSIONS`] for the complete upstream contract list.
 pub const SUPPORTED_MANIFEST_VERSIONS: [&str; 1] = [SUPPORTED_VERSIONS[0]];
 
+/// Manifest fields the pinned engine does not support.
+///
+/// Alpha.4 restored `bundle_url` and `system_prompt_url` for pinned manifest
+/// chains, so `system_prompt_file` is the only field AGT still rejects.
+pub const UNSUPPORTED_MANIFEST_FIELDS: [&str; 1] = ["system_prompt_file"];
+
 /// Historical fields removed by the initial retarget.
-/// Alpha.4 restores the two URL sources. Only `system_prompt_file` remains
-/// unsupported; this array keeps its original shape for existing callers.
+///
+/// Two of these are accepted again since alpha.4, so this list no longer
+/// describes what the engine rejects. It keeps its original shape for source
+/// compatibility; use [`UNSUPPORTED_MANIFEST_FIELDS`] for the current set.
+#[deprecated(
+    since = "0.3.2-beta.0",
+    note = "bundle_url and system_prompt_url are accepted again; use UNSUPPORTED_MANIFEST_FIELDS"
+)]
 pub const REMOVED_MANIFEST_FIELDS: [&str; 3] =
     ["bundle_url", "system_prompt_file", "system_prompt_url"];
 
@@ -879,7 +891,7 @@ fn json_string_size(value: &str) -> usize {
 mod tests {
     use super::{
         parse_manifest_yaml_value, reject_removed_fields, reject_url_manifest_local_fields,
-        validate_manifest_overlay_yaml, validate_manifest_yaml, REMOVED_MANIFEST_FIELDS,
+        validate_manifest_overlay_yaml, validate_manifest_yaml, UNSUPPORTED_MANIFEST_FIELDS,
     };
     use agent_control_spec::Manifest;
 
@@ -1055,7 +1067,16 @@ mod tests {
         let local_bundle = rego_manifest("    bundle: ./policy\n");
         validate_manifest_yaml(&local_bundle).unwrap();
         validate_manifest_overlay_yaml(&local_bundle).unwrap();
-        assert_eq!(REMOVED_MANIFEST_FIELDS.len(), 3);
+        assert_eq!(UNSUPPORTED_MANIFEST_FIELDS, ["system_prompt_file"]);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn removed_fields_array_keeps_its_shape_for_existing_callers() {
+        assert_eq!(super::REMOVED_MANIFEST_FIELDS.len(), 3);
+        for field in super::UNSUPPORTED_MANIFEST_FIELDS {
+            assert!(super::REMOVED_MANIFEST_FIELDS.contains(&field));
+        }
     }
 
     #[test]

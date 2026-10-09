@@ -234,10 +234,12 @@ pub use identity::action_identity;
 pub use artifact_validation::{
     validate_acs_artifacts, validate_acs_manifest, ArtifactValidationResult, ValidationDiagnostic,
 };
+#[allow(deprecated)]
+pub use manifest_yaml::REMOVED_MANIFEST_FIELDS;
 pub use manifest_yaml::{
     parse_manifest_yaml_value, reject_removed_fields as reject_removed_manifest_fields,
     reject_url_manifest_local_fields, validate_manifest_overlay_yaml, validate_manifest_yaml,
-    REMOVED_MANIFEST_FIELDS,
+    UNSUPPORTED_MANIFEST_FIELDS,
 };
 pub use telemetry_sinks::{
     InMemoryTelemetrySink, MultiSink, StdoutJsonTelemetrySink, TelemetryEventExt,

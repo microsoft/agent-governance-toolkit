@@ -458,8 +458,9 @@ impl AgentControl {
     /// configuration. Custom dispatchers own their I/O limits.
     ///
     /// Fails closed with `runtime_error:manifest_invalid` when the manifest
-    /// declares a field the pinned engine dropped; see
-    /// [`reject_removed_manifest_fields`].
+    /// declares `system_prompt_file`, the one field the pinned engine still
+    /// does not support; `bundle_url` and `system_prompt_url` are accepted on a
+    /// pinned chain since alpha.4. See [`reject_removed_manifest_fields`].
     pub fn from_manifest_with_dispatchers_and_limits(
         manifest: Manifest,
         annotations: Option<Arc<dyn AnnotatorDispatcher>>,

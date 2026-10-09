@@ -1306,3 +1306,6 @@ ITAR
 bssn
 uncued
 undelimited
+verus
+vstd
+prettyplease
