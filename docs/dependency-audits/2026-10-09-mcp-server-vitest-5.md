@@ -4,6 +4,8 @@ last_reviewed: 2026-10-09
 owner: Ricky-G
 ---
 
+<!-- cspell:words vite jridgewell magicast obug picomatch tinybench tinyexec istanbuljs estree EALLOWREMOTE -->
+
 # MCP server Vitest 5 consolidated dependency audit
 
 ## Which dependencies changed and why
@@ -256,6 +258,24 @@ These structural and tarball checks do not waive independent upstream
 registry verification. No scanner, alias rule, hash rule, allowlist,
 permission or conditional-approval requirement is changed.
 
+Hosted evaluation of the initial proposed head
+`664e886ea92d14a2284aa734f24bea2ded785e68` supplied the missing independent
+evidence. The Node 22 job actually installed the final lock, built the server,
+ran Vitest 5.0.3 and passed all 16 tests. The upstream integrity job checked
+all 304 affected entries and reported that every hash matches primary
+registry metadata. Hosted release-age, install-script, Scorecard and
+Dependency Audit Trail checks also passed. These are actual executed checks,
+not skipped-job or local-parser proxies.
+
+Job evidence: Node 22 `113599142226` in CI run `37861810913`;
+primary-registry integrity `113599073359` in run `37861810865`.
+The two failures on that initial head were the missing registered-Vite
+catalog entry and spelling of ten genuine technical names. The latter is
+addressed by this document's exact local terminology declaration, following
+existing dependency-audit prior art, without disabling spelling checks or
+changing shared dictionaries. Latest-head hosted checks still must pass;
+the registered-name catalog prerequisite remains separately owned.
+
 The unchanged gates were run on the committed proposal from the repository
 root. Network-dependent failures below are not successful verifications:
 
@@ -286,7 +306,7 @@ gate. Npm signing attestations and historical maintainer continuity cannot
 be independently verified through this mirror.
 
 Required next step: run the unchanged integrity, release-age, install-script,
-dependency-review and Node 22 checks in hosted CI on this proposed head.
+dependency-review and Node 22 checks in hosted CI on the latest proposed head.
 Keep the PR in draft and both originals open until those checks really
 pass; a draft is not permission to release a failing graph. Local TLS
 limitations and unsupported npm signing verification are disclosed rather
