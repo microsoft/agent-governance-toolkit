@@ -174,10 +174,10 @@ def test_acs_registry_pair_and_backend_features_are_consistent() -> None:
     ]:
         manifest = tomllib.loads((REPO_ROOT / path).read_text(encoding="utf-8"))
         dependency = manifest["dependencies"]["agent-control-spec"]
-        assert dependency["version"] == "=0.4.0-alpha.3", path
+        assert dependency["version"] == "=0.4.0-alpha.4", path
         assert not dependency["default-features"], path
         if path in ["policy-engine/core/Cargo.toml", "policy-engine/integrations/otel/Cargo.toml"]:
-            assert "opa" in dependency["features"], path
+            assert not dependency.get("features"), path
     sdk = tomllib.loads(
         (REPO_ROOT / "policy-engine/sdk/rust/Cargo.toml").read_text(encoding="utf-8")
     )
@@ -190,7 +190,7 @@ def test_acs_registry_pair_and_backend_features_are_consistent() -> None:
     ]:
         packages = tomllib.loads((REPO_ROOT / path).read_text(encoding="utf-8"))["package"]
         for name, version in [
-            ("agent-control-spec", "0.4.0-alpha.3"),
+            ("agent-control-spec", "0.4.0-alpha.4"),
             ("agent-hooks-sdk", "0.1.0-alpha.5"),
         ]:
             assert {p["version"] for p in packages if p["name"] == name} == {version}, path

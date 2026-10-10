@@ -5,6 +5,32 @@ entries appear first.
 
 ---
 
+## `acs_builder_set_url_fetch_limits` returns 0 on success; `bundle_url` and `system_prompt_url` are accepted again
+
+**Date:** 2026-10-08 (agent-control-spec 0.4.0-alpha.4, #4224)
+
+The C ABI setter `acs_builder_set_url_fetch_limits` used to return `-1` with an
+"unsupported" error because the pinned engine could not pass download limits to
+its bundled dispatchers. Alpha.4 supports them, so the setter now stores the
+limits and returns `0`. Callers (including the .NET and Node bindings) that
+treated `-1` from this call as "feature unavailable" and skipped limit handling
+now get success and must apply the limits they pass.
+
+In the same release the manifest fields `bundle_url` and `system_prompt_url`,
+rejected by AGT since the engine retarget, are accepted on a pinned manifest
+chain and fetched by the bundled dispatchers at dispatch time. `system_prompt_file`
+remains rejected. `REMOVED_MANIFEST_FIELDS` is deprecated in favour of
+`UNSUPPORTED_MANIFEST_FIELDS`, which lists only `system_prompt_file`.
+
+**How to update:** treat a `0` return from `acs_builder_set_url_fetch_limits` as
+success and keep passing explicit limits; `-1` now means only a null builder or
+an out-of-range value. Review any policy that relied on URL fields being rejected:
+they are honoured when the chain is pinned, and dispatcher-time downloads follow
+the host redirect budget (see `policy-engine/docs/acs-retarget.md`). Replace
+uses of `REMOVED_MANIFEST_FIELDS` with `UNSUPPORTED_MANIFEST_FIELDS`.
+
+---
+
 ## URL sourced manifests are rejected if they declare a local filesystem path field
 
 **Date:** TBD

@@ -95,11 +95,21 @@ verdict := {
 }
 ```
 
-A verdict must carry a `decision` of `allow`, `deny`, `warn`, `escalate`, or `transform`. The optional `reason` is a low cardinality code, and `message` is host facing text. A policy may return a `transform` body only with the `transform` decision; `allow`, `warn`, `deny`, and `escalate` never mutate the policy target. Reasons must not use the reserved `runtime_error:` prefix.
+A policy may express `allow`, `deny`, `transform`, or the intents `warn` and
+`escalate`. ACS normalizes `warn` to `allow` with `warnings[]` and `escalate`
+to `deny` with an `approval` block. The engine returns only three decisions.
+The optional `reason` is a low cardinality code, and `message` is host facing
+text. Only a `transform` decision may carry a transform body. Policy reasons
+must not use the reserved `runtime_error:` or `host_error:` prefixes.
 
 ## Step 4. Construct the runtime
 
-Use the zero-config `from_path` constructor. With no dispatcher arguments it wires the bundled OPA policy dispatcher against the manifest relative Rego bundle, so a Rego host needs no dispatcher code. See [Zero-config construction](README.md#zero-config-construction) for when to supply your own dispatchers.
+Use the `from_path` constructor. With no policy dispatcher argument it wires
+the OPA dispatcher against the manifest relative Rego bundle. Annotator
+defaults depend on the SDK build. See the
+[Python dispatcher requirements](sdk/python/README.md#annotator-dispatchers)
+and the [Node](sdk/node/README.md) and [.NET](sdk/dotnet/README.md) SDK guides
+before using a manifest that declares annotators.
 
 ```rust
 use agent_control_specification::AgentControl;
@@ -176,12 +186,16 @@ The Rust SDK takes the `EnforcementMode` on `evaluate_intervention_point`. The P
 | Decision | Host action |
 | --- | --- |
 | `allow` | Proceed with the original policy target. |
-| `warn` | Proceed with the original policy target, but record the warning. |
-| `deny` | Block the action. Surface `reason` and `message`. |
-| `escalate` | Suspend the action and ask a human or an external authority for approval before proceeding. |
+| `deny` | Block the action. A deny carrying `approval` may proceed only after the host resolves that approval. |
 | `transform` | Proceed only with the returned transformed policy target. |
 
-When a policy returns `transform`, the runtime validates the transform path, applies it to the policy target in `enforce` mode, and exposes the transformed value on the result. Read the transformed policy target rather than the original before executing a tool, sending a model request, storing a tool result, or disclosing output. Redaction is the common case, but the core never mutates on `allow`, `warn`, `deny`, or `escalate`.
+Record `warnings[]` on an allow verdict without changing its decision.
+When ACS returns `transform`, the AGT host SDK validates and applies it in
+`enforce` mode and exposes the transformed value on its result. The engine
+itself does not rewrite the snapshot. Read the transformed target before
+executing a tool, sending a model request or releasing output. In
+`evaluate_only` mode the host validates the proposed transform but does not
+apply it.
 
 ## Step 7. Mediate the whole agent loop
 
@@ -233,7 +247,7 @@ For an artifact-only kit, validate the installed package from a temporary host p
 
 | SDK | Artifact-only smoke check |
 | --- | --- |
-| Rust | `mkdir crates && for c in agent_control_specification_core agent_control_specification agent_control_specification_openai agent_control_specification_mcp agent_control_specification_rig; do tar -xzf "$ACS_KIT"/artifacts/$c-0.3.1-beta.0.crate -C crates 2>/dev/null || true; done`, then point `[patch.crates-io]` at the extracted `crates/<name>-0.3.1-beta.0` directories before `cargo check` |
+| Rust | `mkdir -p crates && tar -xzf "$ACS_KIT/artifacts/agent_control_specification_core-0.3.2-beta.0.crate" -C crates && tar -xzf "$ACS_KIT/artifacts/agent_control_specification-0.4.0-beta.0.crate" -C crates`, then point `[patch.crates-io]` at `crates/agent_control_specification_core-0.3.2-beta.0` and `crates/agent_control_specification-0.4.0-beta.0` before `cargo check`. If using the optional OpenAI, MCP, or Rig adapters, extract their `0.4.0-beta.0` archives and add their extracted directories to the same patch table. |
 | Python | `python -m venv .venv && .venv/bin/python -m pip install "$ACS_KIT"/artifacts/agent_control_specification-0.3.1b1-*.whl && .venv/bin/python -c "import agent_control_specification as acs; print(acs.AgentControl)"` |
 | Node | `npm init -y && npm install "$ACS_KIT"/artifacts/agent-control-specification-0.3.1-beta.0.tgz "$ACS_KIT"/artifacts/agent-control-specification-linux-x64-gnu-0.3.1-beta.0.tgz "$ACS_KIT"/artifacts/agent-control-specification-opa-linux-x64-0.3.1-beta.0.tgz && node -e "const acs=require('agent-control-specification'); console.log(typeof acs.AgentControl)"` |
 | .NET | `dotnet new console -n AcsSmoke && cd AcsSmoke && dotnet add package AgentControlSpecification --version 0.3.1-beta.0 --source "$ACS_KIT/artifacts" && dotnet build` |
@@ -255,8 +269,8 @@ File based `extends` stays inside the top level manifest root. Place a parent ma
 
 ## Next steps
 
-- Read the normative contract in [`spec/SPECIFICATION.md`](spec/SPECIFICATION.md).
+- Read the [upstream ACS contract](https://github.com/responsibleai/agent-control-spec/blob/main/spec/SPECIFICATION.md) and AGT's [compatibility profile](spec/SPECIFICATION.md).
 - Review host obligations and boundaries in [`docs/security-model.md`](docs/security-model.md).
 - Pick the right SDK surface with [`docs/sdk-surfaces.md`](docs/sdk-surfaces.md).
-- Wrap a real agent framework using [`docs/adapter-matrix.md`](docs/adapter-matrix.md) and the [Framework adapters](README.md#framework-adapters) section of the README.
+- Choose an AGT framework adapter using [`docs/adapter-matrix.md`](docs/adapter-matrix.md).
 - Study runnable hosts under repository checkout path `examples/`.
