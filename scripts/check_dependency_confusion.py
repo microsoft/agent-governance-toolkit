@@ -226,6 +226,9 @@ REGISTERED_NPM_PACKAGES = {
     "esbuild", "@esbuild/linux-x64", "@esbuild/darwin-arm64",
     # npm deps from extensions/copilot
     "@octokit/webhooks", "path-to-regexp", "winston",
+    # npm deps from agent-governance-studio
+    "@tanstack/react-query", "@eslint/js", "@vitejs/plugin-react",
+    "typescript-eslint", "vite",
     # npm deps from extensions/chrome
     "react", "react-dom", "webextension-polyfill",
     "@types/chrome", "@types/react", "@types/react-dom",
