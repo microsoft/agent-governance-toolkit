@@ -56,6 +56,11 @@ AKIAFAKEFORTEST
 AKIAAAAAAAAAAAAAAAAA
 AKIAIOSFODNN
 AKIAXXXX
+cbrn
+cipa
+deidentification
+explainability
+ferpa
 fooghp
 AKIDEXAMPLE
 APIM
@@ -156,6 +161,7 @@ GRPC
 Gazetted
 Ghanaian
 GitHub
+roleplay
 thatjosh
 execdir
 ionice
