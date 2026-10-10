@@ -1312,3 +1312,6 @@ vite
 vitejs
 tanstack
 maxfail
+verus
+vstd
+prettyplease

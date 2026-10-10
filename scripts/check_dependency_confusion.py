@@ -37,7 +37,7 @@ REGISTERED_PACKAGES = {
     "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
     "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
     "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
-    # Core packages (on PyPI) â€” both hyphen and underscore variants
+    # Core packages (on PyPI) — both hyphen and underscore variants
     "agent-os-kernel", "agent_os_kernel",
     "agentmesh-platform", "agentmesh_platform",
     "agent-hypervisor", "agent_hypervisor",
@@ -76,7 +76,7 @@ REGISTERED_PACKAGES = {
     "google-adk", "safety", "jupyter", "vitest", "tsup", "typescript",
     "requests",
     "twine",
-    # PyJWT â€” required by agent-mesh/identity/entra_verifier.py for
+    # PyJWT — required by agent-mesh/identity/entra_verifier.py for
     # Entra-signed JWT verification (PR #2659). Real package, on PyPI.
     "pyjwt", "PyJWT",
     # Dashboard / visualization (used in examples)
@@ -135,7 +135,7 @@ REGISTERED_PACKAGES = {
     "aps", "agent-passport-system",
     # Hyperlight micro-VM SDK (CNCF Sandbox project, on PyPI)
     "hyperlight-sandbox", "hyperlight_sandbox", "hyperlight",
-    # Microsoft Agent Framework (MAF) â€” not yet on PyPI, used in examples
+    # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",
     # Microsoft Agent Learning (real PyPI package, used by agent-learning governance)
