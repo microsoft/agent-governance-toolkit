@@ -87,8 +87,12 @@ export class AggregationRuleSet {
 
   constructor(rules: Iterable<AggregationRule> = []) {
     const snapshot = [...rules];
-    if (snapshot.some((rule) => rule === null || rule === undefined)) {
-      throw new TypeError('rules must not contain null or undefined entries.');
+    // Shape is not enough. TypeScript's structural typing admits any object carrying the
+    // right fields, and one with an empty `allLabels` matches every envelope -- which
+    // suppresses the escalation backstop for combinations no rule actually covers. The
+    // rule's own constructor validates its fields, so only its instances are safe here.
+    if (snapshot.some((rule) => !(rule instanceof AggregationRule))) {
+      throw new TypeError('rules must contain AggregationRule instances.');
     }
     this.rules = snapshot;
   }

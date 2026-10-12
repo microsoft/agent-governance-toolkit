@@ -108,3 +108,25 @@ describe('AggregationRule', () => {
     ).toThrow(/whitespace/);
   });
 });
+
+describe('AggregationRuleSet shape check', () => {
+  it('rejects an object that only looks like an AggregationRule', () => {
+    // Structural typing admits this through the constructor's parameter type, and a rule
+    // carrying an empty allLabels then matches every envelope, which suppresses the
+    // escalation backstop for combinations no rule actually covers.
+    const impostor = {
+      name: 'not_a_rule',
+      allLabels: [] as string[],
+      setsSensitivity: DC.Restricted,
+      addsRestrictions: [] as string[],
+    };
+
+    expect(() => new AggregationRuleSet([impostor as unknown as AggregationRule])).toThrow(
+      TypeError,
+    );
+  });
+
+  it('still accepts its own instances', () => {
+    expect(() => new AggregationRuleSet([...RULESET.rules])).not.toThrow();
+  });
+});

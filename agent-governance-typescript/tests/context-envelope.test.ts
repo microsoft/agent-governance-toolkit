@@ -121,3 +121,26 @@ describe('ContextEnvelope', () => {
     });
   });
 });
+
+describe('ContextEnvelope token set ownership', () => {
+  it('gives each envelope its own empty set', () => {
+    // ReadonlySet is a compile-time type only, so one empty set shared by every envelope
+    // would let a caller mutating what it was handed surface in all the others.
+    const a = makeEnvelope();
+    const b = makeEnvelope();
+
+    expect(a.labels).not.toBe(b.labels);
+    (a.labels as Set<string>).add('pii');
+    expect([...b.labels]).toEqual([]);
+  });
+
+  it('reuses an unchanged set on a derived envelope instead of copying it', () => {
+    // Re-snapshotting a field that did not change on every derived value made accumulate
+    // quadratic: three copies per step.
+    const e = makeEnvelope({ labels: ['pii'], restrictions: ['no_memory_write'] });
+    const derived = e.withAggregateSensitivity(DC.Restricted);
+
+    expect(derived.labels).toBe(e.labels);
+    expect(derived.restrictions).toBe(e.restrictions);
+  });
+});
