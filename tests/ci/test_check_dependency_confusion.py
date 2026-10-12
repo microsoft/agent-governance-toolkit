@@ -11,16 +11,17 @@ pre-commit mode and false-positive avoidance for echoed/commented
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
-
 
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[2]
     / "scripts"
     / "check_dependency_confusion.py"
 )
+sys.path.insert(0, str(SCRIPT_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("check_dep_conf", SCRIPT_PATH)
 assert SPEC is not None
 check_dep_conf = importlib.util.module_from_spec(SPEC)

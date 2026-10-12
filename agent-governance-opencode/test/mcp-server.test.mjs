@@ -8,12 +8,20 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { loadPolicy } from "../lib/policy.mjs";
 import { encodeJsonRpcMessage, handleJsonRpcRequest } from "../server/agt-mcp.mjs";
 
 const MCP_SERVER_PATH = fileURLToPath(new URL("../server/agt-mcp.mjs", import.meta.url));
+// Keep the spawned server off the developer's ~/.config/opencode/agt policy and audit log.
+const serverRoot = await mkdtemp(join(tmpdir(), "agt-opencode-mcp-server-"));
+after(() => rm(serverRoot, { recursive: true, force: true }));
+const SERVER_ENV = {
+  ...process.env,
+  AGT_OPENCODE_AUDIT_PATH: join(serverRoot, "audit.json"),
+  AGT_OPENCODE_POLICY_PATH: fileURLToPath(new URL("../config/default-policy.json", import.meta.url)),
+};
 const STATELESS_META = {
   clientInfo: {
     name: "agt-parity-test",
@@ -24,7 +32,7 @@ const STATELESS_META = {
 
 test("handleJsonRpcRequest responds to initialize with serverInfo", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-mcp-init-"));
-  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+  const state = await loadPolicy({ auditPath: join(root, "audit.json"), homeDirectory: root, policyPath: null });
 
   const response = await handleJsonRpcRequest(state, {
     jsonrpc: "2.0",
@@ -42,7 +50,7 @@ test("handleJsonRpcRequest responds to initialize with serverInfo", async () => 
 
 test("handleJsonRpcRequest lists AGT tools", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-mcp-list-"));
-  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+  const state = await loadPolicy({ auditPath: join(root, "audit.json"), homeDirectory: root, policyPath: null });
 
   const response = await handleJsonRpcRequest(state, {
     jsonrpc: "2.0",
@@ -58,7 +66,7 @@ test("handleJsonRpcRequest lists AGT tools", async () => {
 
 test("handleJsonRpcRequest evaluates agt_policy_check_text", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-mcp-check-"));
-  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+  const state = await loadPolicy({ auditPath: join(root, "audit.json"), homeDirectory: root, policyPath: null });
 
   const response = await handleJsonRpcRequest(state, {
     jsonrpc: "2.0",
@@ -86,7 +94,7 @@ test("encoded JSON-RPC messages are newline-delimited JSON", () => {
 
 test("handleJsonRpcRequest rejects invalid requests", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-mcp-invalid-"));
-  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+  const state = await loadPolicy({ auditPath: join(root, "audit.json"), homeDirectory: root, policyPath: null });
 
   const response = await handleJsonRpcRequest(state, { not: "valid" });
   assert.equal(response.error.code, -32600);
@@ -261,6 +269,7 @@ async function requestOverStdio(payload, splitAt) {
 
 async function requestChunksOverStdio(chunks) {
   const child = spawn(process.execPath, [MCP_SERVER_PATH], {
+    env: SERVER_ENV,
     stdio: ["pipe", "pipe", "pipe"],
   });
   const stdout = [];
@@ -465,7 +474,7 @@ test("legacy lifecycle remains compatible and terminal outcomes stay distinct", 
 async function withState(prefix, callback) {
   const root = await mkdtemp(join(tmpdir(), prefix));
   try {
-    const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+    const state = await loadPolicy({ auditPath: join(root, "audit.json"), homeDirectory: root, policyPath: null });
     await callback(state);
   } finally {
     await rm(root, { recursive: true, force: true });

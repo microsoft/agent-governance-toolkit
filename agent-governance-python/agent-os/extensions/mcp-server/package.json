@@ -8,14 +8,14 @@
     "agentos-mcp": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "node node_modules/@typescript/native/bin/tsc",
+    "dev": "node node_modules/@typescript/native/bin/tsc --watch",
     "start": "node dist/cli.js",
     "start:stdio": "node dist/cli.js --stdio",
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest --coverage",
     "lint": "eslint src --ext .ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -39,20 +39,21 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "uuid": "14.0.2",
     "winston": "3.19.0",
     "yaml": "2.9.1",
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/node": "26.6.2",
+    "@types/node": "26.6.3",
     "@types/uuid": "11.0.0",
-    "@typescript-eslint/eslint-plugin": "8.70.1",
-    "@typescript-eslint/parser": "8.70.0",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@typescript-eslint/eslint-plugin": "8.71.0",
+    "@typescript-eslint/parser": "8.71.0",
     "@vitest/coverage-v8": "4.1.10",
     "eslint": "10.11.0",
-    "typescript": "6.0.3",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "vitest": "4.1.11"
   },
   "files": [

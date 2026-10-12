@@ -1,17 +1,25 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { encodeJsonRpcMessage, handleJsonRpcRequest } from "../server/agt-mcp.mjs";
 
 import { loadPolicy } from "../lib/policy.mjs";
 
-const state = await loadPolicy();
+// Keep the suite off the developer's ~/.claude/agt policy and audit log.
+const testRoot = await mkdtemp(join(tmpdir(), "agt-claude-mcp-"));
+after(() => rm(testRoot, { recursive: true, force: true }));
+const auditPath = join(testRoot, "audit.json");
+const policyPath = join(testRoot, "no-user-policy.json");
+const state = await loadPolicy({ auditPath, policyPath });
 const MCP_SERVER_PATH = fileURLToPath(new URL("../server/agt-mcp.mjs", import.meta.url));
 const STATELESS_META = {
   clientInfo: {
@@ -248,6 +256,7 @@ async function requestOverStdio(payload, splitAt) {
 
 async function requestChunksOverStdio(chunks) {
   const child = spawn(process.execPath, [MCP_SERVER_PATH], {
+    env: { ...process.env, AGT_CLAUDE_AUDIT_PATH: auditPath, AGT_CLAUDE_POLICY_PATH: policyPath },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const stdout = [];

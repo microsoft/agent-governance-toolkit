@@ -1,6 +1,6 @@
 ---
 title: Agent Governance Toolkit
-last_reviewed: 2026-08-03
+last_reviewed: 2026-10-03
 owner: docs-team
 hide:
   - navigation
@@ -125,12 +125,19 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
 ## ACS is the policy decision layer
 
 [Agent Control Specification](packages/agent-control-specification.md), or ACS,
-is the canonical AGT 5 policy decision runtime. At each lifecycle event, the
-host sends ACS a complete snapshot, receives a verdict, and applies it at the
-corresponding intervention point.
+is the upstream policy decision runtime used by AGT. AGT's compatibility
+Python SDK supplies `AgentControl` and `HostSession`. From a repository
+checkout, install that SDK before running the example below.
+
+The engine moved to
+[`responsibleai/agent-control-spec`](https://github.com/responsibleai/agent-control-spec)
+so AGT no longer maintains a separate copy of policy evaluation. AGT keeps the
+adapters and host enforcement. The
+[Agent Hooks contract](https://github.com/responsibleai/agent-hooks) defines
+how hosts and interceptors exchange context and verdicts.
 
 ```bash
-pip install agent-control-specification
+python -m pip install ./policy-engine/sdk/python
 ```
 
 ```python
@@ -148,8 +155,9 @@ if not result.verdict.decision.permits:
     raise PermissionError(result.verdict.reason)
 ```
 
-ACS returns one of five normalized verdicts: `allow`, `warn`, `deny`,
-`escalate`, or `transform`. ACS neither executes the tool nor retains hidden
+ACS returns `allow`, `deny`, or `transform`. Warnings accompany an allow
+verdict. Approval requests accompany a liftable deny and require host
+resolution. ACS neither executes the tool nor retains hidden
 session state, so framework adapters, gateways, and custom hosts can share the
 same portable policy contract.
 

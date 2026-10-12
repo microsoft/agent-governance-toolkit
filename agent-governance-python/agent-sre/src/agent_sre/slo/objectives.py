@@ -138,8 +138,7 @@ class ErrorBudget:
 
     def firing_alerts(self) -> list[BurnRateAlert]:
         """Get alerts that are currently firing."""
-        current = self.burn_rate()
-        return [a for a in self.alerts() if a.is_firing(current)]
+        return [a for a in self.alerts() if a.is_firing(self.burn_rate(a.window_seconds))]
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""

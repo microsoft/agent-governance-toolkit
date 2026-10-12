@@ -741,10 +741,12 @@ A compliance report MUST contain:
 | `period_end` | datetime | REQUIRED | End of assessment period. |
 | `organization_id` | string | OPTIONAL | Organization being assessed. |
 | `agents_covered` | list[string] | REQUIRED | Agent DIDs included in assessment. |
-| `total_controls` | int | REQUIRED | Total number of controls assessed. |
-| `controls_met` | int | REQUIRED | Controls fully satisfied. |
+| `total_controls` | int | REQUIRED | Number of controls defined for the framework. |
+| `controls_met` | int | REQUIRED | Controls assessed during the period with no violation. |
 | `controls_partial` | int | REQUIRED | Controls partially satisfied. |
 | `controls_failed` | int | REQUIRED | Controls not satisfied. |
+| `controls_unassessed` | int or None | OPTIONAL | Controls with no recorded assessment during the period. `None` means unknown. |
+| `unassessed_controls` | list[string] | OPTIONAL | IDs of the controls counted in `controls_unassessed`. |
 | `compliance_score` | float | REQUIRED | Overall score (0--100). |
 | `violations` | list[ComplianceViolation] | REQUIRED | Violations during the period. |
 | `evidence_items` | list[dict] | REQUIRED | Evidence collected. |
@@ -758,10 +760,16 @@ The compliance score MUST be computed as:
 compliance_score = (controls_met / total_controls) * 100
 ```
 
-Where `controls_met = total_controls - count(violated_controls)`.
+Where `controls_met = count(assessed_controls - violated_controls)`.
 
 A control is considered violated if ANY violation references that control's `control_id`
 during the assessment period.
+
+A control is considered assessed if a compliance check evaluated it during the assessment
+period (and, when the report is scoped to agents, for one of those agents). A control with
+a recorded violation is assessed. A control that was not assessed MUST NOT be counted in
+`controls_met`; it is counted in `controls_unassessed`, so that
+`controls_met + controls_partial + controls_failed + controls_unassessed == total_controls`.
 
 ### 10.9 Compliance Check [Pure Specification]
 

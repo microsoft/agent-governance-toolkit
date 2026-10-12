@@ -2,13 +2,26 @@
 # Licensed under the MIT License.
 """Tests for SLO definitions and error budget engine."""
 
-
+from unittest.mock import patch
 
 from agent_sre.slo.indicators import CostPerTask, PolicyCompliance, TaskSuccessRate
 from agent_sre.slo.objectives import SLO, ErrorBudget, ExhaustionAction, SLOStatus
 
 
 class TestErrorBudget:
+    def test_firing_alerts_use_their_declared_window(self) -> None:
+        budget = ErrorBudget(total=0.01)
+        with patch("agent_sre.slo.objectives.time.monotonic", return_value=1000):
+            budget.record_event(good=False)
+        with patch("agent_sre.slo.objectives.time.monotonic", return_value=8200):
+            assert budget.burn_rate(3600) == 0
+            assert budget.burn_rate(86400) > budget.burn_rate_critical
+            assert {a.name for a in budget.firing_alerts()} == {
+                "burn_rate_warning", "burn_rate_critical"
+            }
+        with patch("agent_sre.slo.objectives.time.monotonic", return_value=87401):
+            assert budget.firing_alerts() == []
+
     def test_initial_state(self) -> None:
         budget = ErrorBudget(total=0.01)  # 1% budget
         assert budget.remaining == 1.0

@@ -212,8 +212,7 @@
               "minLength": 1
             },
             "bundle_url": {
-              "not": {},
-              "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
+              "$ref": "#/$defs/pinned_https_source"
             },
             "data_paths": {
               "$ref": "#/$defs/string_array"
@@ -226,7 +225,13 @@
               ]
             }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "not": {
+            "required": [
+              "bundle",
+              "bundle_url"
+            ]
+          }
         },
         {
           "type": "object",
@@ -271,8 +276,26 @@
             }
           },
           "oneOf": [
-            { "required": [ "policy_set" ], "not": { "required": [ "policy_path" ] } },
-            { "required": [ "policy_path" ], "not": { "required": [ "policy_set" ] } }
+            {
+              "required": [
+                "policy_set"
+              ],
+              "not": {
+                "required": [
+                  "policy_path"
+                ]
+              }
+            },
+            {
+              "required": [
+                "policy_path"
+              ],
+              "not": {
+                "required": [
+                  "policy_set"
+                ]
+              }
+            }
           ],
           "additionalProperties": true
         },
@@ -313,8 +336,7 @@
           "$ref": "#/$defs/string_array"
         },
         "bundle_url": {
-          "not": {},
-          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
+          "$ref": "#/$defs/pinned_https_source"
         }
       },
       "additionalProperties": true
@@ -335,14 +357,33 @@
         },
         "system_prompt_file": {
           "not": {},
-          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
+          "description": "Unsupported by the pinned ACS engine. Use system_prompt or a pinned system_prompt_url."
         },
         "system_prompt_url": {
-          "not": {},
-          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
+          "$ref": "#/$defs/pinned_https_source"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "system_prompt_url",
+                  "system_prompt"
+                ]
+              },
+              {
+                "required": [
+                  "system_prompt_url",
+                  "prompt"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     "annotator": {
       "type": "object",
@@ -420,11 +461,10 @@
         },
         "system_prompt_file": {
           "not": {},
-          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
+          "description": "Unsupported by the pinned ACS engine. Use system_prompt or a pinned system_prompt_url."
         },
         "system_prompt_url": {
-          "not": {},
-          "description": "Removed in the agent-control-spec retarget: the pinned engine has no implementation and AGT rejects manifests that declare it (runtime_error:manifest_invalid). See policy-engine/docs/acs-retarget.md, 'Removed manifest fields'."
+          "$ref": "#/$defs/pinned_https_source"
         },
         "timeout_ms": {
           "type": "integer",
@@ -459,7 +499,27 @@
           "minLength": 1
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "system_prompt_url",
+                  "system_prompt"
+                ]
+              },
+              {
+                "required": [
+                  "system_prompt_url",
+                  "prompt"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     "tool": {
       "type": "object",
@@ -530,6 +590,83 @@
           "$ref": "#/$defs/policy_binding"
         }
       }
+    },
+    "pinned_https_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        },
+        "integrity": {
+          "type": "string",
+          "pattern": "^sha256-([A-Za-z0-9+/]{42}|[A-Za-z0-9_-]{42})[AEIMQUYcgkosw048]=?$"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "sha256"
+          ]
+        },
+        {
+          "required": [
+            "integrity"
+          ]
+        }
+      ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "agent_control_specification_version": {
+            "pattern": "^[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*0\\.5\\.0-alpha\\.1[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "annotators": {
+            "additionalProperties": {
+              "not": {
+                "required": [
+                  "needs"
+                ]
+              }
+            }
+          },
+          "intervention_points": {
+            "additionalProperties": {
+              "properties": {
+                "annotations": {
+                  "additionalProperties": {
+                    "properties": {
+                      "needs": {
+                        "type": "array",
+                        "uniqueItems": true,
+                        "items": {
+                          "$ref": "#/$defs/non_empty_key",
+                          "pattern": "[^\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

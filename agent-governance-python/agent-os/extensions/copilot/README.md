@@ -143,6 +143,12 @@ npm run build
 npm start
 ```
 
+For development, build, watch, and test typecheck invoke
+`node node_modules/@typescript/native/bin/tsc` directly, avoiding npm's
+ambiguous `tsc` bin-link order. ESLint and `ts-node` use the TypeScript 6 API
+compatibility alias. Jest uses SWC to transform tests; run `npm test` and
+`npm run lint` after changes.
+
 ## Configuration
 
 ### Environment Variables
@@ -257,7 +263,7 @@ docker run -p 3000:3000 agentos-copilot
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](../../../../CONTRIBUTING.md) for guidelines.
 
 ## License
 

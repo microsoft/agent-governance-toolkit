@@ -177,6 +177,143 @@ class TestCompliance:
         assert len(violations) > 0
         assert violations[0].framework == ComplianceFramework.GDPR
 
+    @staticmethod
+    def _last_30_days(engine, framework, **kwargs):
+        now = datetime.now(timezone.utc)
+        return engine.generate_report(
+            framework=framework,
+            period_start=now - timedelta(days=30),
+            period_end=now + timedelta(seconds=1),
+            **kwargs,
+        )
+
+    @staticmethod
+    def _assert_counts_add_up(report):
+        assert (
+            report.controls_met
+            + report.controls_partial
+            + report.controls_failed
+            + report.controls_unassessed
+            == report.total_controls
+        )
+
+    def test_report_without_assessments_does_not_count_controls_as_met(self):
+        """Regression for #3957: no check_compliance() call means nothing is met."""
+        engine = ComplianceEngine([ComplianceFramework.SOC2])
+
+        report = self._last_30_days(engine, ComplianceFramework.SOC2)
+
+        assert report.total_controls == 2
+        assert report.controls_met == 0
+        assert report.controls_failed == 0
+        assert report.controls_unassessed == 2
+        assert report.unassessed_controls == ["SOC2-CC6.1", "SOC2-CC7.2"]
+        assert report.compliance_score == 0.0
+        self._assert_counts_add_up(report)
+
+    def test_report_counts_only_assessed_controls_as_met(self):
+        """data_access assesses SOC2-CC6.1 but not SOC2-CC7.2."""
+        engine = ComplianceEngine([ComplianceFramework.SOC2])
+        engine.check_compliance("did:agentmesh:a", "data_access", {})
+
+        report = self._last_30_days(engine, ComplianceFramework.SOC2)
+
+        assert report.controls_met == 1
+        assert report.controls_unassessed == 1
+        assert report.unassessed_controls == ["SOC2-CC7.2"]
+        assert report.compliance_score == 50.0
+        self._assert_counts_add_up(report)
+
+    def test_report_failed_control_is_not_unassessed(self):
+        engine = ComplianceEngine([ComplianceFramework.HIPAA])
+        engine.check_compliance(
+            "did:agentmesh:a", "data_access", {"data_type": "phi", "encrypted": False}
+        )
+
+        report = self._last_30_days(engine, ComplianceFramework.HIPAA)
+
+        assert report.controls_failed == 1
+        assert report.controls_met == 0
+        assert report.unassessed_controls == ["HIPAA-164.312(a)(1)"]
+        assert report.compliance_score == 0.0
+        self._assert_counts_add_up(report)
+
+    def test_report_ignores_assessments_outside_period(self):
+        engine = ComplianceEngine([ComplianceFramework.SOC2])
+        engine.check_compliance("did:agentmesh:a", "data_access", {})
+
+        now = datetime.now(timezone.utc)
+        report = engine.generate_report(
+            framework=ComplianceFramework.SOC2,
+            period_start=now - timedelta(days=30),
+            period_end=now - timedelta(days=1),
+        )
+
+        assert report.controls_met == 0
+        assert report.controls_unassessed == 2
+
+    def test_report_ignores_assessments_outside_agent_scope(self):
+        engine = ComplianceEngine([ComplianceFramework.SOC2])
+        engine.check_compliance("did:agentmesh:a", "data_access", {})
+
+        other = self._last_30_days(
+            engine, ComplianceFramework.SOC2, agent_ids=["did:agentmesh:b"]
+        )
+        same = self._last_30_days(
+            engine, ComplianceFramework.SOC2, agent_ids=["did:agentmesh:a"]
+        )
+
+        assert other.controls_met == 0
+        assert other.controls_unassessed == 2
+        assert same.controls_met == 1
+        assert same.controls_unassessed == 1
+
+    def test_report_accepts_naive_period_bounds(self):
+        """Naive bounds are read as UTC instead of raising TypeError."""
+        engine = ComplianceEngine([ComplianceFramework.HIPAA])
+        engine.check_compliance(
+            "did:agentmesh:a", "data_access", {"data_type": "phi", "encrypted": False}
+        )
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        report = engine.generate_report(
+            framework=ComplianceFramework.HIPAA,
+            period_start=now - timedelta(days=30),
+            period_end=now + timedelta(seconds=1),
+        )
+
+        assert report.controls_failed == 1
+        assert report.controls_unassessed == 1
+
+    def test_assessment_tracking_does_not_grow_with_call_volume(self):
+        engine = ComplianceEngine([ComplianceFramework.SOC2])
+        for _ in range(500):
+            engine.check_compliance("did:agentmesh:a", "data_access", {})
+
+        # One entry per (control, agent, UTC day), not per call. Two only if
+        # the loop happens to straddle midnight.
+        assert len(engine._assessments) <= 2
+
+    def test_report_from_legacy_json_has_unknown_coverage(self):
+        """Reports serialised before this field existed must not read as fully assessed."""
+        from agentmesh.governance.compliance import ComplianceReport
+
+        legacy = {
+            "report_id": "report_legacy",
+            "framework": "soc2",
+            "period_start": "2026-01-01T00:00:00+00:00",
+            "period_end": "2026-01-31T00:00:00+00:00",
+            "total_controls": 2,
+            "controls_met": 2,
+            "controls_failed": 0,
+            "compliance_score": 100.0,
+        }
+
+        report = ComplianceReport(**legacy)
+
+        assert report.controls_unassessed is None
+        assert report.unassessed_controls == []
+
 
 class TestAudit:
     """Tests for AuditLog and AuditChain."""
