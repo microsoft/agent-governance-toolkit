@@ -192,6 +192,7 @@ LOCAL_ONLY_PACKAGES = {
 }
 
 # Known npm packages for this project
+# cspell:words vite
 REGISTERED_NPM_PACKAGES = {
     "@microsoft/agent-os-kernel", "@microsoft/agentmesh-mcp-proxy",
     "@microsoft/agentmesh-api", "@microsoft/agent-os-cursor",
