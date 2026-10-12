@@ -13,19 +13,21 @@
 const ownSnapshots = new WeakSet<object>();
 
 /**
- * A private copy of `tokens`. Tokens are copied verbatim — normalization is the
- * caller's decision and this layer never rewrites a token the caller owns.
+ * A copy of `tokens` for a value type to own. Tokens are copied verbatim — normalization is
+ * the caller's decision and this layer never rewrites a token the caller owns.
  *
- * A set this module already produced is returned as-is: it is already private to the model,
- * and copying it again on every derived value made `accumulate` quadratic (three copies per
- * step; 20k sequential steps took ~2 minutes). Sets reaching here from outside are still
- * copied, so an envelope can never expose a caller's own set.
+ * A set this module already produced is passed through rather than copied again: copying an
+ * unchanged field on every derived value made `accumulate` quadratic (three copies per step;
+ * 20k sequential steps took ~2 minutes). Sets reaching here from outside are still copied.
  *
- * `undefined` yields a fresh empty set rather than one shared instance. `ReadonlySet` is a
- * compile-time type only — a JavaScript caller can still call `add` on what it gets back —
- * and a singleton returned to every envelope would let one such mutation surface in all of
- * them. (Freezing does not help here: a Set keeps its members in internal slots, so
- * `Object.freeze` leaves `add` working.)
+ * The sets a value type exposes are shared, not isolated. An envelope getter hands back the
+ * same object a derived value may hold, so `ReadonlySet` is a contract the caller keeps rather
+ * than a guarantee this module enforces: do not mutate one. It is a compile-time type only, and
+ * a JavaScript caller can still call `add` on what it gets back. (Freezing would not help — a
+ * Set keeps its members in internal slots, so `Object.freeze` leaves `add` working.)
+ *
+ * `undefined` yields a fresh empty set rather than one shared instance, so that the empty case
+ * at least does not put every envelope behind a single object.
  */
 export function snapshotTokens(
   tokens: Iterable<string> | undefined,

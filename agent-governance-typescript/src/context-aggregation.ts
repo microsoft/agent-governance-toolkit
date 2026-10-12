@@ -115,6 +115,18 @@ export class AggregationRuleSet {
     const restrictions = new Set<string>(envelope.restrictions);
     const applied: string[] = [];
 
+    // `allLabels` is re-checked here, not only in the rule's constructor. A rule can reach this
+    // point through `Object.create(AggregationRule.prototype)`, or have its own set emptied after
+    // construction. An empty set makes `every` vacuously true, so the rule would match every
+    // envelope and suppress the escalation backstop for combinations no rule actually covers.
+    for (const rule of this.rules) {
+      if (rule.allLabels.size === 0) {
+        throw new TypeError(
+          `aggregation rule '${String(rule.name)}' must have a non-empty allLabels set`,
+        );
+      }
+    }
+
     for (const rule of this.rules) {
       const matches = [...rule.allLabels].every((label) => envelope.labels.has(label));
       if (!matches) {

@@ -129,4 +129,32 @@ describe('AggregationRuleSet shape check', () => {
   it('still accepts its own instances', () => {
     expect(() => new AggregationRuleSet([...RULESET.rules])).not.toThrow();
   });
+
+  it('rejects a rule whose allLabels was emptied after construction', () => {
+    const rule = new AggregationRule({
+      name: 'emptied',
+      allLabels: ['pii'],
+      setsSensitivity: DC.Restricted,
+      addsRestrictions: [],
+    });
+    (rule.allLabels as Set<string>).clear();
+
+    const ruleset = new AggregationRuleSet([rule]);
+    expect(() => ruleset.evaluate(makeEnvelope(['pii', 'financial', 'phi']), 3)).toThrow(TypeError);
+  });
+
+  it('rejects a rule that skipped its constructor', () => {
+    // `instanceof` is satisfied by Object.create(AggregationRule.prototype), so the check in the
+    // constructor cannot be the only one: an empty allLabels matches every envelope.
+    const fake = Object.create(AggregationRule.prototype) as AggregationRule;
+    Object.assign(fake, {
+      name: 'skipped_constructor',
+      allLabels: new Set<string>(),
+      setsSensitivity: DC.Restricted,
+      addsRestrictions: new Set<string>(),
+    });
+
+    const ruleset = new AggregationRuleSet([fake]);
+    expect(() => ruleset.evaluate(makeEnvelope(['pii', 'financial', 'phi']), 3)).toThrow(TypeError);
+  });
 });
