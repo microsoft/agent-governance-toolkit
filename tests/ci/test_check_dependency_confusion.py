@@ -11,6 +11,7 @@ pre-commit mode and false-positive avoidance for echoed/commented
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -161,3 +162,35 @@ def test_pre_commit_extension_filter_includes_shell() -> None:
 def test_pre_commit_extension_filter_keeps_existing(ext: str) -> None:
     src = SCRIPT_PATH.read_text(encoding="utf-8")
     assert f'"{ext}"' in src
+
+
+@pytest.mark.parametrize(
+    "section",
+    ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"],
+)
+def test_registered_vite_is_accepted_in_npm_dependencies(
+    tmp_path: Path, section: str,
+) -> None:
+    path = _write(
+        tmp_path, "package.json", json.dumps({section: {"vite": "8.0.16"}}),
+    )
+
+    assert check_dep_conf.check_package_json(path) == []
+
+
+@pytest.mark.parametrize(
+    "section",
+    ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"],
+)
+@pytest.mark.parametrize("package", ["vite-unregistered", "totally-not-a-real-package-xyz"])
+def test_unregistered_npm_names_are_still_flagged(
+    tmp_path: Path, section: str, package: str,
+) -> None:
+    path = _write(
+        tmp_path, "package.json", json.dumps({section: {package: "8.0.16"}}),
+    )
+
+    findings = check_dep_conf.check_package_json(path)
+
+    assert len(findings) == 1
+    assert f"npm '{package}' ({section}) may not be registered" in findings[0]

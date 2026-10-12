@@ -218,7 +218,7 @@ REGISTERED_NPM_PACKAGES = {
     "@modelcontextprotocol/sdk", "ws", "commander", "chalk",
     "@anthropic-ai/sdk", "@types/node", "@types/ws", "@types/express",
     # Common npm dev dependencies
-    "eslint", "@typescript-eslint/parser", "@typescript-eslint/eslint-plugin",
+    "eslint", "vite", "@typescript-eslint/parser", "@typescript-eslint/eslint-plugin",
     "@typescript/typescript6", "@swc/core", "@swc/jest",
     "ts-jest", "@types/jest", "jest", "rimraf", "prettier",
     "axios", "@types/vscode", "@vscode/vsce", "webpack", "webpack-cli",
