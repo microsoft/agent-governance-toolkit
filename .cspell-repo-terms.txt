@@ -1134,6 +1134,7 @@ utcnow
 uvicorn
 venv
 venvs
+vite
 vitest
 vnet
 waitforreleasecompletion
