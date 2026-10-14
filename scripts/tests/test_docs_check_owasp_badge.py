@@ -37,7 +37,7 @@ def _badge(value: str) -> str:
     return f"[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-{value}-blue)](x.md)\n"
 
 
-def _repo(tmp_path: Path, badge: str, partials={4, 6, 9},
+def _repo(tmp_path: Path, badge: str, partials=frozenset({4, 6, 9}),
           summary="Official ASI coverage: 7/10 Full, 3/10 Partial, 0 Gaps.") -> Path:
     _write(tmp_path / "docs/compliance/owasp-agentic-top10-architecture.md", _mapping(partials, summary))
     _write(tmp_path / "README.md", _badge("7_Full,_3_Partial"))
@@ -74,3 +74,15 @@ def test_badge_follows_the_table_when_a_row_changes(tmp_path):
     )
     assert len(errors) == 2
     assert all("8_Full,_2_Partial" in e for e in errors)
+
+
+def test_duplicated_row_fails_closed(tmp_path):
+    text = _mapping({4, 6, 9}, "").replace(
+        "| ASI10 |", "| ASI04 | Risk 4 | ✅ Full | component |\n| ASI10 |"
+    )
+    try:
+        check_owasp_badge.coverage(text)
+    except ValueError as e:
+        assert "ASI04" in str(e)
+    else:
+        raise AssertionError("a duplicated ASI04 row was accepted")

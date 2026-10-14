@@ -5,7 +5,7 @@
 
 The badge is a hand-written string; the coverage table in
 ``docs/compliance/owasp-agentic-top10-architecture.md`` is the assessment it
-summarises. This checker counts the Full and Partial rows for ASI01 to ASI10
+summarizes. This checker counts the Full and Partial rows for ASI01 to ASI10
 in that table, confirms the document's own summary line agrees with the
 rows, and fails on any README whose ``OWASP_Agentic_Top_10`` badge does not
 read ``<full>_Full,_<partial>_Partial``.
@@ -33,10 +33,13 @@ _BADGE_RE = re.compile(r"img\.shields\.io/badge/OWASP_Agentic_Top_10-([^)\s\"]*?
 
 def coverage(text: str) -> tuple[int, int, int]:
     """Return (full, partial, gap) counted from the ASI rows of the table."""
-    rows = dict(_ROW_RE.findall(text))
-    if sorted(rows) != [f"ASI{i:02d}" for i in range(1, 11)]:
-        raise ValueError(f"expected rows ASI01..ASI10, found {sorted(rows)}")
-    values = list(rows.values())
+    found = _ROW_RE.findall(text)
+    ids = sorted(asi for asi, _ in found)
+    # Compare the full list, not a dict: a duplicated row must fail rather than
+    # silently replace the earlier one.
+    if ids != [f"ASI{i:02d}" for i in range(1, 11)]:
+        raise ValueError(f"expected rows ASI01..ASI10 once each, found {ids}")
+    values = [level for _, level in found]
     return values.count("Full"), values.count("Partial"), values.count("Gap")
 
 
