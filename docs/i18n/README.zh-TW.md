@@ -17,7 +17,7 @@ owner: agt-maintainers
 [![.NET 8.0+](https://img.shields.io/badge/.NET_8.0+-NuGet-blue?logo=dotnet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-rust/agentmesh)
 [![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-golang)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../compliance/owasp-agentic-top10-architecture.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-7_Full,_3_Partial-blue)](../compliance/owasp-agentic-top10-architecture.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
@@ -105,7 +105,7 @@ pip install agentmesh-lightning        # 強化學習訓練治理
   - [安全工作流](https://github.com/microsoft/agent-governance-toolkit/tree/main/.github/workflows)
 - **12+ 框架整合**：支援 Microsoft Agent Framework、LangChain、CrewAI、AutoGen、Dify、LlamaIndex、OpenAI Agents、Google ADK 等
   - [框架快速入門](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/quickstart) | [整合方案](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/proposals)
-- **完整 OWASP 覆蓋**：針對 Agentic Top 10 風險實現 10/10 覆蓋，每個 ASI 類別均有專屬控制措施
+- **OWASP Agentic Top 10 對應**：10 項風險中 7 項完整涵蓋，3 項（ASI04、ASI06、ASI09）部分涵蓋（內部自我評估）
   - [OWASP 合規](../compliance/owasp-agentic-top10-architecture.md) | [競品比較](../COMPARISON.md)
 - **GitHub Actions 支援 CI/CD**：透過 Agent Governance Verify 在 CI/CD 中執行治理驗證
   - [Agent Governance Verify Action](https://github.com/microsoft/agent-governance-toolkit/tree/main/action)
