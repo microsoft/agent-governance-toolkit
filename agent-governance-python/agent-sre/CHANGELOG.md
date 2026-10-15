@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Burn alerts now evaluate errors over each alert's declared window instead of
   the default one-hour window, allowing errors from one to 24 hours ago to
   correctly raise SLO status to WARNING or CRITICAL.
+- The FastAPI server (`agent_sre.api.server`) now reads JSON request bodies.
+  The request models were imported only under `TYPE_CHECKING`, so FastAPI could
+  not resolve the route annotations and treated each `body` parameter as a
+  required query parameter: every POST that takes a body (register an SLO,
+  record a cost, create a chaos experiment or rollout, ingest a signal) returned
+  422, and `/openapi.json` failed with a 500, so `/docs` could not load.
 - `ErrorBudget.burn_rate()` now divides the window's error ratio by the allowed
   error ratio (`total`). It used to divide by `total / window_seconds`, which
   inflated the rate by the window length (about 2.6 million for the default
