@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AnomalyDetector` now reports a spike in a metric whose name contains "error"
   (such as `error_rate`) as `ERROR_RATE_SURGE`. The "rate" check ran first, so
   these metrics were reported as `THROUGHPUT_DROP`.
+- `Trace.to_dict()` (and so `TraceStore.save()`) no longer fails with a
+  `JSONDecodeError` when a redacted field such as `password` or `token` contains
+  a double quote. The redaction pattern stopped at the first escaped quote, which
+  left the rest of the secret in the output and produced invalid JSON.
 - `resolve_inheritance()` now lets a child SLO spec inherit the fields it does
   not set. It merged the child's defaults (`target=99.0`, `window="30d"`, an
   empty `description` and `error_budget_policy`) over the parent's values, so a

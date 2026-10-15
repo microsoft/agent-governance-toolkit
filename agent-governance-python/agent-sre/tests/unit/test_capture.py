@@ -5,6 +5,8 @@
 import json
 import tempfile
 
+import pytest
+
 from agent_sre.replay.capture import (
     Span,
     SpanKind,
@@ -69,6 +71,15 @@ class TestRedaction:
     def test_preserves_normal_text(self) -> None:
         text = "This is a normal response"
         assert _redact(text) == text
+
+    @pytest.mark.parametrize(
+        "secret",
+        ['pa"ss', 'ends-with-quote"', 'back\\slash"quote', "trailing-backslash\\"],
+    )
+    def test_redact_value_with_escapes(self, secret: str) -> None:
+        text = json.dumps({"password": secret, "user": "alice"})
+        redacted = _redact(text)
+        assert json.loads(redacted) == {"password": "[REDACTED]", "user": "alice"}
 
 
 class TestTrace:
@@ -146,6 +157,17 @@ class TestTrace:
         d = trace.to_dict(redact=True)
         serialized = json.dumps(d)
         assert "sk-secret123" not in serialized
+
+    def test_redaction_of_secret_containing_quote(self) -> None:
+        trace = Trace(agent_id="agent-1")
+        span = Span(name="login", input_data={"password": 'hunter"2-tail'})
+        span.finish()
+        trace.add_span(span)
+        trace.finish()
+
+        d = trace.to_dict(redact=True)
+        assert d["spans"][0]["input_data"] == {"password": "[REDACTED]"}
+        assert "tail" not in json.dumps(d)
 
 
 class TestTraceCapture:
