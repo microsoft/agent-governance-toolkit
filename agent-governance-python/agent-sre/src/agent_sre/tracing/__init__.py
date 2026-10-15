@@ -116,6 +116,7 @@ class TraceContext:
         return TraceContext(
             trace_id=self.trace_id,
             parent_span_id=self.span_id,
+            sampled=self.sampled,
             baggage=dict(self.baggage),
         )
 

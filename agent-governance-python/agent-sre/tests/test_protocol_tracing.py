@@ -55,6 +55,21 @@ class TestTraceContext:
         assert child.parent_span_id == "parent-span"
         assert child.span_id != "parent-span"  # new span ID
 
+    @pytest.mark.parametrize("sampled", [True, False])
+    def test_child_inherits_sampled_flag(self, sampled):
+        parent = TraceContext(sampled=sampled)
+        assert parent.child().sampled is sampled
+
+    def test_unsampled_incoming_trace_stays_unsampled_downstream(self):
+        incoming = {"traceparent": "00-abcdef1234567890abcdef1234567890-1234567890abcdef-00"}
+        tracer = ProtocolTracer(
+            agent_id="worker",
+            parent_context=TraceContext.from_headers(incoming),
+        )
+        with tracer.a2a_call("downstream-agent") as span:
+            outgoing = tracer.inject(span)
+        assert outgoing["traceparent"].endswith("-00")
+
     def test_child_inherits_baggage(self):
         parent = TraceContext(baggage={"user": "alice", "env": "prod"})
         child = parent.child()
