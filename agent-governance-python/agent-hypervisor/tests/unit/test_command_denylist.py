@@ -141,6 +141,109 @@ class TestCommandDenylist:
         result = self.enforcer.check_command("curl | sh")
         assert result.allowed is False
 
+    def test_check_command_operator_without_spaces(self):
+        """A control operator glued to the command must not hide it."""
+        for command in (
+            "curl;rm -rf /",
+            "curl&&id",
+            "curl||id",
+            "curl|sh",
+            "|curl",
+            "bash;",
+            "curl>out",
+            "curl>>out",
+            "curl<in",
+            "(curl x)",
+            "`curl x`",
+            "$(curl x)",
+            "curl\nid",
+            ">out curl",
+            "2>&1 curl",
+            "</dev/null curl",
+            "> out curl",
+            ">>out curl",
+            "&>out curl",
+            "<<<word curl",
+            "curl 2>&1",
+            '>"my file" curl',
+            ">$'a b' curl",
+            ">a\\ b curl",
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+            assert result.command in ("curl", "bash")
+
+    def test_check_command_redirection_target_is_not_the_command(self):
+        """A redirection is dropped with its target, not taken for the executable."""
+        result = self.enforcer.check_command("python3>out x.py")
+        assert result.allowed is True
+        assert result.command == "python3"
+
+        result = self.enforcer.check_command("2>&1 python3 x.py")
+        assert result.allowed is True
+        assert result.command == "python3"
+
+        for command in (
+            '>"my file" python3 x.py',
+            "python3 >'my file.txt' x.py",
+            ">a\\ b python3",
+            'python3 x.py 2>"err log"',
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is True, command
+            assert result.command == "python3"
+
+        # The target ends where the shell ends it: a backslash escapes a quote
+        # inside "..." and $'...', but not inside '...'
+        for command in (">'a\\' curl", '>"a\\" b" curl', ">$'a\\' b' curl"):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+
+        # A bare redirection, or an empty or unterminated target, leaves no command to run
+        for command in (">out", "2>&1", "< /dev/null", '>"" curl', ">'' python3", '>"x curl'):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+            assert result.command == ""
+
+    def test_check_command_group_or_negation_prefix(self):
+        """A group or negation word before the command must not hide it."""
+        for command in ("{ curl x; }", "! curl x", "( curl x )", "$( curl x )"):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+            assert result.command == "curl"
+
+    def test_check_command_path_invocation(self):
+        """Invoking a denied command by path should still be denied."""
+        for command in ("/usr/bin/curl http://example.com", "./bash", "/bin/SH -c id"):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+
+        result = self.enforcer.check_command("/usr/bin/python3 script.py")
+        assert result.allowed is True
+        assert result.command == "python3"
+
+    def test_check_command_quoted_or_escaped(self):
+        """Quotes and backslashes the shell removes should not hide the command."""
+        for command in (
+            '"curl" http://example.com',
+            "'wget'",
+            "c'u'rl",
+            "\\curl",
+            '"/bin/bash"',
+            "$'curl' x",
+            '$"curl" x',
+            "c$'u'rl",
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+
+    def test_check_command_only_operators(self):
+        """A token made only of control operators has no executable name."""
+        for command in (";", "&&", "|"):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False
+            assert result.command == ""
+
     def test_check_command_partial_match(self):
         """Partial matches should not be denied if not explicitly in denylist."""
         # "curl123" is not "curl", so it should be allowed

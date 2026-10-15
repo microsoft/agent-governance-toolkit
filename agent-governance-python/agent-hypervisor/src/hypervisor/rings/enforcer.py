@@ -11,6 +11,7 @@ Also provides command denylist enforcement for subprocess execution.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -87,6 +88,31 @@ RING_CONSTRAINTS: dict[ExecutionRing, ResourceConstraints] = {
         max_concurrent_tools=2,
     ),
 }
+
+# A redirection operator (with an optional fd number at the start of a word, "&>",
+# ">&", ">|" or "<<<") and the shell word that is its target. The target keeps
+# quoted parts ("...", '...', $'...', $"...") and backslash escapes together with
+# the plain characters around them, so a quoted or escaped space stays inside it.
+# An unterminated quote runs to the end of the command.
+_REDIRECTION = re.compile(
+    r"(?:(?<![^\s;&|()`])\d+|&)?[<>]+[&|]?\s*"
+    r"(?P<target>(?:"
+    r"\$'(?:[^'\\]|\\.)*'?"
+    r'|\$?"(?:[^"\\]|\\.)*"?'
+    r"|'[^']*'?"
+    r"|\\.?"
+    r"|[^\s;&|<>()`'\"\\]"
+    r")*)",
+    re.DOTALL,
+)
+
+
+def _remove_quoting(text: str) -> str:
+    """Remove the quotes and backslashes the shell drops before running a command.
+
+    e.g., "'curl'" -> "curl", "c\\url" -> "curl", "$'curl'" -> "curl"
+    """
+    return re.sub(r"[\"'\\]", "", re.sub(r"\$(?=[\"'])", "", text))
 
 
 @dataclass
@@ -238,7 +264,7 @@ class RingEnforcer:
 
         This method validates whether a command (or command string with arguments)
         is present in the global DENIED_COMMANDS list. The check is performed
-        against the base command name (first token before any whitespace).
+        against the base command name (the first command the shell would run).
         Matching is case-insensitive to prevent bypasses via case variation.
 
         Args:
@@ -256,7 +282,6 @@ class RingEnforcer:
                 matched_denylist_entry=None,
             )
 
-        # Extract base command (first token before whitespace)
         stripped = command.strip()
         if not stripped:
             return CommandCheckResult(
@@ -266,11 +291,44 @@ class RingEnforcer:
                 matched_denylist_entry=None,
             )
 
-        base_command = stripped.split()[0]
+        # Drop redirections with their targets, which the shell applies before running
+        # the command, so a target is never taken for the executable. This runs before
+        # the quotes are removed, so a quoted or escaped space stays in the target
+        # e.g., ">out curl" -> "curl", "2>&1 curl" -> "curl", '>"my file" curl' -> "curl"
+        targets = [match.group("target") for match in _REDIRECTION.finditer(stripped)]
+        normalized = _REDIRECTION.sub(" ", stripped)
 
-        # Strip trailing shell metacharacters that could be used for command injection
-        # e.g., "curl;" -> "curl", "curl&&" -> "curl"
-        base_command = base_command.rstrip(";&|")
+        # Remove shell quoting and escapes, which the shell drops before running
+        # the command, e.g., "'curl'" -> "curl", "c\url" -> "curl", "$'curl'" -> "curl"
+        normalized = _remove_quoting(normalized)
+
+        # Split at whitespace, control operators, redirections, subshells and command
+        # substitution so the first command the shell runs is checked
+        # e.g., "curl;" -> "curl", "|curl" -> "curl", "curl>out" -> "curl", "$(curl x)" -> "curl"
+        tokens = [token for token in re.split(r"[\s;&|<>()`]+", normalized) if token]
+
+        # A redirection to an empty file name ('>"" curl') fails in the shell and
+        # the command never runs, so treat it as having no executable name
+        if any(target and not _remove_quoting(target) for target in targets):
+            tokens = []
+
+        # Skip words that open a group or negate the command that follows them,
+        # and the "$" left over from "$(", e.g., "{ curl; }" -> "curl", "! curl" -> "curl"
+        while tokens and tokens[0] in ("{", "!", "$"):
+            tokens.pop(0)
+        base_command = tokens[0] if tokens else ""
+
+        # Match the executable name rather than the path used to invoke it
+        # e.g., "/usr/bin/curl" -> "curl", "./bash" -> "bash"
+        base_command = base_command.rsplit("/", 1)[-1]
+
+        if not base_command:
+            return CommandCheckResult(
+                allowed=False,
+                reason="Command contains no executable name",
+                command="",
+                matched_denylist_entry=None,
+            )
 
         base_command_lower = base_command.lower()
 
