@@ -156,6 +156,37 @@ class TestCanaryRollout:
         assert triggered is False
         assert r.state == RolloutState.CANARY
 
+    @pytest.mark.parametrize(
+        ("comparator", "value", "expected"),
+        [
+            ("gt", 0.06, True),
+            ("gt", 0.05, False),
+            ("gt", 0.04, False),
+            ("lt", 0.04, True),
+            ("lt", 0.05, False),
+            ("lt", 0.06, False),
+            ("gte", 0.05, True),
+            ("lte", 0.05, True),
+        ],
+    )
+    def test_rollback_condition_comparators(
+        self, comparator: str, value: float, expected: bool
+    ) -> None:
+        cond = RollbackCondition(metric="error_rate", threshold=0.05, comparator=comparator)
+        assert cond.should_rollback(value) is expected
+
+    def test_auto_rollback_with_strict_comparator(self) -> None:
+        r = CanaryRollout(
+            name="test-v2",
+            steps=[RolloutStep(name="s1", weight=0.1)],
+            rollback_conditions=[
+                RollbackCondition(metric="error_rate", threshold=0.05, comparator="gt"),
+            ],
+        )
+        r.start()
+        assert r.check_rollback({"error_rate": 0.5}) is True
+        assert r.state == RolloutState.ROLLED_BACK
+
     def test_analyze_step(self) -> None:
         r = CanaryRollout(
             name="test-v2",

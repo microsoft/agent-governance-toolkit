@@ -49,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `list_providers()` reports `"unavailable"` instead of `"community"` for the
   `slo_detection` and `chaos_engine` slots when no advanced provider is installed,
   since they have no community implementation.
+- `RollbackCondition` now handles the `gt` and `lt` comparators. The AgentRollout
+  CRD (`rollbackConditions[].operator`) accepts `gt` and `lt`, but
+  `should_rollback()` only handled `gte` and `lte` and returned `False` for
+  anything else, so those rollback conditions never fired.
 
 ## [0.3.0] - 2026-02-19
 

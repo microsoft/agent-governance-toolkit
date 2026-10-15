@@ -831,6 +831,7 @@ omitempty
 oncall
 oneshot
 oorandom
+openAPIV3Schema
 opencode
 openpolicyagent
 openshell
