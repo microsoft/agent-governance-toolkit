@@ -204,6 +204,42 @@ class TestCheckRequirements:
         unpinned = [f for f in findings if f.rule == "unpinned-version"]
         assert len(unpinned) == 2
 
+    @pytest.mark.parametrize(
+        "line, version",
+        [
+            ("requests>=2.28.0,!=2.29.0", ">=2.28.0,!=2.29.0"),
+            ("requests<3,>=2.28.0", "<3,>=2.28.0"),
+            ("requests >= 2.28.0, != 2.29.0", ">= 2.28.0, != 2.29.0"),
+            ("requests>2,<3", ">2,<3"),
+        ],
+    )
+    def test_compound_specifier_keeps_package_name(
+        self, guard: SupplyChainGuard, tmp_path: Path, line: str, version: str,
+    ) -> None:
+        req = tmp_path / "requirements.txt"
+        req.write_text(f"{line}\n")
+        findings = guard.check_requirements(str(req))
+        assert [(f.rule, f.package, f.version) for f in findings] == [
+            ("unpinned-version", "requests", version)
+        ]
+
+    def test_compound_specifier_with_exact_pin_passes(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        req = tmp_path / "requirements.txt"
+        req.write_text("requests!=2.30.0,==2.31.0\n")
+        findings = guard.check_requirements(str(req))
+        assert findings == []
+
+    def test_compound_specifier_typosquat_flagged(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        # cspell:ignore reqeusts
+        req = tmp_path / "requirements.txt"
+        req.write_text("reqeusts>=2.28.0,!=2.29.0\n")
+        findings = guard.check_requirements(str(req))
+        assert any(f.rule == "typosquat" and f.package == "reqeusts" for f in findings)
+
 
 # ---------------------------------------------------------------------------
 # check_pyproject
@@ -234,6 +270,19 @@ class TestCheckPyproject:
         )
         findings = guard.check_pyproject(str(pp))
         assert not any(f.rule == "loose-constraint" for f in findings)
+
+    def test_compound_specifier_keeps_package_name(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[project]\nname = "test"\n'
+            'dependencies = [\n'
+            '    "requests>=2.28.0,!=2.29.0",\n'
+            ']\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        assert [(f.rule, f.package) for f in findings] == [("loose-constraint", "requests")]
 
     def test_optional_dependencies_checked(
         self, guard: SupplyChainGuard, tmp_path: Path,
@@ -814,3 +863,13 @@ class TestScanLockfileDrift:
         lock.write_text("requests==2.31.0\n")
         findings = guard.scan_lockfile_drift(str(manifest), str(lock))
         assert any(f.rule == "lockfile-drift" and f.package == "flask" for f in findings)
+
+    def test_compound_specifier_found_in_lockfile(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        manifest = tmp_path / "requirements.txt"
+        manifest.write_text("requests>=2.28.0,!=2.29.0\n")
+        lock = tmp_path / "requirements.lock"
+        lock.write_text("requests==2.31.0\n")
+        findings = guard.scan_lockfile_drift(str(manifest), str(lock))
+        assert findings == []

@@ -97,6 +97,7 @@ class SupplyChainConfig:
 _RANGE_RE = re.compile(r"[\^~]")
 _PEP508_PINNED = re.compile(r"==\s*\S+")
 _LOOSE_CONSTRAINT = re.compile(r"(>=|<=|~=|!=|>|<)")
+_VERSION_OPERATOR = re.compile(r"===|==|~=|!=|>=|<=|>|<")
 # Strict MAJOR.MINOR.PATCH (with optional prerelease/build) used by
 # both the Poetry inline-table check and the npm version classifier.
 _EXACT_SEMVER = re.compile(
@@ -193,13 +194,12 @@ def _parse_requirements_line(line: str) -> tuple[str, str] | None:
     if not line:
         return None
 
-    # Split on version specifier operators
-    for op in ("===", "==", "~=", "!=", ">=", "<=", ">", "<"):
-        if op in line:
-            idx = line.index(op)
-            name = line[:idx].strip()
-            version = line[idx:].strip()
-            return name, version
+    # Split at the first version specifier operator, so a compound specifier
+    # ("pkg>=2.0,!=2.5") stays whole instead of being cut at whichever
+    # operator happens to be tried first
+    match = _VERSION_OPERATOR.search(line)
+    if match:
+        return line[:match.start()].strip(), line[match.start():].strip()
 
     # No version specifier at all
     return line, ""
