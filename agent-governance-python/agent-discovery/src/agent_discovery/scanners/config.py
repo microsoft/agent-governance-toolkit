@@ -151,7 +151,7 @@ class ConfigScanner(BaseScanner):
 
             # Check for known config files
             for filename in filenames:
-                rel_path = str(rel_dir / filename)
+                rel_path = (rel_dir / filename).as_posix()
                 for config in CONFIG_PATTERNS:
                     if filename == config["glob"] or rel_path.endswith(config["glob"]):
                         full_path = Path(dirpath) / filename
