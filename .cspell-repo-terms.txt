@@ -473,6 +473,7 @@ contextlib
 contextvars
 contoso
 conv
+coreutils
 coro
 covermode
 coverprofile
@@ -593,6 +594,7 @@ getattribute
 getenv
 gethostname
 getitem
+getopt
 getoption
 getpolicy
 getroot
@@ -691,6 +693,7 @@ kwonlyargs
 laintext
 langflow
 langgenius
+lastgroup
 lawcontinue
 levelname
 lookahead

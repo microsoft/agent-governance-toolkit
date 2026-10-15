@@ -212,6 +212,159 @@ class TestCommandDenylist:
             assert result.allowed is False, command
             assert result.command == "curl"
 
+    def test_check_command_assignment_prefix(self):
+        """Variable assignments before the command must not hide it."""
+        for command in (
+            "FOO=x curl",
+            "FOO='a b' curl",
+            'FOO="a b" curl',
+            "FOO=a\\ b curl",
+            "A=1 B=2 curl",
+            "FOO+=x curl",
+            "a[0]=x curl",
+            "FOO=x >out curl",
+            "{ FOO=1 curl; }",
+            "time FOO=1 curl",
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+            assert result.command == "curl", command
+
+        for command in ("FOO=1 python3 x.py", 'PYTHONPATH="a b" python3 -m pytest'):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is True, command
+            assert result.command == "python3"
+
+        # A quoted or escaped name is not an assignment, so the word is the command
+        for command in ('"FOO"=x curl', "F\\OO=x curl"):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is True, command
+            assert result.command == "FOO=x"
+
+        # Assignments alone run no command
+        result = self.enforcer.check_command("FOO=x BAR=y")
+        assert result.allowed is False
+        assert result.command == ""
+
+    def test_check_command_wrapper_runs_denied_command(self):
+        """A wrapper that runs a later word as the command must not hide it."""
+        for command in (
+            "env curl",
+            "env -i curl",
+            "env -u PATH curl",
+            "env -uPATH curl",
+            "env --unset=PATH curl",
+            "env --unset PATH curl",
+            "env -iu PATH curl",
+            "env --ignore-env curl",
+            "env - curl",
+            "env -- curl",
+            "env -i FOO=1 'BAR=a b' curl",
+            "env -C /tmp curl",
+            "/usr/bin/env curl",
+            "\\env curl",
+            "exec curl",
+            "exec -a name curl",
+            "exec -ax curl",
+            "exec -cl curl",
+            "exec -cla name curl",
+            "nohup curl",
+            "nohup -- curl",
+            "nice curl",
+            "nice -n 5 curl",
+            "nice -n5 curl",
+            "nice -5 curl",
+            "nice --10 curl",
+            "nice --adjustment=5 curl",
+            "nice --adj 5 curl",
+            "timeout 5 curl",
+            "timeout -s KILL 5 curl",
+            "timeout -sKILL -k 1 5 curl",
+            "timeout --signal=KILL --preserve-status 5 curl",
+            "timeout -- 5 curl",
+            "stdbuf -oL curl",
+            "stdbuf -o L -e0 curl",
+            "stdbuf --output=L curl",
+            "command curl",
+            "command -p curl",
+            "builtin exec curl",
+            "time curl",
+            "time -p curl",
+            "/usr/bin/time -o out -f %e curl",
+            "nohup env -i FOO=1 nice -n 5 timeout 10 stdbuf -oL curl",
+            "FOO=1 exec env curl",
+            "! env curl",
+            "$(env curl)",
+            "env >out curl",
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+            assert result.command == "curl", command
+
+    def test_check_command_wrapper_keeps_wrapped_executable(self):
+        """A wrapped command that is not denied is reported as the executable."""
+        for command, executable in (
+            ("env python3 x.py", "python3"),
+            ("env -i PATH=/bin ls -la", "ls"),
+            ("timeout 30 python3 -m pytest", "python3"),
+            ("nice -n 10 python3 x.py", "python3"),
+            ("nohup python3 server.py", "python3"),
+            ("stdbuf -oL grep x", "grep"),
+            # nohup runs the program named "FOO=x", not an assignment
+            ("nohup FOO=x curl", "FOO=x"),
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is True, command
+            assert result.command == executable, command
+
+    def test_check_command_wrapper_without_command(self):
+        """A wrapper that runs no command is itself the executable."""
+        for command, executable in (
+            ("env", "env"),
+            ("env -i", "env"),
+            ("env FOO=1", "env"),
+            ("env | grep PATH", "env"),
+            ("nice", "nice"),
+            ("exec", "exec"),
+            ("command -v curl", "command"),
+            ("command -V curl", "command"),
+            ("nohup --help", "nohup"),
+            ("env --version curl", "env"),
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is True, command
+            assert result.command == executable, command
+
+    def test_check_command_wrapper_options_not_read_fail_closed(self):
+        """A wrapper whose options cannot be read is denied, not allowed."""
+        for command in (
+            "env -S 'curl x'",
+            "env -iS'curl x'",
+            "env --split-string='curl x'",
+            "env -x curl",
+            "env --ignore curl",
+            "env --unset",
+            "env -u",
+            "nohup -x curl",
+            "nice -n",
+            "timeout -s",
+            "timeout --signal",
+            "exec -a",
+            "stdbuf -x curl",
+            "command -x curl",
+            "env --=x curl",
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+            assert result.command == "", command
+
+    def test_check_command_line_continuation(self):
+        """A backslash-newline the shell removes must not split the command name."""
+        for command in ("cu\\\nrl x", "c\\\nurl", "\\\ncurl", "e\\\nnv curl", "FOO=x\\\n curl"):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+            assert result.command == "curl", command
+
     def test_check_command_path_invocation(self):
         """Invoking a denied command by path should still be denied."""
         for command in ("/usr/bin/curl http://example.com", "./bash", "/bin/SH -c id"):

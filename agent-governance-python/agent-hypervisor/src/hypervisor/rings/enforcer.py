@@ -115,6 +115,242 @@ def _remove_quoting(text: str) -> str:
     return re.sub(r"[\"'\\]", "", re.sub(r"\$(?=[\"'])", "", text))
 
 
+def _join_continued_lines(text: str) -> str:
+    """Remove the backslash-newline pairs the shell drops before it reads words.
+
+    e.g., "cu\\<newline>rl" -> "curl", while an escaped backslash ("\\\\") stays
+    """
+    return re.sub(
+        r"\\(.)", lambda m: "" if m.group(1) == "\n" else m.group(0), text, flags=re.DOTALL
+    )
+
+
+# A shell word (quoted parts, backslash escapes and plain characters kept together,
+# as in a redirection target) or a single operator character between words
+_SHELL_TOKEN = re.compile(
+    r"(?P<word>(?:"
+    r"\$'(?:[^'\\]|\\.)*'?"
+    r'|\$?"(?:[^"\\]|\\.)*"?'
+    r"|'[^']*'?"
+    r"|\\.?"
+    r"|[^\s;&|<>()`'\"\\]"
+    r")+)"
+    r"|(?P<operator>[\n;&|<>()`])",
+    re.DOTALL,
+)
+
+# A variable assignment the shell makes before running the command, e.g., "FOO=x",
+# "FOO+=x" or "a[0]=x". The name must not be quoted or escaped
+_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?\+?=")
+
+
+@dataclass(frozen=True)
+class _WrapperSyntax:
+    """How a command that runs another command reads its options.
+
+    Options are read like getopt_long in "+" mode: they stop at the first operand
+    or after "--", short options can be grouped, an option argument can be attached
+    or be the next word, and a long option can be shortened to a unique prefix.
+
+    Attributes:
+        flags: Short options without an argument.
+        with_argument: Short options that take an argument.
+        long_options: Long option names, mapped to 0 (no argument), 1 (required
+            argument) or 2 (optional argument, only when attached with "=").
+        no_command: Options after which the wrapper runs no command (e.g. "--help").
+        unsupported: Options whose effect on the command cannot be checked.
+        operands: Operands read before the command (the duration of ``timeout``).
+        assignments: Whether ``NAME=VALUE`` words before the command are read
+            (``env``), including a lone "-" right after the options.
+        numeric_options: Whether "-N", "--N" and "-+N" set a value (``nice``).
+    """
+
+    flags: str = ""
+    with_argument: str = ""
+    long_options: dict[str, int] = field(default_factory=dict)
+    no_command: frozenset[str] = frozenset({"--help", "--version"})
+    unsupported: frozenset[str] = frozenset()
+    operands: int = 0
+    assignments: bool = False
+    numeric_options: bool = False
+
+
+_HELP_AND_VERSION = {"help": 0, "version": 0}
+
+# Commands that run the command named by a later word. The option tables follow
+# GNU coreutils and GNU time, and the bash builtins and the "time" keyword.
+_WRAPPERS: dict[str, _WrapperSyntax] = {
+    "builtin": _WrapperSyntax(long_options={"help": 0}),
+    "command": _WrapperSyntax(
+        flags="pvV", long_options={"help": 0}, no_command=frozenset({"--help", "-v", "-V"})
+    ),
+    "env": _WrapperSyntax(
+        flags="iv0",
+        with_argument="uCS",
+        long_options={
+            "ignore-environment": 0,
+            "null": 0,
+            "unset": 1,
+            "chdir": 1,
+            "split-string": 1,
+            "default-signal": 2,
+            "ignore-signal": 2,
+            "block-signal": 2,
+            "list-signal-handling": 0,
+            "debug": 0,
+            **_HELP_AND_VERSION,
+        },
+        # -S splits its argument into more words, which may hold the command
+        unsupported=frozenset({"-S", "--split-string"}),
+        assignments=True,
+    ),
+    "exec": _WrapperSyntax(flags="cl", with_argument="a", long_options={"help": 0}),
+    "nice": _WrapperSyntax(
+        with_argument="n",
+        long_options={"adjustment": 1, **_HELP_AND_VERSION},
+        numeric_options=True,
+    ),
+    "nohup": _WrapperSyntax(long_options=_HELP_AND_VERSION),
+    "stdbuf": _WrapperSyntax(
+        with_argument="ioe",
+        long_options={"input": 1, "output": 1, "error": 1, **_HELP_AND_VERSION},
+    ),
+    "time": _WrapperSyntax(
+        flags="apqVv",
+        with_argument="fo",
+        long_options={
+            "append": 0,
+            "format": 1,
+            "output": 1,
+            "portability": 0,
+            "quiet": 0,
+            "verbose": 0,
+            **_HELP_AND_VERSION,
+        },
+        no_command=frozenset({"--help", "--version", "-V"}),
+    ),
+    "timeout": _WrapperSyntax(
+        flags="fpv",
+        with_argument="ks",
+        long_options={
+            "foreground": 0,
+            "kill-after": 1,
+            "preserve-status": 0,
+            "signal": 1,
+            "verbose": 0,
+            **_HELP_AND_VERSION,
+        },
+        operands=1,
+    ),
+}
+
+
+def _wrapped_command_index(words: list[str | None], i: int, syntax: _WrapperSyntax) -> int | None:
+    """Return the index in ``words`` of the command run by the wrapper at ``i - 1``.
+
+    ``words`` are the unquoted shell words, with None for an operator. An operator
+    or the end of ``words`` in place of the command means the wrapper runs no
+    command, and None means its options cannot be read, so the command it runs
+    is unknown.
+    """
+    end = len(words)
+    while i < end and words[i] is not None:
+        arg = words[i]
+        if syntax.numeric_options and re.match(r"-[-+]?\d", arg):
+            i += 1
+            continue
+        if arg == "--":
+            i += 1
+            break
+        if arg.startswith("--"):
+            name, has_value, _ = arg[2:].partition("=")
+            matches = [option for option in syntax.long_options if option == name]
+            if not matches:
+                matches = [option for option in syntax.long_options if option.startswith(name)]
+            if not name or len(matches) != 1:
+                return None
+            option = matches[0]
+            kind = syntax.long_options[option]
+            if f"--{option}" in syntax.unsupported or (kind == 0 and has_value):
+                return None
+            if f"--{option}" in syntax.no_command:
+                return end
+            if kind == 1 and not has_value:
+                i += 1
+                if i == end or words[i] is None:
+                    return None
+            i += 1
+            continue
+        if arg.startswith("-") and arg != "-":
+            for position, letter in enumerate(arg[1:], start=2):
+                if f"-{letter}" in syntax.unsupported:
+                    return None
+                if f"-{letter}" in syntax.no_command:
+                    return end
+                if letter in syntax.flags:
+                    continue
+                if letter not in syntax.with_argument:
+                    return None
+                # The rest of the word is the argument, or else the next word is
+                if position == len(arg):
+                    i += 1
+                    if i == end or words[i] is None:
+                        return None
+                break
+            i += 1
+            continue
+        break
+    if syntax.assignments:
+        if i < end and words[i] == "-":
+            i += 1
+        while i < end and words[i] is not None and "=" in words[i]:
+            i += 1
+    for _ in range(syntax.operands):
+        if i < end and words[i] is not None:
+            i += 1
+    return i
+
+
+def _command_word_start(text: str) -> int | None:
+    """Return where the word naming the first command the shell runs starts.
+
+    Variable assignments before the command ("FOO=x curl") are skipped, and so are
+    wrappers that run the command named by a later word ("env -i curl",
+    "nohup curl"). A wrapper that runs no command is itself the command
+    ("env", "command -v curl"). Returns None if a wrapper's options cannot be
+    read, and ``len(text)`` if there is no command word.
+    """
+    tokens = list(_SHELL_TOKEN.finditer(text))
+    words = [
+        None if token.lastgroup == "operator" else _remove_quoting(token.group())
+        for token in tokens
+    ]
+    assignments_allowed = True
+    i = 0
+    while i < len(tokens):
+        word = words[i]
+        if word is None or word in ("{", "!", "$"):
+            assignments_allowed = True
+            i += 1
+            continue
+        if assignments_allowed and _ASSIGNMENT.match(tokens[i].group()):
+            i += 1
+            continue
+        name = word.rsplit("/", 1)[-1].lower()
+        syntax = _WRAPPERS.get(name)
+        if syntax is None:
+            return tokens[i].start()
+        command_index = _wrapped_command_index(words, i + 1, syntax)
+        if command_index is None:
+            return None
+        if command_index == len(words) or words[command_index] is None:
+            return tokens[i].start()
+        i = command_index
+        # "time" is also a shell keyword that comes before assignments
+        assignments_allowed = name == "time"
+    return len(text)
+
+
 @dataclass
 class RingCheckResult:
     """Result of a ring enforcement check."""
@@ -265,7 +501,10 @@ class RingEnforcer:
         This method validates whether a command (or command string with arguments)
         is present in the global DENIED_COMMANDS list. The check is performed
         against the base command name (the first command the shell would run).
-        Matching is case-insensitive to prevent bypasses via case variation.
+        Variable assignments before it and wrappers that run it (``env``, ``exec``,
+        ``nohup``, ``nice``, ``timeout``, ``stdbuf``, ``time``, ``command``,
+        ``builtin``) are skipped, and a wrapper whose options cannot be read is
+        denied. Matching is case-insensitive to prevent bypasses via case variation.
 
         Args:
             command: The command to check (e.g., "curl", "curl -X POST", "python3").
@@ -282,7 +521,8 @@ class RingEnforcer:
                 matched_denylist_entry=None,
             )
 
-        stripped = command.strip()
+        # The shell removes a backslash-newline before it reads words, e.g., "cu\<newline>rl"
+        stripped = _join_continued_lines(command).strip()
         if not stripped:
             return CommandCheckResult(
                 allowed=False,
@@ -297,6 +537,18 @@ class RingEnforcer:
         # e.g., ">out curl" -> "curl", "2>&1 curl" -> "curl", '>"my file" curl' -> "curl"
         targets = [match.group("target") for match in _REDIRECTION.finditer(stripped)]
         normalized = _REDIRECTION.sub(" ", stripped)
+
+        # Skip variable assignments and wrappers that run a later word as the command,
+        # e.g., "FOO=x curl" -> "curl", "env -i curl" -> "curl", "nohup curl" -> "curl"
+        start = _command_word_start(normalized)
+        if start is None:
+            return CommandCheckResult(
+                allowed=False,
+                reason="Command runs another command that cannot be determined",
+                command="",
+                matched_denylist_entry=None,
+            )
+        normalized = normalized[start:]
 
         # Remove shell quoting and escapes, which the shell drops before running
         # the command, e.g., "'curl'" -> "curl", "c\url" -> "curl", "$'curl'" -> "curl"
