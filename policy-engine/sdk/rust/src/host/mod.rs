@@ -107,13 +107,23 @@ pub fn default_host_policy_dispatcher_with_limits(
     manifest: &Manifest,
     limits: Limits,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
+    // A manifest that is all Rego keeps AGT's promise of OPA executable selection and bundle behavior. A manifest that
+    // also declares Cedar goes through ACS's binding dispatcher, which runs Cedar in process and
+    // still sends Rego to OPA (this crate enables `opa`, not `rego`); anything else needs a host dispatcher.
+    let mut all_rego = true;
     for (name, policy) in &manifest.policies {
         let engine = policy.engine_type();
-        if engine != "rego" {
+        if !matches!(engine, "rego" | "cedar") {
             return Err(RuntimeError::PolicyInvocationFailed(format!(
-                "default policy dispatcher supports only Rego policies; policy '{name}' uses engine '{engine}'"
+                "default policy dispatcher supports only Rego and Cedar policies; policy '{name}' uses engine '{engine}'"
             )));
         }
+        all_rego &= engine == "rego";
+    }
+    if !all_rego {
+        return Ok(Arc::new(
+            agent_control_spec::dispatchers::BindingPolicyDispatcher::with_limits(limits),
+        ));
     }
     // ACS prefers in-process Rego when any consumer enables that feature.
     // AGT's existing API promises OPA executable selection and bundle behavior.
