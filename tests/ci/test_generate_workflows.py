@@ -195,6 +195,287 @@ def test_unknown_toolchain_is_rejected():
         gen.render_workflow(workflow, actions)
 
 
+def test_sync_registry_adopts_a_bumped_pin(tmp_path, monkeypatch):
+    # A Dependabot-shaped bump: the generated workflow carries a new SHA and
+    # version comment, the registry still has the old pin. Sync adopts it.
+    new_sha = "a" * 40
+    registry = tmp_path / "actions.toml"
+    registry.write_text(
+        f'[checkout]\nuses = "actions/checkout@{"b" * 40}"\ncomment = "v7.0.1"\n',
+        encoding="utf-8",
+    )
+    generated = tmp_path / "policy-engine-ci.yml"
+    generated.write_text(
+        "jobs:\n  x:\n    steps:\n"
+        f"      - uses: actions/checkout@{new_sha} # v7.1.0\n",
+        encoding="utf-8",
+    )
+    composite = tmp_path / "composite"
+    composite.mkdir()
+    monkeypatch.setattr(gen, "ACTIONS_PATH", registry)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+    monkeypatch.setattr(
+        gen, "build_outputs", lambda *_a: {generated: generated.read_text("utf-8")}
+    )
+
+    assert gen.sync_registry_from_tree(verify=False) == ["checkout"]
+    updated = registry.read_text(encoding="utf-8")
+    assert f'uses = "actions/checkout@{new_sha}"' in updated
+    assert 'comment = "v7.1.0"' in updated
+
+
+def test_sync_registry_is_a_noop_when_already_in_sync(tmp_path, monkeypatch):
+    sha = "c" * 40
+    registry = tmp_path / "actions.toml"
+    registry.write_text(
+        f'[checkout]\nuses = "actions/checkout@{sha}"\ncomment = "v7.1.0"\n',
+        encoding="utf-8",
+    )
+    original = registry.read_text(encoding="utf-8")
+    generated = tmp_path / "policy-engine-ci.yml"
+    generated.write_text(
+        f"      - uses: actions/checkout@{sha} # v7.1.0\n", encoding="utf-8"
+    )
+    composite = tmp_path / "composite"
+    composite.mkdir()
+    monkeypatch.setattr(gen, "ACTIONS_PATH", registry)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+    monkeypatch.setattr(
+        gen, "build_outputs", lambda *_a: {generated: generated.read_text("utf-8")}
+    )
+
+    assert gen.sync_registry_from_tree() == []
+    assert registry.read_text(encoding="utf-8") == original
+
+
+def test_sync_registry_fails_closed_on_conflicting_pins(tmp_path, monkeypatch):
+    registry = tmp_path / "actions.toml"
+    registry.write_text(
+        f'[checkout]\nuses = "actions/checkout@{"b" * 40}"\ncomment = "v7.0.1"\n',
+        encoding="utf-8",
+    )
+    generated = tmp_path / "policy-engine-ci.yml"
+    generated.write_text(
+        f"      - uses: actions/checkout@{'a' * 40} # v7.1.0\n", encoding="utf-8"
+    )
+    composite = tmp_path / "composite"
+    action_dir = composite / "x"
+    action_dir.mkdir(parents=True)
+    (action_dir / "action.yml").write_text(
+        "runs:\n  using: composite\n  steps:\n"
+        f"    - uses: actions/checkout@{'d' * 40} # v7.2.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gen, "ACTIONS_PATH", registry)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+    monkeypatch.setattr(
+        gen, "build_outputs", lambda *_a: {generated: generated.read_text("utf-8")}
+    )
+
+    with pytest.raises(gen.GenerationError, match="conflicting pins"):
+        gen.sync_registry_from_tree()
+
+
+def test_sync_registry_refuses_unsafe_comment(tmp_path, monkeypatch):
+    # A version comment that could break out of the TOML string is refused,
+    # not embedded, so a crafted managed file cannot corrupt actions.toml.
+    registry = tmp_path / "actions.toml"
+    original = f'[checkout]\nuses = "actions/checkout@{"b" * 40}"\ncomment = "v7.0.1"\n'
+    registry.write_text(original, encoding="utf-8")
+    generated = tmp_path / "policy-engine-ci.yml"
+    generated.write_text(
+        f'      - uses: actions/checkout@{"a" * 40} # v1" evil = "x\n',
+        encoding="utf-8",
+    )
+    composite = tmp_path / "composite"
+    composite.mkdir()
+    monkeypatch.setattr(gen, "ACTIONS_PATH", registry)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+    monkeypatch.setattr(
+        gen, "build_outputs", lambda *_a: {generated: generated.read_text("utf-8")}
+    )
+
+    with pytest.raises(gen.GenerationError, match="unsafe version comment"):
+        gen.sync_registry_from_tree()
+    assert registry.read_text(encoding="utf-8") == original
+
+
+def test_sync_registry_preserves_registry_layout_and_comments(tmp_path, monkeypatch):
+    # Only the bumped entry changes; header comments, blank lines, and the other
+    # entries are left byte for byte intact.
+    registry = tmp_path / "actions.toml"
+    registry.write_text(
+        "# header comment\n\n"
+        f'[checkout]\nuses = "actions/checkout@{"b" * 40}"\ncomment = "v7.0.1"\n\n'
+        f'[setup-node]\nuses = "actions/setup-node@{"e" * 40}"\ncomment = "v7.0.0"\n',
+        encoding="utf-8",
+    )
+    generated = tmp_path / "policy-engine-ci.yml"
+    generated.write_text(
+        f"      - uses: actions/checkout@{'a' * 40} # v7.1.0\n"
+        f"      - uses: actions/setup-node@{'e' * 40} # v7.0.0\n",
+        encoding="utf-8",
+    )
+    composite = tmp_path / "composite"
+    composite.mkdir()
+    monkeypatch.setattr(gen, "ACTIONS_PATH", registry)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+    monkeypatch.setattr(
+        gen, "build_outputs", lambda *_a: {generated: generated.read_text("utf-8")}
+    )
+
+    assert gen.sync_registry_from_tree(verify=False) == ["checkout"]
+    text = registry.read_text(encoding="utf-8")
+    assert text.startswith("# header comment\n\n")
+    assert f'actions/setup-node@{"e" * 40}' in text
+    assert 'comment = "v7.0.0"' in text
+    assert f'actions/checkout@{"a" * 40}' in text
+
+
+def test_sync_registry_refuses_symlinked_registry_path(tmp_path, monkeypatch):
+    # A symlinked actions.toml must not be written through.
+    real = tmp_path / "real_actions.toml"
+    real.write_text(
+        f'[checkout]\nuses = "actions/checkout@{"b" * 40}"\ncomment = "v7.0.1"\n',
+        encoding="utf-8",
+    )
+    link = tmp_path / "actions.toml"
+    link.symlink_to(real)
+    generated = tmp_path / "policy-engine-ci.yml"
+    generated.write_text(
+        f"      - uses: actions/checkout@{'a' * 40} # v7.1.0\n", encoding="utf-8"
+    )
+    composite = tmp_path / "composite"
+    composite.mkdir()
+    monkeypatch.setattr(gen, "ACTIONS_PATH", link)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+    monkeypatch.setattr(
+        gen, "build_outputs", lambda *_a: {generated: generated.read_text("utf-8")}
+    )
+
+    with pytest.raises(gen.GenerationError, match="symlink"):
+        gen.sync_registry_from_tree()
+    assert real.read_text(encoding="utf-8").count("b" * 40) == 1
+
+
+def test_intra_repo_symlinked_composite_file_is_rejected(tmp_path, monkeypatch):
+    # A symlinked action file is refused even when it resolves to another file
+    # inside the composite directory.
+    composite = tmp_path / "composite"
+    (composite / "real").mkdir(parents=True)
+    target = composite / "real" / "action.yml"
+    target.write_text("runs:\n  using: composite\n  steps: []\n", encoding="utf-8")
+    (composite / "linky").mkdir()
+    (composite / "linky" / "action.yml").symlink_to(target)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+
+    with pytest.raises(gen.GenerationError, match="symlink"):
+        gen._composite_action_files()
+
+
+def test_symlinked_composite_actions_dir_is_rejected(tmp_path, monkeypatch):
+    real_dir = tmp_path / "real_actions_dir"
+    real_dir.mkdir()
+    link = tmp_path / "composite"
+    link.symlink_to(real_dir, target_is_directory=True)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", link)
+
+    with pytest.raises(gen.GenerationError, match="symlink"):
+        gen._composite_action_files()
+
+
+def test_composite_action_symlink_escape_is_rejected(tmp_path, monkeypatch):
+    # A composite action that is a symlink out of the actions directory is
+    # refused, so neither the reader nor the writer follows it out of the tree.
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "action.yml").write_text(
+        "runs:\n  using: composite\n  steps:\n"
+        f"    - uses: actions/checkout@{'a' * 40} # v1.0.0\n",
+        encoding="utf-8",
+    )
+    composite = tmp_path / "composite"
+    composite.mkdir()
+    (composite / "evil").symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+
+    with pytest.raises(gen.GenerationError, match="escapes"):
+        gen._composite_action_files()
+
+
+def test_build_outputs_rejects_output_path_traversal(monkeypatch):
+    actions = gen._load_actions(gen.ACTIONS_PATH)
+    evil = {
+        "workflow": [
+            {
+                "id": "x",
+                "name": "x",
+                "output": ".github/workflows/../../../tmp/escape.yml",
+                "job": [{"id": "a", "step": [{"name": "n", "run": "echo hi"}]}],
+            }
+        ]
+    }
+    monkeypatch.setattr(gen, "_load_toml", lambda _p: evil)
+    with pytest.raises(gen.GenerationError, match="escapes the repository"):
+        gen.build_outputs(actions)
+
+
+def test_pin_line_regex_ignores_commented_uses():
+    # A commented-out step is not a pin source (anchored regex).
+    assert gen._PIN_LINE_RE.match("      # - uses: actions/checkout@" + "a" * 40 + " # v9.9.9") is None
+    assert gen._PIN_LINE_RE.match("      - uses: actions/checkout@" + "a" * 40 + " # v7.0.1") is not None
+    assert gen._PIN_LINE_RE.match("        uses: actions/setup-python@" + "b" * 40 + " # v7.0.0") is not None
+
+
+def test_sync_ignores_commented_pin_but_adopts_real_one(tmp_path, monkeypatch):
+    registry = tmp_path / "actions.toml"
+    registry.write_text(
+        f'[checkout]\nuses = "actions/checkout@{"b" * 40}"\ncomment = "v7.0.1"\n',
+        encoding="utf-8",
+    )
+    generated = tmp_path / "policy-engine-ci.yml"
+    # A commented-out bogus bump plus the real pin that matches the registry.
+    generated.write_text(
+        f"      # - uses: actions/checkout@{'f' * 40} # v9.9.9\n"
+        f"      - uses: actions/checkout@{'b' * 40} # v7.0.1\n",
+        encoding="utf-8",
+    )
+    composite = tmp_path / "composite"
+    composite.mkdir()
+    monkeypatch.setattr(gen, "ACTIONS_PATH", registry)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+    monkeypatch.setattr(gen, "build_outputs", lambda *_a: {generated: generated.read_text("utf-8")})
+    # The commented bogus line is ignored, so no update and no conflict.
+    assert gen.sync_registry_from_tree(verify=False) == []
+
+
+def test_verify_pin_versions_accepts_matching_sha(monkeypatch):
+    monkeypatch.setattr(gen, "_resolve_tag_commit_sha", lambda name, ver, *, token: "a" * 40)
+    gen.verify_pin_versions({"checkout": ("actions/checkout@" + "a" * 40, "v7.1.0")}, token=None)
+
+
+def test_verify_pin_versions_rejects_mismatch(monkeypatch):
+    monkeypatch.setattr(gen, "_resolve_tag_commit_sha", lambda name, ver, *, token: "c" * 40)
+    with pytest.raises(gen.GenerationError, match="pin mismatch"):
+        gen.verify_pin_versions({"checkout": ("actions/checkout@" + "a" * 40, "v7.1.0")}, token=None)
+
+
+def test_verify_pin_versions_fails_closed_when_unresolvable(monkeypatch):
+    monkeypatch.setattr(gen, "_resolve_tag_commit_sha", lambda name, ver, *, token: None)
+    with pytest.raises(gen.GenerationError, match="cannot verify"):
+        gen.verify_pin_versions({"checkout": ("actions/checkout@" + "a" * 40, "v9.9.9")}, token=None)
+
+
+def test_verify_pin_versions_skips_non_version_comment(monkeypatch):
+    def _boom(*_a, **_k):
+        raise AssertionError("resolver must not be called for a non-version comment")
+
+    monkeypatch.setattr(gen, "_resolve_tag_commit_sha", _boom)
+    gen.verify_pin_versions(
+        {"rust-toolchain": ("dtolnay/rust-toolchain@" + "a" * 40, "stable")}, token=None
+    )
+
+
 def test_unknown_action_key_is_rejected():
     actions = gen._load_actions(gen.ACTIONS_PATH)
     workflow = {
