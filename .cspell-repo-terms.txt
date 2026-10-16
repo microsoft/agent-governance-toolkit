@@ -1322,3 +1322,7 @@ amqp
 amqps
 rediss
 xoxe
+OCSF
+ocsf
+NDJSON
+ndjson
