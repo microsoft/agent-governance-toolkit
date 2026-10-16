@@ -103,6 +103,9 @@ class TestFormatStatus:
         out = tracker.format_status('a')
         assert '0%' in out
         assert '0/10,000' in out
+        # Empty budget -> no filled cells, all ten empty cells.
+        assert '█' not in out
+        assert out.count('░') == 10
 
     def test_format_partial(self, tracker):
         tracker.record_usage('a', 4100, 4100)
@@ -110,11 +113,18 @@ class TestFormatStatus:
         assert '82%' in out
         assert '8,200' in out
         assert '10,000' in out
+        # 82% must render ~8 filled cells, not an empty bar (regression: the
+        # bar divided the fraction by 10 instead of multiplying, so every
+        # realistic value collapsed to zero filled cells).
+        assert out.count('█') == 8
+        assert out.count('░') == 2
 
     def test_format_full(self, tracker):
         tracker.record_usage('a', 5000, 5000)
         out = tracker.format_status('a')
         assert '100%' in out
+        assert out.count('█') == 10
+        assert '░' not in out
 
 class TestValidation:
 
