@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -31,9 +32,10 @@ func randomHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// Docker subprocess deadlines. ``docker exec`` runs user-supplied code so
-// it falls back to SandboxConfig.TimeoutSeconds when set; the others are
-// short-lived control-plane operations against the local Docker daemon.
+// Docker subprocess deadlines. “docker exec“ runs user-supplied code so it
+// uses SandboxConfig.TimeoutSeconds when set (falling back to dockerExecTimeout
+// otherwise); the others are short-lived control-plane operations against the
+// local Docker daemon.
 const (
 	dockerInfoTimeout    = 5 * time.Second
 	dockerStartTimeout   = 30 * time.Second
@@ -124,11 +126,22 @@ type SandboxProvider interface {
 
 // DockerSandboxProvider implements SandboxProvider using the Docker CLI.
 type DockerSandboxProvider struct {
-	image          string
-	containers     map[string]string // key: "agentID:sessionID", value: container name
-	mu             sync.Mutex
-	availableOnce  sync.Once
-	available      bool
+	image         string
+	containers    map[string]string        // key: "agentID:sessionID", value: container name
+	execTimeouts  map[string]time.Duration // key: "agentID:sessionID", value: docker exec deadline
+	mu            sync.Mutex
+	availableOnce sync.Once
+	available     bool
+}
+
+// resolveExecTimeout converts a SandboxConfig.TimeoutSeconds value into a
+// docker-exec deadline. Non-positive or non-finite values fall back to
+// dockerExecTimeout so a misconfigured session cannot disable the deadline.
+func resolveExecTimeout(seconds float64) time.Duration {
+	if seconds > 0 && !math.IsInf(seconds, 0) && !math.IsNaN(seconds) {
+		return time.Duration(seconds * float64(time.Second))
+	}
+	return dockerExecTimeout
 }
 
 // NewDockerSandboxProvider creates a DockerSandboxProvider with the given base image.
@@ -140,8 +153,9 @@ type DockerSandboxProvider struct {
 // that exercise other code paths — never pay the `docker info` cost.
 func NewDockerSandboxProvider(image string) *DockerSandboxProvider {
 	return &DockerSandboxProvider{
-		image:      image,
-		containers: make(map[string]string),
+		image:        image,
+		containers:   make(map[string]string),
+		execTimeouts: make(map[string]time.Duration),
 	}
 }
 
@@ -232,14 +246,20 @@ func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxCon
 	if p.containers == nil {
 		p.containers = make(map[string]string)
 	}
+	if p.execTimeouts == nil {
+		p.execTimeouts = make(map[string]time.Duration)
+	}
 	// Evict oldest tracked container if at capacity
 	if len(p.containers) >= maxTrackedContainers {
 		for k := range p.containers {
 			delete(p.containers, k)
+			delete(p.execTimeouts, k)
 			break
 		}
 	}
-	p.containers[containerKey(agentID, sessionID)] = name
+	key := containerKey(agentID, sessionID)
+	p.containers[key] = name
+	p.execTimeouts[key] = resolveExecTimeout(config.TimeoutSeconds)
 	p.mu.Unlock()
 
 	return &SessionHandle{
@@ -252,10 +272,16 @@ func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxCon
 // ExecuteCode runs a command inside an existing sandbox session container.
 func (p *DockerSandboxProvider) ExecuteCode(agentID, sessionID, code string) (*ExecutionHandle, error) {
 	p.mu.Lock()
-	name, ok := p.containers[containerKey(agentID, sessionID)]
+	key := containerKey(agentID, sessionID)
+	name, ok := p.containers[key]
+	execTimeout := p.execTimeouts[key]
 	p.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("session %s:%s not found", agentID, sessionID)
+	}
+	// Sessions created before a timeout was tracked fall back to the default.
+	if execTimeout <= 0 {
+		execTimeout = dockerExecTimeout
 	}
 
 	// Same collision concern as sessionID — keep the nanosecond prefix
@@ -263,7 +289,7 @@ func (p *DockerSandboxProvider) ExecuteCode(agentID, sessionID, code string) (*E
 	execID := fmt.Sprintf("exec-%d-%s", time.Now().UnixNano(), randomHex(4))
 	start := time.Now()
 
-	ctx, cancel := context.WithTimeout(context.Background(), dockerExecTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
 	defer cancel()
 	// Avoid shell interpolation: pipe code via stdin instead of sh -c.
 	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", name, "sh")
@@ -278,7 +304,7 @@ func (p *DockerSandboxProvider) ExecuteCode(agentID, sessionID, code string) (*E
 	exitCode := 0
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("docker exec timed out after %s", dockerExecTimeout)
+			return nil, fmt.Errorf("docker exec timed out after %s", execTimeout)
 		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
@@ -316,6 +342,7 @@ func (p *DockerSandboxProvider) DestroySession(agentID, sessionID string) error 
 	name, ok := p.containers[key]
 	if ok {
 		delete(p.containers, key)
+		delete(p.execTimeouts, key)
 	}
 	p.mu.Unlock()
 
