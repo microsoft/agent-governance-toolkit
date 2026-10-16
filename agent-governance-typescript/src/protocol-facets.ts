@@ -169,6 +169,15 @@ function regexExtractSql(rawQuery: string): SqlFacets {
     verb = SQL_KNOWN_VERBS.has(surfaceVerb) ? surfaceVerb : 'UNKNOWN';
   }
 
+  // An unrecognized verb yields no reliable target/tables/functions: the
+  // generic clause regexes (e.g. a bare `FROM`) would otherwise attach
+  // attacker-controlled identifiers to an UNKNOWN statement. Return the
+  // all-empty UNKNOWN facets, matching the documented contract and the
+  // sibling UNKNOWN paths (multi-statement and no-verb-match guards above).
+  if (verb === 'UNKNOWN') {
+    return { ...UNKNOWN_SQL_FACETS };
+  }
+
   const tables = extractTables(query, verb);
   const functions = extractFunctions(query);
   const target = pickTarget(query, verb, tables);
