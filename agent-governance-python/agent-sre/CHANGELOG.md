@@ -71,6 +71,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   just started, scored as high as a spike, and `RogueAgentDetector.assess()`
   rated an agent with a steady baseline as `CRITICAL` and recommended quarantine
   right after each window boundary.
+- `FleetManager.status()` now reports `CRITICAL` when most agents are unhealthy,
+  counting degraded agents as well as unresponsive ones. It only counted
+  unresponsive agents, so a fleet where every agent was degraded (or two of three
+  were degraded and the third unresponsive) was reported as `DEGRADED`.
 
 ## [0.3.0] - 2026-02-19
 
