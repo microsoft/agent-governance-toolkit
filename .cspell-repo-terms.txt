@@ -470,6 +470,7 @@ contentsafety
 contentsource
 contenttype
 contextlib
+contextmanager
 contextvars
 contoso
 conv
@@ -580,7 +581,9 @@ fromlist
 fromtimestamp
 frontmatter
 frozenset
+fsdecode
 fsencode
+fspath
 fullmatch
 gazetted
 gemini
@@ -591,6 +594,7 @@ geofencing
 geomatch
 getattr
 getattribute
+getcwd
 getenv
 gethostname
 getitem
@@ -857,6 +861,7 @@ pathed
 pathext
 pathexts
 pathlib
+pathlike
 pathsep
 pathspec
 pathspecs
@@ -877,6 +882,7 @@ policydefaults
 policydocument
 policyengine
 popen
+popenargs
 popia
 popitem
 popleft
