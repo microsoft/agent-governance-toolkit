@@ -92,6 +92,11 @@ describe('OciManifestAdapter', () => {
       expect(result.manifest.layers[0].mediaType).toBe('application/vnd.ai-card.agent.v1+json');
     });
 
+    it('uses the OCI image-spec manifest media type', () => {
+      const result = adapter.package(SAMPLE_IDENTITY);
+      expect(result.manifest.mediaType).toBe('application/vnd.oci.image.manifest.v1+json');
+    });
+
     it('includes policy layer when rules provided', () => {
       const result = adapter.package(SAMPLE_IDENTITY, SAMPLE_RULES);
       expect(result.manifest.layers).toHaveLength(2);
