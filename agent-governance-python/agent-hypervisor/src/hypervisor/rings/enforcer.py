@@ -94,8 +94,18 @@ RING_CONSTRAINTS: dict[ExecutionRing, ResourceConstraints] = {
 # quoted parts ("...", '...', $'...', $"...") and backslash escapes together with
 # the plain characters around them, so a quoted or escaped space stays inside it.
 # An unterminated quote runs to the end of the command.
+# Quoted parts and backslash escapes outside a redirection are matched as "quoted"
+# so that a "<" or ">" inside them (echo ">", FOO='<' ls, echo \>) is left as it is:
+# the shell reads those as part of a word, not as a redirection. Only a closed quote
+# counts here, so an unterminated quote is handled as before.
 _REDIRECTION = re.compile(
-    r"(?:(?<![^\s;&|()`])\d+|&)?[<>]+[&|]?\s*"
+    r"(?P<quoted>"
+    r"\$'(?:[^'\\]|\\.)*'"
+    r'|\$?"(?:[^"\\]|\\.)*"'
+    r"|'[^']*'"
+    r"|\\."
+    r")"
+    r"|(?:(?<![^\s;&|()`])\d+|&)?[<>]+[&|]?\s*"
     r"(?P<target>(?:"
     r"\$'(?:[^'\\]|\\.)*'?"
     r'|\$?"(?:[^"\\]|\\.)*"?'
@@ -535,8 +545,16 @@ class RingEnforcer:
         # the command, so a target is never taken for the executable. This runs before
         # the quotes are removed, so a quoted or escaped space stays in the target
         # e.g., ">out curl" -> "curl", "2>&1 curl" -> "curl", '>"my file" curl' -> "curl"
-        targets = [match.group("target") for match in _REDIRECTION.finditer(stripped)]
-        normalized = _REDIRECTION.sub(" ", stripped)
+        # A quoted or escaped "<" or ">" is not a redirection, e.g., 'FOO=">" ls' -> "ls"
+        targets: list[str] = []
+
+        def drop_redirection(match: re.Match[str]) -> str:
+            if match.group("quoted") is not None:
+                return match.group()
+            targets.append(match.group("target"))
+            return " "
+
+        normalized = _REDIRECTION.sub(drop_redirection, stripped)
 
         # Skip variable assignments and wrappers that run a later word as the command,
         # e.g., "FOO=x curl" -> "curl", "env -i curl" -> "curl", "nohup curl" -> "curl"

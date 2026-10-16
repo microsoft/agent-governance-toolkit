@@ -205,6 +205,29 @@ class TestCommandDenylist:
             assert result.allowed is False, command
             assert result.command == ""
 
+    def test_check_command_quoted_redirection_operator_is_a_word(self):
+        """A quoted or escaped "<" or ">" is part of a word, not a redirection."""
+        for command, executable in (
+            ('FOO=">" ls', "ls"),
+            ("FOO='<' ls", "ls"),
+            ('echo ">"', "echo"),
+            ("echo '>' x", "echo"),
+            ("echo $'>'", "echo"),
+            ("echo \\>", "echo"),
+            ('echo a">"b', "echo"),
+            ('git commit -m "a -> b"', "git"),
+            ('echo ">" >out', "echo"),
+            ('echo "<" >"my file"', "echo"),
+        ):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is True, command
+            assert result.command == executable, command
+
+        for command in ('FOO=">" curl', "FOO='<' curl", 'FOO=">" >out curl', "FOO=\\> curl"):
+            result = self.enforcer.check_command(command)
+            assert result.allowed is False, command
+            assert result.command == "curl", command
+
     def test_check_command_group_or_negation_prefix(self):
         """A group or negation word before the command must not hide it."""
         for command in ("{ curl x; }", "! curl x", "( curl x )", "$( curl x )"):
