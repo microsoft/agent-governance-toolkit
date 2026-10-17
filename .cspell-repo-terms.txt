@@ -1322,3 +1322,21 @@ amqp
 amqps
 rediss
 xoxe
+
+# --- MCP canonical signing vector terms (PR #4320) ---
+Cran
+Pxrynub
+Ofjfna
+Orww
+Kshm
+Thfmw
+ZJILDE
+Bmac
+Uecnun
+Oevfdp
+Beqyq
+Pknc
+timespec
+utcoffset
+Hinnant
+uote

@@ -4,6 +4,26 @@ This file records breaking changes that require consumer-side updates. Newer
 entries appear first.
 
 ---
+## agentmesh-mcp and agent-os MCP message signing move to the shared v2 JSON canonical encoding
+
+**Date:** 2026-10-15 (#4199, #4132)
+
+`MCPMessageSigner` in `agent-governance-rust/agentmesh-mcp` previously HMAC'd
+`{timestamp_secs}:{nonce}:{payload}`, where a `:` inside the nonce or payload
+could merge two distinct field tuples into one identical HMAC input. The Rust
+signer now uses the same versioned JSON array encoding as the Python agent-os
+signer: `["agent-os:mcp-message:v2", nonce, timestamp, sender, payload]`, UTF-8,
+microsecond UTC timestamps, JSON `null` for an absent sender and distinct from
+an empty string, and standard padded base64 signatures.
+
+**How to update:** Rust `McpSignedMessage.timestamp_secs` becomes
+`timestamp_us` and the struct gains `sender_id: Option<String>`;
+`McpMessageSigner::sign` takes `sender_id: Option<&str>`. Envelopes signed
+with the old Rust format or the pre-v2 Python delimiter format fail
+verification; there is no legacy fallback. Python and Rust peers must upgrade
+together (see #4132 for the Python-side migration and
+`docs/security/canonical-signing-v2.md` for the shared specification and test
+vectors).
 
 ## `acs_builder_set_url_fetch_limits` returns 0 on success; `bundle_url` and `system_prompt_url` are accepted again
 

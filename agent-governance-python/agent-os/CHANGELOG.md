@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **Shared v2 canonical encoding with the Rust signer (#4199)**: the v2 JSON
+  array canonicalization from #4132 is now implemented identically by the
+  Rust `agentmesh-mcp` crate, with a shared cross-SDK HMAC vector table
+  (`tests/test_mcp_signature_cross_sdk.py` here and the Rust vector tests)
+  so each SDK fails the other's tests if either canonical encoder drifts.
 - **Breaking custom-store contract: atomic MCP replay protection**:
   `MCPMessageSigner` verifies signatures before accessing the replay store and
   rechecks freshness under its lock before claiming a nonce. Concurrent
