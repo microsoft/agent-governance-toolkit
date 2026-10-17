@@ -1322,3 +1322,6 @@ amqp
 amqps
 rediss
 xoxe
+# --- agent-mesh retry-effect tests ---
+observedeffect
+recomputable

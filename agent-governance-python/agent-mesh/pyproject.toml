@@ -63,6 +63,10 @@ dev = [
     "agent_hypervisor>=5.0.0,<6.0",
     # TRACE Trust Record emission (ADR-0032)
     "agentrust-trace>=0.5.1,<0.6.0",
+    # Observed-effect records for the retried-call tests: the reference reader
+    # and the corpus members that separate one write, a duplicate write and a
+    # write not yet witnessed (tests/governance/test_trace_retry_effect.py).
+    "agent-evidence-vectors==0.14.0; python_version >= '3.13'",
 ]
 
 [project.urls]

@@ -67,6 +67,8 @@ REGISTERED_PACKAGES = {
     "agent-control-specification", "agent_control_specification",
     "acs-generator", "acs_generator",
     "k8s-agent-sandbox", "k8s_agent_sandbox",
+    # Published on PyPI; the agent-mesh dev extra pins it for the retried-write tests.
+    "agent-evidence-vectors", "agent_evidence_vectors",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",

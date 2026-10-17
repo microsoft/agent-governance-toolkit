@@ -176,3 +176,15 @@ def test_unapproved_or_malformed_npm_alias_is_flagged(tmp_path):
     findings = check_package_json(str(manifest))
     assert len(findings) == 3
     assert all("invalid or unapproved alias" in finding for finding in findings)
+
+
+def test_agent_evidence_vectors_dev_pin_is_registered(tmp_path):
+    pyproject = _write_pyproject(
+        tmp_path,
+        """
+[project.optional-dependencies]
+dev = ["agent-evidence-vectors==0.14.0; python_version >= '3.13'"]
+""",
+    )
+
+    assert check_pyproject_toml(pyproject) == []
