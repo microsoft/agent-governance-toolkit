@@ -148,6 +148,7 @@ def scan(
             risk = scorer.score(agent)
             agent.tags["risk_level"] = risk.level.value
             agent.tags["risk_score"] = str(risk.score)
+    inventory.save()
 
     console.print(
         f"\n[bold]Total: {total_found} agents discovered, {inventory.count} in inventory[/bold]\n"
@@ -235,6 +236,7 @@ def reconcile(storage: str, registry_file: str | None, output: str) -> None:
 
     console.print("\n[bold blue]🔄 Reconciliation[/bold blue]\n")
     shadow_agents = _run_async(reconciler.reconcile())
+    inv.save()
 
     # Score shadow agents
     for shadow in shadow_agents:
