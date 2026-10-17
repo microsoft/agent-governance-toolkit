@@ -240,6 +240,43 @@ class TestCheckRequirements:
         findings = guard.check_requirements(str(req))
         assert any(f.rule == "typosquat" and f.package == "reqeusts" for f in findings)
 
+    @pytest.mark.parametrize(
+        "line, version",
+        [
+            ("requests[security]>=2.28.0", ">=2.28.0"),
+            ("requests[security,socks] >= 2.28.0", ">= 2.28.0"),
+            ("requests (>=2.28.0)", ">=2.28.0"),
+            ("requests[socks] (>=2.28.0,<3)", ">=2.28.0,<3"),
+            ("requests[security]", "unspecified"),
+        ],
+    )
+    def test_extras_and_parenthesized_specifier_keep_package_name(
+        self, guard: SupplyChainGuard, tmp_path: Path, line: str, version: str,
+    ) -> None:
+        req = tmp_path / "requirements.txt"
+        req.write_text(f"{line}\n")
+        findings = guard.check_requirements(str(req))
+        assert [(f.rule, f.package, f.version) for f in findings] == [
+            ("unpinned-version", "requests", version)
+        ]
+
+    @pytest.mark.parametrize("line", ["requests[security]==2.31.0", "requests (==2.31.0)"])
+    def test_extras_and_parenthesized_exact_pin_passes(
+        self, guard: SupplyChainGuard, tmp_path: Path, line: str,
+    ) -> None:
+        req = tmp_path / "requirements.txt"
+        req.write_text(f"{line}\n")
+        assert guard.check_requirements(str(req)) == []
+
+    def test_extras_typosquat_flagged(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        # cspell:ignore reqeusts
+        req = tmp_path / "requirements.txt"
+        req.write_text("reqeusts[socks]==2.31.0\n")
+        findings = guard.check_requirements(str(req))
+        assert any(f.rule == "typosquat" and f.package == "reqeusts" for f in findings)
+
 
 # ---------------------------------------------------------------------------
 # check_pyproject
@@ -283,6 +320,19 @@ class TestCheckPyproject:
         )
         findings = guard.check_pyproject(str(pp))
         assert [(f.rule, f.package) for f in findings] == [("loose-constraint", "requests")]
+
+    def test_extras_keep_package_name(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[project]\nname = "test"\n'
+            'dependencies = [\n'
+            '    "uvicorn[standard]>=0.30.0",\n'
+            ']\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        assert [(f.rule, f.package) for f in findings] == [("loose-constraint", "uvicorn")]
 
     def test_optional_dependencies_checked(
         self, guard: SupplyChainGuard, tmp_path: Path,
@@ -871,5 +921,15 @@ class TestScanLockfileDrift:
         manifest.write_text("requests>=2.28.0,!=2.29.0\n")
         lock = tmp_path / "requirements.lock"
         lock.write_text("requests==2.31.0\n")
+        findings = guard.scan_lockfile_drift(str(manifest), str(lock))
+        assert findings == []
+
+    def test_extras_found_in_lockfile(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        manifest = tmp_path / "requirements.txt"
+        manifest.write_text("requests[security]==2.31.0\nuvicorn[standard] (>=0.30.0)\n")
+        lock = tmp_path / "requirements.lock"
+        lock.write_text("requests==2.31.0\nuvicorn==0.30.0\n")
         findings = guard.scan_lockfile_drift(str(manifest), str(lock))
         assert findings == []

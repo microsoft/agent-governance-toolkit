@@ -198,11 +198,15 @@ def _parse_requirements_line(line: str) -> tuple[str, str] | None:
     # ("pkg>=2.0,!=2.5") stays whole instead of being cut at whichever
     # operator happens to be tried first
     match = _VERSION_OPERATOR.search(line)
-    if match:
-        return line[:match.start()].strip(), line[match.start():].strip()
+    name = line[:match.start()] if match else line
+    version_spec = line[match.start():].strip() if match else ""
 
-    # No version specifier at all
-    return line, ""
+    # PEP 508 also allows a parenthesized specifier ("pkg (>=1.0)") and
+    # extras ("pkg[security]==1.0"); neither is part of the package name
+    if "(" in name:
+        name = name.split("(", 1)[0]
+        version_spec = version_spec.removesuffix(")").strip()
+    return name.split("[", 1)[0].strip(), version_spec
 
 
 # ---------------------------------------------------------------------------
