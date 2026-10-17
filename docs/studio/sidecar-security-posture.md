@@ -1,6 +1,6 @@
 ---
 title: "AGT Studio sidecar security posture"
-last_reviewed: 2026-09-28
+last_reviewed: 2026-10-12
 owner: studio-team
 ---
 
@@ -24,6 +24,23 @@ for a future Studio implementation, and **blocked** means a decision that must
 be resolved by the Studio/Engine API owners and a security-minded maintainer.
 Conformance to the [Epic 0 profile](engine-api-conformance.md) does **not**
 certify sidecar authentication, browser isolation, or workspace authorization.
+
+## Draft implementation evidence (not approval)
+
+The [proposed loopback/save-disabled profile](sidecar.md) for #4281 is a draft
+layer above **unmerged #4170**. It implements exact Host/Origin/fetch-site and
+POST/preflight gates, credential rejection, privacy headers, canonical metadata
+projection, permanent save denial, bounded body/inventory/admission budgets and
+owned-process parsing/replay cancellation. Its Studio tests cover real middleware,
+native replay, clean wheel/plugin installation, actual listener restart, hostile
+requests, persistence snapshots and threshold/descendant-cleanup failures.
+
+This is evidence for review, **not owner/security signoff or shipped behavior**.
+The browser header contract, process/snapshot architecture, additive timeout/body
+status mappings and validation-detail redaction remain proposed for Studio,
+Engine API and security-minded maintainer review. All reviewer checkboxes below
+remain unapproved. Token provisioning, remote transport, authoring/audit/reload
+decisions and events remain blocked/deferred; same-user-process risk remains.
 
 ## Scope and trust boundaries
 
