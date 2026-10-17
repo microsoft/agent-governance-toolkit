@@ -489,6 +489,7 @@ ctypes
 custodied
 cutover
 cybercrimes
+cyclonedx
 dalek
 dargs
 dataclass

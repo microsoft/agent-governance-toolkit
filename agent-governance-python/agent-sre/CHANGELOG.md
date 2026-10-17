@@ -81,6 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as `03`) was parsed as not sampled and forwarded downstream as `00`. Trace
   flags that are not two hex digits now raise `ValueError` like other malformed
   headers (#4334).
+- `AgentSBOM.to_cyclonedx()` now writes component `bom-ref` values in
+  `dependencies[].ref` and `dependsOn`. It wrote the SPDX IDs used internally
+  for relationships (such as `SPDXRef-Package-pydantic-2.4.0`), which match no
+  component, so every dependency in a CycloneDX SBOM was a dangling reference.
 
 ## [0.3.0] - 2026-02-19
 
