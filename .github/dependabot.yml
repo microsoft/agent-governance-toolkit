@@ -61,6 +61,7 @@ updates:
       - "/agent-governance-typescript"
       - "/agent-governance-antigravity-cli"
       - "/agent-governance-codex-cli"
+      - "/agent-governance-studio/web"
     schedule:
       interval: "weekly"
     cooldown:
