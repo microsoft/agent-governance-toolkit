@@ -11,11 +11,30 @@ detecting causal ordering and concurrency between agent operations.
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 
 class CausalViolationError(Exception):
     """Raised when a write would violate causal ordering."""
+
+
+@contextmanager
+def _locked_pair(a: VectorClock, b: VectorClock) -> Iterator[None]:
+    """Hold the locks of both clocks, acquiring a shared lock only once.
+
+    ``threading.Lock`` is not re-entrant, so comparing or merging a clock
+    with itself must not try to take the same lock twice. Distinct clocks
+    are locked in a deterministic order (by ``id()``) to prevent deadlocks.
+    """
+    if a is b:
+        with a._lock:
+            yield
+        return
+    first, second = sorted([a, b], key=id)
+    with first._lock, second._lock:
+        yield
 
 
 @dataclass
@@ -43,13 +62,10 @@ class VectorClock:
 
         Acquires locks on both clocks to get consistent snapshots.
         """
-        # Deterministic lock ordering by id() to prevent deadlocks
-        first, second = sorted([self, other], key=id)
-        with first._lock:
-            with second._lock:
-                merged_clocks = dict(self.clocks)
-                for agent, clock in other.clocks.items():
-                    merged_clocks[agent] = max(merged_clocks.get(agent, 0), clock)
+        with _locked_pair(self, other):
+            merged_clocks = dict(self.clocks)
+            for agent, clock in other.clocks.items():
+                merged_clocks[agent] = max(merged_clocks.get(agent, 0), clock)
         return VectorClock(clocks=merged_clocks)
 
     def happens_before(self, other: VectorClock) -> bool:
@@ -58,19 +74,17 @@ class VectorClock:
         Clock A happens-before clock B iff every component of A is <=
         the corresponding component of B, and at least one is strictly <.
         """
-        first, second = sorted([self, other], key=id)
-        with first._lock:
-            with second._lock:
-                all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
-                at_least_one_less = False
-                for agent in all_agents:
-                    self_val = self.clocks.get(agent, 0)
-                    other_val = other.clocks.get(agent, 0)
-                    if self_val > other_val:
-                        return False
-                    if self_val < other_val:
-                        at_least_one_less = True
-                return at_least_one_less
+        with _locked_pair(self, other):
+            all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
+            at_least_one_less = False
+            for agent in all_agents:
+                self_val = self.clocks.get(agent, 0)
+                other_val = other.clocks.get(agent, 0)
+                if self_val > other_val:
+                    return False
+                if self_val < other_val:
+                    at_least_one_less = True
+            return at_least_one_less
 
     def is_concurrent(self, other: VectorClock) -> bool:
         """Return True if neither clock causally precedes the other."""
@@ -83,8 +97,6 @@ class VectorClock:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VectorClock):
             return False
-        first, second = sorted([self, other], key=id)
-        with first._lock:
-            with second._lock:
-                all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
-                return all(self.clocks.get(a, 0) == other.clocks.get(a, 0) for a in all_agents)
+        with _locked_pair(self, other):
+            all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
+            return all(self.clocks.get(a, 0) == other.clocks.get(a, 0) for a in all_agents)

@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Tests for VectorClock and SessionIsolationManager fixes."""
 
+import threading
+
 from hypervisor.session.isolation import IsolationLevel, SessionIsolationManager
 from hypervisor.session.vector_clock import VectorClock
 
@@ -69,6 +71,42 @@ class TestVectorClockIsConcurrent:
         a.tick("agent1")
         b.tick("agent2")
         assert a.is_concurrent(b)
+
+
+def _call_with_timeout(func, timeout=2.0):
+    """Run ``func`` in a daemon thread so a deadlock fails the test instead of hanging it."""
+    result = {}
+
+    def target():
+        result["value"] = func()
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    assert not thread.is_alive(), "call did not return (deadlock)"
+    return result["value"]
+
+
+class TestVectorClockSelfComparison:
+    """Comparing or merging a clock with itself must not deadlock on its own lock."""
+
+    def test_equal_to_itself(self):
+        a = VectorClock(clocks={"agent1": 2})
+        assert _call_with_timeout(lambda: a == a) is True
+
+    def test_does_not_happen_before_itself(self):
+        a = VectorClock(clocks={"agent1": 2})
+        assert _call_with_timeout(lambda: a.happens_before(a)) is False
+
+    def test_not_concurrent_with_itself(self):
+        a = VectorClock(clocks={"agent1": 2})
+        assert _call_with_timeout(lambda: a.is_concurrent(a)) is False
+
+    def test_merge_with_itself(self):
+        a = VectorClock(clocks={"agent1": 2, "agent2": 1})
+        merged = _call_with_timeout(lambda: a.merge(a))
+        assert merged.clocks == {"agent1": 2, "agent2": 1}
+        assert merged is not a
 
 
 class TestSessionIsolationFailClosed:

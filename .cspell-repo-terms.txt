@@ -470,6 +470,7 @@ contentsafety
 contentsource
 contenttype
 contextlib
+contextmanager
 contextvars
 contoso
 conv
