@@ -649,6 +649,36 @@ class TestCheckTyposquatting:
         finding = strict_guard.check_typosquatting("my-internal-pkg", ecosystem="pypi")
         assert finding is None
 
+    @pytest.mark.parametrize(
+        "name",
+        ["Django", "Flask", "Pillow", "Requests", "scikit_learn", "Scikit.Learn", "azure_identity"],
+    )
+    def test_pypi_spelling_of_popular_package_passes(
+        self, guard: SupplyChainGuard, name: str
+    ) -> None:
+        # PEP 503: PyPI names are case-insensitive and treat -, _ and . alike.
+        assert guard.check_typosquatting(name, ecosystem="pypi") is None
+
+    def test_pypi_typosquat_flagged_regardless_of_case(self, guard: SupplyChainGuard) -> None:
+        finding = guard.check_typosquatting("Reqeusts", ecosystem="pypi")
+        assert finding is not None
+        assert finding.rule == "typosquat"
+        assert finding.package == "Reqeusts"
+
+    def test_known_packages_allowlist_uses_pypi_normalization(self) -> None:
+        # An allowlisted internal name close to a popular one is accepted however it is spelled.
+        guard = SupplyChainGuard(SupplyChainConfig(known_packages={"request-s"}))
+        assert guard.check_typosquatting("request-s", ecosystem="pypi") is None
+        assert guard.check_typosquatting("Request_S", ecosystem="pypi") is None
+
+    def test_requirements_with_canonical_pypi_names_not_flagged(
+        self, guard: SupplyChainGuard, tmp_path: Path
+    ) -> None:
+        req = tmp_path / "requirements.txt"
+        req.write_text("Django==5.0.1\nFlask==3.0.0\nPillow==10.2.0\n", encoding="utf-8")
+        findings = guard.check_requirements(str(req))
+        assert not [f for f in findings if f.rule == "typosquat"]
+
 
 # ---------------------------------------------------------------------------
 # check_freshness

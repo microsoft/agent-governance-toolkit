@@ -181,6 +181,22 @@ def _similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+_PYPI_NAME_SEPARATORS = re.compile(r"[-_.]+")
+
+
+def _normalize_package_name(name: str, ecosystem: str) -> str:
+    """Return the name a registry treats as identical to ``name``.
+
+    PyPI names are case-insensitive and treat runs of ``-``, ``_`` and
+    ``.`` as one separator (PEP 503), so ``Django``, ``scikit_learn`` and
+    ``Flask`` are the same projects as ``django``, ``scikit-learn`` and
+    ``flask``. Other ecosystems are compared as written.
+    """
+    if ecosystem == "pypi":
+        return _PYPI_NAME_SEPARATORS.sub("-", name).lower()
+    return name
+
+
 def _parse_requirements_line(line: str) -> tuple[str, str] | None:
     """Parse a single requirements.txt line into (name, version_spec).
 
@@ -672,18 +688,25 @@ class SupplyChainGuard:
         ecosystem: str = "pypi",
     ) -> SupplyChainFinding | None:
         """Check if package name is suspiciously similar to a popular package."""
-        allowlist = self.config.known_packages or set()
-        if package in allowlist:
+        normalized = _normalize_package_name(package, ecosystem)
+        allowlist = {
+            _normalize_package_name(name, ecosystem)
+            for name in self.config.known_packages or set()
+        }
+        if normalized in allowlist:
             return None
 
-        popular = KNOWN_POPULAR_PACKAGES.get(ecosystem, set())
+        popular = {
+            _normalize_package_name(name, ecosystem)
+            for name in KNOWN_POPULAR_PACKAGES.get(ecosystem, set())
+        }
 
-        if package in popular:
+        if normalized in popular:
             return None
 
         for known in popular:
-            sim = _similarity(package, known)
-            if sim >= self.config.typosquat_threshold and package != known:
+            sim = _similarity(normalized, known)
+            if sim >= self.config.typosquat_threshold and normalized != known:
                 return SupplyChainFinding(
                     package=package,
                     version="*",

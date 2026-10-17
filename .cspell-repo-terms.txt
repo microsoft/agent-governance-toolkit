@@ -951,6 +951,7 @@ removesuffix
 replayable
 repr
 repudiable
+reqeusts
 requireapproval
 reqwest
 resear
