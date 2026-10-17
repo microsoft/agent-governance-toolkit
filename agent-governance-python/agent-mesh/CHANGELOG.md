@@ -167,6 +167,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pass, so they never decayed at all, against spec §12.1. The clock now starts
   at the first decay pass that sees the agent, so a new agent still does not
   decay on that first pass.
+- The `agentmesh.marketplace` fallback installers (`installer.py` and
+  `_marketplace_impl.py`, used when `agent_marketplace` is not installed) now
+  parse plugin dependency specifiers the way `agent_marketplace` does. They
+  split at the first `>=`, `==`, `<=`, `>` or `<` they found, so `dep>=1.0.0`
+  was installed as exactly `1.0.0`, `dep>=1.0,<2.0` failed with
+  `Version not found: dep@1.0,<2.0`, and `!=` or `~=` became part of the plugin
+  name. Only an `==` clause pins a version now; other specifiers resolve the
+  latest registered version.
 
 ### Changed
 
