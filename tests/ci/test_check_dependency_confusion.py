@@ -158,6 +158,14 @@ def test_pre_commit_extension_filter_includes_shell() -> None:
     assert '".bash"' in src
 
 
+def test_studio_manifest_dependencies_are_registered() -> None:
+    manifest = SCRIPT_PATH.parents[1] / "agent-governance-studio" / "web" / "package.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert data["dependencies"]
+    assert data["devDependencies"]
+    assert check_dep_conf.check_file(str(manifest)) == []
+
+
 @pytest.mark.parametrize("ext", [".py", ".md", ".txt", ".ipynb"])
 def test_pre_commit_extension_filter_keeps_existing(ext: str) -> None:
     src = SCRIPT_PATH.read_text(encoding="utf-8")

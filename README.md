@@ -254,6 +254,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | [**Agent Marketplace**](agent-governance-python/agent-marketplace/) | Plugin governance and trust scoring |
 | [**Agent Lightning**](agent-governance-python/agent-lightning/) | RL training governance with violation penalties |
 | [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, in-memory commitment tracking, command denylist enforcement |
+| [**AGT Studio (scaffold)**](agent-governance-studio/) | Unified UI package and frontend toolchain; sidecar, launcher, and product UI are not yet implemented |
 
 ### Additional Capabilities
 
