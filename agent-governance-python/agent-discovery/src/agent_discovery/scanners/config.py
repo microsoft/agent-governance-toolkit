@@ -151,7 +151,7 @@ class ConfigScanner(BaseScanner):
 
             # Check for known config files
             for filename in filenames:
-                rel_path = str(rel_dir / filename)
+                rel_path = (rel_dir / filename).as_posix()
                 for config in CONFIG_PATTERNS:
                     if filename == config["glob"] or rel_path.endswith(config["glob"]):
                         full_path = Path(dirpath) / filename
@@ -182,6 +182,7 @@ class ConfigScanner(BaseScanner):
             for filename in filenames:
                 if filename in ("Dockerfile", "docker-compose.yml", "docker-compose.yaml"):
                     full_path = Path(dirpath) / filename
+                    rel_path = (rel_dir / filename).as_posix()
                     try:
                         content = full_path.read_text(encoding="utf-8", errors="replace")[
                             :MAX_FILE_READ_BYTES
@@ -197,7 +198,7 @@ class ConfigScanner(BaseScanner):
 
                                 agent = DiscoveredAgent(
                                     fingerprint=fingerprint,
-                                    name=f"Containerized agent at {rel_dir / filename}",
+                                    name=f"Containerized agent at {rel_path}",
                                     agent_type=match.group(0).lower(),
                                     description=(
                                         f"Agent reference in {filename}: '{match.group(0)}'"
@@ -205,7 +206,7 @@ class ConfigScanner(BaseScanner):
                                     merge_keys=merge_keys,
                                     tags={
                                         "root": str(root),
-                                        "docker_file": str(rel_dir / filename),
+                                        "docker_file": rel_path,
                                     },
                                 )
                                 agent.add_evidence(
