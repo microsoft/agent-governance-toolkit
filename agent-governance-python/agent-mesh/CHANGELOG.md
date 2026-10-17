@@ -116,6 +116,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `MemoryStorageProvider` now expires keys set with `ttl_seconds`. It recorded
+  the expiry time but never checked it, so `get`, `exists`, `mget`, `keys`,
+  `scan` and the counters kept returning the key forever, unlike
+  `RedisStorageProvider`. As in Redis, `set` without a TTL, `mset` and `delete`
+  now also clear a key's previous TTL.
 - **Compliance reports no longer count unassessed controls as met.**
   `ComplianceEngine.generate_report()` derived `controls_met` as
   `total_controls - violated`, so a framework that `check_compliance()` never

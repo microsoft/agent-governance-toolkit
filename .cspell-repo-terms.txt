@@ -744,6 +744,7 @@ maxlen
 maxsplit
 memswap
 metavar
+mget
 mgmt
 mhabuomar
 microkernel
@@ -767,6 +768,7 @@ monkeypatched
 monkeypatching
 mpatches
 mpsc
+mset
 msinternal
 msvc
 multibyte
@@ -1091,6 +1093,7 @@ traceid
 tracemalloc
 traceparent
 tsfn
+ttls
 typeerror
 typer
 typosquat
