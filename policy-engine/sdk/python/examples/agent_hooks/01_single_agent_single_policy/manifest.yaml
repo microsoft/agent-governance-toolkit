@@ -1,0 +1,16 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "acs-single-agent-single-policy"
+extends: []
+policies:
+  output_guard:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.single_agent.verdict
+intervention_points:
+  output:
+    policy_target: "$.response.content"
+    policy_target_kind: assistant_output
+    policy:
+      id: output_guard
+      query: data.agent_control_specification.single_agent.output_verdict
