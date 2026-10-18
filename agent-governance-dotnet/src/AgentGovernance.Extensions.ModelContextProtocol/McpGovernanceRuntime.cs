@@ -127,7 +127,7 @@ internal sealed class McpGovernanceRuntime
             if (!IsSupportedAgentDid(resolved))
             {
                 agentId = string.Empty;
-                reason = "The authenticated principal's identifier is not an AgentMesh DID. Configure AgentIdResolver to map authenticated principals to a DID (did:mesh:, did:agentmesh: or did:mcp:).";
+                reason = "The authenticated agent identifier is not a DID; AgentIdResolver must return a did:mesh:, did:agentmesh: or did:mcp: identifier.";
                 return false;
             }
 

@@ -273,6 +273,7 @@ public sealed class McpGovernanceExtensionsTests
             File.Delete(policyPath);
         }
     }
+
     [Fact]
     public async Task WithGovernance_DeniesAuthenticatedPrincipal_WhoseIdentifierIsNotADid()
     {
@@ -310,7 +311,7 @@ public sealed class McpGovernanceExtensionsTests
             var result = await tool.InvokeAsync(context);
             var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
             Assert.True(result.IsError);
-            Assert.Contains("not an AgentMesh DID", text.Text, StringComparison.Ordinal);
+            Assert.Contains("not a DID", text.Text, StringComparison.Ordinal);
             Assert.Contains("AgentIdResolver", text.Text, StringComparison.Ordinal);
         }
         finally
