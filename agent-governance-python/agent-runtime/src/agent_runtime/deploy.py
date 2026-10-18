@@ -65,6 +65,33 @@ def _validate_agent_id(agent_id: str) -> str:
     return agent_id
 
 
+# RFC-1123 label shape that Kubernetes requires of pod names (and that the
+# `agt.agent-id` label value needs at its end): lowercase alphanumerics and
+# dashes, starting and ending with an alphanumeric.
+_POD_NAME_PATTERN = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+
+
+def _pod_name(agent_id: str) -> str:
+    """Return the Kubernetes pod name for ``agent_id``.
+
+    ``_validate_agent_id`` accepts uppercase letters, underscores and a
+    trailing dash, but Kubernetes rejects all three in a pod name. Uppercase
+    is lowercased here; an underscore or a trailing dash cannot be mapped
+    without risking a collision with another id, so it is rejected.
+
+    Raises:
+        ValueError: if ``agent_id`` is invalid or cannot form a pod name.
+    """
+    pod_name = f"agt-{_validate_agent_id(agent_id).lower()}"
+    if not _POD_NAME_PATTERN.match(pod_name):
+        raise ValueError(
+            f"invalid agent_id {agent_id!r} for Kubernetes: the pod name "
+            f"{pod_name!r} must contain only alphanumerics and dashes and "
+            "end with an alphanumeric"
+        )
+    return pod_name
+
+
 class DeploymentStatus(str, Enum):
     PENDING = "pending"
     DEPLOYING = "deploying"
@@ -268,7 +295,7 @@ class KubernetesDeployer:
             "apiVersion": "v1",
             "kind": "Pod",
             "metadata": {
-                "name": f"agt-{agent_id}",
+                "name": _pod_name(agent_id),
                 "namespace": self._namespace,
                 "labels": {
                     "app.kubernetes.io/name": "agent-governance",
@@ -317,13 +344,13 @@ class KubernetesDeployer:
         }
 
     def deploy(self, agent_id: str, image: str, config: GovernanceConfig, **kwargs: Any) -> DeploymentResult:
-        agent_id = _validate_agent_id(agent_id)
+        pod_name = _pod_name(agent_id)
         manifest = self._build_pod_manifest(agent_id, image, config)
         manifest_json = json.dumps(manifest)
         try:
             # Ensure namespace
             self._run(["create", "namespace", self._namespace], check=False)
-            fd, tmp_path = tempfile.mkstemp(prefix=f"agt-{agent_id}-", suffix=".json")
+            fd, tmp_path = tempfile.mkstemp(prefix=f"{pod_name}-", suffix=".json")
             manifest_path = Path(tmp_path)
             try:
                 os.close(fd)
@@ -346,9 +373,9 @@ class KubernetesDeployer:
             )
 
     def stop(self, agent_id: str) -> DeploymentResult:
-        agent_id = _validate_agent_id(agent_id)
+        pod_name = _pod_name(agent_id)
         try:
-            self._run(["delete", "pod", f"agt-{agent_id}", "-n", self._namespace])
+            self._run(["delete", "pod", pod_name, "-n", self._namespace])
             return DeploymentResult(
                 status=DeploymentStatus.TERMINATED,
                 target="kubernetes",
@@ -363,10 +390,10 @@ class KubernetesDeployer:
             )
 
     def status(self, agent_id: str) -> DeploymentResult:
-        agent_id = _validate_agent_id(agent_id)
+        pod_name = _pod_name(agent_id)
         try:
             result = self._run([
-                "get", "pod", f"agt-{agent_id}",
+                "get", "pod", pod_name,
                 "-n", self._namespace,
                 "-o", "jsonpath={.status.phase}",
             ])
@@ -390,10 +417,10 @@ class KubernetesDeployer:
             )
 
     def logs(self, agent_id: str, tail: int = 100) -> str:
-        agent_id = _validate_agent_id(agent_id)
+        pod_name = _pod_name(agent_id)
         try:
             result = self._run([
-                "logs", f"agt-{agent_id}",
+                "logs", pod_name,
                 "-n", self._namespace,
                 "--tail", str(tail),
             ])
