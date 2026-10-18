@@ -3,6 +3,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using AgentGovernance.Mcp;
+using AgentGovernance.Trust;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Microsoft.Extensions.Options;
@@ -123,6 +124,13 @@ internal sealed class McpGovernanceRuntime
         var resolved = TryGetAuthenticatedAgentId(context.User);
         if (!string.IsNullOrWhiteSpace(resolved))
         {
+            if (!IsSupportedAgentDid(resolved))
+            {
+                agentId = string.Empty;
+                reason = "The authenticated agent identifier is not a DID; AgentIdResolver must return a did:mesh:, did:agentmesh: or did:mcp: identifier.";
+                return false;
+            }
+
             agentId = resolved;
             reason = null;
             return true;
@@ -163,6 +171,14 @@ internal sealed class McpGovernanceRuntime
         return principal.FindFirst("agent_id")?.Value
             ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? principal.Identity?.Name;
+    }
+
+    private static bool IsSupportedAgentDid(string agentId)
+    {
+        var trimmed = agentId.Trim();
+        return trimmed.StartsWith(AgentIdentity.CanonicalDidPrefix, StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith(AgentIdentity.LegacyDidPrefix, StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith(AgentIdentity.McpDidPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static Dictionary<string, object>? ConvertArguments(IDictionary<string, JsonElement>? arguments)
