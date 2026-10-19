@@ -228,7 +228,7 @@ class GovernanceEvent:
         """Serialize as an Open Cybersecurity Schema Framework (OCSF v1.3.0) record.
 
         Translates this governance event envelope into standard OCSF schema
-        (e.g. Class 6003: API Activity, Class 2001: Security Finding, Class 3002:
+        (e.g. Class 6003: API Activity, Class 2004: Detection Finding, Class 3003:
         Authorize Session), preserving trace correlation identifiers (traceid,
         spanid) and security metadata for direct ingestion into OCSF-native SIEMs.
 

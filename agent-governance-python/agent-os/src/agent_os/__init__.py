@@ -307,6 +307,7 @@ from agent_os.event_sink import (
     StdoutGovernanceSink,
 )
 from agent_os.ocsf import (
+    OCSF_CLASS_DETECTION_FINDING,
     OCSFGovernanceSink,
     cloudevent_to_ocsf,
     governance_event_to_ocsf,
@@ -475,6 +476,7 @@ __all__ = [
     "StdoutGovernanceSink",
     "OTLPGovernanceSink",
     "OCSFGovernanceSink",
+    "OCSF_CLASS_DETECTION_FINDING",
     "SinkExportResult",
     "AuditBackendSinkAdapter",
     "cloudevent_to_ocsf",
