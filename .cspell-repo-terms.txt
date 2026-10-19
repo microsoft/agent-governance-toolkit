@@ -375,6 +375,7 @@ artefacts
 arun
 asctime
 asdict
+askpass
 asname
 aspnet
 astimezone
@@ -566,6 +567,7 @@ finalizer
 findall
 finditer
 findtext
+findutils
 flatbuffer
 flate
 flowise
@@ -623,6 +625,7 @@ healthz
 helpdesk
 hexdigest
 hexdigit
+hhost
 hitl
 hkdf
 hostnames
@@ -842,6 +845,7 @@ openAPIV3Schema
 opencode
 openpolicyagent
 openshell
+oprtx
 organisation
 organisational
 organisations
@@ -893,6 +897,7 @@ prependpath
 pretool
 privatelink
 processcontainer
+procs
 promptdefense
 promptinjectiondetector
 proofblob
@@ -1138,6 +1143,7 @@ urlopen
 urlparse
 urlsafe
 urlunparse
+uroot
 usemanagedidentity
 userinfo
 usize

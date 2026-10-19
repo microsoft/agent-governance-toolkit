@@ -165,30 +165,38 @@ class _WrapperSyntax:
     Attributes:
         flags: Short options without an argument.
         with_argument: Short options that take an argument.
+        optional_argument: Short options whose argument, if any, is attached to
+            them (``xargs -l1``).
         long_options: Long option names, mapped to 0 (no argument), 1 (required
             argument) or 2 (optional argument, only when attached with "=").
         no_command: Options after which the wrapper runs no command (e.g. "--help").
         unsupported: Options whose effect on the command cannot be checked.
         operands: Operands read before the command (the duration of ``timeout``).
         assignments: Whether ``NAME=VALUE`` words before the command are read
-            (``env``), including a lone "-" right after the options.
+            (``env``, ``sudo``), including a lone "-" right after the options.
+        interleaved_assignments: Whether ``NAME=VALUE`` words can also come
+            between the options (``sudo``). Such a word does not start with "/"
+            or "=".
         numeric_options: Whether "-N", "--N" and "-+N" set a value (``nice``).
     """
 
     flags: str = ""
     with_argument: str = ""
+    optional_argument: str = ""
     long_options: dict[str, int] = field(default_factory=dict)
     no_command: frozenset[str] = frozenset({"--help", "--version"})
     unsupported: frozenset[str] = frozenset()
     operands: int = 0
     assignments: bool = False
+    interleaved_assignments: bool = False
     numeric_options: bool = False
 
 
 _HELP_AND_VERSION = {"help": 0, "version": 0}
 
 # Commands that run the command named by a later word. The option tables follow
-# GNU coreutils and GNU time, and the bash builtins and the "time" keyword.
+# GNU coreutils, GNU time, GNU findutils xargs, sudo and OpenBSD doas, and the
+# bash builtins and the "time" keyword.
 _WRAPPERS: dict[str, _WrapperSyntax] = {
     "builtin": _WrapperSyntax(long_options={"help": 0}),
     "command": _WrapperSyntax(
@@ -214,6 +222,15 @@ _WRAPPERS: dict[str, _WrapperSyntax] = {
         unsupported=frozenset({"-S", "--split-string"}),
         assignments=True,
     ),
+    "doas": _WrapperSyntax(
+        flags="Lns",
+        with_argument="aCu",
+        long_options={},
+        # -L and -C exit without running the command
+        no_command=frozenset({"-L", "-C"}),
+        # -s runs a shell instead of a command
+        unsupported=frozenset({"-s"}),
+    ),
     "exec": _WrapperSyntax(flags="cl", with_argument="a", long_options={"help": 0}),
     "nice": _WrapperSyntax(
         with_argument="n",
@@ -221,6 +238,65 @@ _WRAPPERS: dict[str, _WrapperSyntax] = {
         numeric_options=True,
     ),
     "nohup": _WrapperSyntax(long_options=_HELP_AND_VERSION),
+    "sudo": _WrapperSyntax(
+        flags="ABbEeHiKklNnPSsVv",
+        with_argument="aCcDgpRrTtUu",
+        long_options={
+            "askpass": 0,
+            "auth-type": 1,
+            "background": 0,
+            "bell": 0,
+            "close-from": 1,
+            "login-class": 1,
+            "chdir": 1,
+            "preserve-env": 2,
+            "edit": 0,
+            "group": 1,
+            "set-home": 0,
+            "host": 1,
+            "login": 0,
+            "remove-timestamp": 0,
+            "reset-timestamp": 0,
+            "list": 0,
+            "no-update": 0,
+            "non-interactive": 0,
+            "preserve-groups": 0,
+            "prompt": 1,
+            "chroot": 1,
+            "role": 1,
+            "stdin": 0,
+            "shell": 0,
+            "type": 1,
+            "command-timeout": 1,
+            "other-user": 1,
+            "user": 1,
+            "validate": 0,
+            **_HELP_AND_VERSION,
+        },
+        # Editing files, listing privileges, validating or removing the cached
+        # credentials and printing the version run no command
+        no_command=frozenset(
+            {
+                "--help",
+                "--version",
+                "-V",
+                "-e",
+                "--edit",
+                "-l",
+                "--list",
+                "-v",
+                "--validate",
+                "-K",
+                "--remove-timestamp",
+            }
+        ),
+        # -i and -s run a shell, which reads the command words again, and -h is
+        # either --help or --host with an attached or a following argument
+        unsupported=frozenset({"-i", "--login", "-s", "--shell", "-h"}),
+        assignments=True,
+        # sudo reads an environment word and then resumes reading options
+        interleaved_assignments=True,
+    ),
     "stdbuf": _WrapperSyntax(
         with_argument="ioe",
         long_options={"input": 1, "output": 1, "error": 1, **_HELP_AND_VERSION},
@@ -251,6 +327,30 @@ _WRAPPERS: dict[str, _WrapperSyntax] = {
             **_HELP_AND_VERSION,
         },
         operands=1,
+    ),
+    "xargs": _WrapperSyntax(
+        flags="0oprtx",
+        with_argument="aEILnsPd",
+        optional_argument="eil",
+        long_options={
+            "null": 0,
+            "arg-file": 1,
+            "delimiter": 1,
+            "eof": 2,
+            "replace": 2,
+            "max-lines": 2,
+            "max-args": 1,
+            "open-tty": 0,
+            "interactive": 0,
+            "no-run-if-empty": 0,
+            "max-chars": 1,
+            "verbose": 0,
+            "show-limits": 0,
+            "exit": 0,
+            "max-procs": 1,
+            "process-slot-var": 1,
+            **_HELP_AND_VERSION,
+        },
     ),
 }
 
@@ -299,6 +399,8 @@ def _wrapped_command_index(words: list[str | None], i: int, syntax: _WrapperSynt
                     return end
                 if letter in syntax.flags:
                     continue
+                if letter in syntax.optional_argument:
+                    break
                 if letter not in syntax.with_argument:
                     return None
                 # The rest of the word is the argument, or else the next word is
@@ -307,6 +409,9 @@ def _wrapped_command_index(words: list[str | None], i: int, syntax: _WrapperSynt
                     if i == end or words[i] is None:
                         return None
                 break
+            i += 1
+            continue
+        if syntax.interleaved_assignments and "=" in arg and arg[0] not in "/=":
             i += 1
             continue
         break
@@ -513,8 +618,9 @@ class RingEnforcer:
         against the base command name (the first command the shell would run).
         Variable assignments before it and wrappers that run it (``env``, ``exec``,
         ``nohup``, ``nice``, ``timeout``, ``stdbuf``, ``time``, ``command``,
-        ``builtin``) are skipped, and a wrapper whose options cannot be read is
-        denied. Matching is case-insensitive to prevent bypasses via case variation.
+        ``builtin``, ``sudo``, ``doas``, ``xargs``) are skipped, and a wrapper whose
+        options cannot be read is denied. Matching is case-insensitive to prevent
+        bypasses via case variation.
 
         Args:
             command: The command to check (e.g., "curl", "curl -X POST", "python3").

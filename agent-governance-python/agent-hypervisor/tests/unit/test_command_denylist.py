@@ -319,6 +319,37 @@ class TestCommandDenylist:
             "! env curl",
             "$(env curl)",
             "env >out curl",
+            "sudo curl",
+            "sudo -u root curl",
+            "sudo -uroot -E curl",
+            "sudo -nH -g wheel -D /tmp curl",
+            "sudo --user=root --preserve-env=PATH curl",
+            "sudo --preserve-env curl",
+            "sudo --us root curl",
+            "sudo -k curl",
+            "sudo FOO=1 'BAR=a b' curl",
+            # sudo reads options again after an environment word
+            "sudo FOO=1 -u root curl",
+            "sudo FOO=1 -- curl",
+            "sudo -u root FOO=1 -E curl",
+            "sudo -- curl",
+            "/usr/bin/sudo curl",
+            "doas curl",
+            "doas -u root curl",
+            "doas -nu root curl",
+            "xargs curl",
+            "xargs -n1 curl",
+            "xargs -0 -I{} curl {}",
+            "xargs -i curl",
+            "xargs -i{} curl {}",
+            "xargs -l1 curl",
+            "xargs -e curl",
+            "xargs --max-lines=2 curl",
+            "xargs --replace curl",
+            "xargs -P 4 -n 1 -a urls.txt curl",
+            "xargs -- curl",
+            "nice sudo xargs env curl",
+            "sudo -u root timeout 5 curl",
         ):
             result = self.enforcer.check_command(command)
             assert result.allowed is False, command
@@ -335,6 +366,14 @@ class TestCommandDenylist:
             ("stdbuf -oL grep x", "grep"),
             # nohup runs the program named "FOO=x", not an assignment
             ("nohup FOO=x curl", "FOO=x"),
+            ("sudo apt-get update", "apt-get"),
+            ("sudo -u www-data ls /var/www", "ls"),
+            ("sudo FOO=1 -u root ls", "ls"),
+            ("doas -u root ls", "ls"),
+            ("xargs grep -l x", "grep"),
+            ("xargs -r -n 1 rm", "rm"),
+            # xargs reads its own input, so "echo" is still the first command run
+            ("echo x | xargs curl", "echo"),
         ):
             result = self.enforcer.check_command(command)
             assert result.allowed is True, command
@@ -353,6 +392,21 @@ class TestCommandDenylist:
             ("command -V curl", "command"),
             ("nohup --help", "nohup"),
             ("env --version curl", "env"),
+            ("sudo", "sudo"),
+            ("sudo -k", "sudo"),
+            ("sudo -v", "sudo"),
+            ("sudo -l curl", "sudo"),
+            ("sudo -ll", "sudo"),
+            ("sudo --list -U alice", "sudo"),
+            ("sudo -e /etc/hosts", "sudo"),
+            ("sudo -K", "sudo"),
+            ("sudo -V", "sudo"),
+            ("sudo --help", "sudo"),
+            ("doas -L", "doas"),
+            ("doas -C /etc/doas.conf curl", "doas"),
+            ("xargs", "xargs"),
+            ("xargs -r", "xargs"),
+            ("xargs --help", "xargs"),
         ):
             result = self.enforcer.check_command(command)
             assert result.allowed is True, command
@@ -376,6 +430,22 @@ class TestCommandDenylist:
             "stdbuf -x curl",
             "command -x curl",
             "env --=x curl",
+            # A shell reads the command words again (sudo -s curl runs "$SHELL -c curl")
+            "sudo -s",
+            "sudo -s curl",
+            "sudo -i curl",
+            "sudo --login curl",
+            "sudo -h",
+            "sudo -hhost curl",
+            "sudo -u",
+            "sudo --user",
+            "sudo -x curl",
+            "doas -s",
+            "doas -u",
+            "doas --help",
+            "xargs -Z curl",
+            "xargs -n",
+            "xargs --max curl",
         ):
             result = self.enforcer.check_command(command)
             assert result.allowed is False, command
