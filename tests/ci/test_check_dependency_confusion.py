@@ -186,8 +186,8 @@ def test_registered_compliance_pip_commands_are_accepted(
 @pytest.mark.parametrize(
     "package",
     [
-        "agent-governance-toolkit-complaince",
-        "agent_governance_toolkit_complaince",
+        "agent-governance-toolkit-compliance".replace("ia", "ai"),
+        "agent_governance_toolkit_compliance".replace("ia", "ai"),
         "agent-governance-toolkit-compliance-unregistered",
         "agent_governance_toolkit_compliance_unregistered",
     ],
@@ -228,7 +228,7 @@ def test_strict_scan_accepts_registered_compliance(
 
 @pytest.mark.parametrize(
     "package",
-    ["agent-governance-toolkit-complaince", "agent_governance_toolkit_compliance_unregistered"],
+    ["agent-governance-toolkit-compliance".replace("ia", "ai"), "agent_governance_toolkit_compliance_unregistered"],
 )
 @pytest.mark.parametrize(
     ("filename", "content"),

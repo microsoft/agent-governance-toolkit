@@ -40,7 +40,7 @@ REGISTERED_PACKAGES = {
     "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
     "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
     "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
-    # Compliance: published 5.0.0 verified against PyPI; hosts the agt CLI.
+    # Compliance: PyPI registration verified; hosts the agt CLI.
     "agent-governance-toolkit-compliance", "agent_governance_toolkit_compliance",
     # Core packages (on PyPI) — both hyphen and underscore variants
     "agent-os-kernel", "agent_os_kernel",
