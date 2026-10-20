@@ -65,7 +65,7 @@ jobs:
           persist-credentials: false
 
       - name: Generate base SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           path: base
           format: spdx-json
@@ -74,7 +74,7 @@ jobs:
           upload-release-assets: false
 
       - name: Generate head SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           path: head
           format: spdx-json
@@ -87,7 +87,7 @@ jobs:
         # companion workflow re-derives PR identity from the workflow_run's
         # head SHA via the GitHub API, so nothing in this artifact is trusted
         # for routing or identity purposes.
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom-diff-inputs
           path: |

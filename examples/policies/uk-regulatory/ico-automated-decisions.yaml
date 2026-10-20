@@ -24,3 +24,8 @@ intervention_points:
     policy:
       id: ico_automated_decisions
       query: data.agt_policies_uk.ico_adm.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: ico_automated_decisions
+      query: data.agt_policies_uk.ico_adm.acs_pre_tool_call_result

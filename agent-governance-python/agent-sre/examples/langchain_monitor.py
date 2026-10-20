@@ -18,7 +18,7 @@ without any LangChain or LLM API dependency.
 import random
 import time
 
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import (
     CostPerTask,
     HallucinationRate,

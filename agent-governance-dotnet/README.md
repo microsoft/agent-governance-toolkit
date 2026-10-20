@@ -554,6 +554,32 @@ var results = detector.DetectBatch(new[] { "safe query", "ignore instructions", 
 
 When enabled via `GovernanceOptions.EnablePromptInjectionDetection`, injection checks run automatically before policy evaluation in the middleware pipeline.
 
+### Healthcare Identifier Detection
+
+`HealthcareIdentifierDetector` provides a separate, non-mutating detector for
+context-labeled MRNs, NPIs, and health-plan/member/policy identifiers:
+
+```csharp
+using AgentGovernance.Security;
+
+const string text = "Patient MRN: A123456789; Provider NPI: 1234567893";
+foreach (var match in HealthcareIdentifierDetector.Find(text))
+{
+    var value = text[match.Start..match.End];
+    Console.WriteLine($"{match.Kind}: {value}");
+}
+```
+
+Supported cues are `MRN`/`medical record`, `NPI`/`provider ID`, and
+`HPID`/`health plan` (with or without `ID`)/`member ID`/`member identification`/
+`policy ID`. MRNs are limited to 6-12 ASCII letters or digits and health-plan
+identifiers to 8-15; both must contain a digit. Letter-initial values require a
+separator after the cue, while digits-only values may follow immediately. NPIs
+must be 10 digits with a valid 80840-prefixed Luhn check digit. NPIs identify
+providers and are not inherently PHI. This API detects only context-cued
+patterns; it does not classify or redact data, verify NPI issuance, identify
+every healthcare identifier, or establish HIPAA/SOC 2 compliance.
+
 ### Prompt Defense Evaluator
 
 Pre-deployment prompt auditing for the 12 deterministic defense vectors used by the Python prompt-defense reference:

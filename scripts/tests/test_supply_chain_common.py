@@ -19,7 +19,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import _supply_chain_common as common  # noqa: E402
 
-
 # --------------------------- is_safe_version / is_safe_name ---------------------------
 
 @pytest.mark.parametrize(
@@ -67,6 +66,109 @@ def test_is_safe_version(v, expected):
 )
 def test_is_safe_name(n, expected):
     assert common.is_safe_name(n) == expected
+
+
+@pytest.mark.parametrize("alias,spec,target,version", [
+    ("@typescript/native", "npm:typescript@7.0.2", "typescript", "7.0.2"),
+    ("typescript", "npm:@typescript/typescript6@6.0.2", "@typescript/typescript6", "6.0.2"),
+])
+def test_approved_npm_manifest_aliases(alias, spec, target, version):
+    assert common.resolve_npm_manifest_pin(alias, spec) == (target, version)
+
+
+@pytest.mark.parametrize("alias,spec", [
+    ("@typescript/native", "npm:evil-typescript@7.0.2"),
+    ("@typescript/native", "npm:typescript@^7.0.2"),
+    ("@typescript/native", "npm:typescript@latest"),
+    ("@typescript/native", "npm:typescript@7.0.2/../evil"),
+    ("@typescript/native", "npm:@bad/../../evil@7.0.2"),
+    ("@unapproved/native", "npm:typescript@7.0.2"),
+    ("typescript", "npm:typescript@6.0.2"),
+])
+def test_npm_manifest_alias_rejects_unapproved_or_non_exact(alias, spec):
+    with pytest.raises(ValueError):
+        common.resolve_npm_manifest_pin(alias, spec)
+
+
+def test_lockfile_alias_resolves_transitive_range_with_canonical_tarball():
+    packages = {
+        "": {"devDependencies": {"@typescript/native": "npm:typescript@7.0.2"}},
+        "node_modules/typescript": {"dependencies": {"@typescript/old": "npm:typescript@^6"}},
+    }
+    declarations = common.npm_alias_declarations(packages)
+    info = {
+        "name": "typescript",
+        "version": "6.0.3",
+        "resolved": "https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz",
+    }
+    assert common.resolve_npm_lockfile_name("@typescript/old", info, declarations) == "typescript"
+
+
+def test_established_jest_transitive_alias_is_approved():
+    packages = {
+        "node_modules/jest-haste-map": {
+            "dependencies": {"@jest/react-is-18": "npm:react-is@^18.3.1"},
+        },
+    }
+    declarations = common.npm_alias_declarations(packages)
+    info = {
+        "name": "react-is", "version": "18.3.1",
+        "resolved": "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz",
+    }
+    assert common.resolve_npm_lockfile_name("@jest/react-is-18", info, declarations) == "react-is"
+
+
+@pytest.mark.parametrize("parent,alias,spec", [
+    ("node_modules/parent", "lodash", "npm:evil@1.0.0"),
+    ("node_modules/parent", "@typescript/old", "npm:evil@1.0.0"),
+    ("", "@typescript/native", "npm:evil@7.0.2"),
+])
+def test_lockfile_declarations_reject_unapproved_aliases(parent, alias, spec):
+    with pytest.raises(ValueError, match="unapproved npm lockfile alias"):
+        common.npm_alias_declarations({parent: {"dependencies": {alias: spec}}})
+
+
+@pytest.mark.parametrize("info", [
+    {"name": "evil", "version": "7.0.2", "resolved": "https://registry.npmjs.org/evil/-/evil-7.0.2.tgz"},
+    {"name": "typescript", "version": "7.0.2", "resolved": "https://evil.example.com/typescript.tgz"},
+    {"name": "typescript", "version": "7.0.2", "resolved": "https://registry.npmjs.org/typescript/-/typescript-7.0.1.tgz"},
+    {"name": ["typescript"], "version": "7.0.2", "resolved": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz"},
+    {"version": "7.0.2", "resolved": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz"},
+])
+def test_lockfile_alias_rejects_false_provenance(info):
+    declarations = {"@typescript/native": {("typescript", "7.0.2", True)}}
+    with pytest.raises(ValueError):
+        common.resolve_npm_lockfile_name("@typescript/native", info, declarations)
+
+
+def test_lockfile_alias_rejects_malformed_or_ambiguous_declarations():
+    with pytest.raises(ValueError):
+        common.npm_alias_declarations({"": {"dependencies": {"@typescript/native": "npm:typescript@7.0.2/../x"}}})
+    info = {
+        "name": "typescript", "version": "7.0.2",
+        "resolved": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz",
+    }
+    with pytest.raises(ValueError):
+        common.resolve_npm_lockfile_name(
+            "@typescript/native", info, {"@typescript/native": {
+                ("typescript", "7.0.2", True), ("evil", "7.0.2", False),
+            }}
+        )
+
+
+def test_direct_npm_alias_requires_exact_lockfile_version():
+    declarations = common.npm_alias_declarations({
+        "": {"devDependencies": {"@typescript/native": "npm:typescript@7.0.2"}},
+    })
+    with pytest.raises(ValueError):
+        common.resolve_npm_lockfile_name("@typescript/native", {
+            "name": "typescript", "version": "7.0.1",
+            "resolved": "https://registry.npmjs.org/typescript/-/typescript-7.0.1.tgz",
+        }, declarations)
+    assert common.resolve_npm_lockfile_name("@typescript/native", {
+        "name": "typescript", "version": "7.0.1",
+        "resolved": "https://registry.npmjs.org/typescript/-/typescript-7.0.1.tgz",
+    }, declarations, top_level=False) == "typescript"
 
 
 # --------------------------- safe_url_path ---------------------------
@@ -141,9 +243,8 @@ def test_fetch_json_returns_parsed():
 
 def test_fetch_json_404_raises_lookup():
     err = urllib.error.HTTPError("https://x", 404, "Not Found", {}, BytesIO(b""))
-    with patch.object(common.urllib.request, "urlopen", side_effect=err):
-        with pytest.raises(LookupError):
-            common.fetch_json("https://x/missing")
+    with patch.object(common.urllib.request, "urlopen", side_effect=err), pytest.raises(LookupError):
+        common.fetch_json("https://x/missing")
 
 
 def test_fetch_json_5xx_returns_none():

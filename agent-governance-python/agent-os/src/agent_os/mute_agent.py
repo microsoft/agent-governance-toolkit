@@ -188,7 +188,12 @@ class MuteAgent:
         if isinstance(value, str):
             return self._scrub_string(value)
         if isinstance(value, dict):
-            return {k: self._scrub(v) for k, v in value.items()}
+            # Keys are walked too: a secret in key position (an email used as a
+            # map key) would otherwise pass the gate untouched while the same
+            # string in value position is redacted. Scrubbing can collapse
+            # distinct keys onto the same placeholder; last value wins, which is
+            # acceptable for a redaction gate -- leaking the key is not (#3504).
+            return {self._scrub(k): self._scrub(v) for k, v in value.items()}
         if isinstance(value, (set, frozenset)):
             # Scrubbing can collapse distinct members onto the same placeholder;
             # a set naturally dedupes them, which is the desired outcome.
@@ -200,7 +205,14 @@ class MuteAgent:
             # the whole result instead of redacting it. Rebuild those field-wise.
             if isinstance(value, tuple) and hasattr(value, "_fields"):
                 return type(value)(*scrubbed)
-            return type(value)(scrubbed)
+            # A tuple subclass with a positional ``__new__`` and no ``_fields``
+            # (so not a named tuple) also rejects a single iterable and would
+            # raise TypeError here, taking down the whole result. Fall back to a
+            # plain tuple: a type change beats a crash-as-leak (#3504).
+            try:
+                return type(value)(scrubbed)
+            except TypeError:
+                return tuple(scrubbed)
         return value
 
     def _scrub_string(self, text: str) -> str:

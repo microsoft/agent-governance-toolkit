@@ -26,8 +26,8 @@ except ImportError:
     HAS_RUNTIME = False
 
 try:
-    from agent_sre import SLO, ErrorBudget
     from agent_sre.slo.indicators import TaskSuccessRate
+    from agent_sre.slo.objectives import SLO, ErrorBudget
     HAS_SRE = True
 except ImportError:
     HAS_SRE = False

@@ -214,6 +214,84 @@ class TestInheritance:
         parent = next(s for s in resolved if s.name == "test-base")
         assert parent.target == 99.0
 
+    def test_child_inherits_fields_it_does_not_set(self) -> None:
+        parent = SLOSpec(
+            name="parent",
+            description="parent description",
+            service="parent-agent",
+            sli=SLISpec(metric="task_success_ratio", threshold=0.95),
+            target=95.0,
+            window="7d",
+            error_budget_policy=ErrorBudgetPolicy(
+                burn_rate_thresholds=[
+                    BurnRateThreshold(name="fast", rate=10.0, severity="critical"),
+                ]
+            ),
+        )
+        child = SLOSpec(name="child", inherits_from="parent", service="child-agent")
+
+        resolved = resolve_inheritance([parent, child])
+        merged = next(s for s in resolved if s.name == "child")
+
+        assert merged.service == "child-agent"
+        assert merged.description == "parent description"
+        assert merged.target == 95.0
+        assert merged.window == "7d"
+        assert merged.sli == parent.sli
+        assert [t.name for t in merged.error_budget_policy.burn_rate_thresholds] == ["fast"]
+
+    def test_child_keeps_burn_rate_thresholds_from_parent(
+        self, base_spec: SLOSpec, child_spec: SLOSpec
+    ) -> None:
+        resolved = resolve_inheritance([base_spec, child_spec])
+        child = next(s for s in resolved if s.name == "test-child")
+        assert child.window == "30d"
+        assert [t.name for t in child.error_budget_policy.burn_rate_thresholds] == [
+            "slow",
+            "fast",
+        ]
+
+    def test_child_value_equal_to_default_still_overrides(self) -> None:
+        parent = SLOSpec(name="parent", target=95.0, window="7d")
+        child = SLOSpec(name="child", inherits_from="parent", target=99.0, window="30d")
+
+        resolved = resolve_inheritance([parent, child])
+        merged = next(s for s in resolved if s.name == "child")
+
+        assert merged.target == 99.0
+        assert merged.window == "30d"
+
+    def test_child_loaded_from_yaml_inherits_unset_fields(self) -> None:
+        parent = SLOSpec(name="parent", target=95.0, window="7d", description="parent")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "child.yaml"
+            path.write_text(
+                "name: child\ninherits_from: parent\nservice: child-agent\n",
+                encoding="utf-8",
+            )
+            child = SLOSpec.from_yaml(path)
+
+        resolved = resolve_inheritance([parent, child])
+        merged = next(s for s in resolved if s.name == "child")
+
+        assert merged.service == "child-agent"
+        assert merged.target == 95.0
+        assert merged.window == "7d"
+        assert merged.description == "parent"
+
+    def test_grandchild_inherits_through_chain(self) -> None:
+        root = SLOSpec(name="root", target=95.0, window="7d")
+        middle = SLOSpec(name="middle", inherits_from="root", description="middle")
+        leaf = SLOSpec(name="leaf", inherits_from="middle", service="leaf-agent")
+
+        resolved = resolve_inheritance([root, middle, leaf])
+        merged = next(s for s in resolved if s.name == "leaf")
+
+        assert merged.target == 95.0
+        assert merged.window == "7d"
+        assert merged.description == "middle"
+        assert merged.service == "leaf-agent"
+
 
 # ---- Example specs ----
 

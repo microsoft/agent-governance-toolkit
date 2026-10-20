@@ -4,10 +4,8 @@
 //! Bounded manifest YAML parsing retained by AGT.
 //!
 //! The policy runtime now lives in the `agent_control_spec` crate. That
-//! crate exposes `Manifest::from_yaml_str` but not the resource bounded
-//! `serde` seed AGT layers over it. The seed is generic input hardening
-//! rather than contract semantics, so AGT keeps owning it instead of
-//! forking the policy plane.
+//! crate now provides bounded typed parsing too. AGT retains this generic
+//! YAML-to-JSON surface and its compatibility diagnostics for authoring tools.
 
 use agent_control_spec::policy::PolicyConfig;
 use agent_control_spec::{JsonValue, Limits, Manifest, RuntimeError};
@@ -22,34 +20,32 @@ const MAX_MANIFEST_PARSE_NODES: usize = 100_000;
 /// Manifest grammar versions accepted by the upstream engine.
 pub use agent_control_spec::SUPPORTED_VERSIONS;
 
-/// Legacy array form, derived from the upstream grammar rather than copied.
+/// Legacy single-version array retained for source compatibility.
+/// Use [`SUPPORTED_VERSIONS`] for the complete upstream contract list.
 pub const SUPPORTED_MANIFEST_VERSIONS: [&str; 1] = [SUPPORTED_VERSIONS[0]];
-const _: () = assert!(
-    SUPPORTED_VERSIONS.len() == 1,
-    "review the legacy array API when upstream accepts multiple manifest versions"
-);
 
-/// Manifest fields the pre-retarget engine implemented that
-/// `agent-control-spec` 0.4.0-alpha.3 does not.
+/// Manifest fields the pinned engine does not support.
 ///
-/// The upstream `RegoPolicyConfig::adapter_config`, `PolicyBinding::adapter_config`,
-/// `AnnotatorConfig::fields` and `AnnotationConfig::fields` maps are open, so a
-/// manifest declaring one of these keys deserializes and validates cleanly
-/// while the feature it asks for is silently absent: an `llm` annotator with a
-/// `system_prompt_file` or `system_prompt_url` runs with the default prompt,
-/// and a rego policy with a `bundle_url` denies every request with
-/// `runtime_error:policy_invocation_failed`. AGT rejects them instead. See
-/// `docs/acs-retarget.md`, "Removed manifest fields".
+/// Alpha.4 restored `bundle_url` and `system_prompt_url` for pinned manifest
+/// chains, so `system_prompt_file` is the only field AGT still rejects.
+pub const UNSUPPORTED_MANIFEST_FIELDS: [&str; 1] = ["system_prompt_file"];
+
+/// Historical fields removed by the initial retarget.
+///
+/// Two of these are accepted again since alpha.4, so this list no longer
+/// describes what the engine rejects. It keeps its original shape for source
+/// compatibility; use [`UNSUPPORTED_MANIFEST_FIELDS`] for the current set.
+#[deprecated(
+    since = "0.3.2-beta.0",
+    note = "bundle_url and system_prompt_url are accepted again; use UNSUPPORTED_MANIFEST_FIELDS"
+)]
 pub const REMOVED_MANIFEST_FIELDS: [&str; 3] =
     ["bundle_url", "system_prompt_file", "system_prompt_url"];
 
-/// Reject a manifest that declares any of [`REMOVED_MANIFEST_FIELDS`].
+/// Reject the unsupported `system_prompt_file` field.
 ///
-/// Checks every open map a manifest author can reach: each policy definition,
-/// each annotator declaration, and each intervention point's policy binding
-/// and annotation bindings, since a binding overlays its fields onto the
-/// declaration. Cedar policies deny unknown fields upstream and cannot carry
-/// them.
+/// The historical function name is retained for compatibility. URL source
+/// validation belongs to upstream ACS, which implements those fields now.
 pub fn reject_removed_fields(manifest: &Manifest) -> Result<(), RuntimeError> {
     fn check(
         location: impl Fn() -> String,
@@ -57,11 +53,11 @@ pub fn reject_removed_fields(manifest: &Manifest) -> Result<(), RuntimeError> {
     ) -> Result<(), RuntimeError> {
         for key in keys {
             let key = key.as_ref();
-            if REMOVED_MANIFEST_FIELDS.contains(&key) {
+            if key == "system_prompt_file" {
                 return Err(RuntimeError::ManifestInvalid(format!(
-                    "{} declares '{key}', which the pre-retarget engine implemented and                      agent-control-spec {} does not; the field was removed in the retarget                      and is rejected rather than silently ignored. Inline the value or drop                      the field; see policy-engine/docs/acs-retarget.md, 'Removed manifest fields'",
-                    location(),
-                    agent_control_spec::SUPPORTED_VERSIONS[0]
+                    "{} declares unsupported '{key}'; use system_prompt or a pinned \
+                     system_prompt_url instead; see policy-engine/docs/acs-retarget.md",
+                    location()
                 )));
             }
         }
@@ -96,6 +92,75 @@ pub fn reject_removed_fields(manifest: &Manifest) -> Result<(), RuntimeError> {
                 annotation.fields.keys(),
             )?;
         }
+    }
+    Ok(())
+}
+
+/// Reject a URL sourced manifest that declares a local filesystem path field.
+///
+/// Per `SPECIFICATION.md` section 2.3, a manifest fetched from a URL has no file
+/// system manifest root, so a rego `bundle`, a cedar `policy_path`,
+/// `entities_path`, or `schema_path`, or a `data`/`data_paths` document declared
+/// in a rego, custom, or test policy's `adapter_config` (or on a policy binding)
+/// would otherwise resolve against the process working directory at dispatch and
+/// let a remote manifest read local files. These fields are valid for a
+/// file-based manifest, so this check runs only on the URL load path (see the
+/// host SDK `manifest_from_url`), never in general validation. Fails closed with
+/// `runtime_error:manifest_invalid`.
+pub fn reject_url_manifest_local_fields(manifest: &Manifest) -> Result<(), RuntimeError> {
+    const DATA_PATH_KEYS: [&str; 2] = ["data", "data_paths"];
+
+    fn invalid(location: &str, field: &str) -> RuntimeError {
+        RuntimeError::ManifestInvalid(format!(
+            "{location} declares the local filesystem field '{field}', which a URL sourced \
+             manifest must not carry: it has no file system manifest root, so the path would \
+             resolve against the process working directory at dispatch and let a remote manifest \
+             read local files. Supply the value inline; see policy-engine/spec/SPECIFICATION.md \
+             section 2.3 and policy-engine/docs/acs-retarget.md."
+        ))
+    }
+
+    fn check_data_paths(
+        location: &str,
+        adapter: &std::collections::BTreeMap<String, JsonValue>,
+    ) -> Result<(), RuntimeError> {
+        for key in DATA_PATH_KEYS {
+            if adapter.contains_key(key) {
+                return Err(invalid(location, key));
+            }
+        }
+        Ok(())
+    }
+
+    for (name, policy) in &manifest.policies {
+        let location = format!("policy '{name}'");
+        match policy {
+            PolicyConfig::Rego(config) => {
+                if config.bundle.is_some() {
+                    return Err(invalid(&location, "bundle"));
+                }
+                check_data_paths(&location, &config.adapter_config)?;
+            }
+            PolicyConfig::Cedar(config) => {
+                if config.policy_path.is_some() {
+                    return Err(invalid(&location, "policy_path"));
+                }
+                if config.entities_path.is_some() {
+                    return Err(invalid(&location, "entities_path"));
+                }
+                if config.schema_path.is_some() {
+                    return Err(invalid(&location, "schema_path"));
+                }
+            }
+            PolicyConfig::Custom(config) => check_data_paths(&location, &config.adapter_config)?,
+            PolicyConfig::Test(config) => check_data_paths(&location, &config.adapter_config)?,
+        }
+    }
+    for (point, config) in &manifest.intervention_points {
+        check_data_paths(
+            &format!("intervention point '{}' policy binding", point.as_str()),
+            &config.policy.adapter_config,
+        )?;
     }
     Ok(())
 }
@@ -576,7 +641,7 @@ pub fn validate_manifest_yaml(input: &str) -> Result<(), RuntimeError> {
 ///
 /// AGT's embedded engine had `Manifest::validate_overlay`, a relaxed check
 /// for fragments that only become whole after `extends` resolution.
-/// `agent_control_spec` 0.4.0-alpha.3 still exposes only the strict
+/// `agent_control_spec` exposes only the strict
 /// `Manifest::validate`, which over rejects fragments because it requires
 /// at least one intervention point and resolves policy references. Until
 /// ACS grows an overlay entry point this deserializes the fragment, which
@@ -825,8 +890,8 @@ fn json_string_size(value: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        reject_removed_fields, validate_manifest_overlay_yaml, validate_manifest_yaml,
-        REMOVED_MANIFEST_FIELDS,
+        parse_manifest_yaml_value, reject_removed_fields, reject_url_manifest_local_fields,
+        validate_manifest_overlay_yaml, validate_manifest_yaml, UNSUPPORTED_MANIFEST_FIELDS,
     };
     use agent_control_spec::Manifest;
 
@@ -858,8 +923,7 @@ mod tests {
         )
     }
 
-    /// The six manifests the review probe showed `Manifest::from_yaml_str`
-    /// accepting while the pinned engine had no implementation behind them.
+    /// Unsupported file sources and malformed remote source configurations.
     fn probe_manifests() -> Vec<(&'static str, String, &'static str)> {
         vec![
             (
@@ -873,22 +937,6 @@ mod tests {
                     "    system_prompt: inline\n    system_prompt_url:\n      url: http://prompts.example/p.txt\n",
                 ),
                 "system_prompt_url",
-            ),
-            (
-                "llm annotator with a pinned https system_prompt_url",
-                llm_manifest(&format!(
-                    "    system_prompt_url:\n      url: https://prompts.example/p.txt\n      sha256: {}\n",
-                    "a".repeat(64)
-                )),
-                "system_prompt_url",
-            ),
-            (
-                "rego policy with a pinned https bundle_url",
-                rego_manifest(&format!(
-                    "    bundle_url:\n      url: https://bundles.example/b.tar.gz\n      sha256: {}\n",
-                    "b".repeat(64)
-                )),
-                "bundle_url",
             ),
             (
                 "rego policy with an unpinned http bundle_url",
@@ -907,20 +955,20 @@ mod tests {
     }
 
     #[test]
-    fn upstream_parser_retains_removed_fields_for_agt_validation() {
-        // Parsing must retain these keys for AGT's rejection, even when newer
-        // upstream semantic validation also rejects an invalid URL combination.
+    fn unsupported_sources_are_rejected_by_complete_validation() {
         for (label, manifest, field) in probe_manifests() {
-            let parsed = Manifest::parse_yaml_str(&manifest)
-                .unwrap_or_else(|error| panic!("{label}: upstream parse failed: {error}"));
-            let error = reject_removed_fields(&parsed).expect_err("AGT rejects removed fields");
-            assert!(error.detail().contains(field), "{label}: {error}");
+            let error = validate_manifest_yaml(&manifest).expect_err("invalid source");
+            assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+            assert!(
+                error.detail().contains(field) || error.detail().contains("only https"),
+                "{label}: {error}"
+            );
         }
     }
 
     #[test]
-    fn removed_fields_are_rejected_by_every_validation_entry_point() {
-        for (label, manifest, field) in probe_manifests() {
+    fn file_prompt_is_rejected_by_every_validation_entry_point() {
+        for (label, manifest, field) in probe_manifests().into_iter().take(1) {
             for (entry, result) in [
                 ("validate_manifest_yaml", validate_manifest_yaml(&manifest)),
                 (
@@ -955,7 +1003,7 @@ mod tests {
     }
 
     #[test]
-    fn removed_fields_are_rejected_on_bindings_too() {
+    fn file_prompts_are_rejected_on_bindings_too() {
         // A binding overlays its fields onto the declaration, so the same
         // keys are reachable there.
         let annotation_binding = format!(
@@ -966,7 +1014,7 @@ mod tests {
         let error = validate_manifest_yaml(&annotation_binding).unwrap_err();
         assert!(
             error.detail().starts_with(
-                "intervention point 'input' annotation 'judge' declares 'system_prompt_file'"
+                "intervention point 'input' annotation 'judge' declares unsupported 'system_prompt_file'"
             ),
             "{}",
             error.detail()
@@ -978,27 +1026,37 @@ mod tests {
              \x20     bundle_url:\n        url: https://bundles.example/b.tar.gz\n        sha256: {}\n",
             "d".repeat(64)
         );
-        let error = validate_manifest_yaml(&policy_binding).unwrap_err();
-        assert!(
-            error
-                .detail()
-                .starts_with("intervention point 'input' policy binding declares 'bundle_url'"),
-            "{}",
-            error.detail()
-        );
+        validate_manifest_yaml(&policy_binding).unwrap();
+        validate_manifest_overlay_yaml(&policy_binding).unwrap();
 
         let custom_policy = format!(
-            "{VERSION}policies:\n  p:\n    type: custom\n    adapter: mine\n    bundle_url: x\n\
+            "{VERSION}policies:\n  p:\n    type: custom\n    adapter: mine\n    system_prompt_file: x\n\
              intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n"
         );
         let error = validate_manifest_overlay_yaml(&custom_policy).unwrap_err();
         assert!(
             error
                 .detail()
-                .starts_with("policy 'p' declares 'bundle_url'"),
+                .starts_with("policy 'p' declares unsupported 'system_prompt_file'"),
             "{}",
             error.detail()
         );
+    }
+
+    #[test]
+    fn pinned_remote_sources_are_accepted_by_both_validators() {
+        let prompt = llm_manifest(&format!(
+            "    system_prompt_url:\n      url: https://prompts.example/p.txt\n      sha256: {}\n",
+            "a".repeat(64)
+        ));
+        let bundle = rego_manifest(&format!(
+            "    bundle_url:\n      url: https://bundles.example/b.tar.gz\n      sha256: {}\n",
+            "b".repeat(64)
+        ));
+        for manifest in [prompt, bundle] {
+            validate_manifest_yaml(&manifest).unwrap();
+            validate_manifest_overlay_yaml(&manifest).unwrap();
+        }
     }
 
     #[test]
@@ -1009,6 +1067,97 @@ mod tests {
         let local_bundle = rego_manifest("    bundle: ./policy\n");
         validate_manifest_yaml(&local_bundle).unwrap();
         validate_manifest_overlay_yaml(&local_bundle).unwrap();
-        assert_eq!(REMOVED_MANIFEST_FIELDS.len(), 3);
+        assert_eq!(UNSUPPORTED_MANIFEST_FIELDS, ["system_prompt_file"]);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn removed_fields_array_keeps_its_shape_for_existing_callers() {
+        assert_eq!(super::REMOVED_MANIFEST_FIELDS.len(), 3);
+        for field in super::UNSUPPORTED_MANIFEST_FIELDS {
+            assert!(super::REMOVED_MANIFEST_FIELDS.contains(&field));
+        }
+    }
+
+    #[test]
+    fn url_manifest_rejects_local_filesystem_path_fields() {
+        fn parse(input: &str) -> Manifest {
+            let value = parse_manifest_yaml_value(input).unwrap();
+            serde_json::from_value(value).unwrap()
+        }
+
+        // rego `bundle` is legal for a file manifest but not a URL one.
+        let bundle = parse(&rego_manifest("    bundle: ./policy\n"));
+        let error = reject_url_manifest_local_fields(&bundle).unwrap_err();
+        assert!(
+            error
+                .detail()
+                .starts_with("policy 'p' declares the local filesystem field 'bundle'"),
+            "{}",
+            error.detail()
+        );
+
+        // `data_paths` flattens into the rego adapter_config map.
+        let data_paths = parse(&rego_manifest("    data_paths:\n      - ./data.json\n"));
+        assert!(reject_url_manifest_local_fields(&data_paths)
+            .unwrap_err()
+            .detail()
+            .contains("'data_paths'"));
+
+        // cedar path fields.
+        let cedar = format!(
+            "{VERSION}policies:\n  p:\n    type: cedar\n    policy_path: ./p.cedar\n\
+             intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n"
+        );
+        assert!(reject_url_manifest_local_fields(&parse(&cedar))
+            .unwrap_err()
+            .detail()
+            .contains("'policy_path'"));
+
+        // rego `data` document, also flattened into adapter_config.
+        let rego_data = parse(&rego_manifest("    data: ./data.json\n"));
+        assert!(reject_url_manifest_local_fields(&rego_data)
+            .unwrap_err()
+            .detail()
+            .contains("'data'"));
+
+        // cedar `entities_path` and `schema_path`.
+        for (field, line) in [
+            ("entities_path", "    entities_path: ./e.json\n"),
+            ("schema_path", "    schema_path: ./s.json\n"),
+        ] {
+            let cedar = format!(
+                "{VERSION}policies:\n  p:\n    type: cedar\n{line}\
+                 intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n"
+            );
+            assert!(reject_url_manifest_local_fields(&parse(&cedar))
+                .unwrap_err()
+                .detail()
+                .contains(field));
+        }
+
+        // a custom policy carrying a data document.
+        let custom = format!(
+            "{VERSION}policies:\n  p:\n    type: custom\n    adapter: mine\n    data_paths:\n      - ./d.json\n\
+             intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n"
+        );
+        assert!(reject_url_manifest_local_fields(&parse(&custom))
+            .unwrap_err()
+            .detail()
+            .contains("'data_paths'"));
+
+        // a data document declared on an intervention-point policy binding.
+        let binding = format!(
+            "{VERSION}policies:\n  p:\n    type: rego\n    query: data.acs.result\n\
+             intervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n      data:\n        x: ./d.json\n"
+        );
+        assert!(reject_url_manifest_local_fields(&parse(&binding))
+            .unwrap_err()
+            .detail()
+            .contains("'data'"));
+
+        // A manifest that supplies policy inline is accepted.
+        let inline = parse(&rego_manifest(""));
+        reject_url_manifest_local_fields(&inline).unwrap();
     }
 }

@@ -20,3 +20,8 @@ intervention_points:
     policy:
       id: pos_geofencing
       query: data.agt_policies_nigeria.pos_geofencing.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: pos_geofencing
+      query: data.agt_policies_nigeria.pos_geofencing.acs_pre_tool_call_result

@@ -17,6 +17,7 @@ import {
 
 import { appendAuditEntry, getAuditStatus } from "./audit.mjs";
 import { safeJsonStringify, summarizeText } from "./poisoning.mjs";
+import { isSafeShellCleanupCommand, matchesRecursiveDeleteCommand } from "./recursive-delete.mjs";
 
 export const USER_POLICY_ENV = "AGT_CLAUDE_POLICY_PATH";
 export const AUDIT_PATH_ENV = "AGT_CLAUDE_AUDIT_PATH";
@@ -398,8 +399,12 @@ function createCommandPatternBackend(policy) {
           continue;
         }
 
+        const recursiveDeleteMatched =
+          rule.id === "recursive-delete" &&
+          rule.tool.toLowerCase() === "bash" &&
+          matchesRecursiveDeleteCommand(commandText);
         const matchedPattern = rule.commandPatterns.find((pattern) => pattern.regex.test(commandText));
-        if (!matchedPattern) {
+        if (!recursiveDeleteMatched && !matchedPattern) {
           continue;
         }
         if (shouldBypassBlockedCommandRule(rule, commandText)) {
@@ -409,7 +414,9 @@ function createCommandPatternBackend(policy) {
         return {
           backend: "agt-command-patterns",
           decision: rule.effect,
-          reason: `${rule.reason} Matched /${matchedPattern.source}/${matchedPattern.flags}.`,
+          reason: recursiveDeleteMatched
+            ? `${rule.reason} Matched recursive-delete command.`
+            : `${rule.reason} Matched /${matchedPattern.source}/${matchedPattern.flags}.`,
         };
       }
 
@@ -499,7 +506,10 @@ function createMcpInvocationBackend(policy, scanner) {
         backend: "agt-mcp-scan",
         decision: decisionFromSeverity(policy.mode, getHighestThreatSeverity(result.threats)),
         reason: `MCP/tool scan flagged ${result.threats.length} threat(s) for ${toolName}: ${result.threats
-          .map((threat) => `${threat.type} (${threat.severity})`)
+          .map((threat) => {
+            const label = `${threat.type} (${threat.severity})`;
+            return threat.evidence ? `${label} matched ${JSON.stringify(threat.evidence)}` : label;
+          })
           .join(", ")}.`,
       };
     },
@@ -878,7 +888,9 @@ function createMinimalFallbackPolicy() {
 
 function shouldBypassBlockedCommandRule(rule, commandText) {
   if (rule.id === "recursive-delete") {
-    return isSafeCleanupCommand(commandText);
+    return rule.tool.toLowerCase() === "bash"
+      ? isSafeShellCleanupCommand(commandText)
+      : isSafeCleanupCommand(commandText);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);

@@ -20,3 +20,8 @@ intervention_points:
     policy:
       id: agent_human_approval
       query: data.agt_policies_agent.human_approval.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: agent_human_approval
+      query: data.agt_policies_agent.human_approval.acs_pre_tool_call_result

@@ -20,3 +20,8 @@ intervention_points:
     policy:
       id: agent_tool_permissions
       query: data.agt_policies_agent.tool_permissions.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: agent_tool_permissions
+      query: data.agt_policies_agent.tool_permissions.acs_pre_tool_call_result

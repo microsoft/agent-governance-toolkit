@@ -31,6 +31,7 @@ from agent_control_specification import (
     guard_autogen_agent,
     guard_crewai_crew,
     guard_langchain_runnable,
+    guard_langchain_tool,
     guard_litellm_proxy,
     guard_mcp_server,
     guard_mcp_tool,
@@ -40,6 +41,7 @@ from agent_control_specification import (
 )
 
 _HAS_LANGCHAIN = importlib.util.find_spec("langchain_core") is not None
+_HAS_LANGGRAPH = _HAS_LANGCHAIN and importlib.util.find_spec("langgraph") is not None
 _HAS_OPENAI = (
     importlib.util.find_spec("openai") is not None
     and importlib.util.find_spec("httpx") is not None
@@ -182,14 +184,341 @@ class LangChainRealPackageTests(unittest.IsolatedAsyncioTestCase):
             await guarded.ainvoke("hi")
         _assert_blocked(self, exc, InterventionPoint.OUTPUT)
 
-    async def test_guard_blocks_sync_invoke_bypass(self):
-        from langchain_core.runnables import RunnableLambda
+    async def test_guard_mediates_sync_invoke_and_composed_batch(self):
+        from langchain_core.runnables import Runnable, RunnableLambda, RunnableSequence
 
-        runnable = RunnableLambda(lambda value: value)
-        guarded = guard_langchain_runnable(AgentControl(QueueRuntime([])), runnable)
+        runtime = QueueRuntime([result(transformed_policy_target="safe"), result()] * 5)
+        guarded = guard_langchain_runnable(AgentControl(runtime), RunnableLambda(lambda value: value))
 
-        with self.assertRaises(AdapterUnsupportedError):
-            guarded.invoke("raw")
+        self.assertIsInstance(guarded, Runnable)
+        self.assertEqual(guarded.invoke("raw"), "safe")
+        self.assertEqual(guarded.batch(["raw", "raw"]), ["safe", "safe"])
+        composed = RunnableSequence(guarded, RunnableLambda(lambda value: value + "!"))
+        self.assertEqual(composed.invoke("raw"), "safe!")
+        self.assertEqual(composed.batch(["raw"]), ["safe!"])
+        self.assertEqual([r.intervention_point for r in runtime.requests], [InterventionPoint.INPUT, InterventionPoint.OUTPUT] * 5)
+        with self.assertRaisesRegex(AgentControlBlocked, "adapter unsupported"):
+            guarded.with_config({"tags": ["bypass"]})
+
+
+@unittest.skipUnless(_HAS_LANGGRAPH, "langgraph not installed")
+class LangGraphRealPackageTests(unittest.IsolatedAsyncioTestCase):
+    def _graph(self, node):
+        from langgraph.graph import END, START, MessagesState, StateGraph
+
+        graph = StateGraph(MessagesState)
+        graph.add_node("tools", node)
+        graph.add_edge(START, "tools")
+        graph.add_edge("tools", END)
+        return graph.compile()
+
+    async def test_tool_node_accepts_guarded_tool_on_sync_and_async_paths(self):
+        from langchain_core.messages import AIMessage
+        from langchain_core.tools import BaseTool, tool
+        from langgraph.prebuilt import ToolNode
+
+        calls = []
+
+        @tool
+        def lookup(q: str) -> str:
+            """Look up a value."""
+            calls.append(q)
+            return q
+
+        runtime = QueueRuntime([result(transformed_policy_target={"q": "safe"}), result()] * 2)
+        guarded = guard_langchain_tool(AgentControl(runtime), lookup)
+        self.assertIsInstance(guarded, BaseTool)
+        graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+        message = AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"q": "raw"}, "id": "call-1"}])
+
+        for output in (graph.invoke({"messages": [message]}), await graph.ainvoke({"messages": [message]})):
+            self.assertEqual(output["messages"][-1].content, "safe")
+            self.assertEqual(output["messages"][-1].tool_call_id, "call-1")
+        self.assertEqual(calls, ["safe", "safe"])
+        self.assertEqual([r.intervention_point for r in runtime.requests], [InterventionPoint.PRE_TOOL_CALL, InterventionPoint.POST_TOOL_CALL] * 2)
+        self.assertEqual(runtime.requests[0].snapshot["tool_call"]["args"], {"q": "raw"})
+        self.assertEqual(runtime.requests[0].snapshot["tool_call"]["id"], "call-1")
+        json.dumps(runtime.requests[1].snapshot["tool_result"])
+
+    async def test_tool_node_terminal_deny_is_structured_and_does_not_call_tool(self):
+        from langchain_core.messages import AIMessage, ToolMessage
+        from langchain_core.tools import tool
+        from langgraph.prebuilt import ToolNode
+
+        calls = []
+
+        @tool
+        def lookup(q: str) -> str:
+            """Look up a value."""
+            calls.append(q)
+            return q
+
+        denied = InterventionPointResult(
+            Verdict(Decision.DENY, reason="tool_not_permitted", message="lookup is not permitted for this agent.")
+        )
+        runtime = QueueRuntime([denied, denied, denied])
+        guarded = guard_langchain_tool(AgentControl(runtime), lookup, on_deny="tool_error")
+        graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+        message = AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"q": "raw"}, "id": "call-1"}])
+
+        for output in (graph.invoke({"messages": [message]}), await graph.ainvoke({"messages": [message]})):
+            response = output["messages"][-1]
+            self.assertIsInstance(response, ToolMessage)
+            self.assertEqual(response.status, "error")
+            self.assertEqual(response.tool_call_id, "call-1")
+            self.assertIn("lookup is not permitted", response.content)
+            self.assertNotIn("fix your mistakes", response.content.lower())
+            self.assertEqual(response.additional_kwargs["agent_control"]["terminal"], True)
+            self.assertEqual(response.additional_kwargs["agent_control"]["reason"], "tool_not_permitted")
+        self.assertEqual(calls, [])
+        self.assertEqual(len(runtime.requests), 2)
+
+        from langgraph.graph import END, START, MessagesState, StateGraph
+
+        model_calls = []
+
+        def model(state):
+            model_calls.append(state)
+            return state
+
+        routing = StateGraph(MessagesState)
+        routing.add_node("tools", ToolNode([guarded], handle_tool_errors=False))
+        routing.add_node("model", model)
+        routing.add_edge(START, "tools")
+        routing.add_conditional_edges(
+            "tools",
+            lambda state: END if state["messages"][-1].additional_kwargs["agent_control"]["terminal"] else "model",
+        )
+        routing.add_edge("model", END)
+        routed = routing.compile().invoke({"messages": [message]})
+        self.assertEqual(routed["messages"][-1].status, "error")
+        self.assertEqual(model_calls, [])
+        self.assertEqual(len(runtime.requests), 3)
+
+        with self.assertRaises(ValueError):
+            guard_langchain_tool(AgentControl(QueueRuntime([])), lookup, on_deny="skip")
+
+    async def test_tool_node_post_deny_is_terminal_without_leaking_output(self):
+        from langchain_core.messages import AIMessage
+        from langchain_core.tools import tool
+        from langgraph.prebuilt import ToolNode
+
+        calls = []
+
+        @tool
+        def lookup(q: str) -> str:
+            """Look up a value."""
+            calls.append(q)
+            return "private result"
+
+        denied = InterventionPointResult(
+            Verdict(Decision.DENY, reason="sensitive_result", message="The result is not permitted.")
+        )
+        guarded = guard_langchain_tool(
+            AgentControl(QueueRuntime([result(), denied])), lookup, on_deny="tool_error"
+        )
+        graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+        message = AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"q": "raw"}, "id": "call-2"}])
+
+        response = graph.invoke({"messages": [message]})["messages"][-1]
+        self.assertEqual(response.status, "error")
+        self.assertNotIn("private result", response.content)
+        self.assertEqual(response.additional_kwargs["agent_control"]["reason"], "sensitive_result")
+        self.assertEqual(calls, ["raw"])
+
+        raising = guard_langchain_tool(
+            AgentControl(QueueRuntime([denied])), lookup,
+        )
+        with self.assertRaises(AgentControlBlocked):
+            self._graph(ToolNode([raising], handle_tool_errors=False)).invoke({"messages": [message]})
+        self.assertEqual(calls, ["raw"])
+
+    async def test_tool_node_post_transform_redacts_message_content(self):
+        from langchain_core.messages import AIMessage
+        from langchain_core.tools import tool
+        from langgraph.prebuilt import ToolNode
+
+        @tool
+        def lookup(q: str) -> str:
+            """Look up a value."""
+            return "private result"
+
+        runtime = QueueRuntime([result(), result(transformed_policy_target="redacted")])
+        guarded = guard_langchain_tool(AgentControl(runtime), lookup)
+        graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+        message = AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"q": "raw"}, "id": "call-3"}])
+
+        response = graph.invoke({"messages": [message]})["messages"][-1]
+        self.assertEqual(response.content, "redacted")
+        self.assertEqual(response.tool_call_id, "call-3")
+        self.assertEqual(runtime.requests[1].snapshot["tool_result"]["content"], "private result")
+
+    async def test_tool_node_does_not_expose_injected_state_to_tool_args_policy(self):
+        from typing import Annotated
+
+        from langchain_core.messages import AIMessage, HumanMessage
+        from langchain_core.tools import tool
+        from langgraph.prebuilt import InjectedState, ToolNode
+
+        seen = []
+
+        def lookup(q: str, state: Annotated[dict, InjectedState]) -> str:
+            """Look up a value with graph state."""
+            seen.append((q, state))
+            return q
+
+        lookup.__annotations__["state"] = Annotated[dict, InjectedState]
+        lookup = tool(lookup)
+
+        runtime = QueueRuntime([result(transformed_policy_target={"q": "safe"}), result()] * 2)
+        guarded = guard_langchain_tool(AgentControl(runtime), lookup)
+        graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+        history = HumanMessage(content="secret in prior conversation")
+        call = AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"q": "raw"}, "id": "call-5"}])
+
+        for output in (
+            graph.invoke({"messages": [history, call]}),
+            await graph.ainvoke({"messages": [history, call]}),
+        ):
+            self.assertEqual(output["messages"][-1].content, "safe")
+        self.assertEqual([request.snapshot["tool_call"]["args"] for request in runtime.requests], [{"q": "raw"}, {"q": "safe"}] * 2)
+        self.assertEqual([q for q, _ in seen], ["safe", "safe"])
+        self.assertTrue(all(state["messages"][0] == history for _, state in seen))
+
+        unsafe = guard_langchain_tool(
+            AgentControl(QueueRuntime([result(transformed_policy_target={"q": "safe", "state": {}})])),
+            lookup,
+        )
+        with self.assertRaisesRegex(AdapterUnsupportedError, "injected.*arguments"):
+            self._graph(ToolNode([unsafe], handle_tool_errors=False)).invoke({"messages": [history, call]})
+        self.assertEqual(len(seen), 2)
+
+    async def test_tool_node_raises_on_unserializable_artifact(self):
+        from langchain_core.messages import AIMessage
+        from langchain_core.tools import tool
+        from langgraph.prebuilt import ToolNode
+
+        @tool(response_format="content_and_artifact")
+        def lookup(q: str) -> tuple[str, object]:
+            """Look up a value with an artifact."""
+            return "public", object()
+
+        runtime = QueueRuntime([result(), result()])
+        guarded = guard_langchain_tool(AgentControl(runtime), lookup)
+        graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+        call = AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"q": "raw"}, "id": "call-6"}])
+
+        with self.assertRaisesRegex(AdapterUnsupportedError, "artifact.*JSON"):
+            graph.invoke({"messages": [call]})
+        self.assertEqual(len(runtime.requests), 1)
+
+    async def test_tool_node_propagates_runtime_failures_even_with_tool_error_mode(self):
+        from langchain_core.messages import AIMessage
+        from langchain_core.tools import tool
+        from langgraph.prebuilt import ToolNode
+
+        called = []
+
+        @tool
+        def lookup(q: str) -> str:
+            """Look up a value."""
+            called.append(q)
+            return q
+
+        call = AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"q": "raw"}, "id": "call-7"}])
+        for reason in ("runtime_error:policy_invocation_failed", "runtime_error:policy_output_invalid", "host_error:approval_unresolved"):
+            for post in (False, True):
+                with self.subTest(reason=reason, post=post):
+                    responses = [result()] if post else []
+                    responses.append(InterventionPointResult(Verdict(Decision.DENY, reason=reason)))
+                    guarded = guard_langchain_tool(AgentControl(QueueRuntime(responses)), lookup, on_deny="tool_error")
+                    graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+                    with self.assertRaises(AgentControlBlocked) as exc:
+                        graph.invoke({"messages": [call]})
+                    self.assertEqual(exc.exception.result.verdict.reason, reason)
+        self.assertEqual(called, ["raw"] * 3)
+
+    async def test_tool_node_uses_native_policy_for_allow_and_terminal_deny(self):
+        from langchain_core.messages import AIMessage
+        from langchain_core.tools import tool
+        from langgraph.prebuilt import ToolNode
+
+        manifest = """agent_control_specification_version: 0.4.0-alpha.1
+metadata:
+  name: langgraph-native-check
+policies:
+  lookup:
+    type: custom
+    adapter: test
+intervention_points:
+  pre_tool_call:
+    policy_target_kind: tool_args
+    policy:
+      id: lookup
+    policy_target: $snap.tool_call.args
+  post_tool_call:
+    policy_target_kind: tool_result
+    policy:
+      id: lookup
+    policy_target: $snap.tool_result
+"""
+
+        class Policy:
+            def __init__(self, decision):
+                self.decision = decision
+
+            def evaluate(self, invocation):
+                if self.decision == "raises":
+                    raise ValueError("policy dispatch failed")
+                if self.decision == "none":
+                    return None
+                if self.decision == "unknown":
+                    return {"decision": "unknown"}
+                return {
+                    "decision": self.decision,
+                    "reason": "tool_not_permitted" if self.decision == "deny" else "permitted",
+                    "message": "lookup is not permitted for this agent.",
+                }
+
+        @tool
+        def lookup(q: str) -> str:
+            """Look up a value."""
+            return "result for " + q
+
+        message = AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"q": "x"}, "id": "call-4"}])
+        for decision, status in (("allow", "success"), ("deny", "error")):
+            with self.subTest(decision=decision):
+                guarded = guard_langchain_tool(
+                    AgentControl.from_native(manifest, None, Policy(decision)),
+                    lookup,
+                    on_deny="tool_error",
+                )
+                graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+                for response in (
+                    graph.invoke({"messages": [message]})["messages"][-1],
+                    (await graph.ainvoke({"messages": [message]}))["messages"][-1],
+                ):
+                    self.assertEqual(response.status, status)
+                    self.assertEqual(response.tool_call_id, "call-4")
+                    if decision == "deny":
+                        self.assertEqual(response.additional_kwargs["agent_control"]["reason"], "tool_not_permitted")
+                    else:
+                        self.assertEqual(response.content, "result for x")
+
+        for decision in ("raises", "none", "unknown"):
+            with self.subTest(decision=decision):
+                guarded = guard_langchain_tool(
+                    AgentControl.from_native(manifest, None, Policy(decision)),
+                    lookup,
+                    on_deny="tool_error",
+                )
+                graph = self._graph(ToolNode([guarded], handle_tool_errors=False))
+                with self.assertRaises(AgentControlBlocked) as sync_failure:
+                    graph.invoke({"messages": [message]})
+                with self.assertRaises(AgentControlBlocked) as async_failure:
+                    await graph.ainvoke({"messages": [message]})
+                for exc in (sync_failure.exception, async_failure.exception):
+                    self.assertTrue(exc.result.verdict.reason.startswith("runtime_error:"))
 
 
 @unittest.skipUnless(_HAS_OPENAI, "openai/httpx not installed")

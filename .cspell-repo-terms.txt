@@ -9,6 +9,7 @@ LHMQ
 maketrans
 midword
 NFKD
+Upadhyay
 
 # --- ACS / crypto terms ---
 # --- Additional West/North Africa terms flagged by cspell ---
@@ -16,6 +17,9 @@ NFKD
 # --- UK regulatory policy terms ---
 # --- CloudEvents / signed audit-event terms ---
 # --- Docker / BuildKit toolchain terms ---
+Crumm
+Gummadi
+Prayag
 struction
 
 # --- Documentation site and ACS integration terms ---
@@ -105,6 +109,7 @@ Caldicott
 Cdecl
 Centralised
 Chatflows
+cjar
 Clendenen
 CommonMark
 Convs
@@ -142,6 +147,7 @@ EigenTrust
 Entra
 Errno
 Errorf
+Español
 FAKEFORTESTING
 FFDH
 FIPS
@@ -183,6 +189,7 @@ ISSN
 Initialise
 Jaccard
 Janssen
+jans
 Kigali
 KillSwitch
 Kogi
@@ -326,6 +333,7 @@ ZDOTDIR
 aadhaar
 aarch64
 ababa
+abatch
 abprs
 abspath
 abstractmethod
@@ -353,6 +361,7 @@ aioredis
 aiter
 akickoff
 alikes
+alisteners
 allowlist
 allowlisted
 alnum
@@ -377,6 +386,7 @@ artefacts
 arun
 asctime
 asdict
+askpass
 asname
 aspnet
 astimezone
@@ -385,6 +395,7 @@ asynccontextmanager
 asyncgens
 asyncio
 atexit
+atransform
 attributeerror
 authorisation
 authorised
@@ -425,6 +436,7 @@ carloshvp
 carryforward
 carveout
 casefold
+cautogen
 cdylib
 cedarling
 cedarpy
@@ -471,9 +483,11 @@ contentsafety
 contentsource
 contenttype
 contextlib
+contextmanager
 contextvars
 contoso
 conv
+coreutils
 coro
 covermode
 coverprofile
@@ -489,6 +503,7 @@ ctypes
 custodied
 cutover
 cybercrimes
+cyclonedx
 dalek
 dargs
 dataclass
@@ -564,6 +579,7 @@ finalizer
 findall
 finditer
 findtext
+findutils
 flatbuffer
 flate
 flowise
@@ -594,6 +610,7 @@ getattribute
 getenv
 gethostname
 getitem
+getopt
 getoption
 getpolicy
 getroot
@@ -620,6 +637,7 @@ healthz
 helpdesk
 hexdigest
 hexdigit
+hhost
 hitl
 hkdf
 hostnames
@@ -692,8 +710,10 @@ kwonlyargs
 laintext
 langflow
 langgenius
+lastgroup
 lawcontinue
 levelname
+llamaindexer
 lookahead
 lookaround
 lookarounds
@@ -738,8 +758,10 @@ matplotlib
 maturin
 maxlen
 maxsplit
+mcpython
 memswap
 metavar
+mget
 mgmt
 mhabuomar
 microkernel
@@ -763,6 +785,7 @@ monkeypatched
 monkeypatching
 mpatches
 mpsc
+mset
 msinternal
 msvc
 multibyte
@@ -832,9 +855,11 @@ omitempty
 oncall
 oneshot
 oorandom
+openAPIV3Schema
 opencode
 openpolicyagent
 openshell
+oprtx
 organisation
 organisational
 organisations
@@ -886,6 +911,7 @@ prependpath
 pretool
 privatelink
 processcontainer
+procs
 promptdefense
 promptinjectiondetector
 proofblob
@@ -894,6 +920,7 @@ psmodules
 psour
 purelib
 pyatr
+pyautogen
 pycache
 pyclass
 pyjwt
@@ -946,6 +973,7 @@ removesuffix
 replayable
 repr
 repudiable
+reqeusts
 requireapproval
 reqwest
 resear
@@ -957,6 +985,7 @@ restype
 retarget
 retargeted
 retargets
+retryable
 returncode
 rfile
 rfind
@@ -965,6 +994,7 @@ ringenforcer
 rmal
 rmcp
 rmtree
+rollouts
 roundtrips
 rpartition
 rrdatas
@@ -1083,6 +1113,7 @@ traceid
 tracemalloc
 traceparent
 tsfn
+ttls
 typeerror
 typer
 typosquat
@@ -1110,6 +1141,7 @@ unref
 unrepresentable
 unrevocation
 unrevoke
+unsampled
 unsandboxed
 unscanned
 unsendable
@@ -1126,6 +1158,7 @@ urlopen
 urlparse
 urlsafe
 urlunparse
+uroot
 usemanagedidentity
 userinfo
 usize
@@ -1134,6 +1167,7 @@ utcnow
 uvicorn
 venv
 venvs
+vite
 vitest
 vnet
 waitforreleasecompletion
@@ -1280,3 +1314,38 @@ propagation
 readonly
 resolver
 sha256sum
+# --- Python stdlib identifiers (scripts/check_lockfile_integrity.py) ---
+fromhex
+EBADENGINE
+hono
+# --- rmcp 2.0.0 dependency audit (docs/dependency-audits) ---
+# --- rmcp 2.1.0 dependency audit (docs/dependency-audits) ---
+Abuomar
+Haroon
+alexhancock
+chrono
+pastey
+schemars
+
+# --- Healthcare identifier terms used in HIPAA pattern matching and tests ---
+HPID
+hpid
+Luhn
+luhn
+NPPES
+xmrn
+
+# International Traffic in Arms Regulations
+ITAR
+bssn
+uncued
+undelimited
+verus
+vstd
+prettyplease
+# --- OpenCode secret pattern terms (PR #4280) ---
+ATATT
+amqp
+amqps
+rediss
+xoxe

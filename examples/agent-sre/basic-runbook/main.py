@@ -19,12 +19,12 @@ does not call external services. Task outcomes are deterministic so the
 printed output is stable across runs.
 """
 
-from agent_sre import ErrorBudget, SLO
 from agent_sre.incidents.detector import IncidentDetector, Signal, SignalType
 from agent_sre.incidents.runbook import Runbook, RunbookStep
 from agent_sre.incidents.runbook_executor import RunbookExecutor
 from agent_sre.slo.dashboard import SLODashboard
 from agent_sre.slo.indicators import TaskSuccessRate
+from agent_sre.slo.objectives import SLO, ErrorBudget
 
 
 def print_health(label: str, dashboard: SLODashboard, slo_name: str) -> None:

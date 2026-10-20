@@ -129,6 +129,18 @@ class TestMuteAgentRecursive:
         assert "user@example.com" not in str(redacted.data)
         assert redacted.data["count"] == 5
 
+    def test_dict_keys_are_scrubbed(self):
+        # Regression (#3504): dict values were walked but keys were not, so a
+        # secret used as a map key (an email keying a lookup) passed the gate
+        # untouched while the same string in value position was redacted.
+        agent = MuteAgent()
+        result = FakeResult(data={"user@example.com": "ok"})
+
+        redacted = agent.mute(result)
+
+        assert "user@example.com" not in str(redacted.data)
+        assert "ok" in str(redacted.data)
+
     def test_list_data(self):
         agent = MuteAgent()
         result = FakeResult(data=["SSN: 111-22-3333", "ok"])
@@ -167,6 +179,23 @@ class TestMuteAgentRecursive:
         assert "user@example.com" not in str(redacted.data)
         assert isinstance(redacted.data, Record)
         assert redacted.data.note == "keep me"
+
+    def test_tuple_subclass_without_fields_is_scrubbed_not_crashed(self):
+        # Regression (#3504): a tuple subclass with a positional __new__ and no
+        # _fields is not a named tuple, so it missed the field-wise rebuild and
+        # ``type(value)(scrubbed)`` raised TypeError -- crashing the gate instead
+        # of redacting. It now falls back to a plain tuple.
+        class Pair(tuple):
+            def __new__(cls, a, b):
+                return super().__new__(cls, (a, b))
+
+        agent = MuteAgent()
+        result = FakeResult(data=Pair("user@example.com", "keep me"))
+
+        redacted = agent.mute(result)
+
+        assert "user@example.com" not in str(redacted.data)
+        assert "keep me" in str(redacted.data)
 
     def test_secret_nested_inside_skipped_containers(self):
         # The two container gaps compose: a set inside a named tuple in a list.

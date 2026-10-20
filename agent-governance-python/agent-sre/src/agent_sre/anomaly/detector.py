@@ -357,10 +357,10 @@ def _infer_anomaly_type(metric_name: str) -> AnomalyType:
     name = metric_name.lower()
     if "latency" in name or "duration" in name:
         return AnomalyType.LATENCY_SPIKE
-    if "throughput" in name or "rate" in name:
-        return AnomalyType.THROUGHPUT_DROP
     if "error" in name:
         return AnomalyType.ERROR_RATE_SURGE
+    if "throughput" in name or "rate" in name:
+        return AnomalyType.THROUGHPUT_DROP
     if "token" in name:
         return AnomalyType.TOKEN_USAGE_SPIKE
     if "api" in name or "call" in name:

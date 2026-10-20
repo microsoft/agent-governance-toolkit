@@ -109,8 +109,8 @@ class CostOptimizer:
     def pareto_frontier(self, task: TaskProfile) -> list[CostEstimate]:
         """Compute the Pareto-optimal set of models for a task.
 
-        A model is Pareto-optimal if no other model is both cheaper
-        AND higher quality while meeting the task constraints.
+        A model is Pareto-optimal if no other feasible model costs no more
+        and has no lower quality, with at least one strict improvement.
 
         Args:
             task: Task profile specifying quality and latency constraints.
@@ -131,8 +131,8 @@ class CostOptimizer:
         if not feasible:
             return []
 
-        # Sort by cost ascending
-        feasible.sort(key=lambda e: e.estimated_cost)
+        # At equal cost, consider the highest quality first.
+        feasible.sort(key=lambda e: (e.estimated_cost, -e.estimated_quality))
 
         # Build Pareto frontier: walk cost-sorted list, keep only those
         # that improve quality over the best quality seen so far.

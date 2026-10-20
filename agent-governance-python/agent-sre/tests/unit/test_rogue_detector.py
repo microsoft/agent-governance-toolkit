@@ -82,6 +82,48 @@ class TestToolCallFrequencyAnalyzer:
         z = analyzer.score("agent-1", timestamp=t + 5.0)
         assert z > 2.5, f"Expected high z-score for spike, got {z}"
 
+    def test_quiet_window_scores_zero(self) -> None:
+        """Fewer calls than the baseline is not a spike."""
+        analyzer = ToolCallFrequencyAnalyzer(
+            window_seconds=10.0,
+            z_threshold=2.5,
+            min_windows=5,
+        )
+        call_counts = [4, 5, 6, 5, 4, 6]
+        t = 0.0
+        for window, count in enumerate(call_counts):
+            base = window * 10.0
+            for i in range(count):
+                analyzer.record("agent-1", timestamp=base + i)
+            t = base + 10.0
+            analyzer._flush_bucket("agent-1", t)
+
+        # Current window: a single call
+        analyzer.record("agent-1", timestamp=t)
+        assert analyzer.score("agent-1", timestamp=t + 5.0) == 0.0
+
+    def test_new_window_does_not_flag_steady_agent(self) -> None:
+        """An assessment right after a window boundary stays LOW."""
+        detector = RogueAgentDetector(
+            RogueDetectorConfig(
+                frequency_window_seconds=10.0,
+                frequency_min_windows=5,
+                entropy_min_actions=1000,  # disable entropy
+            ),
+        )
+        detector.register_capability_profile("agent-1", ["search"])
+        call_counts = [4, 5, 6, 5, 4, 6]
+        for window, count in enumerate(call_counts):
+            base = window * 10.0
+            for i in range(count):
+                detector.record_action("agent-1", "search", "search", timestamp=base + i)
+
+        # First assessment in a new window, before any call in it
+        assessment = detector.assess("agent-1", timestamp=60.0)
+        assert assessment.frequency_score == 0.0
+        assert assessment.risk_level == RiskLevel.LOW
+        assert assessment.quarantine_recommended is False
+
     def test_unknown_agent_returns_zero(self) -> None:
         """Scoring an agent with no data should return 0."""
         analyzer = ToolCallFrequencyAnalyzer()

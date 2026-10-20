@@ -97,6 +97,7 @@ class SupplyChainConfig:
 _RANGE_RE = re.compile(r"[\^~]")
 _PEP508_PINNED = re.compile(r"==\s*\S+")
 _LOOSE_CONSTRAINT = re.compile(r"(>=|<=|~=|!=|>|<)")
+_VERSION_OPERATOR = re.compile(r"===|==|~=|!=|>=|<=|>|<")
 # Strict MAJOR.MINOR.PATCH (with optional prerelease/build) used by
 # both the Poetry inline-table check and the npm version classifier.
 _EXACT_SEMVER = re.compile(
@@ -180,6 +181,22 @@ def _similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+_PYPI_NAME_SEPARATORS = re.compile(r"[-_.]+")
+
+
+def _normalize_package_name(name: str, ecosystem: str) -> str:
+    """Return the name a registry treats as identical to ``name``.
+
+    PyPI names are case-insensitive and treat runs of ``-``, ``_`` and
+    ``.`` as one separator (PEP 503), so ``Django``, ``scikit_learn`` and
+    ``Flask`` are the same projects as ``django``, ``scikit-learn`` and
+    ``flask``. Other ecosystems are compared as written.
+    """
+    if ecosystem == "pypi":
+        return _PYPI_NAME_SEPARATORS.sub("-", name).lower()
+    return name
+
+
 def _parse_requirements_line(line: str) -> tuple[str, str] | None:
     """Parse a single requirements.txt line into (name, version_spec).
 
@@ -193,16 +210,19 @@ def _parse_requirements_line(line: str) -> tuple[str, str] | None:
     if not line:
         return None
 
-    # Split on version specifier operators
-    for op in ("===", "==", "~=", "!=", ">=", "<=", ">", "<"):
-        if op in line:
-            idx = line.index(op)
-            name = line[:idx].strip()
-            version = line[idx:].strip()
-            return name, version
+    # Split at the first version specifier operator, so a compound specifier
+    # ("pkg>=2.0,!=2.5") stays whole instead of being cut at whichever
+    # operator happens to be tried first
+    match = _VERSION_OPERATOR.search(line)
+    name = line[:match.start()] if match else line
+    version_spec = line[match.start():].strip() if match else ""
 
-    # No version specifier at all
-    return line, ""
+    # PEP 508 also allows a parenthesized specifier ("pkg (>=1.0)") and
+    # extras ("pkg[security]==1.0"); neither is part of the package name
+    if "(" in name:
+        name = name.split("(", 1)[0]
+        version_spec = version_spec.removesuffix(")").strip()
+    return name.split("[", 1)[0].strip(), version_spec
 
 
 # ---------------------------------------------------------------------------
@@ -668,18 +688,25 @@ class SupplyChainGuard:
         ecosystem: str = "pypi",
     ) -> SupplyChainFinding | None:
         """Check if package name is suspiciously similar to a popular package."""
-        allowlist = self.config.known_packages or set()
-        if package in allowlist:
+        normalized = _normalize_package_name(package, ecosystem)
+        allowlist = {
+            _normalize_package_name(name, ecosystem)
+            for name in self.config.known_packages or set()
+        }
+        if normalized in allowlist:
             return None
 
-        popular = KNOWN_POPULAR_PACKAGES.get(ecosystem, set())
+        popular = {
+            _normalize_package_name(name, ecosystem)
+            for name in KNOWN_POPULAR_PACKAGES.get(ecosystem, set())
+        }
 
-        if package in popular:
+        if normalized in popular:
             return None
 
         for known in popular:
-            sim = _similarity(package, known)
-            if sim >= self.config.typosquat_threshold and package != known:
+            sim = _similarity(normalized, known)
+            if sim >= self.config.typosquat_threshold and normalized != known:
                 return SupplyChainFinding(
                     package=package,
                     version="*",

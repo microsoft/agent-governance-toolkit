@@ -28,6 +28,20 @@ from agent_sre.slo.persistence import (
 
 
 class TestInMemoryMeasurementStore:
+    def test_out_of_order_measurements_match_sqlite(self) -> None:
+        memory = InMemoryMeasurementStore()
+        sqlite = SQLiteMeasurementStore(":memory:")
+        for store in (memory, sqlite):
+            store.append("sli", 0.3, 300, {})
+            store.append("other", 0.9, 250, {})
+            store.append("sli", 0.1, 100, {})
+            store.append("sli", 0.2, 200, {})
+
+        assert [r.value for r in memory.query("sli", 200)] == [0.2, 0.3]
+        assert [r.value for r in memory.query("sli", 200)] == [
+            r.value for r in sqlite.query("sli", 200)
+        ]
+
     def test_append_and_query(self) -> None:
         store = InMemoryMeasurementStore()
         t = time.time()

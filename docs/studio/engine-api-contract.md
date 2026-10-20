@@ -1,6 +1,6 @@
 ---
 title: "Engine API Contract: AGT Studio v1"
-last_reviewed: 2026-06-13
+last_reviewed: 2026-09-28
 owner: studio-team
 ---
 
@@ -20,6 +20,12 @@ owner: studio-team
 > **Date:** 2026-06-13
 > **Tracker:** microsoft/agent-governance-toolkit#3011 (Epic 0, issue 1/32)
 > **Machine-readable companion:** `docs/studio/openapi.yaml` (OpenAPI 3.1)
+
+For Studio-specific binding, browser-request and workspace-write requirements,
+see the [sidecar security posture](sidecar-security-posture.md). It distinguishes
+current adapter behavior from future sidecar controls and flags the contract's
+save/reload and JSON/YAML scope conflicts for maintainer review; conformance
+alone is not a sidecar security certification.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
 "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be

@@ -6,6 +6,11 @@ OPA/Rego Policy Adapter
 Evaluates policies written in Rego (Open Policy Agent's policy language)
 alongside the existing YAML/JSON engine.
 
+OPAPolicyBackend is a standalone adapter: BackendRegistry registration only
+makes it available for explicit lookup and evaluation. It does not configure
+govern() or PolicyEngine. Use govern(rego_path=...) or govern(rego_content=...)
+to configure Rego for a governed callable, or load_rego() on an engine you manage.
+
 Two modes:
   1. **Remote OPA** — Sends queries to an OPA server (e.g., http://localhost:8181)
   2. **Embedded Rego** — Evaluates .rego files locally via subprocess call to `opa eval`
@@ -462,12 +467,16 @@ class OPAEvaluator:
 class OPAPolicyBackend:
     """Adapter wrapping OPAEvaluator to satisfy ExternalPolicyBackend protocol.
 
+    Registration enables lookup only. The caller must evaluate the backend
+    and enforce its decision; govern() does not consult BackendRegistry.
+
     Usage:
         from agentmesh.governance.opa import OPAPolicyBackend
         from agentmesh.governance.backend import BackendRegistry
 
         backend = OPAPolicyBackend(rego_content=MY_REGO)
         BackendRegistry.register(backend)
+        decision = BackendRegistry.get("opa").evaluate("export", context)
     """
 
     def __init__(

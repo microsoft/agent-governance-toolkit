@@ -55,7 +55,7 @@ Traditional SLOs measure uptime and latency. But an agent that responds in 200ms
 
 ### Cascading failures in multi-agent systems
 
-When Agent A calls Agent B, which calls Agent C, a failure in C can cascade backward. Without circuit breakers, one flaky tool or one overloaded model can take down your entire agent workflow. This is [OWASP ASI08 — Cascading Agent Failures](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md).
+When Agent A calls Agent B, which calls Agent C, a failure in C can cascade backward. Without circuit breakers, one flaky tool or one overloaded model can take down your entire agent workflow. This is [OWASP ASI08 — Cascading Agent Failures](../../agent-os/docs/owasp-agentic-top10-mapping.md).
 
 ### Cost runaway without guardrails
 
@@ -106,7 +106,7 @@ hallucination.record_evaluation(hallucinated=False)
 An SLO combines your SLIs into a reliability target with a time window. It answers the question: **"Is my agent reliable enough?"**
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 
 slo = SLO(
     name="customer-support-agent",
@@ -388,7 +388,7 @@ A complete example — define SLOs, set cost guardrails, and detect incidents in
 ```python
 """Monitor an AI agent with SRE best practices."""
 
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask, HallucinationRate
 from agent_sre.cost.guard import CostGuard
 from agent_sre.cascade.breaker import CircuitBreaker, CircuitBreakerConfig
@@ -490,7 +490,7 @@ python examples/quickstart.py
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — Governance kernel for AI agents
 - [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — Identity and trust for multi-agent systems
 - [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) — Runtime session management
-- [OWASP Agentic Security Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md) — How Agent SRE addresses OWASP ASI08
+- [OWASP Agentic Security Mapping](../../agent-os/docs/owasp-agentic-top10-mapping.md) — How Agent SRE addresses OWASP ASI08
 
 ### Examples
 

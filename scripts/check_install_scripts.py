@@ -6,8 +6,10 @@
 Install-time scripts (``preinstall`` / ``install`` / ``postinstall``) are
 the primary payload-delivery vector for npm supply-chain attacks: malware
 runs *as part of* ``npm install``, before any code review or runtime check.
-This scanner refuses adoption of any npm package whose latest version
+This scanner refuses adoption of any npm package whose pinned version
 declares any of those scripts unless the package is on the allow-list.
+Direct npm aliases are limited to approved TypeScript compiler/API pairs;
+transitive aliases are checked against their canonical registry package.
 
 Two manifest sources are inspected:
 
@@ -76,9 +78,21 @@ ALLOWLIST: frozenset[str] = frozenset({
     "deasync",
     "node-sass",
     "sass-embedded",
+    # Native FS watcher (jest-haste-map); install hook is a no-op unless
+    # npm_config_build_from_source=true, binaries ship as platform packages.
+    "@parcel/watcher",
+})
+VERSION_ALLOWLIST: frozenset[tuple[str, str]] = frozenset({
+    # Published postinstall.js validates the native binding and may install
+    # same-version @swc/wasm only if it cannot load; CI uses --ignore-scripts.
+    ("@swc/core", "1.16.2"),
 })
 
 MANIFEST_BASENAMES = ["package.json", "package-lock.json", "npm-shrinkwrap.json"]
+
+
+class InvalidAlias(ValueError):
+    """A lockfile alias cannot be resolved to a safe registry identity."""
 
 
 def _basename(path: str) -> str:
@@ -111,10 +125,30 @@ def _extract_pkgjson_pairs(tree: dict | None) -> dict[str, str]:
                 "^", "~", ">", "<", "=", "*",
             )):
                 continue
-            if not common.is_safe_name(name) or not common.is_safe_version(ver):
+            if not common.is_safe_name(name):
+                continue
+            if ver.startswith("npm:"):
+                out[name] = ver
+                continue
+            if not common.is_safe_version(ver):
                 continue
             out[name] = ver
     return out
+
+
+def _split_npm_alias(spec: str) -> tuple[str, str] | None:
+    """Return ``(package, version)`` from an ``npm:<pkg>@<version>`` alias spec.
+
+    npm aliases install one package under another name (``"react-is-18":
+    "npm:react-is@18.3.1"``). The registry knows only the target, so the
+    audit must query that. Returns ``None`` when *spec* is not an alias or
+    when the target is not an exact, safely formed ``pkg@version`` pair
+    (ranges such as ``npm:react-is@^18`` stay unresolved).
+    """
+    try:
+        return common.parse_npm_alias(spec, exact=True)
+    except ValueError:
+        return None
 
 
 def _unwrap_lockfile_path(key: str) -> str | None:
@@ -140,6 +174,8 @@ def _unwrap_lockfile_path(key: str) -> str | None:
 def _extract_lockfile_pairs(tree: dict | None) -> dict[tuple[str, str], bool | None]:
     """Return ``{(pkg, ver): hasInstallScript_hint}``.
 
+    Raise InvalidAlias for malformed alias metadata rather than omit a package.
+
     The hint is *informational only* — we always query the registry. It's
     reported alongside the finding so reviewers can spot lockfiles that
     declare ``hasInstallScript: false`` while the registry says otherwise
@@ -152,11 +188,15 @@ def _extract_lockfile_pairs(tree: dict | None) -> dict[tuple[str, str], bool | N
     # npm v7+ lockfile v2/v3
     packages = tree.get("packages")
     if isinstance(packages, dict):
+        try:
+            declarations = common.npm_alias_declarations(packages)
+        except ValueError as exc:
+            raise InvalidAlias(f"invalid npm alias declaration: {exc}") from exc
         for raw_key, meta in packages.items():
             if not isinstance(raw_key, str) or not isinstance(meta, dict):
                 continue
-            name = _unwrap_lockfile_path(raw_key)
-            if not name:
+            alias = _unwrap_lockfile_path(raw_key)
+            if not alias:
                 # The root workspace entry sometimes carries a ``name`` field
                 # but we don't treat the root as a candidate dep.
                 continue
@@ -164,6 +204,14 @@ def _extract_lockfile_pairs(tree: dict | None) -> dict[tuple[str, str], bool | N
             if not isinstance(ver, str):
                 continue
             ver = ver.strip()
+            try:
+                name, ver = common.resolve_npm_lockfile_package(
+                    alias, meta, declarations, top_level=raw_key == f"node_modules/{alias}"
+                )
+            except ValueError as exc:
+                raise InvalidAlias(f"invalid npm alias at {raw_key!r}: {exc}") from exc
+            if ver is None:
+                continue
             if not common.is_safe_name(name) or not common.is_safe_version(ver):
                 continue
             hint = meta.get("hasInstallScript")
@@ -190,11 +238,20 @@ def _walk_legacy_deps(node: dict, out: dict[tuple[str, str], bool | None]) -> No
         if not isinstance(name, str) or not isinstance(meta, dict):
             continue
         ver = meta.get("version")
-        if isinstance(ver, str) and common.is_safe_name(name) and common.is_safe_version(ver.strip()):
-            ver = ver.strip()
-            existing = out.get((name, ver))
-            if existing is not True:
-                out[(name, ver)] = None  # v1 doesn't carry the hint
+        if isinstance(ver, str):
+            pkg, ver = name, ver.strip()
+            if ver.startswith("npm:"):
+                alias = _split_npm_alias(ver)
+                if alias is None or not (
+                    common.APPROVED_NPM_TRANSITIVE_ALIASES.get(name) == alias[0]
+                    or common.APPROVED_NPM_MANIFEST_ALIASES.get(name) == alias[0]
+                ):
+                    raise InvalidAlias(f"unapproved legacy npm alias at {name!r}: {ver!r}")
+                pkg, ver = alias
+            if common.is_safe_name(pkg) and common.is_safe_version(ver):
+                existing = out.get((pkg, ver))
+                if existing is not True:
+                    out[(pkg, ver)] = None  # v1 doesn't carry the hint
         nested = meta.get("dependencies")
         if isinstance(nested, dict):
             _walk_legacy_deps(nested, out)
@@ -216,15 +273,20 @@ def collect_candidates(base: str) -> list[tuple[str, str, bool | None, str]]:
         if bn == "package.json":
             base_map = _extract_pkgjson_pairs(common.load_json_at(base, path))
             head_map = _extract_pkgjson_pairs(common.load_json_at("HEAD", path))
-            for name, ver in head_map.items():
-                if base_map.get(name) == ver:
+            for alias, spec in head_map.items():
+                if base_map.get(alias) == spec:
                     continue
+                name, ver = common.resolve_npm_manifest_pin(alias, spec)
                 if (name, ver) in by_key:
                     continue
                 by_key[(name, ver)] = (None, path)
         elif bn in ("package-lock.json", "npm-shrinkwrap.json"):
-            base_map = _extract_lockfile_pairs(common.load_json_at(base, path))
             head_map = _extract_lockfile_pairs(common.load_json_at("HEAD", path))
+            try:
+                base_map = _extract_lockfile_pairs(common.load_json_at(base, path))
+            except InvalidAlias:
+                # A repaired lockfile must be scannable even if its base was invalid.
+                base_map = {}
             for (name, ver), hint in head_map.items():
                 if (name, ver) in base_map:
                     continue
@@ -254,7 +316,9 @@ def fetch_install_scripts(package: str, version: str) -> dict[str, str] | None:
     data = common.fetch_json(url)
     if data is None:
         return None
-    scripts = data.get("scripts") if isinstance(data, dict) else None
+    if not isinstance(data, dict) or data.get("name") != package or data.get("version") != version:
+        raise LookupError(f"npm registry identity mismatch for {package}@{version}")
+    scripts = data.get("scripts")
     if not isinstance(scripts, dict):
         return {}
     return {k: v for k, v in scripts.items() if k in LIFECYCLE_KEYS and isinstance(v, str) and v.strip()}
@@ -300,7 +364,11 @@ def main_with_args(argv: list[str]) -> int:
                 return 2
             candidates.append((pkg, ver, None, "(explicit)"))
     else:
-        candidates = collect_candidates(args.base)
+        try:
+            candidates = collect_candidates(args.base)
+        except ValueError as exc:
+            print(f"::error::invalid npm alias: {exc}", file=sys.stderr)
+            return 1
 
     if not candidates:
         print("OK: no new npm dependencies to check for install scripts.")
@@ -332,14 +400,13 @@ def main_with_args(argv: list[str]) -> int:
                 )
             break
 
-        if pkg in allow:
-            print(f"  SKIP (allow-list): {pkg}@{ver}  [{source}]")
-            continue
-
         if not common.is_safe_name(pkg) or not common.is_safe_version(ver):
             findings.append(
                 f"  REJECTED: {pkg}@{ver} has unsafe name/version syntax  [{source}]"
             )
+            continue
+        if pkg in allow or (pkg, ver) in VERSION_ALLOWLIST:
+            print(f"  SKIP (allow-list): {pkg}@{ver}  [{source}]")
             continue
 
         try:

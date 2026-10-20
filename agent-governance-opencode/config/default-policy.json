@@ -38,12 +38,7 @@
       "tool": "bash",
       "reason": "Recursive delete commands outside common build artifacts are blocked by AGT policy.",
       "effect": "deny",
-      "commandPatterns": [
-        {
-          "source": "\\brm\\b[\\s\\S]*\\b-rf\\b",
-          "flags": "i"
-        }
-      ]
+      "commandPatterns": []
     },
     {
       "id": "dangerous-bootstrap",

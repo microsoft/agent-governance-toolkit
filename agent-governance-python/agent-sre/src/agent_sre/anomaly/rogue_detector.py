@@ -163,6 +163,8 @@ class ToolCallFrequencyAnalyzer:
     def score(self, agent_id: str, timestamp: float | None = None) -> float:
         """Return a z-score for the current window's call frequency.
 
+        Only calls above the baseline count: a window with fewer calls
+        than usual (including one that has just started) scores 0.0.
         Returns 0.0 when insufficient data is available.
         """
         now = timestamp if timestamp is not None else time.time()
@@ -182,7 +184,7 @@ class ToolCallFrequencyAnalyzer:
         if std_dev == 0:
             return 0.0
 
-        return abs(current_count - mean) / std_dev
+        return max(0.0, current_count - mean) / std_dev
 
 
 class ActionEntropyScorer:

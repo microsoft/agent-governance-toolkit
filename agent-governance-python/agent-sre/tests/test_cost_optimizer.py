@@ -163,6 +163,15 @@ class TestRecommendation:
 
 
 class TestParetoFrontier:
+    @pytest.mark.parametrize("better_first", [False, True])
+    def test_equal_cost_keeps_only_higher_quality(
+        self, summarization_task: TaskProfile, better_first: bool
+    ) -> None:
+        better = CHEAP_MODEL.model_copy(update={"name": "better", "quality_score": 0.9})
+        models = [better, CHEAP_MODEL] if better_first else [CHEAP_MODEL, better]
+        frontier = CostOptimizer(models).pareto_frontier(summarization_task)
+        assert [estimate.model_name for estimate in frontier] == ["better"]
+
     def test_no_dominated_models(
         self, optimizer: CostOptimizer, summarization_task: TaskProfile
     ) -> None:

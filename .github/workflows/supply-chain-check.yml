@@ -23,6 +23,8 @@ on:
       - '**/go.mod'
       - '**/go.sum'
       - '**/build.rs'
+      # Cargo source policy for the Rust workspaces.
+      - '**/deny.toml'
       # If the scanner code itself changes, the trip-wire job must run.
       - 'scripts/check_release_age.py'
       - 'scripts/check_install_scripts.py'
@@ -62,7 +64,7 @@ jobs:
           set -euo pipefail
           CHANGED="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
           SCANNER_HITS="$(printf '%s\n' "$CHANGED" \
-            | grep -E '^(scripts/(check_release_age|check_install_scripts|check_build_hooks|check_dependency_scorecard|_supply_chain_common)\.py|scripts/tests/test_(check_release_age|check_install_scripts|check_build_hooks|check_dependency_scorecard|supply_chain_common)\.py|\.github/workflows/supply-chain-check\.yml)$' \
+            | grep -E '^(scripts/(check_release_age|check_install_scripts|check_build_hooks|check_dependency_scorecard|_supply_chain_common)\.py|scripts/tests/test_(check_release_age|check_install_scripts|check_build_hooks|check_dependency_scorecard|supply_chain_common)\.py|\.github/workflows/supply-chain-check\.yml|(.*/)?deny\.toml)$' \
             || true)"
           DEP_HITS="$(printf '%s\n' "$CHANGED" \
             | grep -E '(^|/)(package\.json|package-lock\.json|npm-shrinkwrap\.json|Cargo\.toml|Cargo\.lock|pyproject\.toml|requirements[^/]*\.txt|setup\.py|setup\.cfg|Pipfile|Pipfile\.lock|poetry\.lock|uv\.lock|.*\.csproj|packages\.config|go\.mod|go\.sum|build\.rs)$' \
@@ -185,7 +187,7 @@ jobs:
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          python3 scripts/check_install_scripts.py --base "origin/${BASE_REF}" --strict
+          python3 scripts/check_install_scripts.py --base "origin/${BASE_REF}" --strict --max-deps 2000
 
   # ------------------------------------------------------------------
   # G3 (H5): build-hook (setup.py / build.rs) addition flagger.
@@ -294,3 +296,49 @@ jobs:
             --min-score 5.0 \
             --max-deps 50 \
             "${extra_args[@]}"
+
+  # ------------------------------------------------------------------
+  # Cargo source policy: enforce the [sources] allow-list (deny unknown
+  # git and non-crates.io registries) via cargo-deny. The 7-day
+  # release-age check skips path and git crates because they carry no
+  # registry publish date, so without this a git dependency can reach
+  # the tree with no automated Cargo source gate. Scoped to
+  # `check sources` so the gate stays deterministic and does not flake
+  # on time-varying advisory data; advisories, licenses and bans are
+  # intentionally left out of CI for now.
+  # Covers both Rust workspaces (policy-engine, agent-governance-rust) and
+  # the two standalone manifests (policy-engine/examples/coding_agent/app and
+  # the prompt-injection benchmark harness), which reuse policy-engine/deny.toml.
+  # ------------------------------------------------------------------
+  cargo-source-policy:
+    name: Cargo source policy (cargo-deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: scanner-trip-wire
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Install cargo-deny (checksum-verified)
+        env:
+          CARGO_DENY_VERSION: "0.20.2"
+          CARGO_DENY_SHA256: "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f"
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/cargo-deny.tar.gz"
+          dir="cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl"
+          curl -fsSL -o "$archive" "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/${dir}.tar.gz"
+          echo "${CARGO_DENY_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          install -m755 "$RUNNER_TEMP/${dir}/cargo-deny" "$RUNNER_TEMP/cargo-deny"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: cargo deny check sources (policy-engine)
+        run: cargo-deny --manifest-path policy-engine/Cargo.toml --all-features check sources
+      - name: cargo deny check sources (agent-governance-rust)
+        run: cargo-deny --manifest-path agent-governance-rust/Cargo.toml --all-features check sources
+      # Standalone manifests outside the two workspaces reuse policy-engine/deny.toml.
+      - name: cargo deny check sources (coding_agent example)
+        run: cargo-deny --manifest-path policy-engine/examples/coding_agent/app/Cargo.toml --config policy-engine/deny.toml --all-features check sources
+      - name: cargo deny check sources (prompt-injection benchmark harness)
+        run: cargo-deny --manifest-path benchmarks/prompt-injection/harness/agt-rules-baseline/Cargo.toml --config policy-engine/deny.toml --all-features check sources

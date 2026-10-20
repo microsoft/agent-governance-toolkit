@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Tests for behavioral anomaly detection module."""
 
+import pytest
+
 from agent_sre.anomaly.detector import (
     AnomalyAlert,
     AnomalyDetector,
@@ -211,6 +213,14 @@ class TestAnomalyDetector:
         assert alert.anomaly_type == AnomalyType.LATENCY_SPIKE
         assert alert.score > 2.0
 
+    def test_error_rate_spike_is_an_error_rate_surge(self) -> None:
+        det = AnomalyDetector(DetectorConfig(min_samples=10, z_threshold=2.0))
+        for v in [0.01, 0.02] * 15:
+            det.ingest("error_rate", v)
+        alert = det.ingest("error_rate", 0.5)
+        assert alert is not None
+        assert alert.anomaly_type == AnomalyType.ERROR_RATE_SURGE
+
     def test_multiple_metrics_independent(self) -> None:
         det = AnomalyDetector(DetectorConfig(min_samples=5))
         for v in [1.0] * 10:
@@ -337,6 +347,14 @@ class TestAnomalyTypeInference:
 
     def test_error(self) -> None:
         assert _infer_anomaly_type("error_count") == AnomalyType.ERROR_RATE_SURGE
+
+    @pytest.mark.parametrize("metric", ["error_rate", "tool_error_rate", "ErrorRate"])
+    def test_error_rate(self, metric: str) -> None:
+        assert _infer_anomaly_type(metric) == AnomalyType.ERROR_RATE_SURGE
+
+    @pytest.mark.parametrize("metric", ["throughput", "request_rate"])
+    def test_throughput(self, metric: str) -> None:
+        assert _infer_anomaly_type(metric) == AnomalyType.THROUGHPUT_DROP
 
     def test_token(self) -> None:
         assert _infer_anomaly_type("token_usage") == AnomalyType.TOKEN_USAGE_SPIKE

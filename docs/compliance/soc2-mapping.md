@@ -191,7 +191,7 @@ These numbers are relevant to A1.1 (system capacity) and demonstrate that the go
 
 ```python
 # A1.2 in action: SLO with Error Budget
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import TaskSuccessRate, HallucinationRate
 
 slo = SLO(

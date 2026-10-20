@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 05 — Agent Reliability Engineering"
-last_reviewed: 2026-05-11
+last_reviewed: 2026-09-24
 owner: agt-maintainers
 ---
 
@@ -103,19 +103,29 @@ detector.register_capability_profile(
 ### Feed actions and assess risk
 
 ```python
-import time
+# Fixed timestamps make this demonstration reproducible without waiting.
+base = 1_000_000.0
+normal_actions = [
+    ("search", "search_kb"),
+    ("ticket", "create_ticket"),
+    ("email", "send_email"),
+]
 
-# Simulate normal behavior
-for i in range(20):
-    detector.record_action(
-        agent_id="support-agent",
-        action="search",
-        tool_name="search_kb",
-        timestamp=time.time() + i,
-    )
+# Five completed windows establish a baseline; the sixth is assessed below.
+# Vary counts so the baseline has nonzero variance, and vary actions so
+# normal activity does not look like a repetitive loop.
+for window, count in enumerate([18, 20, 22, 19, 21, 20]):
+    for i in range(count):
+        action, tool_name = normal_actions[i % len(normal_actions)]
+        detector.record_action(
+            agent_id="support-agent",
+            action=action,
+            tool_name=tool_name,
+            timestamp=base + window * 60 + i,
+        )
 
 # Assess risk
-assessment = detector.assess("support-agent")
+assessment = detector.assess("support-agent", timestamp=base + 359)
 print(f"Risk: {assessment.risk_level.value}")          # "low"
 print(f"Composite score: {assessment.composite_score}") # ~0.0
 print(f"Quarantine? {assessment.quarantine_recommended}")  # False
@@ -125,23 +135,23 @@ print(f"Quarantine? {assessment.quarantine_recommended}")  # False
 
 ```python
 # Agent starts using unauthorized tools rapidly
-base = time.time() + 100
+spike_start = base + 360
 for i in range(50):
     detector.record_action(
         agent_id="support-agent",
         action="exfiltrate",
         tool_name="shell_exec",       # Not in allowed tools!
-        timestamp=base + i * 0.5,     # 2 calls/second (frequency spike)
+        timestamp=spike_start + i * 0.5,     # 2 calls/second (frequency spike)
     )
 
-assessment = detector.assess("support-agent", timestamp=base + 25)
-print(f"Risk: {assessment.risk_level.value}")          # "high" or "critical"
+assessment = detector.assess("support-agent", timestamp=spike_start + 25)
+print(f"Risk: {assessment.risk_level.value}")          # "critical"
 print(f"Frequency score: {assessment.frequency_score}") # Elevated
 print(f"Capability score: {assessment.capability_score}")  # >0 (violations)
 print(f"Quarantine? {assessment.quarantine_recommended}")  # True
 
 if assessment.quarantine_recommended:
-    print(f"⚠ QUARANTINE agent '{assessment.agent_id}'")
+    print(f"QUARANTINE agent '{assessment.agent_id}'")
 ```
 
 ---

@@ -5,9 +5,16 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import AgtGovernance from "../src/index.mjs";
+
+// Keep registrations off the developer's ~/.config/opencode/agt policy and audit log.
+const isolationRoot = await mkdtemp(join(tmpdir(), "agt-opencode-duplicate-env-"));
+after(() => rm(isolationRoot, { recursive: true, force: true }));
+process.env.AGT_OPENCODE_POLICY_PATH = fileURLToPath(new URL("../config/default-policy.json", import.meta.url));
+process.env.AGT_OPENCODE_AUDIT_PATH = join(isolationRoot, "audit.json");
 
 function makeClient(logs = []) {
   return {

@@ -1,34 +1,27 @@
 {
   "mcpServers": {
     "filesystem-governed": {
-      "command": "python",
+      "command": "agentmesh",
       "args": [
-        "-m", "agentmesh.integrations.mcp.proxy",
-        "--upstream", "npx @modelcontextprotocol/server-filesystem /home/user/projects",
-        "--policy", "./policies/mcp-governance.yaml",
-        "--audit-dir", "./audit-logs"
-      ],
-      "env": {
-        "AGENTMESH_AGENT_NAME": "claude-desktop",
-        "AGENTMESH_SPONSOR": "security@company.com",
-        "AGENTMESH_TRUST_MIN_SCORE": "600",
-        "AGENTMESH_LOG_LEVEL": "INFO"
-      }
+        "proxy",
+        "--policy",
+        "strict",
+        "--target=npx",
+        "--target=-y",
+        "--target=@modelcontextprotocol/server-filesystem",
+        "--target=/home/user/projects"
+      ]
     },
     "shell-governed": {
-      "command": "python",
+      "command": "agentmesh",
       "args": [
-        "-m", "agentmesh.integrations.mcp.proxy",
-        "--upstream", "npx @modelcontextprotocol/server-shell",
-        "--policy", "./policies/mcp-governance.yaml",
-        "--audit-dir", "./audit-logs"
-      ],
-      "env": {
-        "AGENTMESH_AGENT_NAME": "claude-desktop-shell",
-        "AGENTMESH_SPONSOR": "security@company.com",
-        "AGENTMESH_TRUST_MIN_SCORE": "700",
-        "AGENTMESH_LOG_LEVEL": "INFO"
-      }
+        "proxy",
+        "--policy",
+        "strict",
+        "--target=npx",
+        "--target=-y",
+        "--target=@modelcontextprotocol/server-shell"
+      ]
     }
   }
 }

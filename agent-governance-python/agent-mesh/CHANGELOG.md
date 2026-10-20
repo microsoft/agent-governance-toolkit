@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **RFC 8785 number serialization in the approval action digest**: `approval_protocol.canonicalize` now writes floats the way ECMAScript `Number::toString` does, as RFC 8785 section 3.2.2.3 requires (`1e-06` becomes `0.000001`, `1e-07` becomes `1e-7`, `1e21` becomes `1e+21`). Digests over action parameters holding such floats change; they now match other JCS implementations, and an approval computed by an earlier version over such a parameter no longer binds and must be requested again. The RFC 8785 Appendix B number table is pinned in the tests.
 - **HTTP trust middleware request authentication.** `TrustMiddleware` no longer
   accepts a caller-supplied `X-Agent-DID` header as proof of identity. It
   previously started from a trust score of `1.0` and only lowered it inside an
@@ -115,6 +116,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `MemoryStorageProvider` now expires keys set with `ttl_seconds`. It recorded
+  the expiry time but never checked it, so `get`, `exists`, `mget`, `keys`,
+  `scan` and the counters kept returning the key forever, unlike
+  `RedisStorageProvider`. As in Redis, `set` without a TTL, `mset` and `delete`
+  now also clear a key's previous TTL.
+- **Compliance reports no longer count unassessed controls as met.**
+  `ComplianceEngine.generate_report()` derived `controls_met` as
+  `total_controls - violated`, so a framework that `check_compliance()` never
+  exercised reported every control as met with a score of 100. The engine now
+  records which controls each check assessed, and `controls_met` counts only
+  controls assessed in the period (and agent scope) without a violation. New
+  `controls_unassessed` and `unassessed_controls` fields report the rest.
+  `compliance_score` is still `controls_met / total_controls * 100`, so scores
+  drop for frameworks with unassessed controls. The Annex IV export labels
+  `total_controls` as "Controls defined" instead of "Controls evaluated" and
+  adds a "Controls not assessed" line. `generate_report()` also accepts naive
+  period bounds (read as UTC) instead of raising `TypeError` once a violation
+  exists (#3957).
+- **Provider fallbacks on the default install.** Without an advanced provider,
+  `get_trust_decay()` and `get_capability_engine()` now return `NetworkTrustEngine`
+  and `CapabilityRegistry` instead of failing with an `ImportError` for classes that
+  never existed. `get_delegation_chain()` and `get_audit_logger()`, which have no
+  community implementation, raise a `NotImplementedError` naming the missing class
+  and the entry point group a provider package must register (#4152).
+- `list_providers()` reports `"unavailable"` instead of `"community"` for the
+  `delegation` and `audit` slots when no advanced provider is installed, since they
+  have no community implementation.
 - `AuditLog.export()` and `AuditLog.export_cloudevents()` now return all matching
   records instead of silently capping exports at 10,000 records.
 - **Empty policy sets are visible to readiness probes.** The policy server and
@@ -134,6 +162,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   O(log n) per append (worst-case O(n) when tree capacity doubles). Exported
   `merkle_root` values change for the affected sizes; see
   `BREAKING_CHANGES.md`.
+- `NetworkTrustEngine.apply_temporal_decay()` now decays agents that never
+  received a positive signal. Their last-signal time defaulted to the current
+  pass, so they never decayed at all, against spec §12.1. The clock now starts
+  at the first decay pass that sees the agent, so a new agent still does not
+  decay on that first pass.
+- The `agentmesh.marketplace` fallback installers (`installer.py` and
+  `_marketplace_impl.py`, used when `agent_marketplace` is not installed) now
+  parse plugin dependency specifiers the way `agent_marketplace` does. They
+  split at the first `>=`, `==`, `<=`, `>` or `<` they found, so `dep>=1.0.0`
+  was installed as exactly `1.0.0`, `dep>=1.0,<2.0` failed with
+  `Version not found: dep@1.0,<2.0`, and `!=` or `~=` became part of the plugin
+  name. Only an `==` clause pins a version now; other specifiers resolve the
+  latest registered version.
 
 ### Changed
 

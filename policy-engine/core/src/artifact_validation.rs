@@ -686,7 +686,7 @@ intervention_points:
     }
 
     #[test]
-    fn manifest_schema_rejects_removed_fields() {
+    fn manifest_schema_rejects_unsupported_or_invalid_sources() {
         // The schema keeps these keys as `not: {}` rather than dropping them:
         // the surrounding objects allow additional properties, so a dropped
         // key would be accepted silently, which is the fail-open state the
@@ -697,7 +697,7 @@ policies:
   p:
     type: rego
     bundle_url:
-      url: https://bundles.example/b.tar.gz
+      url: http://bundles.example/b.tar.gz
       sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 intervention_points:
   input:
@@ -738,7 +738,7 @@ intervention_points:
       judge:
         from: $target
         system_prompt_url:
-          url: https://prompts.example/p.txt
+          url: http://prompts.example/p.txt
           sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 "#,
         ] {

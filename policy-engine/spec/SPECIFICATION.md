@@ -1,16 +1,32 @@
 # Agent Control Specification
 
-This document specifies the runtime semantics AGT hosts against. The engine is the `agent-control-spec` crate, pinned at 0.4.0-alpha.3. Its accepted manifest `agent_control_specification_version` remains 0.4.0-alpha.1. Its status is Draft.
+This is AGT's compatibility profile. The canonical decision-engine contract is
+maintained in the
+[upstream ACS specification](https://github.com/responsibleai/agent-control-spec/blob/main/spec/SPECIFICATION.md).
+[Agent Hooks](https://github.com/responsibleai/agent-hooks) defines the
+interceptor and host contract. Consult the [retarget guide](../docs/acs-retarget.md)
+for the exact engine pin and restrictions of this compatibility layer.
 
-The machine readable manifest contract is `schema/manifest.schema.json` in artifact kits and `spec/schema/manifest.schema.json` in this repository. That schema governs manifest syntax. This document governs runtime semantics, which are the evaluation order, the policy input shape, verdict handling, transform application, and fail closed behavior.
+AGT pins `agent-control-spec` at `0.4.0-alpha.4`. That package accepts manifest
+contracts `0.4.0-alpha.1` and `0.5.0-alpha.1`. This profile retains the existing
+host API and adds support for the newer manifest contract. Package and
+manifest versions must not be substituted for one another.
+
+The machine readable AGT compatibility schema is `schema/manifest.schema.json`
+in artifact kits and `spec/schema/manifest.schema.json` in this repository.
+AGT's tooling checks that schema and the pinned engine's typed validation.
+This document records the host profile, including AGT's enforcement and
+approval handling.
 
 The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, NOT RECOMMENDED, MAY, and OPTIONAL in this document are to be interpreted as described in BCP 14 [RFC 2119] [RFC 8174] when, and only when, they appear in all capitals, as shown here. The references are listed in section 23.
 
 ## 1. Model
 
-ACS evaluates one intervention point of one agent at a time. The host assembles a complete JSON snapshot for that intervention point and calls the runtime. The runtime selects the value under evaluation, attaches host supplied annotations, calls a host supplied policy dispatcher, normalizes the result into a verdict, and validates any transform the verdict carries. In enforce mode a `transform` verdict produces a transformed policy target.
+ACS evaluates one intervention point of one agent at a time. The host assembles a complete JSON snapshot for that intervention point and calls the runtime. The runtime selects the value under evaluation, attaches host supplied annotations, calls a host supplied policy dispatcher, normalizes the result into a verdict, and validates any transform the verdict carries. In enforce mode the AGT host SDK applies a `transform` verdict to produce the transformed policy target.
 
-The runtime computes verdicts and produces a transformed policy target. Acting on a verdict, by allowing, transforming, escalating, or refusing the action under control, happens at the host integration boundary defined in section 17. The ACS SDKs implement that boundary in their adapters, so a host that wraps an action in an adapter gets enforcement without writing it by hand.
+The engine returns a verdict and policy input. Acting on that verdict happens
+at the host integration boundary defined in section 17. AGT's host SDKs apply
+transforms and resolve approvals before their guarded operations proceed.
 
 ### 1.1 Invariants
 
@@ -28,7 +44,9 @@ This section defines the terms this document uses with a specific meaning. Every
 
 **Host.** The application that embeds ACS. The host assembles snapshots, calls the runtime, supplies dispatchers, and acts on verdicts. The ACS SDK adapters run inside the host and perform that integration on its behalf.
 
-**Runtime.** The stateless, deterministic engine defined by this document. The runtime computes a verdict and an optional transformed policy target and performs no input or output of its own.
+**Runtime.** The stateless decision engine. It computes a verdict and policy
+input. Dispatchers perform policy and annotator I/O, and the host applies any
+transform.
 
 **Snapshot.** The complete JSON document the host assembles for one intervention point. It is the only input the runtime reads about the agent and its environment.
 
@@ -69,7 +87,11 @@ A manifest MUST be validated before any evaluation uses it. A manifest that fail
 
 ### 2.1 Version
 
-`agent_control_specification_version` MUST be a non empty string. This document describes the value `0.4.0-alpha.1`.
+`agent_control_specification_version` MUST name a supported upstream contract.
+`0.4.0-alpha.1` retains independent annotator evaluation. `0.5.0-alpha.1`
+adds binding-level `needs` dependencies and reads through
+`$pi.annotations.<name>`. A parent and child MUST use the same contract.
+The upstream specification defines dependency validation and evaluation order.
 
 ### 2.2 extends
 
@@ -83,7 +105,26 @@ discovery and its migration-only errors are not part of the runtime contract.
 
 ### 2.3 Loading from a URL
 
-A loader MAY fetch the top level manifest itself from an HTTPS URL rather than the file system. A URL load takes the URL and an optional `sha256` pin and applies the same fetch path and trust gate as a URL `extends` entry defined in section 2.2, so the fetch is HTTPS only, carries no ambient credentials, and is bounded by the same body size limit. The pin is optional, mirroring URL `extends`, where an unpinned URL is trusted because the host chose it. An unpinned top level URL provides no content integrity, so a host that needs integrity SHOULD supply a `sha256`. When a `sha256` is supplied it MUST be a 64 character hexadecimal SHA-256 digest over the fetched bytes and a mismatch MUST fail closed. A non HTTPS URL, a malformed or blank pin, a fetch error, or a body size breach MUST fail closed regardless of whether a pin is present. After the fetch the manifest is parsed, its own `extends` are resolved by the same loader, and the merged manifest is validated as a whole. A reference under a URL sourced manifest resolves against the URL, so a relative `extends` entry becomes a sibling URL. A URL sourced manifest has no file system manifest root, so it MUST NOT carry a filesystem path field. A rego `bundle`, an annotator `system_prompt_file`, a cedar `policy_path`, `entities_path`, or `schema_path`, or an adapter `data` or `data_paths` field MUST fail closed, because such a field would otherwise resolve against the process working directory at dispatch and let a remote manifest read local files. A URL sourced manifest supplies policy and prompt inline, and so never reaches the local file system. The remote `system_prompt_url` and `bundle_url` forms an earlier engine offered are removed (section 10 and section 12.1); a manifest that declares either fails closed with `runtime_error:manifest_invalid` whatever its source. The local filesystem path fields and the host environment secret fields stay rejected for a URL sourced manifest even when its load chain is fully pinned, because their content is not part of the pin. A URL sourced manifest also controls a dispatch endpoint, so it MUST NOT declare an annotator field that reads a host environment secret, namely `api_key_env` or an `aws_*_env` field, because a remote manifest could otherwise name a credential variable and exfiltrate it to a chosen endpoint. This restriction MUST be enforced on both the annotator declaration and the declaration overlaid with each intervention point binding, since a binding overlays its fields onto the declaration. Beyond the explicit fields, a bundled `llm` dispatcher serving a URL sourced manifest MUST NOT fall back to a host environment credential at dispatch, including a provider default credential variable such as `OPENAI_API_KEY` or `AWS_SESSION_TOKEN`, because that read carries no manifest field for a static scan to reject. Such a manifest supplies any credential inline.
+A loader MAY fetch a manifest over HTTPS with an optional SHA-256 pin. Fetch
+errors, invalid pins, hash mismatches and body-limit breaches MUST fail closed.
+A missing pin provides no content-integrity guarantee.
+
+The upstream loader preserves URL provenance through composition. Fetched
+documents MUST NOT request local files, host environment credentials, approval
+configuration or arbitrary executable Rego queries. This includes local Rego
+bundles, Cedar path fields and adapter `data` or `data_paths` fields. Restrictions
+apply to declarations and binding overrides. Bundled annotators MUST NOT fall
+back to environment credentials for a URL sourced invocation.
+
+Fetched documents may use pinned `bundle_url` and `system_prompt_url` sources
+only when the upstream loader verifies the required pinned manifest chain.
+A pin does not grant access to host files or credentials.
+
+AGT's top-level `manifest_from_url` helper retains the legacy
+`0.4.0-alpha.1` wrapper and disables redirects. It checks the caller's literal
+destination, not DNS resolution or nested URL parents. For a
+`0.5.0-alpha.1` URL parent, use a local root with that version and an `extends`
+reference. See the retarget guide for the remaining destination-check limits.
 
 ## 3. Paths
 
@@ -201,7 +242,12 @@ ACS defines no built in classifier or judge engine. Annotator execution is alway
 
 An implementation MAY ship host side default annotator dispatchers. A default `llm` dispatcher MAY provide provider presets for OpenAI compatible chat completions, Azure OpenAI chat completions, Amazon Bedrock Converse, Gemini `generateContent`, and Ollama chat. These presets MUST preserve runtime determinism by keeping network input and output outside pure decision logic. Provider credentials MUST come from explicit manifest fields or named environment variables. Provider responses MUST be normalized to a JSON annotation before policy execution. A malformed provider response, provider error, missing credential, missing label field, or invalid model JSON MUST fail closed as an annotator error. The normalized shape SHOULD include `label` and `raw` members, and a host MAY preserve a configurable `label_field` for model JSON.
 
-A default `llm` dispatcher reads its system prompt from the inline `system_prompt` field, or its `prompt` alias. When neither is set the dispatcher uses its preset default prompt. The `system_prompt_file` and `system_prompt_url` sources an earlier engine offered are removed in the retarget onto `agent-control-spec`: the pinned engine has no implementation of them, and because its annotator configuration is an open map it would otherwise accept the field and run the judge with the default prompt. A manifest that declares `system_prompt_file` or `system_prompt_url`, on the annotator declaration or on an intervention point annotation binding, MUST fail closed with `runtime_error:manifest_invalid` naming the field. The machine readable schema keeps both keys as rejected properties for the same reason. Restoring a file or URL prompt source is an upstream proposal, not a host extension.
+A default `llm` dispatcher reads an inline `system_prompt`, its `prompt` alias,
+or a pinned HTTPS `system_prompt_url`. URL and inline sources MUST NOT be
+combined. With no configured source the dispatcher uses its preset prompt.
+`system_prompt_file` remains unsupported and AGT MUST reject it on declarations
+and bindings. Prompt downloads use the host's artifact URL limits; provider
+inference timeouts are separate.
 
 ## 11. Information flow control
 
@@ -225,7 +271,13 @@ This model follows established attribute and sink enforcement practice. ABAC and
 
 A `policies` entry is a named, reusable policy definition. The schema defines four types.
 
-A `rego` policy targets Open Policy Agent. Its `query` and `bundle` members are optional in the schema. The runtime offers an optional bundled dispatcher that runs the `opa` executable when it is present, and the host MAY supply its own dispatcher instead. The `bundle_url` form an earlier engine offered, a remote bundle fetched and pin checked at dispatch, is removed in the retarget onto `agent-control-spec`: the pinned engine has no implementation of it, and because its policy configuration is an open map it would otherwise accept the field and then deny every request with `runtime_error:policy_invocation_failed` and no diagnostic. A manifest that declares `bundle_url`, on the policy definition or on an intervention point policy binding, MUST fail closed with `runtime_error:manifest_invalid` naming the field. The machine readable schema keeps the key as a rejected property for the same reason. Restoring a remote bundle source is an upstream proposal, not a host extension.
+A `rego` policy uses AGT's explicit OPA default unless the host supplies a
+dispatcher. A local `bundle` and pinned HTTPS `bundle_url` are mutually
+exclusive. The OPA dispatcher fetches a remote bundle at dispatch with the
+host's artifact URL limits and verifies its pin before evaluation. Accepting
+the manifest does not prove that the remote bundle compiles. Upstream's
+in-process Rego backend is a separate opt-in and does not support remote
+archive bundles.
 
 A `cedar` policy targets the Cedar policy language. Its configuration, request mapping, and verdict mapping are defined in section 12.4. The runtime offers an optional bundled `cedar` dispatcher, and the host MAY supply its own dispatcher instead. `rego` and `cedar` are the two types with a bundled runtime execution path.
 
@@ -301,7 +353,7 @@ Normalization MUST fail closed with `runtime_error:policy_output_invalid` when t
 
 `allow` permits the action with no change to the policy target. `transform` permits the action and replaces the policy target as defined in section 14. `deny` refuses the action. The intent `warn` normalizes to `allow` with an entry appended to `warnings[]`; it permits the action with no change to the policy target and records the warning. The intent `escalate` normalizes to a `deny` carrying an `approval` block, which defers the action to the host approval path defined in section 17.1. A host that previously expressed permit with redaction as a permit verdict that also rewrote the policy target MUST now express it as a `transform` verdict, or as an annotator that performs the rewrite upstream of the policy.
 
-The runtime derives two action identities for each successful evaluation. Each is encoded as `sha256:` followed by lowercase hexadecimal bytes. `input_identity` is the SHA-256 digest of the canonical policy input JSON that the policy evaluated. `enforced_identity` is the SHA-256 digest of the canonical policy input after a `transform` path is applied to the policy target. The two identities are equal for every decision other than `transform`, and they are equal in `evaluate_only` mode because no transform is applied. Both identities cover the intervention point, policy target, full snapshot, annotations, and projected tool data that the policy evaluated. The escalation approval path in section 17.1 binds to `enforced_identity` so that the approver consents to the action that will execute.
+The AGT host derives two action identities for each successful evaluation. Each is encoded as `sha256:` followed by lowercase hexadecimal bytes. `input_identity` is the SHA-256 digest of the canonical policy input JSON that the policy evaluated. `enforced_identity` is the SHA-256 digest of the canonical policy input after a `transform` path is applied to the policy target. The two identities are equal for every decision other than `transform`, and they are equal in `evaluate_only` mode because no transform is applied. Both identities cover the intervention point, policy target, full snapshot, annotations, and projected tool data that the policy evaluated. The escalation approval path in section 17.1 binds to `enforced_identity` so that the approver consents to the action that will execute.
 
 ### 13.2 Result labels
 

@@ -32,6 +32,10 @@ class _ObjectProxy:
         object.__setattr__(self, "_agent_control_overrides", dict(overrides or {}))
         object.__setattr__(self, "_agent_control_blocked", dict(blocked or {}))
 
+    @property
+    def __class__(self) -> type:
+        return object.__getattribute__(self, "_agent_control_target").__class__
+
     def __getattr__(self, name: str) -> Any:
         overrides = object.__getattribute__(self, "_agent_control_overrides")
         if name in overrides:

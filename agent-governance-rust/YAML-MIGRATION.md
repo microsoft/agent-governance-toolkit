@@ -100,25 +100,16 @@ floor. AGT's policy-engine core, host SDK and their Rust consumers now declare
 1.89 as well. The lockfiles select age-compliant `granit-parser` 1.2.1 and
 `encoding_rs` 0.8.35.
 
-The committed registry-only graph still contains
-`agentmesh → agent_control_specification → agent-control-spec 0.4.0-alpha.3
-→ serde_yaml → unsafe-libyaml`. The core shim also depends on that external
-engine. The companion ACS parser change in
-`https://github.com/responsibleai/agent-control-spec/pull/75` must be released
-before these paths can disappear.
+The registry dependency is now `agent-control-spec 0.4.0-alpha.4`, which
+includes the upstream `serde-saphyr` migration. The three consumer lockfiles
+no longer contain the engine's `serde_yaml` and `unsafe-libyaml` dependencies.
 
-Release the ACS companion first, wait for the repository's dependency-age
-requirement, update both AGT external ACS pins to that actual published
-version, and regenerate locks with Cargo. Then publish a newly versioned core
-shim, its host SDK and finally the Rust 5.0 packages in the existing coordinated
-release process. No unpublished registry version or permanent local override
-is introduced by this change.
+AGT consumes the published engine through exact registry pins. Release the
+versioned compatibility shim before its host SDK and dependent Rust packages.
+No local engine patch or unpublished package is needed for this parser change.
 
-A validation-only local patch of the companion engine removes `serde_yaml`,
-`unsafe-libyaml`, `yaml_serde` and `libyaml-rs` from the standalone Rust
-workspace's default and all-features graphs. Agentmesh requests Regorus with
-`regex` only. The policy-engine workspace now forwards an optional `rego`
-feature from the core shim, so its all-features graph also enables upstream
-Regorus YAML. That path retains `yaml_serde` and `libyaml-rs` with the companion
-engine. No YAML builtin is disabled to remove a dependency, and this is not
-a claim that the entire Rust graph contains no unsafe code.
+Agentmesh requests Regorus with `regex` only. The policy-engine workspace
+also supports the core shim's opt-in `rego` feature. That graph retains
+`yaml_serde` and `libyaml-rs` for Regorus YAML builtins. The engine parser
+migration does not disable those builtins or imply that the full dependency
+graph contains no unsafe code.

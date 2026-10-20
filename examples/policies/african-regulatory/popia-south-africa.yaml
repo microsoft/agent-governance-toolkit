@@ -20,3 +20,8 @@ intervention_points:
     policy:
       id: popia_south_africa
       query: data.agt_policies_africa.popia.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: popia_south_africa
+      query: data.agt_policies_africa.popia.acs_pre_tool_call_result

@@ -8,8 +8,7 @@ license = "MIT"
 publish = true
 
 [dependencies]
-# Alpha.3 cannot compile without opa or rego; opa adds no evaluator dependency.
-agent-control-spec = { version = "=0.4.0-alpha.3", default-features = false, features = ["opa"] }
+agent-control-spec = { version = "=0.4.0-alpha.4", default-features = false }
 opentelemetry = { version = "0.31", features = ["metrics"] }
 
 [dev-dependencies]

@@ -6,6 +6,12 @@ For every added or changed entry in a lockfile (npm `package-lock.json`,
 Cargo `Cargo.lock`, or `pip` requirements files with ``--hash`` pins), this
 script compares the locally pinned cryptographic hash against what the
 upstream package registry actually publishes for that exact version.
+For npm aliases, the declared target and canonical tarball must agree with
+the lockfile entry before its digest is checked. Weak SHA1-only or malformed
+integrity values are findings, not skipped entries.
+Transitive aliases are restricted to reviewed name/target pairs; this does
+not authenticate the declaring parent's published dependency metadata, so
+lockfile consistency checks remain necessary when installing dependencies.
 
 This catches **lockfile poisoning** — a supply-chain attack where the version
 number is unchanged but the bytes have been swapped (e.g. tampered tarball,
@@ -17,6 +23,14 @@ Supported ecosystems:
     - npm ``package-lock.json`` (lockfileVersion 2/3 ``packages`` map)
     - Cargo ``Cargo.lock`` (``[[package]]`` ``checksum`` field)
     - pip ``requirements*.txt`` lines with ``--hash=sha256:<hex>``
+
+npm aliases (``"@jest/react-is-18": "npm:react-is@^18"`` in package.json)
+land in the lockfile under the alias path, with the real package in the
+``name`` field (v2/v3 ``packages``) or as an exact ``npm:<pkg>@<ver>``
+version in those entries. Such entries are resolved to the real package before
+the registry lookup, since the alias itself is not a registry package. For
+every npm entry the lockfile ``resolved`` tarball URL is compared with the
+registry ``dist.tarball`` in addition to the integrity hash.
 
 Out of scope (noted as future work): yarn.lock, pnpm-lock.yaml,
 NuGet packages.lock.json.
@@ -45,7 +59,9 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from typing import Callable, Iterable, NamedTuple
+
+import _supply_chain_common as common
 
 try:
     import tomllib
@@ -89,10 +105,10 @@ PYPI_HOST = "pypi.org"
 # Tight character classes for ecosystem identifiers. Used both for sanity
 # checking parsed values and for safe log emission (avoid log-injection via
 # control characters in attacker-controlled package names).
-NPM_NAME_RE = re.compile(r"^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$", re.IGNORECASE)
+NPM_NAME_RE = common.NPM_NAME_RE
 CARGO_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 PYPI_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+\-]*$")
+VERSION_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._+\-]*\Z")
 SRI_RE = re.compile(r"^(sha256|sha384|sha512)-([A-Za-z0-9+/]+={0,2})$")
 HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -113,6 +129,7 @@ class LockEntry:
     version: str
     integrity: str  # raw lockfile value (SRI for npm, hex for cargo/pip)
     location: str  # human-readable lockfile path / key for diagnostics
+    resolved: str = ""  # npm ``resolved`` tarball URL, "" when absent
 
 
 @dataclass
@@ -243,10 +260,9 @@ def _http_get_json(url: str, *, allowed_hosts: tuple[str, ...]) -> dict:
 def parse_npm_lockfile(content: str, path: str) -> list[LockEntry]:
     """Parse an npm ``package-lock.json`` (v2/v3) into LockEntry rows.
 
-    Only entries under ``packages`` with a non-empty key, a ``version``,
-    and an ``integrity`` field are returned. Workspace roots (empty key)
-    and link/symlink entries (no integrity) are deliberately skipped — they
-    do not represent registry-installable artifacts.
+    Workspace roots and link/symlink entries do not represent registry
+    artifacts. Invalid aliases and missing/weak digests become error
+    sentinels instead of disappearing from the verification report.
     """
     try:
         data = json.loads(content)
@@ -258,33 +274,59 @@ def parse_npm_lockfile(content: str, path: str) -> list[LockEntry]:
         return []
 
     entries: list[LockEntry] = []
+    try:
+        declarations = common.npm_alias_declarations(packages)
+    except ValueError:
+        entries.append(LockEntry("npm-alias-suspicious", "<invalid declaration>", "",
+                                 "", f"{path}::packages"))
+        declarations = {}
     for key, info in packages.items():
-        if not isinstance(info, dict):
+        if not isinstance(key, str) or not isinstance(info, dict):
             continue
         if not key:
             continue  # workspace root
-        if info.get("link") is True:
-            continue
-        version = info.get("version")
-        integrity = info.get("integrity")
-        if not isinstance(version, str) or not isinstance(integrity, str):
-            continue
-        # The trailing path segment after the last `node_modules/` is the
-        # canonical package name; this handles nested transitive copies.
         marker = "node_modules/"
         idx = key.rfind(marker)
-        name = key[idx + len(marker):] if idx >= 0 else key
-        if not NPM_NAME_RE.match(name) or not VERSION_RE.match(version):
+        alias = key[idx + len(marker):] if idx >= 0 else key
+        location = f"{path}::{key}"
+        try:
+            name, version = common.resolve_npm_lockfile_package(
+                alias, info, declarations, top_level=key == f"node_modules/{alias}"
+            )
+        except ValueError:
+            entries.append(LockEntry("npm-alias-suspicious", _safe(alias), _safe(info.get("version")),
+                                     _safe(info.get("integrity")), location))
             continue
-        if len(name) > MAX_IDENT_LEN or len(version) > MAX_IDENT_LEN:
+        if info.get("link") is True:
+            if name != alias:
+                entries.append(LockEntry("npm-alias-suspicious", name, _safe(info.get("version")),
+                                         _safe(info.get("integrity")), location))
             continue
+        integrity = info.get("integrity")
+        if not isinstance(version, str) or not VERSION_RE.fullmatch(version) or len(version) > MAX_IDENT_LEN:
+            entries.append(LockEntry("npm-integrity-suspicious", name, _safe(info.get("version")),
+                                     _safe(integrity), location))
+            continue
+        if not NPM_NAME_RE.fullmatch(name) or len(name) > MAX_IDENT_LEN:
+            entries.append(LockEntry("npm-alias-suspicious", _safe(name), version,
+                                     _safe(integrity), location))
+            continue
+        if not isinstance(integrity, str):
+            entries.append(LockEntry("npm-integrity-suspicious", name, version, "", location))
+            continue
+        resolved = info.get("resolved")
+        if not isinstance(resolved, str):
+            resolved = ""
         # Multi-algorithm SRI is space-separated, e.g.
         # ``sha512-AAA== sha256-BBB==``. compare_npm() handles either, but
         # the anchored SRI_RE rejects strings with spaces, so we split first.
         if len(integrity) > MAX_IDENT_LEN * 4:
+            entries.append(LockEntry("npm-integrity-suspicious", name, version, _safe(integrity), location))
             continue
-        tokens = [tok for tok in integrity.split() if SRI_RE.match(tok)]
-        if not tokens:
+        tokens = integrity.split()
+        if not tokens or any(not SRI_RE.fullmatch(tok) for tok in tokens):
+            entries.append(LockEntry("npm-integrity-suspicious", name, version,
+                                     _safe(integrity, max_len=200), location))
             continue
         # W3C SRI / ssri semantics: multiple tokens of the *same* algorithm
         # are treated as alternatives — a payload passes if ANY listed
@@ -304,7 +346,8 @@ def parse_npm_lockfile(content: str, path: str) -> list[LockEntry]:
                     name=name,
                     version=version,
                     integrity=_safe(integrity, max_len=200),
-                    location=f"{path}::{key}",
+                    location=location,
+                    resolved=resolved,
                 )
             )
             continue
@@ -314,31 +357,45 @@ def parse_npm_lockfile(content: str, path: str) -> list[LockEntry]:
                 name=name,
                 version=version,
                 integrity=integrity,
-                location=f"{path}::{key}",
+                location=location,
+                resolved=resolved,
             )
         )
     return entries
 
 
-def fetch_npm_integrity(name: str, version: str) -> str:
-    """Return the registry-published SRI integrity for *name*@*version*."""
-    if not NPM_NAME_RE.match(name):
+class NpmDist(NamedTuple):
+    """Registry-published artifact metadata for one npm version."""
+
+    integrity: str  # SRI string
+    tarball: str  # ``dist.tarball`` URL, "" when the registry omits it
+
+
+def fetch_npm_dist(name: str, version: str) -> NpmDist:
+    """Return the registry-published integrity and tarball URL for *name*@*version*."""
+    if not NPM_NAME_RE.fullmatch(name):
         raise RegistryError(f"invalid npm name: {_safe(name)}")
-    if not VERSION_RE.match(version):
+    if not VERSION_RE.fullmatch(version):
         raise RegistryError(f"invalid npm version: {_safe(version)}")
     # urllib quoting is not needed since both fields are tightly validated.
     url = f"https://{NPM_HOST}/{name}/{version}"
     payload = _http_get_json(url, allowed_hosts=(NPM_HOST,))
+    if not isinstance(payload, dict) or payload.get("name") != name or payload.get("version") != version:
+        raise RegistryError(f"npm metadata identity mismatch for {_safe(name)}@{_safe(version)}")
     dist = payload.get("dist")
     if not isinstance(dist, dict):
         raise RegistryError(f"no dist for {_safe(name)}@{_safe(version)}")
+    tarball = dist.get("tarball")
+    if not isinstance(tarball, str):
+        tarball = ""
     integrity = dist.get("integrity")
     if isinstance(integrity, str) and SRI_RE.match(integrity):
-        return integrity
+        return NpmDist(integrity, tarball)
     # Older registry entries only publish shasum (sha1, hex).
     shasum = dist.get("shasum")
     if isinstance(shasum, str) and re.fullmatch(r"[0-9a-f]{40}", shasum):
-        return f"sha1-{base64.b64encode(bytes.fromhex(shasum)).decode('ascii')}"
+        sha1 = f"sha1-{base64.b64encode(bytes.fromhex(shasum)).decode('ascii')}"
+        return NpmDist(sha1, tarball)
     raise RegistryError(f"no integrity for {_safe(name)}@{_safe(version)}")
 
 
@@ -356,6 +413,16 @@ def compare_npm(local: str, upstream: str) -> bool:
     if not local_parts or not upstream_parts:
         return False
     return bool(local_parts & upstream_parts)
+
+
+def compare_npm_resolved(local: str, upstream: str) -> bool:
+    """Return True if the lockfile ``resolved`` URL is the registry tarball.
+
+    Exact match after trimming whitespace. npm writes ``dist.tarball``
+    verbatim into ``resolved``, so any difference means the lockfile points
+    somewhere other than where the registry publishes this version.
+    """
+    return bool(local.strip()) and local.strip() == upstream.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -756,9 +823,7 @@ def _is_lockfile(path: str) -> bool:
         return True
     if base == "Cargo.lock":
         return True
-    if base.startswith("requirements") and base.endswith(".txt"):
-        return True
-    return False
+    return base.startswith("requirements") and base.endswith(".txt")
 
 
 # ---------------------------------------------------------------------------
@@ -780,10 +845,11 @@ def parse_lockfile(path: str, content: str) -> list[LockEntry]:
 def diff_entries(old: list[LockEntry], new: list[LockEntry]) -> list[LockEntry]:
     """Return entries in *new* that are not byte-for-byte in *old*.
 
-    Identity is (ecosystem, name, version, integrity). A version bump, a
-    new dependency, or a silent integrity change all qualify.
+    Identity is (ecosystem, name, version, integrity, resolved). A version
+    bump, a new dependency, a silent integrity change, or a ``resolved``
+    URL that now points elsewhere all qualify.
     """
-    key = lambda e: (e.ecosystem, e.name, e.version, e.integrity)  # noqa: E731
+    key = lambda e: (e.ecosystem, e.name, e.version, e.integrity, e.resolved)  # noqa: E731
     old_keys = {key(e) for e in old}
     return [e for e in new if key(e) not in old_keys]
 
@@ -795,7 +861,7 @@ def verify_entries(
     entries: Iterable[LockEntry],
     report: Report,
     *,
-    npm_fetcher: Callable[[str, str], str] = fetch_npm_integrity,
+    npm_fetcher: Callable[[str, str], NpmDist | str] = fetch_npm_dist,
     cargo_fetcher: Callable[[str, str], str] = fetch_cargo_checksum,
     pip_fetcher: Callable[[str, str], set[str]] = fetch_pypi_hashes,
 ) -> None:
@@ -804,14 +870,35 @@ def verify_entries(
         try:
             if entry.ecosystem == "npm":
                 upstream = npm_fetcher(entry.name, entry.version)
-                if not compare_npm(entry.integrity, upstream):
+                # A fetcher may return a bare SRI string (legacy / tests)
+                # or an NpmDist carrying the tarball URL as well.
+                if isinstance(upstream, tuple):
+                    upstream_integrity, upstream_tarball = upstream[0], upstream[1]
+                else:
+                    upstream_integrity, upstream_tarball = upstream, ""
+                if not compare_npm(entry.integrity, upstream_integrity):
                     report.add(Finding(
                         severity="error",
                         entry=entry,
                         message=(
                             f"npm integrity mismatch for {_safe(entry.name)}@"
                             f"{_safe(entry.version)}: lockfile={_safe(entry.integrity)} "
-                            f"upstream={_safe(upstream)}"
+                            f"upstream={_safe(upstream_integrity)}"
+                        ),
+                    ))
+                elif (
+                    entry.resolved
+                    and upstream_tarball
+                    and not compare_npm_resolved(entry.resolved, upstream_tarball)
+                ):
+                    report.add(Finding(
+                        severity="error",
+                        entry=entry,
+                        message=(
+                            f"npm resolved URL mismatch for {_safe(entry.name)}@"
+                            f"{_safe(entry.version)}: "
+                            f"lockfile={_safe(entry.resolved, max_len=200)} "
+                            f"upstream={_safe(upstream_tarball, max_len=200)}"
                         ),
                     ))
             elif entry.ecosystem == "cargo":
@@ -854,6 +941,21 @@ def verify_entries(
                         f"{_safe(entry.integrity, max_len=200)}"
                     ),
                 ))
+            elif entry.ecosystem == "npm-alias-suspicious":
+                report.add(Finding(
+                    severity="error",
+                    entry=entry,
+                    message=f"invalid npm alias at {_safe(entry.location)}: declaration, "
+                            "target name, version, or canonical registry tarball is not verified",
+                ))
+            elif entry.ecosystem == "npm-integrity-suspicious":
+                report.add(Finding(
+                    severity="error",
+                    entry=entry,
+                    message=f"npm version or integrity for {_safe(entry.name)}@{_safe(entry.version)} "
+                            "is missing, malformed, or uses a weak/unsupported digest "
+                            "(SHA1-only lockfiles must be regenerated with SHA512)",
+                ))
             elif entry.ecosystem == "pip-suspicious":
                 # Sentinel emitted by parse_pip_lockfile for lines that
                 # contain --hash= but do not match the strict registry-
@@ -886,7 +988,7 @@ def run(
     *,
     base_ref: str | None,
     max_deps: int,
-    npm_fetcher: Callable[[str, str], str] | None = None,
+    npm_fetcher: Callable[[str, str], NpmDist | str] | None = None,
     cargo_fetcher: Callable[[str, str], str] | None = None,
     pip_fetcher: Callable[[str, str], set[str]] | None = None,
     read_base: Callable[[str, str], str | None] = read_base_blob,
@@ -894,7 +996,7 @@ def run(
     # Resolve defaults lazily so that test-time monkeypatching of the
     # module-level fetchers is honoured.
     if npm_fetcher is None:
-        npm_fetcher = globals()["fetch_npm_integrity"]
+        npm_fetcher = globals()["fetch_npm_dist"]
     if cargo_fetcher is None:
         cargo_fetcher = globals()["fetch_cargo_checksum"]
     if pip_fetcher is None:

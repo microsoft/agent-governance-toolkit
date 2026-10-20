@@ -1,6 +1,6 @@
 ---
 title: Agent Control Specification Tutorial
-last_reviewed: 2026-07-31
+last_reviewed: 2026-10-03
 owner: docs-team
 ---
 
@@ -28,7 +28,11 @@ You will create:
 - three outcomes: `allow`, `transform`, and `deny`
 
 !!! important "Public Preview"
-    ACS is vendored into AGT under `policy-engine/` as the AGT 5.0 policy layer. The APIs and manifest shape may change before GA.
+    AGT uses the published
+    [agent-control-spec](https://github.com/responsibleai/agent-control-spec)
+    engine. This tutorial uses AGT's compatibility host SDK in `policy-engine/`,
+    not the standalone upstream Python API. The APIs and manifest shape may
+    change before GA.
 
 ## How ACS fits in AGT
 
@@ -50,9 +54,11 @@ cd policy-engine
 python -m pip install ./sdk/python
 ```
 
-The `agent-control-specification` distribution builds the native Rust core with
-maturin when installed from source. It includes `AgentControl`, `HostSession`,
-and `SnapshotBuilder` for Python hosts.
+The `agent-control-specification` distribution builds AGT's native host binding
+with maturin. Its Rust dependencies include the published ACS engine. It
+includes `AgentControl`, `HostSession`, and `SnapshotBuilder` for Python hosts.
+The upstream `agent-control-spec` Python package has a different API and cannot
+be substituted in this tutorial.
 
 OPA-backed Rego examples require the `opa` CLI on `PATH`.
 

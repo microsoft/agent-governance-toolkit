@@ -6,12 +6,16 @@ Tests for storage providers.
 Tests the abstract storage interface and concrete implementations.
 """
 
+from types import SimpleNamespace
+
 import pytest
+
 from agentmesh.storage import (
     AbstractStorageProvider,
     MemoryStorageProvider,
     StorageConfig,
 )
+from agentmesh.storage import memory_provider as memory_provider_module
 
 
 @pytest.fixture
@@ -171,10 +175,61 @@ class TestMemoryStorageProvider:
         # Set with TTL
         assert await memory_provider.set("temp_key", "temp_value", ttl_seconds=1)
         assert await memory_provider.exists("temp_key")
-        
-        # Note: We don't test actual expiration as it would require waiting
-        # and the memory provider doesn't auto-expire keys
-        # This would be tested in integration tests with real Redis
+
+    @pytest.fixture
+    def clock(self, monkeypatch):
+        """Replace the memory provider's clock with a settable one."""
+        now = [1_000.0]
+        monkeypatch.setattr(
+            memory_provider_module, "time", SimpleNamespace(time=lambda: now[0]), raising=False
+        )
+        return now
+
+    @pytest.mark.asyncio
+    async def test_ttl_expires_key(self, memory_provider, clock):
+        """A key set with a TTL is gone once the TTL has passed."""
+        await memory_provider.set("temp_key", "temp_value", ttl_seconds=10)
+        await memory_provider.set("kept_key", "kept_value")
+
+        clock[0] += 9
+        assert await memory_provider.get("temp_key") == "temp_value"
+
+        clock[0] += 1
+        assert await memory_provider.get("temp_key") is None
+        assert not await memory_provider.exists("temp_key")
+        assert await memory_provider.mget(["temp_key", "kept_key"]) == [None, "kept_value"]
+        assert await memory_provider.keys("*") == ["kept_key"]
+        assert await memory_provider.scan(match="*") == (0, ["kept_key"])
+        assert not await memory_provider.delete("temp_key")
+
+    @pytest.mark.asyncio
+    async def test_set_without_ttl_clears_previous_ttl(self, memory_provider, clock):
+        """Like Redis SET and MSET, a write without a TTL makes the key persistent."""
+        await memory_provider.set("set_key", "old", ttl_seconds=10)
+        await memory_provider.set("set_key", "new")
+        await memory_provider.set("mset_key", "old", ttl_seconds=10)
+        await memory_provider.mset({"mset_key": "new"})
+
+        clock[0] += 60
+        assert await memory_provider.get("set_key") == "new"
+        assert await memory_provider.get("mset_key") == "new"
+
+    @pytest.mark.asyncio
+    async def test_delete_clears_ttl(self, memory_provider, clock):
+        """A key recreated after delete does not inherit the deleted key's TTL."""
+        await memory_provider.set("temp_key", "old", ttl_seconds=10)
+        assert await memory_provider.delete("temp_key")
+        await memory_provider.incr("temp_key")
+
+        clock[0] += 60
+        assert await memory_provider.get("temp_key") == "1"
+
+    @pytest.mark.asyncio
+    async def test_incr_after_expiry_starts_from_zero(self, memory_provider, clock):
+        """Incrementing an expired counter starts a new one, as in Redis."""
+        await memory_provider.set("counter", "5", ttl_seconds=10)
+        clock[0] += 10
+        assert await memory_provider.incr("counter") == 1
 
 
 @pytest.mark.skip(reason="Requires Redis server")

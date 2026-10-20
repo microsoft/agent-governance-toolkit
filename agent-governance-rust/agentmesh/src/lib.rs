@@ -26,6 +26,7 @@ pub mod context_audit;
 pub mod control_support;
 pub mod credential_vault;
 pub mod governance_support;
+pub mod healthcare_identifiers;
 pub mod identity;
 pub mod identity_support;
 pub mod integration_support;
@@ -84,6 +85,9 @@ pub use governance_support::{
     PolicyDiagnosticSeverity, PolicyEvaluator, PolicyRuleTrace, RiskLevel as GovernanceRiskLevel,
     ShadowMode, ShadowResult, SignedAuditEntry, TechnicalDocumentationExporter, TrustCondition,
     TrustDefaults, TrustInfo, TrustPolicy, TrustPolicyDecision, TrustRule,
+};
+pub use healthcare_identifiers::{
+    find_healthcare_identifiers, HealthcareIdentifierKind, HealthcareIdentifierMatch,
 };
 pub use identity::{AgentIdentity, PublicIdentity};
 pub use identity_support::{

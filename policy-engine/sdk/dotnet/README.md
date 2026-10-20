@@ -1,6 +1,12 @@
 # Agent Control Specification .NET SDK
 
-This is a thin, stateless .NET surface for Agent Control Specification. It keeps .NET async orchestration in managed code and leaves deterministic intervention point evaluation to a supplied `IAgentControlRuntime`.
+This `AgentControlSpecification` package preserves AGT's .NET host API. It
+keeps async orchestration in managed code and reaches the published
+[`agent-control-spec`](https://github.com/responsibleai/agent-control-spec)
+engine through AGT's Rust host C ABI. The standalone upstream NuGet package is
+`ResponsibleAI.AgentControlSpec`. Its interceptor API is not a drop-in
+replacement for this package's `AgentControl` and framework adapters.
+A supplied `IAgentControlRuntime` can replace the native backend.
 
 `AgentControl.FromPath("manifest.yaml")` builds a control backed by the bundled Rust core through P/Invoke. The native library ships alongside the managed assembly and is loaded at runtime. With no dispatcher arguments the bundled OPA policy dispatcher and annotator dispatcher are wired from the manifest, so a host that uses Rego policies integrates in roughly three lines. Pass `annotatorDispatcher:` and `policyDispatcher:` (or use `FromNative(manifest, ...)`) to override either bundled default, and supply a custom `IAgentControlRuntime` for testing or alternative backends. The zero-config construction section in the root README describes when to supply custom dispatchers.
 

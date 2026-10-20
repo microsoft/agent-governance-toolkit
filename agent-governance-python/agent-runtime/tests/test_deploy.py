@@ -464,3 +464,48 @@ class TestKubernetesDeployerAgentIdValidation:
         deployer = KubernetesDeployer()
         with pytest.raises(ValueError, match="invalid agent_id"):
             deployer.logs("agent\nname")
+
+
+class TestKubernetesPodName:
+    """Kubernetes pod names must be lowercase RFC-1123 labels, which is
+    narrower than what `_validate_agent_id` accepts. The pod name used to be
+    `agt-<agent_id>` verbatim, so an id such as `Analyst-001` produced a
+    manifest that `kubectl apply` rejected.
+    """
+
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/kubectl")
+    def test_manifest_lowercases_pod_name_and_keeps_label(self, mock_which: MagicMock) -> None:
+        deployer = KubernetesDeployer()
+        manifest = deployer._build_pod_manifest("Analyst-001", "img:latest", GovernanceConfig())
+        assert manifest["metadata"]["name"] == "agt-analyst-001"
+        assert manifest["metadata"]["labels"]["agt.agent-id"] == "Analyst-001"
+
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/kubectl")
+    def test_stop_status_logs_use_lowercase_pod_name(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = MagicMock(stdout="Running", stderr="", returncode=0)
+        deployer = KubernetesDeployer()
+        deployer.stop("Analyst-001")
+        deployer.status("Analyst-001")
+        deployer.logs("Analyst-001")
+        cmds = [call[0][0] for call in mock_run.call_args_list]
+        assert len(cmds) == 3
+        for cmd in cmds:
+            assert "agt-analyst-001" in cmd
+            assert "agt-Analyst-001" not in cmd
+
+    @pytest.mark.parametrize("agent_id", ["agent_42", "agent-", "agent_"])
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/kubectl")
+    def test_rejects_ids_that_cannot_form_a_pod_name(
+        self, mock_which: MagicMock, mock_run: MagicMock, agent_id: str,
+    ) -> None:
+        deployer = KubernetesDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.deploy(agent_id, "img:latest", GovernanceConfig())
+        for method in (deployer.stop, deployer.status, deployer.logs):
+            with pytest.raises(ValueError, match="invalid agent_id"):
+                method(agent_id)
+        mock_run.assert_not_called()

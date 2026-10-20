@@ -1,6 +1,16 @@
 # Agent Control Specification spec
 
-`schema/manifest.schema.json` in artifact kits and `spec/schema/manifest.schema.json` in this repository are the authoritative contracts for Agent Control Specification (ACS) manifest syntax. [`SPECIFICATION.md`](SPECIFICATION.md) is the normative specification for runtime semantics, which are the evaluation order, the policy input shape, verdict handling, effect application, and fail closed behavior.
+The [upstream ACS specification](https://github.com/responsibleai/agent-control-spec/blob/main/spec/SPECIFICATION.md)
+and [schema](https://github.com/responsibleai/agent-control-spec/tree/main/spec/schema)
+define the decision engine contract.
+[Agent Hooks](https://github.com/responsibleai/agent-hooks) defines interception
+points, verdict types and host obligations.
+
+[`SPECIFICATION.md`](SPECIFICATION.md) and `schema/manifest.schema.json` in
+this directory document AGT's compatibility profile and authoring validation.
+They must be read with the [retarget guide](../docs/acs-retarget.md), which
+identifies the pinned engine and the restrictions AGT adds. A local schema
+check does not replace validation by that engine.
 
 ## Manifest top-level properties
 

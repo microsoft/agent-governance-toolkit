@@ -11,31 +11,42 @@ Monitor a LangChain agent with **Service Level Objectives**, **error budgets**, 
 ## Quick Start
 
 ```bash
-pip install agent-sre langchain
-cd tutorials/langchain-slo-setup
-python demo.py
+pip install agent-governance-toolkit-cli
+cd agent-governance-python/agent-sre/tutorials/langchain-slo-setup
+python -X utf8 demo.py
 ```
 
 ---
 
 ## Step 1: Create a LangChain Agent
 
-In production, you create a LangChain agent as usual. Agent SRE integrates via a **callback handler** — no changes to your agent code.
+The standalone demo needs no model credentials. The real-agent example below
+uses LangChain 1.x and requires `OPENAI_API_KEY` when invoked:
+
+```bash
+pip install "langchain>=1,<2" "langchain-openai>=1,<2"
+```
 
 ```python
-from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
-from langchain.tools import Tool
+from langchain_core.tools import tool
 
-llm = ChatOpenAI(model="gpt-4o-mini")
+@tool
+def vector_search(query: str) -> str:
+    """Search the tutorial's small document fixture."""
+    return "Document: Agent SRE tracks latency and task outcomes."
 
-tools = [
-    Tool(name="vector_search", func=search_docs, description="Search documents"),
-]
-
-agent = create_openai_tools_agent(llm, tools, prompt)
-executor = AgentExecutor(agent=agent, tools=tools)
+agent = create_agent(
+    model=ChatOpenAI(model="gpt-4o-mini"),
+    tools=[vector_search],
+    system_prompt="Answer using the document search tool.",
+)
 ```
+
+This uses the `create_agent` API described in the
+[LangChain reference](https://reference.langchain.com/python/langchain/agents/factory/create_agent).
+Replace the fixture search with your own retrieval implementation.
 
 For this tutorial, `demo.py` includes a `MockLangChainAgent` that simulates the callback lifecycle so everything runs without API keys.
 
@@ -46,7 +57,7 @@ For this tutorial, `demo.py` includes a `MockLangChainAgent` that simulates the 
 Define what "reliable" means for your agent. Agent SRE provides built-in SLI types for AI workloads:
 
 ```python
-from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.objectives import SLO, ErrorBudget
 from agent_sre.slo.indicators import (
     TaskSuccessRate,
     ResponseLatency,
@@ -88,32 +99,49 @@ Wire up the `AgentSRECallback` and record metrics as the agent runs:
 ```python
 from agent_sre.integrations.langchain.callback import AgentSRECallback
 from agent_sre.slo.dashboard import SLODashboard
+from langchain_core.callbacks import BaseCallbackHandler
 
-# LangChain callback handler
-sre_callback = AgentSRECallback()
+# AgentSRECallback is dependency-free. LangChain also requires its callback
+# protocol attributes and default event handlers, supplied by this base class.
+class LangChainSRECallback(AgentSRECallback, BaseCallbackHandler):
+    raise_error = True  # Surface integration errors while validating this example.
 
-# In production, pass it to your agent:
-#   executor = AgentExecutor(agent=agent, tools=tools, callbacks=[sre_callback])
+sre_callback = LangChainSRECallback()
 
 # Dashboard for aggregate reporting
 dashboard = SLODashboard()
 dashboard.register_slo(slo)
 ```
 
-After each agent call, record the results into SLIs:
+Measure the complete invocation separately from callback timings: a LangChain
+graph emits nested chain events, so callback chain counts are not a count of
+user requests. The graph returns `messages`, not the mock demo's metric fields.
 
 ```python
-result = executor.invoke({"input": query})
+from time import perf_counter
 
-success_rate.record_task(success=result["success"])
-latency.record_latency(result["latency_ms"])
-cost.record_cost(cost_usd=result["cost_usd"])
-hallucination.record_evaluation(hallucinated=result["hallucinated"])
-tool_accuracy.record_call(correct=result["tool_correct"])
-
-# Count against the error budget
-slo.record_event(good=result["success"] and not result["hallucinated"])
+query = "What does Agent SRE track?"
+started = perf_counter()
+success = False
+try:
+    result = agent.invoke(
+        {"messages": [{"role": "user", "content": query}]},
+        config={"callbacks": [sre_callback]},
+    )
+    success = True
+    print(result["messages"][-1].content)
+finally:
+    success_rate.record_task(success=success)
+    latency.record_latency((perf_counter() - started) * 1000)
+    slo.record_event(good=success)
 ```
+
+Here, success means the invocation completed without an exception. It does not
+establish answer correctness. Cost needs measured token usage and configured
+prices; hallucination and tool accuracy need application-specific evaluation.
+The standalone mock demo supplies synthetic values for those fields. Do not read
+`success`, `latency_ms`, `cost_usd`, `hallucinated`, or `tool_correct` from a real
+LangChain result as though they were built-in metrics.
 
 ---
 
@@ -122,7 +150,7 @@ slo.record_event(good=result["success"] and not result["hallucinated"])
 Run the demo to process 100 simulated calls:
 
 ```bash
-python demo.py
+python -X utf8 demo.py
 ```
 
 After the run completes, you'll see output like:

@@ -552,6 +552,82 @@ def test_ssn_pattern_rejects_bare_nine_digit_forms(text: str):
     )
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "SSN: 745102386",
+        "ssn=745102386",
+        "social security number 745102386",
+        '{"ssn": "745102386"}',
+        '"ssn":"745102386"',
+        "'ssn': '745102386'",
+    ],
+)
+def test_cued_bare_ssn_detected_in_lockstep(text: str):
+    """Regression (#3592): a bare nine-digit SSN next to an explicit cue
+    (``SSN:``, ``ssn=``, ``social security number``) evaded both the gateway
+    redactor and the adapter SSN detector, which require a separator. Both
+    detectors now flag the cued-bare form, kept in lockstep (#3591)."""
+    from agent_os.integrations.base import PII_PATTERNS as ADAPTER_PII_PATTERNS
+
+    assert any(
+        m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text)
+    ), f"gateway redactor missed cued-bare SSN: {text!r}"
+    assert any(
+        p.search(text) for p in ADAPTER_PII_PATTERNS
+    ), f"adapter detector missed cued-bare SSN: {text!r}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tracking: 123456789",
+        "ABA 021000021",
+        "ZIP 12345-6789",
+        "ssn_lookup_id=123456789",
+        "ssn service ticket 123456789",
+        "no ssn on file; case 123456789",
+        "SSN:     745102386",
+    ],
+)
+def test_uncued_bare_ssn_rejected_in_lockstep(text: str):
+    """The cued branch must not broaden the bare-uncued corpus: numbers with
+    no SSN cue stay non-matching on both detectors so pii_leak does not
+    hard-block ordinary traffic (#3592)."""
+    from agent_os.integrations.base import PII_PATTERNS as ADAPTER_PII_PATTERNS
+
+    assert not any(
+        m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text)
+    ), f"gateway redactor over-matched uncued number: {text!r}"
+    assert not any(
+        p.search(text) for p in ADAPTER_PII_PATTERNS
+    ), f"adapter detector over-matched uncued number: {text!r}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "SSN: 745102386",  # cued-bare positive, kept for the parity anchor below
+    ],
+)
+def test_ssn_patterns_byte_identical_across_detectors(text: str):
+    """Both SSN forms (separated and cued-bare) must stay byte-identical between
+    the gateway redactor and the adapter detector, so a later edit to one is a CI
+    failure rather than a silent divergence (#3591/#3592)."""
+    from agent_os.integrations.base import PII_PATTERNS as ADAPTER_PII_PATTERNS
+
+    gateway_ssn = [
+        (p.pattern.pattern, p.pattern.flags)
+        for p in CredentialRedactor.PII_PATTERNS
+        if p.name == "US SSN"
+    ]
+    adapter = {(p.pattern, p.flags) for p in ADAPTER_PII_PATTERNS}
+    assert len(gateway_ssn) == 2, "expected a separated and a cued-bare US SSN pattern"
+    for pattern, flags in gateway_ssn:
+        assert (pattern, flags) in adapter, f"adapter is missing the SSN pattern {pattern!r}"
+    # The text arg keeps this a positive smoke check too.
+    assert any(m.name == "US SSN" for m in CredentialRedactor.find_pii_matches(text))
+
 # ---------------------------------------------------------------
 # Boundary regression tests for issue #3933
 # A valid credential glued to a preceding or following word

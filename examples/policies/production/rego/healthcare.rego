@@ -6,9 +6,18 @@ package agt.examples.production.healthcare
 import rego.v1
 
 legacy_input := {
+	"action": object.get(tool_call, "name", ""),
+	"output": object.get(tool_call, "args", input.policy_target.value),
+} if {
+	input.intervention_point == "pre_tool_call"
+	tool_call := object.get(object.get(input, "snapshot", {}), "tool_call", {})
+}
+
+legacy_input := {
 	"action": object.get(body, "action", object.get(input, "intervention_point", "")),
 	"output": object.get(body, "output", body),
 } if {
+	input.intervention_point != "pre_tool_call"
 	body := input.policy_target.value
 	is_object(body)
 }
@@ -16,7 +25,10 @@ legacy_input := {
 legacy_input := {
 	"action": object.get(input, "intervention_point", ""),
 	"output": input.policy_target.value,
-} if not is_object(input.policy_target.value)
+} if {
+	input.intervention_point != "pre_tool_call"
+	not is_object(input.policy_target.value)
+}
 
 denials contains "PHI: SSN pattern detected" if {
 	regex.match(`\b\d{3}-\d{2}-\d{4}\b`, sprintf("%v", [legacy_input.output]))

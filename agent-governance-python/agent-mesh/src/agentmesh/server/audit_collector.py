@@ -167,8 +167,8 @@ async def query_entries(params: QueryParams) -> dict[str, Any]:
 @app.get("/api/v1/audit/verify", tags=["audit"])
 async def verify_integrity() -> dict[str, Any]:
     """Verify Merkle chain integrity of the audit log."""
-    valid = _audit_service.verify_chain()
-    return {"chain_valid": valid, "entry_count": _audit_service.entry_count}
+    summary = _audit_service.summary()
+    return {"chain_valid": summary["chain_valid"], "entry_count": summary["total_entries"]}
 
 
 @app.get("/api/v1/audit/summary", tags=["audit"])

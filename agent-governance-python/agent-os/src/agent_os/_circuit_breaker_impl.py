@@ -97,6 +97,7 @@ class CircuitBreaker:
         self._failure_count = 0
         self._success_count = 0
         self._half_open_calls = 0
+        self._half_open_generation = 0
         self._last_failure_time = 0.0
         self._lock = threading.Lock()
 
@@ -114,7 +115,7 @@ class CircuitBreaker:
             return self._state
 
     def call(self, func: Any, *args: Any, fallback: Any = None, **kwargs: Any) -> Any:
-        retry_after = self._prepare_call()
+        retry_after, probe = self._prepare_call()
         if retry_after is not None:
             if fallback is not None:
                 return fallback
@@ -124,12 +125,20 @@ class CircuitBreaker:
         except Exception:
             self.record_failure()
             raise
+        except BaseException:
+            self._release_probe(probe)
+            raise
         if inspect.isawaitable(result):
             async def _await_result() -> Any:
                 try:
                     value = await result
                 except Exception:
                     self.record_failure()
+                    raise
+                except BaseException:
+                    # Cancellation is the caller backing out, not a failure of the
+                    # call, so give the probe back instead of recording an outcome.
+                    self._release_probe(probe)
                     raise
                 self.record_success()
                 return value
@@ -163,16 +172,29 @@ class CircuitBreaker:
             self._half_open_calls = 0
             self._last_failure_time = 0.0
 
-    def _prepare_call(self) -> float | None:
+    def _prepare_call(self) -> tuple[float | None, int | None]:
         with self._lock:
             self._maybe_transition_to_half_open()
             if self._state is CircuitState.OPEN:
-                return self._time_until_recovery()
+                return self._time_until_recovery(), None
             if self._state is CircuitState.HALF_OPEN:
                 if self._half_open_calls >= self.config.half_open_max_calls:
-                    return self._time_until_recovery()
+                    return self._time_until_recovery(), None
                 self._half_open_calls += 1
-            return None
+                return None, self._half_open_generation
+            return None, None
+
+    def _release_probe(self, probe: int | None) -> None:
+        """Give back a HALF_OPEN probe slot whose call ended without an outcome."""
+        if probe is None:
+            return
+        with self._lock:
+            if (
+                self._state is CircuitState.HALF_OPEN
+                and self._half_open_generation == probe
+                and self._half_open_calls > 0
+            ):
+                self._half_open_calls -= 1
 
     def _maybe_transition_to_half_open(self) -> None:
         if self._state is CircuitState.OPEN:
@@ -184,6 +206,7 @@ class CircuitBreaker:
         self._state = new_state
         if new_state is CircuitState.HALF_OPEN:
             self._half_open_calls = 0
+            self._half_open_generation += 1
 
     def _time_until_recovery(self) -> float:
         elapsed = time.monotonic() - self._last_failure_time

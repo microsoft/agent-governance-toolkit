@@ -72,6 +72,44 @@ Then reload Copilot CLI with:
 /agt status
 ```
 
+## Recursive-delete protection for Bash
+
+<!-- cspell:ignore talosrobotics -->
+The bundled `recursive-delete` rule uses a quote-aware command tokenizer and
+flag parser adapted from the OpenCode implementation and shell-comment handling
+in PRs #4129 and #4142 by Ricky-G (MIT). PR #3834 by talosrobotics was the
+earlier Claude Code regex fix for this rule.
+It denies `rm` invocations with both recursive and force flags, including `-rf`,
+`-fr`, `-r -f`, `--recursive --force`, quoted flags, and common wrappers such as
+`sudo`, `env`, `command`, and `timeout`. It respects command boundaries, comments,
+and the `--` end-of-options marker. Substitutions are scanned independently while
+preserving the enclosing command and word, so `rm -r "$(pwd)/src" -f` is denied. Substitution output remains
+unknown rather than being evaluated. Literal text such as `echo $(pwd) rm -rf src`
+or `echo "rm -rf src"` does not trigger this rule. Redirection operators and their filenames are separated
+from command arguments, so a filename such as `-rf` is not treated as a deletion
+flag. Lookup, help, and list modes such as `command -v` do not count as execution.
+
+The cleanup exception applies only to a single command whose targets are all
+recognized relative build artifacts, such as `node_modules` or `dist`. Mixed
+safe/unsafe targets, wildcard or variable targets, redirections, and incomplete
+shell syntax do not qualify. For example, `rm -rf node_modules src/*` is denied.
+Exempt commands still pass through the rest of the policy, including Bash review.
+
+The built-in matcher applies to rules with `id: "recursive-delete"` and a Bash
+tool name, using the configured rule effect. Bundled Bash rules have
+`commandPatterns: []`; explicit user patterns continue to run alongside the
+built-in matcher. Existing policies containing the old regex gain the parser's
+coverage, but their explicit regex can still produce false positives. Remove
+that obsolete pattern from the Bash rule to use only the built-in matcher.
+
+This is a bounded tokenizer, not a full shell evaluator. It does not resolve
+brace or variable expansions, shell strings passed to `eval` or `sh -c`, indirect
+deletion through `find` or `xargs`, remote/container execution, or every wrapper.
+Escaped nested backticks are not fully supported, and command text inside a
+heredoc can conservatively trigger a denial. Recursive deletion without force
+(for example, `rm -r src`) remains subject to the rest of the configured policy.
+Keep Bash review enabled for forms outside this matcher's coverage.
+
 ## Commands
 
 ### Install

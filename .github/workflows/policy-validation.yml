@@ -25,6 +25,8 @@ jobs:
               - '**/*.yml'
               - 'agent-governance-python/agt-policies/**'
               - 'agent-governance-python/agent-compliance/src/agent_compliance/lint_policy.py'
+              - 'scripts/check_example_intervention_points.py'
+              - 'scripts/tests/test_check_example_intervention_points.py'
 
   validate-policies:
     runs-on: ubuntu-latest
@@ -36,6 +38,15 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+
+      - name: Check example manifest intervention-point coverage
+        # Fail closed when a shipped rego example omits an adapter-evaluated
+        # intervention point (e.g. pre_tool_call); the engine denies unbound
+        # points, breaking the manifest on the first matching interception.
+        run: |
+          pip install --no-cache-dir pyyaml==6.0.2 pytest==8.3.4  # Scorecard: version-pinned
+          python scripts/check_example_intervention_points.py
+          pytest scripts/tests/test_check_example_intervention_points.py
 
       - name: Build native ACS SDK
         # agent-compliance's manifest linter calls the native

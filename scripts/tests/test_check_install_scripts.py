@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import _supply_chain_common as common  # noqa: E402
 import check_install_scripts as cis  # noqa: E402
 
-
 # --------------------------- _extract_pkgjson_pairs ---------------------------
 
 def test_pkgjson_pairs_exact_pin():
@@ -47,6 +46,15 @@ def test_pkgjson_pairs_scoped_names():
     assert cis._extract_pkgjson_pairs(tree) == {"@scope/pkg": "1.0.0"}
 
 
+def test_pkgjson_pairs_retains_alias_specs_for_validation():
+    tree = {"devDependencies": {
+        "@typescript/native": "npm:typescript@7.0.2",
+        "typescript": "npm:@typescript/typescript6@6.0.2",
+        "@typescript/unknown": "npm:typescript@../../evil",
+    }}
+    assert cis._extract_pkgjson_pairs(tree) == tree["devDependencies"]
+
+
 def test_pkgjson_pairs_rejects_unsafe():
     tree = {"dependencies": {"../traversal": "1.0.0", "good": "1.0/2.0"}}
     assert cis._extract_pkgjson_pairs(tree) == {}
@@ -75,6 +83,27 @@ def test_pkgjson_pairs_empty():
 )
 def test_unwrap_lockfile_path(key, expected):
     assert cis._unwrap_lockfile_path(key) == expected
+
+
+# --------------------------- _split_npm_alias ---------------------------
+
+@pytest.mark.parametrize(
+    "spec,expected",
+    [
+        ("npm:react-is@18.3.1", ("react-is", "18.3.1")),
+        ("npm:@ai-sdk/provider@2.0.3", ("@ai-sdk/provider", "2.0.3")),
+        # Ranges cannot be resolved from the spec alone.
+        ("npm:react-is@^18.3.1", None),
+        ("npm:react-is@*", None),
+        # No version, no package, not an alias at all.
+        ("npm:react-is", None),
+        ("npm:@1.0.0", None),
+        ("18.3.1", None),
+        ("npm:bad name@1.0.0", None),
+    ],
+)
+def test_split_npm_alias(spec, expected):
+    assert cis._split_npm_alias(spec) == expected
 
 
 # --------------------------- _extract_lockfile_pairs ---------------------------
@@ -110,6 +139,137 @@ def test_lockfile_v3_nested_node_modules_extracted():
     out = cis._extract_lockfile_pairs(tree)
     assert ("sus", "0.0.1") in out
     assert out[("sus", "0.0.1")] is True
+
+
+def test_lockfile_v3_alias_entry_queries_real_package():
+    """jest 30.5 shape: node_modules/@jest/react-is-18 with name react-is."""
+    tree = {
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "root"},
+            "node_modules/pretty-format": {
+                "dependencies": {
+                    "@jest/react-is-18": "npm:react-is@^18.3.1",
+                    "@jest/react-is-19": "npm:react-is@^19.2.5",
+                },
+            },
+            "node_modules/@jest/react-is-18": {
+                "name": "react-is",
+                "version": "18.3.1",
+                "resolved": "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz",
+                "hasInstallScript": False,
+            },
+            "node_modules/@jest/react-is-19": {
+                "name": "react-is",
+                "version": "19.2.8",
+                "resolved": "https://registry.npmjs.org/react-is/-/react-is-19.2.8.tgz",
+            },
+        },
+    }
+    out = cis._extract_lockfile_pairs(tree)
+    assert out == {("react-is", "18.3.1"): False, ("react-is", "19.2.8"): None}
+
+
+def test_lockfile_v3_alias_via_npm_version_spec():
+    tree = {
+        "lockfileVersion": 3,
+        "packages": {
+            "node_modules/@ai-sdk/provider-v5": {
+                "version": "npm:@ai-sdk/provider@2.0.3",
+                "resolved": "https://registry.npmjs.org/@ai-sdk/provider/-/provider-2.0.3.tgz",
+            },
+        },
+    }
+    out = cis._extract_lockfile_pairs(tree)
+    assert list(out) == [("@ai-sdk/provider", "2.0.3")]
+
+
+def test_lockfile_v3_name_equal_to_path_is_not_an_alias():
+    tree = {
+        "lockfileVersion": 3,
+        "packages": {
+            "node_modules/@scope/pkg": {"name": "@scope/pkg", "version": "1.0.0"},
+        },
+    }
+    assert list(cis._extract_lockfile_pairs(tree)) == [("@scope/pkg", "1.0.0")]
+
+
+def test_lockfile_v3_alias_with_unsafe_target_rejected():
+    tree = {
+        "lockfileVersion": 3,
+        "packages": {
+            "node_modules/alias": {"name": "evil name", "version": "1.0.0"},
+        },
+    }
+    with pytest.raises(cis.InvalidAlias):
+        cis._extract_lockfile_pairs(tree)
+
+
+def test_lockfile_v1_alias_version_spec_queries_real_package():
+    tree = {
+        "lockfileVersion": 1,
+        "dependencies": {
+            "react-is-18": {"version": "npm:react-is@18.3.1"},
+            "outer": {
+                "version": "1.0.0",
+                "dependencies": {"@ai-sdk/provider-v5": {"version": "npm:@ai-sdk/provider@2.0.3"}},
+            },
+        },
+    }
+    out = cis._extract_lockfile_pairs(tree)
+    assert set(out) == {("react-is", "18.3.1"), ("outer", "1.0.0"), ("@ai-sdk/provider", "2.0.3")}
+
+def test_lockfile_aliases_use_canonical_registry_names():
+    tree = {"packages": {
+        "": {"devDependencies": {
+            "@typescript/native": "npm:typescript@7.0.2",
+            "typescript": "npm:@typescript/typescript6@6.0.2",
+        }},
+        "node_modules/typescript": {
+            "name": "@typescript/typescript6", "version": "6.0.2",
+            "resolved": "https://registry.npmjs.org/@typescript/typescript6/-/typescript6-6.0.2.tgz",
+            "dependencies": {"@typescript/old": "npm:typescript@^6"},
+        },
+        "node_modules/@typescript/native": {
+            "name": "typescript", "version": "7.0.2",
+            "resolved": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz",
+        },
+        "node_modules/@typescript/old": {
+            "name": "typescript", "version": "6.0.3",
+            "resolved": "https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz",
+        },
+    }}
+    assert set(cis._extract_lockfile_pairs(tree)) == {
+        ("typescript", "7.0.2"), ("@typescript/typescript6", "6.0.2"),
+        ("typescript", "6.0.3"),
+    }
+
+
+def test_lockfile_alias_with_foreign_resolved_url_fails_closed():
+    tree = {"packages": {
+        "": {"devDependencies": {"@typescript/native": "npm:typescript@7.0.2"}},
+        "node_modules/@typescript/native": {
+            "name": "typescript", "version": "7.0.2",
+            "resolved": "https://evil.example.com/typescript-7.0.2.tgz",
+        },
+    }}
+    with pytest.raises(ValueError):
+        cis._extract_lockfile_pairs(tree)
+
+
+def test_lockfile_only_transitive_alias_cannot_retarget_lodash():
+    tree = {"packages": {
+        "node_modules/parent": {
+            "version": "1.0.0",
+            "dependencies": {"lodash": "npm:evil@1.0.0"},
+        },
+        "node_modules/lodash": {
+            "name": "evil", "version": "1.0.0",
+            "resolved": "https://registry.npmjs.org/evil/-/evil-1.0.0.tgz",
+        },
+    }}
+    with pytest.raises(ValueError, match="unapproved npm lockfile alias"):
+        cis._extract_lockfile_pairs(tree)
 
 
 def test_lockfile_v1_legacy_dependencies_recursive():
@@ -160,8 +320,8 @@ def test_lockfile_rejects_unsafe_names():
         "lockfileVersion": 3,
         "packages": {"node_modules/../evil": {"version": "1.0.0"}},
     }
-    out = cis._extract_lockfile_pairs(tree)
-    assert out == {}
+    with pytest.raises(ValueError):
+        cis._extract_lockfile_pairs(tree)
 
 
 def test_lockfile_none_or_empty():
@@ -224,6 +384,92 @@ def test_collect_candidates_combines_pkgjson_and_lockfile():
     assert ("axios", "1.14.0", False) in triples
 
 
+def test_collect_candidates_alias_resolves_to_real_package():
+    json_map = {
+        ("origin/main", "package-lock.json"): {"lockfileVersion": 3, "packages": {}},
+        ("HEAD", "package-lock.json"): {
+            "lockfileVersion": 3,
+            "packages": {
+                "node_modules/pretty-format": {
+                    "dependencies": {"@jest/react-is-18": "npm:react-is@^18.3.1"},
+                },
+                "node_modules/@jest/react-is-18": {
+                    "name": "react-is",
+                    "version": "18.3.1",
+                    "resolved": "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz",
+                    "hasInstallScript": False,
+                },
+            },
+        },
+    }
+    with _mock_changed(["package-lock.json"]), _mock_json(json_map):
+        out = cis.collect_candidates("origin/main")
+    assert out == [("react-is", "18.3.1", False, "package-lock.json")]
+
+def test_collect_candidates_resolves_approved_manifest_alias():
+    json_map = {
+        ("origin/main", "package.json"): {"devDependencies": {}},
+        ("HEAD", "package.json"): {"devDependencies": {
+            "@typescript/native": "npm:typescript@7.0.2",
+            "typescript": "npm:@typescript/typescript6@6.0.2",
+        }},
+    }
+    with _mock_changed(["package.json"]), _mock_json(json_map):
+        assert cis.collect_candidates("origin/main") == [
+            ("typescript", "7.0.2", None, "package.json"),
+            ("@typescript/typescript6", "6.0.2", None, "package.json"),
+        ]
+
+
+def test_collect_candidates_rejects_malicious_manifest_alias():
+    json_map = {
+        ("origin/main", "package.json"): {"dependencies": {}},
+        ("HEAD", "package.json"): {"dependencies": {
+            "@typescript/native": "npm:evil-typescript@7.0.2",
+        }},
+    }
+    with _mock_changed(["package.json"]), _mock_json(json_map), pytest.raises(ValueError):
+        cis.collect_candidates("origin/main")
+
+
+def test_repaired_unapproved_base_alias_is_checked():
+    invalid_base = {"packages": {
+        "node_modules/parent": {
+            "version": "1.0.0", "dependencies": {"lodash": "npm:evil@1.0.0"},
+        },
+        "node_modules/lodash": {
+            "name": "evil", "version": "1.0.0",
+            "resolved": "https://registry.npmjs.org/evil/-/evil-1.0.0.tgz",
+        },
+    }}
+    repaired_head = {"packages": {
+        "node_modules/lodash": {"version": "1.0.0", "hasInstallScript": True},
+    }}
+    json_map = {
+        ("origin/main", "package-lock.json"): invalid_base,
+        ("HEAD", "package-lock.json"): repaired_head,
+    }
+    with _mock_changed(["package-lock.json"]), _mock_json(json_map):
+        assert cis.collect_candidates("origin/main") == [
+            ("lodash", "1.0.0", True, "package-lock.json"),
+        ]
+
+
+def test_unapproved_head_alias_declaration_fails_closed():
+    json_map = {
+        ("origin/main", "package-lock.json"): {"packages": {}},
+        ("HEAD", "package-lock.json"): {"packages": {
+            "node_modules/parent": {
+                "version": "1.0.0", "dependencies": {"lodash": "npm:evil@1.0.0"},
+            },
+        }},
+    }
+    with _mock_changed(["package-lock.json"]), _mock_json(json_map), pytest.raises(
+        cis.InvalidAlias, match="unapproved npm lockfile alias",
+    ):
+        cis.collect_candidates("origin/main")
+
+
 def test_collect_candidates_dedupes_across_lockfiles():
     json_map = {
         ("origin/main", "a/package-lock.json"): {"lockfileVersion": 3, "packages": {}},
@@ -259,25 +505,26 @@ def test_fetch_install_scripts_rejects_unsafe_version():
 # --------------------------- fetch_install_scripts behavior ---------------------------
 
 def test_fetch_install_scripts_returns_dict_when_scripts_present():
-    body = {"scripts": {"postinstall": "node setup.js"}}
+    body = {"name": "axios", "version": "1.14.0", "scripts": {"postinstall": "node setup.js"}}
     with patch.object(common, "fetch_json", return_value=body):
         out = cis.fetch_install_scripts("axios", "1.14.0")
     assert out == {"postinstall": "node setup.js"}
 
 
 def test_fetch_install_scripts_returns_empty_dict_when_no_scripts():
-    with patch.object(common, "fetch_json", return_value={"scripts": {}}):
+    with patch.object(common, "fetch_json", return_value={"name": "axios", "version": "1.14.0", "scripts": {}}):
         assert cis.fetch_install_scripts("axios", "1.14.0") == {}
 
 
 def test_fetch_install_scripts_returns_empty_dict_when_no_scripts_key():
     """A version with no ``scripts`` key at all has no install scripts."""
-    with patch.object(common, "fetch_json", return_value={"name": "axios"}):
+    with patch.object(common, "fetch_json", return_value={"name": "axios", "version": "1.14.0"}):
         assert cis.fetch_install_scripts("axios", "1.14.0") == {}
 
 
 def test_fetch_install_scripts_filters_to_install_lifecycle_only():
     body = {
+        "name": "axios", "version": "1.14.0",
         "scripts": {
             "test": "jest",         # not an install script
             "build": "tsc",         # not an install script
@@ -292,14 +539,20 @@ def test_fetch_install_scripts_filters_to_install_lifecycle_only():
 
 
 def test_fetch_install_scripts_404_raises():
-    with patch.object(common, "fetch_json", side_effect=LookupError("404")):
-        with pytest.raises(LookupError):
-            cis.fetch_install_scripts("ghost", "0.0.1")
+    with patch.object(common, "fetch_json", side_effect=LookupError("404")), pytest.raises(LookupError):
+        cis.fetch_install_scripts("ghost", "0.0.1")
 
 
 def test_fetch_install_scripts_transient_returns_none():
     with patch.object(common, "fetch_json", return_value=None):
         assert cis.fetch_install_scripts("axios", "1.14.0") is None
+
+
+def test_fetch_install_scripts_rejects_wrong_registry_identity():
+    with patch.object(common, "fetch_json", return_value={
+        "name": "evil", "version": "1.14.0", "scripts": {},
+    }), pytest.raises(LookupError):
+        cis.fetch_install_scripts("axios", "1.14.0")
 
 
 # --------------------------- main_with_args ---------------------------
@@ -337,6 +590,19 @@ def test_main_allowlist_skips_query():
         rc = cis.main_with_args(["--explicit", "axios@1.14.0", "--allow", "axios"])
     assert rc == 0
     f.assert_not_called()
+
+
+def test_main_swc_exception_is_version_specific():
+    with patch.object(cis, "fetch_install_scripts", return_value={"postinstall": "node setup.js"}) as fetch:
+        assert cis.main_with_args(["--explicit", "@swc/core@1.16.2", "--strict"]) == 0
+        fetch.assert_not_called()
+        assert cis.main_with_args(["--explicit", "@swc/core@1.16.3", "--strict"]) == 1
+        fetch.assert_called_once_with("@swc/core", "1.16.3")
+
+
+def test_main_rejects_malformed_alias_even_if_allowed():
+    with patch.object(cis, "collect_candidates", side_effect=ValueError("bad alias")):
+        assert cis.main_with_args(["--strict", "--allow", "typescript"]) == 1
 
 
 def test_main_lockfile_hint_false_still_queried():
@@ -415,3 +681,45 @@ def test_main_deadline_unscanned_becomes_finding():
             "--strict",
         ])
     assert rc == 1
+
+
+@pytest.mark.parametrize("metadata", [
+    {"name": "../react-is"}, {"name": ""}, {"name": None},
+    {"name": "react-is\n"}, {"version": "npm:react-is@^18"},
+])
+def test_malformed_alias_fails_install_cli_without_registry(metadata):
+    tree = {"packages": {"node_modules/react-is": {
+        "version": "18.3.1", "hasInstallScript": True, **metadata,
+    }}}
+    with patch.object(common, "changed_manifests", return_value=["package-lock.json"]), \
+         patch.object(common, "load_json_at", side_effect=lambda rev, path: tree if rev == "HEAD" else {}), \
+         patch.object(cis, "fetch_install_scripts") as fetch:
+        assert cis.main_with_args(["--strict"]) == 1
+        fetch.assert_not_called()
+
+
+def test_repaired_alias_is_checked_even_when_base_is_invalid():
+    def load(rev, path):
+        return {"packages": {
+            "node_modules/pretty-format": {
+                "dependencies": {"@jest/react-is-18": "npm:react-is@^18.3.1"},
+            },
+            "node_modules/@jest/react-is-18": {
+                "name": "react-is" if rev == "HEAD" else "../react-is",
+                "version": "18.3.1",
+                "resolved": "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz",
+                "hasInstallScript": True,
+            },
+        }}
+    with patch.object(common, "changed_manifests", return_value=["package-lock.json"]), \
+         patch.object(common, "load_json_at", side_effect=load), \
+         patch.object(cis, "fetch_install_scripts", return_value={}) as fetch:
+        assert cis.main_with_args(["--strict"]) == 0
+        fetch.assert_called_once_with("react-is", "18.3.1")
+
+
+def test_malformed_legacy_alias_is_rejected():
+    with pytest.raises(cis.InvalidAlias):
+        cis._extract_lockfile_pairs({"dependencies": {
+            "alias": {"version": "npm:react-is@^18"},
+        }})

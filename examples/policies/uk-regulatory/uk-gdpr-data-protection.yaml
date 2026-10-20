@@ -24,3 +24,8 @@ intervention_points:
     policy:
       id: uk_gdpr_data_protection
       query: data.agt_policies_uk.uk_gdpr.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: uk_gdpr_data_protection
+      query: data.agt_policies_uk.uk_gdpr.acs_pre_tool_call_result

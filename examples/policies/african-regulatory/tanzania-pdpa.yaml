@@ -20,3 +20,8 @@ intervention_points:
     policy:
       id: tanzania_pdpa
       query: data.agt_policies_africa.tanzania_pdpa.acs_output_result
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: tanzania_pdpa
+      query: data.agt_policies_africa.tanzania_pdpa.acs_pre_tool_call_result

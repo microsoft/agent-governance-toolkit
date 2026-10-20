@@ -48,6 +48,7 @@ pydantic-ai = ["pydantic-ai>=0.0.10,<1.0"]
 flowise = []
 langflow = []
 adk = ["google-adk>=0.1.0,<1.0"]
+cedarling = ["cedarling-python>=2.3,<3.0"]
 avp = []
 nostr-wot = []
 structural-authz = []
@@ -85,6 +86,7 @@ packages = ["_placeholder"]
 "../agentmesh-integrations/openshell-skill/openshell_agentmesh" = "openshell_agentmesh"
 "../agentmesh-integrations/audit-accountability-export/audit_accountability_export" = "audit_accountability_export"
 "../agentmesh-integrations/template-agentmesh/template_agentmesh" = "template_agentmesh"
+"../agentmesh-integrations/cedarling-acs/cedarling_acs" = "cedarling_acs"
 # Adapters with src/ layout
 "../agentmesh-integrations/haystack-agentmesh/src/haystack_agentmesh" = "haystack_agentmesh"
 "../agentmesh-integrations/flowise-agentmesh/src/flowise_agentmesh" = "flowise_agentmesh"

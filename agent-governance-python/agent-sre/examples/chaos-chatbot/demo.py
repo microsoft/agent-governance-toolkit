@@ -18,7 +18,6 @@ from __future__ import annotations
 import random
 import time
 
-from agent_sre import SLO, ErrorBudget
 from agent_sre.chaos.engine import ChaosExperiment, Fault, ResilienceScore
 from agent_sre.slo.indicators import (
     CostPerTask,
@@ -26,6 +25,7 @@ from agent_sre.slo.indicators import (
     ResponseLatency,
     TaskSuccessRate,
 )
+from agent_sre.slo.objectives import SLO, ErrorBudget
 
 # ── Helpers ────────────────────────────────────────────────────────────
 

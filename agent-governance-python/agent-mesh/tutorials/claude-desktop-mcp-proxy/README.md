@@ -1,6 +1,8 @@
 # Secure Claude Desktop with AgentMesh MCP Proxy
 
-> **Turn Claude Desktop from a black box into a governed, auditable AI assistant.**
+> The live CLI and the standalone simulation use different policy interfaces.
+> `agentmesh proxy` accepts built-in presets. `demo.py` defines local mock classes;
+> its custom rules and sample YAML are not configuration for the live CLI.
 
 Claude Desktop's Model Context Protocol (MCP) gives AI direct access to your
 filesystem, databases, APIs, and shell. That's powerful — and dangerous without
@@ -30,14 +32,14 @@ trust policies, rate limits, and tamper-evident audit logging on every tool call
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Claude Desktop (optional — the demo works standalone)
 - 5 minutes
 
 ## Step 1: Install AgentMesh
 
 ```bash
-pip install agentmesh-platform
+pip install agent-governance-toolkit-core
 ```
 
 Verify:
@@ -48,9 +50,13 @@ python -c "from agentmesh import AgentIdentity, PolicyEngine, AuditLog; print('A
 
 ## Step 2: Define Governance Policies
 
-Create a policy file that controls which MCP tools Claude can access. See
-[`policies/mcp-agt-manifest.yaml`](policies/mcp-agt-manifest.yaml) for the full
-example. The key sections:
+For the live proxy, select `--policy strict`, `moderate`, or `permissive`.
+The CLI does not accept a policy-file path or an `--audit-dir` option.
+Run `agentmesh proxy --help` to inspect the installed command.
+
+The YAML below illustrates the standalone simulation's rule format. It is not
+loadable through the live CLI or the SDK's `PolicyEngine.load_yaml` API.
+The demo uses its own in-code rules.
 
 ```yaml
 policies:
@@ -90,25 +96,25 @@ pointing Claude directly at your MCP server, point it at the AgentMesh proxy.
 | Linux | `~/.config/Claude/claude_desktop_config.json` |
 
 Copy [`claude_desktop_config.example.json`](claude_desktop_config.example.json)
-to the appropriate location and adjust paths:
+into your existing configuration and adjust paths. Use the absolute path to
+the installed `agentmesh` executable if Claude Desktop cannot find it. On
+Windows, use `npx.cmd` as the target and replace the example directory with
+your own accessible directory:
 
 ```json
 {
   "mcpServers": {
     "filesystem-governed": {
-      "command": "python",
+      "command": "agentmesh",
       "args": [
-        "-m", "agentmesh.integrations.mcp.proxy",
-        "--upstream", "npx @modelcontextprotocol/server-filesystem /home/user/projects",
-        "--policy", "./policies/mcp-agt-manifest.yaml",
-        "--audit-dir", "./audit-logs"
-      ],
-      "env": {
-        "AGENTMESH_AGENT_NAME": "claude-desktop",
-        "AGENTMESH_SPONSOR": "security@company.com",
-        "AGENTMESH_TRUST_MIN_SCORE": "600",
-        "AGENTMESH_LOG_LEVEL": "INFO"
-      }
+        "proxy",
+        "--policy",
+        "strict",
+        "--target=npx",
+        "--target=-y",
+        "--target=@modelcontextprotocol/server-filesystem",
+        "--target=/home/user/projects"
+      ]
     }
   }
 }
@@ -119,11 +125,13 @@ transparently — Claude doesn't know or care that governance is in place.
 
 ## Step 4: Run the Demo (No Claude Desktop Required)
 
-The included demo simulates the full proxy flow:
+The included demo uses local mock classes, not imports from the AgentMesh SDK.
+It does not launch Claude Desktop or an MCP subprocess. Run it from the repository
+root with UTF-8 enabled on Windows:
 
 ```bash
-cd tutorials/claude-desktop-mcp-proxy
-python demo.py
+cd agent-governance-python/agent-mesh/tutorials/claude-desktop-mcp-proxy
+python -X utf8 demo.py
 ```
 
 **Expected output:**
@@ -189,7 +197,7 @@ python demo.py
 
 ## Step 5: Inspect Audit Logs
 
-Every tool call produces a CloudEvents-format audit entry:
+The simulation prints a CloudEvents-format example from its in-memory audit log:
 
 ```json
 {
@@ -211,9 +219,14 @@ Every tool call produces a CloudEvents-format audit entry:
 ```
 
 Entries are hash-chained: each entry's hash includes the previous entry's hash,
-making tampering detectable. Use `agentmesh audit verify` to validate the chain.
+making tampering detectable. The demo calls its own `verify_chain()` method;
+its in-memory log is not a file consumed by `agentmesh audit verify`.
 
-## Step 6: Customize Policies
+## Step 6: Illustrative Policy Extensions
+
+These YAML fragments describe possible extensions. They are not accepted by
+the live CLI presets, and the demo does not load this file. Implement and test
+the corresponding conditions before relying on these examples.
 
 ### Block specific file paths
 
@@ -238,12 +251,13 @@ making tampering detectable. Use `agentmesh audit verify` to validate the chain.
   limit: "100/hour"
 ```
 
-### Shadow mode (log-only, don't block)
+### Illustrative shadow mode (not a CLI option)
 
-Set `shadow_mode: true` in the governance config to test policies without
-enforcement. All decisions are logged but never block tool calls.
+The sample configuration illustrates `shadow_mode: true`. The live
+`agentmesh proxy` command does not load that configuration or expose a
+shadow-mode option; do not rely on it to disable enforcement.
 
-## How It Works
+## How the Simulation Works
 
 1. **Claude Desktop** sends a tool call via MCP (e.g., `read_file`)
 2. **AgentMesh Proxy** intercepts the call before it reaches the MCP server
@@ -260,9 +274,9 @@ enforcement. All decisions are logged but never block tool calls.
 | Issue | Solution |
 |---|---|
 | Claude can't see MCP tools | Check `claude_desktop_config.json` syntax, restart Claude |
-| All calls blocked | Verify policy file path, check for `shadow_mode: true` |
-| Audit logs empty | Ensure `--audit-dir` path is writable |
-| Proxy won't start | Check Python 3.10+, run `pip install agentmesh-platform` |
+| All calls blocked | Check the selected built-in policy preset and the denial reason |
+| Unknown option | Use `agentmesh proxy --help`; `--upstream` and `--audit-dir` are unsupported |
+| Proxy won't start | Check Python 3.11+, run `pip install agent-governance-toolkit-core` |
 
 ## Next Steps
 

@@ -2,13 +2,46 @@
 # Licensed under the MIT License.
 """Tests for SLO definitions and error budget engine."""
 
+from unittest.mock import patch
 
+import pytest
 
 from agent_sre.slo.indicators import CostPerTask, PolicyCompliance, TaskSuccessRate
 from agent_sre.slo.objectives import SLO, ErrorBudget, ExhaustionAction, SLOStatus
 
 
 class TestErrorBudget:
+    def test_firing_alerts_use_their_declared_window(self) -> None:
+        budget = ErrorBudget(total=0.01)
+        with patch("agent_sre.slo.objectives.time.monotonic", return_value=1000):
+            budget.record_event(good=False)
+        with patch("agent_sre.slo.objectives.time.monotonic", return_value=8200):
+            assert budget.burn_rate(3600) == 0
+            assert budget.burn_rate(86400) > budget.burn_rate_critical
+            assert {a.name for a in budget.firing_alerts()} == {
+                "burn_rate_warning", "burn_rate_critical"
+            }
+        with patch("agent_sre.slo.objectives.time.monotonic", return_value=87401):
+            assert budget.firing_alerts() == []
+
+    @pytest.mark.parametrize(
+        ("errors", "burn_rate", "firing"),
+        [
+            (5, 0.5, set()),
+            (30, 3.0, {"burn_rate_warning"}),
+            (150, 15.0, {"burn_rate_warning", "burn_rate_critical"}),
+        ],
+    )
+    def test_burn_rate_is_error_ratio_over_allowed_ratio(
+        self, errors: int, burn_rate: float, firing: set[str]
+    ) -> None:
+        budget = ErrorBudget(total=0.01)  # 99% target
+        with patch("agent_sre.slo.objectives.time.monotonic", return_value=1000):
+            for i in range(1000):
+                budget.record_event(good=i >= errors)
+            assert budget.burn_rate(3600) == pytest.approx(burn_rate)
+            assert {a.name for a in budget.firing_alerts()} == firing
+
     def test_initial_state(self) -> None:
         budget = ErrorBudget(total=0.01)  # 1% budget
         assert budget.remaining == 1.0

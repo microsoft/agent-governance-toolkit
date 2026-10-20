@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { randomUUID } from "node:crypto";
+import { createHash, createSecretKey, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -15,16 +15,37 @@ import {
   PromptDefenseEvaluator,
 } from "@microsoft/agent-governance-sdk";
 
-import { appendAuditEntry, getAuditStatus } from "./audit.mjs";
+import {
+  appendAuditEntry,
+  canonicalJson,
+  computeArgsDigest,
+  getAuditStatus,
+} from "./audit.mjs";
 import { safeJsonStringify, summarizeText } from "./poisoning.mjs";
 
 export const USER_POLICY_ENV = "AGT_OPENCODE_POLICY_PATH";
 export const AUDIT_PATH_ENV = "AGT_OPENCODE_AUDIT_PATH";
+export const AUDIT_HMAC_KEY_ENV = "AGT_OPENCODE_AUDIT_HMAC_KEY";
+export const PRINCIPAL_SUB_ENV = "AGT_OPENCODE_PRINCIPAL_SUB";
+export const PRINCIPAL_ISS_ENV = "AGT_OPENCODE_PRINCIPAL_ISS";
 export const SURFACE_NAME = "opencode";
 
 const USER_POLICY_RELATIVE_PATH = [".config", "opencode", "agt", "policy.json"];
 const USER_AUDIT_RELATIVE_PATH = [".config", "opencode", "agt", "audit-log.json"];
 const DEFAULT_AGENT_ID = "opencode";
+/** Upper bound on the decision reason copied into an audit entry. */
+const MAX_AUDIT_REASON_LENGTH = 1024;
+/** Upper bound on the error text copied into a failure audit entry. */
+const MAX_AUDIT_FAILURE_REASON_LENGTH = 256;
+/** Shortest HMAC key accepted, in bytes. Anything shorter weakens the digest. */
+const MIN_AUDIT_HMAC_KEY_BYTES = 32;
+/** Bounds on the principal subject and issuer recorded in an audit entry. */
+const MAX_PRINCIPAL_FIELD_LENGTH = 256;
+/** Bounds on operator-supplied secret patterns. These run on every tool output. */
+export const MAX_SECRET_PATTERNS = 64;
+const MAX_SECRET_PATTERN_SOURCE_LENGTH = 1000;
+/** Pattern ids appear in audit entries and in redaction placeholders. */
+const SECRET_PATTERN_ID_SHAPE = /^[A-Za-z0-9._-]{1,64}$/;
 const DEFAULT_MIN_PROMPT_DEFENSE_GRADE = "B";
 const SUPPORTED_POLICY_SCHEMA_VERSION = 1;
 const DEFAULT_TOOL_EFFECT = "allow";
@@ -61,6 +82,8 @@ export async function loadPolicy({
   defaultPolicyPath = new URL("../config/default-policy.json", import.meta.url),
   policyPath = process.env[USER_POLICY_ENV],
   auditPath = process.env[AUDIT_PATH_ENV],
+  auditHmacKey = process.env[AUDIT_HMAC_KEY_ENV],
+  principal = principalFromEnvironment(),
   homeDirectory = homedir(),
 } = {}) {
   const bundledDefaultPath = normalizeFilePath(defaultPolicyPath);
@@ -73,12 +96,14 @@ export async function loadPolicy({
 
   let bundledDefaultError;
   let configuredPolicyError;
+  let configuredAdditionalContext = [];
   let compiledPolicy;
   let source = "bundled-default";
 
   if (existsSync(configuredPolicyPath)) {
     try {
       compiledPolicy = compilePolicy(await readJsonFile(configuredPolicyPath));
+      configuredAdditionalContext = toStringArray(compiledPolicy.raw?.additionalContext);
       source = process.env[USER_POLICY_ENV] ? "env" : "user";
     } catch (error) {
       configuredPolicyError = error;
@@ -96,8 +121,8 @@ export async function loadPolicy({
     }
   }
 
-  const runtime = createGovernanceRuntime(compiledPolicy);
-  return {
+  const runtime = createGovernanceRuntime(compiledPolicy, configuredAdditionalContext);
+  const state = {
     auditPath: resolvedAuditPath,
     bundledDefaultError,
     configuredPolicyError,
@@ -109,6 +134,25 @@ export async function loadPolicy({
     source,
     ...runtime,
   };
+
+  // Resolved once per load rather than per write, and kept non-enumerable so
+  // it is not swept into a log line or a JSON dump of the state.
+  const resolvedHmacKey = resolveAuditHmacKey(auditHmacKey);
+  const resolvedPrincipal = resolvePrincipal(principal);
+  state.auditConfigError = [resolvedHmacKey.error, resolvedPrincipal.error]
+    .filter(Boolean)
+    .join(" ") || undefined;
+
+  Object.defineProperty(state, "auditContext", {
+    enumerable: false,
+    value: Object.freeze({
+      hmacKey: resolvedHmacKey.key,
+      policyVersion: computePolicyVersion(compiledPolicy.raw),
+      principal: resolvedPrincipal.principal,
+    }),
+  });
+
+  return state;
 }
 
 export function buildSessionStartResult(state, input = {}) {
@@ -165,6 +209,7 @@ export async function evaluatePromptSubmission(state, input = {}) {
     await recordAudit(state, {
       action: "prompt.submit",
       decision: decision.effectiveDecision,
+      reason,
       sessionId: input.session_id,
     });
 
@@ -192,6 +237,7 @@ export async function evaluatePromptSubmission(state, input = {}) {
       await recordFailureAudit(state, {
         action: "prompt.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.session_id,
       });
       return {
@@ -243,7 +289,9 @@ export async function evaluatePreToolUse(state, input = {}) {
     await recordAudit(state, {
       action: `tool.${toolName}`,
       decision: decision.effectiveDecision,
+      reason,
       sessionId: input.session_id,
+      toolArgs: input.tool_input,
     });
 
     if (decision.effectiveDecision === "deny") {
@@ -277,7 +325,9 @@ export async function evaluatePreToolUse(state, input = {}) {
       await recordFailureAudit(state, {
         action: "tool.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.session_id,
+        toolArgs: input.tool_input,
       });
       return {
         hookSpecificOutput: {
@@ -328,25 +378,41 @@ export function checkArbitraryText(state, text, sessionId = "adhoc-check") {
 
 export async function getPolicyStatus(state) {
   const auditStatus = await getAuditStatus(state.auditPath);
+  const auditContext = state.auditContext ?? {};
   return {
+    // Reports which digest is in force, never the key itself.
+    auditArgsDigestAlg: auditContext.hmacKey ? "hmac-sha256" : "sha256",
+    auditConfigError: state.auditConfigError,
     auditEntries: auditStatus.count,
+    auditPrincipal: auditContext.principal,
     auditError: auditStatus.error,
     auditPath: state.auditPath,
     auditValid: auditStatus.valid,
+    policyVersion: auditContext.policyVersion,
     bundledDefaultError: state.bundledDefaultError?.message,
     configuredPolicyError: state.configuredPolicyError?.message,
     configuredPolicyPath: state.configuredPolicyPath,
+    configuredPromptDefenseCoverage: state.configuredPromptDefenseReport.coverage,
+    configuredPromptDefenseGrade: state.configuredPromptDefenseReport.grade,
+    configuredPromptDefenseMissing: state.configuredPromptDefenseReport.missing,
+    configuredPromptDefenseScope: "operator-additional-context",
     denyOnPolicyError: state.policy.denyOnPolicyError,
     minimumPromptDefenseGrade: state.policy.minimumPromptDefenseGrade,
     mode: state.policy.mode,
     path: state.path,
     promptDefenseCoverage: state.promptDefenseReport.coverage,
     promptDefenseGrade: state.promptDefenseReport.grade,
+    promptDefenseScope: "effective-context",
     promptDefenseBlocking: state.promptDefenseReport.isBlocking(
       state.policy.minimumPromptDefenseGrade,
     ),
+    promptDefenseBlockingScope: "effective-context",
     promptDefenseMissing: state.promptDefenseReport.missing,
     schemaVersion: state.policy.schemaVersion,
+    // Identifiers only. Pattern sources and matched values are never reported.
+    secretPatternIds: resolveSecretPatterns(state)
+      .map((pattern) => pattern.id)
+      .sort(),
     sdkPath: state.sdkPath,
     sdkSource: state.sdkSource,
     source: state.source,
@@ -354,9 +420,12 @@ export async function getPolicyStatus(state) {
   };
 }
 
-function createGovernanceRuntime(policy) {
+function createGovernanceRuntime(policy, configuredAdditionalContext) {
   const promptDefenseEvaluator = new PromptDefenseEvaluator();
   const promptDefenseReport = promptDefenseEvaluator.evaluate(policy.additionalContext.join("\n"));
+  const configuredPromptDefenseReport = promptDefenseEvaluator.evaluate(
+    configuredAdditionalContext.join("\n"),
+  );
   const mcpScanner = new McpSecurityScanner();
   const policyEngine = new PolicyEngine(buildLegacyRules(policy));
 
@@ -370,6 +439,7 @@ function createGovernanceRuntime(policy) {
   policyEngine.registerBackend(createMcpInvocationBackend(policy, mcpScanner));
 
   return {
+    configuredPromptDefenseReport,
     mcpScanner,
     policyEngine,
     promptDefenseReport,
@@ -377,13 +447,21 @@ function createGovernanceRuntime(policy) {
 }
 
 function getPolicyLoadFailure(state) {
+  const failures = [];
   if (state.configuredPolicyError) {
-    return `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`;
+    failures.push(
+      `AGT policy could not be loaded from ${state.configuredPolicyPath}: ${state.configuredPolicyError.message}`,
+    );
   }
   if (state.bundledDefaultError) {
-    return `AGT bundled default policy could not be loaded from ${state.path}: ${state.bundledDefaultError.message}`;
+    failures.push(
+      `AGT bundled default policy could not be loaded from ${state.path}: ${state.bundledDefaultError.message}`,
+    );
   }
-  return "";
+  if (state.auditConfigError) {
+    failures.push(`AGT audit configuration is invalid: ${state.auditConfigError}`);
+  }
+  return failures.join(" ");
 }
 
 function createCommandPatternBackend(policy) {
@@ -401,18 +479,23 @@ function createCommandPatternBackend(policy) {
           continue;
         }
 
+        const recursiveDeleteMatched =
+          rule.id === "recursive-delete" && matchesRecursiveDeleteCommand(commandText);
         const matchedPattern = rule.commandPatterns.find((pattern) => pattern.regex.test(commandText));
-        if (!matchedPattern) {
+        if (!recursiveDeleteMatched && !matchedPattern) {
           continue;
         }
         if (shouldBypassBlockedCommandRule(rule, commandText)) {
           continue;
         }
 
+        const matchDescription = recursiveDeleteMatched
+          ? "recursive-delete command"
+          : `/${matchedPattern.source}/${matchedPattern.flags}`;
         return {
           backend: "agt-command-patterns",
           decision: rule.effect,
-          reason: `${rule.reason} Matched /${matchedPattern.source}/${matchedPattern.flags}.`,
+          reason: `${rule.reason} Matched ${matchDescription}.`,
         };
       }
 
@@ -611,13 +694,142 @@ function createContextDetector(policy) {
   });
 }
 
-async function recordAudit(state, { action, decision, sessionId }) {
+async function recordAudit(state, { action, decision, sessionId, reason, toolArgs }) {
   await mkdir(dirname(state.auditPath), { recursive: true });
+  const auditContext = state.auditContext ?? {};
   await appendAuditEntry(state.auditPath, {
     action,
     agentId: `${DEFAULT_AGENT_ID}:${sessionId ?? "unknown-session"}`,
     decision: toAuditDecision(decision),
+    policyVersion: auditContext.policyVersion,
+    principal: auditContext.principal,
+    reason: normalizeAuditReason(reason),
+    ...(toolArgs === undefined
+      ? {}
+      : computeArgsDigest(toolArgs, { hmacKey: auditContext.hmacKey })),
   });
+}
+
+/**
+ * Read the delegating principal from the environment.
+ *
+ * The principal answers "on whose behalf", which is the difference between an
+ * action the agent took by itself and one a human delegated. It comes only
+ * from operator configuration: taking it from tool arguments or model output
+ * would let the agent name its own authority, and then it is not evidence.
+ */
+function principalFromEnvironment() {
+  const sub = process.env[PRINCIPAL_SUB_ENV];
+  const iss = process.env[PRINCIPAL_ISS_ENV];
+  if (!sub && !iss) {
+    return undefined;
+  }
+  return { ...(sub ? { sub } : {}), ...(iss ? { iss } : {}) };
+}
+
+/**
+ * Validate the configured principal. Shaped after OIDC (`sub`, optional
+ * `iss`) so the record stays unambiguous when more than one identity provider
+ * is in play. An invalid principal is an error rather than a silent omission,
+ * because a missing principal and a misconfigured one mean different things to
+ * whoever reads the log later.
+ */
+function resolvePrincipal(principal) {
+  if (principal === undefined || principal === null) {
+    return { principal: undefined, error: undefined };
+  }
+
+  if (typeof principal !== "object" || Array.isArray(principal)) {
+    return { principal: undefined, error: "Audit principal must be an object with a sub." };
+  }
+
+  for (const key of Object.keys(principal)) {
+    if (key !== "sub" && key !== "iss") {
+      return { principal: undefined, error: `Audit principal has an unsupported field '${key}'.` };
+    }
+  }
+
+  const sub = principal.sub;
+  if (typeof sub !== "string" || sub.trim().length === 0) {
+    return {
+      principal: undefined,
+      error: `Audit principal requires a non-empty sub (set ${PRINCIPAL_SUB_ENV}).`,
+    };
+  }
+  if (sub.length > MAX_PRINCIPAL_FIELD_LENGTH) {
+    return { principal: undefined, error: "Audit principal sub is too long." };
+  }
+
+  if (Object.hasOwn(principal, "iss")) {
+    if (typeof principal.iss !== "string" || principal.iss.length > MAX_PRINCIPAL_FIELD_LENGTH) {
+      return { principal: undefined, error: "Audit principal iss must be a short string." };
+    }
+    return { principal: Object.freeze({ iss: principal.iss, sub }), error: undefined };
+  }
+
+  return { principal: Object.freeze({ sub }), error: undefined };
+}
+
+/**
+ * Resolve the optional key that turns the argument digest from a plain
+ * SHA-256 into an HMAC.
+ *
+ * A short key is refused rather than used, so a weak digest cannot be
+ * mistaken for a keyed one. The key is wrapped in a KeyObject, which
+ * serializes as `{}`, so it cannot leak through a log line or a status dump.
+ */
+function resolveAuditHmacKey(value) {
+  if (value === undefined || value === null || value === "") {
+    return { key: null, error: undefined };
+  }
+
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(String(value), "utf8");
+  if (buffer.byteLength < MIN_AUDIT_HMAC_KEY_BYTES) {
+    return {
+      key: null,
+      error:
+        `${AUDIT_HMAC_KEY_ENV} must be at least ${MIN_AUDIT_HMAC_KEY_BYTES} bytes; ` +
+        "falling back to an unkeyed digest.",
+    };
+  }
+
+  try {
+    return { key: createSecretKey(buffer), error: undefined };
+  } catch (error) {
+    return { key: null, error: `${AUDIT_HMAC_KEY_ENV} could not be used: ${error.message}` };
+  }
+}
+
+/**
+ * Reasons are operator-facing evidence, not free-form storage. Only strings are
+ * accepted, whitespace is flattened, and the text is capped, because a reason
+ * can quote a matched path or URL from the request.
+ */
+function normalizeAuditReason(reason) {
+  if (typeof reason !== "string") {
+    return undefined;
+  }
+  const summarized = summarizeText(reason, MAX_AUDIT_REASON_LENGTH);
+  return summarized.length > 0 ? summarized : undefined;
+}
+
+/** Reason recorded when governance itself failed rather than reached a verdict. */
+function failureReason(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return `policy_error: ${summarizeText(message, MAX_AUDIT_FAILURE_REASON_LENGTH)}`;
+}
+
+/**
+ * Identifies the policy that produced a decision. Derived from the active raw
+ * policy rather than a declared version field, so an edited policy always
+ * produces a different value.
+ */
+function computePolicyVersion(raw) {
+  try {
+    return `sha256:${createHash("sha256").update(canonicalJson(raw ?? null), "utf8").digest("hex")}`;
+  } catch {
+    return "sha256:unavailable";
+  }
 }
 
 async function recordFailureAudit(state, payload) {
@@ -661,6 +873,7 @@ export function compilePolicy(raw) {
     policyDocument: raw?.policyDocument,
     raw,
     schemaVersion: normalizeSchemaVersion(raw?.schemaVersion),
+    secretPatterns: compileSecretPatterns(raw?.secretPatterns),
     toolPolicies: {
       allowedTools,
       blockedTools: toStringArray(raw?.toolPolicies?.blockedTools),
@@ -766,6 +979,102 @@ function compilePoisoningPattern(pattern, index) {
     pattern: pattern.source,
     severity: normalizeSeverity(pattern.severity),
   };
+}
+
+/**
+ * Compiles operator-supplied secret patterns. These merge with the built-ins
+ * rather than replacing them, so a policy file cannot weaken the safe defaults.
+ *
+ * Throwing here is deliberate. compilePolicy already throws for a bad
+ * pathPatterns regex, loadPolicy records that as configuredPolicyError, and
+ * enforce mode denies on a policy load failure. So a malformed block fails
+ * closed instead of quietly running with redaction disabled.
+ */
+function compileSecretPatterns(raw) {
+  if (raw === undefined || raw === null) {
+    return [];
+  }
+  if (!Array.isArray(raw)) {
+    throw new Error("Invalid secretPatterns: expected an array.");
+  }
+  if (raw.length > MAX_SECRET_PATTERNS) {
+    throw new Error(
+      `Invalid secretPatterns: ${raw.length} patterns exceeds the limit of ${MAX_SECRET_PATTERNS}.`,
+    );
+  }
+
+  const seenIds = new Set();
+  return raw.map((pattern, index) => {
+    const label = `secretPatterns[${index}]`;
+    const id = typeof pattern?.id === "string" ? pattern.id.trim() : "";
+    if (!SECRET_PATTERN_ID_SHAPE.test(id)) {
+      throw new Error(
+        `Invalid ${label}: id must match ${SECRET_PATTERN_ID_SHAPE.source}.`,
+      );
+    }
+    if (BUILTIN_SECRET_PATTERN_IDS.has(id)) {
+      throw new Error(`Invalid ${label}: id "${id}" is reserved by a built-in pattern.`);
+    }
+    if (seenIds.has(id)) {
+      throw new Error(`Invalid ${label}: duplicate id "${id}".`);
+    }
+    seenIds.add(id);
+
+    const source = typeof pattern?.source === "string" ? pattern.source : "";
+    if (!source.trim()) {
+      throw new Error(`Invalid ${label}: missing regex source.`);
+    }
+    if (source.length > MAX_SECRET_PATTERN_SOURCE_LENGTH) {
+      throw new Error(
+        `Invalid ${label}: regex source exceeds ${MAX_SECRET_PATTERN_SOURCE_LENGTH} characters.`,
+      );
+    }
+
+    const flags = typeof pattern?.flags === "string" ? pattern.flags : "";
+    if (flags.includes("y")) {
+      // Sticky anchors every attempt to lastIndex, which silently breaks the
+      // replace pass that performs the redaction.
+      throw new Error(`Invalid ${label}: the sticky "y" flag is not supported.`);
+    }
+
+    // An unparseable source or an unknown flag throws here. Relabel it so the
+    // operator learns which pattern is at fault, not just that a regex is bad.
+    let regex;
+    try {
+      regex = new RegExp(source, flags.includes("g") ? flags : `${flags}g`);
+    } catch (error) {
+      throw new Error(
+        `Invalid ${label}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    // A pattern that matches the empty string or any single arbitrary
+    // character matches almost everywhere, so it would redact the whole tool
+    // output rather than a credential inside it. Probing the empty string
+    // alone lets `.+` and `[\s\S]` through, so probe a character and a
+    // newline too.
+    for (const probe of ["", "a", "\n"]) {
+      regex.lastIndex = 0;
+      if (regex.test(probe)) {
+        throw new Error(
+          `Invalid ${label}: pattern matches ${
+            probe === "" ? "the empty string" : "a single arbitrary character"
+          }.`,
+        );
+      }
+    }
+    regex.lastIndex = 0;
+
+    // Deliberately no complexity guard. The probes above happen to reject the
+    // simplest catastrophic sources, but not the class: `(x+x+)+y` passes them
+    // and still takes seconds on 28 characters of hostile tool output, and
+    // these patterns run on every tool result. That risk is accepted rather
+    // than overlooked. The policy file already takes arbitrary operator regexes
+    // in pathPatterns, urlPatterns, commandPatterns and poisoningPatterns, so
+    // this key adds no new trust boundary, and the count and source-length caps
+    // above bound the blast radius. Revisit together with those keys, not alone.
+
+    return { id, regex };
+  });
 }
 
 function compileRegexPattern(pattern, label) {
@@ -889,34 +1198,226 @@ function shouldBypassBlockedCommandRule(rule, commandText) {
   return false;
 }
 
+function matchesRecursiveDeleteCommand(commandText) {
+  const { commands } = tokenizeShellCommands(commandText);
+  return commands.some((tokens) => {
+    const invocation = getShellCommandInvocation(tokens);
+    if (invocation?.name !== "rm") {
+      return false;
+    }
+
+    let recursive = false;
+    let force = false;
+    let optionsEnded = false;
+    for (const token of invocation.args) {
+      if (optionsEnded) {
+        continue;
+      }
+      if (token === "--") {
+        optionsEnded = true;
+        continue;
+      }
+
+      const option = parseRmOption(token);
+      if (option) {
+        recursive ||= option.recursive;
+        force ||= option.force;
+      }
+    }
+
+    return recursive && force;
+  });
+}
+
 function isSafeCleanupCommand(commandText) {
-  if (containsCommandControlOperator(commandText)) {
+  const parsedCommand = tokenizeShellCommands(commandText);
+  if (parsedCommand.hasControlOperator || parsedCommand.commands.length !== 1) {
     return false;
   }
 
-  const tokens = tokenizeCommand(commandText);
-  const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|ri|rd|del)$/i.test(stripCommandToken(token)),
-  );
-  if (commandIndex === -1) {
+  const invocation = getShellCommandInvocation(parsedCommand.commands[0]);
+  if (invocation?.name !== "rm") {
     return false;
   }
 
   const candidateTargets = [];
-  for (const token of tokens.slice(commandIndex + 1)) {
-    const normalizedToken = stripCommandToken(token);
-    if (!normalizedToken || normalizedToken.startsWith("-")) {
+  let optionsEnded = false;
+  for (const token of invocation.args) {
+    if (!token) {
+      return false;
+    }
+    if (optionsEnded) {
+      if (!addSafeCleanupTargets(candidateTargets, token)) {
+        return false;
+      }
       continue;
     }
-    for (const part of normalizedToken.split(",")) {
-      const cleaned = normalizeCommandPathToken(part);
-      if (cleaned) {
-        candidateTargets.push(cleaned);
+    if (token === "--") {
+      optionsEnded = true;
+      continue;
+    }
+    if (token.startsWith("-")) {
+      const option = parseRmOption(token);
+      if (!option?.recognized) {
+        return false;
       }
+      continue;
+    }
+    if (!addSafeCleanupTargets(candidateTargets, token)) {
+      return false;
     }
   }
 
   return candidateTargets.length > 0 && candidateTargets.every(isSafeCleanupTarget);
+}
+
+function getShellCommandInvocation(tokens) {
+  let index = 0;
+  while (index < tokens.length) {
+    const token = tokens[index];
+    const commandName = getLastPathSegment(token.replace(/\\/g, "/")).toLowerCase();
+    if (
+      ["if", "then", "do", "else", "elif", "while", "until", "in"].includes(commandName) ||
+      /^[a-z_][a-z0-9_]*=/i.test(token)
+    ) {
+      index += 1;
+      continue;
+    }
+
+    if (commandName === "exec") {
+      index += 1;
+      while (tokens[index]?.startsWith("-")) {
+        const option = tokens[index];
+        index += option === "-a" ? 2 : 1;
+      }
+      continue;
+    }
+
+    if (["command", "nohup", "busybox"].includes(commandName)) {
+      index += 1;
+      while (tokens[index]?.startsWith("-")) {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (["nice", "time", "timeout"].includes(commandName)) {
+      index += 1;
+      const optionsWithArguments = {
+        nice: new Set(["-n", "--adjustment"]),
+        time: new Set(["-f", "--format", "-o", "--output"]),
+        timeout: new Set(["-k", "--kill-after", "-s", "--signal"]),
+      }[commandName];
+      while (tokens[index]?.startsWith("-")) {
+        const option = tokens[index];
+        index += 1;
+        if (option === "--") {
+          break;
+        }
+        if (optionsWithArguments.has(option)) {
+          index += 1;
+        }
+      }
+      if (commandName === "timeout" && index < tokens.length) {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (commandName === "env") {
+      index += 1;
+      while (index < tokens.length) {
+        const argument = tokens[index];
+        if (argument === "--") {
+          index += 1;
+          break;
+        }
+        if (["-u", "--unset", "-C", "--chdir"].includes(argument)) {
+          index += 2;
+        } else if (argument.startsWith("-") || /^[a-z_][a-z0-9_]*=/i.test(argument)) {
+          index += 1;
+        } else {
+          break;
+        }
+      }
+      continue;
+    }
+
+    if (commandName === "sudo" || commandName === "doas") {
+      index += 1;
+      while (index < tokens.length && tokens[index].startsWith("-")) {
+        const option = tokens[index];
+        index += 1;
+        if (sudoWrapperOptionTakesArgument(option)) {
+          index += 1;
+        }
+      }
+      continue;
+    }
+
+    return {
+      args: tokens.slice(index + 1),
+      name: commandName,
+    };
+  }
+  return undefined;
+}
+
+function sudoWrapperOptionTakesArgument(option) {
+  if (
+    ["-u", "--user", "-g", "--group", "-h", "--host", "-p", "--prompt", "-C", "--close-from"].includes(option)
+  ) {
+    return true;
+  }
+  return /^-[A-Za-z]+$/.test(option) && /[ughpC]$/.test(option.slice(1));
+}
+
+function parseRmOption(token) {
+  if (token === "-" || !token.startsWith("-")) {
+    return undefined;
+  }
+
+  if (token.startsWith("--")) {
+    const optionName = token.slice(2).split("=")[0].toLowerCase();
+    if (optionName.startsWith("r") && "recursive".startsWith(optionName)) {
+      return { force: false, recognized: true, recursive: true };
+    }
+    if (optionName.startsWith("f") && "force".startsWith(optionName)) {
+      return { force: true, recognized: true, recursive: false };
+    }
+
+    return {
+      force: false,
+      recognized: [
+        "dir",
+        "help",
+        "interactive",
+        "no-preserve-root",
+        "one-file-system",
+        "preserve-root",
+        "verbose",
+        "version",
+      ].includes(optionName),
+      recursive: false,
+    };
+  }
+
+  const optionLetters = token.slice(1).toLowerCase();
+  return {
+    force: optionLetters.includes("f"),
+    recognized: [...optionLetters].every((letter) => "firdv".includes(letter)),
+    recursive: optionLetters.includes("r"),
+  };
+}
+
+function addSafeCleanupTargets(candidateTargets, token) {
+  const parts = token.split(",");
+  const cleanedTargets = parts.map(normalizeCommandPathToken);
+  if (cleanedTargets.some((target) => !target)) {
+    return false;
+  }
+  candidateTargets.push(...cleanedTargets);
+  return true;
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
@@ -951,7 +1452,7 @@ export function evaluateDirectResourceAccess(policy, context) {
 
     const result = {
       effect: rule.effect,
-      reason: `${rule.reason} Matched path ${matched.displayPath}.`,
+      reason: `${rule.reason} Matched path rule ${rule.id}.`,
     };
     if (rule.effect === "deny") {
       return result;
@@ -969,7 +1470,7 @@ export function evaluateDirectResourceAccess(policy, context) {
 
     const result = {
       effect: rule.effect,
-      reason: `${rule.reason} Matched URL ${matched.normalizedUrl}.`,
+      reason: `${rule.reason} Matched URL rule ${rule.id}.`,
     };
     if (rule.effect === "deny") {
       return result;
@@ -1133,6 +1634,222 @@ function normalizeUrlValue(value) {
   }
 }
 
+function tokenizeShellCommands(commandText) {
+  const input = String(commandText);
+  const commands = [];
+  let command = [];
+  let token = "";
+  let tokenStarted = false;
+  let quote;
+  const substitutions = [];
+  let hasControlOperator = false;
+
+  const finishToken = () => {
+    if (tokenStarted) {
+      command.push(token);
+      token = "";
+      tokenStarted = false;
+    }
+  };
+  const finishCommand = () => {
+    finishToken();
+    if (command.length > 0) {
+      commands.push(command);
+      command = [];
+    }
+  };
+
+  for (let index = 0; index < input.length; index += 1) {
+    const character = input[index];
+    if (quote) {
+      if (quote === '"' && character === "`") {
+        hasControlOperator = true;
+        finishCommand();
+        quote = undefined;
+        substitutions.push({ resumeDoubleQuote: true, type: "backtick" });
+        continue;
+      }
+      if (quote === '"' && character === "$" && input[index + 1] === "(") {
+        hasControlOperator = true;
+        finishCommand();
+        quote = undefined;
+        substitutions.push({
+          depth: 1,
+          resumeDoubleQuote: true,
+          type: "command",
+        });
+        index += 1;
+        continue;
+      }
+      if (character === quote) {
+        quote = undefined;
+      } else if (quote === '"' && character === "\\" && index + 1 < input.length) {
+        const nextCharacter = input[index + 1];
+        if (['"', "\\", "$", "`"].includes(nextCharacter)) {
+          token += nextCharacter;
+          index += 1;
+        } else if (nextCharacter !== "\n" && nextCharacter !== "\r") {
+          token += character;
+        }
+      } else {
+        token += character;
+      }
+      tokenStarted = true;
+      continue;
+    }
+
+    const activeSubstitution = substitutions.at(-1);
+    if (character === "`" && activeSubstitution?.type === "backtick") {
+      hasControlOperator = true;
+      finishCommand();
+      substitutions.pop();
+      if (activeSubstitution.resumeDoubleQuote) {
+        quote = '"';
+        tokenStarted = true;
+      }
+      continue;
+    }
+    if (character === "`") {
+      hasControlOperator = true;
+      finishCommand();
+      substitutions.push({ resumeDoubleQuote: false, type: "backtick" });
+      continue;
+    }
+    if (character === "$" && input[index + 1] === "(") {
+      hasControlOperator = true;
+      finishCommand();
+      substitutions.push({
+        depth: 1,
+        resumeDoubleQuote: false,
+        type: "command",
+      });
+      index += 1;
+      continue;
+    }
+    if (activeSubstitution?.type === "command" && character === "(") {
+      hasControlOperator = true;
+      finishCommand();
+      activeSubstitution.depth += 1;
+      continue;
+    }
+    if (activeSubstitution?.type === "command" && character === ")") {
+      hasControlOperator = true;
+      finishCommand();
+      activeSubstitution.depth -= 1;
+      if (activeSubstitution.depth === 0) {
+        substitutions.pop();
+      }
+      if (activeSubstitution.depth === 0 && activeSubstitution.resumeDoubleQuote) {
+        quote = '"';
+        tokenStarted = true;
+      }
+      continue;
+    }
+
+    const hashFollowsExpansionSyntax = ["{", "}", ")", "`"].includes(input[index - 1]);
+    if (character === "#" && !tokenStarted && !hashFollowsExpansionSyntax) {
+      const insideBacktickSubstitution = substitutions.some(
+        (substitution) => substitution.type === "backtick",
+      );
+      let precedingBackslashes = 0;
+      while (index + 1 < input.length) {
+        const nextCharacter = input[index + 1];
+        if (
+          nextCharacter === "\n" ||
+          nextCharacter === "\r" ||
+          (insideBacktickSubstitution &&
+            nextCharacter === "`" &&
+            precedingBackslashes % 2 === 0)
+        ) {
+          break;
+        }
+        precedingBackslashes = nextCharacter === "\\" ? precedingBackslashes + 1 : 0;
+        index += 1;
+      }
+      finishCommand();
+      if (input[index + 1] === "\r" && input[index + 2] === "\n") {
+        hasControlOperator = true;
+        index += 2;
+      } else if (input[index + 1] === "\n" || input[index + 1] === "\r") {
+        hasControlOperator = true;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (character === "'" || character === '"') {
+      quote = character;
+      tokenStarted = true;
+      continue;
+    }
+    if (character === "\\") {
+      const nextCharacter = input[index + 1];
+      if (nextCharacter === "\n") {
+        index += 1;
+        continue;
+      }
+      if (nextCharacter === "\r" && input[index + 2] === "\n") {
+        index += 2;
+        continue;
+      }
+      if (nextCharacter !== undefined) {
+        token += nextCharacter;
+        tokenStarted = true;
+        index += 1;
+      } else {
+        token += character;
+        tokenStarted = true;
+      }
+      continue;
+    }
+    if (
+      character === "&" &&
+      ([">", "<"].includes(input[index - 1]) || [">", "<"].includes(input[index + 1]))
+    ) {
+      token += character;
+      tokenStarted = true;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      finishToken();
+      if (character === "\n" || character === "\r") {
+        hasControlOperator = true;
+        finishCommand();
+        if (character === "\r" && input[index + 1] === "\n") {
+          index += 1;
+        }
+      }
+      continue;
+    }
+    if (character === ">" || character === "<") {
+      finishToken();
+      token = character;
+      tokenStarted = true;
+      if (input[index + 1] === character) {
+        token += character;
+        index += 1;
+      }
+      continue;
+    }
+    if (";|&(){} `".includes(character)) {
+      hasControlOperator = true;
+      finishCommand();
+      if (
+        (character === "|" || character === "&") &&
+        input[index + 1] === character
+      ) {
+        index += 1;
+      }
+      continue;
+    }
+
+    token += character;
+    tokenStarted = true;
+  }
+  finishCommand();
+  return { commands, hasControlOperator };
+}
+
 function containsCommandControlOperator(commandText) {
   return /(?:&&|\|\||[;`]|[\r\n])/.test(commandText);
 }
@@ -1221,6 +1938,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
     await recordAudit(state, {
       action: "prompt.submit",
       decision: effect,
+      reason,
       sessionId: input.sessionId,
     });
 
@@ -1233,6 +1951,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
       await recordFailureAudit(state, {
         action: "prompt.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.sessionId,
       });
       return {
@@ -1252,7 +1971,7 @@ export async function evaluateOpenCodePrompt(state, input = {}) {
  *
  * @param {object} state Loaded policy state from {@link loadPolicy}.
  * @param {{ tool: string, args?: object, cwd?: string, sessionId?: string }} input
- * @returns {Promise<{ effect: "allow"|"review"|"deny", reason: string }>}
+ * @returns {Promise<{ effect: "allow"|"review"|"deny", reason: string, policyError?: boolean }>}
  */
 export async function evaluateOpenCodeTool(state, input = {}) {
   const policyLoadFailure = getPolicyLoadFailure(state);
@@ -1279,7 +1998,9 @@ export async function evaluateOpenCodeTool(state, input = {}) {
     await recordAudit(state, {
       action: `tool.${toolName}`,
       decision: effect,
+      reason,
       sessionId: input.sessionId,
+      toolArgs: input.args,
     });
 
     return {
@@ -1291,16 +2012,20 @@ export async function evaluateOpenCodeTool(state, input = {}) {
       await recordFailureAudit(state, {
         action: "tool.policy_error",
         decision: "deny",
+        reason: failureReason(error),
         sessionId: input.sessionId,
+        toolArgs: input.args,
       });
       return {
         effect: "deny",
         reason: `AGT tool evaluation failed closed: ${error instanceof Error ? error.message : String(error)}`,
+        policyError: true,
       };
     }
     return {
       effect: "allow",
       reason: `AGT advisory: tool evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
+      policyError: true,
     };
   }
 }
@@ -1320,10 +2045,13 @@ export async function evaluateOpenCodeToolOutput(state, input = {}) {
     return { redact: false, reason: "" };
   }
 
-  const findings = scanForSecretLikeContent(text);
+  const patterns = resolveSecretPatterns(state);
+  const findings = scanForSecretLikeContent(text, patterns);
   await recordAudit(state, {
     action: `tool.${String(input.tool ?? "unknown")}.output`,
     decision: findings.length ? "review" : "allow",
+    // Pattern identifiers only. The matched text is never recorded.
+    reason: findings.length ? describeSecretFindings(findings) : undefined,
     sessionId: input.sessionId,
   });
 
@@ -1336,7 +2064,7 @@ export async function evaluateOpenCodeToolOutput(state, input = {}) {
 
   return {
     redact: true,
-    redactedOutput: redactSecretLikeContent(text, findings),
+    redactedOutput: redactSecretLikeContent(text, findings, patterns),
     reason: `AGT redacted tool output: ${describeSecretFindings(findings)}`,
   };
 }
@@ -1360,13 +2088,66 @@ const SECRET_PATTERNS = [
   { id: "github-fine-grained", regex: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g },
   { id: "openai-key", regex: /\bsk-[A-Za-z0-9]{32,}\b/g },
   { id: "azure-account-key", regex: /\bAccountKey=[A-Za-z0-9+/=]{40,}\b/g },
-  { id: "private-key-block", regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/g },
+  { id: "private-key-block", ranges: privateKeyBlockRanges },
   { id: "jwt-token", regex: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
+  // Each pattern below is anchored on a vendor prefix with a length floor, so
+  // ordinary source, diffs and prose do not match.
+  { id: "slack-token", regex: /\bxox[abeprs]-[A-Za-z0-9-]{10,}\b/g },
+  {
+    id: "slack-webhook",
+    regex: /https:\/\/hooks\.slack\.com\/services\/T[A-Za-z0-9_]+\/B[A-Za-z0-9_]+\/[A-Za-z0-9_]{16,}/g,
+  },
+  // ghp_ is already covered by github-token above, so it is excluded here.
+  { id: "github-app-token", regex: /\bgh[orsu]_[A-Za-z0-9]{36,}\b/g },
+  { id: "npm-token", regex: /\bnpm_[A-Za-z0-9]{36}\b/g },
+  { id: "google-api-key", regex: /\bAIza[A-Za-z0-9_-]{35}\b/g },
+  { id: "atlassian-token", regex: /\bATATT3x[A-Za-z0-9_\-=]{64,}\b/g },
+  {
+    // Requires a non-empty password and a known scheme. A credential-free URI
+    // such as postgres://localhost:5432/db is left alone.
+    id: "db-connection-string",
+    regex:
+      /\b(?:postgres|postgresql|mysql|mongodb\+srv|mongodb|redis|rediss|amqp|amqps|mssql):\/\/[^\s:@/]+:[^\s:@/]+@[^\s/]+/g,
+  },
 ];
 
-function scanForSecretLikeContent(text) {
+const BUILTIN_SECRET_PATTERN_IDS = new Set(SECRET_PATTERNS.map((pattern) => pattern.id));
+
+/**
+ * The patterns in force for a load: built-ins first, then any configured ones.
+ * @param {object} state Loaded policy state from {@link loadPolicy}.
+ */
+function resolveSecretPatterns(state) {
+  const configured = state?.policy?.secretPatterns ?? [];
+  return configured.length ? [...SECRET_PATTERNS, ...configured] : SECRET_PATTERNS;
+}
+
+function privateKeyBlockRanges(text) {
+  // Scan delimiters once. Retrying a whole-body regex at every unmatched BEGIN
+  // makes tool output containing repeated headers take quadratic time.
+  const delimiters = /-----(BEGIN|END) [A-Z ]*PRIVATE KEY-----/g;
+  const ranges = [];
+  let start = null;
+  let bodyStart = 0;
+  for (const match of text.matchAll(delimiters)) {
+    if (start === null && match[1] === "BEGIN") {
+      start = match.index;
+      bodyStart = match.index + match[0].length;
+    } else if (start !== null && match[1] === "END" && match.index > bodyStart) {
+      ranges.push([start, match.index + match[0].length]);
+      start = null;
+    }
+  }
+  return ranges;
+}
+
+function scanForSecretLikeContent(text, patterns = SECRET_PATTERNS) {
   const hits = [];
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of patterns) {
+    if (pattern.ranges) {
+      if (pattern.ranges(text).length) hits.push(pattern.id);
+      continue;
+    }
     pattern.regex.lastIndex = 0;
     if (pattern.regex.test(text)) {
       hits.push(pattern.id);
@@ -1375,9 +2156,20 @@ function scanForSecretLikeContent(text) {
   return hits;
 }
 
-function redactSecretLikeContent(text, _findings) {
+function redactSecretLikeContent(text, _findings, patterns = SECRET_PATTERNS) {
   let redacted = text;
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of patterns) {
+    if (pattern.ranges) {
+      const chunks = [];
+      let cursor = 0;
+      for (const [start, end] of pattern.ranges(redacted)) {
+        chunks.push(redacted.slice(cursor, start), `[AGT_REDACTED:${pattern.id}]`);
+        cursor = end;
+      }
+      chunks.push(redacted.slice(cursor));
+      redacted = chunks.join("");
+      continue;
+    }
     const flags = pattern.regex.flags.includes("g") ? pattern.regex.flags : `${pattern.regex.flags}g`;
     const globalRegex = new RegExp(pattern.regex.source, flags);
     redacted = redacted.replace(globalRegex, `[AGT_REDACTED:${pattern.id}]`);

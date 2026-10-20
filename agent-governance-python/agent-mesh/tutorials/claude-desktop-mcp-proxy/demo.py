@@ -4,6 +4,7 @@
 """AgentMesh MCP Proxy Demo — Claude Desktop Security.
 
 Simulates the MCP governance proxy flow without requiring Claude Desktop.
+All governance classes below are local mocks, not the AgentMesh SDK API.
 Demonstrates policy enforcement, audit logging, and trust scoring for
 MCP tool calls.
 

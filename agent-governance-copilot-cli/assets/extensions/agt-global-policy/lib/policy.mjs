@@ -9,6 +9,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { flattenText, safeJsonStringify, summarizeText, summarizeTextWindows } from "./poisoning.mjs";
 import { SDK_ENTRY_ENV, loadAgentGovernanceSdk } from "./sdk-loader.mjs";
+import { isSafeShellCleanupCommand, matchesRecursiveDeleteCommand } from "./recursive-delete.mjs";
 
 export const USER_POLICY_ENV = "AGT_COPILOT_POLICY_PATH";
 export const AUDIT_PATH_ENV = "AGT_COPILOT_AUDIT_PATH";
@@ -521,8 +522,12 @@ function createCommandPatternBackend(policy) {
           continue;
         }
 
+        const recursiveDeleteMatched =
+          rule.id === "recursive-delete" &&
+          rule.tool.toLowerCase() === "bash" &&
+          matchesRecursiveDeleteCommand(commandText);
         const matchedPattern = rule.commandPatterns.find((pattern) => pattern.regex.test(commandText));
-        if (!matchedPattern) {
+        if (!recursiveDeleteMatched && !matchedPattern) {
           continue;
         }
         if (shouldBypassBlockedCommandRule(rule, commandText)) {
@@ -532,7 +537,9 @@ function createCommandPatternBackend(policy) {
         return {
           backend: "agt-command-patterns",
           decision: rule.effect,
-          reason: `${rule.reason} Matched /${matchedPattern.source}/${matchedPattern.flags}.`,
+          reason: recursiveDeleteMatched
+            ? `${rule.reason} Matched recursive-delete command.`
+            : `${rule.reason} Matched /${matchedPattern.source}/${matchedPattern.flags}.`,
         };
       }
 
@@ -981,7 +988,9 @@ function createMinimalFallbackPolicy() {
 
 function shouldBypassBlockedCommandRule(rule, commandText) {
   if (rule.id === "recursive-delete") {
-    return isSafeCleanupCommand(commandText);
+    return rule.tool.toLowerCase() === "bash"
+      ? isSafeShellCleanupCommand(commandText)
+      : isSafeCleanupCommand(commandText);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);

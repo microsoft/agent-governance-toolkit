@@ -19,3 +19,7 @@ intervention_points:
     policy_target: $.output.content
     policy:
       id: financial_services
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy:
+      id: financial_services
