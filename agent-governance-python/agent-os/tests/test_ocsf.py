@@ -66,8 +66,9 @@ class TestCloudEventToOCSF:
         assert ocsf["type_uid"] == 200401  # 2004 * 100 + 1
         assert ocsf["disposition_id"] == OCSF_DISPOSITION_BLOCKED
         assert ocsf["disposition"] == "Blocked"
-        assert ocsf["status_id"] == OCSF_STATUS_FAILURE
-        assert ocsf["status"] == "Failure"
+        # Detection Finding (2004) uses its own status enum; default is New (1)
+        assert ocsf["status_id"] == 1
+        assert ocsf["status"] == "New"
         assert ocsf["severity_id"] == OCSF_SEVERITY_CRITICAL
         assert ocsf["severity"] == "Critical"
 
@@ -81,12 +82,11 @@ class TestCloudEventToOCSF:
         assert ocsf["unmapped"]["_trace"]["parent_span_id"] == "span-000"
         assert ocsf["unmapped"]["_trace"]["session_id"] == "session-xyz"
 
-        # Finding details and state (required on 2004)
+        # Finding details (1.9.x requires finding_info; actor/state not present)
         assert ocsf["finding_info"]["uid"] == "evt-violation-123"
         assert "no-destructive-commands" in ocsf["finding_info"]["title"]
-        assert ocsf["state_id"] == 1
         assert ocsf["policy"]["name"] == "no-destructive-commands"
-        assert ocsf["actor"]["user"]["name"] == "bot-1"
+        assert "actor" not in ocsf
 
     def test_api_activity_policy_check_allowed(self):
         """Class 6003 (API Activity) for allowed policy checks."""

@@ -225,7 +225,7 @@ class GovernanceEvent:
         self,
         source: str | None = None,
     ) -> dict[str, Any]:
-        """Serialize as an Open Cybersecurity Schema Framework (OCSF v1.3.0) record.
+        """Serialize as an Open Cybersecurity Schema Framework (OCSF v1.9.0) record.
 
         Translates this governance event envelope into standard OCSF schema
         (e.g. Class 6003: API Activity, Class 2004: Detection Finding, Class 3003:

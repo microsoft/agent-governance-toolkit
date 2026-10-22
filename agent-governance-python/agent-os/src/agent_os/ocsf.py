@@ -1,5 +1,5 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
-"""Open Cybersecurity Schema Framework (OCSF) v1.3.0 conversion and sink.
+"""Open Cybersecurity Schema Framework (OCSF) v1.9.0 conversion and sink.
 
 This module translates AGT governance, audit, and trace telemetry from
 CloudEvents v1.0 schema into OCSF schema (Open Cybersecurity Schema Framework),
@@ -33,24 +33,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: Default OCSF Schema version targeted by this converter.
-OCSF_SCHEMA_VERSION = "1.3.0"
+OCSF_SCHEMA_VERSION = "1.9.0"
 
-# Latest validator-targeted schema (observed at schema.ocsf.io v2 validate API).
-OCSF_SCHEMA_VERSION_LATEST = "1.9.0"
-
-# Environment toggle: when set to "latest", output is shaped to satisfy the
-# current public validator (v2) and uses newer schema conventions.
-_SCHEMA_MODE = os.getenv("AGT_OCSF_SCHEMA_MODE", "1.3").lower()
-_USE_LATEST = _SCHEMA_MODE in {"latest", "new", "v2", "1.9", "1.9.0"}
+# Note: This converter targets OCSF 1.9.0. The optional `schema_mode`
+# parameter is accepted for backward compatibility but is ignored; only
+# 1.9.0 shapes are emitted.
 
 # OCSF Categories
 OCSF_CATEGORY_FINDINGS = 2
 OCSF_CATEGORY_IAM = 3
 OCSF_CATEGORY_APPLICATION_ACTIVITY = 6
 
-# OCSF Classes (OCSF v1.3.0)
+# OCSF Classes (OCSF v1.9.0)
 OCSF_CLASS_DETECTION_FINDING = 2004  # Category 2: replaces deprecated Security Finding 2001
-OCSF_CLASS_AUTHENTICATION = 3002     # Category 3: Authentication (Logon/Logoff)
 OCSF_CLASS_AUTHORIZE_SESSION = 3003  # Category 3: Authorize Session (Assign Privileges)
 OCSF_CLASS_API_ACTIVITY = 6003       # Category 6: API Activity
 
@@ -218,7 +213,7 @@ def _resolve_kind(ce_type: str, kind_val: str) -> str:
 
     # Match known multi-word suffixes first (longer match wins)
     t_lower = ce_type.lower()
-    for suffix, kind in _CE_TYPE_SUFFIX_TO_KIND.items():
+    for suffix, kind in sorted(_CE_TYPE_SUFFIX_TO_KIND.items(), key=lambda kv: len(kv[0]), reverse=True):
         if t_lower.endswith(suffix) or f".{suffix}." in t_lower:
             return kind
 
@@ -235,7 +230,7 @@ def _classify_event(
 ) -> tuple[int, str, int, str, int, str, int, str]:
     """Determine the OCSF Class, Category, Activity, and Type UID.
 
-    OCSF v1.3.0 classes used:
+    OCSF v1.9.0 classes used:
     - 2004 Detection Finding  (category 2) — policy violations and security detections.
     - 3003 Authorize Session  (category 3) — identity checks and privilege escalations.
     - 6003 API Activity       (category 6) — policy checks, resource accesses, checkpoints.
@@ -350,7 +345,7 @@ def cloudevent_to_ocsf(
     custom_product: dict[str, Any] | None = None,
     schema_mode: str | None = None,
 ) -> dict[str, Any]:
-    """Convert a CloudEvents v1.0 governance or trace envelope into an OCSF v1.3.0 event.
+    """Convert a CloudEvents v1.0 governance or trace envelope into an OCSF v1.9.0 event.
 
     Maps CloudEvents attributes and AGT governance payloads into standard OCSF
     classes (API Activity 6003, Detection Finding 2004, Authorize Session 3003),
@@ -367,7 +362,7 @@ def cloudevent_to_ocsf(
         custom_product: Optional metadata.product override for OCSF metadata.
 
     Returns:
-        An OCSF v1.3.0 compliant dictionary.
+        An OCSF v1.9.0 compliant dictionary.
     """
     event_id = str(cloudevent.get("id") or "")
     ce_type = str(cloudevent.get("type") or "ai.agentos.event")
@@ -419,6 +414,9 @@ def cloudevent_to_ocsf(
     # ``kind`` may be present when a raw CE is constructed manually or comes
     # from an external system; to_cloudevent() does not write it to data.
     kind_val = str(data.get("kind") or "")
+    # OCSF v1.9.0 is always used; `schema_mode` and env overrides are ignored.
+    use_latest = True
+    resolved_kind = _resolve_kind(ce_type, kind_val)
 
     severity_str = str(data.get("severity") or "info").lower()
     severity_id, severity_name = _SEVERITY_MAP.get(
@@ -448,7 +446,7 @@ def cloudevent_to_ocsf(
     }
 
     metadata: dict[str, Any] = {
-        "version": (OCSF_SCHEMA_VERSION_LATEST if ((_SCHEMA_MODE if schema_mode is None else schema_mode).lower() in {"latest", "new", "v2", "1.9", "1.9.0"}) else OCSF_SCHEMA_VERSION),
+        "version": OCSF_SCHEMA_VERSION,
         "product": product_meta,
         "profiles": ["security_control"],
         "original_time": original_time,
@@ -519,13 +517,15 @@ def cloudevent_to_ocsf(
         # In OCSF 1.3, state/state_id were used; newer validators reject them.
         finding_info: dict[str, Any] = {
             "uid": event_id or f"finding-{time_ms}",
-            "title": f"Governance Detection: {policy_name or action or kind_val}",
+            "title": f"Governance Detection: {policy_name or action or resolved_kind}",
             "desc": reason or f"Policy detection for action: {action or 'unknown'}",
-            "types": [kind_val] if kind_val else ["policy_detection"],
+            "types": [resolved_kind] if resolved_kind else ["policy_detection"],
         }
         ocsf["finding_info"] = finding_info
+        # Detection Finding uses its own status enum; default to New.
+        ocsf["status_id"], ocsf["status"] = 1, "New"
         # Only add state/state_id in legacy mode; latest validator rejects them.
-        if not _USE_LATEST:
+        if not use_latest:
             ocsf["state_id"] = 1   # New
             ocsf["state"] = "New"
         if policy_name:
@@ -562,8 +562,7 @@ def cloudevent_to_ocsf(
             auth_session["uid"] = str(session_id)
         if auth_session:
             ocsf["session"] = auth_session
-        if resource:
-            ocsf["resource"] = {"name": str(resource)}
+        # Do not set top-level resource on 3003; validators reject it.
 
     # Retain all unmapped custom attributes to preserve complete data fidelity.
     # Trace/span context that has no standard OCSF home on these classes is also
@@ -625,10 +624,12 @@ def cloudevent_to_ocsf(
 
     if unmapped:
         ocsf["unmapped"] = unmapped
+    # Preserve resource under unmapped for 3003 (top-level resource is invalid)
+    if class_uid == OCSF_CLASS_AUTHORIZE_SESSION and resource:
+        ocsf.setdefault("unmapped", {})["resource"] = {"name": str(resource)}
 
-    # Adjustments for the public v2 validator (latest schema conventions)
-    effective_mode = (_SCHEMA_MODE if schema_mode is None else schema_mode).lower()
-    use_latest = effective_mode in {"latest", "new", "v2", "1.9", "1.9.0"}
+    # Adjustments for the public v2 validator (latest schema conventions).
+    # `use_latest` is computed above per-call (arg > env).
 
     if use_latest:
         if class_uid == OCSF_CLASS_DETECTION_FINDING:
@@ -665,7 +666,7 @@ def governance_event_to_ocsf(
     *,
     schema_mode: str | None = None,
 ) -> dict[str, Any]:
-    """Convert a :class:`GovernanceEvent` directly into an OCSF v1.3.0 record.
+    """Convert a :class:`GovernanceEvent` directly into an OCSF v1.9.0 record.
 
     Serializes the event to its canonical CloudEvent envelope first, then maps
     it to OCSF schema.
@@ -675,7 +676,7 @@ def governance_event_to_ocsf(
         source: Optional CloudEvents source URI identifying the emitter.
 
     Returns:
-        An OCSF v1.3.0 compliant dictionary.
+        An OCSF v1.9.0 compliant dictionary.
     """
     cloudevent = event.to_cloudevent(source=source)
     return cloudevent_to_ocsf(cloudevent, schema_mode=schema_mode)
@@ -685,7 +686,7 @@ class OCSFGovernanceSink(GovernanceEventSinkBase):
     """Sink that writes governance trace events in OCSF schema as JSON lines.
 
     Converts :class:`GovernanceEvent` objects (and their CloudEvents representation)
-    to Open Cybersecurity Schema Framework (OCSF v1.3.0) format, the industry
+    to Open Cybersecurity Schema Framework (OCSF v1.9.0) format, the industry
     standard for SIEM, XDR, and security data lakes (e.g. AWS Security Lake,
     Splunk, Datadog).
 
@@ -722,7 +723,7 @@ class OCSFGovernanceSink(GovernanceEventSinkBase):
         for event in events:
             try:
                 ocsf_record = governance_event_to_ocsf(event, source=self._source)
-                stream.write(json.dumps(ocsf_record, sort_keys=True, default=str) + "\n")
+                stream.write(json.dumps(ocsf_record, sort_keys=True) + "\n")
             except Exception:
                 logger.exception(
                     "OCSFGovernanceSink: failed to emit event %s; skipping",
