@@ -21,7 +21,6 @@ from agent_os.ocsf import (
     OCSF_SCHEMA_VERSION,
     OCSF_SEVERITY_CRITICAL,
     OCSF_SEVERITY_INFORMATIONAL,
-    OCSF_STATUS_FAILURE,
     OCSF_STATUS_SUCCESS,
     OCSFGovernanceSink,
     cloudevent_to_ocsf,

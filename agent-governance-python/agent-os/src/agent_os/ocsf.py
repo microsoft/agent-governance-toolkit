@@ -1,4 +1,4 @@
-# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+﻿# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Open Cybersecurity Schema Framework (OCSF) v1.9.0 conversion and sink.
 
 This module translates AGT governance, audit, and trace telemetry from
@@ -9,16 +9,16 @@ such as Amazon Security Lake, Splunk, Datadog, and IBM QRadar.
 References:
     - OCSF Schema Specification: https://schema.ocsf.io/
     - ADR-0021: CloudEvents Envelope for Mesh Audit
-    - AUDIT-COMPLIANCE-1.0 §20.4
+    - AUDIT-COMPLIANCE-1.0 Â§20.4
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import Any
 
 from agent_os.event_sink import (
     GovernanceEvent,
@@ -27,17 +27,13 @@ from agent_os.event_sink import (
     SinkExportResult,
 )
 
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
 #: Default OCSF Schema version targeted by this converter.
 OCSF_SCHEMA_VERSION = "1.9.0"
 
-# Note: This converter targets OCSF 1.9.0. The optional `schema_mode`
-# parameter is accepted for backward compatibility but is ignored; only
-# 1.9.0 shapes are emitted.
+# Note: This converter targets OCSF 1.9.0 only. There is no schema_mode control; the converter always emits 1.9.0-compliant shapes.
 
 # OCSF Categories
 OCSF_CATEGORY_FINDINGS = 2
@@ -47,7 +43,7 @@ OCSF_CATEGORY_APPLICATION_ACTIVITY = 6
 # OCSF Classes (OCSF v1.9.0)
 OCSF_CLASS_DETECTION_FINDING = 2004  # Category 2: replaces deprecated Security Finding 2001
 OCSF_CLASS_AUTHORIZE_SESSION = 3003  # Category 3: Authorize Session (Assign Privileges)
-OCSF_CLASS_API_ACTIVITY = 6003       # Category 6: API Activity
+OCSF_CLASS_API_ACTIVITY = 6003  # Category 6: API Activity
 
 # OCSF Severities
 OCSF_SEVERITY_UNKNOWN = 0
@@ -86,7 +82,7 @@ OCSF_STATUS_SUCCESS = 1
 OCSF_STATUS_FAILURE = 2
 OCSF_STATUS_OTHER = 99
 
-# Map CloudEvents type segments → GovernanceEventKind values, used when
+# Map CloudEvents type segments â†’ GovernanceEventKind values, used when
 # ``kind`` is absent from the data payload (which is the default for events
 # produced by GovernanceEvent.to_cloudevent()).
 _CE_TYPE_SUFFIX_TO_KIND: dict[str, str] = {
@@ -129,29 +125,27 @@ _IAM_KINDS: frozenset[str] = frozenset(
 def _parse_time_ms(time_val: Any) -> tuple[int, str]:
     """Parse a datetime object or ISO8601 string into (epoch_ms, iso_str)."""
     if isinstance(time_val, datetime):
-        dt = time_val if time_val.tzinfo else time_val.replace(tzinfo=timezone.utc)
+        dt = time_val if time_val.tzinfo else time_val.replace(tzinfo=UTC)
         return int(dt.timestamp() * 1000), dt.isoformat()
     if isinstance(time_val, (int, float)):
         # If timestamp is in seconds, convert to ms
         ms = int(time_val * 1000) if time_val < 1e11 else int(time_val)
-        dt = datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc)
+        dt = datetime.fromtimestamp(ms / 1000.0, tz=UTC)
         return ms, dt.isoformat()
     if isinstance(time_val, str) and time_val:
         try:
             clean = time_val.replace("Z", "+00:00")
             dt = datetime.fromisoformat(clean)
             if not dt.tzinfo:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             return int(dt.timestamp() * 1000), time_val
         except Exception:
             pass
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return int(now.timestamp() * 1000), now.isoformat()
 
 
-def _map_disposition_and_status(
-    decision: str, outcome: str
-) -> tuple[int, str, int, str]:
+def _map_disposition_and_status(decision: str, outcome: str) -> tuple[int, str, int, str]:
     """Map decision/outcome to OCSF disposition and status tuples."""
     d_norm = (decision or "").strip().lower()
     o_norm = (outcome or "").strip().lower()
@@ -213,7 +207,9 @@ def _resolve_kind(ce_type: str, kind_val: str) -> str:
 
     # Match known multi-word suffixes first (longer match wins)
     t_lower = ce_type.lower()
-    for suffix, kind in sorted(_CE_TYPE_SUFFIX_TO_KIND.items(), key=lambda kv: len(kv[0]), reverse=True):
+    for suffix, kind in sorted(
+        _CE_TYPE_SUFFIX_TO_KIND.items(), key=lambda kv: len(kv[0]), reverse=True
+    ):
         if t_lower.endswith(suffix) or f".{suffix}." in t_lower:
             return kind
 
@@ -231,9 +227,9 @@ def _classify_event(
     """Determine the OCSF Class, Category, Activity, and Type UID.
 
     OCSF v1.9.0 classes used:
-    - 2004 Detection Finding  (category 2) — policy violations and security detections.
-    - 3003 Authorize Session  (category 3) — identity checks and privilege escalations.
-    - 6003 API Activity       (category 6) — policy checks, resource accesses, checkpoints.
+    - 2004 Detection Finding  (category 2) â€” policy violations and security detections.
+    - 3003 Authorize Session  (category 3) â€” identity checks and privilege escalations.
+    - 6003 API Activity       (category 6) â€” policy checks, resource accesses, checkpoints.
 
     Note: Security Finding (2001) is deprecated in OCSF 1.3.0 and is not used here.
     Note: Class 3002 is Authentication in OCSF 1.3.0; agent identity/trust events
@@ -244,7 +240,7 @@ def _classify_event(
     d_norm = (decision or "").lower()
     o_norm = (outcome or "").lower()
 
-    # Kind-based IAM check takes priority — an explicit IAM kind (e.g.
+    # Kind-based IAM check takes priority â€” an explicit IAM kind (e.g.
     # IDENTITY_REJECTED with decision=deny) must remain Authorize Session even
     # when the decision field alone would trigger the finding path.
     kind_is_iam = k_norm in _IAM_KINDS
@@ -258,23 +254,20 @@ def _classify_event(
         or "agent.verified" in t_norm
     )
 
-    is_finding = (
-        (not is_iam)
-        and (
-            kind_is_finding
-            or "violation" in t_norm
-            or "blocked" in t_norm
-            or "poisoning" in t_norm
-            or "injection" in t_norm
-            or "anomaly" in t_norm
-            # Decision/outcome signals only apply when kind is not explicitly IAM
-            or d_norm in {"deny", "denied", "block", "blocked"}
-            or o_norm in {"denied", "blocked"}
-        )
+    is_finding = (not is_iam) and (
+        kind_is_finding
+        or "violation" in t_norm
+        or "blocked" in t_norm
+        or "poisoning" in t_norm
+        or "injection" in t_norm
+        or "anomaly" in t_norm
+        # Decision/outcome signals only apply when kind is not explicitly IAM
+        or d_norm in {"deny", "denied", "block", "blocked"}
+        or o_norm in {"denied", "blocked"}
     )
 
     if is_finding:
-        # Category 2: Findings → Class 2004: Detection Finding
+        # Category 2: Findings - Class 2004: Detection Finding
         # Activity 1 = "Create" (a new finding record)
         activity_id = 1
         activity_name = "Create"
@@ -296,7 +289,7 @@ def _classify_event(
         )
 
     if is_iam:
-        # Category 3: Identity & Access Management → Class 3003: Authorize Session
+        # Category 3: Identity & Access Management â†’ Class 3003: Authorize Session
         # Activity 1 = "Assign Privileges" per OCSF 1.3.0
         activity_id = 1
         activity_name = "Assign Privileges"
@@ -317,7 +310,7 @@ def _classify_event(
             type_name,
         )
 
-    # Category 6: Application Activity → Class 6003: API Activity
+    # Category 6: Application Activity â†’ Class 6003: API Activity
     # Activity 99 = "Other"
     activity_id = 99
     activity_name = "Other"
@@ -343,7 +336,6 @@ def cloudevent_to_ocsf(
     cloudevent: dict[str, Any],
     *,
     custom_product: dict[str, Any] | None = None,
-    schema_mode: str | None = None,
 ) -> dict[str, Any]:
     """Convert a CloudEvents v1.0 governance or trace envelope into an OCSF v1.9.0 event.
 
@@ -375,18 +367,8 @@ def cloudevent_to_ocsf(
     data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
 
     # Extract trace and session correlation from CloudEvent extensions or data
-    trace_id = (
-        cloudevent.get("traceid")
-        or data.get("trace_id")
-        or data.get("traceid")
-        or None
-    )
-    span_id = (
-        cloudevent.get("spanid")
-        or data.get("span_id")
-        or data.get("spanid")
-        or None
-    )
+    trace_id = cloudevent.get("traceid") or data.get("trace_id") or data.get("traceid") or None
+    span_id = cloudevent.get("spanid") or data.get("span_id") or data.get("spanid") or None
     parent_span_id = (
         cloudevent.get("parentspanid")
         or data.get("parent_span_id")
@@ -394,10 +376,7 @@ def cloudevent_to_ocsf(
         or None
     )
     session_id = (
-        cloudevent.get("sessionid")
-        or data.get("session_id")
-        or data.get("sessionid")
-        or None
+        cloudevent.get("sessionid") or data.get("session_id") or data.get("sessionid") or None
     )
 
     action = str(data.get("action") or "")
@@ -419,9 +398,7 @@ def cloudevent_to_ocsf(
     resolved_kind = _resolve_kind(ce_type, kind_val)
 
     severity_str = str(data.get("severity") or "info").lower()
-    severity_id, severity_name = _SEVERITY_MAP.get(
-        severity_str, (OCSF_SEVERITY_UNKNOWN, "Unknown")
-    )
+    severity_id, severity_name = _SEVERITY_MAP.get(severity_str, (OCSF_SEVERITY_UNKNOWN, "Unknown"))
 
     (
         class_uid,
@@ -434,9 +411,7 @@ def cloudevent_to_ocsf(
         type_name,
     ) = _classify_event(ce_type, kind_val, decision, outcome)
 
-    disp_id, disp_name, stat_id, stat_name = _map_disposition_and_status(
-        decision, outcome
-    )
+    disp_id, disp_name, stat_id, stat_name = _map_disposition_and_status(decision, outcome)
 
     product_meta = custom_product or {
         "name": "Agent Governance Toolkit",
@@ -459,7 +434,7 @@ def cloudevent_to_ocsf(
     elif session_id:
         metadata["correlation_uid"] = str(session_id)
 
-    # actor: OCSF actor object — user sub-object is the standard carrier of
+    # actor: OCSF actor object â€” user sub-object is the standard carrier of
     # identity.  ``invoked_by`` is a plain string in OCSF (the name of the
     # process or service that triggered the actor).  Custom fields that are not
     # in the OCSF actor schema go to unmapped.
@@ -524,10 +499,7 @@ def cloudevent_to_ocsf(
         ocsf["finding_info"] = finding_info
         # Detection Finding uses its own status enum; default to New.
         ocsf["status_id"], ocsf["status"] = 1, "New"
-        # Only add state/state_id in legacy mode; latest validator rejects them.
-        if not use_latest:
-            ocsf["state_id"] = 1   # New
-            ocsf["state"] = "New"
+        # Do not add legacy state/state_id; the latest validator rejects them.
         if policy_name:
             ocsf["policy"] = {
                 "name": str(policy_name),
@@ -593,9 +565,7 @@ def cloudevent_to_ocsf(
         "sessionid",
         "latency_ms",
     }
-    unmapped: dict[str, Any] = {
-        k: v for k, v in data.items() if k not in standard_keys
-    }
+    unmapped: dict[str, Any] = {k: v for k, v in data.items() if k not in standard_keys}
 
     # Also capture extension attributes from the CloudEvent envelope
     # (e.g. signature hashes added by AgentMesh or external signers).
@@ -643,18 +613,28 @@ def cloudevent_to_ocsf(
             # privileges/groups/iam_roles.
             # Provide a minimal user mirror from actor.user if present.
             actor_user = (
-                (ocsf.get("actor") or {}).get("user") if isinstance(ocsf.get("actor"), dict) else None
+                (ocsf.get("actor") or {}).get("user")
+                if isinstance(ocsf.get("actor"), dict)
+                else None
             )
             if actor_user and "user" not in ocsf:
                 ocsf["user"] = actor_user
             elif "user" not in ocsf:
-                ocsf["user"] = {"name": agent_id or agent_did or "unknown", "uid": agent_did or agent_id or "unknown"}
+                ocsf["user"] = {
+                    "name": agent_id or agent_did or "unknown",
+                    "uid": agent_did or agent_id or "unknown",
+                }
 
             # Ensure at least one constraint field is present. Prefer privileges
             # and derive a sensible name from policy/action/decision. Latest schema
             # expects privileges as an array of strings, not objects.
             if not any(k in ocsf for k in ("privileges", "groups", "iam_roles")):
-                priv_name = str(policy_name or action or ("allow" if disp_id == OCSF_DISPOSITION_ALLOWED else "deny") or "access")
+                priv_name = str(
+                    policy_name
+                    or action
+                    or ("allow" if disp_id == OCSF_DISPOSITION_ALLOWED else "deny")
+                    or "access"
+                )
                 ocsf["privileges"] = [priv_name]
 
     return ocsf
@@ -663,8 +643,6 @@ def cloudevent_to_ocsf(
 def governance_event_to_ocsf(
     event: GovernanceEvent,
     source: str | None = None,
-    *,
-    schema_mode: str | None = None,
 ) -> dict[str, Any]:
     """Convert a :class:`GovernanceEvent` directly into an OCSF v1.9.0 record.
 
@@ -679,7 +657,7 @@ def governance_event_to_ocsf(
         An OCSF v1.9.0 compliant dictionary.
     """
     cloudevent = event.to_cloudevent(source=source)
-    return cloudevent_to_ocsf(cloudevent, schema_mode=schema_mode)
+    return cloudevent_to_ocsf(cloudevent)
 
 
 class OCSFGovernanceSink(GovernanceEventSinkBase):
@@ -736,3 +714,7 @@ class OCSFGovernanceSink(GovernanceEventSinkBase):
             logger.exception("OCSFGovernanceSink: stream flush failed")
             overall = SinkExportResult.FAILURE
         return overall
+
+
+
+
