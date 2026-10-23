@@ -152,3 +152,20 @@ dotnet pack src/AgentControlSpecification.AutoGen/AgentControlSpecification.Auto
 dotnet pack src/AgentControlSpecification.SemanticKernel/AgentControlSpecification.SemanticKernel.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
 ls -la "$RUNNER_TEMP/acs-dotnet-pack"
 """
+
+[[workflow.job]]
+id = "java"
+name = "Java SDK"
+toolchains = ["rust"]
+opa = true
+working_directory = "policy-engine"
+[[workflow.job.step]]
+name = "Build the native library"
+run = "cargo build --release -p agent_control_specification --features opa,bundled-dispatchers"
+[[workflow.job.step]]
+name = "Build and test the Java SDK"
+run = """
+cd sdk/java
+export JAVA_HOME="${JAVA_HOME_25_X64:?JDK 25 is not installed on this runner}"
+./gradlew build --no-daemon -Pacs.native.library="$GITHUB_WORKSPACE/policy-engine/target/release/libagent_control_specification.so"
+"""
