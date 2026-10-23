@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Chaos experiment library — pre-built resilience test scenarios."""
 
 from __future__ import annotations

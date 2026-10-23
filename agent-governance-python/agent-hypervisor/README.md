@@ -1,6 +1,6 @@
 <div align="center">
 
-# Agent Hypervisor Public Preview
+# Agent Hypervisor
 
 **Runtime supervisor for AI agents with execution rings, isolated sessions, saga compensation, tamper-evident audit trails, and safety controls.**
 

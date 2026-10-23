@@ -10,10 +10,9 @@ AGT publishes a small set of canonical package families. Most Python users
 should start with the toolkit; choose a narrower package only for a specific
 runtime surface or language SDK.
 
-!!! important "Public Preview"
-    Package APIs may change before general availability. Use the canonical names
-    below for new projects. Older component names remain as temporary
-    compatibility packages.
+!!! note "Package names"
+    Use the canonical names below for new projects. Older component names
+    remain as temporary compatibility packages.
 
 ## Python toolkit
 

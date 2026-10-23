@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Cost guard — budget management and simple threshold alerting for agents."""
 
 from __future__ import annotations

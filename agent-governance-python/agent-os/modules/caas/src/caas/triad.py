@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic context/memory management
 """
 Tiered Context Manager — single-tier context storage.
 

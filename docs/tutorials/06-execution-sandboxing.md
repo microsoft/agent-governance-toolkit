@@ -237,7 +237,7 @@ if elevation.is_active:
 manager.revoke_elevation(elevation.elevation_id)
 ```
 
-> **Public Preview:** Elevation requests are always denied. The denial
+> **Note:** Elevation requests are always denied. The denial
 > reason is `ElevationDenialReason.COMMUNITY_EDITION`. Upgrade to Enterprise
 > for dynamic ring escalation.
 

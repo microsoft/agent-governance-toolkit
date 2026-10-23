@@ -11,11 +11,11 @@ owner: docs-team
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Rust](https://img.shields.io/badge/core-Rust-orange.svg)](https://www.rust-lang.org/)
 
-!!! important "Public Preview"
+!!! note "Engine dependency"
     AGT depends on the published
     [agent-control-spec](https://github.com/responsibleai/agent-control-spec)
     engine. `policy-engine/` contains AGT's compatibility SDKs and host
-    integration. APIs and manifest details may change before GA.
+    integration.
 
 ## What ACS is
 

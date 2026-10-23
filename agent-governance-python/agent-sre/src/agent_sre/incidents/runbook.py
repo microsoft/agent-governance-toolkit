@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Runbook models — dataclasses for scripted incident response."""
 
 from __future__ import annotations

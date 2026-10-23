@@ -3,7 +3,7 @@ Licensed under the MIT License. -->
 
 # agent-governance-antigravity-cli
 
-`@microsoft/agent-governance-antigravity-cli` is a **Public Preview** installer package that deploys an AGT-managed Antigravity CLI extension into `~/.antigravity/extensions/agt-global-policy`.
+`@microsoft/agent-governance-antigravity-cli` is an installer package that deploys an AGT-managed Antigravity CLI extension into `~/.antigravity/extensions/agt-global-policy`.
 
 The installed extension maps Copilot-style governance behavior onto Antigravity CLI's native model:
 

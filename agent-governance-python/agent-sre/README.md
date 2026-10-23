@@ -11,9 +11,6 @@
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-sre/)
 
-> [!IMPORTANT]
-> **Public Preview** — The `agent-sre` package on PyPI is a public preview release. APIs may change before GA.
-
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent SRE.
 
 > 🔗 **Part of the [Agent Governance Ecosystem](https://github.com/microsoft/agent-governance-toolkit)** — Works with [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (governance), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (identity & trust), and [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) (runtime sessions)

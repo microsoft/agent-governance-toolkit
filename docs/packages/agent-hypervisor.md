@@ -1,12 +1,12 @@
 ---
-title: "Agent Hypervisor Public Preview"
+title: "Agent Hypervisor"
 last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
 <div align="center" markdown="1">
 
-# Agent Hypervisor Public Preview
+# Agent Hypervisor
 
 **Runtime supervisor for AI agents with execution rings, isolated sessions, saga compensation, tamper-evident audit trails, and safety controls.**
 

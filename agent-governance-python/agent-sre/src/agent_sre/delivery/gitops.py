@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """GitOps rollout spec — declarative YAML deployment definitions."""
 
 from __future__ import annotations
