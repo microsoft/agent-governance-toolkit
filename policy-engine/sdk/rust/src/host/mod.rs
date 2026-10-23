@@ -359,14 +359,24 @@ pub fn policy_labels(manifest: &Manifest) -> JsonValue {
     JsonValue::Object(points)
 }
 
+/// Host-side handle over an `agent_control_spec::Runtime`.
+///
+/// Every `AgentControl` is built from a manifest through one of the
+/// `from_*` constructors, which run [`reject_removed_manifest_fields`] and
+/// keep the annotator dispatcher and [`Limits`] the runtime was built with.
+/// There is no constructor over a caller-built `Runtime`: the upstream
+/// runtime exposes no accessor for those inputs, so a control wrapping one
+/// could neither rebuild it for telemetry nor revalidate transforms against
+/// the caller's limits (see #3941).
 #[derive(Clone)]
 pub struct AgentControl {
     runtime: Runtime,
     approval_resolver: Option<ApprovalResolver>,
     /// Retained so [`AgentControl::with_telemetry`] can rebuild the
-    /// runtime. `agent_control_spec::Runtime` takes its telemetry sink at
-    /// construction and exposes no setter.
-    parts: Option<RuntimeParts>,
+    /// runtime and [`AgentControl::evaluate_intervention_point`] can
+    /// revalidate transforms. `agent_control_spec::Runtime` takes its
+    /// telemetry sink at construction and exposes no setter.
+    parts: RuntimeParts,
 }
 
 /// Construction inputs that the upstream runtime does not expose.
@@ -408,14 +418,6 @@ impl fmt::Debug for AgentControl {
 }
 
 impl AgentControl {
-    pub fn new(runtime: Runtime) -> Self {
-        Self {
-            runtime,
-            approval_resolver: None,
-            parts: None,
-        }
-    }
-
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, RuntimeError> {
         Self::from_path_with_dispatchers(path, None, None)
     }
@@ -482,12 +484,14 @@ impl AgentControl {
             Arc::clone(&policy),
             limits,
         )?;
-        let mut control = Self::new(runtime);
-        control.parts = Some(RuntimeParts {
-            annotations,
-            limits,
-        });
-        Ok(control)
+        Ok(Self {
+            runtime,
+            approval_resolver: None,
+            parts: RuntimeParts {
+                annotations,
+                limits,
+            },
+        })
     }
 
     pub fn from_manifest_chain(manifests: &[&str]) -> Result<Self, RuntimeError> {
@@ -510,28 +514,44 @@ impl AgentControl {
 
     /// Install a telemetry sink so every evaluation emits a redaction-safe
     /// `TelemetryEvent` to it. The core runtime owns the emission, so installing
-    /// a sink built through any constructor is enough. Combine with the built-in
-    /// `InMemoryTelemetrySink`, `StdoutJsonTelemetrySink`, or `MultiSink`, or the
-    /// `OtelTelemetrySink` from the `agent_control_specification_otel` crate
-    /// (added as a dependency) for OpenTelemetry metrics.
-    /// Requires an `AgentControl` built from a manifest. `agent_control_spec`
-    /// takes the sink at `Runtime` construction and exposes no setter or
-    /// annotator/limit accessors, so a control built through
-    /// [`AgentControl::new`] keeps the sink the runtime was constructed with.
-    /// Tracked in docs/acs-retarget.md.
-    pub fn with_telemetry(mut self, telemetry: Arc<dyn crate::TelemetrySink>) -> Self {
-        if let Some(parts) = self.parts.clone() {
-            if let Ok(runtime) = Runtime::with_telemetry_perf_and_limits(
-                self.runtime.manifest().clone(),
-                parts.annotations,
-                Arc::clone(self.runtime.policy_dispatcher()),
-                telemetry,
-                self.runtime.perf_telemetry(),
-                parts.limits,
-            ) {
-                self.runtime = runtime;
-            }
-        }
+    /// a sink on a control built through any constructor is enough. Combine
+    /// with the built-in `InMemoryTelemetrySink`, `StdoutJsonTelemetrySink`, or
+    /// `MultiSink`, or the `OtelTelemetrySink` from the
+    /// `agent_control_specification_otel` crate (added as a dependency) for
+    /// OpenTelemetry metrics.
+    ///
+    /// `agent_control_spec` takes the sink at `Runtime` construction and
+    /// exposes no setter, so this rebuilds the runtime from the retained
+    /// manifest, dispatchers, limits and perf level. A later call replaces
+    /// the sink installed by an earlier one. The approval resolver is kept.
+    ///
+    /// # Errors
+    ///
+    /// Returns the upstream error if the rebuild fails. The manifest and
+    /// dispatchers already built once, so this is reachable only through a
+    /// failure inside the upstream constructor itself; it is surfaced rather
+    /// than swallowed so a control never runs with a sink it did not install.
+    pub fn with_telemetry(
+        mut self,
+        telemetry: Arc<dyn crate::TelemetrySink>,
+    ) -> Result<Self, RuntimeError> {
+        self.runtime = Runtime::with_telemetry_perf_and_limits(
+            self.runtime.manifest().clone(),
+            Arc::clone(&self.parts.annotations),
+            Arc::clone(self.runtime.policy_dispatcher()),
+            telemetry,
+            self.runtime.perf_telemetry(),
+            self.parts.limits,
+        )?;
+        Ok(self)
+    }
+
+    /// Set the perf telemetry level (`Off`, `External`, `Full`) that governs
+    /// the `annotator_dispatch`, `policy_evaluation` and `evaluation_timing`
+    /// events. The FFI, Python and Node hosts expose the same knob; the
+    /// level survives a later [`with_telemetry`](Self::with_telemetry).
+    pub fn with_perf_telemetry_level(mut self, level: crate::PerfTelemetry) -> Self {
+        self.runtime = self.runtime.with_perf_telemetry_level(level);
         self
     }
 
@@ -546,12 +566,7 @@ impl AgentControl {
         mode: EnforcementMode,
     ) -> HostEvaluation {
         let engine = self.runtime.evaluate_point(intervention_point, snapshot);
-        let limits = self
-            .parts
-            .as_ref()
-            .map(|parts| parts.limits)
-            .unwrap_or_default();
-        HostEvaluation::from_engine_with_limits(intervention_point, engine, mode, limits)
+        HostEvaluation::from_engine_with_limits(intervention_point, engine, mode, self.parts.limits)
             .unwrap_or_else(|(error, detail)| HostEvaluation {
                 verdict: agent_hooks::Verdict::host_error(error, Some(detail)),
                 policy_input: None,

@@ -5,6 +5,60 @@ entries appear first.
 
 ---
 
+## `AgentControl::new(runtime)` is removed; `with_telemetry` returns `Result`
+
+**Date:** 2026-10-23 (agent_control_specification 0.4.0-beta.1, #3941)
+
+The Rust SDK no longer offers `AgentControl::new(runtime)`. A control is built
+from a manifest through `from_path`, `from_manifest`, `from_manifest_chain` and
+their `_with_dispatchers` and `_and_limits` forms, all of which reject
+`system_prompt_file` and keep the annotator dispatcher and `Limits` the runtime
+was built with. `AgentControl::with_telemetry` now returns
+`Result<AgentControl, RuntimeError>` instead of `AgentControl`. The new builder
+`AgentControl::with_perf_telemetry_level(level)` sets the perf telemetry level
+(`Off`, `External`, `Full`), the knob the FFI, Python and Node hosts already had.
+
+`agent_control_spec::Runtime` exposes no accessor for the annotator dispatcher
+or limits it was built with, so a control wrapping a caller-built runtime could
+not keep them. Three paths then failed open. A transform was revalidated
+against `Limits::default()` rather than the caller's limits, so a tightened
+`max_snapshot_bytes` did not apply to the transformed snapshot and the guarded
+body ran. `with_telemetry` could not rebuild the runtime and kept the old sink
+without saying so, so the installed sink received no events. The
+`system_prompt_file` rejection in the manifest constructors was bypassed.
+Removing the constructor closes all three for every control. The retargeted
+0.4.0-beta.0 crate was not published, so no deprecation window is kept.
+
+**How to update:**
+
+```rust
+// before
+let control = AgentControl::new(Runtime::new(manifest, annotator, policy)?);
+// after
+let control =
+    AgentControl::from_manifest_with_dispatchers(manifest, Some(annotator), Some(policy))?;
+
+// before
+let control = AgentControl::new(Runtime::with_limits(manifest, annotator, policy, limits)?);
+// after
+let control = AgentControl::from_manifest_with_dispatchers_and_limits(
+    manifest, Some(annotator), Some(policy), limits,
+)?;
+
+// before
+let control = control.with_telemetry(sink);
+// after
+let control = control.with_telemetry(sink)?;
+```
+
+The error from `with_telemetry` is reachable only if the upstream rebuild fails
+on a manifest that already built once; it is surfaced rather than swallowed. The
+Rust SDK crate moves to 0.4.0-beta.1 together with the integration crates
+(`_rig`, `_otel`, `_mcp`, `_openai`, `_annotators`) and the
+`agent-governance-rust` path dependency requirement.
+
+---
+
 ## `acs_builder_set_url_fetch_limits` returns 0 on success; `bundle_url` and `system_prompt_url` are accepted again
 
 **Date:** 2026-10-08 (agent-control-spec 0.4.0-alpha.4, #4224)

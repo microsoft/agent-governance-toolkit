@@ -2,7 +2,7 @@ use agent_control_specification::{
     AgentControl, AgentControlInterruption, AnnotatorDispatcher, AnnotatorInvocation,
     ApprovalResolution, ApprovalResolver, Decision, EnforcementMode, HostEvaluation,
     InterceptionPoint, JsonValue, Manifest, OpaRegoRunner, PolicyDispatcher,
-    PreparedPolicyInvocation, Runtime, RuntimeError, ToolRunOptions,
+    PreparedPolicyInvocation, RuntimeError, ToolRunOptions,
 };
 use serde_json::json;
 use std::{
@@ -91,10 +91,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("OPA not available at {}", opa.executable().display()).into());
     }
 
-    let runtime = Runtime::new(
+    let control = AgentControl::from_manifest_with_dispatchers(
         manifest,
-        Arc::new(CodingAgentAnnotators),
-        Arc::new(CompletingOpaPolicy { runner: opa }),
+        Some(Arc::new(CodingAgentAnnotators)),
+        Some(Arc::new(CompletingOpaPolicy { runner: opa })),
     )?;
 
     let approval_resolver: ApprovalResolver = Arc::new(|point, result| {
@@ -105,7 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         ApprovalResolution::allow(result.action_identity.clone().unwrap())
     });
-    let control = AgentControl::new(runtime).with_approval_resolver(approval_resolver);
+    let control = control.with_approval_resolver(approval_resolver);
 
     println!("ACS coding-agent Rust demo (OPA + generated Rego)\n");
     allowed_flow(&control, &coding_dir)?;
