@@ -1,4 +1,4 @@
-﻿# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Open Cybersecurity Schema Framework (OCSF) v1.9.0 conversion and sink.
 
 This module translates AGT governance, audit, and trace telemetry from
