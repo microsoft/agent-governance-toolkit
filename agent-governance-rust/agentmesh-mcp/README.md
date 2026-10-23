@@ -30,7 +30,7 @@ let signer = McpMessageSigner::new(
     Duration::from_secs(600),
 )?;
 
-let signed: McpSignedMessage = signer.sign("hello from mcp")?;
+let signed: McpSignedMessage = signer.sign("hello from mcp", None)?;
 signer.verify(&signed)?;
 
 let redactor = CredentialRedactor::new();
