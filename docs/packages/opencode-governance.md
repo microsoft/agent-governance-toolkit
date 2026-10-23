@@ -30,7 +30,7 @@ That model lets this package:
 
 | OpenCode hook | AGT behavior |
 |---|---|
-| `session.created` | Attempts to log policy status; does not inject governance context. |
+| `event` (`session.created`) | Attempts to log policy status when OpenCode emits `session.created`; does not inject governance context. |
 | `event` (chat-style) | Scans the submitted prompt with the AGT prompt-defense backend. Throws on `deny`. |
 | `tool.execute.before` | Runs `evaluateOpenCodeTool`. Throws on `deny`; marks args on `review`. |
 | `tool.execute.after` | Scans tool output for AWS keys, GitHub PATs, OpenAI keys, Azure storage keys, JWTs, and PEM private keys. Redacts in enforce and advisory modes. |
