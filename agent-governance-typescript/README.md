@@ -404,6 +404,49 @@ Only the two annotations merged into the WebMCP spec today (`readOnlyHint`, `unt
 
 **This namespacing protects audit-trail integrity only — it is not an origin-verification mechanism, and policy conditions never see it.** `attributes` are attached to the trace span, but policy decisions are made against `action` and `input` alone. Since `input` is the tool call's own page-controlled arguments, a page can put any key it wants there — including something shaped like `assertedAgentOrigin` — and a policy condition keyed on that field would match the forged value regardless of what this module does with `attributes`. If you need to gate governance on the calling page's origin, that verification must happen in your own backend code *before* calling `toFrameworkInvocation`/`adapter.run()` — WebMCP does not yet define a verified client/origin binding ([webmachinelearning/webmcp#96](https://github.com/webmachinelearning/webmcp/issues/96), [#105](https://github.com/webmachinelearning/webmcp/issues/105)), so `client.agentOrigin` is only ever a best-effort hint. See `examples/webmcp-tool-governance.ts` for a full example.
 
+### Accumulated Context
+
+Workflow-scoped governance that folds the labels a workflow actually touched after each
+execution, then gates later actions against the accumulated sensitivity and restrictions.
+A combination no rule covers escalates once it reaches the category threshold, and the audit
+event for a transition carries the higher of the before/after classifications.
+
+```ts
+import {
+  AggregationRule,
+  AggregationRuleSet,
+  ContextEnvelope,
+  DataClassification,
+  accumulate,
+  decideNext,
+} from '@microsoft/agent-governance-sdk';
+
+const rules = new AggregationRuleSet([
+  new AggregationRule({
+    name: 'customer_profile',
+    allLabels: ['pii', 'financial'],
+    setsSensitivity: DataClassification.Restricted,
+    addsRestrictions: ['no_external_export'],
+  }),
+]);
+
+const envelope = accumulate(
+  new ContextEnvelope({ envelopeId: 'env-1', workflowId: 'workflow-1' }),
+  ['pii', 'financial'],
+  DataClassification.Confidential,
+  rules,
+  3,
+);
+
+const decision = decideNext(envelope, 'export', rules, 3, DataClassification.Restricted);
+// decision.outcome is ContextOutcome.Deny | Constrain | Escalate | Allow
+```
+
+`accumulate` and `decideNext` fail closed: a value outside the classification ladder, or a rule
+that is not an `AggregationRule`, throws rather than letting an envelope report a lower
+sensitivity than the data it holds. An escalation comes back as `ContextOutcome.Escalate` for the
+host to route; this package does not map it onto a policy verdict.
+
 ## Development
 
 The build and test typecheck invoke `node node_modules/@typescript/native/bin/tsc`
