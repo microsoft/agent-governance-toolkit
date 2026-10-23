@@ -131,6 +131,125 @@ def test_excessive_privilege_passes_unprivileged_role_and_permissions() -> None:
     assert result.passed == True
 
 
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        # Whitespace around the value.
+        {"privilege": " admin "},
+        {"role": "\tadmin\n"},
+        {"scopes": [" * "]},
+        # Unicode whitespace (no-break space, em space).
+        {"privilege": "\u00a0admin\u2003"},
+        # Mixed-case value.
+        {"privilege": " AdMiN "},
+        {"scopes": ["Root "]},
+        # List-valued privilege and role, element by element.
+        {"privilege": ["user", "admin"]},
+        {"role": ("viewer", "Owner")},
+        {"privilege": {"user", "admin"}},
+        # Nested lists in scopes and permissions.
+        {"scopes": [["*"]]},
+        {"permissions": [["read"], [["write", ["admin"]]]]},
+        {"scopes": [[[[[[[[[["*"]]]]]]]]]]},
+        # Partial wildcards.
+        {"scopes": ["admin:*"]},
+        {"permissions": ["repo.*"]},
+        {"scopes": ["*:read"]},
+        {"privilege": "admin:*"},
+        # Capitalised keys, including mixed-case key with mixed-case value.
+        {"Privilege": "admin"},
+        {"ROLE": "admin"},
+        {"Scopes": ["*"]},
+        {"PERMISSIONS": ["root"]},
+        {"PrIvIlEgE": "AdMiN"},
+        {" privilege ": "admin"},
+        # A capitalised key next to a lower-case one that is harmless.
+        {"privilege": "user", "PRIVILEGE": "admin"},
+    ],
+)
+def test_excessive_privilege_normalizes_values_and_keys(parameters) -> None:
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("grant", **parameters)), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert [finding.action_id for finding in result.findings] == ["grant"]
+    assert result.findings[0].severity is RiskLevel.HIGH
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"scopes": [None]},
+        {"scopes": [b"*"]},
+        {"permissions": [{"name": "admin"}]},
+        {"privilege": [1]},
+        {"role": ["user", None]},
+    ],
+)
+def test_excessive_privilege_fails_closed_on_unexpected_leaf_types(parameters) -> None:
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("grant", **parameters)), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert [finding.action_id for finding in result.findings] == ["grant"]
+    assert result.findings[0].message == (
+        "Action privilege, role, scope and permission values must be strings"
+    )
+
+
+def test_excessive_privilege_reports_elevated_value_over_unreadable_leaf() -> None:
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("grant", scopes=[None, "admin"])), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert result.findings[0].message == "Action requests excessive privilege"
+
+
+def test_excessive_privilege_counts_flattened_scopes() -> None:
+    evaluation = ExcessivePrivilegeEvaluation(max_scopes=3)
+    result = evaluation.evaluate(
+        _policy(_action("grant", scopes=[["a", "b"], ["c"]], Permissions=["d"])),
+        episodes=(),
+        baseline=None,
+    )
+
+    assert result.passed == False
+    assert result.findings[0].metadata == {"scope_count": 4}
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"privilege": " user ", "role": "Viewer", "scopes": ["read"]},
+        {"Privilege": "user", "ROLE": "viewer", "Permissions": [["read"], ["write"]]},
+        {"privilege": [], "role": (), "scopes": [[]], "permissions": set()},
+        {"privilege": None, "role": None},
+        {"scopes": ["admin-reports:read", "repo.read"]},
+        {},
+    ],
+)
+def test_excessive_privilege_passes_normalized_low_privilege(parameters) -> None:
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("search", **parameters)), episodes=(), baseline=None
+    )
+
+    assert result.passed == True
+    assert result.findings == ()
+
+
+def test_excessive_privilege_handles_self_referencing_scopes() -> None:
+    scopes: list = ["read"]
+    scopes.append(scopes)
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("search", scopes=scopes)), episodes=(), baseline=None
+    )
+
+    assert result.passed == True
+
+
 def test_regression_check_uses_approved_baseline() -> None:
     telemetry = GovernanceTelemetry(
         violations=(
