@@ -9,7 +9,7 @@ use agent_control_specification_core::{
     manifest_yaml::SUPPORTED_MANIFEST_VERSIONS, validate_manifest_yaml, TelemetryEventExt,
 };
 use serde_json::json;
-use std::{env, process::Command};
+use std::{env, process::Command, sync::Arc};
 
 const MANIFEST: &str = r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
@@ -324,6 +324,102 @@ fn assert_ffi_uses_opa() {
             "runtime_error:policy_invocation_failed"
         );
     }
+}
+
+#[test]
+fn mixed_manifest_rego_fails_closed_when_opa_is_missing() {
+    const MIXED_MANIFEST: &str = r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  rego_rule:
+    type: rego
+    query: '{"decision": "allow"}'
+  cedar_rule:
+    type: cedar
+    policy_set: |
+      forbid (principal, action, resource == Tool::"drop");
+      permit (principal, action, resource);
+intervention_points:
+  input:
+    policy_target: $.input
+    policy:
+      id: rego_rule
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: cedar_rule
+tools:
+  drop:
+    type: Tool
+    id: drop
+  read:
+    type: Tool
+    id: read
+"#;
+
+    // Isolate executable selection from the other tests' process environment.
+    if env::var_os("AGT_OPA_BACKEND_CHILD").is_none() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = Command::new(env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "mixed_manifest_rego_fails_closed_when_opa_is_missing",
+            ])
+            .env("AGT_OPA_BACKEND_CHILD", "1")
+            .env("ACS_OPA_PATH", directory.path().join("missing-opa"))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+
+    let manifest = Manifest::from_yaml_str(MIXED_MANIFEST).unwrap();
+    if env::var_os("AGT_EXPECT_UPSTREAM_REGO").is_some() {
+        // The upstream binding dispatcher routes Rego through in-process
+        // regorus whenever feature unification enables it, so this branch
+        // is only reachable when that backend is the intended default.
+        let upstream = Runtime::new(
+            manifest.clone(),
+            default_host_annotator_dispatcher(&manifest).unwrap(),
+            Arc::new(agent_control_spec::dispatchers::BindingPolicyDispatcher::new()),
+        )
+        .unwrap();
+        assert_eq!(
+            upstream
+                .evaluate_point(InterceptionPoint::Input, json!({"input": "hello"}))
+                .verdict
+                .decision,
+            Decision::Allow,
+            "the upstream in-process backend must not need the missing OPA executable",
+        );
+    }
+
+    let control = AgentControl::from_manifest(manifest).unwrap();
+    let rego_result = control.evaluate_intervention_point(
+        InterceptionPoint::Input,
+        json!({"input": "hello"}),
+        EnforcementMode::Enforce,
+    );
+    assert_eq!(rego_result.verdict.decision, Decision::Deny);
+    assert_eq!(
+        rego_result.verdict.reason.as_deref(),
+        Some("runtime_error:policy_invocation_failed")
+    );
+    let cedar_result = control.evaluate_intervention_point(
+        InterceptionPoint::PreToolCall,
+        json!({
+            "envelope": { "agent": { "id": "agent-1" } },
+            "tool_call": { "name": "read", "args": {} }
+        }),
+        EnforcementMode::Enforce,
+    );
+    assert_eq!(cedar_result.verdict.decision, Decision::Allow);
 }
 
 #[test]
