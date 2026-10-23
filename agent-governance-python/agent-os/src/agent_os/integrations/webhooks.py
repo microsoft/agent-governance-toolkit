@@ -17,6 +17,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from .webhook_guard import DEFAULT_GUARD, WebhookEndpointGuard
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,10 +68,26 @@ class WebhookNotifier:
 
     Thread-safe notifier that delivers events to configured webhook endpoints
     with retry logic and delivery history tracking.
+
+    Every endpoint URL is checked against ``endpoint_guard`` at construction
+    (scheme, blocked host names, literal internal addresses) and again at
+    connect time, when the guard resolves the host, rejects internal
+    addresses and pins the socket to the validated address. Redirects are
+    not followed. The default guard denies loopback, private, link-local and
+    cloud-metadata destinations; pass ``WebhookEndpointGuard.allowing([...])``
+    to deliver to an internal receiver.
     """
 
-    def __init__(self, configs: list[WebhookConfig]):
+    def __init__(
+        self,
+        configs: list[WebhookConfig],
+        *,
+        endpoint_guard: Optional[WebhookEndpointGuard] = None,
+    ):
+        self._guard = endpoint_guard or DEFAULT_GUARD
         self._configs = list(configs)
+        for config in self._configs:
+            self._guard.validate_url(config.url)
         self._history: list[DeliveryRecord] = []
         self._lock = threading.Lock()
 
@@ -90,10 +108,10 @@ class WebhookNotifier:
 
         for attempt in range(config.retry_count):
             try:
-                req = urllib.request.Request(  # noqa: S310 — webhook URL from configuration
+                req = urllib.request.Request(
                     config.url, data=payload, headers=headers, method="POST"
                 )
-                with urllib.request.urlopen(req, timeout=config.timeout) as resp:  # noqa: S310 — webhook URL from configuration
+                with self._guard.open(req, timeout=config.timeout) as resp:
                     last_status = resp.status
                     record = DeliveryRecord(
                         url=config.url,

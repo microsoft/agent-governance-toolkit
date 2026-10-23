@@ -16,6 +16,7 @@ from agentmesh.governance.advisory import (
     PatternAdvisory,
 )
 from agentmesh.governance.govern import GovernanceDenied, govern
+from agentmesh.governance.webhook_guard import WebhookEndpointGuard
 
 ALLOW_ALL = """
 apiVersion: governance.toolkit/v1
@@ -458,6 +459,7 @@ class TestHttpAdvisoryAsync:
         via asyncio.to_thread rather than hanging the event loop."""
         advisory = HttpAdvisory(
             "http://127.0.0.1:1/classify", timeout_seconds=1, on_error="allow",
+            endpoint_guard=WebhookEndpointGuard.allowing(["127.0.0.1"]),
         )
         result = await advisory.acheck({})
         assert result.action == "allow"
@@ -471,6 +473,7 @@ class TestHttpAdvisoryAsync:
         starving the concurrently-scheduled ticker task."""
         advisory = HttpAdvisory(
             "http://127.0.0.1:1/classify", timeout_seconds=1, on_error="allow",
+            endpoint_guard=WebhookEndpointGuard.allowing(["127.0.0.1"]),
         )
         advisory.check = lambda ctx: (time.sleep(0.2), AdvisoryDecision(action="allow"))[1]
 
