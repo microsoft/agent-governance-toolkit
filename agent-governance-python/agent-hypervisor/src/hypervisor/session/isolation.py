@@ -10,9 +10,49 @@ sessions' data requires explicit capability grants.
 
 from __future__ import annotations
 
+import posixpath
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import PurePosixPath
+
+
+def _is_valid_identifier(identifier: str) -> bool:
+    """Validate that a session identifier does not contain path separators or traversal tokens."""
+    if not isinstance(identifier, str) or not identifier.strip():
+        return False
+    if "/" in identifier or "\\" in identifier:
+        return False
+    if identifier in (".", ".."):
+        return False
+    return True
+
+
+def _is_strictly_within(target_path: str, base_directory: str) -> bool:
+    """Check if target_path sits strictly inside base_directory (cannot be equal to base_directory)."""
+    try:
+        if not posixpath.isabs(target_path) or not posixpath.isabs(base_directory):
+            return False
+        norm_target = posixpath.normpath(target_path)
+        norm_base = posixpath.normpath(base_directory)
+        return norm_target != norm_base and norm_target.startswith(norm_base.rstrip("/") + "/")
+    except (ValueError, TypeError):
+        return False
+
+
+def _is_path_contained(target_path: str, base_directory: str) -> bool:
+    """Check if target_path is within base_directory after collapsing relative segments.
+
+    Fails closed (returns False) for non-absolute paths or malformed inputs.
+    Note: Performs lexical path containment; does not resolve filesystem symlinks.
+    """
+    try:
+        if not posixpath.isabs(target_path):
+            return False
+        norm_target = posixpath.normpath(target_path)
+        norm_base = posixpath.normpath(base_directory)
+        return norm_target == norm_base or norm_target.startswith(norm_base.rstrip("/") + "/")
+    except (ValueError, TypeError):
+        return False
 
 
 class IsolationLevel(str, Enum):
@@ -73,16 +113,26 @@ class SessionScope:
         Returns:
             True if the path is within the session scope or a granted scope.
         """
-        normalized = str(PurePosixPath(path))
+        # Ensure session_id is a valid single-segment identifier and working directory sits strictly inside base_path.
+        # If session_id contains '..' or '/', or escapes base_path, access is denied.
+        if not _is_valid_identifier(self.session_id) or not _is_strictly_within(
+            self.working_directory, self.base_path
+        ):
+            return False
+
         # Always allow access within own working directory
-        if normalized.startswith(self.working_directory):
+        if _is_path_contained(path, self.working_directory):
             return True
 
         # Check granted session access (READ_COMMITTED only)
         if self.isolation_level == IsolationLevel.READ_COMMITTED:
             for granted_id in self.granted_sessions:
+                if not _is_valid_identifier(granted_id):
+                    continue
                 granted_dir = str(PurePosixPath(self.base_path) / granted_id)
-                if normalized.startswith(granted_dir):
+                if not _is_strictly_within(granted_dir, self.base_path):
+                    continue
+                if _is_path_contained(path, granted_dir):
                     return True
 
         return False
@@ -95,6 +145,8 @@ class SessionScope:
         Args:
             other_session_id: Session ID to grant access to.
         """
+        if not _is_valid_identifier(other_session_id):
+            raise ValueError(f"Invalid session identifier: {other_session_id!r}")
         self.granted_sessions.add(other_session_id)
 
     def revoke_access(self, other_session_id: str) -> None:
@@ -129,6 +181,8 @@ class SessionIsolationManager:
         Returns:
             SessionScope with the assigned working directory.
         """
+        if not _is_valid_identifier(session_id):
+            raise ValueError(f"Invalid session identifier: {session_id!r}")
         scope = SessionScope(
             session_id=session_id,
             agent_did=agent_did,
@@ -166,6 +220,8 @@ class SessionIsolationManager:
         Returns:
             True if grant was applied, False if session not found or wrong isolation.
         """
+        if not _is_valid_identifier(target_session_id):
+            return False
         scope = self._scopes.get(session_id)
         if scope is None:
             return False
