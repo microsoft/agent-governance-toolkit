@@ -1,4 +1,4 @@
-# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+﻿# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Open Cybersecurity Schema Framework (OCSF) v1.9.0 conversion and sink.
 
 This module translates AGT governance, audit, and trace telemetry from
@@ -432,7 +432,7 @@ def cloudevent_to_ocsf(
     elif session_id:
         metadata["correlation_uid"] = str(session_id)
 
-    # actor: OCSF actor object â€” user sub-object is the standard carrier of
+    # actor: OCSF actor object - user sub-object is the standard carrier of
     # identity.  ``invoked_by`` is a plain string in OCSF (the name of the
     # process or service that triggered the actor).  Custom fields that are not
     # in the OCSF actor schema go to unmapped.
