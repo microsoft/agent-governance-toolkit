@@ -44,14 +44,21 @@ def discover_policies(action_path: Path, root: Path) -> list[Path]:
     Raises:
         ResolutionError: ``PATH_TRAVERSAL`` if ``action_path`` resolves
             outside ``root`` (symlinks, ``..`` segments, attacker-supplied
-            path fields). The previous v4 behaviour of returning an empty
-            list defaulted to allow; v5 fails closed.
+            path fields) or cannot be resolved at all. The previous v4
+            behaviour of returning an empty list defaulted to allow; v5
+            fails closed. ``INVALID_GOVERNANCE`` if ``action_path`` does
+            not exist, is neither a file nor a directory, or the walk hits
+            an ``OSError`` (for example an unreadable parent directory).
+            No other exception type escapes.
     """
-    root = root.resolve()
-    action_path = action_path.resolve()
-
-    if action_path.is_file():
-        action_path = action_path.parent
+    try:
+        root = root.resolve()
+        action_path = action_path.resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        # ValueError: a NUL byte in the path ("embedded null character").
+        raise ResolutionError.path_traversal(
+            f"failed to resolve action_path under {root} ({type(exc).__name__})"
+        ) from exc
 
     if not _is_relative_to(action_path, root):
         raise ResolutionError.path_traversal(
@@ -59,23 +66,38 @@ def discover_policies(action_path: Path, root: Path) -> list[Path]:
         )
 
     candidates: list[Path] = []
-    current = action_path
+    try:
+        if not action_path.exists():
+            raise ResolutionError.invalid_governance(
+                f"action_path {action_path} does not exist"
+            )
+        if action_path.is_file():
+            action_path = action_path.parent
+        elif not action_path.is_dir():
+            raise ResolutionError.invalid_governance(
+                f"action_path {action_path} is neither a file nor a directory"
+            )
 
-    while True:
-        for name in GOVERNANCE_FILENAMES:
-            candidate = current / name
-            if candidate.is_file():
-                resolved_candidate = candidate.resolve()
-                if not _is_relative_to(resolved_candidate, root):
-                    raise ResolutionError.path_traversal(
-                        f"governance file {candidate} resolves outside workspace root {root}"
-                    )
-                candidates.append(resolved_candidate)
+        current = action_path
+        while True:
+            for name in GOVERNANCE_FILENAMES:
+                candidate = current / name
+                if candidate.is_file():
+                    resolved_candidate = candidate.resolve()
+                    if not _is_relative_to(resolved_candidate, root):
+                        raise ResolutionError.path_traversal(
+                            f"governance file {candidate} resolves outside workspace root {root}"
+                        )
+                    candidates.append(resolved_candidate)
+                    break
+
+            if current == root or current.parent == current:
                 break
-
-        if current == root or current.parent == current:
-            break
-        current = current.parent
+            current = current.parent
+    except (OSError, ValueError) as exc:
+        raise ResolutionError.invalid_governance(
+            f"failed to walk governance chain under {root} ({type(exc).__name__})"
+        ) from exc
 
     candidates.reverse()
     return candidates

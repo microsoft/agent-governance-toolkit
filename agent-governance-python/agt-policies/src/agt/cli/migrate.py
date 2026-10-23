@@ -746,6 +746,33 @@ def _migrate_governance_policy(
         )
 
     bundle_dir = policies_dir / f"{base_name}_bundle"
+    # Caught in the preflight pass so --write never starts: the chains are
+    # applied before the policies, and a FileExistsError or PermissionError
+    # from mkdir here would otherwise escape after they had already been
+    # moved. is_symlink() covers a broken symlink named 'policies', for which
+    # exists() is False but mkdir() still fails.
+    if (policies_dir.is_symlink() or policies_dir.exists()) and not policies_dir.is_dir():
+        finding.manual_review.append(
+            f"policies path {policies_dir} exists and is not a directory; "
+            "move it aside before migrating"
+        )
+        finding.rewrite_snippet = _render_governance_rewrite_snippet(
+            kwargs=finding.kwargs,
+            manifest_path=manifest_path,
+            manual_review=finding.manual_review,
+        )
+        return
+    if policies_dir.is_dir() and not os.access(policies_dir, os.W_OK):
+        finding.manual_review.append(
+            f"policies directory {policies_dir} is not writable; "
+            "fix its permissions before migrating"
+        )
+        finding.rewrite_snippet = _render_governance_rewrite_snippet(
+            kwargs=finding.kwargs,
+            manifest_path=manifest_path,
+            manual_review=finding.manual_review,
+        )
+        return
     if manifest_path.exists() or bundle_dir.exists():
         finding.manual_review.append(
             "migration output already exists; refusing to overwrite it"
@@ -761,11 +788,24 @@ def _migrate_governance_policy(
         finding.manifest_path = manifest_path
         return
 
-    policies_dir.mkdir(parents=True, exist_ok=True)
     policy_id = base_name or "agt_governance_policy"
-    with tempfile.TemporaryDirectory(
-        prefix=f".{policy_id}_migration_", dir=policies_dir
-    ) as staging_dir:
+    try:
+        policies_dir.mkdir(parents=True, exist_ok=True)
+        staging_tmp = tempfile.TemporaryDirectory(
+            prefix=f".{policy_id}_migration_", dir=policies_dir
+        )
+    except OSError as exc:
+        finding.manual_review.append(
+            f"could not create migration staging under {policies_dir}: "
+            f"{type(exc).__name__}: {exc}"
+        )
+        finding.rewrite_snippet = _render_governance_rewrite_snippet(
+            kwargs=finding.kwargs,
+            manifest_path=manifest_path,
+            manual_review=finding.manual_review,
+        )
+        return
+    with staging_tmp as staging_dir:
         staging = Path(staging_dir)
         staging_bundle = staging / "bundle"
         bundle_created = False
@@ -1205,7 +1245,17 @@ def run_from_args(args: argparse.Namespace) -> int:
 
     if args.write_report:
         out_path = Path(args.write_report)
-        out_path.write_text(text, encoding="utf-8")
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(text, encoding="utf-8")
+        except (OSError, ValueError) as exc:
+            # The report was already printed above; a failed copy to disk
+            # must not turn into a traceback or change the migration's own
+            # exit code. ValueError: a NUL byte in the path.
+            print(
+                f"agt migrate: could not write report to {out_path}: {exc}",
+                file=sys.stderr,
+            )
 
     # Dry runs remain informational. A write run fails when any artifact could
     # not be migrated exactly, so automation cannot mistake partial output for

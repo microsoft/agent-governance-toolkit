@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -111,9 +112,10 @@ def resolve_manifest(
 
     merged_rules = merge_documents(docs_only)
 
-    # Validate before materializing anything. Both guards below reject the
+    # Validate before materializing anything. Every guard below rejects the
     # chain, and creating the bundle first would leave an orphaned temp
     # directory behind on every rejected migration.
+    _validate_rules(merged_rules)
     intervention_points = _collect_intervention_points(docs_only)
     if merged_rules and not _binds_legacy_rules(intervention_points):
         raise ResolutionError.invalid_governance(
@@ -161,6 +163,121 @@ def resolve_manifest(
             manifest[section] = value
 
     return manifest
+
+
+_SUPPORTED_OPERATORS = frozenset(
+    {
+        "eq",
+        "ne",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "in",
+        "not_in",
+        "exists",
+        "contains",
+        "startswith",
+        "endswith",
+        "matches",
+        "regex",
+    }
+)
+_LIST_OPERATORS = frozenset({"in", "not_in"})
+_STRING_OPERATORS = frozenset({"contains", "startswith", "endswith", "matches", "regex"})
+_REGEX_OPERATORS = frozenset({"matches", "regex"})
+_COMPOUND_KEYS = ("and", "or", "not")
+
+
+def _is_json_value(value: Any) -> bool:
+    """True when ``json.dumps`` writes *value* exactly, with no coercion.
+
+    YAML yields Python types JSON has no spelling for (``date``,
+    ``datetime``, ``bytes`` from ``!!binary``, ``set``), and ``.nan``/``.inf``
+    floats that JSON writes as literals Rego does not parse.
+    """
+    if value is None or isinstance(value, (str, bool, int)):
+        return True
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(_is_json_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(key, str) and _is_json_value(item) for key, item in value.items()
+        )
+    return False
+
+
+def _validate_rules(rules: list[dict[str, Any]]) -> None:
+    """Refuse any merged rule the Rego renderer cannot translate exactly.
+
+    ``_render_rego`` keeps an always-matching fail-closed deny as its last
+    line of defence, but reaching it turns every lower-priority rule into
+    dead code with only a log warning. A migration tool must refuse such a
+    chain instead, naming the rule and the construct.
+
+    Raises:
+        ResolutionError: ``INVALID_GOVERNANCE`` for a missing or non-mapping
+            condition, a compound ``and``/``or``/``not`` condition (the
+            renderer emits one scalar predicate per rule), an invalid field
+            path, an operator outside the supported set, a value of the
+            wrong shape for the operator, a regex that is not valid Go RE2
+            (or cannot be validated), or a value JSON cannot write exactly.
+    """
+    for rule in rules:
+        label = f"rule {str(rule.get('name'))!r}"
+        condition = rule.get("condition")
+        if not isinstance(condition, dict) or not condition:
+            raise ResolutionError.invalid_governance(
+                f"{label} has no condition mapping; every migrated rule needs "
+                "a condition with field, operator and value"
+            )
+        for key in _COMPOUND_KEYS:
+            if key in condition:
+                raise ResolutionError.invalid_governance(
+                    f"{label} uses a compound {key!r} condition, which the "
+                    "generated Rego does not express; split it into separate "
+                    "rules before migrating"
+                )
+        field = condition.get("field")
+        if not isinstance(field, str) or not field or _rego_field_accessor(field) is None:
+            raise ResolutionError.invalid_governance(
+                f"{label} has an invalid field path; use a non-empty "
+                "dot-separated path of identifiers"
+            )
+        operator = condition.get("operator")
+        if not isinstance(operator, str) or operator.lower() not in _SUPPORTED_OPERATORS:
+            shown = repr(operator) if isinstance(operator, str) else type(operator).__name__
+            raise ResolutionError.invalid_governance(
+                f"{label} uses an unsupported operator ({shown})"
+            )
+        operator = operator.lower()
+        value = condition.get("value")
+        if operator in _LIST_OPERATORS and not isinstance(value, list):
+            raise ResolutionError.invalid_governance(
+                f"{label}: operator {operator!r} requires a list value, "
+                f"got {type(value).__name__}"
+            )
+        if operator in _STRING_OPERATORS and not isinstance(value, str):
+            raise ResolutionError.invalid_governance(
+                f"{label}: operator {operator!r} requires a string value, "
+                f"got {type(value).__name__}"
+            )
+        if operator in _REGEX_OPERATORS:
+            try:
+                validate_re2(value, require_opa=True)
+            except ValueError as exc:
+                raise ResolutionError.invalid_governance(
+                    f"{label} has a regex pattern that was rejected or could "
+                    f"not be validated against Go RE2: {exc}"
+                ) from exc
+        if not _is_json_value(value):
+            raise ResolutionError.invalid_governance(
+                f"{label} has a condition value of type {type(value).__name__} "
+                "that cannot be written to Rego exactly; use strings, finite "
+                "numbers, booleans, null, or lists of those"
+            )
 
 
 def _binds_legacy_rules(intervention_points: dict[str, Any]) -> bool:
@@ -279,6 +396,10 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
                     f"a regex pattern for operator {operator!r} that was "
                     f"rejected or could not be validated "
                     f"(ensure Go RE2 compatibility and install OPA or google-re2)"
+                )
+            elif operator in _SUPPORTED_OPERATORS:
+                invalid_detail = (
+                    f"a value that cannot be translated for operator {operator!r}"
                 )
             else:
                 invalid_detail = f"unsupported operator {operator!r}"
@@ -422,7 +543,15 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
         for unsupported operators. The caller emits a fail-closed deny
         in place of any rule that returns ``None``.
     """
-    literal = json.dumps(value)
+    try:
+        # allow_nan=False: NaN/Infinity are not Rego literals, and a YAML date
+        # or !!binary value is not JSON. Both would otherwise either raise a
+        # bare TypeError here or write a bundle OPA cannot parse. The caller
+        # treats None as "cannot translate" and emits a fail-closed deny;
+        # _validate_rules refuses such a rule before rendering is reached.
+        literal = json.dumps(value, allow_nan=False)
+    except (TypeError, ValueError):
+        return None
     indent = "    "
     if operator == "eq":
         if value is None and action != "deny":
