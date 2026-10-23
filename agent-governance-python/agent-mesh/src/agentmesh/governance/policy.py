@@ -83,6 +83,35 @@ def parse_rate_limit(limit: str) -> tuple[int, int]:
     return count, RATE_LIMIT_PERIODS[period_str]
 
 
+def _split_outside_quotes(expr: str, sep: str) -> list[str]:
+    """Split ``expr`` on ``sep`` only where ``sep`` is outside a quoted literal.
+
+    ``expr.split(" and ")`` would also split ``tool.name == 'search and replace'``
+    inside the string literal. This walks the expression once, tracking single-
+    and double-quote state, like ``splitOutsideQuotes`` in the TypeScript SDK and
+    ``SplitCompound`` in the .NET SDK. If ``sep`` never occurs outside quotes,
+    the result is ``[expr]``.
+    """
+    parts: list[str] = []
+    start = 0
+    in_single = in_double = False
+    i = 0
+    while i <= len(expr) - len(sep):
+        ch = expr[i]
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif not in_single and not in_double and expr.startswith(sep, i):
+            parts.append(expr[start:i])
+            start = i + len(sep)
+            i = start
+            continue
+        i += 1
+    parts.append(expr[start:])
+    return parts
+
+
 class PolicyRule(BaseModel):
     """
     A single policy rule.
@@ -212,14 +241,14 @@ class PolicyRule(BaseModel):
         # Handle compound conditions first (AND/OR)
         # This must be checked before individual conditions
 
-        # OR conditions
-        if " or " in expr:
-            parts = expr.split(" or ")
+        # OR conditions (only split outside quoted literals)
+        parts = _split_outside_quotes(expr, " or ")
+        if len(parts) > 1:
             return any(self._eval_expression(p.strip(), context, _depth + 1) for p in parts)
 
-        # AND conditions
-        if " and " in expr:
-            parts = expr.split(" and ")
+        # AND conditions (only split outside quoted literals)
+        parts = _split_outside_quotes(expr, " and ")
+        if len(parts) > 1:
             return all(self._eval_expression(p.strip(), context, _depth + 1) for p in parts)
 
         # Now handle atomic conditions

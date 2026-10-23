@@ -26,6 +26,8 @@ from typing import Any, Literal, Optional, Protocol, runtime_checkable
 import yaml
 from pydantic import BaseModel, Field
 
+from agentmesh.governance.policy import _split_outside_quotes
+
 logger = logging.getLogger(__name__)
 
 
@@ -1060,14 +1062,14 @@ def _eval_expression(expr: str, context: dict, _depth: int = 0, action: str = "d
         )
         return match
 
-    # OR
-    if " or " in expr:
-        parts = expr.split(" or ")
+    # OR (only split outside quoted literals)
+    parts = _split_outside_quotes(expr, " or ")
+    if len(parts) > 1:
         return any(_eval_expression(p.strip(), context, _depth + 1, action) for p in parts)
 
-    # AND
-    if " and " in expr:
-        parts = expr.split(" and ")
+    # AND (only split outside quoted literals)
+    parts = _split_outside_quotes(expr, " and ")
+    if len(parts) > 1:
         return all(_eval_expression(p.strip(), context, _depth + 1, action) for p in parts)
 
     # Equality: field == 'value'
