@@ -1,4 +1,4 @@
-﻿# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Open Cybersecurity Schema Framework (OCSF) v1.9.0 conversion and sink.
 
 This module translates AGT governance, audit, and trace telemetry from
@@ -9,7 +9,7 @@ such as Amazon Security Lake, Splunk, Datadog, and IBM QRadar.
 References:
     - OCSF Schema Specification: https://schema.ocsf.io/
     - ADR-0021: CloudEvents Envelope for Mesh Audit
-    - AUDIT-COMPLIANCE-1.0 Â§20.4
+    - AUDIT-COMPLIANCE-1.0 §20.4
 """
 
 from __future__ import annotations
@@ -27,13 +27,12 @@ from agent_os.event_sink import (
     SinkExportResult,
 )
 
-
 logger = logging.getLogger(__name__)
 
 #: Default OCSF Schema version targeted by this converter.
 OCSF_SCHEMA_VERSION = "1.9.0"
 
-# Note: This converter targets OCSF 1.9.0 only. There is no schema_mode control; the converter always emits 1.9.0-compliant shapes.
+# Note: This converter targets OCSF 1.9.0 only and always emits 1.9.0-compliant shapes.
 
 # OCSF Categories
 OCSF_CATEGORY_FINDINGS = 2
@@ -82,7 +81,7 @@ OCSF_STATUS_SUCCESS = 1
 OCSF_STATUS_FAILURE = 2
 OCSF_STATUS_OTHER = 99
 
-# Map CloudEvents type segments â†’ GovernanceEventKind values, used when
+# Map CloudEvents type segments → GovernanceEventKind values, used when
 # ``kind`` is absent from the data payload (which is the default for events
 # produced by GovernanceEvent.to_cloudevent()).
 _CE_TYPE_SUFFIX_TO_KIND: dict[str, str] = {
@@ -227,9 +226,9 @@ def _classify_event(
     """Determine the OCSF Class, Category, Activity, and Type UID.
 
     OCSF v1.9.0 classes used:
-    - 2004 Detection Finding  (category 2) â€” policy violations and security detections.
-    - 3003 Authorize Session  (category 3) â€” identity checks and privilege escalations.
-    - 6003 API Activity       (category 6) â€” policy checks, resource accesses, checkpoints.
+    - 2004 Detection Finding  (category 2) — policy violations and security detections.
+    - 3003 Authorize Session  (category 3) — identity checks and privilege escalations.
+    - 6003 API Activity       (category 6) — policy checks, resource accesses, checkpoints.
 
     Note: Security Finding (2001) is deprecated in OCSF 1.3.0 and is not used here.
     Note: Class 3002 is Authentication in OCSF 1.3.0; agent identity/trust events
@@ -240,7 +239,7 @@ def _classify_event(
     d_norm = (decision or "").lower()
     o_norm = (outcome or "").lower()
 
-    # Kind-based IAM check takes priority â€” an explicit IAM kind (e.g.
+    # Kind-based IAM check takes priority — an explicit IAM kind (e.g.
     # IDENTITY_REJECTED with decision=deny) must remain Authorize Session even
     # when the decision field alone would trigger the finding path.
     kind_is_iam = k_norm in _IAM_KINDS
@@ -289,7 +288,7 @@ def _classify_event(
         )
 
     if is_iam:
-        # Category 3: Identity & Access Management â†’ Class 3003: Authorize Session
+        # Category 3: Identity & Access Management → Class 3003: Authorize Session
         # Activity 1 = "Assign Privileges" per OCSF 1.3.0
         activity_id = 1
         activity_name = "Assign Privileges"
@@ -310,7 +309,7 @@ def _classify_event(
             type_name,
         )
 
-    # Category 6: Application Activity â†’ Class 6003: API Activity
+    # Category 6: Application Activity → Class 6003: API Activity
     # Activity 99 = "Other"
     activity_id = 99
     activity_name = "Other"
@@ -393,8 +392,7 @@ def cloudevent_to_ocsf(
     # ``kind`` may be present when a raw CE is constructed manually or comes
     # from an external system; to_cloudevent() does not write it to data.
     kind_val = str(data.get("kind") or "")
-    # OCSF v1.9.0 is always used; `schema_mode` and env overrides are ignored.
-    use_latest = True
+    # OCSF v1.9.0 is always used.
     resolved_kind = _resolve_kind(ce_type, kind_val)
 
     severity_str = str(data.get("severity") or "info").lower()
@@ -598,44 +596,40 @@ def cloudevent_to_ocsf(
     if class_uid == OCSF_CLASS_AUTHORIZE_SESSION and resource:
         ocsf.setdefault("unmapped", {})["resource"] = {"name": str(resource)}
 
-    # Adjustments for the public v2 validator (latest schema conventions).
-    # `use_latest` is computed above per-call (arg > env).
+    # Adjustments for the latest public OCSF schema conventions.
 
-    if use_latest:
-        if class_uid == OCSF_CLASS_DETECTION_FINDING:
-            # Drop attributes the latest schema flags as unknown on 2004
-            ocsf.pop("actor", None)
-            ocsf.pop("state", None)
-            ocsf.pop("state_id", None)
+    if class_uid == OCSF_CLASS_DETECTION_FINDING:
+        # Drop attributes the latest schema flags as unknown on 2004
+        ocsf.pop("actor", None)
+        ocsf.pop("state", None)
+        ocsf.pop("state_id", None)
 
-        elif class_uid == OCSF_CLASS_AUTHORIZE_SESSION:
-            # Latest schema expects top-level user and at least one of
-            # privileges/groups/iam_roles.
-            # Provide a minimal user mirror from actor.user if present.
-            actor_user = (
-                (ocsf.get("actor") or {}).get("user")
-                if isinstance(ocsf.get("actor"), dict)
-                else None
+    elif class_uid == OCSF_CLASS_AUTHORIZE_SESSION:
+        # Latest schema expects top-level user and at least one of
+        # privileges/groups/iam_roles.
+        # Provide a minimal user mirror from actor.user if present.
+        actor_user = (
+            (ocsf.get("actor") or {}).get("user") if isinstance(ocsf.get("actor"), dict) else None
+        )
+        if actor_user and "user" not in ocsf:
+            ocsf["user"] = actor_user
+        elif "user" not in ocsf:
+            ocsf["user"] = {
+                "name": agent_id or agent_did or "unknown",
+                "uid": agent_did or agent_id or "unknown",
+            }
+
+        # Ensure at least one constraint field is present. Prefer privileges
+        # and derive a sensible name from policy/action/decision. Latest schema
+        # expects privileges as an array of strings, not objects.
+        if not any(k in ocsf for k in ("privileges", "groups", "iam_roles")):
+            priv_name = str(
+                policy_name
+                or action
+                or ("allow" if disp_id == OCSF_DISPOSITION_ALLOWED else "deny")
+                or "access"
             )
-            if actor_user and "user" not in ocsf:
-                ocsf["user"] = actor_user
-            elif "user" not in ocsf:
-                ocsf["user"] = {
-                    "name": agent_id or agent_did or "unknown",
-                    "uid": agent_did or agent_id or "unknown",
-                }
-
-            # Ensure at least one constraint field is present. Prefer privileges
-            # and derive a sensible name from policy/action/decision. Latest schema
-            # expects privileges as an array of strings, not objects.
-            if not any(k in ocsf for k in ("privileges", "groups", "iam_roles")):
-                priv_name = str(
-                    policy_name
-                    or action
-                    or ("allow" if disp_id == OCSF_DISPOSITION_ALLOWED else "deny")
-                    or "access"
-                )
-                ocsf["privileges"] = [priv_name]
+            ocsf["privileges"] = [priv_name]
 
     return ocsf
 
@@ -714,7 +708,3 @@ class OCSFGovernanceSink(GovernanceEventSinkBase):
             logger.exception("OCSFGovernanceSink: stream flush failed")
             overall = SinkExportResult.FAILURE
         return overall
-
-
-
-
