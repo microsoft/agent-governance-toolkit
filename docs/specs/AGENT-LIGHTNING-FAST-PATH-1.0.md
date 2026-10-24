@@ -659,12 +659,13 @@ The constructor MUST be generic over state and action types:
    - Critical: `violation_penalty * 10`
    - High: `violation_penalty * 5`
    - All others: `violation_penalty * 1`
-8. Accumulate the reward into `EnvironmentState.total_reward`.
-9. Check termination: if `terminate_on_critical` and any violation has
+8. Check termination: if `terminate_on_critical` and any violation has
    severity `"critical"`, set `terminated = True`.
-10. Check truncation: if `step_count >= max_steps`, set
-    `truncated = True`.
-11. If the step succeeded with zero violations, add `success_bonus`.
+9. Check truncation: if `step_count >= max_steps`, set
+   `truncated = True`.
+10. If the step succeeded with zero violations, add `success_bonus`.
+11. Accumulate the reward, including any `success_bonus`, into
+    `EnvironmentState.total_reward`.
 12. Return `(next_state, reward, terminated, truncated, info)`.
 
 **[Pure Specification]**
