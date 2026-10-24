@@ -526,6 +526,34 @@ class TestPolicyRewardMultiplicative:
         # No violations → additive path: base=1.0 + clean_bonus=5.0
         assert r == pytest.approx(6.0)
 
+    def test_multiplicative_stats_record_applied_penalty(self):
+        # A critical violation scales base(1.0) by 0.5, so the penalty that
+        # was applied is -0.5, not the additive table's -100.
+        cfg = RewardConfig(multiplicative=True, multiplicative_factor=0.5)
+        reward = PolicyReward(_make_mock_kernel(), config=cfg)
+        reward(_FakeRollout(violations=[_FakeViolation("critical")]), emit=False)
+        reward(_FakeRollout(violations=[]), emit=False)
+        stats = reward.get_stats()
+        assert stats["total_penalties"] == pytest.approx(-0.5)
+        assert stats["avg_penalty"] == pytest.approx(-0.25)
+
+    def test_multiplicative_emits_applied_penalty(self):
+        cfg = RewardConfig(multiplicative=True, multiplicative_factor=0.25)
+        reward = PolicyReward(
+            _make_mock_kernel(), base_reward_fn=lambda _r: 8.0, config=cfg
+        )
+        reward._emit_reward = MagicMock()
+        r = reward(_FakeRollout(violations=[_FakeViolation("high")]))
+        assert r == pytest.approx(2.0)
+        final, base, penalty, _violations = reward._emit_reward.call_args.args
+        assert (final, base) == (pytest.approx(2.0), pytest.approx(8.0))
+        assert penalty == pytest.approx(-6.0)
+
+    def test_additive_stats_record_severity_penalty(self):
+        reward = PolicyReward(_make_mock_kernel())
+        reward(_FakeRollout(violations=[_FakeViolation("high")]), emit=False)
+        assert reward.get_stats()["total_penalties"] == pytest.approx(-50.0)
+
 
 class TestPolicyRewardZeroViolations:
     def test_full_reward_on_zero_violations(self):

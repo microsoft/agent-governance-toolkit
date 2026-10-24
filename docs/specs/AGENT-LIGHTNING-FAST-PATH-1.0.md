@@ -420,10 +420,16 @@ When `PolicyReward.__call__` is invoked with a rollout:
 1. Compute the base reward from `base_reward_fn(rollout)`.
 2. Extract violations from the rollout (via `rollout.violations` or
    `kernel.get_recent_violations()`).
-3. Calculate the total penalty via the severity mapping.
-4. If `config.multiplicative` is `True` and violations exist, compute:
-   `final_reward = base_reward * config.multiplicative_factor`.
-5. Otherwise, compute: `final_reward = base_reward + penalty`.
+3. If `config.multiplicative` is `True` and violations exist, compute:
+   `final_reward = base_reward * config.multiplicative_factor`. The
+   penalty is the scaling that was applied:
+   `penalty = base_reward * config.multiplicative_factor - base_reward`.
+4. Otherwise (additive mode, or no violations), the penalty is the sum
+   of the severity mapping over the violations, and
+   `final_reward = base_reward + penalty`.
+5. The penalty from step 3 or 4 is taken before the clean bonus and
+   the clamp below; it is the value recorded in the statistics and
+   emitted as `policy_penalty`.
 6. If no violations exist, add `config.clean_bonus` to `final_reward`.
 7. Apply `min_reward` floor (if not `None`):
    `final_reward = max(final_reward, min_reward)`.
@@ -444,7 +450,7 @@ multi-dimensional reward object:
 | --- | --- |
 | `"final"` | The clamped final reward |
 | `"base"` | The base reward before penalties |
-| `"policy_penalty"` | The total penalty value |
+| `"policy_penalty"` | The penalty applied in the active mode (Section 6.5), before the clean bonus and the clamp |
 
 With attributes:
 
