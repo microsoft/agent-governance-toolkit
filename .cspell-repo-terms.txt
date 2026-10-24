@@ -1334,6 +1334,41 @@ vite
 vitejs
 jsdom
 
+# --- Studio sidecar: runtime packages, Python APIs and Windows socket/process APIs ---
+aiohappyeyeballs
+aiosignal
+certifi
+contextmanager
+creationflags
+dnspython
+EXCLUSIVEADDRUSE
+followlinks
+frozenlist
+fsevents
+getsignal
+getsockname
+httpcore
+isdecimal
+killable
+killpg
+LPCWSTR
+mdurl
+multidict
+nosniff
+propcache
+pycparser
+redoc
+REUSEADDR
+rpds
+setblocking
+setsockopt
+SIGBREAK
+signum
+urlsplit
+utime
+wintypes
+yarl
+
 # --- Healthcare identifier terms used in HIPAA pattern matching and tests ---
 HPID
 hpid
