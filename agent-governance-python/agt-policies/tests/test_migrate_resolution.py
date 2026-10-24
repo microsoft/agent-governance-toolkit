@@ -280,14 +280,14 @@ def _condition_matches(condition: object, sample: dict) -> bool:
 
 
 def test_merge_single_document_sorts_by_priority() -> None:
-    doc = {"rules": [_rule("a", "allow", 1), _rule("b", "deny", 5)]}
+    doc = {"rules": [_rule("a", "deny", 1), _rule("b", "deny", 5)]}
     merged = merge_documents([doc])
     assert [r["name"] for r in merged] == ["b", "a"]
 
 
 def test_merge_unique_names_are_concatenated() -> None:
     parent = {"rules": [_rule("p1", "allow", 1)]}
-    child = {"rules": [_rule("c1", "deny", 5)]}
+    child = {"rules": [_rule("c1", "allow", 5)]}
     merged = merge_documents([parent, child])
     assert [r["name"] for r in merged] == ["c1", "p1"]
 
@@ -915,6 +915,184 @@ def test_merge_non_dict_document_raises() -> None:
     assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
 
 
+@pytest.mark.parametrize(
+    "condition",
+    [
+        {"field": "tool_name", "operator": "not_in", "value": []},
+        {
+            "and": [
+                {"field": "tool_name", "operator": "not_in", "value": []},
+                {"field": "metadata.env", "operator": "eq", "value": "prod"},
+            ]
+        },
+    ],
+)
+def test_merge_rejects_allow_not_in_empty(condition: dict[str, object]) -> None:
+    rule = _rule_with_condition(
+        "allow-everything",
+        "allow",
+        condition,
+        100,
+    )
+
+    with pytest.raises(ResolutionError, match="allow.*not_in.*empty"):
+        merge_documents([{"rules": [rule]}])
+
+
+def test_merge_rejects_deny_covered_by_higher_priority_allow() -> None:
+    rules = [
+        _rule_with_condition(
+            "broad-allow",
+            "allow",
+            {"field": "tool_name", "operator": "in", "value": ["read", "delete"]},
+            100,
+        ),
+        _rule_with_condition(
+            "dead-deny",
+            "deny",
+            {"field": "tool_name", "operator": "eq", "value": "delete"},
+            10,
+        ),
+    ]
+
+    with pytest.raises(ResolutionError, match="dead-deny.*covered.*broad-allow"):
+        merge_documents([{"rules": rules}])
+
+
+def test_merge_rejects_child_deny_shadowed_by_parent_allow() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "parent-allow",
+                "allow",
+                {"field": "tool_name", "operator": "in", "value": ["read", "delete"]},
+                100,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child-deny",
+                "deny",
+                {"field": "tool_name", "operator": "eq", "value": "delete"},
+                10,
+            )
+        ]
+    }
+
+    with pytest.raises(ResolutionError, match="child-deny.*covered.*parent-allow"):
+        merge_documents([parent, child])
+
+
+def test_merge_keeps_rule_not_fully_covered_by_higher_priority_opposite() -> None:
+    rules = [
+        _rule_with_condition(
+            "narrow-allow",
+            "allow",
+            {"field": "tool_name", "operator": "eq", "value": "read"},
+            100,
+        ),
+        _rule_with_condition(
+            "broader-deny",
+            "deny",
+            {"field": "tool_name", "operator": "in", "value": ["read", "delete"]},
+            10,
+        ),
+    ]
+
+    assert [rule["name"] for rule in merge_documents([{"rules": rules}])] == [
+        "narrow-allow",
+        "broader-deny",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("higher_condition", "lower_condition"),
+    [
+        pytest.param(
+            {"field": "metadata.region", "operator": "ne", "value": "US"},
+            {"field": "metadata.region", "operator": "ne", "value": "US"},
+            id="ne-deny-also-matches-absent",
+        ),
+        pytest.param(
+            {
+                "field": "metadata.region",
+                "operator": "not_in",
+                "value": ["US"],
+            },
+            {
+                "field": "metadata.region",
+                "operator": "not_in",
+                "value": ["US"],
+            },
+            id="not-in-deny-also-matches-absent",
+        ),
+        pytest.param(
+            {"field": "metadata.region", "operator": "eq", "value": None},
+            {"field": "metadata.region", "operator": "eq", "value": None},
+            id="eq-null-deny-also-matches-absent",
+        ),
+        pytest.param(
+            {
+                "field": "metadata.region",
+                "operator": "in",
+                "value": ["US", None],
+            },
+            {"field": "metadata.region", "operator": "eq", "value": None},
+            id="in-does-not-cover-null-equality",
+        ),
+    ],
+)
+def test_merge_preserves_deny_reachable_only_on_null_or_absence(
+    higher_condition: dict[str, object], lower_condition: dict[str, object]
+) -> None:
+    rules = [
+        _rule_with_condition("higher-allow", "allow", higher_condition, 100),
+        _rule_with_condition("reachable-deny", "deny", lower_condition, 10),
+    ]
+
+    assert [rule["name"] for rule in merge_documents([{"rules": rules}])] == [
+        "higher-allow",
+        "reachable-deny",
+    ]
+
+
+def test_merge_still_rejects_coverage_when_null_list_member_cannot_match() -> None:
+    rules = [
+        _rule_with_condition(
+            "higher-allow",
+            "allow",
+            {"field": "metadata.region", "operator": "eq", "value": "US"},
+            100,
+        ),
+        _rule_with_condition(
+            "dead-deny",
+            "deny",
+            {
+                "field": "metadata.region",
+                "operator": "in",
+                "value": ["US", None],
+            },
+            10,
+        ),
+    ]
+
+    with pytest.raises(ResolutionError, match="dead-deny.*covered.*higher-allow"):
+        merge_documents([{"rules": rules}])
+
+
+def test_merge_deny_negative_condition_covers_guarded_allow() -> None:
+    condition = {"field": "metadata.region", "operator": "ne", "value": "US"}
+    rules = [
+        _rule_with_condition("higher-deny", "deny", condition, 100),
+        _rule_with_condition("dead-allow", "allow", condition, 10),
+    ]
+
+    with pytest.raises(ResolutionError, match="dead-allow.*covered.*higher-deny"):
+        merge_documents([{"rules": rules}])
+
+
 # ── merge_top_level_section ──────────────────────────────────────────
 
 
@@ -990,6 +1168,190 @@ def test_resolve_emits_flat_acs_manifest(tmp_path: Path) -> None:
     assert (bundle_path / "agt_legacy.rego").is_file()
     assert "pre_tool_call" in manifest["intervention_points"]
     assert manifest["tools"] == {"t": {"clearance": "public"}}
+
+
+def test_resolve_maps_v4_tool_fields_to_snapshot_paths(tmp_path: Path) -> None:
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "block-delete",
+                    "deny",
+                    {"field": "tool_name", "operator": "eq", "value": "delete_file"},
+                    10,
+                ),
+                _rule_with_condition(
+                    "block-force",
+                    "deny",
+                    {"field": "tool_args.force", "operator": "eq", "value": True},
+                    9,
+                ),
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    manifest = resolve_manifest(root, root)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+
+    assert 'object.get(input.snapshot, ["tool_call", "name"], null)' in rego
+    assert 'object.get(input.snapshot, ["tool_call", "args", "force"], null)' in rego
+    assert 'object.get(input.snapshot, ["tool_name"], null)' not in rego
+
+
+@pytest.mark.parametrize(
+    ("intervention_point", "field"),
+    [
+        pytest.param(
+            "pre_tool_call",
+            "envelope.budgets.tool_call_count",
+            id="shared-envelope",
+        ),
+        pytest.param("output", "response.content", id="agt-output-response"),
+    ],
+)
+def test_resolve_accepts_agt_host_snapshot_roots(
+    tmp_path: Path, intervention_point: str, field: str
+) -> None:
+    binding = {
+        intervention_point: {
+            "policy_target": "$.tool_call.args"
+            if intervention_point == "pre_tool_call"
+            else "$.response.content",
+            "policy_target_kind": "tool_args"
+            if intervention_point == "pre_tool_call"
+            else "output",
+            "policy": {"id": "agt_legacy_rules"},
+        }
+    }
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "valid-agt-field",
+                    "deny",
+                    {"field": field, "operator": "exists", "value": None},
+                )
+            ],
+            "intervention_points": binding,
+        },
+    )
+
+    manifest = resolve_manifest(tmp_path, tmp_path)
+
+    assert manifest["policies"]["agt_legacy_rules"]["bundle"]
+
+
+def test_resolve_honours_explicit_default_deny(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "default_action": "deny",
+            "rules": [],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    manifest = resolve_manifest(tmp_path, tmp_path)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+
+    assert 'default verdict := {"decision": "deny"}' in rego
+
+
+@pytest.mark.parametrize("value", ["allow", "warn", "DENY", None, 1])
+def test_resolve_refuses_unsupported_default_action(
+    tmp_path: Path, value: object
+) -> None:
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "default_action": value,
+            "rules": [],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    with pytest.raises(ResolutionError, match="default_action"):
+        resolve_manifest(tmp_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        pytest.param("toolname", id="misspelling"),
+        pytest.param("tool_name_extra", id="known-root-with-suffix"),
+        pytest.param("tool_name.extra", id="scalar-legacy-key-with-suffix"),
+        pytest.param("tool_n\N{CYRILLIC SMALL LETTER A}me", id="confusable"),
+    ],
+)
+def test_resolve_refuses_field_outside_bound_snapshot_roots(
+    tmp_path: Path, field: str
+) -> None:
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "bad-field",
+                    "deny",
+                    {"field": field, "operator": "eq", "value": "delete_file"},
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    with pytest.raises(ResolutionError, match="bad-field.*field.*pre_tool_call"):
+        resolve_manifest(tmp_path, tmp_path)
+
+
+def test_resolve_refuses_tool_field_at_non_tool_binding(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "rules": [_rule("tool-only", "deny", 10)],
+            "intervention_points": {
+                "input": {
+                    "policy_target": "$.input",
+                    "policy_target_kind": "input",
+                    "policy": {"id": "agt_legacy_rules"},
+                }
+            },
+        },
+    )
+
+    with pytest.raises(ResolutionError, match="tool-only.*tool_call.*input"):
+        resolve_manifest(tmp_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "key", ["default_aciton", "default_acti\N{CYRILLIC SMALL LETTER O}n", 1]
+)
+def test_resolve_refuses_unknown_top_level_key(tmp_path: Path, key: object) -> None:
+    _write(
+        tmp_path / "governance.yaml",
+        {key: "deny", "rules": [], "intervention_points": _legacy_binding()},
+    )
+
+    with pytest.raises(ResolutionError, match="unknown top-level key"):
+        resolve_manifest(tmp_path, tmp_path)
+
+
+def test_resolve_refuses_string_condition_by_name(tmp_path: Path) -> None:
+    rule = _rule("string-condition", "deny", 10)
+    rule["condition"] = "tool.name == 'delete_file'"
+    _write(
+        tmp_path / "governance.yaml",
+        {"rules": [rule], "intervention_points": _legacy_binding()},
+    )
+
+    with pytest.raises(ResolutionError, match="string-condition.*condition.*mapping"):
+        resolve_manifest(tmp_path, tmp_path)
 
 
 def test_resolve_no_governance_file_fails_closed(tmp_path: Path) -> None:
@@ -1185,8 +1547,8 @@ def test_resolve_invalid_field_syntax_fails_closed(tmp_path: Path) -> None:
         pytest.param(
             {
                 "and": [
-                    {"field": "amount", "operator": "gt", "value": 5},
-                    {"field": "amount", "operator": "lt", "value": 3},
+                    {"field": "tool_args.amount", "operator": "gt", "value": 5},
+                    {"field": "tool_args.amount", "operator": "lt", "value": 3},
                 ]
             },
             id="disjoint-ranges",

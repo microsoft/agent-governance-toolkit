@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import tempfile
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,48 @@ from .scope import filter_by_scope
 logger = logging.getLogger(__name__)
 
 ACS_VERSION = "0.4.0-alpha.1"
+
+_ALLOWED_TOP_LEVEL_KEYS = {
+    "apiVersion",
+    "version",
+    "name",
+    "description",
+    "inherit",
+    "scope",
+    "default_action",
+    "rules",
+    "intervention_points",
+    "tools",
+    "annotators",
+    "limits",
+    "approval",
+}
+
+_AMBIENT_SNAPSHOT_ROOTS = {
+    "actor",
+    "tenant",
+    "conversation",
+    "messages",
+    "approvals",
+    "prior_decisions",
+    "transport",
+    "metadata",
+}
+
+_COMMON_SNAPSHOT_ROOTS = _AMBIENT_SNAPSHOT_ROOTS | {"envelope"}
+
+_SNAPSHOT_ROOTS_BY_INTERVENTION_POINT = {
+    "agent_startup": _COMMON_SNAPSHOT_ROOTS | {"agent", "agent_init"},
+    "input": _COMMON_SNAPSHOT_ROOTS | {"input"},
+    "pre_model_call": _COMMON_SNAPSHOT_ROOTS
+    | {"model", "model_request", "messages", "tools", "request_id"},
+    "post_model_call": _COMMON_SNAPSHOT_ROOTS
+    | {"model", "model_response", "request_id", "response", "usage"},
+    "pre_tool_call": _COMMON_SNAPSHOT_ROOTS | {"tool_call"},
+    "post_tool_call": _COMMON_SNAPSHOT_ROOTS | {"tool_call", "tool_result"},
+    "output": _COMMON_SNAPSHOT_ROOTS | {"output", "response", "message_chain"},
+    "agent_shutdown": _COMMON_SNAPSHOT_ROOTS | {"agent", "reason", "summary"},
+}
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -63,6 +106,123 @@ def _apply_inheritance(documents: list[tuple[Path, dict[str, Any]]]) -> list[tup
         if documents[i][1].get("inherit") is False:
             return documents[i:]
     return documents
+
+
+def _validate_document_top_level(path: Path, document: dict[str, Any]) -> None:
+    unknown = sorted(
+        (key for key in document if key not in _ALLOWED_TOP_LEVEL_KEYS), key=repr
+    )
+    if unknown:
+        rendered = ", ".join(repr(key) for key in unknown)
+        raise ResolutionError.invalid_governance(
+            f"governance file {path} has unknown top-level key(s): {rendered}"
+        )
+    if "default_action" in document and document["default_action"] != "deny":
+        raise ResolutionError.invalid_governance(
+            f"governance file {path} has unsupported default_action "
+            f"{document['default_action']!r}; the v4-to-v5 migrator only accepts "
+            "an explicit value of 'deny'"
+        )
+
+
+def _legacy_rule_intervention_points(
+    intervention_points: dict[str, Any],
+) -> list[str]:
+    bound: list[str] = []
+    for name, config in intervention_points.items():
+        if not isinstance(config, dict):
+            continue
+        policy = config.get("policy")
+        if isinstance(policy, dict) and policy.get("id") == "agt_legacy_rules":
+            bound.append(name)
+    return bound
+
+
+def _map_v4_field(field: str) -> str:
+    if field == "tool_name":
+        return "tool_call.name"
+    if field == "tool_args":
+        return "tool_call.args"
+    if field.startswith("tool_args."):
+        return f"tool_call.args.{field.removeprefix('tool_args.')}"
+    return field
+
+
+def _normalize_condition_fields(
+    condition: dict[str, Any],
+    *,
+    rule_name: str,
+    bound_points: list[str],
+) -> None:
+    for compound in ("and", "or"):
+        items = condition.get(compound)
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict):
+                    _normalize_condition_fields(
+                        item, rule_name=rule_name, bound_points=bound_points
+                    )
+    negated = condition.get("not")
+    if isinstance(negated, dict):
+        _normalize_condition_fields(
+            negated, rule_name=rule_name, bound_points=bound_points
+        )
+
+    if "field" not in condition:
+        return
+    field = condition["field"]
+    if not isinstance(field, str) or not field:
+        raise ResolutionError.invalid_governance(
+            f"rule {rule_name!r} condition field must be a non-empty string"
+        )
+    mapped = _map_v4_field(field)
+    root = mapped.split(".", 1)[0]
+    for point in bound_points:
+        allowed_roots = _SNAPSHOT_ROOTS_BY_INTERVENTION_POINT.get(point, set())
+        if root not in allowed_roots:
+            raise ResolutionError.invalid_governance(
+                f"rule {rule_name!r} field {field!r} maps to snapshot root "
+                f"{root!r}, which is unavailable at intervention point {point!r}"
+            )
+    condition["field"] = mapped
+
+
+def _normalize_documents(
+    documents: list[tuple[Path, dict[str, Any]]],
+    intervention_points: dict[str, Any],
+) -> list[dict[str, Any]]:
+    bound_points = _legacy_rule_intervention_points(intervention_points)
+    normalized: list[dict[str, Any]] = []
+    for path, original in documents:
+        document = deepcopy(original)
+        rules = document.get("rules", [])
+        if not isinstance(rules, list):
+            raise ResolutionError.invalid_governance(
+                f"governance file {path} rules must be a list"
+            )
+        for index, rule in enumerate(rules):
+            if not isinstance(rule, dict):
+                continue
+            rule_name = str(rule.get("name", f"rule at index {index}"))
+            condition = rule.get("condition")
+            if not isinstance(condition, dict):
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule_name!r} condition must be a mapping; "
+                    f"got {type(condition).__name__}"
+                )
+            _normalize_condition_fields(
+                condition, rule_name=rule_name, bound_points=bound_points
+            )
+        normalized.append(document)
+    return normalized
+
+
+def _resolved_default_action(documents: list[dict[str, Any]]) -> str:
+    return (
+        "deny"
+        if any(doc.get("default_action") == "deny" for doc in documents)
+        else "allow"
+    )
 
 
 def resolve_manifest(
@@ -101,20 +261,22 @@ def resolve_manifest(
 
     raw_docs = _apply_inheritance(raw_docs)
 
+    for path, doc in raw_docs:
+        _validate_document_top_level(path, doc)
+
     scoped_docs: list[tuple[Path, dict[str, Any]]] = []
     for path, doc in raw_docs:
         scope_pattern = doc.get("scope")
         if filter_by_scope(path, scope_pattern, action_path, root):
             scoped_docs.append((path, doc))
 
-    docs_only = [doc for _, doc in scoped_docs]
-
-    merged_rules = merge_documents(docs_only)
-
     # Validate before materializing anything. Both guards below reject the
     # chain, and creating the bundle first would leave an orphaned temp
     # directory behind on every rejected migration.
-    intervention_points = _collect_intervention_points(docs_only)
+    intervention_points = _collect_intervention_points([doc for _, doc in scoped_docs])
+    docs_only = _normalize_documents(scoped_docs, intervention_points)
+    merged_rules = merge_documents(docs_only)
+    default_action = _resolved_default_action(docs_only)
     if merged_rules and not _binds_legacy_rules(intervention_points):
         raise ResolutionError.invalid_governance(
             "governance rules must bind policy id 'agt_legacy_rules' at one or more intervention points"
@@ -132,7 +294,9 @@ def resolve_manifest(
         )
 
     bundle_path = bundle_dir or Path(tempfile.mkdtemp(prefix="agt_resolved_bundle_"))
-    rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
+    rego_path = _materialize_rego_bundle(
+        bundle_path, merged_rules, default_action=default_action
+    )
 
     manifest: dict[str, Any] = {
         "agent_control_specification_version": ACS_VERSION,
@@ -196,7 +360,12 @@ def _collect_intervention_points(documents: list[dict[str, Any]]) -> dict[str, A
     return merged
 
 
-def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> Path:
+def _materialize_rego_bundle(
+    bundle_root: Path,
+    rules: list[dict[str, Any]],
+    *,
+    default_action: str = "allow",
+) -> Path:
     """Write a generated Rego file to disk and return the bundle path.
 
     The generated rule package is ``agt.legacy`` and exposes a single
@@ -206,7 +375,7 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
     """
     # Hash the exact bytes written, including on Windows where write_text
     # would otherwise translate line endings after the digest was computed.
-    body = _render_rego(rules).encode("utf-8")
+    body = _render_rego(rules, default_action=default_action).encode("utf-8")
     digest = hashlib.sha256(body).hexdigest().encode("ascii")
     try:
         bundle_root = bundle_root.resolve()
@@ -232,7 +401,7 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
         ) from exc
 
 
-def _render_rego(rules: list[dict[str, Any]]) -> str:
+def _render_rego(rules: list[dict[str, Any]], *, default_action: str = "allow") -> str:
     """Render a Rego module emitting an AGT verdict from rule conditions.
 
     Each rule becomes one ``verdict`` branch keyed on its index. Field
@@ -245,7 +414,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         "# Source rules are merged from the host-side governance chain.\n"
         "package agt.legacy\n"
         "import rego.v1\n\n"
-        "default verdict := {\"decision\": \"allow\"}\n\n"
+        f'default verdict := {{"decision": {json.dumps(default_action)}}}\n\n'
     )
 
     branches: list[str] = []
