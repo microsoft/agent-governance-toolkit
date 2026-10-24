@@ -38,7 +38,16 @@ func (a *AgentIdentity) Sign(data []byte) ([]byte, error) {
 }
 
 // Verify checks a signature against data using the agent's public key.
+//
+// The public key length is validated first because ed25519.Verify panics on a
+// key that is not exactly ed25519.PublicKeySize bytes. Identities rehydrated
+// via FromJSON carry an attacker-influenced public key of arbitrary length, so
+// a malformed key must fail verification rather than crash the process. This
+// mirrors the guard already present in TrustManager.VerifyPeer.
 func (a *AgentIdentity) Verify(data, signature []byte) bool {
+	if len(a.PublicKey) != ed25519.PublicKeySize {
+		return false
+	}
 	return ed25519.Verify(a.PublicKey, data, signature)
 }
 

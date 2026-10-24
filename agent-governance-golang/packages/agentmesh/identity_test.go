@@ -247,19 +247,17 @@ func TestPublicIdentityWrongKeyLengthRejects(t *testing.T) {
 		PublicKey: ed25519.PublicKey([]byte("short-key")),
 	}
 
-	// ed25519.Verify will panic or return false with wrong key length
-	// We need to catch this
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				// This is expected - wrong key length causes panic in ed25519
-				t.Logf("ed25519.Verify panicked with wrong key length as expected: %v", r)
-			}
-		}()
-		if badId.Verify(data, sig) {
-			t.Error("wrong key length should not verify")
+	// Verify must reject a malformed public key by returning false, not by
+	// panicking: identities rehydrated from untrusted JSON (FromJSON) can carry
+	// an arbitrary-length key, and a panic would be a remotely reachable DoS.
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Verify panicked on wrong key length (should return false): %v", r)
 		}
 	}()
+	if badId.Verify(data, sig) {
+		t.Error("wrong key length should not verify")
+	}
 }
 
 func TestPublicIdentityWrongSignatureLengthRejects(t *testing.T) {
