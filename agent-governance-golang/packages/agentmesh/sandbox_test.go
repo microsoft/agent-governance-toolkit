@@ -4,6 +4,7 @@
 package agentmesh
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -164,5 +165,27 @@ func TestRandomHexProducesUniqueValues(t *testing.T) {
 			t.Fatalf("randomHex collided after %d iterations: %q", i, v)
 		}
 		seen[v] = struct{}{}
+	}
+}
+
+func TestResolveExecTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		seconds float64
+		want    time.Duration
+	}{
+		{"custom positive honored", 2, 2 * time.Second},
+		{"fractional honored", 1.5, 1500 * time.Millisecond},
+		{"zero falls back to default", 0, dockerExecTimeout},
+		{"negative falls back to default", -5, dockerExecTimeout},
+		{"NaN falls back to default", math.NaN(), dockerExecTimeout},
+		{"Inf falls back to default", math.Inf(1), dockerExecTimeout},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolveExecTimeout(tc.seconds); got != tc.want {
+				t.Errorf("resolveExecTimeout(%v) = %s, want %s", tc.seconds, got, tc.want)
+			}
+		})
 	}
 }
