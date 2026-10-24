@@ -564,6 +564,24 @@ class TestPolicyPenaltyHelper:
         r = policy_penalty([_FakeViolation("critical")], critical_penalty=-200.0)
         assert r == pytest.approx(-200.0)
 
+    def test_dict_violations_use_their_severity(self):
+        violations = [{"severity": "critical"}, {"severity": "low"}]
+        assert policy_penalty(violations) == pytest.approx(-101.0)
+
+    def test_dict_violation_unknown_or_missing_severity_is_medium(self):
+        violations = [{"severity": "unknown_level"}, {"policy": "p"}]
+        assert policy_penalty(violations) == pytest.approx(-20.0)
+
+    def test_policy_reward_charges_kernel_dict_violations_by_severity(self):
+        # A rollout without ``violations`` falls back to the kernel, which
+        # may return dicts; a critical one must cost the critical penalty.
+        kernel = _make_mock_kernel()
+        kernel.get_recent_violations = MagicMock(
+            return_value=[{"policy": "p", "severity": "critical"}]
+        )
+        reward = PolicyReward(kernel, base_reward_fn=lambda _r: 1.0)
+        assert reward(object(), emit=False) == pytest.approx(-99.0)
+
 
 class TestCreatePolicyReward:
     def test_factory_with_defaults(self):

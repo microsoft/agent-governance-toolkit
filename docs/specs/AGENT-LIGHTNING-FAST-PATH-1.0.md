@@ -482,13 +482,16 @@ accept:
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `violations` | list[Any] | (required) | List of PolicyViolation objects |
+| `violations` | list[Any] | (required) | List of PolicyViolation objects or violation dicts |
 | `critical_penalty` | float | -100.0 | Penalty for critical violations |
 | `high_penalty` | float | -50.0 | Penalty for high-severity violations |
 | `medium_penalty` | float | -10.0 | Penalty for medium-severity violations |
 | `low_penalty` | float | -1.0 | Penalty for low-severity violations |
 
-**[Pure Specification]**
+Each violation MAY be an object with a `severity` attribute (such as a
+`PolicyViolation`) or a dict with a `"severity"` key, the shape a
+kernel's `get_recent_violations()` may return (Section 9.8). Both forms
+MUST be charged by their severity. **[Pure Specification]**
 
 ### 7.2 Severity Mapping
 
@@ -504,7 +507,8 @@ severity_penalties = {
 
 total_penalty = 0.0
 for violation in violations:
-    severity = violation.severity  (default "medium" if absent)
+    severity = violation["severity"] if violation is a dict
+               else violation.severity  (default "medium" if absent)
     total_penalty += severity_penalties.get(severity, medium_penalty)
 ```
 
@@ -1205,8 +1209,8 @@ An implementation is conformant if it satisfies all MUST requirements:
    caller-supplied; preserves caller-supplied penalty.
 8. PolicyViolationError stores the violation and formats the message
    correctly.
-9. `policy_penalty` falls back to medium penalty for unknown
-   severities.
+9. `policy_penalty` charges object and dict violations by their
+   severity and falls back to medium penalty for unknown severities.
 10. PolicyReward supports both additive and multiplicative penalty
     modes.
 11. PolicyReward clamps rewards to `[min_reward, max_reward]`.
@@ -1236,7 +1240,8 @@ Conformance tests MUST cover:
 - PolicyViolation caller-supplied penalty preservation.
 - PolicyViolationType enum values.
 - PolicyViolationError message formatting.
-- `policy_penalty` with known and unknown severities.
+- `policy_penalty` with known and unknown severities, for object and
+  dict violations.
 - PolicyReward additive mode computation.
 - PolicyReward multiplicative mode computation.
 - PolicyReward clean bonus application.
