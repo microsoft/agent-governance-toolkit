@@ -115,6 +115,10 @@ class AgentInventory:
         if self._storage_path:
             self._save()
 
+    def save(self) -> None:
+        """Persist the inventory, including in-place changes to its agents."""
+        self._save()
+
     def export_json(self) -> str:
         """Export inventory as JSON."""
         return json.dumps(
