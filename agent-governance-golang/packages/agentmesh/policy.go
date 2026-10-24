@@ -448,12 +448,18 @@ func toFloat64(v interface{}) (float64, bool) {
 }
 
 func valuesEqual(a, b interface{}) bool {
+	// Numeric values are compared via toFloat64 so that integer-typed values
+	// (e.g. rules decoded from YAML/JSON, where bare numbers become int/int64/
+	// float64) match regardless of their concrete Go numeric type. This mirrors
+	// the comparison operators ($gt/$gte/$lt/$lte), which already normalize
+	// through toFloat64.
+	if af, aok := toFloat64(a); aok {
+		bf, bok := toFloat64(b)
+		return bok && af == bf
+	}
 	switch av := a.(type) {
 	case string:
 		bv, ok := b.(string)
-		return ok && av == bv
-	case float64:
-		bv, ok := b.(float64)
 		return ok && av == bv
 	case bool:
 		bv, ok := b.(bool)
