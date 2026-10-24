@@ -1,6 +1,6 @@
 ---
 title: Agent Governance Toolkit
-last_reviewed: 2026-10-03
+last_reviewed: 2026-10-15
 owner: docs-team
 hide:
   - navigation
@@ -266,6 +266,7 @@ LlamaIndex, Haystack, PydanticAI, and Google ADK. See the
 | [smolagents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/smolagents-governed) | HuggingFace smolagents | Lightweight agent governance |
 | [maf-integration](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/maf-integration) | MAF | Microsoft Agent Framework integration |
 | [mcp-trust-verified-server](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/mcp-trust-verified-server) | MCP | Trust-verified MCP server implementation |
+| [humanoid-action-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/humanoid-action-governed) | Local simulated humanoid | Runtime task authority, exact-action approval, replay prevention, and signed software evidence beyond a simulated motion-only safety gate |
 
 </div>
 
