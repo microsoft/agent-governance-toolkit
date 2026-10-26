@@ -9,6 +9,8 @@ import json
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from check_dependency_confusion import (
@@ -83,6 +85,50 @@ dependencies = ["uvicorn[standard]>=0.30"]
     findings = check_pyproject_toml(pyproject)
 
     assert findings == []
+
+
+@pytest.mark.parametrize(
+    "package",
+    ["agent-governance-toolkit-compliance", "agent_governance_toolkit_compliance"],
+)
+@pytest.mark.parametrize(
+    "specifier",
+    ["==5.0.0", ">=5.0.0,<5.1.0", "[full]>=5.0.0,<5.1.0; python_version >= '3.11'"],
+)
+@pytest.mark.parametrize("section", ["project", "project.optional-dependencies"])
+def test_registered_compliance_manifest_dependencies_are_accepted(
+    tmp_path, package: str, specifier: str, section: str,
+):
+    key = "dependencies" if section == "project" else "compliance"
+    pyproject = _write_pyproject(
+        tmp_path, f'[{section}]\n{key} = ["{package}{specifier}"]\n',
+    )
+
+    assert check_pyproject_toml(pyproject) == []
+
+
+@pytest.mark.parametrize(
+    "package",
+    [
+        "agent-governance-toolkit-compliance".replace("ia", "ai"),
+        "agent_governance_toolkit_compliance".replace("ia", "ai"),
+        "agent-governance-toolkit-compliance-unregistered",
+        "agent_governance_toolkit_compliance_unregistered",
+    ],
+)
+@pytest.mark.parametrize("section", ["project", "project.optional-dependencies"])
+def test_unregistered_compliance_manifest_lookalikes_are_flagged(
+    tmp_path, package: str, section: str,
+):
+    key = "dependencies" if section == "project" else "compliance"
+    pyproject = _write_pyproject(
+        tmp_path, f'[{section}]\n{key} = ["{package}>=5.0.0,<5.1.0"]\n',
+    )
+
+    findings = check_pyproject_toml(pyproject)
+
+    assert len(findings) == 1
+    assert f"'{package}' may not be registered on PyPI" in findings[0]
 
 
 def test_check_pyproject_multiline_dependency_arrays(tmp_path):
