@@ -41,7 +41,7 @@ Runnable pieces today:
 - `parse_manifest()`, `validate_manifest()`, and `validate_manifest_overlay()` backed by the Rust runtime parser
 - `AgentControl.evaluate_intervention_point()` delegating to an abstract runtime client
 - `AgentControl.run()` enforcing `input` and `output`
-- `AgentControl.protect_tool()` / `run_tool()` enforcing `pre_tool_call` and `post_tool_call`
+- `AgentControl.protect_tool()` / `run_tool()` enforcing `pre_tool_call` and `post_tool_call`. The manifest must bind both points, including for the MCP, LangChain, Semantic Kernel and Foundry adapters, which call `run_tool`. An unbound point denies with `runtime_error:intervention_point_unknown`; when `post_tool_call` is not bound, enforce mode raises that `AgentControlBlocked` before the tool runs, so the side effect does not happen.
 - stateless adapter helpers:
   - `guard_run()` for generic agent/run callables
   - `run_model_call()` / `guard_model_call()` for `pre_model_call` and `post_model_call`
