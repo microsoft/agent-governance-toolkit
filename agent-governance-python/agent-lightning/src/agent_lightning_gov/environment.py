@@ -117,7 +117,11 @@ class GovernedEnvironment(Generic[T_state, T_action]):
         self._total_episodes = 0
         self._total_steps = 0
         self._total_violations = 0
+        # Episodes that finished with every step succeeding and no
+        # violation. The episode in progress is counted by get_metrics
+        # through ``_episode_clean`` until reset() closes it.
         self._successful_episodes = 0
+        self._episode_clean = False
 
         # Set up kernel hooks
         self._setup_hooks()
@@ -221,6 +225,11 @@ class GovernedEnvironment(Generic[T_state, T_action]):
         Returns:
             Tuple of (initial_state, info_dict)
         """
+        # Close the previous episode before starting a new one
+        if self._episode_clean:
+            self._successful_episodes += 1
+        self._episode_clean = False
+
         # Reset episode state
         self._state = EnvironmentState()
         self._current_violations = []
@@ -257,6 +266,7 @@ class GovernedEnvironment(Generic[T_state, T_action]):
             Tuple of (next_state, reward, terminated, truncated, info)
         """
         self._current_violations = []
+        first_step = self._state.step_count == 0
         self._state.step_count += 1
         self._total_steps += 1
 
@@ -310,9 +320,10 @@ class GovernedEnvironment(Generic[T_state, T_action]):
             truncated = True
 
         # Mark success
-        if success and not self._current_violations:
+        step_clean = success and not self._current_violations
+        if step_clean:
             reward += self.config.success_bonus
-            self._successful_episodes += 1
+        self._episode_clean = step_clean and (first_step or self._episode_clean)
 
         self._state.terminated = terminated
         self._state.truncated = truncated
@@ -342,12 +353,13 @@ class GovernedEnvironment(Generic[T_state, T_action]):
 
     def get_metrics(self) -> dict[str, Any]:
         """Get environment metrics."""
+        successful_episodes = self._successful_episodes + int(self._episode_clean)
         return {
             "total_episodes": self._total_episodes,
             "total_steps": self._total_steps,
             "total_violations": self._total_violations,
-            "successful_episodes": self._successful_episodes,
-            "success_rate": self._successful_episodes / max(self._total_episodes, 1),
+            "successful_episodes": successful_episodes,
+            "success_rate": successful_episodes / max(self._total_episodes, 1),
             "violations_per_episode": self._total_violations
             / max(self._total_episodes, 1),
             "steps_per_episode": self._total_steps / max(self._total_episodes, 1),

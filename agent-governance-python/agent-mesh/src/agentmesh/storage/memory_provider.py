@@ -6,8 +6,9 @@ In-Memory Storage Provider.
 Simple in-memory implementation for development and testing.
 """
 
-from typing import Optional
+import time
 from collections import defaultdict
+from typing import Optional
 
 from .provider import AbstractStorageProvider, StorageConfig
 
@@ -42,10 +43,23 @@ class MemoryStorageProvider(AbstractStorageProvider):
         """Check if storage is healthy."""
         return self._connected
 
+    def _expire(self, key: str) -> None:
+        """Drop *key* if its TTL has passed, as Redis does when a key is read."""
+        expires_at = self._ttls.get(key)
+        if expires_at is not None and time.time() >= expires_at:
+            del self._ttls[key]
+            self._data.pop(key, None)
+
+    def _expire_all(self) -> None:
+        """Drop every key whose TTL has passed."""
+        for key in list(self._ttls):
+            self._expire(key)
+
     # Key-Value Operations
 
     async def get(self, key: str) -> Optional[str]:
         """Get value by key."""
+        self._expire(key)
         return self._data.get(key)
 
     async def set(
@@ -57,12 +71,16 @@ class MemoryStorageProvider(AbstractStorageProvider):
         """Set value with optional TTL."""
         self._data[key] = value
         if ttl_seconds is not None:
-            import time
             self._ttls[key] = time.time() + ttl_seconds
+        else:
+            # Like Redis SET, a write without a TTL clears the previous one.
+            self._ttls.pop(key, None)
         return True
 
     async def delete(self, key: str) -> bool:
         """Delete key."""
+        self._expire(key)
+        self._ttls.pop(key, None)
         if key in self._data:
             del self._data[key]
             return True
@@ -70,6 +88,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
     async def exists(self, key: str) -> bool:
         """Check if key exists."""
+        self._expire(key)
         return key in self._data
 
     # Hash Operations
@@ -175,6 +194,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
     async def incr(self, key: str) -> int:
         """Increment value atomically."""
+        self._expire(key)
         current = int(self._data.get(key, "0"))
         new_value = current + 1
         self._data[key] = str(new_value)
@@ -182,6 +202,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
     async def decr(self, key: str) -> int:
         """Decrement value atomically."""
+        self._expire(key)
         current = int(self._data.get(key, "0"))
         new_value = current - 1
         self._data[key] = str(new_value)
@@ -189,6 +210,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
     async def incrby(self, key: str, amount: int) -> int:
         """Increment value by amount."""
+        self._expire(key)
         current = int(self._data.get(key, "0"))
         new_value = current + amount
         self._data[key] = str(new_value)
@@ -198,11 +220,15 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
     async def mget(self, keys: list[str]) -> list[Optional[str]]:
         """Get multiple values."""
+        for key in keys:
+            self._expire(key)
         return [self._data.get(key) for key in keys]
 
     async def mset(self, mapping: dict[str, str]) -> bool:
         """Set multiple key-value pairs."""
         self._data.update(mapping)
+        for key in mapping:
+            self._ttls.pop(key, None)
         return True
 
     # Pattern Operations
@@ -210,6 +236,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
     async def keys(self, pattern: str) -> list[str]:
         """Get keys matching pattern."""
         import fnmatch
+        self._expire_all()
         return [key for key in self._data.keys() if fnmatch.fnmatch(key, pattern)]
 
     async def scan(
@@ -219,6 +246,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
         count: int = 100,
     ) -> tuple[int, list[str]]:
         """Scan keys with cursor."""
+        self._expire_all()
         all_keys = list(self._data.keys())
 
         if match:

@@ -86,11 +86,17 @@ class TrustGate:
         return rec.score
 
     def apply_decay(self, agent_id: str) -> float:
-        """Apply time-based decay to an agent's trust score."""
+        """Apply time-based decay to an agent's trust score.
+
+        Decay covers the time since the record was last updated or decayed,
+        so each elapsed hour is charged once however often this is called.
+        """
         rec = self._get_record(agent_id)
-        elapsed_hours = (time.time() - rec.last_update) / 3600.0
+        now = time.time()
+        elapsed_hours = (now - rec.last_update) / 3600.0
         decay = self.decay_rate * elapsed_hours
         rec.score = max(rec.score - decay, 0.0)
+        rec.last_update = now
         return rec.score
 
     def get_score(self, agent_id: str) -> float:

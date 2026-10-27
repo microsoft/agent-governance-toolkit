@@ -89,13 +89,17 @@ class RollbackCondition:
 
     metric: str
     threshold: float
-    comparator: str = "gte"  # trigger rollback when metric >= threshold
+    comparator: str = "gte"  # gte, lte, gt, lt; "gte" rolls back when metric >= threshold
 
     def should_rollback(self, value: float) -> bool:
         if self.comparator == "gte":
             return value >= self.threshold
         elif self.comparator == "lte":
             return value <= self.threshold
+        elif self.comparator == "gt":
+            return value > self.threshold
+        elif self.comparator == "lt":
+            return value < self.threshold
         return False
 
     def to_dict(self) -> dict[str, Any]:

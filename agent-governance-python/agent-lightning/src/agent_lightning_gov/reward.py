@@ -164,13 +164,16 @@ class PolicyReward:
         # Get violations from rollout or check kernel
         violations = self._get_violations(rollout)
 
-        # Calculate penalty
-        penalty = self._calculate_penalty(violations)
-
-        # Calculate final reward
+        # Calculate final reward. ``penalty`` is the amount the violations
+        # actually took off the base reward, so the statistics and the
+        # emitted ``policy_penalty`` match the mode that was applied: the
+        # severity table in additive mode, the scaling in multiplicative
+        # mode.
         if self.config.multiplicative and violations:
             final_reward = base_reward * self.config.multiplicative_factor
+            penalty = final_reward - base_reward
         else:
+            penalty = self._calculate_penalty(violations)
             final_reward = base_reward + penalty
 
         # Apply clean execution bonus

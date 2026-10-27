@@ -319,3 +319,30 @@ class TestSpecParsing:
         }
         result = r.reconcile("analysis", "default", spec)
         assert result.action == ReconcileAction.CREATED
+
+    @pytest.mark.parametrize(
+        ("operator", "metrics"),
+        [
+            ("gte", {"error_rate": 0.5}),
+            ("gt", {"error_rate": 0.5}),
+            ("lte", {"error_rate": 0.01}),
+            ("lt", {"error_rate": 0.01}),
+        ],
+    )
+    def test_every_crd_rollback_operator_triggers_rollback(self, operator, metrics):
+        crd = generate_crd_manifest()
+        schema = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+        conditions = schema["properties"]["spec"]["properties"]["rollbackConditions"]
+        operators = conditions["items"]["properties"]["operator"]["enum"]
+        assert operator in operators
+
+        r = Reconciler()
+        spec = dict(SAMPLE_SPEC)
+        spec["rollbackConditions"] = [
+            {"metric": "error_rate", "threshold": 0.05, "operator": operator},
+        ]
+        r.reconcile("ops", "default", spec)
+        rollout = r.get_rollout("ops", "default")
+        assert rollout is not None
+        assert rollout.check_rollback(metrics) is True
+        assert rollout.state.value == "rolled_back"

@@ -1,7 +1,15 @@
-
-
-
-
+# --- Conversation guardian Unicode normalization terms ---
+Bidi
+Halfwidth
+homoglyphs
+ignorables
+invisibles
+leetspeak
+LHMQ
+maketrans
+midword
+NFKD
+Upadhyay
 
 # --- ACS / crypto terms ---
 # --- Additional West/North Africa terms flagged by cspell ---
@@ -9,6 +17,9 @@
 # --- UK regulatory policy terms ---
 # --- CloudEvents / signed audit-event terms ---
 # --- Docker / BuildKit toolchain terms ---
+Crumm
+Gummadi
+Prayag
 struction
 
 # --- Documentation site and ACS integration terms ---
@@ -375,6 +386,7 @@ artefacts
 arun
 asctime
 asdict
+askpass
 asname
 aspnet
 astimezone
@@ -424,6 +436,7 @@ carloshvp
 carryforward
 carveout
 casefold
+cautogen
 cdylib
 cedarling
 cedarpy
@@ -470,9 +483,11 @@ contentsafety
 contentsource
 contenttype
 contextlib
+contextmanager
 contextvars
 contoso
 conv
+coreutils
 coro
 covermode
 coverprofile
@@ -488,6 +503,7 @@ ctypes
 custodied
 cutover
 cybercrimes
+cyclonedx
 dalek
 dargs
 dataclass
@@ -563,6 +579,7 @@ finalizer
 findall
 finditer
 findtext
+findutils
 flatbuffer
 flate
 flowise
@@ -593,6 +610,7 @@ getattribute
 getenv
 gethostname
 getitem
+getopt
 getoption
 getpolicy
 getroot
@@ -619,6 +637,7 @@ healthz
 helpdesk
 hexdigest
 hexdigit
+hhost
 hitl
 hkdf
 hostnames
@@ -691,8 +710,10 @@ kwonlyargs
 laintext
 langflow
 langgenius
+lastgroup
 lawcontinue
 levelname
+llamaindexer
 lookahead
 lookaround
 lookarounds
@@ -737,8 +758,10 @@ matplotlib
 maturin
 maxlen
 maxsplit
+mcpython
 memswap
 metavar
+mget
 mgmt
 mhabuomar
 microkernel
@@ -762,6 +785,7 @@ monkeypatched
 monkeypatching
 mpatches
 mpsc
+mset
 msinternal
 msvc
 multibyte
@@ -831,9 +855,11 @@ omitempty
 oncall
 oneshot
 oorandom
+openAPIV3Schema
 opencode
 openpolicyagent
 openshell
+oprtx
 organisation
 organisational
 organisations
@@ -885,6 +911,7 @@ prependpath
 pretool
 privatelink
 processcontainer
+procs
 promptdefense
 promptinjectiondetector
 proofblob
@@ -893,6 +920,7 @@ psmodules
 psour
 purelib
 pyatr
+pyautogen
 pycache
 pyclass
 pyjwt
@@ -945,6 +973,7 @@ removesuffix
 replayable
 repr
 repudiable
+reqeusts
 requireapproval
 reqwest
 resear
@@ -965,6 +994,7 @@ ringenforcer
 rmal
 rmcp
 rmtree
+rollouts
 roundtrips
 rpartition
 rrdatas
@@ -1035,6 +1065,7 @@ socsec
 softmax
 spacy
 spanid
+spawnp
 specversion
 spellcheck
 spellchecking
@@ -1083,6 +1114,7 @@ traceid
 tracemalloc
 traceparent
 tsfn
+ttls
 typeerror
 typer
 typosquat
@@ -1110,6 +1142,7 @@ unref
 unrepresentable
 unrevocation
 unrevoke
+unsampled
 unsandboxed
 unscanned
 unsendable
@@ -1126,6 +1159,7 @@ urlopen
 urlparse
 urlsafe
 urlunparse
+uroot
 usemanagedidentity
 userinfo
 usize
@@ -1316,3 +1350,9 @@ amqp
 amqps
 rediss
 xoxe
+OCSF
+ocsf
+NDJSON
+ndjson
+dataschema
+disp

@@ -376,7 +376,7 @@ class FleetManager:
         fleet_cost = sum(e.cost_usd for e in all_events)
 
         # Determine fleet health
-        if unresponsive > total / 2:
+        if degraded + unresponsive > total / 2:
             health = FleetHealth.CRITICAL
         elif degraded > 0 or unresponsive > 0:
             health = FleetHealth.DEGRADED
