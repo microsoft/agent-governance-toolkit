@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -615,25 +615,40 @@ def _flatten_leaves(values: Iterable[Any]) -> tuple[Any, ...]:
     """Flatten nested lists, tuples, sets and other non-string iterables to leaves.
 
     Strings, bytes and mappings are leaves, as is any non-iterable value. The
-    walk is iterative with a visited set, so a deeply nested or self-referencing
-    collection neither overflows the stack nor loops forever.
+    walk is iterative, so a deeply nested collection does not overflow the
+    stack. Only the containers on the current path from the root are tracked,
+    so a self-referencing collection does not loop forever, while a container
+    reached twice by different paths (the same list under ``scopes`` and
+    ``permissions``) is read each time. Each frame keeps a reference to its
+    container, so its id cannot be reused by another object while it is on
+    the path.
     """
     leaves: list[Any] = []
-    stack: list[Any] = list(values)
-    stack.reverse()
-    seen: set[int] = set()
-    while stack:
-        value = stack.pop()
+    # Each frame is (container, iterator over its items). The root frame has
+    # no container of its own.
+    frames: list[tuple[Any, Iterator[Any]]] = [(None, iter(values))]
+    ancestors: set[int] = set()
+    while frames:
+        container, items = frames[-1]
+        value = next(items, _EXHAUSTED)
+        if value is _EXHAUSTED:
+            frames.pop()
+            if container is not None:
+                ancestors.discard(id(container))
+            continue
         if isinstance(value, (str, bytes, bytearray, Mapping)) or not isinstance(
             value, Iterable
         ):
             leaves.append(value)
             continue
-        if id(value) in seen:
+        if id(value) in ancestors:
             continue
-        seen.add(id(value))
-        stack.extend(reversed(list(value)))
+        ancestors.add(id(value))
+        frames.append((value, iter(value)))
     return tuple(leaves)
+
+
+_EXHAUSTED = object()
 
 
 __all__ = [

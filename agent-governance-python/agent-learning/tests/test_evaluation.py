@@ -250,6 +250,55 @@ def test_excessive_privilege_handles_self_referencing_scopes() -> None:
     assert result.passed == True
 
 
+def test_excessive_privilege_flags_elevated_value_inside_a_cycle() -> None:
+    scopes: list = ["read"]
+    scopes.append([scopes, "admin"])
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("search", scopes=scopes)), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert result.findings[0].metadata == {"scope_count": 2}
+
+
+def test_excessive_privilege_revisits_a_container_yielded_twice() -> None:
+    # The same list object (so the same id) is yielded twice; it carries an
+    # elevated value only on the second pass. A walker that remembers every
+    # id it has seen skips the second pass and misses the value.
+    def scopes():
+        shared = ["read"]
+        yield shared
+        shared[0] = "admin"
+        yield shared
+
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("search", scopes=scopes())), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert result.findings[0].metadata == {"scope_count": 2}
+
+
+def test_excessive_privilege_detects_admin_in_list_with_reused_id() -> None:
+    # Each inner generator builds its list only when the walker reaches it,
+    # and the walker drops the list once it has been read, so CPython can
+    # hand the next list the same id. Every list must still be read.
+    def nested(value: str):
+        yield [value]
+
+    def scopes():
+        for index in range(50):
+            yield nested(f"scope-{index}:read")
+        yield nested("admin")
+
+    result = ExcessivePrivilegeEvaluation(max_scopes=100).evaluate(
+        _policy(_action("search", scopes=scopes())), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert result.findings[0].metadata == {"scope_count": 51}
+
+
 def test_regression_check_uses_approved_baseline() -> None:
     telemetry = GovernanceTelemetry(
         violations=(
