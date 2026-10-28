@@ -92,6 +92,28 @@ class TestGitOpsSpec:
         assert "metadata" in d
         assert "spec" in d
 
+    def test_to_dict_uses_crd_field_names(self):
+        from agent_sre.delivery.rollout import RollbackCondition, RolloutStep
+        spec = RolloutSpec(
+            name="test",
+            candidate=AgentRef(name="agent", version="v1"),
+            steps=[RolloutStep(weight=0.5, duration_seconds=120, manual_gate=True)],
+            rollback_conditions=[RollbackCondition("error_rate", 0.1, comparator="gt")],
+        )
+        d = spec.to_dict()["spec"]
+        assert d["steps"] == [
+            {
+                "name": "",
+                "weight": 0.5,
+                "durationSeconds": 120,
+                "analysis": [],
+                "manualGate": True,
+            }
+        ]
+        assert d["rollbackConditions"] == [
+            {"metric": "error_rate", "threshold": 0.1, "operator": "gt"}
+        ]
+
     def test_agent_ref(self):
         ref = AgentRef(name="my-agent", version="v2.0", model="gpt-4")
         d = ref.to_dict()
