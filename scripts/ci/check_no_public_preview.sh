@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
 # ci/check_no_public_preview.sh — Fail if the "Public Preview" release-stage
 # label comes back anywhere outside the historical records.
 #
