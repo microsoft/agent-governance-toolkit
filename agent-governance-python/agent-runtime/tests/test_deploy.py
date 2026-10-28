@@ -167,6 +167,55 @@ class TestDockerDeployer:
         cmd_str = " ".join(cmd)
         assert "MY_VAR=my_val" in cmd_str
 
+    @pytest.mark.parametrize("name", [
+        "AGT_POLICY_PATH",
+        "AGT_TRUST_LEVEL",
+        "AGT_AUDIT_ENABLED",
+        "AGT_MAX_TOOL_CALLS",
+        "AGT_RATE_LIMIT_RPM",
+        "AGT_KILL_SWITCH",
+        "AGT_RETENTION_DAYS",
+    ])
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_deploy_rejects_env_overriding_governance_config(
+        self, mock_which: MagicMock, mock_run: MagicMock, name: str,
+    ) -> None:
+        deployer = DockerDeployer()
+        with pytest.raises(ValueError, match=name):
+            deployer.deploy("a1", "img:latest", GovernanceConfig(), env={name: "x"})
+        mock_run.assert_not_called()
+
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_deploy_rejects_env_name_with_equals(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        deployer = DockerDeployer()
+        with pytest.raises(ValueError, match="must not contain '='"):
+            deployer.deploy(
+                "a1", "img:latest", GovernanceConfig(),
+                env={"AGT_KILL_SWITCH=false": ""},
+            )
+        mock_run.assert_not_called()
+
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_deploy_keeps_other_agt_env(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = MagicMock(stdout="cid123\n", stderr="", returncode=0)
+        deployer = DockerDeployer()
+        result = deployer.deploy(
+            "a1", "img:latest", GovernanceConfig(kill_switch_enabled=True),
+            env={"AGT_LOG_LEVEL": "debug"},
+        )
+        assert result.status == DeploymentStatus.RUNNING
+        cmd = mock_run.call_args_list[-1][0][0]
+        env_args = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"]
+        assert "AGT_KILL_SWITCH=true" in env_args
+        assert "AGT_LOG_LEVEL=debug" in env_args
+
     @patch("agent_runtime.deploy.subprocess.run")
     @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
     def test_deploy_failure(
@@ -217,6 +266,23 @@ class TestDockerDeployer:
         deployer = DockerDeployer()
         result = deployer.status("agent-1")
         assert result.status == DeploymentStatus.STOPPED
+
+    @pytest.mark.parametrize(("state", "expected"), [
+        ("paused", DeploymentStatus.STOPPED),
+        ("removing", DeploymentStatus.STOPPED),
+        ("dead", DeploymentStatus.FAILED),
+        ("created", DeploymentStatus.FAILED),
+        ("restarting", DeploymentStatus.FAILED),
+    ])
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_status_other_docker_states(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+        state: str, expected: DeploymentStatus,
+    ) -> None:
+        mock_run.return_value = MagicMock(stdout=f"{state}\n", stderr="", returncode=0)
+        deployer = DockerDeployer()
+        assert deployer.status("agent-1").status == expected
 
     @patch("agent_runtime.deploy.subprocess.run")
     @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
