@@ -1346,3 +1346,88 @@ def test_write_report_failure_is_reported_not_raised(tmp_path: Path, capsys: pyt
     assert code == 0
     assert "AGT v4 → v5 Migration Report" in captured.out
     assert "could not write report" in captured.err
+
+
+def test_write_refuses_huge_int_without_partial_output(tmp_path: Path) -> None:
+    # ``0x`` + 4,000 hex digits loads as an int that json.dumps cannot write.
+    # The renderer's None fallback used to emit an unconditional deny, report
+    # success, and move governance.yaml aside. Now the chain is refused and
+    # nothing in the project changes.
+    if sys.get_int_max_str_digits() == 0:
+        pytest.skip("int-to-str digit limit disabled in this interpreter")
+    chain = tmp_path / "svc"
+    chain.mkdir()
+    (chain / "governance.yaml").write_text(
+        "rules:\n"
+        "  - name: huge\n    action: deny\n    priority: 1\n"
+        f"    condition: {{field: amount, operator: eq, value: 0x{'f' * 4000}}}\n"
+        "intervention_points:\n"
+        "  pre_tool_call:\n"
+        "    policy_target: $.tool_call.args\n"
+        "    policy_target_kind: tool_args\n"
+        "    tool_name_from: $.tool_call.name\n"
+        "    policy: {id: agt_legacy_rules}\n",
+        encoding="utf-8",
+    )
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    finding = report.governance_chains[0]
+    assert not finding.applied
+    assert finding.error is not None
+    assert "rule 'huge'" in finding.error
+    assert "digits" in finding.error
+    assert sorted(p.name for p in chain.iterdir()) == ["governance.yaml"]
+    assert "rule 'huge'" in migrate_mod.render_report(report)
+
+
+def test_cli_reports_cyclic_yaml_without_traceback(tmp_path: Path) -> None:
+    # ``value: &v [*v]`` raised an uncaught RecursionError (exit 1, no report).
+    (tmp_path / "governance.yaml").write_text(
+        "rules:\n"
+        "  - name: loop\n    action: deny\n    priority: 1\n"
+        "    condition: {field: amount, operator: in, value: &v [*v]}\n"
+        "intervention_points:\n"
+        "  pre_tool_call:\n"
+        "    policy_target: $.tool_call.args\n"
+        "    policy_target_kind: tool_args\n"
+        "    tool_name_from: $.tool_call.name\n"
+        "    policy: {id: agt_legacy_rules}\n",
+        encoding="utf-8",
+    )
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "agt.cli", "migrate", "v4-to-v5", str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert "Traceback" not in proc.stderr
+    assert "RecursionError" not in proc.stderr
+    assert "rule 'loop'" in proc.stdout
+    assert "anchor/alias cycle" in proc.stdout
+
+
+def test_write_removes_bundle_when_manifest_cannot_be_serialized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # yaml.safe_dump ran outside the guarded block, so a failure there left the
+    # freshly written policy/ bundle behind with no manifest and no finding.
+    chain = tmp_path / "svc"
+    chain.mkdir()
+    _write_governance(chain / "governance.yaml")
+
+    def fail_dump(*args: Any, **kwargs: Any) -> str:
+        raise ValueError("cannot serialize")
+
+    monkeypatch.setattr(migrate_mod.yaml, "safe_dump", fail_dump)
+
+    report = migrate_mod.migrate_project(tmp_path, write=True)
+
+    finding = report.governance_chains[0]
+    assert not finding.applied
+    assert finding.error is not None
+    assert "cannot serialize" in finding.error
+    assert sorted(p.name for p in chain.iterdir()) == ["governance.yaml"]

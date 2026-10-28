@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import random
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,9 @@ from agt.cli._migrate_resolution import (
 )
 from agt.cli._migrate_resolution.merge import merge_top_level_section
 from agt.cli._migrate_resolution.build import (
+    _MAX_NESTING_DEPTH,
+    _is_json_value,
+    _materialize_rego_bundle,
     _rego_field_accessor,
     _rego_op_clause,
     _render_rego,
@@ -1961,3 +1965,289 @@ def test_filter_by_scope_reports_action_path_outside_root_as_traversal(tmp_path:
     with pytest.raises(ResolutionError, match="not under workspace root") as exc:
         filter_by_scope(root / "governance.yaml", "team/*", outside, root)
     assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
+
+
+# ── values the migrator cannot write back ────────────────────────────
+
+
+_INTERVENTION_POINTS = (
+    "intervention_points:\n"
+    "  pre_tool_call:\n"
+    "    policy_target: $.tool_call.args\n"
+    "    policy_target_kind: tool_args\n"
+    "    tool_name_from: $.tool_call.name\n"
+    "    policy: {id: agt_legacy_rules}\n"
+)
+
+
+def _huge_hex_int() -> str:
+    """A YAML int scalar that loads but has more digits than str() allows.
+
+    Hex parsing is not capped, so ``0x`` + (limit + 1) hex digits loads as an
+    int of about 1.2 * limit decimal digits; ``str()`` and ``json.dumps`` then
+    raise ValueError on it.
+    """
+    return "0x" + "f" * (sys.get_int_max_str_digits() + 1)
+
+
+def _governance(rule_lines: str, extra: str = "") -> str:
+    return "rules:\n" + rule_lines + _INTERVENTION_POINTS + extra
+
+
+_digit_limit = pytest.mark.skipif(
+    sys.get_int_max_str_digits() == 0,
+    reason="int-to-str digit limit disabled in this interpreter",
+)
+
+
+@_digit_limit
+@pytest.mark.parametrize(
+    ("document", "names_rule"),
+    [
+        pytest.param(
+            _governance(
+                "  - name: huge\n    action: deny\n    priority: 1\n"
+                f"    condition: {{field: amount, operator: eq, value: {_huge_hex_int()}}}\n"
+            ),
+            True,
+            id="condition-value",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: huge\n    action: deny\n    priority: 1\n"
+                f"    condition: {{field: amount, operator: in, value: [1, {_huge_hex_int()}]}}\n"
+            ),
+            True,
+            id="list-item",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: huge\n    action: deny\n    priority: 1\n"
+                f"    message: {_huge_hex_int()}\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n"
+            ),
+            True,
+            id="message",
+        ),
+        pytest.param(
+            _governance(
+                f"  - name: huge\n    action: {_huge_hex_int()}\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n"
+            ),
+            True,
+            id="action",
+        ),
+        pytest.param(
+            _governance(
+                f"  - name: huge\n    action: deny\n    priority: {_huge_hex_int()}\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n"
+            ),
+            True,
+            id="priority",
+        ),
+        pytest.param(
+            _governance(
+                f"  - name: {_huge_hex_int()}\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n"
+            ),
+            False,
+            id="name",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: ok\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n",
+                extra=f"tools: {{max: {_huge_hex_int()}}}\n",
+            ),
+            False,
+            id="tools-section",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: ok\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n",
+                # Block-style explicit key: an implicit flow key is capped at
+                # 1024 characters by the YAML parser.
+                extra=f"limits:\n  ? {_huge_hex_int()}\n  : 1\n",
+            ),
+            False,
+            id="mapping-key",
+        ),
+    ],
+)
+def test_resolve_refuses_int_beyond_digit_limit(
+    tmp_path: Path, document: str, names_rule: bool
+) -> None:
+    # A hex scalar past sys.get_int_max_str_digits() passed _is_json_value
+    # (isinstance int) and only failed in json.dumps at render time, where the
+    # None fallback wrote an unconditional deny and the migration reported
+    # success. In name/action/message it crashed str() with a bare ValueError;
+    # in a top-level section it crashed yaml.safe_dump after the bundle was
+    # already on disk. Every placement is refused before anything is written.
+    (tmp_path / "governance.yaml").write_text(document, encoding="utf-8")
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError) as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    detail = str(exc.value)
+    assert f"more than {sys.get_int_max_str_digits()} digits" in detail
+    assert ("rule 'huge'" in detail) is names_rule
+    assert not bundle.exists()
+
+
+@_digit_limit
+def test_resolve_refuses_decimal_int_beyond_digit_limit(tmp_path: Path) -> None:
+    # PyYAML builds a decimal scalar with int(), which raises ValueError (not
+    # YAMLError) past the digit limit; _load_yaml let it escape as a traceback.
+    digits = "9" * (sys.get_int_max_str_digits() + 1)
+    (tmp_path / "governance.yaml").write_text(
+        _governance(
+            "  - name: huge\n    action: deny\n    priority: 1\n"
+            f"    condition: {{field: amount, operator: eq, value: {digits}}}\n"
+        ),
+        encoding="utf-8",
+    )
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="failed to parse") as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert not bundle.exists()
+
+
+@_digit_limit
+def test_resolve_accepts_large_int_within_digit_limit(tmp_path: Path) -> None:
+    (tmp_path / "governance.yaml").write_text(
+        _governance(
+            "  - name: big\n    action: deny\n    priority: 1\n"
+            f"    condition: {{field: amount, operator: gt, value: {10**400}}}\n"
+        ),
+        encoding="utf-8",
+    )
+    manifest = resolve_manifest(tmp_path, tmp_path, bundle_dir=tmp_path / "bundle")
+    rego = Path(manifest["policies"]["agt_legacy_rules"]["bundle"]).joinpath("agt_legacy.rego")
+    assert f"_v > {10**400}" in rego.read_text(encoding="utf-8")
+
+
+@_digit_limit
+def test_is_json_value_rejects_int_beyond_digit_limit() -> None:
+    huge = int("f" * (sys.get_int_max_str_digits() + 1), 16)
+    assert _is_json_value(10**400)
+    assert not _is_json_value(huge)
+    assert not _is_json_value([1, huge])
+    assert not _is_json_value({"k": huge})
+
+
+@_digit_limit
+def test_materialize_refuses_render_failure_before_writing(tmp_path: Path) -> None:
+    # Last line of defence behind the document walk: a value that only fails
+    # when str() runs in the renderer becomes a refusal, not a traceback, and
+    # the bundle directory is never created.
+    huge = int("f" * (sys.get_int_max_str_digits() + 1), 16)
+    rule = {
+        "name": "r",
+        "action": "deny",
+        "priority": 1,
+        "message": huge,
+        "condition": {"field": "amount", "operator": "eq", "value": 1},
+    }
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="could not be rendered") as exc:
+        _materialize_rego_bundle(bundle, [rule])
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert not bundle.exists()
+
+
+@pytest.mark.parametrize(
+    ("document", "expected"),
+    [
+        pytest.param(
+            _governance(
+                "  - name: loop\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: in, value: &v [*v]}\n"
+            ),
+            "rule 'loop' (rules[0].condition.value[0])",
+            id="condition-value",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: ok\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n",
+                extra="tools: &t {a: *t}\n",
+            ),
+            "tools.a",
+            id="tools-section",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: ok\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n",
+                extra="limits: &l {inner: {deeper: [*l]}}\n",
+            ),
+            "limits.inner.deeper[0]",
+            id="indirect-cycle",
+        ),
+    ],
+)
+def test_resolve_refuses_cyclic_yaml(tmp_path: Path, document: str, expected: str) -> None:
+    # safe_load builds a list that contains itself for ``&v [*v]``; every
+    # recursive step after that (_is_json_value, json.dumps, yaml.safe_dump)
+    # raised an uncaught RecursionError, or wrote a self-referencing manifest.
+    (tmp_path / "governance.yaml").write_text(document, encoding="utf-8")
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="anchor/alias cycle") as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert expected in str(exc.value)
+    assert not bundle.exists()
+
+
+def test_resolve_accepts_shared_acyclic_alias(tmp_path: Path) -> None:
+    # The same anchored value used twice is a DAG, not a cycle, and must load.
+    (tmp_path / "governance.yaml").write_text(
+        _governance(
+            "  - name: a\n    action: deny\n    priority: 2\n"
+            "    condition: {field: tool, operator: in, value: &tools [rm, dd]}\n"
+            "  - name: b\n    action: deny\n    priority: 1\n"
+            "    condition: {field: parent_tool, operator: in, value: *tools}\n"
+        ),
+        encoding="utf-8",
+    )
+    manifest = resolve_manifest(tmp_path, tmp_path, bundle_dir=tmp_path / "bundle")
+    assert manifest["policies"]["agt_legacy_rules"]["type"] == "rego"
+
+
+@pytest.mark.parametrize(
+    "depth",
+    [
+        pytest.param(_MAX_NESTING_DEPTH + 1, id="just-over-the-cap"),
+        pytest.param(5000, id="overflows-the-parser"),
+    ],
+)
+def test_resolve_refuses_deeply_nested_yaml(tmp_path: Path, depth: int) -> None:
+    # An acyclic value nested past the interpreter's recursion limit raised
+    # RecursionError inside yaml.safe_load (its composer is recursive) or in
+    # the later walks. Both depths are refused with the same category; the
+    # message differs because one fails in the parser and one in the walk.
+    nested = "[" * depth + "]" * depth
+    (tmp_path / "governance.yaml").write_text(
+        _governance(
+            "  - name: deep\n    action: deny\n    priority: 1\n"
+            f"    condition: {{field: amount, operator: in, value: {nested}}}\n"
+        ),
+        encoding="utf-8",
+    )
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="nested") as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert not bundle.exists()

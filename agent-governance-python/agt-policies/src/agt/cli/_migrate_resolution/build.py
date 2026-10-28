@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import math
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -46,13 +47,130 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         raise ResolutionError.invalid_governance(
             f"failed to read governance file {path} ({type(exc).__name__})"
         ) from exc
+    except ValueError as exc:
+        # PyYAML builds a decimal integer scalar with int(), which raises
+        # ValueError (not a YAMLError) once the scalar has more digits than
+        # sys.get_int_max_str_digits() allows.
+        raise ResolutionError.invalid_governance(
+            f"failed to parse {path}: {exc}"
+        ) from exc
+    except RecursionError as exc:
+        # PyYAML composes nodes recursively, so a document nested a few
+        # hundred levels deep overflows the interpreter stack before the
+        # depth check below can see it.
+        raise ResolutionError.invalid_governance(
+            f"failed to parse {path}: the document is nested too deeply"
+        ) from exc
     if data is None:
         return {}
     if not isinstance(data, dict):
         raise ResolutionError.invalid_governance(
             f"governance file {path} must be a mapping at top level"
         )
+    _check_document_values(path, data)
     return data
+
+
+def _int_too_long(value: int) -> bool:
+    """True when ``str(value)`` and ``json.dumps(value)`` raise ``ValueError``.
+
+    CPython caps int-to-decimal conversion at ``sys.get_int_max_str_digits()``
+    digits (4300 by default, 0 disables the cap). Parsing is not capped the
+    same way: a hex scalar such as ``0x`` followed by 4,000 digits loads fine
+    and only fails when it is written back as text.
+    """
+    limit = sys.get_int_max_str_digits()
+    # Every decimal digit needs more than three bits, so an int of at most
+    # 3 * limit bits has fewer than limit digits and needs no conversion.
+    if not limit or value.bit_length() <= limit * 3:
+        return False
+    try:
+        str(value)
+    except ValueError:
+        return True
+    return False
+
+
+# Governance documents are shallow: rules[i].condition.value[j] is four levels
+# down. The cap keeps every later recursive step (_is_json_value, json.dumps,
+# yaml.safe_dump) far from the interpreter's recursion limit.
+_MAX_NESTING_DEPTH = 64
+
+
+def _check_document_values(path: Path, document: dict[str, Any]) -> None:
+    """Refuse a parsed governance document the migrator cannot write back.
+
+    Runs once per file, before merge, validation and rendering, so every
+    later step (rule labels built with ``str(name)``, ``json.dumps`` in the
+    Rego renderer, ``yaml.safe_dump`` of the manifest) only sees values it
+    can serialize. The walk is iterative so it cannot itself overflow the
+    stack.
+
+    Raises:
+        ResolutionError: ``INVALID_GOVERNANCE`` for an int (value or mapping
+            key) with more digits than ``sys.get_int_max_str_digits()``
+            allows anywhere in the document; for a value that contains
+            itself through a YAML anchor/alias cycle (``&v [*v]``), which
+            every recursive step would turn into ``RecursionError``; and for
+            nesting deeper than ``_MAX_NESTING_DEPTH`` levels, for the same
+            reason. The message names the rule when the value sits under
+            ``rules``.
+    """
+    limit = sys.get_int_max_str_digits()
+    # Entries: (value, location, rule name or None, depth). A container is
+    # pushed a second time with depth -1 as its exit marker, so ``ancestors``
+    # holds exactly the containers on the current path: an alias that points
+    # back to one of them is a cycle, while a shared acyclic alias is not.
+    stack: list[tuple[Any, str, str | None, int]] = [(document, "document", None, 0)]
+    ancestors: set[int] = set()
+    while stack:
+        value, where, rule_name, depth = stack.pop()
+        if depth < 0:
+            ancestors.discard(id(value))
+            continue
+        label = f"rule {rule_name!r} ({where})" if rule_name is not None else where
+        if isinstance(value, bool) or value is None or isinstance(value, (str, float)):
+            continue
+        if isinstance(value, int):
+            if _int_too_long(value):
+                raise ResolutionError.invalid_governance(
+                    f"{label} in {path} is an integer with more than {limit} "
+                    "digits, which cannot be written to the manifest or Rego "
+                    "bundle; use a shorter number"
+                )
+            continue
+        if not isinstance(value, (list, dict)):
+            continue
+        if id(value) in ancestors:
+            raise ResolutionError.invalid_governance(
+                f"{label} in {path} is a YAML alias that points back to a value "
+                "containing it (an anchor/alias cycle); a cyclic value cannot "
+                "be written to the manifest or Rego bundle"
+            )
+        if depth >= _MAX_NESTING_DEPTH:
+            raise ResolutionError.invalid_governance(
+                f"{label} in {path} is nested more than {_MAX_NESTING_DEPTH} "
+                "levels deep; flatten the document before migrating"
+            )
+        ancestors.add(id(value))
+        stack.append((value, where, rule_name, -1))
+        if isinstance(value, list):
+            for index, item in enumerate(value):
+                name = rule_name
+                if where == "rules" and isinstance(item, dict) and isinstance(item.get("name"), str):
+                    name = item["name"]
+                stack.append((item, f"{where}[{index}]", name, depth + 1))
+            continue
+        for key, item in value.items():
+            if isinstance(key, int) and not isinstance(key, bool) and _int_too_long(key):
+                raise ResolutionError.invalid_governance(
+                    f"{label} in {path} has a mapping key that is an integer "
+                    f"with more than {limit} digits, which cannot be written "
+                    "to the manifest; use a shorter key"
+                )
+            key_text = key if isinstance(key, str) else f"<{type(key).__name__} key>"
+            child = key_text if where == "document" else f"{where}.{key_text}"
+            stack.append((item, child, rule_name, depth + 1))
 
 
 def _apply_inheritance(documents: list[tuple[Path, dict[str, Any]]]) -> list[tuple[Path, dict[str, Any]]]:
@@ -193,11 +311,15 @@ def _is_json_value(value: Any) -> bool:
     """True when ``json.dumps`` writes *value* exactly, with no coercion.
 
     YAML yields Python types JSON has no spelling for (``date``,
-    ``datetime``, ``bytes`` from ``!!binary``, ``set``), and ``.nan``/``.inf``
-    floats that JSON writes as literals Rego does not parse.
+    ``datetime``, ``bytes`` from ``!!binary``, ``set``), ``.nan``/``.inf``
+    floats that JSON writes as literals Rego does not parse, and integers past
+    the interpreter's digit cap that ``json.dumps`` refuses to convert.
     """
-    if value is None or isinstance(value, (str, bool, int)):
+    if value is None or isinstance(value, (str, bool)):
         return True
+    if isinstance(value, int):
+        # json.dumps raises ValueError, not TypeError, past the digit cap.
+        return not _int_too_long(value)
     if isinstance(value, float):
         return math.isfinite(value)
     if isinstance(value, list):
@@ -323,7 +445,16 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
     """
     # Hash the exact bytes written, including on Windows where write_text
     # would otherwise translate line endings after the digest was computed.
-    body = _render_rego(rules).encode("utf-8")
+    try:
+        body = _render_rego(rules).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        # _validate_rules and _check_document_values refuse these earlier;
+        # this keeps a render-time failure from escaping as a traceback and
+        # runs before any directory is created, so nothing is left behind.
+        raise ResolutionError.invalid_governance(
+            f"generated Rego could not be rendered ({type(exc).__name__}); "
+            "a rule carries a value that cannot be written as text"
+        ) from exc
     digest = hashlib.sha256(body).hexdigest().encode("ascii")
     try:
         bundle_root = bundle_root.resolve()

@@ -638,10 +638,6 @@ def _migrate_governance_chain(
             prefix=".agt_chain_migration_", dir=chain_root
         ) as staging_dir:
             staged_manifest = Path(staging_dir) / "manifest.yaml"
-            staged_manifest.write_text(
-                yaml.safe_dump(manifest, sort_keys=False),
-                encoding="utf-8",
-            )
             # Use os.replace (atomic rename) rather than os.link so the swap
             # works on any filesystem, not just hard-link-capable ones (some
             # Windows volumes and Unix mounts do not support hard links). Each
@@ -653,6 +649,13 @@ def _migrate_governance_chain(
             moved_backups: list[tuple[Path, Path]] = []
             manifest_placed = False
             try:
+                # Serialize inside the guarded block: the Rego bundle already
+                # exists at this point, so a value yaml cannot write must
+                # remove it again instead of leaving a half-migrated chain.
+                staged_manifest.write_text(
+                    yaml.safe_dump(manifest, sort_keys=False),
+                    encoding="utf-8",
+                )
                 os.replace(staged_manifest, manifest_path)
                 manifest_placed = True
                 for gov_file, backup in zip(
