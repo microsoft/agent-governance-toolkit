@@ -1065,6 +1065,7 @@ socsec
 softmax
 spacy
 spanid
+spawnp
 specversion
 spellcheck
 spellchecking
@@ -1349,3 +1350,9 @@ amqp
 amqps
 rediss
 xoxe
+OCSF
+ocsf
+NDJSON
+ndjson
+dataschema
+disp
