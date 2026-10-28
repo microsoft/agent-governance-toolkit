@@ -14,7 +14,9 @@ from __future__ import annotations
 import random
 import re
 import sys
+import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -31,6 +33,7 @@ from agt.cli._migrate_resolution import (
 from agt.cli._migrate_resolution.merge import merge_top_level_section
 from agt.cli._migrate_resolution.build import (
     _MAX_NESTING_DEPTH,
+    _check_document_values,
     _is_json_value,
     _materialize_rego_bundle,
     _rego_field_accessor,
@@ -2241,6 +2244,65 @@ def test_resolve_accepts_shared_acyclic_alias(tmp_path: Path) -> None:
     )
     manifest = resolve_manifest(tmp_path, tmp_path, bundle_dir=tmp_path / "bundle")
     assert manifest["policies"]["agt_legacy_rules"]["type"] == "rego"
+
+
+def test_check_document_values_walks_shared_alias_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ten aliases of ten aliases of ... is a small document whose expanded
+    # tree is exponential (the "billion laughs" shape). The walk used to
+    # visit every path, so four levels meant 10,000 visits of the one leaf
+    # and eight levels took minutes; a shared container is now walked once
+    # per depth. yaml.safe_dump writes such a section with aliases, so the
+    # document itself is legitimate and must still be accepted.
+    import agt.cli._migrate_resolution.build as build_mod
+
+    visits: list[int] = []
+    real = build_mod._int_too_long
+
+    def counting(value: int) -> bool:
+        visits.append(value)
+        return real(value)
+
+    monkeypatch.setattr(build_mod, "_int_too_long", counting)
+    level: Any = [7]
+    for _ in range(4):
+        level = [level] * 10
+    _check_document_values(tmp_path / "governance.yaml", {"tools": {"a": level}})
+    assert len(visits) == 1
+
+    # A shared container first seen shallow is walked again when a deeper
+    # path reaches it, so the nesting cap still applies on that path.
+    shared: Any = [1]
+    deep: Any = shared
+    for _ in range(_MAX_NESTING_DEPTH):
+        deep = [deep]
+    with pytest.raises(ResolutionError, match="nested more than"):
+        _check_document_values(
+            tmp_path / "governance.yaml", {"first": shared, "second": deep}
+        )
+
+
+def test_resolve_accepts_alias_fan_out_quickly(tmp_path: Path) -> None:
+    # The same shape through the public entry point: eight alias levels with
+    # fan-out ten, which the manifest writer serializes with aliases.
+    levels = ["x0: &x0 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]\n"]
+    for i in range(1, 8):
+        refs = ", ".join([f"*x{i - 1}"] * 10)
+        levels.append(f"x{i}: &x{i} [{refs}]\n")
+    (tmp_path / "governance.yaml").write_text(
+        "".join(levels)
+        + _governance(
+            "  - name: ok\n    action: deny\n    priority: 1\n"
+            "    condition: {field: amount, operator: eq, value: 1}\n",
+            extra="tools: {fan: *x7}\n",
+        ),
+        encoding="utf-8",
+    )
+    started = time.monotonic()
+    manifest = resolve_manifest(tmp_path, tmp_path, bundle_dir=tmp_path / "bundle")
+    assert time.monotonic() - started < 5
+    assert manifest["tools"]["fan"][0][0][0][0][0][0][0][0] == 1
 
 
 @pytest.mark.parametrize(

@@ -123,6 +123,13 @@ def _check_document_values(path: Path, document: dict[str, Any]) -> None:
     # back to one of them is a cycle, while a shared acyclic alias is not.
     stack: list[tuple[Any, str, str | None, int]] = [(document, "document", None, 0)]
     ancestors: set[int] = set()
+    # One anchored container can be aliased from many parents, and those
+    # parents aliased again (ten aliases of ten aliases of ...), so walking
+    # every path separately is exponential in the number of alias levels.
+    # Remember the depth each container was walked at and skip it on a later
+    # visit unless that visit is deeper, where the nesting cap could still
+    # trip. Each (container, depth) pair is then walked at most once.
+    walked_at_depth: dict[int, int] = {}
     while stack:
         value, where, rule_name, depth = stack.pop()
         if depth < 0:
@@ -152,6 +159,9 @@ def _check_document_values(path: Path, document: dict[str, Any]) -> None:
                 f"{label} in {path} is nested more than {_MAX_NESTING_DEPTH} "
                 "levels deep; flatten the document before migrating"
             )
+        if walked_at_depth.get(id(value), -1) >= depth:
+            continue
+        walked_at_depth[id(value)] = depth
         ancestors.add(id(value))
         stack.append((value, where, rule_name, -1))
         if isinstance(value, list):
