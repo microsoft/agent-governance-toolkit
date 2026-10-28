@@ -22,15 +22,29 @@ ALLOW=(
   ':!scripts/ci/check_no_public_preview.sh'
 )
 
-HITS=$(git grep -n -i -E 'public[[:space:]-]+preview' -- . "${ALLOW[@]}" || true)
+# git grep exits 0 on a match, 1 on no match, and 2 (or another non-zero
+# code) when it could not run. Capture the status so a Git failure never
+# passes as a clean tree.
+set +e
+HITS=$(git grep -n -i -E 'public[[:space:]-]+preview' -- . "${ALLOW[@]}")
+STATUS=$?
+set -e
 
-if [ -n "$HITS" ]; then
-  echo "❌ check_no_public_preview: the release-stage label is back:"
-  echo "$HITS"
-  echo ""
-  echo "Fix: drop the label. If a sentence says a feature is incomplete, keep"
-  echo "the factual part and remove the stage wording (see issue #4373)."
-  exit 1
-fi
-
-echo "✅ check_no_public_preview: no release-stage label outside release history"
+case "$STATUS" in
+  0)
+    echo "❌ check_no_public_preview: the release-stage label is back:"
+    echo "$HITS"
+    echo ""
+    echo "Fix: drop the label. If a sentence says a feature is incomplete, keep"
+    echo "the factual part and remove the stage wording (see issue #4373)."
+    exit 1
+    ;;
+  1)
+    echo "✅ check_no_public_preview: no release-stage label outside release history"
+    ;;
+  *)
+    echo "❌ check_no_public_preview: git grep failed with exit status $STATUS;" \
+      "the check did not complete (see the git error above)." >&2
+    exit "$STATUS"
+    ;;
+esac
