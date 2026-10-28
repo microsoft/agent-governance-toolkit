@@ -51,11 +51,20 @@ def discover_policies(action_path: Path, root: Path) -> list[Path]:
             an ``OSError`` (for example an unreadable parent directory).
             No other exception type escapes.
     """
+    # A NUL byte can never name a file. Refuse it here so the category is the
+    # same on every platform: POSIX Path.resolve() raises ValueError for it,
+    # while Windows (and Python 3.14) resolve the path and only fail later in
+    # exists(), which would classify it as INVALID_GOVERNANCE instead.
+    for label, candidate in (("workspace root", root), ("action_path", action_path)):
+        if "\x00" in str(candidate):
+            raise ResolutionError.path_traversal(
+                f"{label} contains a NUL byte and cannot name a path"
+            )
+
     try:
         root = root.resolve()
         action_path = action_path.resolve()
     except (OSError, RuntimeError, ValueError) as exc:
-        # ValueError: a NUL byte in the path ("embedded null character").
         raise ResolutionError.path_traversal(
             f"failed to resolve action_path under {root} ({type(exc).__name__})"
         ) from exc

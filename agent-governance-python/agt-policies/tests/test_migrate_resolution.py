@@ -1685,15 +1685,34 @@ def test_merge_missing_rules_key_means_no_rules() -> None:
 
 
 def test_discover_nul_byte_in_action_path_fails_closed(tmp_path: Path) -> None:
-    # Path.resolve() raises ValueError ("embedded null character") for a NUL
-    # byte, which the OSError/RuntimeError handler let escape as a traceback.
+    # A NUL byte used to be classified by whatever Path.resolve() did with it:
+    # POSIX raises ValueError ("embedded null character"), which an earlier
+    # version let escape as a traceback, while Windows and Python 3.14 resolve
+    # the path and only fail in exists(), giving INVALID_GOVERNANCE. The byte is
+    # now refused up front, so the category is PATH_TRAVERSAL on every platform.
     (tmp_path / "governance.yaml").write_text("rules: []\n", encoding="utf-8")
 
     with pytest.raises(ResolutionError) as exc:
         discover_policies(tmp_path / "svc\x00x", tmp_path)
 
     assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
-    assert "ValueError" in str(exc.value)
+    assert "NUL byte" in str(exc.value)
+
+
+def test_discover_nul_byte_is_path_traversal_even_when_resolve_accepts_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Simulate the Windows / Python 3.14 behaviour where Path.resolve() returns
+    # the NUL-bearing path instead of raising, so the walk would otherwise hit
+    # exists() and report INVALID_GOVERNANCE.
+    (tmp_path / "governance.yaml").write_text("rules: []\n", encoding="utf-8")
+    monkeypatch.setattr(Path, "resolve", lambda self, strict=False: self)
+
+    with pytest.raises(ResolutionError) as exc:
+        discover_policies(tmp_path / "svc\x00x", tmp_path)
+
+    assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
+    assert "NUL byte" in str(exc.value)
 
 
 def test_merge_accepts_absent_and_float_priority() -> None:
