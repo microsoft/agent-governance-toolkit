@@ -299,6 +299,18 @@ def test_excessive_privilege_detects_admin_in_list_with_reused_id() -> None:
     assert result.findings[0].metadata == {"scope_count": 51}
 
 
+def test_excessive_privilege_counts_shared_list_in_scopes_and_permissions() -> None:
+    shared = ["a", "b", "c", "d", "e", "f"]
+    result = ExcessivePrivilegeEvaluation(max_scopes=10).evaluate(
+        _policy(_action("grant", scopes=shared, permissions=shared)),
+        episodes=(),
+        baseline=None,
+    )
+
+    assert result.passed == False
+    assert result.findings[0].metadata == {"scope_count": 12}
+
+
 def test_regression_check_uses_approved_baseline() -> None:
     telemetry = GovernanceTelemetry(
         violations=(
