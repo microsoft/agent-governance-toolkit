@@ -25,7 +25,7 @@ htmlcov/
 node_modules/
 
 # IDE
-.vscode/
+
 .idea/
 *.swp
 *.swo
