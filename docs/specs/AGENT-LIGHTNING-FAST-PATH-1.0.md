@@ -420,10 +420,16 @@ When `PolicyReward.__call__` is invoked with a rollout:
 1. Compute the base reward from `base_reward_fn(rollout)`.
 2. Extract violations from the rollout (via `rollout.violations` or
    `kernel.get_recent_violations()`).
-3. Calculate the total penalty via the severity mapping.
-4. If `config.multiplicative` is `True` and violations exist, compute:
-   `final_reward = base_reward * config.multiplicative_factor`.
-5. Otherwise, compute: `final_reward = base_reward + penalty`.
+3. If `config.multiplicative` is `True` and violations exist, compute:
+   `final_reward = base_reward * config.multiplicative_factor`. The
+   penalty is the scaling that was applied:
+   `penalty = base_reward * config.multiplicative_factor - base_reward`.
+4. Otherwise (additive mode, or no violations), the penalty is the sum
+   of the severity mapping over the violations, and
+   `final_reward = base_reward + penalty`.
+5. The penalty from step 3 or 4 is taken before the clean bonus and
+   the clamp below; it is the value recorded in the statistics and
+   emitted as `policy_penalty`.
 6. If no violations exist, add `config.clean_bonus` to `final_reward`.
 7. Apply `min_reward` floor (if not `None`):
    `final_reward = max(final_reward, min_reward)`.
@@ -444,7 +450,7 @@ multi-dimensional reward object:
 | --- | --- |
 | `"final"` | The clamped final reward |
 | `"base"` | The base reward before penalties |
-| `"policy_penalty"` | The total penalty value |
+| `"policy_penalty"` | The penalty applied in the active mode (Section 6.5), before the clean bonus and the clamp |
 
 With attributes:
 
@@ -482,13 +488,16 @@ accept:
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `violations` | list[Any] | (required) | List of PolicyViolation objects |
+| `violations` | list[Any] | (required) | List of PolicyViolation objects or violation dicts |
 | `critical_penalty` | float | -100.0 | Penalty for critical violations |
 | `high_penalty` | float | -50.0 | Penalty for high-severity violations |
 | `medium_penalty` | float | -10.0 | Penalty for medium-severity violations |
 | `low_penalty` | float | -1.0 | Penalty for low-severity violations |
 
-**[Pure Specification]**
+Each violation MAY be an object with a `severity` attribute (such as a
+`PolicyViolation`) or a dict with a `"severity"` key, the shape a
+kernel's `get_recent_violations()` may return (Section 9.8). Both forms
+MUST be charged by their severity. **[Pure Specification]**
 
 ### 7.2 Severity Mapping
 
@@ -504,7 +513,8 @@ severity_penalties = {
 
 total_penalty = 0.0
 for violation in violations:
-    severity = violation.severity  (default "medium" if absent)
+    severity = violation["severity"] if violation is a dict
+               else violation.severity  (default "medium" if absent)
     total_penalty += severity_penalties.get(severity, medium_penalty)
 ```
 
@@ -659,12 +669,13 @@ The constructor MUST be generic over state and action types:
    - Critical: `violation_penalty * 10`
    - High: `violation_penalty * 5`
    - All others: `violation_penalty * 1`
-8. Accumulate the reward into `EnvironmentState.total_reward`.
-9. Check termination: if `terminate_on_critical` and any violation has
+8. Check termination: if `terminate_on_critical` and any violation has
    severity `"critical"`, set `terminated = True`.
-10. Check truncation: if `step_count >= max_steps`, set
-    `truncated = True`.
-11. If the step succeeded with zero violations, add `success_bonus`.
+9. Check truncation: if `step_count >= max_steps`, set
+   `truncated = True`.
+10. If the step succeeded with zero violations, add `success_bonus`.
+11. Accumulate the reward, including any `success_bonus`, into
+    `EnvironmentState.total_reward`.
 12. Return `(next_state, reward, terminated, truncated, info)`.
 
 **[Pure Specification]**
@@ -737,7 +748,7 @@ The environment MUST expose a `terminated` property that returns
 | `total_episodes` | int | Number of episodes completed |
 | `total_steps` | int | Total steps across all episodes |
 | `total_violations` | int | Total violations across all episodes |
-| `successful_episodes` | int | Episodes with at least one violation-free, successful step |
+| `successful_episodes` | int | Episodes in which every step succeeded without a violation |
 | `success_rate` | float | `successful_episodes / max(total_episodes, 1)` |
 | `violations_per_episode` | float | `total_violations / max(total_episodes, 1)` |
 | `steps_per_episode` | float | `total_steps / max(total_episodes, 1)` |
@@ -1205,8 +1216,8 @@ An implementation is conformant if it satisfies all MUST requirements:
    caller-supplied; preserves caller-supplied penalty.
 8. PolicyViolationError stores the violation and formats the message
    correctly.
-9. `policy_penalty` falls back to medium penalty for unknown
-   severities.
+9. `policy_penalty` charges object and dict violations by their
+   severity and falls back to medium penalty for unknown severities.
 10. PolicyReward supports both additive and multiplicative penalty
     modes.
 11. PolicyReward clamps rewards to `[min_reward, max_reward]`.
@@ -1236,7 +1247,8 @@ Conformance tests MUST cover:
 - PolicyViolation caller-supplied penalty preservation.
 - PolicyViolationType enum values.
 - PolicyViolationError message formatting.
-- `policy_penalty` with known and unknown severities.
+- `policy_penalty` with known and unknown severities, for object and
+  dict violations.
 - PolicyReward additive mode computation.
 - PolicyReward multiplicative mode computation.
 - PolicyReward clean bonus application.

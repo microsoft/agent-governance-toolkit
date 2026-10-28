@@ -32,6 +32,8 @@ _DANGEROUS_CALLS: dict[str, set[str]] = {
         "execvp",
         "execvpe",
         "popen",
+        "posix_spawn",
+        "posix_spawnp",
         "spawnl",
         "spawnle",
         "spawnlp",
@@ -44,6 +46,14 @@ _DANGEROUS_CALLS: dict[str, set[str]] = {
     },
     "pty": {"spawn"},
     "shutil": {"which"},
+    "asyncio": {"create_subprocess_exec", "create_subprocess_shell"},
+}
+
+# Submodules whose process-spawning functions are listed under their parent
+# module above: ``asyncio.subprocess`` defines the functions that
+# ``asyncio`` re-exports.
+_DANGEROUS_SUBMODULES: dict[tuple[str, str], str] = {
+    ("asyncio", "subprocess"): "asyncio",
 }
 
 
@@ -113,6 +123,10 @@ class _SubprocessScanVisitor(ast.NodeVisitor):
             return
 
         for alias in node.names:
+            submodule = _DANGEROUS_SUBMODULES.get((node.module, alias.name))
+            if submodule is not None:
+                self._module_aliases[alias.asname or alias.name] = submodule
+                continue
             if alias.name == "*":
                 self._add_violation(
                     node,
@@ -158,6 +172,11 @@ class _SubprocessScanVisitor(ast.NodeVisitor):
     def _resolve_module_name(self, node: ast.expr) -> str | None:
         if isinstance(node, ast.Name):
             return self._module_aliases.get(node.id, node.id)
+        if isinstance(node, ast.Attribute):
+            parent = self._resolve_module_name(node.value)
+            if parent is None:
+                return None
+            return _DANGEROUS_SUBMODULES.get((parent, node.attr))
         if isinstance(node, ast.Call):
             return self._resolve_dynamic_import(node)
         return None

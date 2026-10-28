@@ -5,6 +5,7 @@
 import json
 import os
 import tempfile
+from datetime import UTC, datetime
 
 import pytest
 
@@ -52,6 +53,35 @@ class TestAuditLogger:
         meta = {"source": "test", "priority": 1}
         logger.run(action="z", agent_id="a1", decision="audit", metadata=meta)
         assert logger.entries[0].metadata == meta
+
+    def test_caller_changing_metadata_after_run_keeps_chain_valid(self):
+        logger = AuditLogger()
+        meta = {"source": "test", "tags": ["a"]}
+        logger.run(action="z", agent_id="a1", decision="audit", metadata=meta)
+        meta["source"] = "changed"
+        meta["tags"].append("b")
+        assert logger.entries[0].metadata == {"source": "test", "tags": ["a"]}
+        assert logger.verify_chain() is True
+
+    def test_non_json_metadata_is_recorded_as_text(self):
+        logger = AuditLogger()
+        when = datetime(2026, 1, 1, tzinfo=UTC)
+        logger.run(action="z", agent_id="a1", decision="audit", metadata={"at": when})
+        assert logger.entries[0].metadata == {"at": str(when)}
+        assert logger.verify_chain() is True
+        assert json.loads(logger.to_jsonl_string())["metadata"] == {"at": str(when)}
+
+    def test_metadata_with_mixed_key_types_is_recorded(self):
+        logger = AuditLogger()
+        logger.run(action="z", agent_id="a1", decision="audit", metadata={1: "a", "b": 2})
+        assert logger.entries[0].metadata == {"1": "a", "b": 2}
+        assert logger.verify_chain() is True
+
+    def test_tampered_metadata_still_breaks_chain(self):
+        logger = AuditLogger()
+        logger.run(action="z", agent_id="a1", decision="audit", metadata={"k": 1})
+        logger.entries[0].metadata["k"] = 2
+        assert logger.verify_chain() is False
 
     def test_export_jsonl(self):
         logger = AuditLogger()

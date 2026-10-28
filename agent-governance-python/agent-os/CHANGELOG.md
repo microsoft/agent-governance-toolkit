@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **OCSF v1.9.0 schema converter and sink for CloudEvents trace events**:
+  `cloudevent_to_ocsf` and `governance_event_to_ocsf` convert AGT governance, audit, and trace telemetry from CloudEvents v1.0 schema to Open Cybersecurity Schema Framework (OCSF v1.9.0). Mapped classes include Class 6003 (API Activity), Class 2004 (Detection Finding), and Class 3003 (Authorize Session), preserving trace correlation (`trace_id`, `span_id`, `parent_span_id`, `session_id`), identity (under `actor.user` where applicable), policy metadata, and custom payloads under `unmapped`. `OCSFGovernanceSink` provides streaming NDJSON export for SIEMs and security data lakes (AWS Security Lake, Splunk, Datadog). (New public exports: `OCSFGovernanceSink`, `cloudevent_to_ocsf`, `governance_event_to_ocsf`.)
+
 ### Security
 - **Breaking custom-store contract: atomic MCP replay protection**:
   `MCPMessageSigner` verifies signatures before accessing the replay store and

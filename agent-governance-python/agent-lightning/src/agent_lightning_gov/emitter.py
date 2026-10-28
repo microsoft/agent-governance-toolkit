@@ -309,7 +309,13 @@ class FlightRecorderEmitter:
         Returns:
             Summary dictionary with violation statistics
         """
-        spans = self.get_spans()
+        # Convert directly instead of calling get_spans(): a summary does not
+        # emit anything, so it must not add to emitted_count.
+        spans = [
+            span
+            for entry in self._get_entries()
+            if (span := self._convert_entry(entry))
+        ]
 
         violations = [
             s for s in spans if s.attributes.get("agent_os.policy_violated", False)

@@ -53,3 +53,49 @@ print("os.system('id')")
             enforce_no_subprocess_execution("import subprocess\nsubprocess.run(['ls'])")
 
         assert exc.value.violations[0].line == 2
+
+    @pytest.mark.parametrize(
+        ("code", "pattern"),
+        [
+            ("import os\nos.posix_spawn('/bin/sh', ['sh'], {})", "os.posix_spawn"),
+            ("from os import posix_spawnp\nposix_spawnp('sh', ['sh'], {})", "os.posix_spawnp"),
+            (
+                "import asyncio\nasyncio.create_subprocess_exec('ls')",
+                "asyncio.create_subprocess_exec",
+            ),
+            (
+                "from asyncio import create_subprocess_shell as sh\nsh('id')",
+                "asyncio.create_subprocess_shell",
+            ),
+            (
+                "import asyncio.subprocess\nasyncio.subprocess.create_subprocess_exec('ls')",
+                "asyncio.create_subprocess_exec",
+            ),
+            (
+                "from asyncio import subprocess\nsubprocess.create_subprocess_shell('id')",
+                "asyncio.create_subprocess_shell",
+            ),
+            (
+                "from asyncio import subprocess as asp\nasp.create_subprocess_exec('ls')",
+                "asyncio.create_subprocess_exec",
+            ),
+            (
+                "from asyncio.subprocess import create_subprocess_exec\n"
+                "create_subprocess_exec('ls')",
+                "asyncio.create_subprocess_exec",
+            ),
+        ],
+    )
+    def test_detects_posix_spawn_and_asyncio_subprocesses(self, code, pattern):
+        assert pattern in _patterns(code)
+
+    def test_does_not_flag_other_asyncio_or_os_calls(self):
+        code = """
+import asyncio
+import os
+asyncio.run(main())
+asyncio.subprocess.PIPE
+os.path.join('a', 'b')
+os.cpu_count()
+"""
+        assert scan_code_for_subprocesses(code) == []

@@ -1611,7 +1611,7 @@ The environment MUST track and report:
 | `total_episodes` | Total number of episodes completed. |
 | `total_steps` | Total steps across all episodes. |
 | `total_violations` | Total policy violations across all episodes. |
-| `successful_episodes` | Episodes that completed without critical violations. |
+| `successful_episodes` | Episodes in which every step succeeded without a violation. |
 | `success_rate` | Fraction of successful episodes. |
 | `violations_per_episode` | Average violations per episode. |
 | `steps_per_episode` | Average steps per episode. |
