@@ -175,19 +175,35 @@ class DockerDeployer:
             "--security-opt", "no-new-privileges",
             "--read-only",
             "--tmpfs", "/tmp:rw,noexec,nosuid",  # noqa: S108 — Docker tmpfs mount specification, not a hardcoded path
-            # Governance config as env vars
-            "-e", f"AGT_POLICY_PATH={config.policy_path}",
-            "-e", f"AGT_TRUST_LEVEL={config.trust_level}",
-            "-e", f"AGT_AUDIT_ENABLED={str(config.audit_enabled).lower()}",
-            "-e", f"AGT_MAX_TOOL_CALLS={config.max_tool_calls}",
-            "-e", f"AGT_RATE_LIMIT_RPM={config.rate_limit_rpm}",
-            "-e", f"AGT_KILL_SWITCH={str(config.kill_switch_enabled).lower()}",
-            "-e", f"AGT_RETENTION_DAYS={config.retention_days}",
         ]
+        # Governance config as env vars
+        governance_env = {
+            "AGT_POLICY_PATH": config.policy_path,
+            "AGT_TRUST_LEVEL": config.trust_level,
+            "AGT_AUDIT_ENABLED": str(config.audit_enabled).lower(),
+            "AGT_MAX_TOOL_CALLS": str(config.max_tool_calls),
+            "AGT_RATE_LIMIT_RPM": str(config.rate_limit_rpm),
+            "AGT_KILL_SWITCH": str(config.kill_switch_enabled).lower(),
+            "AGT_RETENTION_DAYS": str(config.retention_days),
+        }
+        for k, v in governance_env.items():
+            cmd.extend(["-e", f"{k}={v}"])
         if port:
             cmd.extend(["-p", f"127.0.0.1:{port}:8080"])
         if env:
+            # `docker run` keeps the last `-e` for a name, so an extra
+            # variable with a governance name, or with an `=` in its name
+            # (`-e AGT_KILL_SWITCH=false=x` sets AGT_KILL_SWITCH), would
+            # replace the value taken from `config`.
             for k, v in env.items():
+                if "=" in k:
+                    raise ValueError(
+                        f"invalid environment variable name {k!r}: must not contain '='"
+                    )
+                if k in governance_env:
+                    raise ValueError(
+                        f"env must not set {k}: it is set from GovernanceConfig"
+                    )
                 cmd.extend(["-e", f"{k}={v}"])
         cmd.append(image)
 

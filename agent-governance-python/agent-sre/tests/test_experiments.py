@@ -147,6 +147,35 @@ class TestExperiment:
         assert counts["a"] > 600
         assert counts["b"] > 100
 
+    def _split(self, variants: list[Variant], n: int = 3000) -> dict[str, int]:
+        random.seed(7)
+        exp = Experiment(name="test", variants=variants)
+        exp.start()
+        counts = {v.name: 0 for v in variants}
+        for _ in range(n):
+            counts[exp.assign()] += 1
+        return counts
+
+    def test_traffic_split_three_default_weights(self):
+        # Three variants with the default weight 0.5 each get a third of the traffic.
+        counts = self._split([Variant("a"), Variant("b"), Variant("c")])
+        for name in ("a", "b", "c"):
+            assert 850 < counts[name] < 1150
+
+    def test_traffic_split_percentage_weights(self):
+        counts = self._split([Variant("a", weight=70), Variant("b", weight=30)])
+        assert 1950 < counts["a"] < 2250
+        assert 750 < counts["b"] < 1050
+
+    def test_traffic_split_weights_below_one(self):
+        counts = self._split([Variant("a", weight=0.1), Variant("b", weight=0.1)])
+        assert 1350 < counts["a"] < 1650
+        assert 1350 < counts["b"] < 1650
+
+    def test_traffic_split_zero_weight_gets_no_traffic(self):
+        counts = self._split([Variant("a", weight=0.0), Variant("b", weight=1.0)])
+        assert counts == {"a": 0, "b": 3000}
+
 
 class TestMetricSummary:
     def test_to_dict(self):
