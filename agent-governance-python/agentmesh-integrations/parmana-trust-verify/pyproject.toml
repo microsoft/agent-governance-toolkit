@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentmesh-parmana-trust-verify"
+version = "0.1.0"
+description = "Verify Parmana execution trust records inside AgentMesh workflows"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["parmana-verifier>=0.1.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["parmana_trust_verify"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
