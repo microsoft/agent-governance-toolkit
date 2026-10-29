@@ -2255,16 +2255,16 @@ def test_check_document_values_walks_shared_alias_once(
     # and eight levels took minutes; a shared container is now walked once
     # per depth. yaml.safe_dump writes such a section with aliases, so the
     # document itself is legitimate and must still be accepted.
-    import agt.cli._migrate_resolution.build as build_mod
+    build_module = sys.modules["agt.cli._migrate_resolution.build"]
 
     visits: list[int] = []
-    real = build_mod._int_too_long
+    real = build_module._int_too_long
 
     def counting(value: int) -> bool:
         visits.append(value)
         return real(value)
 
-    monkeypatch.setattr(build_mod, "_int_too_long", counting)
+    monkeypatch.setattr(build_module, "_int_too_long", counting)
     level: Any = [7]
     for _ in range(4):
         level = [level] * 10
