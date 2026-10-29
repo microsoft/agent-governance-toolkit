@@ -325,7 +325,9 @@ def _parse_spec(spec_dict: dict[str, Any]) -> RolloutSpec:
     for s in spec_dict.get("steps", []):
         analysis = []
         for a in s.get("analysis", []):
-            analysis.append(AnalysisCriterion(a["metric"], a["threshold"]))
+            analysis.append(
+                AnalysisCriterion(a["metric"], a["threshold"], a.get("comparator", "gte"))
+            )
         steps.append(RolloutStep(
             name=s.get("name", ""),
             weight=s.get("weight", 0.0),

@@ -346,3 +346,42 @@ class TestSpecParsing:
         assert rollout is not None
         assert rollout.check_rollback(metrics) is True
         assert rollout.state.value == "rolled_back"
+
+    def test_gitops_rollout_spec_round_trips_through_reconciler(self):
+        from agent_sre.delivery.gitops import AgentRef, RolloutSpec
+        from agent_sre.delivery.rollout import (
+            AnalysisCriterion,
+            RollbackCondition,
+            RolloutStep,
+        )
+
+        spec = RolloutSpec(
+            name="gitops",
+            candidate=AgentRef(name="agent", version="v2"),
+            steps=[
+                RolloutStep(
+                    weight=0.1,
+                    duration_seconds=600,
+                    manual_gate=True,
+                    analysis=[AnalysisCriterion("latency_ms", 500.0, comparator="lte")],
+                ),
+                RolloutStep(weight=1.0, duration_seconds=0),
+            ],
+            rollback_conditions=[RollbackCondition("success_rate", 0.9, comparator="lt")],
+        )
+
+        r = Reconciler()
+        result = r.reconcile("gitops", "default", spec.to_dict()["spec"])
+        assert result.action == ReconcileAction.CREATED
+        rollout = r.get_rollout("gitops", "default")
+        assert rollout is not None
+
+        first, last = rollout.steps
+        assert (first.duration_seconds, first.manual_gate) == (600, True)
+        assert (last.duration_seconds, last.manual_gate) == (0, False)
+        assert first.analysis[0].comparator == "lte"
+        assert rollout.analyze_step({"latency_ms": 200.0}) is True
+
+        # A healthy success rate must not trip the "lt 0.9" condition.
+        assert rollout.check_rollback({"success_rate": 0.99}) is False
+        assert rollout.check_rollback({"success_rate": 0.5}) is True

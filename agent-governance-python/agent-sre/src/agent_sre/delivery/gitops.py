@@ -57,11 +57,34 @@ class SLORef:
         return d
 
 
+def _step_to_spec(step: RolloutStep) -> dict[str, Any]:
+    """Serialize a step with the AgentRollout CRD field names."""
+    return {
+        "name": step.name,
+        "weight": step.weight,
+        "durationSeconds": step.duration_seconds,
+        "analysis": [a.to_dict() for a in step.analysis],
+        "manualGate": step.manual_gate,
+    }
+
+
+def _rollback_condition_to_spec(condition: RollbackCondition) -> dict[str, Any]:
+    """Serialize a rollback condition with the AgentRollout CRD field names."""
+    return {
+        "metric": condition.metric,
+        "threshold": condition.threshold,
+        "operator": condition.comparator,
+    }
+
+
 @dataclass
 class RolloutSpec:
     """Declarative rollout specification for GitOps-style deployments.
 
     Designed to be serialized to YAML and stored in version control.
+    ``to_dict()`` returns an ``AgentRollout`` manifest that uses the CRD's
+    field names (``durationSeconds``, ``manualGate``, ``operator``), so the
+    reconciler reads it back unchanged.
     """
     api_version: SpecVersion = SpecVersion.V1ALPHA1
     kind: str = "AgentRollout"
@@ -92,8 +115,10 @@ class RolloutSpec:
                 "strategy": self.strategy.value,
                 "current": self.current.to_dict(),
                 "candidate": self.candidate.to_dict(),
-                "steps": [s.to_dict() for s in self.steps],
-                "rollbackConditions": [r.to_dict() for r in self.rollback_conditions],
+                "steps": [_step_to_spec(s) for s in self.steps],
+                "rollbackConditions": [
+                    _rollback_condition_to_spec(r) for r in self.rollback_conditions
+                ],
                 "sloRequirements": [s.to_dict() for s in self.slo_requirements],
             },
         }

@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -305,6 +307,39 @@ class TestDockerDeployer:
         mock_run.side_effect = subprocess.CalledProcessError(1, "docker")
         deployer = DockerDeployer()
         assert deployer.logs("nonexistent") == ""
+
+    def test_logs_include_the_container_stderr(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # The container runs without a TTY, so `docker logs` replays its
+        # stdout on stdout and its stderr on stderr. A stand-in Docker CLI
+        # (`python logs ...`, with the script `logs` in the working directory)
+        # does the same.
+        (tmp_path / "logs").write_text(
+            "import sys\n"
+            "print('stdout line 1', flush=True)\n"
+            "print('stderr line', file=sys.stderr, flush=True)\n"
+            "print('stdout line 2', flush=True)\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        deployer = DockerDeployer(docker_cmd=sys.executable)
+
+        output = deployer.logs("agent-1", tail=50)
+
+        assert output.splitlines() == ["stdout line 1", "stderr line", "stdout line 2"]
+
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_logs_merge_stderr_into_stdout(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = MagicMock(stdout="line\n", stderr=None, returncode=0)
+        DockerDeployer().logs("agent-1", tail=50)
+
+        assert mock_run.call_args.args[0] == ["docker", "logs", "agt-agent-1", "--tail", "50"]
+        assert mock_run.call_args.kwargs["stdout"] == subprocess.PIPE
+        assert mock_run.call_args.kwargs["stderr"] == subprocess.STDOUT
 
 
 # ---------------------------------------------------------------------------
