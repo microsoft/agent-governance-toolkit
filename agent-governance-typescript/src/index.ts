@@ -64,6 +64,29 @@ export type {
 export { RingEnforcer, RingBreachError } from './rings';
 export { GovernanceVerifier } from './verify';
 export { SurfaceParityChecker } from './surface-parity';
+
+// Accumulated context governance (issue #3084)
+export { DataClassification, isDataClassification, maximumClassification, requireDataClassification } from './data-classification';
+export { ContextEnvelope, EnvelopeReference } from './context-envelope';
+export type { ContextEnvelopeInit } from './context-envelope';
+export { AggregationResult, AggregationRule, AggregationRuleSet } from './context-aggregation';
+export type { AggregationResultInit, AggregationRuleInit } from './context-aggregation';
+export { Obligation, ObligationSet } from './obligations';
+export type { ObligationInit, ObligationSetInit } from './obligations';
+export { ContextDecision, ContextOutcome, accumulate, decideNext } from './context-accumulation';
+export type { ContextDecisionInit } from './context-accumulation';
+export { mergeRestrictions } from './context-delegation';
+export {
+  CONTEXT_AGGREGATION_ELEVATED,
+  CONTEXT_DELEGATED,
+  CONTEXT_ENVELOPE_CREATED,
+  CONTEXT_ENVELOPE_UPDATED,
+  CONTEXT_REDACTED,
+  ContextEvent,
+  DERIVED_ARTIFACT_LABELED,
+  contextEvent,
+} from './context-audit';
+export type { ContextEventInit } from './context-audit';
 export { CascadeContainmentManager } from './cascade-containment';
 export { ContextPoisoningDetector } from './context-poisoning';
 export { OciManifestAdapter } from './oci-manifest';
