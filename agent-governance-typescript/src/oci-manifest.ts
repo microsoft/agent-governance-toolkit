@@ -15,7 +15,7 @@ import type {
 
 const AI_CARD_MEDIA_TYPE = 'application/vnd.ai-card.agent.v1+json';
 const POLICY_MEDIA_TYPE = 'application/vnd.agt.policy.v1+json';
-const OCI_MANIFEST_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v2+json';
+const OCI_MANIFEST_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v1+json';
 const OCI_CONFIG_MEDIA_TYPE = 'application/vnd.oci.image.config.v1+json';
 
 /**
