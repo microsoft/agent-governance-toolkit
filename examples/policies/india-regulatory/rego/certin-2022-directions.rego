@@ -1,5 +1,5 @@
 # agt-policies-india - CERT-In Directions 2022 (Rego reference)
-# Enforcing authority: CERT-In, MeitY. Status: binding (IT Act s.70B). NOT loaded at runtime. RE2.
+# Enforcing authority: CERT-In, MeitY. Status: binding (IT Act s.70B). RE2.
 #
 # Input schema:
 #   { "action": "store_logs_offshore",
@@ -11,6 +11,13 @@ package agt_policies_india.certin
 import rego.v1
 
 _output_text := v if { is_string(input.output); v := input.output } else := ""
+
+# Actions that place or configure ICT log storage, and actions that change clock
+# synchronisation. Both sets use the verbs this pack's policy document already
+# declared, so a host using different names must extend them.
+log_storage_actions := {"disable_logging", "store_logs_offshore", "set_log_retention_below_180"}
+
+clock_sync_actions := {"disable_ntp", "set_external_untrusted_ntp"}
 
 # Direction (ii): 6-hour reporting - cannot suppress/delay
 deny contains msg if {
@@ -25,6 +32,7 @@ deny contains msg if {
 }
 
 deny contains msg if {
+	input.action in log_storage_actions
 	not input.params.log_storage_region == "IN"
 	region := object.get(input.params, "log_storage_region", "unset")
 	msg := sprintf("CERT-In 2022 Directions (iv): logs must be retained within India, configured region: '%v'", [region])
@@ -32,6 +40,7 @@ deny contains msg if {
 
 # Direction (i): NTP clock sync - escalate if not synced
 escalate contains msg if {
+	input.action in clock_sync_actions
 	not input.params.ntp_synced == true
 	msg := "CERT-In 2022 Directions (i): synchronise ICT system clocks to NIC/NPL NTP servers or traceable sources"
 }
