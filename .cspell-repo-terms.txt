@@ -1166,6 +1166,7 @@ usize
 utcfromtimestamp
 utcnow
 uvicorn
+vapt
 venv
 venvs
 vite
