@@ -1,5 +1,5 @@
 # agt-policies-india - CERT-In Directions 2022 (Rego reference)
-# Enforcing authority: CERT-In, MeitY. Status: binding (IT Act s.70B). NOT loaded at runtime. RE2.
+# Enforcing authority: CERT-In, MeitY. Status: binding (IT Act s.70B). RE2.
 #
 # Input schema:
 #   { "action": "store_logs_offshore",
@@ -25,14 +25,13 @@ deny contains msg if {
 }
 
 deny contains msg if {
-	not input.params.log_storage_region == "IN"
-	region := object.get(input.params, "log_storage_region", "unset")
-	msg := sprintf("CERT-In 2022 Directions (iv): logs must be retained within India, configured region: '%v'", [region])
+	input.params.log_storage_region != "IN"
+	msg := sprintf("CERT-In 2022 Directions (iv): logs must be retained within India, configured region: '%v'", [input.params.log_storage_region])
 }
 
 # Direction (i): NTP clock sync - escalate if not synced
 escalate contains msg if {
-	not input.params.ntp_synced == true
+	input.params.ntp_synced != true
 	msg := "CERT-In 2022 Directions (i): synchronise ICT system clocks to NIC/NPL NTP servers or traceable sources"
 }
 

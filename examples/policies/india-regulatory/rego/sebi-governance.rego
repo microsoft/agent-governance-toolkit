@@ -1,5 +1,5 @@
 # agt-policies-india - SEBI CSCRF 2024 + AI/ML Responsibility Amendment Feb 2025 (Rego reference)
-# Enforcing authority: SEBI. Status: CSCRF + Feb-2025 binding; June-2025 guidelines draft. NOT loaded at runtime. RE2.
+# Enforcing authority: SEBI. Status: CSCRF + Feb-2025 binding; June-2025 guidelines draft. RE2.
 #
 # Input schema:
 #   { "action": "disable_audit_log",
@@ -34,9 +34,8 @@ deny contains msg if {
 }
 
 deny contains msg if {
-	not input.params.log_storage_region == "IN"
-	region := object.get(input.params, "log_storage_region", "unset")
-	msg := sprintf("SEBI CSCRF 2024: audit logs must be retained within India, configured region: '%v'", [region])
+	input.params.log_storage_region != "IN"
+	msg := sprintf("SEBI CSCRF 2024: audit logs must be retained within India, configured region: '%v'", [input.params.log_storage_region])
 }
 
 # CSCRF 2024: incident reporting - cannot suppress
