@@ -299,9 +299,11 @@ class AgentControlInterruption(RuntimeError):
 class AgentControlBlocked(AgentControlInterruption):
     """Raised when an enforcing wrapper receives a deny or unapproved escalate verdict.
 
-    For a ``post_*`` intervention point the guarded action has already executed;
-    a block prevents the result from propagating, it does not undo the side effect.
-    Use ``pre_*`` points to prevent side effects.
+    For a ``post_*`` intervention point the guarded action has usually already
+    executed; a block prevents the result from propagating, it does not undo the
+    side effect. The one exception is ``run_tool``, which raises for an unbound
+    ``post_tool_call`` before it runs the tool. Use ``pre_*`` points to prevent
+    side effects.
     """
 
     def __init__(self, intervention_point: InterventionPoint, result: InterventionPointResult):
