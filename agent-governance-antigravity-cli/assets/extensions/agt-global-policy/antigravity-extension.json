@@ -1,7 +1,7 @@
 {
   "name": "agt-global-policy",
   "version": "3.3.0",
-  "description": "Public Preview — AGT governance extension for Antigravity CLI",
+  "description": "AGT governance extension for Antigravity CLI",
   "contextFileName": "ANTIGRAVITY.md",
   "mcpServers": {
     "agt_global_policy": {

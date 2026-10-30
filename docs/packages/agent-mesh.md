@@ -1,12 +1,12 @@
 ---
-title: "AgentMesh — Public Preview"
+title: "AgentMesh"
 last_reviewed: 2026-09-22
 owner: agt-maintainers
 ---
 
 <div align="center" markdown="1">
 
-# AgentMesh — Public Preview
+# AgentMesh
 
 **SSL for AI Agents**
 
@@ -21,9 +21,6 @@ owner: agt-maintainers
 [![awesome-AI-Agents](https://img.shields.io/badge/Awesome--AI--Agents-listed-orange)](https://github.com/Jenqyang/Awesome-AI-Agents/pull/45)
 [![awesome-copilot](https://img.shields.io/badge/awesome--copilot-listed-orange)](https://github.com/github/awesome-copilot/pull/755)
 [![awesome-opentelemetry](https://img.shields.io/badge/awesome--opentelemetry-listed-orange)](https://github.com/magsther/awesome-opentelemetry/pull/24)
-
-> [!IMPORTANT]
-> **Public Preview** — The `agentmesh-platform` package on PyPI is a public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh.
 

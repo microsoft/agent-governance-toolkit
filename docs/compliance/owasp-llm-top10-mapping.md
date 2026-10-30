@@ -355,7 +355,7 @@ pathway. This finding warrants priority remediation.
 
 **Mitigations:**
 
-- Execution rings — `enforcer.py:47-88` — 4-tier privilege model (Ring 0-3). Ring 0 always denied in Public Preview. Agent ring derived from trust score.
+- Execution rings — `enforcer.py:47-88` — 4-tier privilege model (Ring 0-3). Ring 0 always denied. Agent ring derived from trust score.
 - Ring enforcement — `enforcer.py:94-97` — `should_demote()` checks trust score drops.
 - Kill switch — `kill_switch.py:86-118` — Immediate agent termination with 6 kill reasons and saga step compensation.
 - `RogueDetectionMiddleware` — `maf_adapter.py:416-501` — Raises `MiddlewareTermination` when `quarantine_recommended=True`. **Only enforcement point that auto-blocks.**

@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """
 Vector Clocks -- causal ordering for multi-agent writes.
 
@@ -39,7 +38,7 @@ def _locked_pair(a: VectorClock, b: VectorClock) -> Iterator[None]:
 
 @dataclass
 class VectorClock:
-    """A version counter (Public Preview: tracking only, no enforcement).
+    """A version counter (tracking only, no enforcement).
 
     Thread-safe: all reads and mutations are guarded by an internal lock
     to prevent data races when multiple agents tick/merge concurrently.

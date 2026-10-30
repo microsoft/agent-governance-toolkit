@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Session-scoped VFS — simple dict-based storage."""
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ class SessionVFS:
     """
     Simple dict-based session storage.
 
-    Public Preview: basic get/set/delete with a single global lock
+    Basic get/set/delete with a single global lock
     (threading.Lock omitted since Python GIL provides serialization).
     """
 

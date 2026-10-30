@@ -1,8 +1,5 @@
 # Agent Lightning — RL Training Governance
 
-> [!IMPORTANT]
-> **Public Preview** — The `agentmesh-lightning` package on PyPI is a public preview release. APIs may change before GA.
-
 Train AI agents with RL while maintaining **0% policy violations**.
 
 *Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)*

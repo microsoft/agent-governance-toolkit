@@ -806,7 +806,7 @@ assert response.status_code == 200
 
 The `RingElevationManager` controls temporary ring elevation — allowing an
 agent to operate at a higher privilege level for a limited time. In the
-public preview, all elevation requests are denied by design.
+current implementation, all elevation requests are denied by design.
 
 ### 7.1 The 4-Ring Model (Recap)
 
@@ -939,17 +939,17 @@ effective = manager.get_effective_ring(
     session_id="s1",
     base_ring=ExecutionRing.RING_3_SANDBOX,
 )
-# In public preview, always returns base_ring
+# Always returns base_ring
 
 # Check for active elevation
 elevation = manager.get_active_elevation("agent-1", "s1")
-# In public preview, always returns None
+# Always returns None
 
 # List all active elevations
-active = manager.active_elevations  # always [] in public preview
+active = manager.active_elevations  # always []
 
 # Tick — expire elapsed elevations (returns revoked list)
-revoked = manager.tick()  # always [] in public preview
+revoked = manager.tick()  # always []
 
 # Child agent ring assignment: children get demoted one ring from parent
 child_ring = manager.register_child(

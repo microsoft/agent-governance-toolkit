@@ -1,8 +1,7 @@
 # Agent Learning Governance Integration
 
 > [!IMPORTANT]
-> **Public Preview.** `agent_learning_gov` targets Microsoft Agent Learning
-> `0.8.x`. Its API may change before general availability.
+> `agent_learning_gov` targets Microsoft Agent Learning `0.8.x`.
 
 Apply Agent Governance Toolkit controls throughout an Agent Learning lifecycle:
 

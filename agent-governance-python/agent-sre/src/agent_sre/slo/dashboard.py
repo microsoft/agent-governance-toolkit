@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """SLO compliance dashboard and reporting."""
 
 from __future__ import annotations

@@ -351,7 +351,6 @@ saves time.
   - Python/Shell: `# Copyright (c) Microsoft Corporation.\n# Licensed under the MIT License.`
   - TypeScript/JavaScript/Rust/C#/Go: `// Copyright (c) Microsoft Corporation.\n// Licensed under the MIT License.`
 - Author: Microsoft Corporation, email: agentgovtoolkit@microsoft.com
-- All packages prefixed with "Public Preview" in descriptions
 
 ## CI Optimization
 

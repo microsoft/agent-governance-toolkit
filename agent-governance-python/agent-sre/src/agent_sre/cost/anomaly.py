@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Cost anomaly detection — simple threshold-based alerting."""
 
 from __future__ import annotations

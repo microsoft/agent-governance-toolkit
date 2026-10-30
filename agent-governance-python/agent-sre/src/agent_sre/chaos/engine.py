@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Chaos engine — fault injection and resilience testing for agents."""
 
 from __future__ import annotations

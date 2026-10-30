@@ -404,12 +404,12 @@ Implementations MUST define the following circuit breaker states:
 | --- | --- |
 | `CLOSED` | Normal operation -- track failures |
 | `OPEN` | Agent isolated -- reject all calls |
-| `HALF_OPEN` | Reserved for future auto-recovery; NOT entered in Public Preview |
+| `HALF_OPEN` | Reserved for future auto-recovery; NOT entered by the current implementation |
 
-> **Public Preview Note:** The `HALF_OPEN` state is wired through the
+> **Note:** The `HALF_OPEN` state is wired through the
 > enum, config knobs (`success_threshold`, `half_open_max_calls`), and
 > registry summaries for forward compatibility. However, **no code path
-> transitions to HALF_OPEN** in Public Preview. Recovery MUST be
+> transitions to HALF_OPEN** in the current implementation. Recovery MUST be
 > performed manually via `force_close()` or `reset()`.
 
 **[Pure Specification]**
@@ -431,7 +431,7 @@ The circuit breaker MUST implement the following transition rules:
 
 ```
 CLOSED -> OPEN:    failure_count >= failure_threshold
-OPEN -> CLOSED:    force_close() or reset() (manual only in Public Preview)
+OPEN -> CLOSED:    force_close() or reset() (manual only)
 ```
 
 When transitioning to OPEN, the breaker MUST:
@@ -1461,7 +1461,7 @@ An implementation is conformant if it satisfies all MUST requirements:
 8. Burn rate computation handles zero and infinite cases correctly.
 9. CircuitState enum contains CLOSED, OPEN, and HALF_OPEN.
 10. Circuit breaker transitions follow the specified rules.
-11. HALF_OPEN is not auto-entered in Public Preview.
+11. HALF_OPEN is not auto-entered by the current implementation.
 12. All twelve FaultType values are defined.
 13. Blast radius is clamped to [0.0, 1.0].
 14. Abort conditions halt experiments when triggered.

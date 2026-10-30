@@ -1,6 +1,6 @@
 <div align="center">
 
-# Agent OS — Public Preview
+# Agent OS
 
 **A kernel architecture for governing autonomous AI agents**
 
@@ -9,9 +9,6 @@
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
-
-> [!IMPORTANT]
-> **Public Preview** — The `agent-os-kernel` package on PyPI is a public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent OS.
 

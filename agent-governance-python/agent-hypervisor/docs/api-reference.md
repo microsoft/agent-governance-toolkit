@@ -894,8 +894,8 @@ for kill in ks.kill_history:
 
 #### `RingBreachDetector`
 
-Detects anomalous ring-boundary crossings. Public preview provides stubs;
-full anomaly scoring available in the enterprise edition.
+Detects anomalous ring-boundary crossings. The built-in detector provides
+stubs; full anomaly scoring is available in the enterprise edition.
 
 ```python
 from hypervisor.rings import RingBreachDetector, BreachSeverity

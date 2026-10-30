@@ -1,8 +1,5 @@
 # 🛡️ AgentMesh MCP Proxy
 
-> [!IMPORTANT]
-> **Public Preview** — This npm package is a public preview release. APIs may change before GA.
-
 > **Anthropic built the USB port. AgentMesh is the Firewall.**
 
 A security proxy for Model Context Protocol (MCP) servers. Adds authentication, rate limiting, policy enforcement, and audit logging to any MCP server with **zero code changes**.

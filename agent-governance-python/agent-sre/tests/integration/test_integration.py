@@ -138,7 +138,7 @@ class TestIncidentFlow:
 
         assert cb.state == CircuitState.OPEN
 
-        # Public Preview: no auto half-open, use force_close to recover
+        # No auto half-open; use force_close to recover
         time.sleep(0.15)
         assert cb.state == CircuitState.OPEN
         assert not cb.is_available
@@ -188,7 +188,7 @@ class TestIncidentFlow:
 
         incidents = detector.open_incidents
         if incidents:
-            # Public Preview: generate raises NotImplementedError
+            # generate raises NotImplementedError without an advanced provider
             with contextlib.suppress(NotImplementedError):
                 gen.generate(incidents[0])
         else:
@@ -261,7 +261,7 @@ class TestDeliveryPipeline:
         )
 
         assert rollout.state == RolloutState.PENDING
-        # Public Preview: start raises NotImplementedError
+        # start raises NotImplementedError without an advanced provider
         with contextlib.suppress(NotImplementedError):
             rollout.start()
 
