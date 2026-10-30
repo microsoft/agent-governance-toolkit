@@ -5,8 +5,7 @@
 
 use agent_control_specification::{
     AgentControl, AgentControlInterruption, EnforcementMode, HostEvaluation, InterceptionPoint,
-    JsonValue, Manifest, OpaRegoRunner, PolicyDispatcher, PreparedPolicyInvocation, Runtime,
-    RuntimeError,
+    JsonValue, Manifest, OpaRegoRunner, PolicyDispatcher, PreparedPolicyInvocation, RuntimeError,
 };
 use agent_control_specification_annotators::ClassifierAnnotator;
 use serde_json::json;
@@ -111,12 +110,11 @@ intervention_points:
     );
 
     let manifest = Manifest::from_yaml_str(&manifest_yaml)?;
-    let runtime = Runtime::new(
+    let control = AgentControl::from_manifest_with_dispatchers(
         manifest,
-        Arc::new(ClassifierAnnotator::new()),
-        Arc::new(OpaPolicy { runner: opa }),
+        Some(Arc::new(ClassifierAnnotator::new())),
+        Some(Arc::new(OpaPolicy { runner: opa })),
     )?;
-    let control = AgentControl::new(runtime);
 
     println!("ACS live enforcement loop (Azure Content Safety + OPA Rego)\n");
 

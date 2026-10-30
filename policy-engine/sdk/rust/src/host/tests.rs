@@ -59,11 +59,11 @@ impl PolicyDispatcher for QueuePolicy {
     }
 }
 
-fn runtime(manifest_yaml: &str, policy: Arc<QueuePolicy>) -> Runtime {
-    Runtime::new(
+fn build_control(manifest_yaml: &str, policy: Arc<QueuePolicy>) -> AgentControl {
+    AgentControl::from_manifest_with_dispatchers(
         Manifest::from_yaml_str(manifest_yaml).unwrap(),
-        Arc::new(NoopAnnotator),
-        policy,
+        Some(Arc::new(NoopAnnotator)),
+        Some(policy),
     )
     .unwrap()
 }
@@ -342,7 +342,7 @@ fn run_allows_and_blocks_input_denial_before_execute() {
         json!({"decision": "allow"}),
         json!({"decision": "allow"}),
     ]));
-    let control = AgentControl::new(runtime(run_manifest(), allow_policy));
+    let control = build_control(run_manifest(), allow_policy);
     let result = control
         .run(json!({"text": "hello"}), |input| json!({"echo": input}))
         .unwrap();
@@ -360,7 +360,7 @@ fn run_allows_and_blocks_input_denial_before_execute() {
         "decision": "deny",
         "reason": "blocked_input"
     })]));
-    let control = AgentControl::new(runtime(run_manifest(), deny_policy.clone()));
+    let control = build_control(run_manifest(), deny_policy.clone());
     let executed = Arc::new(Mutex::new(false));
     let executed_for_closure = executed.clone();
     let blocked = control
@@ -397,7 +397,7 @@ fn run_uses_transformed_input_and_output_in_enforce_mode() {
             "decision": "transform", "transform": {"path": "$target.text", "value": "final"}
         }),
     ]));
-    let control = AgentControl::new(runtime(run_manifest(), policy));
+    let control = build_control(run_manifest(), policy);
     let executed_with = Arc::new(Mutex::new(JsonValue::Null));
     let executed_with_for_closure = executed_with.clone();
 
@@ -433,7 +433,7 @@ fn evaluate_only_does_not_block_or_apply_transforms() {
         }),
         json!({"decision": "deny", "reason": "observed_only"}),
     ]));
-    let control = AgentControl::new(runtime(run_manifest(), policy));
+    let control = build_control(run_manifest(), policy);
     let executed_with = Arc::new(Mutex::new(JsonValue::Null));
     let executed_with_for_closure = executed_with.clone();
 
@@ -468,7 +468,7 @@ fn try_run_preserves_execute_errors() {
     struct HostError(&'static str);
 
     let policy = Arc::new(QueuePolicy::with_responses([json!({"decision": "allow"})]));
-    let control = AgentControl::new(runtime(run_manifest(), policy));
+    let control = build_control(run_manifest(), policy);
     let error = control
         .try_run(json!({"text": "hello"}), |_input| {
             Err::<JsonValue, _>(HostError("boom"))
@@ -488,7 +488,7 @@ fn protected_tool_enforces_pre_and_post_with_stored_execute_repeatedly() {
             "decision": "transform", "transform": {"path": "$target.answer", "value": "redacted"}
         }),
     ]));
-    let control = AgentControl::new(runtime(&tool_manifest("$snap.tool_call.args"), policy));
+    let control = build_control(&tool_manifest("$snap.tool_call.args"), policy);
     let executed_with = Arc::new(Mutex::new(Vec::new()));
     let executed_with_for_closure = executed_with.clone();
     let protected = control.protect_tool("search", move |args| {
@@ -535,10 +535,10 @@ fn run_model_allows_and_emits_model_snapshots() {
         json!({"decision": "allow"}),
         json!({"decision": "allow"}),
     ]));
-    let control = AgentControl::new(runtime(
+    let control = build_control(
         &model_manifest("$snap.model_request", "$snap.model_response"),
         policy,
-    ));
+    );
     let mut ambient = serde_json::Map::new();
     ambient.insert("conversation".to_string(), json!({"id": "conv-1"}));
 
@@ -572,10 +572,10 @@ fn run_model_uses_pre_transform_for_execute_and_post_snapshot() {
         }),
         json!({"decision": "allow"}),
     ]));
-    let control = AgentControl::new(runtime(
+    let control = build_control(
         &model_manifest("$snap.model_request", "$snap.model_response"),
         policy,
-    ));
+    );
     let executed_with = Arc::new(Mutex::new(JsonValue::Null));
     let executed_with_for_closure = executed_with.clone();
 
@@ -605,10 +605,10 @@ fn run_model_uses_post_transform_for_returned_value() {
             "decision": "transform", "transform": {"path": "$target.text", "value": "redacted"}
         }),
     ]));
-    let control = AgentControl::new(runtime(
+    let control = build_control(
         &model_manifest("$snap.model_request", "$snap.model_response"),
         policy,
-    ));
+    );
 
     let result = control
         .run_model(json!({"prompt": "hello"}), |_| json!({"text": "raw"}))
@@ -623,10 +623,10 @@ fn run_model_blocks_pre_denial_before_execute() {
         "decision": "deny",
         "reason": "blocked_request"
     })]));
-    let control = AgentControl::new(runtime(
+    let control = build_control(
         &model_manifest("$snap.model_request", "$snap.model_response"),
         policy.clone(),
-    ));
+    );
     let executed = Arc::new(Mutex::new(false));
     let executed_for_closure = executed.clone();
 
@@ -655,10 +655,10 @@ fn run_model_blocks_post_denial() {
         json!({"decision": "allow"}),
         json!({"decision": "deny", "reason": "blocked_response"}),
     ]));
-    let control = AgentControl::new(runtime(
+    let control = build_control(
         &model_manifest("$snap.model_request", "$snap.model_response"),
         policy,
-    ));
+    );
 
     let blocked = control
         .run_model(json!({"prompt": "hello"}), |_| json!({"text": "raw"}))
@@ -677,10 +677,10 @@ fn run_model_blocks_post_denial() {
 #[test]
 fn malformed_tool_args_fail_closed_before_execute() {
     let policy = Arc::new(QueuePolicy::default());
-    let control = AgentControl::new(runtime(
+    let control = build_control(
         &tool_manifest("$snap.tool_call.args.payload.query"),
         policy.clone(),
-    ));
+    );
     let executed = Arc::new(Mutex::new(false));
     let executed_for_closure = executed.clone();
 
@@ -754,7 +754,7 @@ fn rig_like_tool_wrapper_guards_tool_without_rig_dependency() {
             "decision": "transform", "transform": {"path": "$target.answer", "value": "redacted"}
         }),
     ]));
-    let control = AgentControl::new(runtime(&tool_manifest("$snap.tool_call.args"), policy));
+    let control = build_control(&tool_manifest("$snap.tool_call.args"), policy);
     let seen = Arc::new(Mutex::new(Vec::new()));
     let guarded = control.guard_rig_like_tool_with_options(
         SearchTool { seen: seen.clone() },
@@ -790,7 +790,7 @@ fn escalate_without_resolver_fails_closed() {
         "decision": "escalate",
         "reason": "needs_approval"
     })]));
-    let control = AgentControl::new(runtime(run_manifest(), policy));
+    let control = build_control(run_manifest(), policy);
     let executed = Arc::new(Mutex::new(false));
     let executed_for_closure = executed.clone();
 
@@ -816,8 +816,7 @@ fn escalate_after_approval_proceeds_with_original_input() {
         json!({"decision": "escalate", "reason": "needs_approval"}),
         json!({"decision": "allow"}),
     ]));
-    let control =
-        AgentControl::new(runtime(run_manifest(), policy)).with_approval_resolver(allow_resolver());
+    let control = build_control(run_manifest(), policy).with_approval_resolver(allow_resolver());
     let executed_with = Arc::new(Mutex::new(JsonValue::Null));
     let executed_with_for_closure = executed_with.clone();
 
@@ -839,7 +838,7 @@ fn escalate_approval_receives_and_matches_action_identity() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({"decision": "escalate"}),
     ]));
-    let control = AgentControl::new(runtime(run_manifest(), policy));
+    let control = build_control(run_manifest(), policy);
     let result = control.evaluate_intervention_point(
         InterceptionPoint::Input,
         json!({"input": {"text": "x"}}),
@@ -866,7 +865,7 @@ fn escalate_approval_action_mismatch_fails_closed() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({"decision": "escalate"}),
     ]));
-    let control = AgentControl::new(runtime(run_manifest(), policy));
+    let control = build_control(run_manifest(), policy);
     let mut result = control.evaluate_intervention_point(
         InterceptionPoint::Input,
         json!({"input": {"text": "x"}}),
@@ -903,8 +902,7 @@ fn escalate_deny_blocks() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({"decision": "escalate"}),
     ]));
-    let control =
-        AgentControl::new(runtime(run_manifest(), policy)).with_approval_resolver(deny_resolver());
+    let control = build_control(run_manifest(), policy).with_approval_resolver(deny_resolver());
 
     let interruption = control.run(json!({"text": "x"}), |v| v).unwrap_err();
     assert!(matches!(interruption, AgentControlInterruption::Blocked(_)));
@@ -921,8 +919,7 @@ fn escalate_suspend_raises_suspended_with_handle() {
             result.action_identity.clone().unwrap(),
         )
     });
-    let control =
-        AgentControl::new(runtime(run_manifest(), policy)).with_approval_resolver(resolver);
+    let control = build_control(run_manifest(), policy).with_approval_resolver(resolver);
 
     let interruption = control.run(json!({"text": "x"}), |v| v).unwrap_err();
     match interruption {
@@ -943,8 +940,7 @@ fn deny_does_not_consult_resolver() {
         *consulted_for_closure.lock().unwrap() = true;
         ApprovalResolution::allow(result.action_identity.clone().unwrap())
     });
-    let control =
-        AgentControl::new(runtime(run_manifest(), policy)).with_approval_resolver(resolver);
+    let control = build_control(run_manifest(), policy).with_approval_resolver(resolver);
 
     let interruption = control.run(json!({"text": "x"}), |v| v).unwrap_err();
     assert!(matches!(interruption, AgentControlInterruption::Blocked(_)));
@@ -957,8 +953,7 @@ fn per_call_resolver_overrides_instance_resolver() {
         json!({"decision": "escalate"}),
         json!({"decision": "allow"}),
     ]));
-    let control =
-        AgentControl::new(runtime(run_manifest(), policy)).with_approval_resolver(deny_resolver());
+    let control = build_control(run_manifest(), policy).with_approval_resolver(deny_resolver());
 
     let result = control
         .run_with_options(
@@ -983,8 +978,7 @@ fn evaluate_only_does_not_consult_resolver() {
         *consulted_for_closure.lock().unwrap() = true;
         ApprovalResolution::allow(result.action_identity.clone().unwrap())
     });
-    let control =
-        AgentControl::new(runtime(run_manifest(), policy)).with_approval_resolver(resolver);
+    let control = build_control(run_manifest(), policy).with_approval_resolver(resolver);
 
     let result = control
         .run_with_options(
@@ -1004,7 +998,7 @@ fn post_tool_escalate_runs_tool_but_blocks_result() {
         json!({"decision": "allow"}),
         json!({"decision": "escalate"}),
     ]));
-    let control = AgentControl::new(runtime(&tool_manifest("$snap.tool_call.args"), policy));
+    let control = build_control(&tool_manifest("$snap.tool_call.args"), policy);
     let executed = Arc::new(Mutex::new(false));
     let executed_for_closure = executed.clone();
 
@@ -1029,7 +1023,7 @@ fn post_tool_escalate_runs_tool_but_blocks_result() {
 }
 
 #[test]
-fn with_telemetry_emits_one_decision_event_per_evaluation() {
+fn with_telemetry_emits_one_decision_event_per_evaluation() -> Result<(), RuntimeError> {
     use agent_control_specification_core::InMemoryTelemetrySink;
 
     let policy = Arc::new(QueuePolicy::with_responses([
@@ -1042,7 +1036,7 @@ fn with_telemetry_emits_one_decision_event_per_evaluation() {
         Some(policy),
     )
     .unwrap()
-    .with_telemetry(sink.clone());
+    .with_telemetry(sink.clone())?;
 
     let result = control.evaluate_intervention_point(
         InterceptionPoint::Input,
@@ -1059,6 +1053,7 @@ fn with_telemetry_emits_one_decision_event_per_evaluation() {
     assert_eq!(events[0].policy_id.as_deref(), Some("test_policy"));
     // Free-text reason is reduced to a safe code by the core redaction helper.
     assert_eq!(events[0].reason_code.as_deref(), Some("blocked"));
+    Ok(())
 }
 
 #[test]
@@ -1279,4 +1274,514 @@ intervention_points:
         Some(Arc::new(QueuePolicy::with_responses([]))),
     )
     .expect("upstream implements pinned prompt URLs");
+}
+
+// ---- #3941: every control keeps its limits, dispatchers and telemetry ----
+
+fn tight_limits() -> crate::Limits {
+    crate::Limits {
+        max_snapshot_bytes: 256,
+        ..crate::Limits::default()
+    }
+}
+
+fn oversized_transform_policy() -> Arc<QueuePolicy> {
+    Arc::new(QueuePolicy::with_responses([json!({
+        "decision": "transform",
+        "transform": {"path": "$target", "value": "b".repeat(100)}
+    })]))
+}
+
+fn tight_control(policy: Arc<QueuePolicy>) -> AgentControl {
+    AgentControl::from_manifest_with_dispatchers_and_limits(
+        Manifest::from_yaml_str(run_manifest()).unwrap(),
+        Some(Arc::new(NoopAnnotator)),
+        Some(policy),
+        tight_limits(),
+    )
+    .unwrap()
+}
+
+fn padded_options() -> RunOptions {
+    RunOptions::default().with_ambient_snapshot(
+        json!({"ambient": "a".repeat(180)})
+            .as_object()
+            .unwrap()
+            .clone(),
+    )
+}
+
+/// Run the padded scenario and report whether the body executed and how
+/// the input point was judged.
+fn run_padded(
+    control: &AgentControl,
+    options: RunOptions,
+) -> (bool, Result<RunResult, AgentControlInterruption>) {
+    let (executed_with, outcome) = run_padded_capturing(control, options);
+    (executed_with.is_some(), outcome)
+}
+
+/// As [`run_padded`], returning the input the body received when it ran.
+fn run_padded_capturing(
+    control: &AgentControl,
+    options: RunOptions,
+) -> (
+    Option<JsonValue>,
+    Result<RunResult, AgentControlInterruption>,
+) {
+    let executed_with = Arc::new(Mutex::new(None));
+    let executed_with_for_closure = executed_with.clone();
+    let outcome = control.run_with_options(json!("x"), options, move |input| {
+        *executed_with_for_closure.lock().unwrap() = Some(input.clone());
+        input
+    });
+    let executed_with = executed_with.lock().unwrap().clone();
+    (executed_with, outcome)
+}
+
+fn blocked_reason(outcome: Result<RunResult, AgentControlInterruption>) -> String {
+    match outcome {
+        Err(AgentControlInterruption::Blocked(blocked)) => {
+            assert_eq!(blocked.intervention_point, InterceptionPoint::Input);
+            blocked
+                .intervention_point_result
+                .verdict
+                .reason
+                .expect("host errors carry a reason")
+        }
+        other => panic!("expected a block at input, got {other:?}"),
+    }
+}
+
+#[test]
+fn oversized_transform_is_reported_in_evaluate_only_mode() {
+    let control = tight_control(oversized_transform_policy());
+    let (executed, outcome) = run_padded(
+        &control,
+        padded_options().with_mode(EnforcementMode::EvaluateOnly),
+    );
+    // Evaluate-only never blocks, but the limit failure must still be
+    // visible so the policy cannot look clean in shadow mode.
+    assert!(executed);
+    let result = outcome.unwrap();
+    let input = result.input_intervention_point_result;
+    assert_eq!(
+        input.verdict.reason.as_deref(),
+        Some("host_error:transform_invalid")
+    );
+    assert_eq!(input.transformed_policy_target, None);
+}
+
+#[test]
+fn transform_at_the_snapshot_limit_passes_and_one_byte_over_blocks() {
+    // Locate the boundary with the same validator the host applies, over
+    // the snapshot the host assembles for this scenario.
+    let probe = tight_control(Arc::new(QueuePolicy::with_responses([])));
+    let (_, outcome) = run_padded(
+        &probe,
+        padded_options().with_mode(EnforcementMode::EvaluateOnly),
+    );
+    let snapshot = outcome
+        .unwrap()
+        .input_intervention_point_result
+        .policy_input
+        .unwrap()["snapshot"]
+        .clone();
+    let with_input = |bytes: usize| {
+        let mut snapshot = snapshot.clone();
+        snapshot["input"] = json!("b".repeat(bytes));
+        snapshot
+    };
+    let at_limit = (1..=256)
+        .rev()
+        .find(|bytes| {
+            tight_limits()
+                .validate_snapshot(&with_input(*bytes))
+                .is_ok()
+        })
+        .expect("some transform fits in 256 bytes");
+    assert_eq!(
+        crate::canonical_json(&with_input(at_limit)).unwrap().len(),
+        256
+    );
+    assert!(tight_limits()
+        .validate_snapshot(&with_input(at_limit + 1))
+        .is_err());
+
+    let transform_of = |bytes: usize| {
+        Arc::new(QueuePolicy::with_responses([json!({
+            "decision": "transform",
+            "transform": {"path": "$target", "value": "b".repeat(bytes)}
+        })]))
+    };
+    // The body receives the transformed input, so the input point admitted
+    // a snapshot of exactly 256 bytes. The output snapshot then carries that
+    // input plus the output and may trip the engine's own budget; that is
+    // the engine's check, not the host revalidation under test here.
+    let (executed_with, outcome) =
+        run_padded_capturing(&tight_control(transform_of(at_limit)), padded_options());
+    assert_eq!(
+        executed_with,
+        Some(json!("b".repeat(at_limit))),
+        "a transform exactly at the limit is admitted"
+    );
+    if let Err(interruption) = outcome {
+        assert_eq!(interruption.intervention_point(), InterceptionPoint::Output);
+    }
+
+    let (executed, outcome) =
+        run_padded(&tight_control(transform_of(at_limit + 1)), padded_options());
+    assert!(!executed, "one byte over the limit is blocked");
+    assert_eq!(blocked_reason(outcome), "host_error:transform_invalid");
+}
+
+#[test]
+fn forbidden_transform_target_is_reported_over_its_size() {
+    let policy = Arc::new(QueuePolicy::with_responses([json!({
+        "decision": "transform",
+        "transform": {"path": "$snap.ambient", "value": "b".repeat(100)}
+    })]));
+    let (executed, outcome) = run_padded(&tight_control(policy), padded_options());
+    assert!(!executed);
+    // The engine rejects the path before the host revalidates the size, so
+    // the code is the engine's; either way the target error wins over size.
+    let reason = blocked_reason(outcome);
+    assert!(
+        reason.ends_with(":transform_target_forbidden"),
+        "expected a forbidden-target code, got {reason}"
+    );
+}
+
+#[test]
+fn cloned_control_keeps_its_limits() {
+    let original = tight_control(oversized_transform_policy());
+    let clone = original.clone();
+    drop(original);
+    let (executed, outcome) = run_padded(&clone, padded_options());
+    assert!(!executed);
+    assert_eq!(blocked_reason(outcome), "host_error:transform_invalid");
+}
+
+fn deny_policy() -> Arc<QueuePolicy> {
+    Arc::new(QueuePolicy::with_responses([
+        json!({"decision": "deny", "reason": "blocked"}),
+    ]))
+}
+
+fn manifest_file(yaml: &str) -> tempfile::NamedTempFile {
+    let file = tempfile::Builder::new().suffix(".yaml").tempfile().unwrap();
+    std::fs::write(file.path(), yaml).unwrap();
+    file
+}
+
+fn ifc_manifest_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/ifc_agent/manifest.yaml")
+}
+
+/// The ifc_agent manifest with its relative paths made absolute, so it can
+/// be loaded as an in-memory chain where no manifest directory exists.
+fn ifc_manifest_yaml_with_absolute_paths() -> String {
+    let dir = ifc_manifest_path()
+        .parent()
+        .unwrap()
+        .canonicalize()
+        .unwrap();
+    std::fs::read_to_string(ifc_manifest_path())
+        .unwrap()
+        .replace(
+            "bundle: ./policy",
+            &format!("bundle: {}", dir.join("policy").display()),
+        )
+        .replace(
+            "- ../../policy/lib/ifc.rego",
+            &format!("- {}", dir.join("../../policy/lib/ifc.rego").display()),
+        )
+}
+
+fn ifc_deny_snapshot() -> JsonValue {
+    json!({
+        "tool_call": { "name": "public_egress", "args": { "body": "secret" } },
+        "ifc": { "source_labels": ["confidential"] }
+    })
+}
+
+/// One public constructor under test: its name, the control it built, the
+/// deny evaluation it supports, and the policy id and reason code the
+/// telemetry event must carry.
+type ConstructorCase = (
+    &'static str,
+    Result<AgentControl, RuntimeError>,
+    InterceptionPoint,
+    JsonValue,
+    &'static str,
+    &'static str,
+);
+
+/// Every public constructor, paired with the deny evaluation it supports
+/// and the policy id and reason the telemetry event must carry.
+fn every_constructor() -> Vec<ConstructorCase> {
+    let test_input = json!({"input": {"text": "hi"}});
+    let run_file = manifest_file(run_manifest());
+    let ifc_yaml = ifc_manifest_yaml_with_absolute_paths();
+    vec![
+        (
+            "from_path",
+            AgentControl::from_path(ifc_manifest_path()),
+            InterceptionPoint::PreToolCall,
+            ifc_deny_snapshot(),
+            "ifc_policy",
+            "ifc_clearance_violation",
+        ),
+        (
+            "from_path_with_dispatchers",
+            AgentControl::from_path_with_dispatchers(
+                run_file.path(),
+                Some(Arc::new(NoopAnnotator)),
+                Some(deny_policy()),
+            ),
+            InterceptionPoint::Input,
+            test_input.clone(),
+            "test_policy",
+            "blocked",
+        ),
+        (
+            "from_manifest",
+            AgentControl::from_manifest(Manifest::from_path(ifc_manifest_path()).unwrap()),
+            InterceptionPoint::PreToolCall,
+            ifc_deny_snapshot(),
+            "ifc_policy",
+            "ifc_clearance_violation",
+        ),
+        (
+            "from_manifest_with_dispatchers",
+            AgentControl::from_manifest_with_dispatchers(
+                Manifest::from_yaml_str(run_manifest()).unwrap(),
+                Some(Arc::new(NoopAnnotator)),
+                Some(deny_policy()),
+            ),
+            InterceptionPoint::Input,
+            test_input.clone(),
+            "test_policy",
+            "blocked",
+        ),
+        (
+            "from_manifest_with_dispatchers_and_limits",
+            AgentControl::from_manifest_with_dispatchers_and_limits(
+                Manifest::from_yaml_str(run_manifest()).unwrap(),
+                Some(Arc::new(NoopAnnotator)),
+                Some(deny_policy()),
+                tight_limits(),
+            ),
+            InterceptionPoint::Input,
+            test_input.clone(),
+            "test_policy",
+            "blocked",
+        ),
+        (
+            "from_manifest_chain",
+            AgentControl::from_manifest_chain(&[ifc_yaml.as_str()]),
+            InterceptionPoint::PreToolCall,
+            ifc_deny_snapshot(),
+            "ifc_policy",
+            "ifc_clearance_violation",
+        ),
+        (
+            "from_manifest_chain_with_dispatchers",
+            AgentControl::from_manifest_chain_with_dispatchers(
+                &[run_manifest()],
+                Some(Arc::new(NoopAnnotator)),
+                Some(deny_policy()),
+            ),
+            InterceptionPoint::Input,
+            test_input,
+            "test_policy",
+            "blocked",
+        ),
+    ]
+}
+
+#[test]
+fn with_telemetry_delivers_events_for_every_constructor() {
+    use agent_control_specification_core::InMemoryTelemetrySink;
+
+    for (name, control, point, snapshot, policy_id, reason_code) in every_constructor() {
+        let sink = Arc::new(InMemoryTelemetrySink::new());
+        let control = control
+            .unwrap_or_else(|error| panic!("{name}: {error}"))
+            .with_telemetry(sink.clone())
+            .unwrap_or_else(|error| panic!("{name}: with_telemetry: {error}"));
+
+        let result = control.evaluate_intervention_point(point, snapshot, EnforcementMode::Enforce);
+
+        assert_eq!(result.verdict.decision, Decision::Deny, "{name}");
+        let events = sink.events();
+        assert_eq!(events.len(), 1, "{name}: {events:?}");
+        assert_eq!(events[0].decision, Some(Decision::Deny), "{name}");
+        assert_eq!(events[0].intervention_point, point, "{name}");
+        assert_eq!(events[0].policy_id.as_deref(), Some(policy_id), "{name}");
+        assert_eq!(
+            events[0].reason_code.as_deref(),
+            Some(reason_code),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn with_telemetry_keeps_limits_and_perf_level() -> Result<(), RuntimeError> {
+    use agent_control_specification_core::InMemoryTelemetrySink;
+
+    let sink = Arc::new(InMemoryTelemetrySink::new());
+    let control = tight_control(oversized_transform_policy())
+        .with_perf_telemetry_level(crate::PerfTelemetry::Full)
+        .with_telemetry(sink.clone())?;
+
+    assert_eq!(
+        control.runtime().perf_telemetry(),
+        crate::PerfTelemetry::Full
+    );
+    let (executed, outcome) = run_padded(&control, padded_options());
+    assert!(!executed, "the rebuild must not widen the limits");
+    assert_eq!(blocked_reason(outcome), "host_error:transform_invalid");
+    assert!(
+        sink.events()
+            .iter()
+            .any(|event| event.intervention_point == InterceptionPoint::Input),
+        "the rebuilt runtime reports to the installed sink"
+    );
+    Ok(())
+}
+
+#[test]
+fn with_perf_telemetry_level_changes_the_runtime_level() {
+    let control = build_control(run_manifest(), Arc::new(QueuePolicy::with_responses([])));
+    assert_eq!(
+        control.runtime().perf_telemetry(),
+        crate::PerfTelemetry::Off
+    );
+    let control = control.with_perf_telemetry_level(crate::PerfTelemetry::External);
+    assert_eq!(
+        control.runtime().perf_telemetry(),
+        crate::PerfTelemetry::External
+    );
+    let control = control.with_perf_telemetry_level(crate::PerfTelemetry::Full);
+    assert_eq!(
+        control.runtime().perf_telemetry(),
+        crate::PerfTelemetry::Full
+    );
+}
+
+#[test]
+fn approval_resolver_survives_with_telemetry() -> Result<(), RuntimeError> {
+    use agent_control_specification_core::InMemoryTelemetrySink;
+
+    let policy = Arc::new(QueuePolicy::with_responses([
+        json!({"decision": "escalate", "reason": "needs_approval"}),
+        json!({"decision": "allow"}),
+    ]));
+    let sink = Arc::new(InMemoryTelemetrySink::new());
+    let control = build_control(run_manifest(), policy)
+        .with_approval_resolver(allow_resolver())
+        .with_telemetry(sink.clone())?;
+
+    let result = control
+        .run(json!({"text": "original"}), |input| input)
+        .expect("the resolver installed before the rebuild still approves");
+    assert_eq!(result.value, json!({"text": "original"}));
+    assert_eq!(sink.events().len(), 2, "one decision event per evaluation");
+    Ok(())
+}
+
+#[test]
+fn second_with_telemetry_replaces_the_first_sink() -> Result<(), RuntimeError> {
+    use agent_control_specification_core::InMemoryTelemetrySink;
+
+    let first = Arc::new(InMemoryTelemetrySink::new());
+    let second = Arc::new(InMemoryTelemetrySink::new());
+    let control = build_control(run_manifest(), deny_policy())
+        .with_telemetry(first.clone())?
+        .with_telemetry(second.clone())?;
+
+    control.evaluate_intervention_point(
+        InterceptionPoint::Input,
+        json!({"input": {"text": "hi"}}),
+        EnforcementMode::Enforce,
+    );
+
+    assert_eq!(first.events().len(), 0);
+    assert_eq!(second.events().len(), 1);
+    Ok(())
+}
+
+#[test]
+fn every_constructor_rejects_removed_manifest_fields() {
+    let yaml = r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: test
+annotators:
+  judge:
+    type: llm
+    system_prompt_file: prompts/judge.txt
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+    annotations:
+      judge:
+        from: $target
+"#;
+    let manifest = Manifest::from_yaml_str(yaml).expect("upstream accepts the field");
+    let file = manifest_file(yaml);
+    let noop = || -> Option<Arc<dyn AnnotatorDispatcher>> { Some(Arc::new(NoopAnnotator)) };
+    let allow =
+        || -> Option<Arc<dyn PolicyDispatcher>> { Some(Arc::new(QueuePolicy::with_responses([]))) };
+    let attempts: Vec<(&str, Result<AgentControl, RuntimeError>)> = vec![
+        ("from_path", AgentControl::from_path(file.path())),
+        (
+            "from_path_with_dispatchers",
+            AgentControl::from_path_with_dispatchers(file.path(), noop(), allow()),
+        ),
+        (
+            "from_manifest",
+            AgentControl::from_manifest(manifest.clone()),
+        ),
+        (
+            "from_manifest_with_dispatchers",
+            AgentControl::from_manifest_with_dispatchers(manifest.clone(), noop(), allow()),
+        ),
+        (
+            "from_manifest_with_dispatchers_and_limits",
+            AgentControl::from_manifest_with_dispatchers_and_limits(
+                manifest,
+                noop(),
+                allow(),
+                tight_limits(),
+            ),
+        ),
+        (
+            "from_manifest_chain",
+            AgentControl::from_manifest_chain(&[yaml]),
+        ),
+        (
+            "from_manifest_chain_with_dispatchers",
+            AgentControl::from_manifest_chain_with_dispatchers(&[yaml], noop(), allow()),
+        ),
+    ];
+    for (name, attempt) in attempts {
+        let error = attempt
+            .err()
+            .unwrap_or_else(|| panic!("{name} accepted system_prompt_file"));
+        assert!(
+            matches!(error, RuntimeError::ManifestInvalid(_)),
+            "{name}: {error}"
+        );
+        assert!(
+            error
+                .to_string()
+                .starts_with("runtime_error:manifest_invalid"),
+            "{name}: {error}"
+        );
+    }
 }

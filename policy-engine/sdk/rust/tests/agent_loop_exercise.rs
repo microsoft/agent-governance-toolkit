@@ -1,7 +1,7 @@
 use agent_control_specification::{
     identity, AgentControl, AnnotatorDispatcher, AnnotatorInvocation, ApprovalOutcome,
     ApprovalResolution, ApprovalResolver, Decision, EnforcementMode, InterceptionPoint, JsonValue,
-    Manifest, PolicyDispatcher, PreparedPolicyInvocation, RigLikeTool, Runtime, RuntimeError,
+    Manifest, PolicyDispatcher, PreparedPolicyInvocation, RigLikeTool, RuntimeError,
 };
 use serde_json::json;
 use std::sync::{
@@ -143,7 +143,7 @@ annotators:
 }
 
 fn control(policy: Arc<ScenarioPolicy>, annotator: Arc<RecordingAnnotator>) -> AgentControl {
-    AgentControl::new(Runtime::new(manifest(), annotator, policy).unwrap())
+    AgentControl::from_manifest_with_dispatchers(manifest(), Some(annotator), Some(policy)).unwrap()
 }
 
 fn allow_resolver() -> ApprovalResolver {
@@ -479,14 +479,12 @@ tools:
 }
 
 fn payment_control(resolver: ApprovalResolver) -> AgentControl {
-    AgentControl::new(
-        Runtime::new(
-            payment_manifest(),
-            Arc::new(RecordingAnnotator::default()),
-            Arc::new(PaymentPolicy),
-        )
-        .unwrap(),
+    AgentControl::from_manifest_with_dispatchers(
+        payment_manifest(),
+        Some(Arc::new(RecordingAnnotator::default())),
+        Some(Arc::new(PaymentPolicy)),
     )
+    .unwrap()
     .with_approval_resolver(resolver)
 }
 

@@ -1,7 +1,7 @@
 use agent_control_specification::{
     assemble_sse_stream_with_limits, synthesize_sse_stream, AgentControl, AnnotatorDispatcher,
     AnnotatorInvocation, Decision, InterceptionPoint, JsonValue, Manifest, PolicyDispatcher,
-    PreparedPolicyInvocation, Runtime, RuntimeError, StreamingLimits, DEFAULT_MAX_STREAM_BYTES,
+    PreparedPolicyInvocation, RuntimeError, StreamingLimits, DEFAULT_MAX_STREAM_BYTES,
     DEFAULT_MAX_STREAM_EVENTS,
 };
 use serde_json::json;
@@ -68,9 +68,12 @@ intervention_points:
     policy_target: $snap.model_response"#,
     )
     .unwrap();
-    AgentControl::new(
-        Runtime::new(manifest, Arc::new(NoopAnnotator), Arc::new(AllowPolicy)).unwrap(),
+    AgentControl::from_manifest_with_dispatchers(
+        manifest,
+        Some(Arc::new(NoopAnnotator)),
+        Some(Arc::new(AllowPolicy)),
     )
+    .unwrap()
 }
 
 #[test]
@@ -212,9 +215,12 @@ intervention_points:
     policy_target: $snap.model_response"#,
     )
     .unwrap();
-    let control = AgentControl::new(
-        Runtime::new(manifest, Arc::new(NoopAnnotator), Arc::new(TransformPolicy)).unwrap(),
-    );
+    let control = AgentControl::from_manifest_with_dispatchers(
+        manifest,
+        Some(Arc::new(NoopAnnotator)),
+        Some(Arc::new(TransformPolicy)),
+    )
+    .unwrap();
     let input = read_fixture("inputs/allow_text_only.sse");
     let expected = read_fixture("inputs/synth_text.expected.sse");
 
