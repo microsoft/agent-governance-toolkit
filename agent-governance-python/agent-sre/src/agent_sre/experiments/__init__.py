@@ -140,10 +140,13 @@ class Experiment:
         if self.status != ExperimentStatus.RUNNING:
             return self.variants[0].name
 
-        r = random.random()  # noqa: S311 — non-cryptographic use for experiment randomization
+        # Weights are relative: each variant gets weight / total of the traffic,
+        # so they need not sum to 1. A variant with weight <= 0 gets none.
+        total = sum(max(v.weight, 0.0) for v in self.variants)
+        r = random.random() * total  # noqa: S311 — non-cryptographic use for experiment randomization
         cumulative = 0.0
         for v in self.variants:
-            cumulative += v.weight
+            cumulative += max(v.weight, 0.0)
             if r < cumulative:
                 self._assignments[v.name] = self._assignments.get(v.name, 0) + 1
                 return v.name

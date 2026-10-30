@@ -80,6 +80,103 @@ class TestValidate:
         assert result is False
 
 
+class _FakeClock:
+    """Stands in for the ``time`` module that ``blue_green`` uses."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def time(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        # Like time.sleep, reject a negative length.
+        if seconds < 0:
+            raise ValueError("sleep length must be non-negative")
+        self.now += seconds
+
+
+class _TooManyChecks(BaseException):
+    """Escapes ``validate``'s ``except Exception`` to stop a loop that never ends."""
+
+
+class TestValidateTimeout:
+    """The validation timeout is measured on the clock, not by summing intervals."""
+
+    def test_time_spent_in_health_checks_counts_against_timeout(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        clock = _FakeClock()
+        monkeypatch.setattr("agent_sre.delivery.blue_green.time", clock)
+        calls = []
+
+        def slow_failing_check() -> bool:
+            calls.append(clock.now)
+            clock.now += 30  # each check takes 30 seconds
+            return False
+
+        mgr = BlueGreenManager(
+            config=BlueGreenConfig(
+                health_check_interval_seconds=5,
+                validation_timeout_seconds=60,
+            )
+        )
+        mgr.deploy("v2.0.0")
+
+        assert mgr.validate(slow_failing_check) is False
+        # Checks start at 0s and 35s; the second one ends past the 60s timeout.
+        assert calls == [0.0, 35.0]
+
+    def test_zero_interval_stops_at_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        clock = _FakeClock()
+        monkeypatch.setattr("agent_sre.delivery.blue_green.time", clock)
+        calls = 0
+
+        def failing_check() -> bool:
+            nonlocal calls
+            calls += 1
+            if calls > 1000:
+                raise _TooManyChecks
+            clock.now += 1  # each check takes 1 second
+            return False
+
+        mgr = BlueGreenManager(
+            config=BlueGreenConfig(
+                health_check_interval_seconds=0,
+                validation_timeout_seconds=10,
+            )
+        )
+        mgr.deploy("v2.0.0")
+
+        assert mgr.validate(failing_check) is False
+        assert calls == 10
+        inactive = mgr.get_inactive()
+        assert inactive.health_status == "unhealthy"
+        assert inactive.state == EnvironmentState.INACTIVE
+
+    def test_negative_interval_does_not_raise(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        clock = _FakeClock()
+        monkeypatch.setattr("agent_sre.delivery.blue_green.time", clock)
+
+        def failing_check() -> bool:
+            clock.now += 1
+            return False
+
+        mgr = BlueGreenManager(
+            config=BlueGreenConfig(
+                health_check_interval_seconds=-1,
+                validation_timeout_seconds=3,
+            )
+        )
+        mgr.deploy("v2.0.0")
+
+        assert mgr.validate(failing_check) is False
+        assert mgr.get_inactive().state == EnvironmentState.INACTIVE
+
+
 class TestSwitch:
     """Switch traffic between environments."""
 

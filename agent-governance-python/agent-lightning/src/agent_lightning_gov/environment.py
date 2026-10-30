@@ -303,8 +303,6 @@ class GovernedEnvironment(Generic[T_state, T_action]):
                 penalty *= 5
             reward += penalty
 
-        self._state.total_reward += reward
-
         # Check termination conditions
         terminated = False
         truncated = False
@@ -324,6 +322,10 @@ class GovernedEnvironment(Generic[T_state, T_action]):
         if step_clean:
             reward += self.config.success_bonus
         self._episode_clean = step_clean and (first_step or self._episode_clean)
+
+        # Accumulate the reward this step returns, success bonus included,
+        # so total_reward is the episode's return.
+        self._state.total_reward += reward
 
         self._state.terminated = terminated
         self._state.truncated = truncated

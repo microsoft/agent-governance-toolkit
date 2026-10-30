@@ -56,7 +56,10 @@ def policy_penalty(
     full PolicyReward class.
 
     Args:
-        violations: List of PolicyViolation objects
+        violations: List of violations, each a PolicyViolation (or any
+            object with a ``severity`` attribute) or a dict with a
+            ``"severity"`` key, as returned by
+            ``kernel.get_recent_violations()``
         critical_penalty: Penalty for critical violations
         high_penalty: Penalty for high severity violations
         medium_penalty: Penalty for medium severity violations
@@ -78,7 +81,14 @@ def policy_penalty(
 
     total_penalty = 0.0
     for violation in violations:
-        severity = getattr(violation, "severity", "medium")
+        # Kernels may report violations as dicts (see
+        # ``GovernedEnvironment._pull_kernel_violations``); reading only the
+        # attribute charged every dict the medium penalty, whatever its
+        # severity.
+        if isinstance(violation, dict):
+            severity = violation.get("severity", "medium")
+        else:
+            severity = getattr(violation, "severity", "medium")
         total_penalty += severity_penalties.get(severity, medium_penalty)
 
     return total_penalty
@@ -164,13 +174,16 @@ class PolicyReward:
         # Get violations from rollout or check kernel
         violations = self._get_violations(rollout)
 
-        # Calculate penalty
-        penalty = self._calculate_penalty(violations)
-
-        # Calculate final reward
+        # Calculate final reward. ``penalty`` is the amount the violations
+        # actually took off the base reward, so the statistics and the
+        # emitted ``policy_penalty`` match the mode that was applied: the
+        # severity table in additive mode, the scaling in multiplicative
+        # mode.
         if self.config.multiplicative and violations:
             final_reward = base_reward * self.config.multiplicative_factor
+            penalty = final_reward - base_reward
         else:
+            penalty = self._calculate_penalty(violations)
             final_reward = base_reward + penalty
 
         # Apply clean execution bonus

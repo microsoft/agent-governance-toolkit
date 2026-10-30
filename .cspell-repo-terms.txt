@@ -1350,3 +1350,10 @@ amqp
 amqps
 rediss
 xoxe
+OCSF
+ocsf
+NDJSON
+ndjson
+dataschema
+disp
+gitops

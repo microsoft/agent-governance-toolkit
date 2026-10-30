@@ -70,6 +70,20 @@ spec:
                       durationSeconds:
                         type: integer
                         minimum: 0
+                      analysis:
+                        type: array
+                        items:
+                          type: object
+                          required: [metric, threshold]
+                          properties:
+                            metric:
+                              type: string
+                            threshold:
+                              type: number
+                            comparator:
+                              type: string
+                              enum: [gte, lte, eq]
+                              default: gte
                       manualGate:
                         type: boolean
                         default: false

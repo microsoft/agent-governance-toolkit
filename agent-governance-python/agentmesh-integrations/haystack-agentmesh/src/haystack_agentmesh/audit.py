@@ -49,7 +49,7 @@ def _hash_entry(entry: AuditEntry) -> str:
     payload = (
         f"{entry.entry_id}|{entry.timestamp}|{entry.action}|"
         f"{entry.agent_id}|{entry.decision}|"
-        f"{json.dumps(entry.metadata, sort_keys=True)}|{entry.prev_hash}"
+        f"{json.dumps(entry.metadata, sort_keys=True, default=str)}|{entry.prev_hash}"
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -81,14 +81,19 @@ class AuditLogger:
         decision: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Record an audit entry and return ``entry_id`` and ``chain_hash``."""
+        """Record an audit entry and return ``entry_id`` and ``chain_hash``.
+
+        ``metadata`` is stored as a JSON snapshot taken now (values JSON
+        cannot hold are stored as their ``str()``), so later changes to the
+        caller's dict do not alter the recorded entry or break the chain.
+        """
         entry = AuditEntry(
             entry_id=uuid.uuid4().hex[:16],
             timestamp=time.time(),
             action=action,
             agent_id=agent_id,
             decision=decision,
-            metadata=metadata or {},
+            metadata=json.loads(json.dumps(metadata or {}, default=str)),
             prev_hash=self._last_hash,
         )
         entry.chain_hash = _hash_entry(entry)

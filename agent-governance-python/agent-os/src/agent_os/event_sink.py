@@ -221,6 +221,27 @@ class GovernanceEvent:
             cloudevent = signer.sign(cloudevent)
         return cloudevent
 
+    def to_ocsf(
+        self,
+        source: str | None = None,
+    ) -> dict[str, Any]:
+        """Serialize as an Open Cybersecurity Schema Framework (OCSF v1.9.0) record.
+
+        Translates this governance event envelope into standard OCSF schema
+        (e.g. Class 6003: API Activity, Class 2004: Detection Finding, Class 3003:
+        Authorize Session), preserving trace correlation identifiers (traceid,
+        spanid) and security metadata for direct ingestion into OCSF-native SIEMs.
+
+        Args:
+            source: CloudEvents source URI identifying the emitter.
+
+        Returns:
+            An OCSF-compliant dictionary suitable for JSON serialization.
+        """
+        from agent_os.ocsf import governance_event_to_ocsf
+
+        return governance_event_to_ocsf(self, source=source)
+
 
 class GovernanceEventSigner:
     """HMAC-SHA256 signer/verifier for CloudEvents governance envelopes.
