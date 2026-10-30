@@ -24,7 +24,7 @@
       "action": "Action::\"output\"",
       "resource": "PolicyTarget::\"assistant_output\"",
       "context": {
-        "response": {"content": "your manager is bob@corp.example"}
+        "output": "your manager is bob@corp.example"
       }
     },
     "entities": [

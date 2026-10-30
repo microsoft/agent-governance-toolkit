@@ -129,9 +129,8 @@ forbid (
   action,
   resource
 ) when {
-  context has response &&
-  context.response has content &&
-  context.response.content like "*@*.*"
+  context has output &&
+  context.output like "*@*.*"
 };
 
 @id("pii_ssn_pattern_in_input")
@@ -182,10 +181,9 @@ forbid (
   resource
 ) when {
   resource has clearance_dominated_labels &&
-  context has response &&
-  context.response has ifc &&
-  context.response.ifc has result_labels &&
-  !(resource.clearance_dominated_labels.containsAll(context.response.ifc.result_labels))
+  context has ifc &&
+  context.ifc has result_labels &&
+  !(resource.clearance_dominated_labels.containsAll(context.ifc.result_labels))
 };
 
 // ── approval (escalate via advice) ───────────────────────────────────

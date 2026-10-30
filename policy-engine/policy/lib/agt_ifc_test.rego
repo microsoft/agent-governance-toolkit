@@ -67,7 +67,7 @@ test_source_labels_defaults_to_empty if {
 }
 
 test_result_labels_reads_agt_output_path if {
-	ifc.result_labels == ["internal"] with input as {"snapshot": {"response": {"ifc": {"result_labels": ["internal"]}}}}
+	ifc.result_labels == ["internal"] with input as {"snapshot": {"ifc": {"result_labels": ["internal"]}}}
 }
 
 test_result_labels_defaults_to_empty if {

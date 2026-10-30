@@ -97,7 +97,7 @@ intervention_points:
     policy:
       id: scenario_policy
   output:
-    policy_target: $.response.content
+    policy_target: $.output
     policy_target_kind: assistant_output
     policy:
       id: scenario_policy

@@ -16,7 +16,7 @@ intervention_points:
     policy:
       id: prompt_safety
   output:
-    policy_target: $.response.content
+    policy_target: $.output
     policy:
       id: prompt_safety
   post_tool_call:

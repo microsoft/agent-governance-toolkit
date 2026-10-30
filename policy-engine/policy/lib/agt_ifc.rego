@@ -7,14 +7,14 @@
 # (`dominates`, `max_sensitivity`, `flow_allowed`, `allow`, `deny`,
 # `verdict`, `verdict_propagating`, and their `_with_lattice` variants)
 # matches the upstream library so policies authored against the AGT helpers
-# remain familiar. The snapshot paths are AGT-correct per
-# AGT-SNAPSHOT-1.0.md §2.2 (input) and §2.7 (output):
-# `input.snapshot.input.ifc.source_labels` at the `input` intervention
-# point, and `input.snapshot.response.ifc.result_labels` at `output`. The
-# upstream `agent_control_specification.lib.ifc` library reads
-# `input.snapshot.ifc.*`, which the AGT host SDKs do not populate and which
-# would therefore fail closed on every call. AGT users MUST import
-# `data.agt.ifc` rather than the upstream package.
+# remain familiar. The `source_labels` and `result_labels` readers below
+# follow the paths AGT hosts populate, per AGT-SNAPSHOT-1.0.md §2.2 and
+# §2.7: `input.snapshot.input.ifc.source_labels` at the `input`
+# intervention point, and `input.snapshot.ifc.result_labels` at `output`
+# (the top-level `ifc` member SPECIFICATION.md §11 names, since `output`
+# itself is the bare content). The upstream library takes the label array
+# as an argument and reads no snapshot path of its own, so AGT manifests
+# import `data.agt.ifc` for these readers.
 
 package agt.ifc
 
@@ -134,7 +134,7 @@ source_labels := value if {
 # Convenience helper that reads AGT snapshot result labels at the output
 # intervention point.
 result_labels := value if {
-	value := input.snapshot.response.ifc.result_labels
+	value := input.snapshot.ifc.result_labels
 	is_array(value)
 } else := []
 
