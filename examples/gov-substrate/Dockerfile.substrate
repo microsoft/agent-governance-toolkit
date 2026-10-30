@@ -1,0 +1,9 @@
+FROM docker:29-cli AS dockercli
+FROM python:3.12.10-slim-bookworm
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+RUN pip install --no-cache-dir fastapi==0.115.12 uvicorn==0.34.2 httpx==0.28.1 cryptography==46.0.2 PyYAML==6.0.3 aiosmtpd==1.4.6
+COPY substrate_service.py transport.py /integration/
+ENV PYTHONPATH=/gov-src:/integration PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /integration
+CMD ["python", "substrate_service.py"]

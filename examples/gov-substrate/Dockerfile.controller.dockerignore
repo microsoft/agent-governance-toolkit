@@ -1,0 +1,6 @@
+**/.local/
+**/__pycache__/
+**/.git/
+**/.pytest_cache/
+**/.ruff_cache/
+examples/gov-substrate/evidence/
