@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cloudevent_to_ocsf` and `governance_event_to_ocsf` convert AGT governance, audit, and trace telemetry from CloudEvents v1.0 schema to Open Cybersecurity Schema Framework (OCSF v1.9.0). Mapped classes include Class 6003 (API Activity), Class 2004 (Detection Finding), and Class 3003 (Authorize Session), preserving trace correlation (`trace_id`, `span_id`, `parent_span_id`, `session_id`), identity (under `actor.user` where applicable), policy metadata, and custom payloads under `unmapped`. `OCSFGovernanceSink` provides streaming NDJSON export for SIEMs and security data lakes (AWS Security Lake, Splunk, Datadog). (New public exports: `OCSFGovernanceSink`, `cloudevent_to_ocsf`, `governance_event_to_ocsf`.)
 
 ### Security
+- **Webhook SSRF guard for `WebhookNotifier` and `WebhookApprovalBackend`
+  (#3516).** Both posted to any configured URL with the default `urllib`
+  opener: no host check, DNS resolved by the client, redirects followed and
+  proxy variables honoured, so a configured or redirected URL could reach
+  loopback, private or cloud-metadata addresses. Endpoint URLs are now
+  checked at construction and again at connect time by
+  `agent_os.integrations.webhook_guard.WebhookEndpointGuard`, which rejects
+  internal destinations (including IPv4-mapped IPv6, decimal and hex IPv4
+  spellings, `localhost` and trailing-dot forms), resolves the host itself,
+  rejects any internal record, pins the socket to the validated address,
+  follows no redirects and ignores proxy settings. A notifier or backend
+  built with an internal URL now raises `ValueError`; operators who need
+  an internal receiver pass
+  `endpoint_guard=WebhookEndpointGuard.allowing(["10.0.0.0/8"])`.
 - **Breaking custom-store contract: atomic MCP replay protection**:
   `MCPMessageSigner` verifies signatures before accessing the replay store and
   rechecks freshness under its lock before claiming a nonce. Concurrent

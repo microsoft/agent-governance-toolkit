@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Webhook SSRF guard resolves and pins (#3516).** `HttpAdvisory`,
+  `VersionedWebhookApproval` and the deprecated `WebhookApproval` checked
+  the endpoint host against three literal strings once, at construction,
+  then let `urllib` resolve the name and follow redirects. A host name
+  resolving to `127.0.0.1`, `169.254.169.254` or a private address, a
+  literal loopback or private address, an IPv4-mapped IPv6 address, a
+  decimal or hex IPv4 spelling, `localhost`, a trailing dot, a redirect to
+  an internal host, or a DNS answer that changed between validation and
+  connect all reached the internal destination. The new
+  `agentmesh.governance.webhook_guard.WebhookEndpointGuard` rejects
+  loopback, private, link-local, shared, multicast, reserved and
+  documentation ranges in IPv4 and IPv6 (unwrapping mapped and compatible
+  forms), blocked host names with their subdomains, and `inet_aton`
+  spellings at construction; at connect time it resolves the host itself,
+  rejects the request when any record is internal, and opens the socket to
+  the validated address so the name is never resolved twice. The opener
+  follows no redirects and ignores proxy environment variables. Operators
+  who need an internal receiver pass
+  `endpoint_guard=WebhookEndpointGuard.allowing(["10.0.0.0/8"])`; the
+  default allows nothing internal.
 - **RFC 8785 number serialization in the approval action digest**: `approval_protocol.canonicalize` now writes floats the way ECMAScript `Number::toString` does, as RFC 8785 section 3.2.2.3 requires (`1e-06` becomes `0.000001`, `1e-07` becomes `1e-7`, `1e21` becomes `1e+21`). Digests over action parameters holding such floats change; they now match other JCS implementations, and an approval computed by an earlier version over such a parameter no longer binds and must be requested again. The RFC 8785 Appendix B number table is pinned in the tests.
 - **HTTP trust middleware request authentication.** `TrustMiddleware` no longer
   accepts a caller-supplied `X-Agent-DID` header as proof of identity. It

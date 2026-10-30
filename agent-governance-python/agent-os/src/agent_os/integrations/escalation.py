@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
+from .webhook_guard import DEFAULT_GUARD, WebhookEndpointGuard
 
 logger = logging.getLogger(__name__)
 
@@ -214,15 +215,25 @@ class WebhookApprovalBackend(ApprovalBackend):
     API endpoint).
 
     Args:
-        webhook_url: URL to POST escalation notifications to.
+        webhook_url: URL to POST escalation notifications to. Checked against
+            ``endpoint_guard`` here and again at connect time.
         headers: Optional HTTP headers (e.g., auth tokens).
+        endpoint_guard: SSRF policy for the endpoint. The default denies
+            loopback, private, link-local and cloud-metadata destinations,
+            resolves the host itself, pins the connection to the validated
+            address and follows no redirects. Pass
+            ``WebhookEndpointGuard.allowing([...])`` for an internal receiver.
     """
 
     def __init__(
         self,
         webhook_url: str,
         headers: dict[str, str] | None = None,
+        *,
+        endpoint_guard: WebhookEndpointGuard | None = None,
     ) -> None:
+        self._guard = endpoint_guard or DEFAULT_GUARD
+        self._guard.validate_url(webhook_url)
         self._inner = InMemoryApprovalQueue()
         self._webhook_url = webhook_url
         self._headers = headers or {}
@@ -247,13 +258,14 @@ class WebhookApprovalBackend(ApprovalBackend):
                 },
                 default=str,
             ).encode()
-            req = urllib.request.Request(  # noqa: S310 — webhook URL from configuration
+            req = urllib.request.Request(
                 self._webhook_url,
                 data=payload,
                 headers={**self._headers, "Content-Type": "application/json"},
                 method="POST",
             )
-            urllib.request.urlopen(req, timeout=10)  # noqa: S310
+            with self._guard.open(req, timeout=10):
+                pass
             logger.info("Escalation webhook sent for %s", request.request_id)
         except Exception:
             logger.warning(

@@ -284,6 +284,7 @@ RustCrypto
 RustSec
 Rwandan
 SECP
+setsockopt
 SGHA
 SIEM
 SIGSTOP
@@ -598,6 +599,8 @@ frontmatter
 frozenset
 fsencode
 fullmatch
+functools
+gaierror
 gazetted
 gemini
 generativeai
@@ -605,6 +608,7 @@ genkey
 geofence
 geofencing
 geomatch
+getaddrinfo
 getattr
 getattribute
 getenv
@@ -613,6 +617,7 @@ getitem
 getopt
 getoption
 getpolicy
+getproxies
 getroot
 getuid
 getvalue
@@ -659,6 +664,7 @@ initialised
 innererror
 inspectable
 interp
+IPPROTO
 iproof
 ircuit
 isalnum
@@ -819,6 +825,7 @@ newtype
 newurl
 nfiu
 nmap
+NODELAY
 nonblocking
 nonconformant
 nonfinite
@@ -843,6 +850,7 @@ nsecure
 ntpath
 nuint
 nullglob
+NUMERICHOST
 numpy
 nupkgs
 objectcomprehension
