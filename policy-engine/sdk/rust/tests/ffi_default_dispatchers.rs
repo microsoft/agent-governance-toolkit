@@ -65,6 +65,30 @@ intervention_points:
       id: input_policy
     policy_target: $.input"#;
 
+const CEDAR_POLICY_MANIFEST: &str = r#"agent_control_specification_version: 0.4.0-alpha.1
+metadata:
+  name: defaults-cedar
+policies:
+  input_policy:
+    type: cedar
+    policy_set: |
+      forbid (principal, action, resource == Tool::"drop");
+      permit (principal, action, resource);
+intervention_points:
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: input_policy
+tools:
+  drop:
+    type: Tool
+    id: drop
+  read:
+    type: Tool
+    id: read"#;
+
 fn take_err(err: *mut c_char) -> String {
     if err.is_null() {
         return "<no error>".to_string();
@@ -174,9 +198,63 @@ fn default_policy_dispatcher_rejects_non_rego_policies() {
     assert!(runtime.is_null(), "non-rego policy must fail the build");
     let message = take_err(err);
     assert!(
-        message.contains("only Rego"),
+        message.contains("only Rego and Cedar policies")
+            && message.contains("policy 'input_policy'")
+            && message.contains("engine 'custom'"),
         "unexpected error message: {message}"
     );
+}
+
+/// The C ABI is the surface the default Cedar support is for: build a Cedar manifest through
+/// `acs_builder_enable_default_policy_dispatcher` and evaluate an allow and a deny.
+#[test]
+fn default_policy_dispatcher_builds_and_evaluates_cedar_manifests() {
+    let yaml = CString::new(CEDAR_POLICY_MANIFEST).unwrap();
+    let mut err: *mut c_char = ptr::null_mut();
+    let builder = unsafe { acs_builder_from_yaml(yaml.as_ptr(), &mut err) };
+    assert!(!builder.is_null(), "builder construction failed");
+
+    assert_eq!(
+        unsafe { acs_builder_enable_default_policy_dispatcher(builder, &mut err) },
+        0
+    );
+
+    let runtime = unsafe { acs_builder_build(builder, &mut err) };
+    assert!(
+        !runtime.is_null(),
+        "Cedar manifest must build through the default dispatcher, got {}",
+        take_err(err)
+    );
+
+    let mut evaluate = |tool: &str| -> Value {
+        let request = CString::new(
+            json!({
+                "intervention_point": "pre_tool_call",
+                "snapshot": {
+                    "envelope": { "agent": { "id": "agent-1" } },
+                    "tool_call": { "name": tool, "args": {} }
+                },
+                "mode": "enforce"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let out = unsafe { acs_runtime_evaluate(runtime, request.as_ptr(), &mut err) };
+        assert!(!out.is_null(), "evaluate error: {}", take_err(err));
+        let result: Value = serde_json::from_str(
+            unsafe { CStr::from_ptr(out) }
+                .to_str()
+                .expect("runtime output is UTF-8"),
+        )
+        .expect("runtime output is JSON");
+        unsafe { acs_free_string(out) };
+        result["verdict"]["decision"].clone()
+    };
+
+    assert_eq!(evaluate("read"), json!("allow"));
+    assert_eq!(evaluate("drop"), json!("deny"));
+
+    unsafe { acs_runtime_free(runtime) };
 }
 
 #[test]

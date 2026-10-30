@@ -466,12 +466,13 @@ pub unsafe extern "C" fn acs_builder_enable_default_annotator_dispatcher(
     })
 }
 
-/// Enable the bundled native OPA policy dispatcher as the build-time default.
+/// Enable the bundled policy dispatcher as the build-time default.
 ///
 /// When enabled and no explicit policy dispatcher is registered, the runtime
-/// evaluates Rego policies through the bundled OPA dispatcher. An explicitly
-/// registered host dispatcher always overrides this default. `build` fails fast
-/// if the manifest declares a non-Rego policy. OPA process failures happen
+/// evaluates Rego policies through the bundled OPA dispatcher and Cedar
+/// policies in process. An explicitly registered host dispatcher always
+/// overrides this default. `build` fails fast if the manifest declares a
+/// policy engine other than Rego or Cedar. OPA process failures happen
 /// during evaluation and are normalized to fail-closed verdicts.
 ///
 /// # Safety
