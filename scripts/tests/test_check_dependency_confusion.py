@@ -58,6 +58,20 @@ dev = ["pytest", "ruff>=0.5"]
     assert findings == []
 
 
+@pytest.mark.parametrize(
+    "package_name", ["agent-evidence-vectors", "agent_evidence_vectors"]
+)
+def test_published_evidence_corpus_is_registered(tmp_path, package_name: str) -> None:
+    """The optional conformance fixture is a published dependency, not a typo."""
+    pyproject = _write_pyproject(
+        tmp_path,
+        f'[project]\nname = "example"\n[project.optional-dependencies]\n'
+        f'dev = ["{package_name}==0.14.0"]\n',
+    )
+
+    assert check_pyproject_toml(pyproject) == []
+
+
 def test_check_pyproject_unregistered_dependency_is_flagged(tmp_path):
     pyproject = _write_pyproject(
         tmp_path,
