@@ -70,8 +70,9 @@ export function resolveBundledOpa(): string | undefined {
  * Prepend an explicit or bundled OPA location to PATH when one is available.
  *
  * This is intentionally non-throwing so generic construction surfaces can keep
- * the native runtime's own policy validation errors, such as "only Rego", while
- * still making the optional dependency work for zero-config Rego manifests.
+ * the native runtime's own policy validation errors, such as "only Rego and
+ * Cedar", while still making the optional dependency work for zero-config Rego
+ * manifests.
  */
 export function configureOpaPath(opaHint: string | undefined = process.env[OPA_PATH_ENV]): string | undefined {
   if (opaHint !== undefined && opaHint !== "") {

@@ -1,6 +1,6 @@
 use crate::{
     AnnotatorDispatcher, EnforcementMode, InterceptionPoint, JsonValue, Limits, Manifest,
-    PolicyDispatcher, Runtime, RuntimeError,
+    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError,
 };
 use std::{convert::Infallible, fmt, fs, path::Path, sync::Arc};
 
@@ -95,32 +95,86 @@ pub fn default_host_annotator_dispatcher_with_limits(
     }
 }
 
-/// Select AGT's OPA policy dispatcher independently of Cargo feature unification.
+/// Select the default host policy dispatcher for Rego and Cedar policies.
+///
+/// Rego invocations reach the OPA-backed dispatcher, preserving the existing
+/// executable selection and bundle behavior. Cedar invocations reach the
+/// in-process `CedarBuiltinDispatcher` from `agent-control-spec`, so a manifest
+/// that declares Cedar evaluates without a host-supplied dispatcher.
+///
+/// The default still fails closed for `test` and `custom` policies, which have
+/// no bundled evaluator.
 pub fn default_host_policy_dispatcher(
     manifest: &Manifest,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
     default_host_policy_dispatcher_with_limits(manifest, Limits::default())
 }
 
-/// Select the OPA policy default with explicit artifact download limits.
+/// Select the default policy dispatcher with explicit artifact download limits.
 pub fn default_host_policy_dispatcher_with_limits(
     manifest: &Manifest,
     limits: Limits,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
+    let mut has_rego = false;
+    let mut has_cedar = false;
     for (name, policy) in &manifest.policies {
         let engine = policy.engine_type();
-        if engine != "rego" {
-            return Err(RuntimeError::PolicyInvocationFailed(format!(
-                "default policy dispatcher supports only Rego policies; policy '{name}' uses engine '{engine}'"
-            )));
+        match engine {
+            "rego" => has_rego = true,
+            "cedar" => has_cedar = true,
+            _ => {
+                return Err(RuntimeError::PolicyInvocationFailed(format!(
+                    "default policy dispatcher supports only Rego and Cedar policies; policy '{name}' uses engine '{engine}'"
+                )))
+            }
         }
     }
-    // ACS prefers in-process Rego when any consumer enables that feature.
-    // AGT's existing API promises OPA executable selection and bundle behavior.
-    Ok(Arc::new(
-        agent_control_spec::OpaPolicyDispatcher::with_runner(
-            agent_control_spec::OpaRegoRunner::from_environment().with_limits(limits),
-        ),
+    match (has_rego, has_cedar) {
+        (true, true) => Ok(Arc::new(RoutingPolicyDispatcher {
+            rego: opa_policy_dispatcher(limits),
+            cedar: Arc::new(agent_control_spec::CedarBuiltinDispatcher::new()),
+        })),
+        (false, true) => Ok(Arc::new(agent_control_spec::CedarBuiltinDispatcher::new())),
+        _ => Ok(opa_policy_dispatcher(limits)),
+    }
+}
+
+/// Dispatch each invocation to the dispatcher that implements its engine.
+struct RoutingPolicyDispatcher {
+    rego: Arc<dyn PolicyDispatcher>,
+    cedar: Arc<dyn PolicyDispatcher>,
+}
+
+impl PolicyDispatcher for RoutingPolicyDispatcher {
+    fn evaluate(&self, invocation: &PreparedPolicyInvocation) -> Result<JsonValue, RuntimeError> {
+        match invocation {
+            PreparedPolicyInvocation::Rego(_) => self.rego.evaluate(invocation),
+            PreparedPolicyInvocation::Cedar(_) => self.cedar.evaluate(invocation),
+            other => Err(unsupported_invocation(other)),
+        }
+    }
+
+    fn warm(&self, invocation: &PreparedPolicyInvocation) -> Result<(), RuntimeError> {
+        match invocation {
+            PreparedPolicyInvocation::Rego(_) => self.rego.warm(invocation),
+            PreparedPolicyInvocation::Cedar(_) => self.cedar.warm(invocation),
+            other => Err(unsupported_invocation(other)),
+        }
+    }
+}
+
+fn unsupported_invocation(invocation: &PreparedPolicyInvocation) -> RuntimeError {
+    RuntimeError::PolicyInvocationFailed(format!(
+        "default policy dispatcher supports only Rego and Cedar invocations; received {} invocation",
+        invocation.engine_type()
+    ))
+}
+
+// ACS prefers in-process Rego when any consumer enables that feature.
+// AGT's existing API promises OPA executable selection and bundle behavior.
+fn opa_policy_dispatcher(limits: Limits) -> Arc<dyn PolicyDispatcher> {
+    Arc::new(agent_control_spec::OpaPolicyDispatcher::with_runner(
+        agent_control_spec::OpaRegoRunner::from_environment().with_limits(limits),
     ))
 }
 

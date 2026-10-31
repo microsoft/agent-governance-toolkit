@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import pickle
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -486,6 +487,22 @@ intervention_points:
     policy_target: $.input
 """
 
+CEDAR_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
+metadata:
+  name: zero-config-cedar
+policies:
+  guard:
+    type: cedar
+    policy_set: |
+{policy_set}
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: guard
+    policy_target: $.input
+"""
+
 REGO_MANIFEST = """agent_control_specification_version: 0.4.0-alpha.1
 metadata:
   name: zero-config-rego
@@ -601,7 +618,57 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
             else:
                 os.environ["ACS_OPA_PATH"] = previous
 
-    def test_default_policy_dispatcher_rejects_non_rego(self):
+    def _cedar_control(self, policy_set: str) -> AgentControl:
+        manifest = CEDAR_MANIFEST.format(
+            policy_set=textwrap.indent(policy_set, "      ")
+        )
+        return AgentControl.from_native(manifest)
+
+    def _evaluate_cedar(self, control: AgentControl):
+        return asyncio.run(
+            control.evaluate_intervention_point(
+                InterventionPoint.INPUT,
+                {
+                    "envelope": {"agent": {"id": "agent-1"}},
+                    "input": {"text": "hello"},
+                },
+            )
+        )
+
+    def test_default_policy_dispatcher_evaluates_cedar_allow(self):
+        control = self._cedar_control("permit(principal, action, resource);")
+
+        result = self._evaluate_cedar(control)
+
+        self.assertEqual(result.verdict.decision, Decision.ALLOW)
+        self.assertIsNotNone(result.policy_input)
+
+    def test_default_policy_dispatcher_reports_cedar_deny_reason(self):
+        control = self._cedar_control(
+            '@id("blocked")\nforbid(principal, action, resource);'
+        )
+
+        result = self._evaluate_cedar(control)
+
+        self.assertEqual(result.verdict.decision, Decision.DENY)
+        self.assertEqual(result.verdict.reason, "blocked")
+
+    def test_default_policy_dispatcher_fails_closed_on_invalid_cedar_advice(self):
+        control = self._cedar_control(
+            '@advice("{\\"verdict\\":\\"bogus\\"}")\n'
+            "permit(principal, action, resource);"
+        )
+
+        result = self._evaluate_cedar(control)
+
+        self.assertEqual(result.verdict.decision, Decision.DENY)
+        # Section 12.3 folds every dispatcher error into this reason. The Cedar
+        # dispatcher reports the advice mismatch as policy_output_invalid first.
+        self.assertEqual(
+            result.verdict.reason, "runtime_error:policy_invocation_failed"
+        )
+
+    def test_default_policy_dispatcher_rejects_unsupported_policy_types(self):
         import tempfile
 
         with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as handle:
@@ -610,7 +677,7 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
         try:
             with self.assertRaises(Exception) as ctx:
                 AgentControl.from_path(path)
-            self.assertIn("only Rego", str(ctx.exception))
+            self.assertIn("only Rego and Cedar", str(ctx.exception))
         finally:
             import os
 
