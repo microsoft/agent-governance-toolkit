@@ -14,12 +14,25 @@ No external MCP SDK dependency — implements the MCP tool interface via duck ty
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+def _amount(args: dict[str, Any], key: str) -> float:
+    """Read a USD amount from tool arguments; it must be finite and non-negative.
+
+    A negative report would lower the running total and raise the remaining
+    budget, and a NaN would make every later comparison false.
+    """
+    value = float(args.get(key, 0))
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{key} must be a finite, non-negative number, got {args.get(key)!r}")
+    return value
 
 
 @dataclass
@@ -156,19 +169,19 @@ class AgentSREServer:
 
     def _report_cost(self, args: dict[str, Any]) -> dict[str, Any]:
         agent_id = args.get("agent_id", "")
-        cost_usd = float(args.get("cost_usd", 0))
+        cost_usd = _amount(args, "cost_usd")
         self._cost_spent[agent_id] = self._cost_spent.get(agent_id, 0.0) + cost_usd
         budget = self._cost_budgets.get(agent_id)
         return {
             "agent_id": agent_id,
             "cost_recorded": cost_usd,
             "total_spent": self._cost_spent[agent_id],
-            "budget_remaining": (budget - self._cost_spent[agent_id]) if budget else None,
+            "budget_remaining": (budget - self._cost_spent[agent_id]) if budget is not None else None,
         }
 
     def _request_budget(self, args: dict[str, Any]) -> dict[str, Any]:
         agent_id = args.get("agent_id", "")
-        requested = float(args.get("requested_usd", 0))
+        requested = _amount(args, "requested_usd")
         budget = self._cost_budgets.get(agent_id)
         spent = self._cost_spent.get(agent_id, 0.0)
         if budget is None:
