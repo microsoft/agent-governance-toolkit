@@ -271,6 +271,6 @@ This verifies:
 
 ## See Also
 
-- [Policy Schema Reference](../docs/policy-schema.md)
-- [Kernel Internals](../docs/kernel-internals.md)
-- [Security Specification](../docs/security-spec.md)
+- [Policy Schema Reference](../policy-schema.md)
+- [Kernel Internals](../kernel-internals.md)
+- [Security Specification](../security-spec.md)
