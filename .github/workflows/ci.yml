@@ -23,6 +23,7 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       dotnet: ${{ steps.filter.outputs.dotnet }}
       typescript: ${{ steps.filter.outputs.typescript }}
+      studio: ${{ steps.filter.outputs.studio }}
       integrations: ${{ steps.filter.outputs.integrations }}
       rust: ${{ steps.filter.outputs.rust }}
       go: ${{ steps.filter.outputs.go }}
@@ -76,6 +77,9 @@ jobs:
               - 'agent-governance-python/agent-os/extensions/**'
               - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
               - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
+            studio:
+              - 'agent-governance-studio/**'
+              - '.github/workflows/ci.yml'
             integrations:
               - 'agent-governance-python/agentmesh-integrations/**'
               - 'examples/flowise-governance/**'
@@ -1260,6 +1264,84 @@ jobs:
             echo "No tests configured"
           fi
 
+  # ── Studio package lint, test and build (Python + frontend) ──────────
+  studio:
+    needs: changes
+    if: needs.changes.outputs.studio == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install pinned Python build and test tools
+        run: |
+          python -m pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-build.txt
+          python -m pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-lint.txt
+          python -m pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-test.txt
+      - name: Lint and test Studio Python package
+        run: |
+          ruff check agent-governance-studio/src agent-governance-studio/tests --select E,F,W --ignore E501
+          python -m pytest agent-governance-studio/tests -q --junitxml=/tmp/agt-studio-python.xml
+      - name: Build Studio wheel and sdist
+        run: python -m build --no-isolation agent-governance-studio
+      - name: Verify Studio distributions and clean install
+        run: |
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          from tarfile import open as open_tar
+          from zipfile import ZipFile
+
+          dist = Path("agent-governance-studio/dist")
+          wheels = list(dist.glob("*.whl"))
+          sdists = list(dist.glob("*.tar.gz"))
+          assert len(wheels) == len(sdists) == 1, (wheels, sdists)
+          with ZipFile(wheels[0]) as archive:
+              wheel_files = archive.namelist()
+          with open_tar(sdists[0], "r:gz") as archive:
+              sdist_files = archive.getnames()
+          for files in (wheel_files, sdist_files):
+              assert any(name.endswith("agent_governance_studio/__init__.py") for name in files)
+              assert any(name.endswith("/LICENSE") for name in files)
+              assert not any(
+                  {"web", "node_modules", "dist", "tests"} & set(PurePosixPath(name).parts)
+                  for name in files
+              )
+          PY
+          python -m venv /tmp/agt-studio-venv
+          /tmp/agt-studio-venv/bin/python -m pip install --no-deps agent-governance-studio/dist/*.whl
+          /tmp/agt-studio-venv/bin/python -I -c "import agent_governance_studio; print(agent_governance_studio.__file__)"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: agent-governance-studio/web/package-lock.json
+      - name: Install locked Studio frontend dependencies
+        run: npm ci --ignore-scripts --prefix agent-governance-studio/web
+      - name: Lint, test and build Studio frontend
+        run: |
+          npm run lint --prefix agent-governance-studio/web
+          npm test --prefix agent-governance-studio/web -- --reporter=default --reporter=junit --outputFile.junit=/tmp/agt-studio-frontend.xml
+          npm run build --prefix agent-governance-studio/web
+          python - <<'PY'
+          from pathlib import Path
+
+          styles = list(Path("agent-governance-studio/web/dist/assets").glob("*.css"))
+          assert len(styles) == 1, styles
+          assert ".text-3xl" in styles[0].read_text(encoding="utf-8")
+          PY
+      - name: Require executed Studio tests
+        run: |
+          python - <<'PY'
+          from xml.etree.ElementTree import parse
+
+          for path in ("/tmp/agt-studio-python.xml", "/tmp/agt-studio-frontend.xml"):
+              cases = parse(path).findall(".//testcase")
+              if not any(case.find("skipped") is None for case in cases):
+                  raise SystemExit(f"No Studio tests executed in {path}")
+              print(f"{path}: {len(cases)} tests, at least one executed")
+          PY
+
   # ── Rust build + test (only when Rust files change) ──────────────────
   build-rust:
     needs: changes
@@ -1447,6 +1529,7 @@ jobs:
         workflow-security,
         test-integrations-ts,
         build-npm,
+        studio,
         build-rust,
         build-go,
         docker-compose-test,
