@@ -38,6 +38,21 @@ rule would otherwise be skipped and could leave a later rule or the default
 action in effect. Unlike `in: []`, `not_in: []` is accepted because it matches
 every present field value; deny rules also match when the field is absent.
 
+The same refusal covers a rule the generated Rego cannot express exactly: a
+compound `and`, `or` or `not` condition, a rule without a condition, an
+unsupported operator, an invalid field path, a value of the wrong shape for its
+operator, a value with no JSON spelling (a YAML date, `!!binary`, `.nan`), a
+priority that is not a finite number, and a `scope` that is present but not a
+non-empty string (an empty scope would match nothing and drop the document's
+deny rules). Each names the rule in the error instead of writing a bundle in
+which the bad rule denies everything and every lower-priority rule is dead.
+
+A governance file is also refused as a whole when it holds a value the
+migrator could not write back: an integer with more digits than Python
+converts to text (`sys.get_int_max_str_digits()`, 4300 by default), a YAML
+anchor that refers to itself (`value: &v [*v]`), or nesting deeper than 64
+levels. The error names the rule or section, and nothing is written.
+
 ## After migrating
 
 The generated manifest is what the runtime evaluates. Load it through the ACS

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any
 
 from .errors import ResolutionError
@@ -363,6 +364,22 @@ def _conditions_overlap(parent_condition: Any, child_condition: Any) -> bool:
     )
 
 
+def _document_rules(doc: dict[str, Any], level: int) -> list[Any]:
+    """Return the ``rules`` list of a document, refusing any other shape.
+
+    A missing key means no rules. ``rules: null`` (a bare ``rules:`` line)
+    and any non-list value are refused: iterating ``None`` raised a bare
+    ``TypeError`` that escaped the CLI, and a mapping or string would be
+    walked element by element and misreported as a nameless rule.
+    """
+    rules = doc.get("rules", [])
+    if not isinstance(rules, list):
+        raise ResolutionError.invalid_governance(
+            f"rules at level {level} must be a list, got {type(rules).__name__}"
+        )
+    return rules
+
+
 def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merge governance documents into a flat priority-sorted rule list.
 
@@ -389,10 +406,24 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
             raise ResolutionError.invalid_governance(
                 f"document at level {level} is not a mapping"
             )
-        for rule in doc.get("rules", []):
+        for rule in _document_rules(doc, level):
             if not isinstance(rule, dict) or "name" not in rule:
                 raise ResolutionError.invalid_governance(
                     f"rule at level {level} is missing name"
+                )
+            priority = rule.get("priority", 0)
+            if (
+                isinstance(priority, bool)
+                or not isinstance(priority, (int, float))
+                or (isinstance(priority, float) and not math.isfinite(priority))
+            ):
+                # The sort below would raise a bare TypeError on a null or
+                # string priority and skip the migration report entirely.
+                # Only a float can be non-finite; math.isfinite() on an int
+                # too large for a float raises OverflowError instead.
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a non-numeric priority "
+                    f"({type(priority).__name__}); priority must be a finite number"
                 )
             if _condition_unsatisfiable(
                 rule.get("condition"), is_deny=_rule_action(rule) == "deny"
@@ -404,7 +435,7 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 )
 
     if len(documents) == 1:
-        rules = list(documents[0].get("rules", []))
+        rules = list(_document_rules(documents[0], 0))
         rules.sort(key=lambda r: r.get("priority", 0), reverse=True)
         return rules
 
@@ -413,7 +444,7 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
 
     for level, doc in enumerate(documents):
-        for rule in doc.get("rules", []):
+        for rule in _document_rules(doc, level):
             name = str(rule["name"])
             existing = rules_by_name.get(name)
             override = bool(rule.get("override", False))

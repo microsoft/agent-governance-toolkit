@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import random
 import re
+import sys
+import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -29,6 +32,10 @@ from agt.cli._migrate_resolution import (
 )
 from agt.cli._migrate_resolution.merge import merge_top_level_section
 from agt.cli._migrate_resolution.build import (
+    _MAX_NESTING_DEPTH,
+    _check_document_values,
+    _is_json_value,
+    _materialize_rego_bundle,
     _rego_field_accessor,
     _rego_op_clause,
     _render_rego,
@@ -1144,12 +1151,15 @@ def test_resolve_invalid_field_syntax_fails_closed(tmp_path: Path) -> None:
         },
     )
 
-    manifest = resolve_manifest(root, root)
-    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
-    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+    bundle = tmp_path / "bundle"
+    # An invalid field path used to render an always-matching fail-closed
+    # deny that turned every lower-priority rule into dead code (#3137).
+    # Migration now refuses the chain before writing a bundle.
+    with pytest.raises(ResolutionError, match="invalid field path") as exc:
+        resolve_manifest(root, root, bundle_dir=bundle)
 
-    assert "runtime_error:manifest_invalid" in rego
-    assert "invalid field" in rego
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert not bundle.exists()
 
 
 @pytest.mark.parametrize(
@@ -1222,44 +1232,37 @@ def test_resolve_rejects_unsatisfiable_rule_before_materializing_bundle(
         pytest.param(True, "gt", 3, id="boolean-range"),
     ],
 )
-def test_resolve_does_not_reject_uncertain_mixed_type_conditions(
-    tmp_path: Path,
+def test_merge_does_not_reject_uncertain_mixed_type_conditions(
     equal_value: object,
     operator: str,
     value: object,
 ) -> None:
-    root = tmp_path
-    _write(
-        root / "governance.yaml",
+    # The never-matches analysis must keep an uncertain mixed-type pair
+    # rather than declare the rule impossible. This exercises the merge layer
+    # directly: resolve_manifest now refuses every compound condition because
+    # the generated Rego cannot express one (#3137).
+    rule = _rule_with_condition(
+        "mixed-types",
+        "deny",
         {
-            "rules": [
-                _rule_with_condition(
-                    "mixed-types",
-                    "deny",
-                    {
-                        "and": [
-                            {
-                                "field": "tool_name",
-                                "operator": "eq",
-                                "value": equal_value,
-                            },
-                            {
-                                "field": "tool_name",
-                                "operator": operator,
-                                "value": value,
-                            },
-                        ]
-                    },
-                )
-            ],
-            "intervention_points": _legacy_binding(),
+            "and": [
+                {
+                    "field": "tool_name",
+                    "operator": "eq",
+                    "value": equal_value,
+                },
+                {
+                    "field": "tool_name",
+                    "operator": operator,
+                    "value": value,
+                },
+            ]
         },
     )
-    bundle_dir = tmp_path / "bundle"
 
-    manifest = resolve_manifest(root, root, bundle_dir=bundle_dir)
+    merged = merge_documents([{"rules": [rule]}])
 
-    assert manifest["policies"]["agt_legacy_rules"]["bundle"]
+    assert [r["name"] for r in merged] == ["mixed-types"]
 
 
 def test_resolve_fails_closed_when_legacy_rules_unbound(tmp_path: Path) -> None:
@@ -1598,3 +1601,734 @@ def test_render_matches_uses_authoritative_re2_when_available(
     }])
     assert "regex.match" in rego
     assert "runtime_error:manifest_invalid" not in rego
+
+
+# ── #3137 regressions: refuse instead of crash or silently deny ──────
+
+
+@pytest.mark.parametrize(
+    "priority",
+    [pytest.param(None, id="null"), pytest.param("high", id="string"), pytest.param(True, id="bool")],
+)
+def test_merge_rejects_non_numeric_priority_single_document(priority: object) -> None:
+    # Sorting [None, 1] used to raise a bare TypeError that escaped the CLI
+    # (migrate.py catches only ResolutionError) and left no migration report.
+    rules = [_rule("a", "deny", 1), {**_rule("b", "deny"), "priority": priority}]
+    with pytest.raises(ResolutionError, match="non-numeric priority") as exc:
+        merge_documents([{"rules": rules}])
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+
+
+@pytest.mark.parametrize(
+    "priority",
+    [pytest.param(None, id="null"), pytest.param("high", id="string"), pytest.param(True, id="bool")],
+)
+def test_merge_rejects_non_numeric_priority_multi_document(priority: object) -> None:
+    parent = {"rules": [_rule("p", "deny", 1)]}
+    child = {"rules": [{**_rule("c", "deny"), "priority": priority}]}
+    with pytest.raises(ResolutionError, match="non-numeric priority") as exc:
+        merge_documents([parent, child])
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+
+
+def test_merge_rejects_non_finite_priority() -> None:
+    with pytest.raises(ResolutionError, match="non-numeric priority"):
+        merge_documents([{"rules": [{**_rule("a", "deny"), "priority": float("nan")}]}])
+
+
+def test_merge_accepts_int_priority_too_large_for_float_single_document() -> None:
+    # math.isfinite(10**400) raised OverflowError ("int too large to convert
+    # to float"), another bare exception the CLI does not catch. Only a float
+    # can be non-finite, so an int of any size is a valid priority and sorts.
+    rules = [_rule("low", "deny", 1), _rule("huge", "deny", 10**400)]
+    assert [r["name"] for r in merge_documents([{"rules": rules}])] == ["huge", "low"]
+
+
+def test_merge_accepts_int_priority_too_large_for_float_multi_document() -> None:
+    parent = {"rules": [_rule("low", "deny", 1)]}
+    child = {"rules": [_rule("huge", "deny", 10**400)]}
+    assert [r["name"] for r in merge_documents([parent, child])] == ["huge", "low"]
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [
+        pytest.param(None, id="null"),
+        pytest.param("deny_all", id="string"),
+        pytest.param({"name": "a"}, id="mapping"),
+        pytest.param(3, id="int"),
+    ],
+)
+def test_merge_rejects_non_list_rules_single_document(rules: object) -> None:
+    # 'rules: null' (a bare 'rules:' line) raised a bare TypeError from the
+    # for loop; a string or mapping was iterated element by element and
+    # misreported as a nameless rule. Every non-list shape is refused with
+    # the offending type named. A missing key still means no rules.
+    with pytest.raises(ResolutionError, match="rules at level 0 must be a list") as exc:
+        merge_documents([{"rules": rules}])
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert type(rules).__name__ in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [pytest.param(None, id="null"), pytest.param("deny_all", id="string")],
+)
+def test_merge_rejects_non_list_rules_multi_document(rules: object) -> None:
+    parent = {"rules": [_rule("p", "deny", 1)]}
+    child = {"rules": rules}
+    with pytest.raises(ResolutionError, match="rules at level 1 must be a list") as exc:
+        merge_documents([parent, child])
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+
+
+def test_merge_missing_rules_key_means_no_rules() -> None:
+    assert merge_documents([{"intervention_points": {}}]) == []
+    assert [r["name"] for r in merge_documents([{}, {"rules": [_rule("c", "deny")]}])] == ["c"]
+
+
+def test_discover_nul_byte_in_action_path_fails_closed(tmp_path: Path) -> None:
+    # A NUL byte used to be classified by whatever Path.resolve() did with it:
+    # POSIX raises ValueError ("embedded null character"), which an earlier
+    # version let escape as a traceback, while Windows and Python 3.14 resolve
+    # the path and only fail in exists(), giving INVALID_GOVERNANCE. The byte is
+    # now refused up front, so the category is PATH_TRAVERSAL on every platform.
+    (tmp_path / "governance.yaml").write_text("rules: []\n", encoding="utf-8")
+
+    with pytest.raises(ResolutionError) as exc:
+        discover_policies(tmp_path / "svc\x00x", tmp_path)
+
+    assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
+    assert "NUL byte" in str(exc.value)
+
+
+def test_discover_nul_byte_is_path_traversal_even_when_resolve_accepts_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Simulate the Windows / Python 3.14 behaviour where Path.resolve() returns
+    # the NUL-bearing path instead of raising, so the walk would otherwise hit
+    # exists() and report INVALID_GOVERNANCE.
+    (tmp_path / "governance.yaml").write_text("rules: []\n", encoding="utf-8")
+    monkeypatch.setattr(Path, "resolve", lambda self, strict=False: self)
+
+    with pytest.raises(ResolutionError) as exc:
+        discover_policies(tmp_path / "svc\x00x", tmp_path)
+
+    assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
+    assert "NUL byte" in str(exc.value)
+
+
+def test_merge_accepts_absent_and_float_priority() -> None:
+    rules = [{**_rule("a", "deny"), "priority": 2.5}, _rule("b", "deny")]
+    del rules[1]["priority"]
+    assert [r["name"] for r in merge_documents([{"rules": rules}])] == ["a", "b"]
+
+
+@pytest.mark.parametrize(
+    "yaml_value",
+    [
+        pytest.param("2026-06-23", id="date"),
+        pytest.param("2026-06-23T10:00:00Z", id="datetime"),
+        pytest.param("!!binary aGVsbG8=", id="binary"),
+        pytest.param(".nan", id="nan"),
+        pytest.param(".inf", id="inf"),
+    ],
+)
+def test_resolve_refuses_non_json_condition_values(tmp_path: Path, yaml_value: str) -> None:
+    # json.dumps(value) in the renderer raised a bare TypeError for a YAML
+    # date or !!binary value (traceback, exit 1, no report); NaN/Infinity were
+    # written as literals OPA cannot parse. Refuse instead of coercing.
+    (tmp_path / "governance.yaml").write_text(
+        "rules:\n"
+        "  - name: dated\n"
+        "    action: deny\n"
+        "    priority: 1\n"
+        f"    condition: {{field: when, operator: eq, value: {yaml_value}}}\n"
+        "intervention_points:\n"
+        "  pre_tool_call:\n"
+        "    policy_target: $.tool_call.args\n"
+        "    policy_target_kind: tool_args\n"
+        "    tool_name_from: $.tool_call.name\n"
+        "    policy: {id: agt_legacy_rules}\n",
+        encoding="utf-8",
+    )
+    bundle = tmp_path / "bundle"
+    with pytest.raises(ResolutionError, match="rule 'dated'") as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert "cannot be written to Rego exactly" in str(exc.value)
+    assert not bundle.exists()
+
+
+def test_rego_op_clause_returns_none_for_untranslatable_literal() -> None:
+    import datetime
+
+    accessor = _rego_field_accessor("when")
+    assert accessor is not None
+    # Last line of defence behind _validate_rules: never a bare TypeError, and
+    # never a NaN literal in the bundle.
+    assert _rego_op_clause("eq", accessor, datetime.date(2026, 6, 23)) is None
+    assert _rego_op_clause("eq", accessor, float("nan")) is None
+    assert _rego_op_clause("exists", accessor, b"bytes") is None
+
+
+@pytest.mark.parametrize(
+    ("condition", "detail"),
+    [
+        pytest.param(
+            {"field": "tool_name", "operator": "fuzzy", "value": "rm"},
+            "unsupported operator",
+            id="unsupported-operator",
+        ),
+        pytest.param(
+            {"field": "tool_name", "operator": 7, "value": "rm"},
+            "unsupported operator",
+            id="non-string-operator",
+        ),
+        pytest.param(
+            {
+                "and": [
+                    {"field": "tool_name", "operator": "eq", "value": "rm"},
+                    {"field": "env", "operator": "eq", "value": "prod"},
+                ]
+            },
+            "compound 'and'",
+            id="compound-and",
+        ),
+        pytest.param(
+            {
+                "or": [
+                    {"field": "tool_name", "operator": "eq", "value": "rm"},
+                    {"field": "tool_name", "operator": "eq", "value": "curl"},
+                ]
+            },
+            "compound 'or'",
+            id="compound-or",
+        ),
+        pytest.param(
+            {"not": {"field": "tool_name", "operator": "eq", "value": "rm"}},
+            "compound 'not'",
+            id="compound-not",
+        ),
+        pytest.param(
+            {"field": 123, "operator": "eq", "value": "rm"},
+            "invalid field path",
+            id="non-string-field",
+        ),
+        pytest.param(
+            {"field": "", "operator": "eq", "value": "rm"},
+            "invalid field path",
+            id="empty-field",
+        ),
+        pytest.param(
+            {"field": "tool_name", "operator": "in", "value": "rm"},
+            "requires a list value",
+            id="in-with-scalar",
+        ),
+        pytest.param(
+            {"field": "tool_name", "operator": "startswith", "value": ["r"]},
+            "requires a string value",
+            id="startswith-with-list",
+        ),
+        pytest.param(
+            {"field": "tool_name", "operator": "matches", "value": "(unclosed"},
+            "regex pattern",
+            id="invalid-regex",
+        ),
+    ],
+)
+def test_resolve_refuses_untranslatable_rule_before_materializing(
+    tmp_path: Path, condition: dict, detail: str
+) -> None:
+    # Any of these used to render '_match_i if { true }': a fail-closed deny
+    # that made every lower-priority rule dead code with only a log warning.
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition("hi", "deny", {"field": "tool_name", "operator": "eq", "value": "rm"}, 10),
+                _rule_with_condition("bad", "allow", condition, 5),
+                _rule_with_condition("lo", "deny", {"field": "tool_name", "operator": "eq", "value": "curl"}, 1),
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+    bundle = tmp_path / "bundle"
+    with pytest.raises(ResolutionError, match="rule 'bad'") as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert detail in str(exc.value)
+    assert not bundle.exists()
+
+
+def test_resolve_refuses_rule_without_condition(tmp_path: Path) -> None:
+    rule = _rule("unconditional", "deny", 5)
+    del rule["condition"]
+    _write(
+        tmp_path / "governance.yaml",
+        {"rules": [rule], "intervention_points": _legacy_binding()},
+    )
+    bundle = tmp_path / "bundle"
+    with pytest.raises(ResolutionError, match="has no condition mapping"):
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+    assert not bundle.exists()
+
+
+def test_discover_wraps_resolve_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "chain"
+    target.mkdir()
+    original_resolve = Path.resolve
+
+    def failing_resolve(self: Path, *args, **kwargs):
+        if self == target:
+            raise OSError("resolve failed")
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", failing_resolve)
+    with pytest.raises(ResolutionError, match="failed to resolve action_path") as exc:
+        discover_policies(target, tmp_path)
+    assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
+    assert isinstance(exc.value.__cause__, OSError)
+
+
+def test_discover_wraps_walk_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # chmod is not reliable under root or on Windows, so fail the stat call
+    # the walk makes on the parent's governance candidate instead.
+    chain = tmp_path / "locked" / "chain"
+    chain.mkdir(parents=True)
+    (tmp_path / "governance.yaml").write_text("rules: []\n", encoding="utf-8")
+    blocked = tmp_path / "locked" / "governance.yaml"
+    original_is_file = Path.is_file
+
+    def failing_is_file(self: Path, *args, **kwargs):
+        if self == blocked:
+            raise PermissionError("stat denied")
+        return original_is_file(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "is_file", failing_is_file)
+    with pytest.raises(ResolutionError, match="failed to walk governance chain") as exc:
+        discover_policies(chain, tmp_path)
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert isinstance(exc.value.__cause__, PermissionError)
+
+    # The same crash propagated through resolve_manifest as a raw
+    # PermissionError, which the CLI does not catch.
+    with pytest.raises(ResolutionError):
+        resolve_manifest(tmp_path, chain, bundle_dir=tmp_path / "bundle")
+
+
+def test_discover_rejects_missing_action_path(tmp_path: Path) -> None:
+    (tmp_path / "governance.yaml").write_text("rules: []\n", encoding="utf-8")
+    # Used to be walked as if it were a directory and returned the root file.
+    with pytest.raises(ResolutionError, match="does not exist") as exc:
+        discover_policies(tmp_path / "does" / "not" / "exist", tmp_path)
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+
+
+# cspell:ignore mkfifo
+@pytest.mark.skipif(not hasattr(__import__("os"), "mkfifo"), reason="needs named pipes")
+def test_discover_rejects_action_path_that_is_neither_file_nor_directory(tmp_path: Path) -> None:
+    import os
+
+    fifo = tmp_path / "pipe"
+    os.mkfifo(fifo)
+    with pytest.raises(ResolutionError, match="neither a file nor a directory") as exc:
+        discover_policies(fifo, tmp_path)
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("   ", id="whitespace"),
+        pytest.param(["a", "b"], id="list"),
+        pytest.param(3, id="int"),
+    ],
+)
+def test_filter_by_scope_rejects_empty_or_non_string_scope(tmp_path: Path, scope: object) -> None:
+    # '' and '   ' matched nothing and silently dropped the document (and its
+    # deny rules); a list raised a raw AttributeError through the CLI.
+    with pytest.raises(ResolutionError, match="scope must be a non-empty glob string") as exc:
+        filter_by_scope(tmp_path / "governance.yaml", scope, tmp_path, tmp_path)  # type: ignore[arg-type]
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+
+
+def test_resolve_refuses_chain_with_empty_scope_instead_of_dropping_deny(tmp_path: Path) -> None:
+    root = tmp_path
+    child = root / "team"
+    child.mkdir()
+    _write(
+        root / "governance.yaml",
+        {"rules": [_rule("root_allow", "allow", 1)], "intervention_points": _legacy_binding()},
+    )
+    _write(
+        child / "governance.yaml",
+        {
+            "scope": "",
+            "rules": [
+                _rule_with_condition(
+                    "team_deny", "deny", {"field": "tool_name", "operator": "eq", "value": "rm"}, 10
+                )
+            ],
+        },
+    )
+    bundle = tmp_path / "bundle"
+    with pytest.raises(ResolutionError, match="scope must be a non-empty glob string"):
+        resolve_manifest(root, child, bundle_dir=bundle)
+    assert not bundle.exists()
+
+
+def test_filter_by_scope_reports_action_path_outside_root_as_traversal(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    with pytest.raises(ResolutionError, match="not under workspace root") as exc:
+        filter_by_scope(root / "governance.yaml", "team/*", outside, root)
+    assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
+
+
+# ── values the migrator cannot write back ────────────────────────────
+
+
+_INTERVENTION_POINTS = (
+    "intervention_points:\n"
+    "  pre_tool_call:\n"
+    "    policy_target: $.tool_call.args\n"
+    "    policy_target_kind: tool_args\n"
+    "    tool_name_from: $.tool_call.name\n"
+    "    policy: {id: agt_legacy_rules}\n"
+)
+
+
+def _huge_hex_int() -> str:
+    """A YAML int scalar that loads but has more digits than str() allows.
+
+    Hex parsing is not capped, so ``0x`` + (limit + 1) hex digits loads as an
+    int of about 1.2 * limit decimal digits; ``str()`` and ``json.dumps`` then
+    raise ValueError on it.
+    """
+    return "0x" + "f" * (sys.get_int_max_str_digits() + 1)
+
+
+def _governance(rule_lines: str, extra: str = "") -> str:
+    return "rules:\n" + rule_lines + _INTERVENTION_POINTS + extra
+
+
+_digit_limit = pytest.mark.skipif(
+    sys.get_int_max_str_digits() == 0,
+    reason="int-to-str digit limit disabled in this interpreter",
+)
+
+
+@_digit_limit
+@pytest.mark.parametrize(
+    ("document", "names_rule"),
+    [
+        pytest.param(
+            _governance(
+                "  - name: huge\n    action: deny\n    priority: 1\n"
+                f"    condition: {{field: amount, operator: eq, value: {_huge_hex_int()}}}\n"
+            ),
+            True,
+            id="condition-value",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: huge\n    action: deny\n    priority: 1\n"
+                f"    condition: {{field: amount, operator: in, value: [1, {_huge_hex_int()}]}}\n"
+            ),
+            True,
+            id="list-item",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: huge\n    action: deny\n    priority: 1\n"
+                f"    message: {_huge_hex_int()}\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n"
+            ),
+            True,
+            id="message",
+        ),
+        pytest.param(
+            _governance(
+                f"  - name: huge\n    action: {_huge_hex_int()}\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n"
+            ),
+            True,
+            id="action",
+        ),
+        pytest.param(
+            _governance(
+                f"  - name: huge\n    action: deny\n    priority: {_huge_hex_int()}\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n"
+            ),
+            True,
+            id="priority",
+        ),
+        pytest.param(
+            _governance(
+                f"  - name: {_huge_hex_int()}\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n"
+            ),
+            False,
+            id="name",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: ok\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n",
+                extra=f"tools: {{max: {_huge_hex_int()}}}\n",
+            ),
+            False,
+            id="tools-section",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: ok\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n",
+                # Block-style explicit key: an implicit flow key is capped at
+                # 1024 characters by the YAML parser.
+                extra=f"limits:\n  ? {_huge_hex_int()}\n  : 1\n",
+            ),
+            False,
+            id="mapping-key",
+        ),
+    ],
+)
+def test_resolve_refuses_int_beyond_digit_limit(
+    tmp_path: Path, document: str, names_rule: bool
+) -> None:
+    # A hex scalar past sys.get_int_max_str_digits() passed _is_json_value
+    # (isinstance int) and only failed in json.dumps at render time, where the
+    # None fallback wrote an unconditional deny and the migration reported
+    # success. In name/action/message it crashed str() with a bare ValueError;
+    # in a top-level section it crashed yaml.safe_dump after the bundle was
+    # already on disk. Every placement is refused before anything is written.
+    (tmp_path / "governance.yaml").write_text(document, encoding="utf-8")
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError) as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    detail = str(exc.value)
+    assert f"more than {sys.get_int_max_str_digits()} digits" in detail
+    assert ("rule 'huge'" in detail) is names_rule
+    assert not bundle.exists()
+
+
+@_digit_limit
+def test_resolve_refuses_decimal_int_beyond_digit_limit(tmp_path: Path) -> None:
+    # PyYAML builds a decimal scalar with int(), which raises ValueError (not
+    # YAMLError) past the digit limit; _load_yaml let it escape as a traceback.
+    digits = "9" * (sys.get_int_max_str_digits() + 1)
+    (tmp_path / "governance.yaml").write_text(
+        _governance(
+            "  - name: huge\n    action: deny\n    priority: 1\n"
+            f"    condition: {{field: amount, operator: eq, value: {digits}}}\n"
+        ),
+        encoding="utf-8",
+    )
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="failed to parse") as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert not bundle.exists()
+
+
+@_digit_limit
+def test_resolve_accepts_large_int_within_digit_limit(tmp_path: Path) -> None:
+    (tmp_path / "governance.yaml").write_text(
+        _governance(
+            "  - name: big\n    action: deny\n    priority: 1\n"
+            f"    condition: {{field: amount, operator: gt, value: {10**400}}}\n"
+        ),
+        encoding="utf-8",
+    )
+    manifest = resolve_manifest(tmp_path, tmp_path, bundle_dir=tmp_path / "bundle")
+    rego = Path(manifest["policies"]["agt_legacy_rules"]["bundle"]).joinpath("agt_legacy.rego")
+    assert f"_v > {10**400}" in rego.read_text(encoding="utf-8")
+
+
+@_digit_limit
+def test_is_json_value_rejects_int_beyond_digit_limit() -> None:
+    huge = int("f" * (sys.get_int_max_str_digits() + 1), 16)
+    assert _is_json_value(10**400)
+    assert not _is_json_value(huge)
+    assert not _is_json_value([1, huge])
+    assert not _is_json_value({"k": huge})
+
+
+@_digit_limit
+def test_materialize_refuses_render_failure_before_writing(tmp_path: Path) -> None:
+    # Last line of defence behind the document walk: a value that only fails
+    # when str() runs in the renderer becomes a refusal, not a traceback, and
+    # the bundle directory is never created.
+    huge = int("f" * (sys.get_int_max_str_digits() + 1), 16)
+    rule = {
+        "name": "r",
+        "action": "deny",
+        "priority": 1,
+        "message": huge,
+        "condition": {"field": "amount", "operator": "eq", "value": 1},
+    }
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="could not be rendered") as exc:
+        _materialize_rego_bundle(bundle, [rule])
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert not bundle.exists()
+
+
+@pytest.mark.parametrize(
+    ("document", "expected"),
+    [
+        pytest.param(
+            _governance(
+                "  - name: loop\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: in, value: &v [*v]}\n"
+            ),
+            "rule 'loop' (rules[0].condition.value[0])",
+            id="condition-value",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: ok\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n",
+                extra="tools: &t {a: *t}\n",
+            ),
+            "tools.a",
+            id="tools-section",
+        ),
+        pytest.param(
+            _governance(
+                "  - name: ok\n    action: deny\n    priority: 1\n"
+                "    condition: {field: amount, operator: eq, value: 1}\n",
+                extra="limits: &l {inner: {deeper: [*l]}}\n",
+            ),
+            "limits.inner.deeper[0]",
+            id="indirect-cycle",
+        ),
+    ],
+)
+def test_resolve_refuses_cyclic_yaml(tmp_path: Path, document: str, expected: str) -> None:
+    # safe_load builds a list that contains itself for ``&v [*v]``; every
+    # recursive step after that (_is_json_value, json.dumps, yaml.safe_dump)
+    # raised an uncaught RecursionError, or wrote a self-referencing manifest.
+    (tmp_path / "governance.yaml").write_text(document, encoding="utf-8")
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="anchor/alias cycle") as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert expected in str(exc.value)
+    assert not bundle.exists()
+
+
+def test_resolve_accepts_shared_acyclic_alias(tmp_path: Path) -> None:
+    # The same anchored value used twice is a DAG, not a cycle, and must load.
+    (tmp_path / "governance.yaml").write_text(
+        _governance(
+            "  - name: a\n    action: deny\n    priority: 2\n"
+            "    condition: {field: tool, operator: in, value: &tools [rm, dd]}\n"
+            "  - name: b\n    action: deny\n    priority: 1\n"
+            "    condition: {field: parent_tool, operator: in, value: *tools}\n"
+        ),
+        encoding="utf-8",
+    )
+    manifest = resolve_manifest(tmp_path, tmp_path, bundle_dir=tmp_path / "bundle")
+    assert manifest["policies"]["agt_legacy_rules"]["type"] == "rego"
+
+
+def test_check_document_values_walks_shared_alias_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ten aliases of ten aliases of ... is a small document whose expanded
+    # tree is exponential (the "billion laughs" shape). The walk used to
+    # visit every path, so four levels meant 10,000 visits of the one leaf
+    # and eight levels took minutes; a shared container is now walked once
+    # per depth. yaml.safe_dump writes such a section with aliases, so the
+    # document itself is legitimate and must still be accepted.
+    build_module = sys.modules["agt.cli._migrate_resolution.build"]
+
+    visits: list[int] = []
+    real = build_module._int_too_long
+
+    def counting(value: int) -> bool:
+        visits.append(value)
+        return real(value)
+
+    monkeypatch.setattr(build_module, "_int_too_long", counting)
+    level: Any = [7]
+    for _ in range(4):
+        level = [level] * 10
+    _check_document_values(tmp_path / "governance.yaml", {"tools": {"a": level}})
+    assert len(visits) == 1
+
+    # A shared container first seen shallow is walked again when a deeper
+    # path reaches it, so the nesting cap still applies on that path.
+    shared: Any = [1]
+    deep: Any = shared
+    for _ in range(_MAX_NESTING_DEPTH):
+        deep = [deep]
+    with pytest.raises(ResolutionError, match="nested more than"):
+        _check_document_values(
+            tmp_path / "governance.yaml", {"first": shared, "second": deep}
+        )
+
+
+def test_resolve_accepts_alias_fan_out_quickly(tmp_path: Path) -> None:
+    # The same shape through the public entry point: eight alias levels with
+    # fan-out ten, which the manifest writer serializes with aliases.
+    levels = ["x0: &x0 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]\n"]
+    for i in range(1, 8):
+        refs = ", ".join([f"*x{i - 1}"] * 10)
+        levels.append(f"x{i}: &x{i} [{refs}]\n")
+    (tmp_path / "governance.yaml").write_text(
+        "".join(levels)
+        + _governance(
+            "  - name: ok\n    action: deny\n    priority: 1\n"
+            "    condition: {field: amount, operator: eq, value: 1}\n",
+            extra="tools: {fan: *x7}\n",
+        ),
+        encoding="utf-8",
+    )
+    started = time.monotonic()
+    manifest = resolve_manifest(tmp_path, tmp_path, bundle_dir=tmp_path / "bundle")
+    assert time.monotonic() - started < 5
+    assert manifest["tools"]["fan"][0][0][0][0][0][0][0][0] == 1
+
+
+@pytest.mark.parametrize(
+    "depth",
+    [
+        pytest.param(_MAX_NESTING_DEPTH + 1, id="just-over-the-cap"),
+        pytest.param(5000, id="overflows-the-parser"),
+    ],
+)
+def test_resolve_refuses_deeply_nested_yaml(tmp_path: Path, depth: int) -> None:
+    # An acyclic value nested past the interpreter's recursion limit raised
+    # RecursionError inside yaml.safe_load (its composer is recursive) or in
+    # the later walks. Both depths are refused with the same category; the
+    # message differs because one fails in the parser and one in the walk.
+    nested = "[" * depth + "]" * depth
+    (tmp_path / "governance.yaml").write_text(
+        _governance(
+            "  - name: deep\n    action: deny\n    priority: 1\n"
+            f"    condition: {{field: amount, operator: in, value: {nested}}}\n"
+        ),
+        encoding="utf-8",
+    )
+    bundle = tmp_path / "bundle"
+
+    with pytest.raises(ResolutionError, match="nested") as exc:
+        resolve_manifest(tmp_path, tmp_path, bundle_dir=bundle)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert not bundle.exists()
