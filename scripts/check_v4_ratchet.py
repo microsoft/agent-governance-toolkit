@@ -189,6 +189,8 @@ ALLOWED_V4_FILES: frozenset[str] = frozenset(
         "agent-governance-python/agt-policies/tests/test_migration_boundary.py",
         "agent-governance-python/agt-policies/tests/test_migrate_bridge.py",
         "agent-governance-python/agt-policies/tests/test_migrate_resolution.py",
+        # End-to-end OPA coverage for fields translated by the v4 migrator.
+        "agent-governance-python/agt-policies/tests/scenarios/test_v4_field_migration.py",
         "docs/v4-removal.md",
         # The breaking-changes record has to name each removed symbol so users
         # can find its replacement. Naming a symbol in order to say it is gone

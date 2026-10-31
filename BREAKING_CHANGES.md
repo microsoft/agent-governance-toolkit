@@ -5,6 +5,38 @@ entries appear first.
 
 ---
 
+## The AGT v4 migrator rejects ambiguous or behavior-changing policy shapes
+
+**Date:** TBD (#3661)
+
+The `agt-policies` v4-to-v5 migrator now fails closed instead of producing an
+ACS bundle when it cannot preserve the source policy's effective behavior. It
+rejects four policy shapes that earlier versions accepted:
+
+- `default_action: allow`. Only an explicit `deny` is supported because an
+  explicit allow default can hide migration gaps.
+- Any top-level key outside the migrator's supported allowlist, including
+  extension keys such as `metadata`. Previously these keys were silently
+  ignored.
+- A condition field whose mapped snapshot root is unavailable at an
+  intervention point bound to the generated legacy-rule policy. Legacy
+  `tool_name` and `tool_args` fields are still supported and map to
+  `tool_call.name` and `tool_call.args`.
+- A lower-priority rule that is provably covered by a higher-priority rule with
+  the opposite action. First-match-wins evaluation makes the lower rule
+  unreachable, which can conceal an allow/deny conflict.
+
+**How to update:** remove `default_action: allow` and rely on the implicit allow
+default only after confirming every intended deny is represented, or change the
+default to `deny`. Remove or relocate unsupported top-level metadata before
+migration. Rewrite condition fields to snapshot roots available at every bound
+intervention point (using `tool_name`/`tool_args` for legacy tool rules is still
+valid). Finally, resolve each covered opposite-action pair by changing its
+priorities or conditions, or deleting the unreachable rule, so that the desired
+decision is unambiguous.
+
+---
+
 ## `acs_builder_set_url_fetch_limits` returns 0 on success; `bundle_url` and `system_prompt_url` are accepted again
 
 **Date:** 2026-10-08 (agent-control-spec 0.4.0-alpha.4, #4224)
