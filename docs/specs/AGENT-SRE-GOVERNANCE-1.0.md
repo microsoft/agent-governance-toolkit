@@ -1185,6 +1185,11 @@ The `IncidentDetector` MUST:
 4. Correlate: if multiple signals from the same source arrive within
    the `correlation_window_seconds` (default 300s), they MUST be
    grouped into a single correlated incident with the highest severity.
+   A P1/P2 signal whose source has an unresolved incident holding a
+   signal within the window MUST join that incident (raising its
+   severity if higher) rather than open another, and `ingest_signal`
+   returns `None` because no incident was created. A signal already in
+   an incident MUST NOT be copied into a new one.
 5. Prune old signals outside `2 * correlation_window`.
 
 **[Pure Specification]**
