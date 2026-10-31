@@ -2,9 +2,11 @@
 #
 # Every pull request requires an approving review from one of the owners
 # below (enforced by branch protection + the "Protect" ruleset:
-# require_code_owner_review). This is the maintainer-approval gate — it
-# replaces the former require-maintainer-approval.yml CI workflow.
+# require_code_owner_review). This is the maintainer-approval gate —
+# it replaces the former require-maintainer-approval.yml CI workflow.
 #
 # Only the project lead can bypass this requirement or push without a PR.
 
 * @MohammadHaroonAbuomar @liamcrumm @prayagupa
+
+/agent-governance-studio/ @MohammadHaroonAbuomar @liamcrumm @prayagupa
