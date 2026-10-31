@@ -1001,6 +1001,7 @@ rrdatas
 rsplit
 rstrip
 run_results
+runbook
 runbooks
 runsc
 rustc
