@@ -34,13 +34,16 @@ def test_distribution_identity_and_metadata() -> None:
     ).read_text(encoding="utf-8")
 
 
-def test_no_runtime_dependencies_or_unimplemented_cli_registration() -> None:
+def test_real_plugin_and_direct_runtime_dependencies() -> None:
     project = tomllib.loads(
         (PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )["project"]
-    assert not project.get("dependencies")
     assert not project.get("scripts")
-    assert not project.get("entry-points")
+    assert project["entry-points"]["agt.commands"] == {"serve": "agent_governance_studio.cli:serve"}
+    assert {requirement.split(">=")[0] for requirement in project["dependencies"]} == {
+        "agent-governance-toolkit-core", "agent-governance-toolkit-compliance",
+        "agent-control-specification", "click", "fastapi", "uvicorn",
+    }
 
 
 def test_frontend_identity_and_non_empty_validation_commands() -> None:
