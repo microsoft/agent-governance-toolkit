@@ -1,3 +1,4 @@
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Tests for reconciler and registry providers."""
 
 import pytest
@@ -134,3 +135,23 @@ class TestReconciler:
         shadows = await reconciler.reconcile()
         actions = shadows[0].recommended_actions
         assert any("mcp-scan" in a for a in actions)
+
+    @pytest.mark.asyncio
+    async def test_statuses_are_saved_to_storage(self, tmp_path):
+        storage = tmp_path / "inventory.json"
+        inv = AgentInventory(storage_path=storage)
+        inv.ingest(
+            ScanResult(
+                scanner_name="test",
+                agents=[
+                    _make_agent("a", "Registered", did="did:agent:a"),
+                    _make_agent("b", "Shadow Agent"),
+                ],
+            )
+        )
+        provider = StaticRegistryProvider([{"did": "did:agent:a", "name": "Registered"}])
+        await Reconciler(inv, provider).reconcile()
+
+        reloaded = AgentInventory(storage_path=storage)
+        assert reloaded.get("a").status == AgentStatus.REGISTERED
+        assert reloaded.get("b").status == AgentStatus.SHADOW

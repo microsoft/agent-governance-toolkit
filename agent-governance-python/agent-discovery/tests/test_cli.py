@@ -1,8 +1,10 @@
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Tests for the CLI."""
 
 from click.testing import CliRunner
 
 from agent_discovery.cli.main import main
+from agent_discovery.inventory import AgentInventory
 
 
 class TestCLI:
@@ -58,3 +60,28 @@ class TestCLI:
         )
         assert result.exit_code == 0
         assert "No agents" in result.output
+
+    def test_scan_saves_risk_tags(self, tmp_path):
+        (tmp_path / "crewai.yaml").write_text("agents: []\n", encoding="utf-8")
+        storage = tmp_path / "inv.json"
+        result = self.runner.invoke(
+            main, ["scan", "-s", "config", "-p", str(tmp_path), "--storage", str(storage)]
+        )
+        assert result.exit_code == 0
+
+        agents = AgentInventory(storage_path=storage).agents
+        assert len(agents) == 1
+        assert agents[0].tags["risk_level"]
+        assert agents[0].tags["risk_score"]
+
+    def test_reconcile_saves_statuses(self, tmp_path):
+        (tmp_path / "crewai.yaml").write_text("agents: []\n", encoding="utf-8")
+        storage = tmp_path / "inv.json"
+        self.runner.invoke(
+            main, ["scan", "-s", "config", "-p", str(tmp_path), "--storage", str(storage)]
+        )
+        result = self.runner.invoke(main, ["reconcile", "--storage", str(storage)])
+        assert result.exit_code == 0
+
+        result = self.runner.invoke(main, ["inventory", "--storage", str(storage), "-o", "summary"])
+        assert '"shadow": 1' in result.output
