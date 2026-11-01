@@ -77,7 +77,18 @@ export class CMVKClient {
                 // Fallback to mock for offline development
                 return this.mockReview(code, language, models);
             }
-            throw new Error(`CMVK API error: ${error.message}`);
+            const responseData = error.response?.data;
+            const detail = typeof responseData === 'string'
+                ? responseData
+                : (responseData?.error ?? responseData?.message);
+            const requestId = typeof responseData === 'object' && responseData !== null
+                ? responseData.requestId
+                : undefined;
+            throw new Error(
+                `CMVK API error (${error.response?.status ?? 'network'}): ${detail ?? error.message}` +
+                    (requestId ? ` [request ${requestId}]` : ''),
+                { cause: error },
+            );
         }
     }
 
