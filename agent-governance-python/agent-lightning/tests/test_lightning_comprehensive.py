@@ -1060,6 +1060,22 @@ class TestFlightRecorderEmitterExport:
         assert count == 1
         store.add_span.assert_called_once()
 
+    def test_emit_to_store_counts_only_accepted_spans(self):
+        entries = [_FakeEntry(), _FakeEntry(id="e2"), _FakeEntry(id="e3")]
+        emitter = FlightRecorderEmitter(_make_recorder(entries))
+        store = MagicMock(spec=["emit_span"])
+        store.emit_span.side_effect = [None, RuntimeError("store down"), None]
+        count = emitter.emit_to_store(store)
+        # The failing span is logged and skipped; the next one is still sent.
+        assert store.emit_span.call_count == 3
+        assert count == 2
+
+    def test_emit_to_store_without_span_emitter_emits_nothing(self):
+        entries = [_FakeEntry(), _FakeEntry(id="e2")]
+        emitter = FlightRecorderEmitter(_make_recorder(entries))
+        store = MagicMock(spec=[])
+        assert emitter.emit_to_store(store) == 0
+
     def test_export_to_file(self, tmp_path):
         entries = [_FakeEntry()]
         emitter = FlightRecorderEmitter(_make_recorder(entries))
