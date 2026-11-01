@@ -119,6 +119,10 @@ spec:
                   type: integer
                 currentWeight:
                   type: number
+                observedGeneration:
+                  type: integer
+                message:
+                  type: string
                 conditions:
                   type: array
                   items:

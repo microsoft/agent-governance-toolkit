@@ -85,6 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `dependencies[].ref` and `dependsOn`. It wrote the SPDX IDs used internally
   for relationships (such as `SPDXRef-Package-pydantic-2.4.0`), which match no
   component, so every dependency in a CycloneDX SBOM was a dangling reference.
+- The `AgentRollout` status written by `ResourceStatus.to_dict()` now matches the
+  CRD schema. Condition `lastTransitionTime` is an RFC 3339 UTC string such as
+  `2026-11-01T09:30:00Z`, not a Unix timestamp, which the API server rejects for
+  a field declared as a string. The schema in `k8s.generate_crd_manifest()` and
+  the Helm chart now declares `status.observedGeneration` and `status.message`,
+  which were pruned from every status update.
 
 ## [0.3.0] - 2026-02-19
 

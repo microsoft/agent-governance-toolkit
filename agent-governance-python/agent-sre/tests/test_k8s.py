@@ -39,6 +39,35 @@ def _prune(value: Any, schema: dict[str, Any]) -> Any:
     return value
 
 
+_JSON_TYPES = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "boolean": bool,
+    "integer": int,
+    "number": (int, float),
+}
+
+
+def _type_errors(value: Any, schema: dict[str, Any], path: str = "") -> list[str]:
+    """List the values whose JSON type does not match the schema, as the API server checks."""
+    expected = schema.get("type")
+    if expected and (
+        not isinstance(value, _JSON_TYPES[expected])
+        or (isinstance(value, bool) and expected != "boolean")
+    ):
+        return [f"{path or '.'}: {type(value).__name__} is not {expected}"]
+    errors: list[str] = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if k in schema.get("properties", {}):
+                errors += _type_errors(v, schema["properties"][k], f"{path}.{k}")
+    elif isinstance(value, list) and "items" in schema:
+        for i, v in enumerate(value):
+            errors += _type_errors(v, schema["items"], f"{path}[{i}]")
+    return errors
+
+
 # ---------------------------------------------------------------------------
 # CRD manifest
 # ---------------------------------------------------------------------------
@@ -157,6 +186,28 @@ class TestResourceStatus:
         assert d["type"] == "Available"
         assert d["status"] == "True"
         assert d["reason"] == "Ready"
+
+    def test_condition_last_transition_time_is_rfc3339(self):
+        c = Condition(
+            ConditionType.AVAILABLE,
+            ConditionStatus.TRUE,
+            last_transition_time=1700000000.75,
+        )
+        assert c.to_dict()["lastTransitionTime"] == "2023-11-14T22:13:20Z"
+
+    def test_status_matches_crd_schema(self):
+        r = Reconciler()
+        result = r.reconcile("my-agent", "default", SAMPLE_SPEC, generation=3)
+        status = result.status.to_dict()
+        schema = generate_crd_manifest()["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+        status_schema = schema["properties"]["status"]
+
+        # Nothing the reconciler reports is pruned on a status update ...
+        assert _prune(status, status_schema) == status
+        assert status["observedGeneration"] == 3
+        assert status["message"].startswith("Rollout started")
+        # ... and every value has the type the schema declares.
+        assert _type_errors(status, status_schema) == []
 
 
 # ---------------------------------------------------------------------------
