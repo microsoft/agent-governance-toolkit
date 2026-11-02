@@ -10,15 +10,17 @@ pinned target and refuses the connection.
 
 from __future__ import annotations
 
+import contextlib
 import http.server
 import json
 import pathlib
 import socket
+import ssl
 import threading
 import urllib.error
 import urllib.request
 import warnings
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -32,6 +34,7 @@ from agentmesh.governance.webhook_guard import (
     DEFAULT_GUARD,
     WebhookEndpointBlockedError,
     WebhookEndpointGuard,
+    default_resolver,
 )
 
 PUBLIC_V4 = "93.184.216.34"
@@ -290,7 +293,9 @@ class _Server:
 
         self.httpd = http.server.HTTPServer(("127.0.0.1", 0), Handler)
         self.port = self.httpd.server_address[1]
-        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread = threading.Thread(
+            target=self.httpd.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True
+        )
         self.thread.start()
 
     def close(self):
@@ -402,6 +407,216 @@ class TestGuardedTransport:
         assert urllib.request.HTTPRedirectHandler not in handlers
         assert urllib.request.ProxyHandler not in handlers
         assert urllib.request.FileHandler not in handlers
+
+
+# --------------------------------------------------------------------------- #
+# Transport: TLS over the pinned connection
+# --------------------------------------------------------------------------- #
+
+try:
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+except ImportError:  # pragma: no cover - exercised only without the dev extra
+    x509 = None
+
+needs_cryptography = pytest.mark.skipif(
+    x509 is None, reason="the cryptography package is needed to mint test certificates"
+)
+
+TLS_HOST = "webhook.test"
+
+
+def _name(common_name):
+    return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+
+
+def _issue(subject, issuer_name, issuer_key, *, ca=False, san=None):
+    """Mint a certificate for ``subject``; ``issuer_key`` is ``None`` for a
+    self-signed one. Short-lived EC keys keep the tests fast."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    signer = issuer_key or key
+    now = datetime.now(timezone.utc)
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(_name(subject))
+        .issuer_name(issuer_name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=5))
+        .not_valid_after(now + timedelta(hours=1))
+        .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
+    )
+    if san:
+        builder = builder.add_extension(
+            x509.SubjectAlternativeName([x509.DNSName(san)]), critical=False
+        )
+    return key, builder.sign(signer, hashes.SHA256())
+
+
+def _write_pem(directory, stem, key, cert):
+    cert_path = directory / f"{stem}.crt"
+    key_path = directory / f"{stem}.key"
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return cert_path, key_path
+
+
+class _TLSCerts:
+    """A throwaway test CA plus three leaf certificates: one for
+    ``webhook.test``, one for another name, and one self-signed."""
+
+    def __init__(self, directory):
+        ca_key, ca_cert = _issue("Webhook Test CA", _name("Webhook Test CA"), None, ca=True)
+        self.ca_file, _ = _write_pem(directory, "ca", ca_key, ca_cert)
+        self.good = _write_pem(
+            directory, "good", *_issue(TLS_HOST, ca_cert.subject, ca_key, san=TLS_HOST)
+        )
+        self.wrong_host = _write_pem(
+            directory,
+            "wrong-host",
+            *_issue("other.test", ca_cert.subject, ca_key, san="other.test"),
+        )
+        self.self_signed = _write_pem(
+            directory, "self-signed", *_issue(TLS_HOST, _name(TLS_HOST), None, san=TLS_HOST)
+        )
+
+
+class _TLSServer(_Server):
+    """The loopback server from above, wrapped in TLS with the given leaf
+    certificate. Records the SNI name each client handshake presented."""
+
+    def __init__(self, cert_path, key_path):
+        super().__init__()
+        self.sni_names: list[str | None] = []
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(str(cert_path), str(key_path))
+
+        def record_sni(sock, server_name, ctx):
+            self.sni_names.append(server_name)
+
+        context.sni_callback = record_sni
+        self.httpd.socket = context.wrap_socket(self.httpd.socket, server_side=True)
+
+    def guard(self, host=TLS_HOST, ca_file=None):
+        """Pin ``host`` to the loopback server and trust only ``ca_file``
+        (nothing at all when it is ``None``; the system store is never
+        consulted)."""
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.check_hostname = True
+        if ca_file is not None:
+            context.load_verify_locations(str(ca_file))
+        return WebhookEndpointGuard.allowing(
+            [host], resolver=_resolver(["127.0.0.1"]), ssl_context=context
+        )
+
+    def url(self, path="/hook", host=TLS_HOST):
+        return f"https://{host}:{self.port}{path}"
+
+
+@pytest.fixture(scope="module")
+def tls_certs(tmp_path_factory):
+    if x509 is None:
+        pytest.skip("the cryptography package is needed to mint test certificates")
+    return _TLSCerts(tmp_path_factory.mktemp("webhook-tls"))
+
+
+@pytest.fixture
+def connect_trace(monkeypatch):
+    """Record every address the guard connects to, then connect for real."""
+    real = socket.create_connection
+    attempts: list[tuple[str, int]] = []
+
+    def tracing_create_connection(address, *args, **kwargs):
+        attempts.append((address[0], address[1]))
+        return real(address, *args, **kwargs)
+
+    monkeypatch.setattr(webhook_guard.socket, "create_connection", tracing_create_connection)
+    return attempts
+
+
+@contextlib.contextmanager
+def _tls_server(certs, which):
+    cert_path, key_path = getattr(certs, which)
+    srv = _TLSServer(cert_path, key_path)
+    try:
+        yield srv
+    finally:
+        srv.close()
+
+
+@needs_cryptography
+class TestGuardedTLSTransport:
+    def test_pinned_connection_verifies_and_presents_original_hostname(
+        self, tls_certs, connect_trace
+    ):
+        # The socket goes to the pinned loopback address, yet TLS must verify
+        # the leaf against the URL's name and send that name as SNI.
+        with _tls_server(tls_certs, "good") as server:
+            guard = server.guard(ca_file=tls_certs.ca_file)
+            with guard.open(_post(server.url()), timeout=5) as resp:
+                assert resp.status == 200
+                assert json.loads(resp.read()) == {"action": "allow"}
+            assert connect_trace == [("127.0.0.1", server.port)]
+            assert server.sni_names == [TLS_HOST]
+            assert server.requests == [(f"{TLS_HOST}:{server.port}", "/hook", b"{}")]
+
+    def test_certificate_for_another_host_is_rejected(self, tls_certs, connect_trace):
+        # Trusted CA, wrong name: the pinned address must not relax the
+        # host name check.
+        with _tls_server(tls_certs, "wrong_host") as server:
+            guard = server.guard(ca_file=tls_certs.ca_file)
+            with pytest.raises(urllib.error.URLError) as excinfo:
+                guard.open(_post(server.url()), timeout=5)
+            assert isinstance(excinfo.value.reason, ssl.SSLCertVerificationError)
+            assert connect_trace == [("127.0.0.1", server.port)]
+            assert server.requests == []
+
+    def test_self_signed_certificate_is_rejected(self, tls_certs, connect_trace):
+        # Right name, issuer outside the trust store.
+        with _tls_server(tls_certs, "self_signed") as server:
+            guard = server.guard(ca_file=tls_certs.ca_file)
+            with pytest.raises(urllib.error.URLError) as excinfo:
+                guard.open(_post(server.url()), timeout=5)
+            assert isinstance(excinfo.value.reason, ssl.SSLCertVerificationError)
+            assert connect_trace == [("127.0.0.1", server.port)]
+            assert server.requests == []
+
+    def test_good_certificate_needs_the_test_ca_to_be_trusted(self, tls_certs):
+        # The same leaf fails with an empty trust store, so the passing test
+        # above proves the CA file, not a disabled check, is what admits it.
+        with _tls_server(tls_certs, "good") as server:
+            with pytest.raises(urllib.error.URLError) as excinfo:
+                server.guard(ca_file=None).open(_post(server.url()), timeout=5)
+            assert isinstance(excinfo.value.reason, ssl.SSLCertVerificationError)
+
+    def test_default_guard_verifies_against_the_system_store(self):
+        # No context configured: the handler falls back to a verifying
+        # default context, never to an unverified one.
+        assert DEFAULT_GUARD.ssl_context is None
+        handler = next(
+            h for h in DEFAULT_GUARD.build_opener().handlers
+            if isinstance(h, webhook_guard._GuardedHTTPSHandler)
+        )
+        assert handler._context.verify_mode == ssl.CERT_REQUIRED
+        assert handler._context.check_hostname is True
+
+    def test_with_ssl_context_keeps_policy(self):
+        context = ssl.create_default_context()
+        base = WebhookEndpointGuard.allowing(["10.0.0.0/8", "hooks.corp.internal"])
+        guard = base.with_ssl_context(context)
+        assert guard.ssl_context is context
+        assert guard.allowed_hosts == base.allowed_hosts
+        assert guard.allowed_networks == base.allowed_networks
+        assert guard.with_resolver(default_resolver).ssl_context is context
 
 
 # --------------------------------------------------------------------------- #

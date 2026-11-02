@@ -25,7 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   follows no redirects and ignores proxy settings. A notifier or backend
   built with an internal URL now raises `ValueError`; operators who need
   an internal receiver pass
-  `endpoint_guard=WebhookEndpointGuard.allowing(["10.0.0.0/8"])`.
+  `endpoint_guard=WebhookEndpointGuard.allowing(["10.0.0.0/8"])`. Over
+  https the certificate is verified against the URL's host name, which is
+  also sent as SNI, not against the pinned address; a guard built with
+  `ssl_context=` uses that context, so a private CA can be trusted without
+  touching the system store.
 - **Breaking custom-store contract: atomic MCP replay protection**:
   `MCPMessageSigner` verifies signatures before accessing the replay store and
   rechecks freshness under its lock before claiming a nonce. Concurrent

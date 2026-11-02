@@ -48,6 +48,7 @@ import functools
 import http.client
 import ipaddress
 import socket
+import ssl
 import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -207,11 +208,17 @@ class WebhookEndpointGuard:
             they fall inside a blocked range.
         resolver: Maps a host name to its address strings. Defaults to the
             system resolver; tests inject one.
+        ssl_context: Context for https connections. ``None`` uses the
+            interpreter default (system trust store, host name checked).
+            Operators pass one loaded with a private CA; the certificate is
+            always verified against the URL's host name, never the pinned
+            address.
     """
 
     allowed_hosts: frozenset[str] = frozenset()
     allowed_networks: tuple[IPNetwork, ...] = ()
     resolver: AddressResolver = default_resolver
+    ssl_context: ssl.SSLContext | None = None
 
     @classmethod
     def allowing(
@@ -219,6 +226,7 @@ class WebhookEndpointGuard:
         entries: Iterable[str] | None = None,
         *,
         resolver: AddressResolver | None = None,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> WebhookEndpointGuard:
         """Build a guard that exempts ``entries``: host names, IP literals
         or CIDR networks. An empty list yields the default deny-all guard."""
@@ -236,10 +244,18 @@ class WebhookEndpointGuard:
             allowed_hosts=frozenset(hosts),
             allowed_networks=tuple(networks),
             resolver=resolver or default_resolver,
+            ssl_context=ssl_context,
         )
 
     def with_resolver(self, resolver: AddressResolver) -> WebhookEndpointGuard:
-        return WebhookEndpointGuard(self.allowed_hosts, self.allowed_networks, resolver)
+        return WebhookEndpointGuard(
+            self.allowed_hosts, self.allowed_networks, resolver, self.ssl_context
+        )
+
+    def with_ssl_context(self, ssl_context: ssl.SSLContext | None) -> WebhookEndpointGuard:
+        return WebhookEndpointGuard(
+            self.allowed_hosts, self.allowed_networks, self.resolver, ssl_context
+        )
 
     # -- policy -----------------------------------------------------------
 
@@ -407,7 +423,7 @@ class _GuardedHTTPHandler(urllib.request.HTTPHandler):
 
 class _GuardedHTTPSHandler(urllib.request.HTTPSHandler):
     def __init__(self, guard: WebhookEndpointGuard) -> None:
-        super().__init__()
+        super().__init__(context=guard.ssl_context)
         self._guard = guard
 
     def https_open(self, req):
