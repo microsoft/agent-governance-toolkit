@@ -78,11 +78,18 @@ export class CMVKClient {
                 return this.mockReview(code, language, models);
             }
             const responseData = error.response?.data;
+            // Only string fields are surfaced, and both are capped: this
+            // message is shown via vscode.window.showErrorMessage, so an
+            // uncapped proxy HTML body would produce a multi-megabyte
+            // notification, and a non-string field would render as
+            // "[object Object]". Anything else falls back to error.message.
+            const cappedString = (value: unknown): string | undefined =>
+                typeof value === 'string' ? value.slice(0, 500) : undefined;
             const detail = typeof responseData === 'string'
-                ? responseData
-                : (responseData?.error ?? responseData?.message);
+                ? responseData.slice(0, 500)
+                : (cappedString(responseData?.error) ?? cappedString(responseData?.message));
             const requestId = typeof responseData === 'object' && responseData !== null
-                ? responseData.requestId
+                ? cappedString(responseData.requestId)
                 : undefined;
             throw new Error(
                 `CMVK API error (${error.response?.status ?? 'network'}): ${detail ?? error.message}` +
