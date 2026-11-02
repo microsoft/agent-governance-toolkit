@@ -598,16 +598,19 @@ class TestGuardedTLSTransport:
                 server.guard(ca_file=None).open(_post(server.url()), timeout=5)
             assert isinstance(excinfo.value.reason, ssl.SSLCertVerificationError)
 
-    def test_default_guard_verifies_against_the_system_store(self):
-        # No context configured: the handler falls back to a verifying
-        # default context, never to an unverified one.
+    def test_default_context_verifies_against_the_system_store(self, tls_certs):
+        # No context configured: the connection uses the interpreter's
+        # verifying default, never an unverified one. The test CA is not in
+        # the system store, so the handshake must fail even though the leaf
+        # carries the right name and the address is pinned.
         assert DEFAULT_GUARD.ssl_context is None
-        handler = next(
-            h for h in DEFAULT_GUARD.build_opener().handlers
-            if isinstance(h, webhook_guard._GuardedHTTPSHandler)
-        )
-        assert handler._context.verify_mode == ssl.CERT_REQUIRED
-        assert handler._context.check_hostname is True
+        with _tls_server(tls_certs, "good") as server:
+            guard = WebhookEndpointGuard.allowing([TLS_HOST], resolver=_resolver(["127.0.0.1"]))
+            assert guard.ssl_context is None
+            with pytest.raises(urllib.error.URLError) as excinfo:
+                guard.open(_post(server.url()), timeout=5)
+            assert isinstance(excinfo.value.reason, ssl.SSLCertVerificationError)
+            assert server.requests == []
 
     def test_with_ssl_context_keeps_policy(self):
         context = ssl.create_default_context()
