@@ -497,6 +497,7 @@ class _TLSServer(_Server):
         super().__init__()
         self.sni_names: list[str | None] = []
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(str(cert_path), str(key_path))
 
         def record_sni(sock, server_name, ctx):
@@ -510,6 +511,7 @@ class _TLSServer(_Server):
         (nothing at all when it is ``None``; the system store is never
         consulted)."""
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.verify_mode = ssl.CERT_REQUIRED
         context.check_hostname = True
         if ca_file is not None:
