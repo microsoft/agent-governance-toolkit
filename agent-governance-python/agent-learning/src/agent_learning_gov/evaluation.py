@@ -234,14 +234,14 @@ class ExcessivePrivilegeEvaluation:
         findings = []
         for action in policy.actions:
             parameters = dict(action.parameters)
-            privilege = parameters.get("privilege", parameters.get("role"))
-            scopes = parameters.get("scopes", parameters.get("permissions", ()))
-            normalized_scopes = _as_sequence(scopes)
-            privileged = (
-                isinstance(privilege, str) and privilege.lower() in self.privileged_values
-            ) or any(
-                isinstance(scope, str) and scope.lower() in self.privileged_values
-                for scope in normalized_scopes
+            # An action can carry both keys of each pair, so check both.
+            privileges = (parameters.get("privilege"), parameters.get("role"))
+            normalized_scopes = _as_sequence(parameters.get("scopes")) + _as_sequence(
+                parameters.get("permissions")
+            )
+            privileged = any(
+                isinstance(value, str) and value.lower() in self.privileged_values
+                for value in (*privileges, *normalized_scopes)
             )
             if privileged or len(normalized_scopes) > self.max_scopes:
                 findings.append(

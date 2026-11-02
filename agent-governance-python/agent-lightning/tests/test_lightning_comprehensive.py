@@ -526,6 +526,34 @@ class TestPolicyRewardMultiplicative:
         # No violations → additive path: base=1.0 + clean_bonus=5.0
         assert r == pytest.approx(6.0)
 
+    def test_multiplicative_stats_record_applied_penalty(self):
+        # A critical violation scales base(1.0) by 0.5, so the penalty that
+        # was applied is -0.5, not the additive table's -100.
+        cfg = RewardConfig(multiplicative=True, multiplicative_factor=0.5)
+        reward = PolicyReward(_make_mock_kernel(), config=cfg)
+        reward(_FakeRollout(violations=[_FakeViolation("critical")]), emit=False)
+        reward(_FakeRollout(violations=[]), emit=False)
+        stats = reward.get_stats()
+        assert stats["total_penalties"] == pytest.approx(-0.5)
+        assert stats["avg_penalty"] == pytest.approx(-0.25)
+
+    def test_multiplicative_emits_applied_penalty(self):
+        cfg = RewardConfig(multiplicative=True, multiplicative_factor=0.25)
+        reward = PolicyReward(
+            _make_mock_kernel(), base_reward_fn=lambda _r: 8.0, config=cfg
+        )
+        reward._emit_reward = MagicMock()
+        r = reward(_FakeRollout(violations=[_FakeViolation("high")]))
+        assert r == pytest.approx(2.0)
+        final, base, penalty, _violations = reward._emit_reward.call_args.args
+        assert (final, base) == (pytest.approx(2.0), pytest.approx(8.0))
+        assert penalty == pytest.approx(-6.0)
+
+    def test_additive_stats_record_severity_penalty(self):
+        reward = PolicyReward(_make_mock_kernel())
+        reward(_FakeRollout(violations=[_FakeViolation("high")]), emit=False)
+        assert reward.get_stats()["total_penalties"] == pytest.approx(-50.0)
+
 
 class TestPolicyRewardZeroViolations:
     def test_full_reward_on_zero_violations(self):
@@ -563,6 +591,24 @@ class TestPolicyPenaltyHelper:
     def test_custom_penalties(self):
         r = policy_penalty([_FakeViolation("critical")], critical_penalty=-200.0)
         assert r == pytest.approx(-200.0)
+
+    def test_dict_violations_use_their_severity(self):
+        violations = [{"severity": "critical"}, {"severity": "low"}]
+        assert policy_penalty(violations) == pytest.approx(-101.0)
+
+    def test_dict_violation_unknown_or_missing_severity_is_medium(self):
+        violations = [{"severity": "unknown_level"}, {"policy": "p"}]
+        assert policy_penalty(violations) == pytest.approx(-20.0)
+
+    def test_policy_reward_charges_kernel_dict_violations_by_severity(self):
+        # A rollout without ``violations`` falls back to the kernel, which
+        # may return dicts; a critical one must cost the critical penalty.
+        kernel = _make_mock_kernel()
+        kernel.get_recent_violations = MagicMock(
+            return_value=[{"policy": "p", "severity": "critical"}]
+        )
+        reward = PolicyReward(kernel, base_reward_fn=lambda _r: 1.0)
+        assert reward(object(), emit=False) == pytest.approx(-99.0)
 
 
 class TestCreatePolicyReward:
@@ -808,6 +854,27 @@ class TestGovernedEnvironmentStep:
         # No hook fire => no violations recorded.
         assert info["violations"] == []
 
+    def test_total_reward_is_sum_of_step_rewards(self):
+        """The episode's total_reward includes each step's success bonus."""
+        kernel = _make_mock_kernel()
+
+        def execute(action):
+            if action == "bad":
+                env._handle_violation("P", "blocked", "high", True)
+            return "result"
+
+        kernel.execute = MagicMock(side_effect=execute)
+        env = GovernedEnvironment(kernel)
+        env.reset()
+        rewards = []
+        for action in ("good", "bad", "good"):
+            _, reward, _, _, info = env.step(action)
+            rewards.append(reward)
+            assert info["total_reward"] == pytest.approx(sum(rewards))
+        # 1.0 - 0.1 + 10.0 (clean), 1.0 - 0.1 - 50.0 (high), clean again
+        assert rewards == pytest.approx([10.9, -49.1, 10.9])
+        assert env._state.total_reward == pytest.approx(sum(rewards))
+
 
 class TestGovernedEnvironmentGymInterface:
     def test_terminated_property(self):
@@ -858,6 +925,41 @@ class TestGovernedEnvironmentMetrics:
         m = env.get_metrics()
         assert m["total_episodes"] == 1
         assert m["total_steps"] == 2
+
+    def test_clean_episode_counts_once(self):
+        """Regression: every clean step used to add a successful episode,
+        so one clean five-step episode reported a success_rate of 5.0."""
+        env = GovernedEnvironment(_make_mock_kernel())
+        env.reset()
+        for i in range(5):
+            env.step(f"a{i}")
+        m = env.get_metrics()
+        assert m["successful_episodes"] == 1
+        assert m["success_rate"] == 1.0
+
+    def test_episode_with_a_violation_is_not_successful(self):
+        kernel = _make_mock_kernel()
+
+        def execute(action):
+            if action == "bad":
+                env._handle_violation("P", "blocked", "low", True)
+            return "result"
+
+        kernel.execute = MagicMock(side_effect=execute)
+        env = GovernedEnvironment(kernel)
+        env.reset()
+        for action in ("ok", "bad", "ok"):
+            env.step(action)
+        assert env.get_metrics()["successful_episodes"] == 0
+
+        # A clean second episode counts; the first one stays unsuccessful.
+        env.reset()
+        env.step("ok")
+        env.reset()
+        m = env.get_metrics()
+        assert m["total_episodes"] == 3
+        assert m["successful_episodes"] == 1
+        assert m["success_rate"] == pytest.approx(1 / 3)
 
 
 class TestCreateGovernedEnv:
@@ -987,6 +1089,18 @@ class TestFlightRecorderEmitterViolationSummary:
         summary = emitter.get_violation_summary()
         assert summary["total_violations"] == 0
         assert summary["violation_rate"] == 0.0
+
+    def test_violation_summary_does_not_count_as_emitted(self):
+        entries = [_FakeEntry(violated=True), _FakeEntry(id="e2")]
+        emitter = FlightRecorderEmitter(_make_recorder(entries))
+        emitter.get_violation_summary()
+        emitter.get_violation_summary()
+        assert emitter.get_stats()["emitted_count"] == 0
+
+        store = MagicMock()
+        emitter.emit_to_store(store)
+        emitter.get_violation_summary()
+        assert emitter.get_stats()["emitted_count"] == 2
 
 
 class TestFlightRecorderEmitterStream:

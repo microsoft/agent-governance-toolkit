@@ -140,6 +140,22 @@ def _openapi_schema() -> dict[str, Any]:
                                 "name": {"type": "string"},
                                 "weight": {"type": "number", "minimum": 0, "maximum": 1},
                                 "durationSeconds": {"type": "integer", "minimum": 0},
+                                "analysis": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "required": ["metric", "threshold"],
+                                        "properties": {
+                                            "metric": {"type": "string"},
+                                            "threshold": {"type": "number"},
+                                            "comparator": {
+                                                "type": "string",
+                                                "enum": ["gte", "lte", "eq"],
+                                                "default": "gte",
+                                            },
+                                        },
+                                    },
+                                },
                                 "manualGate": {"type": "boolean", "default": False},
                             },
                         },
@@ -325,7 +341,9 @@ def _parse_spec(spec_dict: dict[str, Any]) -> RolloutSpec:
     for s in spec_dict.get("steps", []):
         analysis = []
         for a in s.get("analysis", []):
-            analysis.append(AnalysisCriterion(a["metric"], a["threshold"]))
+            analysis.append(
+                AnalysisCriterion(a["metric"], a["threshold"], a.get("comparator", "gte"))
+            )
         steps.append(RolloutStep(
             name=s.get("name", ""),
             weight=s.get("weight", 0.0),

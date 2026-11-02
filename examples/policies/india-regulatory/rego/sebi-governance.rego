@@ -1,5 +1,5 @@
 # agt-policies-india - SEBI CSCRF 2024 + AI/ML Responsibility Amendment Feb 2025 (Rego reference)
-# Enforcing authority: SEBI. Status: CSCRF + Feb-2025 binding; June-2025 guidelines draft. NOT loaded at runtime. RE2.
+# Enforcing authority: SEBI. Status: CSCRF + Feb-2025 binding; June-2025 guidelines draft. RE2.
 #
 # Input schema:
 #   { "action": "disable_audit_log",
@@ -14,6 +14,10 @@ _output_text := v if { is_string(input.output); v := input.output } else := ""
 
 ai_action_targets := {"place_order", "advise_investor", "execute_trade", "manage_portfolio"}
 log_tamper_actions := {"disable_audit_log", "delete_audit_log", "make_log_mutable", "store_audit_log_offshore"}
+
+# Actions that place or configure audit log storage, kept disjoint from
+# log_tamper_actions above so one action never produces two denials.
+log_storage_actions := {"configure_audit_log", "store_audit_log"}
 
 # Feb 2025 amendment: RE solely responsible for AI/ML output; cannot disclaim
 deny contains msg if {
@@ -34,6 +38,7 @@ deny contains msg if {
 }
 
 deny contains msg if {
+	input.action in log_storage_actions
 	not input.params.log_storage_region == "IN"
 	region := object.get(input.params, "log_storage_region", "unset")
 	msg := sprintf("SEBI CSCRF 2024: audit logs must be retained within India, configured region: '%v'", [region])

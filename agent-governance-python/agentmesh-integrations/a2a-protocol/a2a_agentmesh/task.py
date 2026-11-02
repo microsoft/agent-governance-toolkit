@@ -212,13 +212,14 @@ class TaskEnvelope:
         trust = data.get("x-agentmesh-trust", {})
         messages = []
         for m in data.get("messages", []):
-            text = ""
-            if "parts" in m:
-                text = m["parts"][0].get("text", "")
+            # to_dict writes one part; a message may also arrive with none.
+            parts = m.get("parts") or [{}]
+            part = parts[0]
             messages.append(
                 TaskMessage(
                     role=m["role"],
-                    content=text,
+                    content=part.get("text", ""),
+                    content_type=part.get("type", "text/plain"),
                     metadata=m.get("metadata", {}),
                 )
             )
