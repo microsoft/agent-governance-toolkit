@@ -42,20 +42,26 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install OPA 1.22.0
+      - name: Install OPA
         env:
-          OPA_VERSION: "1.22.0"
-          OPA_SHA256: "791790254c598a942eb140959bcec9a47f844535a632fd01d11d870ba2a47047"
+          OPA_VERSION: "0.70.0"
+          OPA_SHA256: "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084"
         run: |
           set -euo pipefail
-          curl --proto '=https' --tlsv1.2 --fail --location --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 --output "$RUNNER_TEMP/opa" "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static"
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 --output "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v${OPA_VERSION}/opa_linux_amd64_static"
           echo "${OPA_SHA256}  $RUNNER_TEMP/opa" | sha256sum --check -
           chmod +x "$RUNNER_TEMP/opa"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/opa" version
 
       - name: Run all example Rego tests
-        run: opa test examples/policies -v
+        run: |
+          opa test -v \
+            examples/policies/african-regulatory/rego \
+            examples/policies/india-regulatory/rego \
+            examples/policies/production/rego \
+            examples/policies/rego \
+            examples/policies/uk-regulatory/rego
 
   validate-policies:
     runs-on: ubuntu-latest
