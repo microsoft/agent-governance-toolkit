@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from itertools import zip_longest
 from typing import Any
 
 from agent_sre.replay.capture import Span, SpanStatus, Trace, TraceStore
@@ -182,54 +183,57 @@ class ReplayEngine:
     def diff(self, trace_a: Trace, trace_b: Trace) -> list[TraceDiff]:
         """Compare two traces and return differences.
 
-        Basic comparison: checks for missing/extra spans and output mismatches.
+        Match spans by name and occurrence order within each name.
+        Checks missing/extra spans, output mismatches, and status changes.
         """
         diffs: list[TraceDiff] = []
 
-        spans_a = {s.name: s for s in trace_a.spans}
-        spans_b = {s.name: s for s in trace_b.spans}
+        spans_a: dict[str, list[Span]] = {}
+        spans_b: dict[str, list[Span]] = {}
+        for span in trace_a.spans:
+            spans_a.setdefault(span.name, []).append(span)
+        for span in trace_b.spans:
+            spans_b.setdefault(span.name, []).append(span)
 
-        all_names = set(spans_a.keys()) | set(spans_b.keys())
+        all_names = set(spans_a) | set(spans_b)
 
         for name in sorted(all_names):
-            sa = spans_a.get(name)
-            sb = spans_b.get(name)
+            for sa, sb in zip_longest(spans_a.get(name, []), spans_b.get(name, [])):
+                if sa is None:
+                    diffs.append(TraceDiff(
+                        diff_type=DiffType.EXTRA_SPAN,
+                        span_name=name,
+                        description=f"Span '{name}' only in trace B",
+                    ))
+                    continue
 
-            if sa is None:
-                diffs.append(TraceDiff(
-                    diff_type=DiffType.EXTRA_SPAN,
-                    span_name=name,
-                    description=f"Span '{name}' only in trace B",
-                ))
-                continue
+                if sb is None:
+                    diffs.append(TraceDiff(
+                        diff_type=DiffType.MISSING_SPAN,
+                        span_name=name,
+                        description=f"Span '{name}' only in trace A",
+                    ))
+                    continue
 
-            if sb is None:
-                diffs.append(TraceDiff(
-                    diff_type=DiffType.MISSING_SPAN,
-                    span_name=name,
-                    description=f"Span '{name}' only in trace A",
-                ))
-                continue
+                # Compare outputs
+                if sa.output_data != sb.output_data:
+                    diffs.append(TraceDiff(
+                        diff_type=DiffType.OUTPUT_MISMATCH,
+                        span_name=name,
+                        original=sa.output_data,
+                        replayed=sb.output_data,
+                        description=f"Output differs for '{name}'",
+                    ))
 
-            # Compare outputs
-            if sa.output_data != sb.output_data:
-                diffs.append(TraceDiff(
-                    diff_type=DiffType.OUTPUT_MISMATCH,
-                    span_name=name,
-                    original=sa.output_data,
-                    replayed=sb.output_data,
-                    description=f"Output differs for '{name}'",
-                ))
-
-            # Compare status
-            if sa.status != sb.status:
-                diffs.append(TraceDiff(
-                    diff_type=DiffType.STATUS_CHANGE,
-                    span_name=name,
-                    original=sa.status.value,
-                    replayed=sb.status.value,
-                    description=f"Status changed for '{name}'",
-                ))
+                # Compare status
+                if sa.status != sb.status:
+                    diffs.append(TraceDiff(
+                        diff_type=DiffType.STATUS_CHANGE,
+                        span_name=name,
+                        original=sa.status.value,
+                        replayed=sb.status.value,
+                        description=f"Status changed for '{name}'",
+                    ))
 
         return diffs
 
