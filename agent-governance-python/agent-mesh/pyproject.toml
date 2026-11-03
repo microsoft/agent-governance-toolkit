@@ -31,11 +31,11 @@ dependencies = ["agent-governance-toolkit-core>=5.0.0,<6.0"]
 # the test suite at collection time, so the dev bundle must list them.
 dev = [
     "pytest>=9.1.1,<10.0",
-    "pytest-asyncio>=1.4.0,<2.0",
+    "pytest-asyncio>=1.4.1,<2.0",
     "pytest-cov>=7.1.0,<8.0",
     "hypothesis>=6.170.5,<7.0",
     "black>=26.10.1,<27.0",
-    "ruff>=0.17.1,<1.0",
+    "ruff>=0.17.3,<1.0",
     "mypy>=2.4.0,<3.0",
     "fakeredis>=2.38.0,<3.0",
     "prometheus-client>=0.26.0,<1.0",
