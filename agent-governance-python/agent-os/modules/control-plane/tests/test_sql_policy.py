@@ -160,6 +160,54 @@ class TestSQLPolicy:
         request = self.make_sql_request("EXECUTE xp_cmdshell 'net user'")
         assert sql_policy.validator(request) is False
 
+    # ---------------------------------------------------------------
+    # Newline-separated EXEC procedures - regression coverage
+    #
+    # The dangerous-procedure detection matches against
+    # ``statement.sql().upper()`` using ``\s+`` between the EXEC/EXECUTE
+    # keyword and the procedure name, so whitespace that happens to be a
+    # newline in the source SQL is already handled. These tests lock in
+    # that behavior so a future refactor (e.g. switching to a
+    # single-space or line-anchored pattern) cannot silently regress it.
+    # They characterize the current, correct denial — they are not a bug
+    # report and assert no bypass exists.
+    # ---------------------------------------------------------------
+
+    def test_exec_newline_xp_cmdshell_blocked(self, sql_policy):
+        """EXEC separated from xp_cmdshell by a newline should be blocked."""
+        request = self.make_sql_request("EXEC\nxp_cmdshell 'whoami'")
+        assert sql_policy.validator(request) is False
+
+    def test_execute_newline_xp_cmdshell_blocked(self, sql_policy):
+        """EXECUTE separated from xp_cmdshell by a newline should be blocked."""
+        request = self.make_sql_request("EXECUTE\nxp_cmdshell 'net user'")
+        assert sql_policy.validator(request) is False
+
+    def test_exec_newline_sp_configure_blocked(self, sql_policy):
+        """EXEC separated from sp_configure by a newline should be blocked."""
+        request = self.make_sql_request(
+            "EXEC\nsp_configure 'show advanced options', 1"
+        )
+        assert sql_policy.validator(request) is False
+
+    def test_exec_newline_sp_addrolemember_blocked(self, sql_policy):
+        """EXEC separated from sp_addrolemember by a newline should be blocked."""
+        request = self.make_sql_request(
+            "EXEC\nsp_addrolemember 'db_owner', 'attacker'"
+        )
+        assert sql_policy.validator(request) is False
+
+    def test_multiline_select_still_allowed(self, sql_policy):
+        """A benign SELECT spanning newlines should remain allowed.
+
+        Confirms the newline-robust proc detection does not over-block
+        ordinary multi-line queries.
+        """
+        request = self.make_sql_request(
+            "SELECT id,\n       name\nFROM users\nWHERE active = 1"
+        )
+        assert sql_policy.validator(request) is True
+
     def test_merge_into_blocked(self, sql_policy):
         """MERGE INTO should be blocked."""
         request = self.make_sql_request(
