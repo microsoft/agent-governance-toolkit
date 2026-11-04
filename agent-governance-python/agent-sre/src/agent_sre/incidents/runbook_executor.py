@@ -146,8 +146,16 @@ class RunbookExecutor:
         execution: RunbookExecution,
         incident: Incident,
     ) -> None:
-        """Run rollback actions in reverse order for completed steps."""
-        for step, _result in reversed(completed_steps):
+        """Run rollback actions in reverse order for completed steps.
+
+        Each step whose rollback succeeds is marked ``ROLLED_BACK``. The
+        execution is marked ``ROLLED_BACK`` only when every rollback
+        succeeded; if any rollback fails it stays ``FAILED`` and the
+        step keeps ``SUCCESS`` with the rollback error recorded.
+        """
+        rolled_back = False
+        rollback_failed = False
+        for step, result in reversed(completed_steps):
             if step.rollback_action is None:
                 continue
 
@@ -159,13 +167,17 @@ class RunbookExecutor:
                     )
                 # String rollback actions are logged but not executed
                 self._emit_event("rollback_completed", step=step, incident=incident)
+                result.status = StepStatus.ROLLED_BACK
+                rolled_back = True
             except Exception as exc:
                 logger.warning("Rollback failed for step '%s': %s", step.name, exc)
                 self._emit_event(
                     "rollback_failed", step=step, incident=incident, error=str(exc)
                 )
+                result.error = f"rollback failed: {exc}"
+                rollback_failed = True
 
-        if any(s.rollback_action is not None for s, _ in completed_steps):
+        if rolled_back and not rollback_failed:
             execution.status = ExecutionStatus.ROLLED_BACK
 
     def _invoke_with_timeout(
