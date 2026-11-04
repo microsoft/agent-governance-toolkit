@@ -15,6 +15,8 @@ import threading
 from pathlib import Path
 from typing import Optional
 
+from packaging.specifiers import SpecifierSet
+
 from agent_marketplace.manifest import MarketplaceError, PluginManifest, PluginType
 from agent_marketplace.marketplace_policy import (
     MarketplacePolicy,
@@ -130,7 +132,13 @@ class PluginRegistry:
             logger.info("Unregistered plugin %s (version=%s)", name, version or "all")
             self._persist()
 
-    def get_plugin(self, name: str, version: Optional[str] = None) -> PluginManifest:
+    def get_plugin(
+        self,
+        name: str,
+        version: Optional[str] = None,
+        *,
+        version_specifier: SpecifierSet | None = None,
+    ) -> PluginManifest:
         """Retrieve a specific plugin manifest.
 
         When *version* is ``None`` the latest version (highest semver) is returned.
@@ -138,6 +146,7 @@ class PluginRegistry:
         Args:
             name: Plugin name.
             version: Exact version string, or ``None`` for latest.
+            version_specifier: Optional constraints on the returned version.
 
         Returns:
             The matching PluginManifest.
@@ -149,6 +158,16 @@ class PluginRegistry:
             if name not in self._plugins:
                 raise MarketplaceError(f"Plugin not found: {name}")
             versions = self._plugins[name]
+            if version_specifier is not None:
+                matching = [
+                    v for v in version_specifier.filter(versions)
+                    if version is None or v == version
+                ]
+                if not matching:
+                    raise MarketplaceError(
+                        f"No version of {name} satisfies {version_specifier}"
+                    )
+                return versions[max(matching, key=_semver_tuple)]
             if version:
                 if version not in versions:
                     raise MarketplaceError(f"Version not found: {name}@{version}")
