@@ -47,7 +47,7 @@ governance tools from external workflows.
 
 This initial package enforces:
 
-- `session.created`         — best-effort status logging; no context injection
+- `event` (`session.created`) — best-effort session-start status logging; no context injection
 - `event` (chat-style)      — scans submitted prompts; throws to block
 - `tool.execute.before`     — allow / review / deny tool calls
 - `tool.execute.after`      — scans tool output and redacts known secret
