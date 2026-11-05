@@ -54,11 +54,28 @@ class TestSessionToTrustRecord:
         assert record["subject"] == "did:mesh:spiffe://cluster/ns/default/sa/agent-1"
         assert record["data_class"] == "public"
         assert isinstance(record["iat"], int) and record["iat"] > 0
-        assert record["transparency"] is None  # unanchored at Level 0/1
+        assert "transparency" not in record  # unanchored at Level 0/1
         assert record["appraisal"]["status"] == "affirming"
         assert record["appraisal"]["verifier"] == "https://verifier.agentrust-io.com"
         assert record["tool_transcript"]["call_count"] == 1
         assert record["tool_transcript"]["hash"].startswith("sha256:")
+
+    def test_signed_record_verifies_with_supported_trace_dependency(self):
+        from agentrust_trace import generate_key, sign_record, verify_record
+
+        session = TraceSession(
+            agent_did="did:mesh:test",
+            audit_entries=[_entry()],
+            data_class="public",
+            policy_bundle_hash=f"sha256:{_ZEROS}",
+        )
+        key = generate_key()
+        record = session_to_trust_record(session, _CONFIG)
+        signed = sign_record(record, key)
+        result = verify_record(signed, key.public_key())
+        assert result.profile == record["eat_profile"]
+        assert "transparency" not in signed
+        assert signed["policy"]["enforcement_mode"] == _CONFIG.enforcement_mode
 
     def test_affirming_when_no_denials(self):
         session = TraceSession(
