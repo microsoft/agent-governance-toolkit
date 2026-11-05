@@ -5,13 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> [!IMPORTANT]
-> All releases are currently **public preview releases**. They are Microsoft-signed
-> and production-quality but may have breaking changes before GA.
-
 ## [Unreleased]
 
 ### Changed
+- **Removed the "Public Preview" label from documentation, package metadata, docstrings and comments.** The label names a product release stage that does not apply to an MIT open-source project; semver and BREAKING_CHANGES.md say how API changes are handled. The roadmap's current-release line now reads v5.0.0. A new gate, `scripts/ci/check_no_public_preview.sh`, fails if the phrase returns outside the dated release history (#4373).
 - **policy-engine: agent-control-spec 0.4.0-alpha.4 (#4224).** The engine now accepts both manifest contracts (`0.4.0-alpha.1`, `0.5.0-alpha.1`); `bundle_url` and `system_prompt_url` are accepted on a pinned chain and fetched by the bundled dispatchers at dispatch time; `acs_builder_set_url_fetch_limits` stores the limits and returns `0` instead of the former `-1` "unsupported"; `REMOVED_MANIFEST_FIELDS` is deprecated in favour of `UNSUPPORTED_MANIFEST_FIELDS`. See BREAKING_CHANGES.md for the consumer-side notes.
 
 ### Fixed

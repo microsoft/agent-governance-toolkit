@@ -1,10 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Circuit breaker — automatic agent isolation on failure.
 
-Basic open/closed circuit breaker. Half-open recovery is not available
-in Public Preview — use force_close() or reset() to recover.
+Basic open/closed circuit breaker. Half-open recovery is not implemented;
+use force_close() or reset() to recover.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ class CircuitState(Enum):
     knobs (``success_threshold``, ``half_open_max_calls``), the
     ``CircuitBreaker._half_open_calls`` field, and the
     ``CircuitBreakerRegistry.summary`` rollup — but **no code path ever
-    transitions to it** in Public Preview. The recovery flow is
+    transitions to it**. The recovery flow is
     documented as manual: callers ``force_close()`` or ``reset()`` after
     deciding the agent is healthy. The HALF_OPEN surface is kept
     forward-compatible so future versions can flip on auto-recovery
@@ -30,7 +29,7 @@ class CircuitState(Enum):
     """
     CLOSED = "closed"      # Normal operation
     OPEN = "open"          # Failing, reject calls
-    HALF_OPEN = "half_open"  # Reserved for future auto-recovery; not entered in Public Preview
+    HALF_OPEN = "half_open"  # Reserved for future auto-recovery; never entered
 
 
 @dataclass
@@ -39,7 +38,7 @@ class CircuitBreakerConfig:
 
     ``success_threshold`` and ``half_open_max_calls`` are part of the
     forward-compatible HALF_OPEN surface (see ``CircuitState``) and are
-    not read by any code path in Public Preview. They're kept on the
+    not read by any code path. They're kept on the
     config so a future flip to auto-recovery does not break serialised
     configs in the wild.
     """
@@ -81,7 +80,7 @@ class CircuitBreaker:
     - CLOSED: Normal operation. Track failures.
     - OPEN: Agent isolated. Reject all calls. Use force_close() or reset() to recover.
 
-    Half-open recovery is not available in Public Preview.
+    Half-open recovery is not implemented.
     """
 
     def __init__(self, agent_id: str, config: CircuitBreakerConfig | None = None) -> None:
@@ -98,7 +97,7 @@ class CircuitBreaker:
 
     @property
     def state(self) -> CircuitState:
-        """Current state — no auto-transition in Public Preview."""
+        """Current state — there is no automatic transition."""
         return self._state
 
     @property

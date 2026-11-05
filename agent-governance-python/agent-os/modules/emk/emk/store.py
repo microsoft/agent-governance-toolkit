@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic context/memory management
 """
 Store — Abstract interfaces and mutable file-based implementation for episodic memory.
 """

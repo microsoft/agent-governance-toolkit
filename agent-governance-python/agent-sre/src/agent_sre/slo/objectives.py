@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """SLO definitions and Error Budget engine."""
 
 from __future__ import annotations

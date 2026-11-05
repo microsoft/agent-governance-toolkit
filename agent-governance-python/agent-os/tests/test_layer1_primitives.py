@@ -262,7 +262,7 @@ class TestEpisodicMemoryEdgeCases:
         assert len(results) == 2
 
     def test_episode_is_mutable(self):
-        """Public Preview: Episode model is mutable for flexibility."""
+        """Episode model is mutable for flexibility."""
         ep = Episode(goal="g", action="a", result="r", reflection="ref")
         ep.goal = "new goal"
         assert ep.goal == "new goal"

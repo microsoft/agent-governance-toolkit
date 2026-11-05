@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic context/memory management
 """
 Episode Schema — core data structures for episodic memory.
 
@@ -42,7 +41,6 @@ class Episode(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional context or tags")
     episode_id: str = Field(default="", description="Unique hash-based identifier")
     
-    # Public Preview — basic context/memory management
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -156,7 +154,6 @@ class SemanticRule(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional context or tags")
     rule_id: str = Field(default="", description="Unique hash-based identifier")
     
-    # Public Preview — basic context/memory management
     model_config = {
         "json_schema_extra": {
             "example": {

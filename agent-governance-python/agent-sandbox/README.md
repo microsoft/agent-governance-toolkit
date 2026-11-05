@@ -1,6 +1,6 @@
 # Agent Sandbox
 
-Public Preview — execution isolation for AI agents with explicit host
+Execution isolation for AI agents with explicit host
 configuration, optional native ACS governance, and filesystem checkpointing.
 Ships five interchangeable backends behind the same
 `SandboxProvider` ABC.

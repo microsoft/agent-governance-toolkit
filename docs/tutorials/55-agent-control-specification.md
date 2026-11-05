@@ -27,12 +27,11 @@ You will create:
 - a Python host that calls `AgentControl.run_tool()`
 - three outcomes: `allow`, `transform`, and `deny`
 
-!!! important "Public Preview"
+!!! note "Engine dependency"
     AGT uses the published
     [agent-control-spec](https://github.com/responsibleai/agent-control-spec)
     engine. This tutorial uses AGT's compatibility host SDK in `policy-engine/`,
-    not the standalone upstream Python API. The APIs and manifest shape may
-    change before GA.
+    not the standalone upstream Python API.
 
 ## How ACS fits in AGT
 

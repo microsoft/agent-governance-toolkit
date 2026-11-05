@@ -38,6 +38,8 @@
     { "pattern": "pipc\\.go\\.kr" },
     { "pattern": "msit\\.go\\.kr" },
     { "pattern": "agent-to-agent\\.github\\.io" },
+    { "pattern": "^https://deepwiki\\.com/" },
+    { "pattern": "^https://digital-strategy\\.ec\\.europa\\.eu/" },
     { "pattern": "agent-os\\.dev" },
     { "pattern": "docs\\.agentmesh\\.io" },
     { "pattern": "maximumsats\\.com" },

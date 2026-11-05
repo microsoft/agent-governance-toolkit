@@ -2,7 +2,7 @@
 name = "agentmesh"
 version.workspace = true
 edition.workspace = true
-description = "Public Preview — Rust SDK for the Agent Governance Toolkit (policy, trust, audit, identity)"
+description = "Rust SDK for the Agent Governance Toolkit (policy, trust, audit, identity)"
 license.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/agentmesh"
