@@ -155,7 +155,7 @@ fn default_policy_dispatcher_fails_closed_for_bad_explicit_opa_path() {
 }
 
 #[test]
-fn default_policy_dispatcher_rejects_non_rego_policies() {
+fn default_policy_dispatcher_rejects_unsupported_policy_types() {
     let yaml = CString::new(CUSTOM_POLICY_MANIFEST).unwrap();
     let mut err: *mut c_char = ptr::null_mut();
     let builder = unsafe { acs_builder_from_yaml(yaml.as_ptr(), &mut err) };
@@ -171,10 +171,13 @@ fn default_policy_dispatcher_rejects_non_rego_policies() {
     );
 
     let runtime = unsafe { acs_builder_build(builder, &mut err) };
-    assert!(runtime.is_null(), "non-rego policy must fail the build");
+    assert!(
+        runtime.is_null(),
+        "unsupported policy type must fail the build"
+    );
     let message = take_err(err);
     assert!(
-        message.contains("only Rego"),
+        message.contains("only Rego and Cedar"),
         "unexpected error message: {message}"
     );
 }

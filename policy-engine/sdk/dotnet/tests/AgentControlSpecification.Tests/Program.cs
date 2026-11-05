@@ -120,6 +120,89 @@ Assert(labelingResult.Verdict.ResultLabels is not null, "verdict should carry re
 AssertEqual(1, labelingResult.Verdict.ResultLabels!.Count, "result_labels should contain one label.");
 AssertEqual("confidential", labelingResult.Verdict.ResultLabels![0], "result_labels should round-trip verbatim.");
 
+const string CedarAllowManifest = """
+agent_control_specification_version: 0.4.0-alpha.1
+metadata:
+  name: cedar-defaults
+policies:
+  guard:
+    type: cedar
+    policy_set: |
+      permit(principal, action, resource);
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: guard
+    policy_target: $.input
+""";
+var cedarSnapshot = new Dictionary<string, object?>
+{
+    ["envelope"] = new { agent = new { id = "agent-1" } },
+};
+var cedarAllow = AgentControl.FromNative(CedarAllowManifest);
+var cedarAllowResult = await cedarAllow.EvaluateInputAsync(new { text = "hello" }, cedarSnapshot);
+AssertEqual(
+    Decision.Allow,
+    cedarAllowResult.Verdict.Decision,
+    "default dispatcher should evaluate a Cedar permit.");
+
+const string CedarDenyManifest = """
+agent_control_specification_version: 0.4.0-alpha.1
+metadata:
+  name: cedar-deny-defaults
+policies:
+  guard:
+    type: cedar
+    policy_set: |
+      @id("blocked")
+      forbid(principal, action, resource);
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: guard
+    policy_target: $.input
+""";
+var cedarDeny = AgentControl.FromNative(CedarDenyManifest);
+var cedarDenyResult = await cedarDeny.EvaluateInputAsync(new { text = "hello" }, cedarSnapshot);
+AssertEqual(
+    Decision.Deny,
+    cedarDenyResult.Verdict.Decision,
+    "default dispatcher should evaluate a Cedar forbid.");
+AssertEqual(
+    "blocked",
+    cedarDenyResult.Verdict.Reason,
+    "Cedar deny reason should come from the contributing policy @id.");
+
+const string CedarInvalidAdviceManifest = """
+agent_control_specification_version: 0.4.0-alpha.1
+metadata:
+  name: cedar-invalid-advice-defaults
+policies:
+  guard:
+    type: cedar
+    policy_set: |
+      @advice("{\"verdict\":\"bogus\"}")
+      permit(principal, action, resource);
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: guard
+    policy_target: $.input
+""";
+var cedarInvalidAdvice = AgentControl.FromNative(CedarInvalidAdviceManifest);
+var cedarInvalidAdviceResult = await cedarInvalidAdvice.EvaluateInputAsync(new { text = "hello" }, cedarSnapshot);
+AssertEqual(
+    Decision.Deny,
+    cedarInvalidAdviceResult.Verdict.Decision,
+    "invalid Cedar advice should fail closed.");
+AssertEqual(
+    "runtime_error:policy_invocation_failed",
+    cedarInvalidAdviceResult.Verdict.Reason,
+    "section 12.3 folds the dispatcher's policy_output_invalid error into the invocation failure reason.");
+
 const string InputOutputManifest = """
 agent_control_specification_version: 0.4.0-alpha.1
 policies:
