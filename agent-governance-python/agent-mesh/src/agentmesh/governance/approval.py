@@ -29,6 +29,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from agentmesh.governance.webhook_guard import DEFAULT_GUARD, WebhookEndpointGuard
+
 logger = logging.getLogger(__name__)
 
 # Strict mode (ADR-0030 section 9, step 5) rejects the two unsafe legacy
@@ -236,6 +238,9 @@ class WebhookApproval(ApprovalHandler):
         url: Webhook endpoint URL.
         timeout_seconds: Max time to wait. Default 300 (5 min).
         headers: Optional HTTP headers (e.g., auth tokens).
+        endpoint_guard: SSRF policy for the endpoint; see
+            :class:`agentmesh.governance.webhook_guard.WebhookEndpointGuard`.
+            Defaults to denying every internal destination.
     """
 
     def __init__(
@@ -245,10 +250,10 @@ class WebhookApproval(ApprovalHandler):
         headers: dict[str, str] | None = None,
         *,
         strict: bool | None = None,
+        endpoint_guard: WebhookEndpointGuard | None = None,
     ):
-        from agentmesh.governance.advisory import _validate_webhook_url
-
-        _validate_webhook_url(url)
+        self._guard = endpoint_guard or DEFAULT_GUARD
+        self._guard.validate_url(url)
         self._url = url
         self._timeout = timeout_seconds
         self._headers = headers or {}
@@ -290,7 +295,7 @@ class WebhookApproval(ApprovalHandler):
             req = urllib.request.Request(
                 self._url, data=payload, headers=headers, method="POST",
             )
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            with self._guard.open(req, timeout=self._timeout) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
                 approved = body.get("approved", False)
                 return ApprovalDecision(

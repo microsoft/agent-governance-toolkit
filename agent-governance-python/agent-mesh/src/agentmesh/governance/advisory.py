@@ -46,6 +46,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional, Union
 
+from .webhook_guard import DEFAULT_GUARD, WebhookEndpointGuard
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,27 +63,15 @@ class AdvisoryMisconfiguredError(TypeError):
     """
 
 
-_BLOCKED_HOSTS = frozenset({
-    "169.254.169.254",       # cloud metadata (AWS/Azure)
-    "metadata.google.internal",
-    "[fd00:ec2::254]",
-})
+def _validate_webhook_url(
+    url: str, guard: Optional[WebhookEndpointGuard] = None
+) -> None:
+    """Reject URLs with dangerous schemes or SSRF targets.
 
-
-def _validate_webhook_url(url: str) -> None:
-    """Reject URLs with dangerous schemes or known SSRF targets."""
-    from urllib.parse import urlparse
-
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError(
-            f"Unsupported URL scheme '{parsed.scheme}': only http and https are allowed"
-        )
-    host = (parsed.hostname or "").lower()
-    if host in _BLOCKED_HOSTS:
-        raise ValueError(
-            f"URL host '{host}' is blocked to prevent SSRF"
-        )
+    Thin wrapper kept for callers that imported this name; the policy lives
+    in :mod:`agentmesh.governance.webhook_guard`.
+    """
+    (guard or DEFAULT_GUARD).validate_url(url)
 
 
 @dataclass
@@ -239,6 +229,12 @@ class HttpAdvisory(AdvisoryCheck):
         timeout_seconds: Request timeout. Default: 5.
         headers: Optional HTTP headers (auth tokens, etc.).
         on_error: Action on failure. Default: "allow".
+        endpoint_guard: SSRF policy for the endpoint. The default denies
+            loopback, private, link-local, metadata and other internal
+            destinations, resolves the host itself at connect time and pins
+            the connection to the validated address. Pass
+            ``WebhookEndpointGuard.allowing([...])`` to permit an internal
+            classifier.
     """
 
     def __init__(
@@ -248,8 +244,11 @@ class HttpAdvisory(AdvisoryCheck):
         timeout_seconds: float = 5,
         headers: Optional[dict[str, str]] = None,
         on_error: str = "allow",
+        *,
+        endpoint_guard: Optional[WebhookEndpointGuard] = None,
     ):
-        _validate_webhook_url(url)
+        self._guard = endpoint_guard or DEFAULT_GUARD
+        self._guard.validate_url(url)
         self._url = url
         self._name = name
         self._timeout = timeout_seconds
@@ -267,7 +266,7 @@ class HttpAdvisory(AdvisoryCheck):
             req = urllib.request.Request(
                 self._url, data=payload, headers=headers, method="POST",
             )
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            with self._guard.open(req, timeout=self._timeout) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
                 return AdvisoryDecision(
                     action=body.get("action", "allow"),
