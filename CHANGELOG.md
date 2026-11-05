@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **policy-engine: `AgentControl::new(runtime)` is removed and `with_telemetry` returns `Result` (#3941).** A Rust `AgentControl` is built from a manifest only, so every control keeps the limits and dispatchers it was built with: transforms are revalidated against the configured limits, an installed telemetry sink receives events, and the `system_prompt_file` check cannot be bypassed. `with_perf_telemetry_level` is added. The Rust SDK and integration crates move to 0.4.0-beta.1. See BREAKING_CHANGES.md for the rewrites.
 - **policy-engine: agent-control-spec 0.4.0-alpha.4 (#4224).** The engine now accepts both manifest contracts (`0.4.0-alpha.1`, `0.5.0-alpha.1`); `bundle_url` and `system_prompt_url` are accepted on a pinned chain and fetched by the bundled dispatchers at dispatch time; `acs_builder_set_url_fetch_limits` stores the limits and returns `0` instead of the former `-1` "unsupported"; `REMOVED_MANIFEST_FIELDS` is deprecated in favour of `UNSUPPORTED_MANIFEST_FIELDS`. See BREAKING_CHANGES.md for the consumer-side notes.
 
 ### Fixed

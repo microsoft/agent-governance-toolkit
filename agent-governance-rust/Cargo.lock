@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "agent_control_specification"
-version = "0.4.0-beta.0"
+version = "0.4.0-beta.1"
 dependencies = [
  "agent-control-spec",
  "agent-hooks-sdk",

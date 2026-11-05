@@ -183,9 +183,13 @@ all return the same shape or diagnostics as AGT's tooling. A replacement needs
 behavioral parity, not just a matching function name.
 
 Runtime manifest and policy-dispatcher getters avoid duplicate construction
-state. The host still retains the inputs needed to rebuild a runtime with a
-telemetry sink. The remaining upstream API requests are
-[#22](https://github.com/responsibleai/agent-control-spec/issues/22) and
+state. The runtime still has no getter for its annotator dispatcher or limits,
+so the host keeps those inputs itself and builds every `AgentControl` from a
+manifest; `with_telemetry` rebuilds the runtime from them and fails rather
+than keeping the old sink. A constructor over a caller-built `Runtime` can
+come back once upstream
+[#22](https://github.com/responsibleai/agent-control-spec/issues/22) lands.
+The remaining upstream API requests are #22 and
 [#23](https://github.com/responsibleai/agent-control-spec/issues/23).
 The old binding-validation gap
 [#14](https://github.com/responsibleai/agent-control-spec/issues/14) and
