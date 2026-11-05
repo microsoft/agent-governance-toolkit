@@ -122,7 +122,7 @@ Your agent code runs in "user space" - it can do anything. But the kernel interc
 | [Building Your First Governed Agent](./first-governed-agent.md) | 10 min | Complete walkthrough |
 | [Using Message Bus Adapters](./message-bus-adapters.md) | 10 min | Connect agents with Redis/Kafka |
 | [Creating Custom Tools](./custom-tools.md) | 15 min | Build safe tools |
-| [Carbon Auditor Example](../examples/carbon-auditor/) | 15 min | Full multi-agent demo |
+| [Carbon Auditor Example](../../examples/carbon-auditor/) | 15 min | Full multi-agent demo |
 
 ## Quick Reference
 
