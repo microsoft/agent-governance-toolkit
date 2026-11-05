@@ -79,6 +79,10 @@ jobs:
               - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
             studio:
               - 'agent-governance-studio/**'
+              - 'agent-governance-python/agent-mesh/src/agentmesh/engine_api/**'
+              - 'agent-governance-python/agent-compliance/src/agent_compliance/policy_test.py'
+              - 'agent-governance-python/agent-compliance/pyproject.toml'
+              - 'agent-governance-python/agent-governance-toolkit-core/pyproject.toml'
               - '.github/workflows/ci.yml'
             integrations:
               - 'agent-governance-python/agentmesh-integrations/**'
@@ -1269,6 +1273,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.studio == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    env:
+      AGT_ENGINE_API_REQUIRE_REPLAY: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -1279,10 +1285,35 @@ jobs:
           python -m pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-build.txt
           python -m pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-lint.txt
           python -m pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-test.txt
+      - name: Install verified OPA for the real Studio replay backend
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
+            --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/opa"
+          echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
+          echo "AGT_STUDIO_TEST_WHEELHOUSE=$RUNNER_TEMP/studio-wheelhouse" >> "$GITHUB_ENV"
+      - name: Build and install the canonical Studio production wheelhouse
+        run: |
+          set -euo pipefail
+          python -m pip install --no-cache-dir maturin==1.8.7 hatchling==1.28.0 wheel==0.46.3
+          python -m pip wheel --no-deps --no-build-isolation --wheel-dir "$RUNNER_TEMP/studio-wheels" ./policy-engine/sdk/python
+          python -m build --no-isolation --wheel --outdir "$RUNNER_TEMP/studio-wheels" agent-governance-python/agent-governance-toolkit-core
+          python -m build --no-isolation --wheel --outdir "$RUNNER_TEMP/studio-wheels" agent-governance-python/agent-compliance
+          python -m build --no-isolation --wheel agent-governance-studio
+          python -m pip download --dest "$RUNNER_TEMP/studio-wheelhouse" \
+            -c agent-governance-studio/runtime-constraints.txt \
+            "$RUNNER_TEMP"/studio-wheels/*.whl agent-governance-studio/dist/*.whl
+          python -m pip install --no-index --find-links "$RUNNER_TEMP/studio-wheelhouse" agent-governance-studio==5.0.0
       - name: Lint and test Studio Python package
         run: |
           ruff check agent-governance-studio/src agent-governance-studio/tests --select E,F,W --ignore E501
           python -m pytest agent-governance-studio/tests -q --junitxml=/tmp/agt-studio-python.xml
+      - name: Run canonical Engine API tests and conformance with required real replay
+        working-directory: agent-governance-python/agent-mesh
+        run: python -m pytest tests/engine_api/ -q
       - name: Build Studio wheel and sdist
         run: python -m build --no-isolation agent-governance-studio
       - name: Verify Studio distributions and clean install
@@ -1308,9 +1339,9 @@ jobs:
                   for name in files
               )
           PY
-          python -m venv /tmp/agt-studio-venv
-          /tmp/agt-studio-venv/bin/python -m pip install --no-deps agent-governance-studio/dist/*.whl
-          /tmp/agt-studio-venv/bin/python -I -c "import agent_governance_studio; print(agent_governance_studio.__file__)"
+          python -m venv "$RUNNER_TEMP/agt-studio-venv"
+          "$RUNNER_TEMP/agt-studio-venv/bin/python" -m pip install --no-index --find-links "$RUNNER_TEMP/studio-wheelhouse" agent-governance-studio==5.0.0
+          "$RUNNER_TEMP/agt-studio-venv/bin/python" -I -c "import agent_governance_studio; print(agent_governance_studio.__file__)"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
