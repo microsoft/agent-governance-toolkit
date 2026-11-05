@@ -18,7 +18,8 @@ class RAGPolicy:
         denied_collections: Collections that are always blocked, regardless
             of the allow list.
         max_retrievals_per_minute: Maximum retrieval calls per agent per
-            sliding window. ``0`` disables rate limiting. The window
+            sliding window. ``0`` disables rate limiting; a negative
+            value raises ``ValueError``. The window
             length defaults to 60 seconds but can be overridden with
             ``rate_limit_window_seconds``.
         rate_limit_window_seconds: Length of the sliding rate-limit
@@ -54,6 +55,13 @@ class RAGPolicy:
 
     def __post_init__(self) -> None:
         """Validate rate-limit configuration."""
+        if self.max_retrievals_per_minute < 0:
+            # A negative limit is never met, so it would reject every
+            # retrieval while looking like "no limit".
+            raise ValueError(
+                "max_retrievals_per_minute must be zero (no limit) or "
+                f"positive; got {self.max_retrievals_per_minute!r}"
+            )
         if self.rate_limit_window_seconds <= 0:
             raise ValueError(
                 "rate_limit_window_seconds must be positive; got "

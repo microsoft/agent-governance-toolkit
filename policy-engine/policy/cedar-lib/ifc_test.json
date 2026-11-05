@@ -96,7 +96,7 @@
       "action": "Action::\"output\"",
       "resource": "PolicyTarget::\"assistant_output\"",
       "context": {
-        "response": {"content": "hi", "ifc": {"result_labels": ["internal"]}}
+        "output": "hi", "ifc": {"result_labels": ["internal"]}
       }
     },
     "entities": [
@@ -114,7 +114,7 @@
       "action": "Action::\"output\"",
       "resource": "PolicyTarget::\"assistant_output\"",
       "context": {
-        "response": {"content": "hi", "ifc": {"result_labels": ["secret"]}}
+        "output": "hi", "ifc": {"result_labels": ["secret"]}
       }
     },
     "entities": [
