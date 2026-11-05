@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import threading
 import time
@@ -158,13 +159,100 @@ def test_direct_entry_path_from_path_rejects_unsupported_manifest_version(
     pytest.skip("native ACS build does not yet enforce unsupported manifest versions")
 
 
-def test_direct_entry_path_cedar_schema_path_if_available(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _require_opa(monkeypatch)
+def _write_cedar_schema(path: Path) -> None:
+    """The Cedar schema for the snapshot the runtime builds at pre_tool_call.
+
+    The request mapping is fixed by the specification: the principal is
+    ``Agent::"<agent.id>"``, the action is ``Action::"pre_tool_call"`` and the
+    resource is ``Tool::"<tool.name>"``, and the context is the snapshot with
+    the annotations nested under ``annotations``. With a ``schema_path`` set,
+    the builtin dispatcher validates the policy set and the request against
+    this schema, so it must declare those types, that action and the context
+    shape the snapshot actually carries.
+    """
+    schema = {
+        "": {
+            "entityTypes": {
+                "Agent": {"shape": {"type": "Record", "attributes": {}}},
+                "Tool": {"shape": {"type": "Record", "attributes": {}}},
+            },
+            "actions": {
+                "pre_tool_call": {
+                    "appliesTo": {
+                        "principalTypes": ["Agent"],
+                        "resourceTypes": ["Tool"],
+                        "context": {
+                            "type": "Record",
+                            "attributes": {
+                                "envelope": {
+                                    "type": "Record",
+                                    "attributes": {
+                                        "agent": {
+                                            "type": "Record",
+                                            "attributes": {
+                                                "id": {"type": "String"},
+                                                "version": {"type": "String", "required": False},
+                                                "name": {"type": "String", "required": False},
+                                            },
+                                        },
+                                        "session": {
+                                            "type": "Record",
+                                            "required": False,
+                                            "attributes": {
+                                                "id": {"type": "String"},
+                                                "started_at": {"type": "String", "required": False},
+                                            },
+                                        },
+                                        "intervention_point": {"type": "String", "required": False},
+                                        "timestamp": {"type": "String", "required": False},
+                                        "budgets": {
+                                            "type": "Record",
+                                            "required": False,
+                                            "attributes": {
+                                                "tool_call_count": {"type": "Long", "required": False},
+                                                "token_count": {"type": "Long", "required": False},
+                                                "elapsed_seconds": {
+                                                    "type": "Extension",
+                                                    "name": "decimal",
+                                                    "required": False,
+                                                },
+                                                "cost_usd": {
+                                                    "type": "Extension",
+                                                    "name": "decimal",
+                                                    "required": False,
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                                "tool_call": {
+                                    "type": "Record",
+                                    "attributes": {
+                                        "name": {"type": "String"},
+                                        "id": {"type": "String", "required": False},
+                                        # The fixture calls the tool with empty
+                                        # arguments. Cedar's full schema format
+                                        # allows no open records, so the args
+                                        # record declares no attributes.
+                                        "args": {"type": "Record", "attributes": {}},
+                                    },
+                                },
+                                "annotations": {
+                                    "type": "Record",
+                                    "attributes": {},
+                                },
+                            },
+                        },
+                    },
+                }
+            },
+        }
+    }
+    path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_cedar_manifest(tmp_path: Path, schema_path: Path) -> Path:
     manifest_path = tmp_path / "cedar_manifest.yaml"
-    schema_path = tmp_path / "schema.json"
-    schema_path.write_text("{}\n", encoding="utf-8")
     _write_yaml(
         manifest_path,
         {
@@ -188,11 +276,18 @@ def test_direct_entry_path_cedar_schema_path_if_available(
             "tools": {"lookup": {"clearance": "public"}},
         },
     )
+    return manifest_path
 
-    try:
-        control = AgentControl.from_path(str(manifest_path))
-    except Exception as exc:
-        pytest.skip(f"cedar default dispatcher unavailable in this build: {exc}")
+
+def test_direct_entry_path_cedar_schema_path_allows_benign(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _require_opa(monkeypatch)
+    schema_path = tmp_path / "schema.json"
+    _write_cedar_schema(schema_path)
+    manifest_path = _write_cedar_manifest(tmp_path, schema_path)
+
+    control = AgentControl.from_path(str(manifest_path))
 
     async def run() -> Any:
         return await control.evaluate_intervention_point(
@@ -201,6 +296,29 @@ def test_direct_entry_path_cedar_schema_path_if_available(
 
     result = asyncio.run(run())
     assert result.verdict.decision == Decision.ALLOW
+
+
+def test_direct_entry_path_cedar_empty_schema_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty schema declares no entity types and no actions, so the strict
+    validator finds no applicable action for the request and the runtime fails
+    closed. A schema that declares nothing must not silently allow everything."""
+    _require_opa(monkeypatch)
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text("{}\n", encoding="utf-8")
+    manifest_path = _write_cedar_manifest(tmp_path, schema_path)
+
+    control = AgentControl.from_path(str(manifest_path))
+
+    async def run() -> Any:
+        return await control.evaluate_intervention_point(
+            InterventionPoint.PRE_TOOL_CALL, _pre_tool_snapshot("lookup")
+        )
+
+    result = asyncio.run(run())
+    assert result.verdict.decision == Decision.DENY
+    assert result.verdict.reason == "runtime_error:policy_invocation_failed"
 
 
 def test_runtime_approval_timeout_denies_promptly(tmp_path: Path) -> None:
