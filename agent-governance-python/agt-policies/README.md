@@ -31,12 +31,17 @@ instead of on every evaluation; the algorithm is specified in
 `--write-report MIGRATION.md` records what changed.
 
 Migration refuses rather than guesses. Dynamic expressions, host-only settings,
-invalid patterns, unsupported fields, conditions proven unable to match (such as
-`in: []`, an empty `or`, or contradictory `and` siblings), and an existing
-output file all stop the run with an error naming the construct. An impossible
-rule would otherwise be skipped and could leave a later rule or the default
-action in effect. Unlike `in: []`, `not_in: []` is accepted because it matches
-every present field value; deny rules also match when the field is absent.
+invalid patterns, unknown top-level keys, non-mapping conditions, unsupported
+snapshot field roots, an explicit `default_action` other than `deny`, conditions
+proven unable to match (such as `in: []`, an empty `or`, or contradictory `and`
+siblings), allow rules containing `not_in: []`, rules covered by a
+higher-priority opposite-action rule, and an existing output file all stop the
+run with an error naming the construct. An impossible or unreachable rule would
+otherwise be skipped or preempted and could leave a later rule or the default
+action in effect. Legacy `tool_name` and `tool_args` condition fields are mapped
+to `tool_call.name` and `tool_call.args` in the ACS snapshot. Deny rules using
+`not_in` still match when the field is absent; allow rules retain a non-null
+guard so they cannot preempt a later deny on a missing field.
 
 ## After migrating
 
