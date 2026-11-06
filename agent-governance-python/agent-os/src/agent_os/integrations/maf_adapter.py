@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from typing import Any, Awaitable, Callable, Optional
 
 from ._native_adapter_runtime import (
@@ -66,6 +67,13 @@ except ImportError:
     RogueDetectorConfig = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
+
+
+def _native_identity(value: Any) -> str | None:
+    """Keep bounded native evidence verbatim; it is not an authenticated principal."""
+    if isinstance(value, str) and 0 < len(value) <= 256 and all(" " <= c <= "~" for c in value):
+        return value
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +265,7 @@ class RuntimeGovernanceMiddleware(AgentMiddleware):
         if self._v5_ctx is None:
             self._v5_ctx = AdapterExecutionState(
                 agent_id=self._agent_id,
-                session_id=f"maf-mw-{int(time.time())}",
+                session_id=f"maf-mw-{uuid.uuid4().hex}",
             )
         return self._v5_ctx
 
@@ -424,7 +432,7 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
         if self._v5_ctx is None:
             self._v5_ctx = AdapterExecutionState(
                 agent_id=self._agent_id,
-                session_id=f"maf-cap-{int(time.time())}",
+                session_id=f"maf-cap-{uuid.uuid4().hex}",
             )
         return self._v5_ctx
 
@@ -456,13 +464,39 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
         else:
             args_dict = {"_value": raw_args}
 
+        metadata = getattr(context, "metadata", None)
+        call_id = _native_identity(metadata.get("call_id") if isinstance(metadata, dict) else None)
+        session_id = _native_identity(
+            getattr(getattr(context, "session", None), "session_id", None)
+        )
+        correlation = {"framework": "microsoft-agent-framework"}
+        if session_id is not None:
+            correlation["session_id"] = session_id
+        if call_id is None:
+            if self.audit_log:
+                self.audit_log.log(
+                    event_type="tool_blocked",
+                    agent_did="capability-guard",
+                    action="deny",
+                    resource=func_name,
+                    session_id=session_id,
+                    data={"reason": "invalid_framework_call_id", "correlation": correlation},
+                    outcome="denied",
+                )
+            raise MiddlewareTermination("MAF tool call requires a valid native call_id")
+        correlation["call_id"] = call_id
+
         ctx = self._ensure_v5_context()
         bridge_result = self.kernel.evaluate_pre_tool_call(
             ctx,
             tool_name=func_name,
             args=args_dict,
-            call_id=f"maf-cap-{ctx.call_count + 1}",
+            call_id=call_id,
         )
+        for name in ("input_identity", "enforced_identity"):
+            identity = getattr(bridge_result, name, None)
+            if isinstance(identity, str):
+                correlation[name] = identity
 
         if not bridge_result.allowed or not bridge_result.applies_to(dict):
             reason = bridge_result.reason or "tool_blocked"
@@ -472,9 +506,7 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
                 reason,
             )
 
-            context.result = (
-                f"⛔ Tool '{func_name}' is not permitted by governance policy"
-            )
+            context.result = f"⛔ Tool '{func_name}' is not permitted by governance policy"
 
             if self.audit_log:
                 self.audit_log.log(
@@ -482,13 +514,12 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
                     agent_did="capability-guard",
                     action="deny",
                     resource=func_name,
-                    data={"tool": func_name, "reason": reason},
+                    data={"tool": func_name, "reason": reason, "correlation": correlation},
+                    session_id=session_id,
                     outcome="denied",
                 )
 
-            raise MiddlewareTermination(
-                f"Tool '{func_name}' is not permitted by governance policy"
-            )
+            raise MiddlewareTermination(f"Tool '{func_name}' is not permitted by governance policy")
 
         # AGT-DELTA D1.1: rewrite the outbound arguments when the
         # engine returned a transform verdict so the next filter sees
@@ -499,18 +530,30 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
             try:
                 context.arguments = bridge_result.transformed_value
             except Exception as exc:  # noqa: BLE001 — opaque context object
+                if self.audit_log:
+                    self.audit_log.log(
+                        event_type="tool_blocked",
+                        agent_did="capability-guard",
+                        action="deny",
+                        resource=func_name,
+                        session_id=session_id,
+                        data={"reason": "transform_not_applied", "correlation": correlation},
+                        outcome="denied",
+                    )
                 raise MiddlewareTermination(
                     "AGT returned a transform the capability guard could not "
                     "write to the tool arguments"
                 ) from exc
 
+        start_entry = None
         if self.audit_log:
-            self.audit_log.log(
+            start_entry = self.audit_log.log(
                 event_type="tool_invocation",
                 agent_did="capability-guard",
                 action="start",
                 resource=func_name,
-                data={"tool": func_name},
+                data={"tool": func_name, "correlation": correlation},
+                session_id=session_id,
                 outcome="success",
             )
 
@@ -519,24 +562,26 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
             func_name,
         )
 
-        await call_next()
-
-        ctx.call_count += 1
-
-        # Log completion with a truncated result summary.
-        result_summary = str(getattr(context, "result", ""))[:500]
-        if self.audit_log:
-            self.audit_log.log(
-                event_type="tool_invocation",
-                agent_did="capability-guard",
-                action="complete",
-                resource=func_name,
-                data={
-                    "tool": func_name,
-                    "result_preview": result_summary,
-                },
-                outcome="success",
-            )
+        completed = False
+        try:
+            await call_next()
+            ctx.call_count += 1
+            completed = True
+        finally:
+            if self.audit_log:
+                self.audit_log.log(
+                    event_type="tool_invocation",
+                    agent_did="capability-guard",
+                    action="complete" if completed else "error",
+                    resource=func_name,
+                    data={
+                        "tool": func_name,
+                        "correlation": correlation,
+                        "start_entry_id": start_entry.entry_id,
+                    },
+                    session_id=session_id,
+                    outcome="success" if completed else "error",
+                )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -765,14 +810,17 @@ def create_governance_middleware(
     stack: list[Any] = []
     if audit_log is not None:
         stack.append(AuditTrailMiddleware(audit_log=audit_log, agent_did=agent_id))
-    stack.extend([
-        RuntimeGovernanceMiddleware(
-            kernel=kernel, audit_log=audit_log, agent_id=agent_id
-        ),
-        CapabilityGuardMiddleware(
-            kernel=kernel, audit_log=audit_log, agent_id=agent_id
-        ),
-    ])
+    runtime_middleware = RuntimeGovernanceMiddleware(
+        kernel=kernel, audit_log=audit_log, agent_id=agent_id
+    )
+    capability_guard = CapabilityGuardMiddleware(
+        kernel=kernel, audit_log=audit_log, agent_id=agent_id
+    )
+    # One factory call owns one execution state; native session IDs remain audit-only.
+    runtime_middleware._v5_ctx = capability_guard._v5_ctx = AdapterExecutionState(
+        agent_id=agent_id, session_id=f"maf-{uuid.uuid4().hex}"
+    )
+    stack.extend([runtime_middleware, capability_guard])
     if enable_rogue_detection and RogueAgentDetector is not None:
         stack.append(
             RogueDetectionMiddleware(
