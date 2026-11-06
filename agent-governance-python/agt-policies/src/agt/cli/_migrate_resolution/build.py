@@ -16,6 +16,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -45,13 +47,140 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         raise ResolutionError.invalid_governance(
             f"failed to read governance file {path} ({type(exc).__name__})"
         ) from exc
+    except ValueError as exc:
+        # PyYAML builds a decimal integer scalar with int(), which raises
+        # ValueError (not a YAMLError) once the scalar has more digits than
+        # sys.get_int_max_str_digits() allows.
+        raise ResolutionError.invalid_governance(
+            f"failed to parse {path}: {exc}"
+        ) from exc
+    except RecursionError as exc:
+        # PyYAML composes nodes recursively, so a document nested a few
+        # hundred levels deep overflows the interpreter stack before the
+        # depth check below can see it.
+        raise ResolutionError.invalid_governance(
+            f"failed to parse {path}: the document is nested too deeply"
+        ) from exc
     if data is None:
         return {}
     if not isinstance(data, dict):
         raise ResolutionError.invalid_governance(
             f"governance file {path} must be a mapping at top level"
         )
+    _check_document_values(path, data)
     return data
+
+
+def _int_too_long(value: int) -> bool:
+    """True when ``str(value)`` and ``json.dumps(value)`` raise ``ValueError``.
+
+    CPython caps int-to-decimal conversion at ``sys.get_int_max_str_digits()``
+    digits (4300 by default, 0 disables the cap). Parsing is not capped the
+    same way: a hex scalar such as ``0x`` followed by 4,000 digits loads fine
+    and only fails when it is written back as text.
+    """
+    limit = sys.get_int_max_str_digits()
+    # Every decimal digit needs more than three bits, so an int of at most
+    # 3 * limit bits has fewer than limit digits and needs no conversion.
+    if not limit or value.bit_length() <= limit * 3:
+        return False
+    try:
+        str(value)
+    except ValueError:
+        return True
+    return False
+
+
+# Governance documents are shallow: rules[i].condition.value[j] is four levels
+# down. The cap keeps every later recursive step (_is_json_value, json.dumps,
+# yaml.safe_dump) far from the interpreter's recursion limit.
+_MAX_NESTING_DEPTH = 64
+
+
+def _check_document_values(path: Path, document: dict[str, Any]) -> None:
+    """Refuse a parsed governance document the migrator cannot write back.
+
+    Runs once per file, before merge, validation and rendering, so every
+    later step (rule labels built with ``str(name)``, ``json.dumps`` in the
+    Rego renderer, ``yaml.safe_dump`` of the manifest) only sees values it
+    can serialize. The walk is iterative so it cannot itself overflow the
+    stack.
+
+    Raises:
+        ResolutionError: ``INVALID_GOVERNANCE`` for an int (value or mapping
+            key) with more digits than ``sys.get_int_max_str_digits()``
+            allows anywhere in the document; for a value that contains
+            itself through a YAML anchor/alias cycle (``&v [*v]``), which
+            every recursive step would turn into ``RecursionError``; and for
+            nesting deeper than ``_MAX_NESTING_DEPTH`` levels, for the same
+            reason. The message names the rule when the value sits under
+            ``rules``.
+    """
+    limit = sys.get_int_max_str_digits()
+    # Entries: (value, location, rule name or None, depth). A container is
+    # pushed a second time with depth -1 as its exit marker, so ``ancestors``
+    # holds exactly the containers on the current path: an alias that points
+    # back to one of them is a cycle, while a shared acyclic alias is not.
+    stack: list[tuple[Any, str, str | None, int]] = [(document, "document", None, 0)]
+    ancestors: set[int] = set()
+    # One anchored container can be aliased from many parents, and those
+    # parents aliased again (ten aliases of ten aliases of ...), so walking
+    # every path separately is exponential in the number of alias levels.
+    # Remember the depth each container was walked at and skip it on a later
+    # visit unless that visit is deeper, where the nesting cap could still
+    # trip. Each (container, depth) pair is then walked at most once.
+    walked_at_depth: dict[int, int] = {}
+    while stack:
+        value, where, rule_name, depth = stack.pop()
+        if depth < 0:
+            ancestors.discard(id(value))
+            continue
+        label = f"rule {rule_name!r} ({where})" if rule_name is not None else where
+        if isinstance(value, bool) or value is None or isinstance(value, (str, float)):
+            continue
+        if isinstance(value, int):
+            if _int_too_long(value):
+                raise ResolutionError.invalid_governance(
+                    f"{label} in {path} is an integer with more than {limit} "
+                    "digits, which cannot be written to the manifest or Rego "
+                    "bundle; use a shorter number"
+                )
+            continue
+        if not isinstance(value, (list, dict)):
+            continue
+        if id(value) in ancestors:
+            raise ResolutionError.invalid_governance(
+                f"{label} in {path} is a YAML alias that points back to a value "
+                "containing it (an anchor/alias cycle); a cyclic value cannot "
+                "be written to the manifest or Rego bundle"
+            )
+        if depth >= _MAX_NESTING_DEPTH:
+            raise ResolutionError.invalid_governance(
+                f"{label} in {path} is nested more than {_MAX_NESTING_DEPTH} "
+                "levels deep; flatten the document before migrating"
+            )
+        if walked_at_depth.get(id(value), -1) >= depth:
+            continue
+        walked_at_depth[id(value)] = depth
+        ancestors.add(id(value))
+        stack.append((value, where, rule_name, -1))
+        if isinstance(value, list):
+            for index, item in enumerate(value):
+                name = rule_name
+                if where == "rules" and isinstance(item, dict) and isinstance(item.get("name"), str):
+                    name = item["name"]
+                stack.append((item, f"{where}[{index}]", name, depth + 1))
+            continue
+        for key, item in value.items():
+            if isinstance(key, int) and not isinstance(key, bool) and _int_too_long(key):
+                raise ResolutionError.invalid_governance(
+                    f"{label} in {path} has a mapping key that is an integer "
+                    f"with more than {limit} digits, which cannot be written "
+                    "to the manifest; use a shorter key"
+                )
+            key_text = key if isinstance(key, str) else f"<{type(key).__name__} key>"
+            child = key_text if where == "document" else f"{where}.{key_text}"
+            stack.append((item, child, rule_name, depth + 1))
 
 
 def _apply_inheritance(documents: list[tuple[Path, dict[str, Any]]]) -> list[tuple[Path, dict[str, Any]]]:
@@ -111,9 +240,10 @@ def resolve_manifest(
 
     merged_rules = merge_documents(docs_only)
 
-    # Validate before materializing anything. Both guards below reject the
+    # Validate before materializing anything. Every guard below rejects the
     # chain, and creating the bundle first would leave an orphaned temp
     # directory behind on every rejected migration.
+    _validate_rules(merged_rules)
     intervention_points = _collect_intervention_points(docs_only)
     if merged_rules and not _binds_legacy_rules(intervention_points):
         raise ResolutionError.invalid_governance(
@@ -163,6 +293,125 @@ def resolve_manifest(
     return manifest
 
 
+_SUPPORTED_OPERATORS = frozenset(
+    {
+        "eq",
+        "ne",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "in",
+        "not_in",
+        "exists",
+        "contains",
+        "startswith",
+        "endswith",
+        "matches",
+        "regex",
+    }
+)
+_LIST_OPERATORS = frozenset({"in", "not_in"})
+_STRING_OPERATORS = frozenset({"contains", "startswith", "endswith", "matches", "regex"})
+_REGEX_OPERATORS = frozenset({"matches", "regex"})
+_COMPOUND_KEYS = ("and", "or", "not")
+
+
+def _is_json_value(value: Any) -> bool:
+    """True when ``json.dumps`` writes *value* exactly, with no coercion.
+
+    YAML yields Python types JSON has no spelling for (``date``,
+    ``datetime``, ``bytes`` from ``!!binary``, ``set``), ``.nan``/``.inf``
+    floats that JSON writes as literals Rego does not parse, and integers past
+    the interpreter's digit cap that ``json.dumps`` refuses to convert.
+    """
+    if value is None or isinstance(value, (str, bool)):
+        return True
+    if isinstance(value, int):
+        # json.dumps raises ValueError, not TypeError, past the digit cap.
+        return not _int_too_long(value)
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(_is_json_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(key, str) and _is_json_value(item) for key, item in value.items()
+        )
+    return False
+
+
+def _validate_rules(rules: list[dict[str, Any]]) -> None:
+    """Refuse any merged rule the Rego renderer cannot translate exactly.
+
+    ``_render_rego`` keeps an always-matching fail-closed deny as its last
+    line of defence, but reaching it turns every lower-priority rule into
+    dead code with only a log warning. A migration tool must refuse such a
+    chain instead, naming the rule and the construct.
+
+    Raises:
+        ResolutionError: ``INVALID_GOVERNANCE`` for a missing or non-mapping
+            condition, a compound ``and``/``or``/``not`` condition (the
+            renderer emits one scalar predicate per rule), an invalid field
+            path, an operator outside the supported set, a value of the
+            wrong shape for the operator, a regex that is not valid Go RE2
+            (or cannot be validated), or a value JSON cannot write exactly.
+    """
+    for rule in rules:
+        label = f"rule {str(rule.get('name'))!r}"
+        condition = rule.get("condition")
+        if not isinstance(condition, dict) or not condition:
+            raise ResolutionError.invalid_governance(
+                f"{label} has no condition mapping; every migrated rule needs "
+                "a condition with field, operator and value"
+            )
+        for key in _COMPOUND_KEYS:
+            if key in condition:
+                raise ResolutionError.invalid_governance(
+                    f"{label} uses a compound {key!r} condition, which the "
+                    "generated Rego does not express; split it into separate "
+                    "rules before migrating"
+                )
+        field = condition.get("field")
+        if not isinstance(field, str) or not field or _rego_field_accessor(field) is None:
+            raise ResolutionError.invalid_governance(
+                f"{label} has an invalid field path; use a non-empty "
+                "dot-separated path of identifiers"
+            )
+        operator = condition.get("operator")
+        if not isinstance(operator, str) or operator.lower() not in _SUPPORTED_OPERATORS:
+            shown = repr(operator) if isinstance(operator, str) else type(operator).__name__
+            raise ResolutionError.invalid_governance(
+                f"{label} uses an unsupported operator ({shown})"
+            )
+        operator = operator.lower()
+        value = condition.get("value")
+        if operator in _LIST_OPERATORS and not isinstance(value, list):
+            raise ResolutionError.invalid_governance(
+                f"{label}: operator {operator!r} requires a list value, "
+                f"got {type(value).__name__}"
+            )
+        if operator in _STRING_OPERATORS and not isinstance(value, str):
+            raise ResolutionError.invalid_governance(
+                f"{label}: operator {operator!r} requires a string value, "
+                f"got {type(value).__name__}"
+            )
+        if operator in _REGEX_OPERATORS:
+            try:
+                validate_re2(value, require_opa=True)
+            except ValueError as exc:
+                raise ResolutionError.invalid_governance(
+                    f"{label} has a regex pattern that was rejected or could "
+                    f"not be validated against Go RE2: {exc}"
+                ) from exc
+        if not _is_json_value(value):
+            raise ResolutionError.invalid_governance(
+                f"{label} has a condition value of type {type(value).__name__} "
+                "that cannot be written to Rego exactly; use strings, finite "
+                "numbers, booleans, null, or lists of those"
+            )
+
+
 def _binds_legacy_rules(intervention_points: dict[str, Any]) -> bool:
     for config in intervention_points.values():
         if not isinstance(config, dict):
@@ -206,7 +455,16 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
     """
     # Hash the exact bytes written, including on Windows where write_text
     # would otherwise translate line endings after the digest was computed.
-    body = _render_rego(rules).encode("utf-8")
+    try:
+        body = _render_rego(rules).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        # _validate_rules and _check_document_values refuse these earlier;
+        # this keeps a render-time failure from escaping as a traceback and
+        # runs before any directory is created, so nothing is left behind.
+        raise ResolutionError.invalid_governance(
+            f"generated Rego could not be rendered ({type(exc).__name__}); "
+            "a rule carries a value that cannot be written as text"
+        ) from exc
     digest = hashlib.sha256(body).hexdigest().encode("ascii")
     try:
         bundle_root = bundle_root.resolve()
@@ -279,6 +537,10 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
                     f"a regex pattern for operator {operator!r} that was "
                     f"rejected or could not be validated "
                     f"(ensure Go RE2 compatibility and install OPA or google-re2)"
+                )
+            elif operator in _SUPPORTED_OPERATORS:
+                invalid_detail = (
+                    f"a value that cannot be translated for operator {operator!r}"
                 )
             else:
                 invalid_detail = f"unsupported operator {operator!r}"
@@ -422,7 +684,15 @@ def _rego_op_clause(operator: str, accessor: str, value: Any, action: str = "all
         for unsupported operators. The caller emits a fail-closed deny
         in place of any rule that returns ``None``.
     """
-    literal = json.dumps(value)
+    try:
+        # allow_nan=False: NaN/Infinity are not Rego literals, and a YAML date
+        # or !!binary value is not JSON. Both would otherwise either raise a
+        # bare TypeError here or write a bundle OPA cannot parse. The caller
+        # treats None as "cannot translate" and emits a fail-closed deny;
+        # _validate_rules refuses such a rule before rendering is reached.
+        literal = json.dumps(value, allow_nan=False)
+    except (TypeError, ValueError):
+        return None
     indent = "    "
     if operator == "eq":
         if value is None and action != "deny":
