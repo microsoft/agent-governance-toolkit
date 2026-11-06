@@ -37,6 +37,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Awaitable
 from enum import Enum
 
+from agentmesh.integrations.mcp.server_identity import (
+    DiscoveryConfig,
+    ServerVerificationResult,
+    verify_server,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -408,13 +414,52 @@ class TrustGatedMCPClient:
         self,
         identity: Any,  # AgentIdentity
         trust_bridge: Any = None,  # TrustBridge
+        registry: Any = None,  # IdentityRegistry
+        discovery_config: Optional[DiscoveryConfig] = None,
+        http_transport: Any = None,  # httpx.AsyncBaseTransport (tests/injection)
     ):
         self.identity = identity
         self.trust_bridge = trust_bridge
+        self.registry = registry
+        self.discovery_config = discovery_config or DiscoveryConfig()
+        self.http_transport = http_transport
         self._connected_servers: set[str] = set()
 
+    def _client_did(self) -> str:
+        """Return this client's DID string for challenge audiences."""
+        did = getattr(self.identity, "did", "")
+        return str(did) if did else ""
+
+    async def verify_server_identity(self, server_url: str) -> ServerVerificationResult:
+        """Run Phase 1 server verification for ``server_url``.
+
+        Fetches ``/.well-known/agent.json``, binds the document to the
+        configured :class:`IdentityRegistry`, and verifies possession via
+        the document signature (plus the interactive challenge when the
+        document advertises a same-origin HTTPS challenge endpoint).
+        Requires a registry; without one there is no trust anchor to
+        verify against, which fails closed.
+        """
+        if self.registry is None:
+            return ServerVerificationResult(False, None, "no-registry-configured")
+        return await verify_server(
+            server_url,
+            self.registry,
+            self._client_did(),
+            self.discovery_config,
+            None,
+            self.http_transport,
+        )
+
     async def connect(self, server_url: str) -> bool:
-        """Connect to MCP server with trust verification."""
+        """Connect to MCP server with trust verification.
+
+        Fail-closed when trust material is configured: with a registry,
+        the server must pass full identity verification; with only a
+        trust bridge, the discovered DID must verify through the bridge
+        (a missing DID fails closed). With neither configured there is no
+        trust anchor to enforce, so the connection is recorded as before.
+        """
         # V18: Validate server URL scheme
         from urllib.parse import urlparse
         parsed = urlparse(server_url)
@@ -430,23 +475,60 @@ class TrustGatedMCPClient:
             logger.warning("Rejected internal/loopback server URL: %s", server_url)
             return False
 
-        # Verify server identity if TrustBridge available
+        # Registry path: full Phase 1 verification (fail closed).
+        if self.registry is not None:
+            result = await self.verify_server_identity(server_url)
+            if not result.verified:
+                logger.warning(
+                    "Server %s failed identity verification: %s",
+                    server_url,
+                    result.reason,
+                )
+                return False
+            self._connected_servers.add(server_url)
+            logger.info(f"Connected to MCP server: {server_url}")
+            return True
+
+        # Bridge path: the discovered DID must verify through the bridge.
+        # A missing DID fails closed — an unverifiable server is not
+        # recorded as connected. ``verify_peer`` returns a
+        # ``HandshakeResult`` (check ``.verified``), while tests may
+        # substitute plain booleans.
         if self.trust_bridge:
-            # Extract server DID from URL or discovery
             server_did = await self._discover_server_did(server_url)
-            if server_did:
-                if not await self.trust_bridge.verify_peer(server_did):
-                    logger.warning(f"Server {server_url} failed trust verification")
-                    return False
+            if not server_did:
+                logger.warning(f"Server {server_url} has no verifiable DID")
+                return False
+            peer = await self.trust_bridge.verify_peer(server_did)
+            verified = peer.verified if hasattr(peer, "verified") else bool(peer)
+            if not verified:
+                logger.warning(f"Server {server_url} failed trust verification")
+                return False
 
         self._connected_servers.add(server_url)
         logger.info(f"Connected to MCP server: {server_url}")
         return True
 
     async def _discover_server_did(self, server_url: str) -> Optional[str]:
-        """Discover server DID from /.well-known/agent.json"""
-        # In real implementation, fetch agent.json and extract DID
-        return None
+        """Discover the server DID from ``/.well-known/agent.json``.
+
+        Returns the DID only when the fetched document parses; otherwise
+        ``None``. Signature and registry checks happen in
+        :meth:`verify_server_identity` — discovery alone authenticates
+        nothing.
+        """
+        from agentmesh.integrations.mcp.server_identity import (
+            afetch_server_document,
+            parse_server_document,
+        )
+
+        raw = await afetch_server_document(
+            server_url, self.discovery_config, self.http_transport
+        )
+        if raw is None:
+            return None
+        document = parse_server_document(raw)
+        return document.did if document else None
 
     async def invoke(
         self,
