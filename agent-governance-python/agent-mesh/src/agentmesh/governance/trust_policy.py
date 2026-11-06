@@ -93,8 +93,11 @@ class TrustCondition(BaseModel):
             return actual not in expected
         elif operator == ConditionOperator.matches:
             pattern = str(expected)
-            # V31: Reject overly complex regex patterns to prevent ReDoS
-            if len(pattern) > 200 or any(c in pattern for c in ['{', '(+', '(.*)*', '(.+)+']):
+            # V31: Reject overly complex regex patterns to prevent ReDoS.
+            # Note: bounded quantifiers like {n,m} are the ReDoS-*safe* form, so
+            # '{' must not be blocked — doing so made rules such as
+            # '^svc-[0-9]{4}$' silently fail to match (fail-open).
+            if len(pattern) > 200 or any(c in pattern for c in ['(+', '(.*)*', '(.+)+']):
                 return False
             try:
                 return bool(re.search(pattern, str(actual), flags=re.DOTALL))

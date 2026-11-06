@@ -300,3 +300,14 @@ class TestEdgeCases:
         # p2-allow has priority 10 (higher priority) so it wins
         assert decision.allowed is True
         assert decision.rule_name == "p2-allow"
+
+
+def test_matches_allows_bounded_quantifier_regex():
+    """Bounded quantifiers ({n,m}) are ReDoS-safe and must be allowed.
+
+    Blocking '{' made a `matches` rule like '^svc-[0-9]{4}$' silently return
+    False (fail-open: a deny/require_approval rule using it never fires).
+    """
+    cond = TrustCondition(field="agent.id", operator="matches", value=r"^svc-[0-9]{4}$")
+    assert cond.evaluate({"agent": {"id": "svc-1234"}}) is True
+    assert cond.evaluate({"agent": {"id": "svc-12"}}) is False
