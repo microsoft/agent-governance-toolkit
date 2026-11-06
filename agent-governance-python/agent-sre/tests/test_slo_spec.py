@@ -85,6 +85,62 @@ class TestYAMLRoundtrip:
             # Compare full serialized form
             assert base_spec.model_dump(mode="json") == loaded.model_dump(mode="json")
 
+    def test_roundtrip_preserves_inherited_fields(self, tmp_path: Path) -> None:
+        parent = SLOSpec(
+            name="parent",
+            target=99.9,
+            window="7d",
+            description="shared SLO",
+            error_budget_policy=ErrorBudgetPolicy(
+                burn_rate_thresholds=[BurnRateThreshold(name="fast", rate=10.0)],
+            ),
+        )
+        child = SLOSpec(name="child", inherits_from="parent", service="child-agent")
+        before = resolve_inheritance([parent, child])[1]
+        parent.to_yaml(tmp_path / "parent.yaml")
+        child.to_yaml(tmp_path / "child.yaml")
+        loaded_parent = SLOSpec.from_yaml(tmp_path / "parent.yaml")
+        loaded_child = SLOSpec.from_yaml(tmp_path / "child.yaml")
+        after = resolve_inheritance([loaded_parent, loaded_child])[1]
+
+        assert after.target == 99.9
+        assert after.window == "7d"
+        assert after.description == "shared SLO"
+        assert after.service == "child-agent"
+        assert after.error_budget_policy == parent.error_budget_policy
+        assert after == before
+        assert loaded_child.model_fields_set == child.model_fields_set
+
+    def test_roundtrip_preserves_explicit_default_overrides(self, tmp_path: Path) -> None:
+        parent = SLOSpec(
+            name="parent",
+            target=99.9,
+            window="7d",
+            description="shared SLO",
+            error_budget_policy=ErrorBudgetPolicy(
+                burn_rate_thresholds=[BurnRateThreshold(name="fast", rate=10.0)],
+            ),
+        )
+        child = SLOSpec(
+            name="child",
+            inherits_from="parent",
+            target=99.0,
+            window="30d",
+            description="",
+            error_budget_policy=ErrorBudgetPolicy(),
+        )
+        before = resolve_inheritance([parent, child])[1]
+        child.to_yaml(tmp_path / "child.yaml")
+        loaded = SLOSpec.from_yaml(tmp_path / "child.yaml")
+        after = resolve_inheritance([parent, loaded])[1]
+
+        assert after.target == 99.0
+        assert after.window == "30d"
+        assert after.description == ""
+        assert after.error_budget_policy.burn_rate_thresholds == []
+        assert after == before
+        assert {"target", "window", "description", "error_budget_policy"} <= loaded.model_fields_set
+
     def test_load_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             for name, target in [("a", 99.0), ("b", 95.0)]:
