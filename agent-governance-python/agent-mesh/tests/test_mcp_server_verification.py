@@ -274,6 +274,33 @@ class TestResolveAndCheckHost:
         # 2130706433 == 127.0.0.1, so the guard must reject it.
         assert resolve_and_check_host("2130706433", 443, 16) is False
 
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://224.0.0.1/",
+            "https://[ff02::1]/",
+            # Unbracketed IPv6 is not a valid URL authority: must fail
+            # closed (None), never raise.
+            "https://ff02::1/",
+        ],
+    )
+    def test_multicast_urls_rejected(self, url: str) -> None:
+        # is_global alone admits multicast; the guard excludes it
+        # explicitly. No network: literals never leave the process.
+        assert discovery_url(url, DiscoveryConfig()) is None
+
+    def test_multicast_literals_unsafe(self) -> None:
+        from agentmesh.integrations.mcp.server_identity import _is_safe_literal_ip
+
+        assert _is_safe_literal_ip("224.0.0.1") is False
+        assert _is_safe_literal_ip("ff02::1") is False
+
+    def test_resolvers_exported_consistently(self) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        assert "resolve_and_check_host" in si.__all__
+        assert "aresolve_and_check_host" in si.__all__
+
 
 class TestVerifyServerDocument:
     def test_valid_document_verified(
@@ -930,6 +957,70 @@ class TestSharedDefaultCache:
             ).verified
             is False
         )
+
+
+class TestCredentialHygiene:
+    @pytest.mark.parametrize(
+        "server_url",
+        [
+            "https://user:pw@mcp.example.com:8443/",
+            "https://user@mcp.example.com:8443/",
+            "ftp://user:pw@mcp.example.com/",
+        ],
+    )
+    async def test_userinfo_rejected_without_network_or_logs(
+        self, server_url: str, client_identity: AgentIdentity, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        def explode(request: httpx.Request) -> httpx.Response:
+            raise AssertionError("no network request may be made")
+
+        client = TrustGatedMCPClient(
+            client_identity, http_transport=httpx.MockTransport(explode)
+        )
+        with caplog.at_level("WARNING", logger="agentmesh.integrations.mcp"):
+            assert await client.connect(server_url) is False
+        assert server_url not in client._connected_servers
+        logged = caplog.text
+        assert "user:pw" not in logged
+        assert "pw@" not in logged
+
+    @pytest.mark.parametrize(
+        "server_url",
+        [
+            "https://ff02::1/",
+            "https://[::1",
+            "https://user:pw@:8443/",
+        ],
+    )
+    async def test_malformed_urls_fail_closed_without_raising(
+        self,
+        server_url: str,
+        client_identity: AgentIdentity,
+        registry: IdentityRegistry,
+    ) -> None:
+        # A registry-configured client must fail closed (False, never an
+        # exception) on malformed authorities. A trustless client stays
+        # permissive by design; that path is covered elsewhere.
+        client = TrustGatedMCPClient(client_identity, registry=registry)
+        assert await client.connect(server_url) is False
+        assert server_url not in client._connected_servers
+
+    async def test_invoke_with_userinfo_returns_error(
+        self, client_identity: AgentIdentity, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client = TrustGatedMCPClient(client_identity)
+        with caplog.at_level("WARNING", logger="agentmesh.integrations.mcp"):
+            result = await client.invoke("https://user:pw@mcp.example.com:8443/", "t", {})
+        assert result == {"error": "Failed to connect to server"}
+        assert "user:pw" not in caplog.text
+
+    def test_safe_host_label(self) -> None:
+        from agentmesh.integrations.mcp import _safe_host_label
+
+        assert _safe_host_label("https://user:pw@mcp.example.com:8443/x") == (
+            "mcp.example.com"
+        )
+        assert _safe_host_label("not a url") == "unparseable-server-url"
 
 
 class TestSharedReplayCache:

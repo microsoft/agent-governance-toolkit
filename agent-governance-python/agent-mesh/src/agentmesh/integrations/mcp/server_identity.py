@@ -272,21 +272,22 @@ def _is_safe_literal_ip(host: str) -> bool:
 
     Non-literal hostnames return ``True`` here: they are resolved and
     re-checked by :func:`aresolve_and_check_host`. Literal IPs must be
-    globally routable — loopback, private, reserved, multicast, and
-    unspecified addresses are rejected. Legacy ``inet_aton`` forms that
-    some resolvers still accept (``2130706433``, ``0x7f.0.0.1``,
-    ``0177.0.0.1``) are normalized before judging, so they cannot slip
-    past the strict parser only to resolve as loopback later.
+    globally routable — loopback, private, link-local, reserved,
+    multicast, and unspecified addresses are rejected. (``is_global``
+    alone admits multicast, so it is excluded explicitly.) Legacy
+    ``inet_aton`` forms that some resolvers still accept
+    (``2130706433``, ``0x7f.0.0.1``, ``0177.0.0.1``) are normalized
+    before judging, so they cannot slip past the strict parser only to
+    resolve as loopback later.
     """
     try:
-        return ipaddress.ip_address(host).is_global
+        address = ipaddress.ip_address(host)
     except ValueError:
-        pass
-    try:
-        packed = socket.inet_aton(host)
-    except (OSError, ValueError):
-        return True
-    return ipaddress.ip_address(packed).is_global
+        try:
+            address = ipaddress.ip_address(socket.inet_aton(host))
+        except (OSError, ValueError):
+            return True
+    return address.is_global and not address.is_multicast
 
 
 def resolve_and_check_host(host: str, port: int, max_answers: int) -> bool:
@@ -400,23 +401,26 @@ def discovery_url(server_url: str, config: DiscoveryConfig) -> str | None:
     """
     try:
         parsed = urlparse(server_url)
+        port = parsed.port
+        host = (parsed.hostname or "").lower()
+        has_userinfo = bool(parsed.username or parsed.password)
     except (ValueError, TypeError):
+        # Malformed authority (e.g. unbracketed IPv6): fail closed
+        # instead of letting the parse error escape to the caller.
         return None
     scheme = {"ws": "http", "wss": "https"}.get(parsed.scheme, parsed.scheme)
     if config.require_https and scheme != "https":
         return None
     if scheme not in ("http", "https"):
         return None
-    if parsed.username or parsed.password:
+    if has_userinfo:
         return None
-    host = (parsed.hostname or "").lower()
     if not host or host in _BLOCKED_HOSTS:
         return None
     if not _is_safe_literal_ip(host):
         return None
     # Rebuild authority without userinfo so credentials can never leak
     # into a fetch, even if a caller bypasses this guard in future.
-    port = parsed.port
     authority = host if port is None else f"{host}:{port}"
     return f"{scheme}://{authority}{SERVER_IDENTITY_PATH}"
 
@@ -658,14 +662,19 @@ def _challenge_endpoint_for(server_url: str, document: ServerIdentityDocument) -
     try:
         server = urlparse(server_url)
         endpoint = urlparse(document.challenge_endpoint)
+        endpoint_host = (endpoint.hostname or "").lower()
+        server_host = (server.hostname or "").lower()
+        endpoint_port = endpoint.port or 443
+        server_port = server.port or 443
     except (ValueError, TypeError):
+        # Malformed endpoint in an adversary-supplied document: no
+        # challenge, and the failure stays fail-closed upstream.
         return None
     if endpoint.scheme != "https" or server.scheme != "https":
         return None
-    if (endpoint.hostname or "").lower() != (server.hostname or "").lower():
+    if endpoint_host != server_host:
         return None
-    server_port = server.port or 443
-    if (endpoint.port or 443) != server_port:
+    if endpoint_port != server_port:
         return None
     return document.challenge_endpoint
 
@@ -801,6 +810,7 @@ __all__ = [
     "ServerIdentityDocument",
     "ServerVerificationResult",
     "afetch_server_document",
+    "aresolve_and_check_host",
     "build_challenge_payload",
     "build_document_payload",
     "discovery_url",
