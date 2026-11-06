@@ -34,7 +34,17 @@ def _rule_action(rule: dict[str, Any]) -> str:
 
 
 def _condition_key(condition: Any) -> str:
-    return json.dumps(condition, sort_keys=True, separators=(",", ":"), default=str)
+    try:
+        return json.dumps(condition, sort_keys=True, separators=(",", ":"), default=str)
+    except TypeError:
+        # sort_keys compares mapping keys, so a mapping that mixes integer and
+        # string keys (``value: {1: a, x: b}``) raised a bare TypeError here,
+        # before _validate_rules could refuse the value as one JSON cannot
+        # write. Fall back to an order-sensitive key: the merge completes and
+        # the validation report names the rule instead of a traceback.
+        return json.dumps(
+            condition, sort_keys=False, separators=(",", ":"), default=str
+        )
 
 
 def _condition_parts(condition: dict[str, Any]) -> tuple[str, str, Any] | None:
