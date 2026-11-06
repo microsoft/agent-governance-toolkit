@@ -839,7 +839,6 @@ class TestMCPClientConnect:
         assert result is False
         assert "https://mcp.example.com:8080" not in client._connected_servers
         bridge.verify_peer.assert_not_awaited()
-        bridge.verify_peer.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_connect_with_bridge_server_did_verified(

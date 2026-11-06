@@ -1359,3 +1359,9 @@ ndjson
 dataschema
 disp
 gitops
+# --- MCP server identity terms (PR #4529) ---
+afetch
+deadbeefdeadbeef
+gaierror
+getaddrinfo
+sockaddr

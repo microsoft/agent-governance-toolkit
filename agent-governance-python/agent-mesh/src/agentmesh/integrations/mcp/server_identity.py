@@ -33,7 +33,10 @@ canonical JSON encoding (sorted keys, no insignificant whitespace,
 version-prefixed) of ``did``, ``public_key``, ``key_id``, ``issued_at``,
 and ``challenge_endpoint``. ``challenge_endpoint`` is optional; when
 present it must be same-origin HTTPS and enables the interactive
-challenge-response path.
+challenge-response path. The challenge never runs for servers
+discovered over plain HTTP (even with ``require_https=False``): without
+transport confidentiality a challenge response is replayable on the
+wire, so those servers verify by document signature alone.
 
 Trust model
 -----------
@@ -49,12 +52,15 @@ accept public keys without proof-of-possession").
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import ipaddress
 import json
 import logging
 import secrets
 import socket
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Optional
@@ -139,20 +145,29 @@ class ServerVerificationResult:
     verified: bool
     did: Optional[str] = None
     reason: str = "not verified"
-    # ``detail`` carries operator-safe context (DIDs, hostnames, reason
-    # codes). It MUST NOT contain key material, tokens, or document bodies.
-    detail: str = ""
 
 
 @dataclass
 class DiscoveryConfig:
     """Network and freshness policy for server identity discovery."""
 
+    # Per-phase budget in seconds: one DNS lookup, one document fetch, or
+    # one challenge round-trip. Not a total operation budget; see
+    # ``total_deadline_seconds``.
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     max_bytes: int = DEFAULT_MAX_BYTES
     require_https: bool = True
     max_doc_age_seconds: int = DEFAULT_MAX_DOC_AGE_SECONDS
     challenge_window_seconds: int = DEFAULT_CHALLENGE_WINDOW_SECONDS
+    # Overall deadline in seconds for a full verification pipeline
+    # (DNS plus document fetch plus an optional challenge round-trip).
+    # Fifteen seconds covers three back-to-back per-phase budgets
+    # (``timeout_seconds`` each) with no headroom left over: a pipeline
+    # that exhausts every phase budget trips the deadline instead of
+    # completing, which is the intended fail-closed bias — slow
+    # infrastructure must not silently extend trust decisions. Raise this
+    # (not the per-phase budgets) if legitimate deployments time out.
+    total_deadline_seconds: float = 15.0
     # Upper bound on DNS answers inspected per lookup. Lookups resolving to
     # more addresses are rejected rather than partially evaluated.
     max_dns_answers: int = 16
@@ -256,26 +271,30 @@ def _is_safe_literal_ip(host: str) -> bool:
     """Return whether ``host`` is a literal IP safe to contact.
 
     Non-literal hostnames return ``True`` here: they are resolved and
-    re-checked by :func:`resolve_and_check_host`. Literal IPs must be
+    re-checked by :func:`aresolve_and_check_host`. Literal IPs must be
     globally routable — loopback, private, reserved, multicast, and
-    unspecified addresses are rejected.
+    unspecified addresses are rejected. Legacy ``inet_aton`` forms that
+    some resolvers still accept (``2130706433``, ``0x7f.0.0.1``,
+    ``0177.0.0.1``) are normalized before judging, so they cannot slip
+    past the strict parser only to resolve as loopback later.
     """
     try:
-        address = ipaddress.ip_address(host)
+        return ipaddress.ip_address(host).is_global
     except ValueError:
+        pass
+    try:
+        packed = socket.inet_aton(host)
+    except (OSError, ValueError):
         return True
-    return address.is_global
+    return ipaddress.ip_address(packed).is_global
 
 
 def resolve_and_check_host(host: str, port: int, max_answers: int) -> bool:
     """Resolve ``host`` and require every answer to be globally routable.
 
-    This runs before the HTTP fetch so DNS names pointing at internal
-    infrastructure fail closed instead of being fetched. It cannot fully
-    prevent DNS rebinding between resolution and connection (TOCTOU); the
-    signature checks in :func:`verify_server_document` are the binding
-    defense, since rebinding still cannot forge a registry-signed
-    document. Resolution failures fail closed.
+    Synchronous building block for :func:`aresolve_and_check_host`; call
+    it directly only from worker threads or tests. Resolution failures
+    fail closed.
     """
     if not host or max_answers <= 0:
         return False
@@ -297,31 +316,131 @@ def resolve_and_check_host(host: str, port: int, max_answers: int) -> bool:
     return True
 
 
+# Upper bound on concurrent DNS resolutions. Saturated lookups fail
+# closed immediately instead of queuing, so a slow resolver cannot
+# accumulate unbounded worker threads. Resolutions run on a dedicated
+# pool — never the application's shared default executor — so a wedged
+# lookup cannot starve unrelated ``to_thread`` users in the host process.
+_MAX_CONCURRENT_DNS = 16
+_DNS_SEMAPHORE = threading.BoundedSemaphore(_MAX_CONCURRENT_DNS)
+_DNS_EXECUTOR = ThreadPoolExecutor(
+    max_workers=_MAX_CONCURRENT_DNS, thread_name_prefix="agentmesh-dns"
+)
+
+
+def _guarded_resolve(host: str, port: int, max_answers: int) -> bool:
+    """Worker-thread body for :func:`aresolve_and_check_host`.
+
+    Always releases its semaphore slot on completion. A coroutine
+    cancelled by its deadline leaves the worker running, but the slot
+    stays held until that worker finishes, which bounds live threads.
+    """
+    try:
+        return resolve_and_check_host(host, port, max_answers)
+    finally:
+        _DNS_SEMAPHORE.release()
+
+
+async def aresolve_and_check_host(
+    host: str,
+    port: int,
+    max_answers: int,
+    *,
+    deadline_seconds: float,
+) -> bool:
+    """Resolve ``host`` off the event loop and require globally routable answers.
+
+    The lookup runs in a worker thread of the dedicated ``_DNS_EXECUTOR``
+    pool under ``deadline_seconds``. The thread itself cannot be
+    cancelled, so concurrency is capped: callers beyond the in-flight
+    limit fail closed at once, and timed-out slots stay held until their
+    worker finishes. This runs before the HTTP fetch so DNS names
+    pointing at internal infrastructure fail closed instead of being
+    fetched. It cannot fully prevent DNS rebinding between resolution
+    and connection (TOCTOU); the signature checks in
+    :func:`verify_server_document` are the binding defense, since
+    rebinding still cannot forge a registry-signed document. Timeouts
+    and resolution failures fail closed.
+    """
+    if not _DNS_SEMAPHORE.acquire(blocking=False):
+        return False
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _DNS_SEMAPHORE.release()
+        return False
+    try:
+        future = loop.run_in_executor(
+            _DNS_EXECUTOR, _guarded_resolve, host, port, max_answers
+        )
+    except (OSError, RuntimeError):
+        # Submission failed before any worker existed, so no worker will
+        # release this slot: release it here, exactly once. Once
+        # submitted, the worker owns its slot — _guarded_resolve releases
+        # it in a finally, including on timeout or cancellation — so this
+        # handler must never release after a successful submission.
+        _DNS_SEMAPHORE.release()
+        return False
+    try:
+        return await asyncio.wait_for(future, deadline_seconds)
+    except (asyncio.TimeoutError, OSError, RuntimeError):
+        return False
+
+
 def discovery_url(server_url: str, config: DiscoveryConfig) -> str | None:
     """Build the ``agent.json`` URL for ``server_url``, or ``None``.
 
-    Rejects URLs whose scheme, host, or resolved addresses are unsafe to
-    fetch: wrong scheme, blocked hosts, non-global literal IPs, or DNS
-    answers that are not all globally routable. Redirects are never
-    followed by the fetcher, so the returned URL is the only one fetched.
+    Pure URL-shape check: no network I/O. ``ws``/``wss`` schemes map to
+    ``http``/``https`` for discovery only; the caller's original URL is
+    untouched. Rejects embedded userinfo credentials (they must never be
+    forwarded as Basic auth to a discovered host), blocked hosts, and
+    non-global literal IPs. DNS answers are checked separately by
+    :func:`aresolve_and_check_host`. Redirects are never followed by the
+    fetcher, so the returned URL is the only one fetched.
     """
     try:
         parsed = urlparse(server_url)
     except (ValueError, TypeError):
         return None
-    if config.require_https and parsed.scheme != "https":
+    scheme = {"ws": "http", "wss": "https"}.get(parsed.scheme, parsed.scheme)
+    if config.require_https and scheme != "https":
         return None
-    if parsed.scheme not in ("http", "https"):
+    if scheme not in ("http", "https"):
+        return None
+    if parsed.username or parsed.password:
         return None
     host = (parsed.hostname or "").lower()
     if not host or host in _BLOCKED_HOSTS:
         return None
     if not _is_safe_literal_ip(host):
         return None
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    if not resolve_and_check_host(host, port, config.max_dns_answers):
-        return None
-    return f"{parsed.scheme}://{parsed.netloc}{SERVER_IDENTITY_PATH}"
+    # Rebuild authority without userinfo so credentials can never leak
+    # into a fetch, even if a caller bypasses this guard in future.
+    port = parsed.port
+    authority = host if port is None else f"{host}:{port}"
+    return f"{scheme}://{authority}{SERVER_IDENTITY_PATH}"
+
+
+async def _read_capped_body(response: Any, max_bytes: int) -> bytes | None:
+    """Read a streamed response, aborting past ``max_bytes``.
+
+    Returns ``None`` without consuming further chunks once the running
+    total exceeds the cap, so a hostile server cannot force the client
+    to buffer arbitrary data.
+    """
+    total = 0
+    chunks: list[bytes] = []
+    async for chunk in response.aiter_bytes(chunk_size=8192):
+        total += len(chunk)
+        if total > max_bytes:
+            return None
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _json_content_type(response: Any) -> bool:
+    content_type = response.headers.get("content-type", "").split(";")[0].strip()
+    return content_type in ("application/json", "application/agent-json")
 
 
 async def afetch_server_document(
@@ -331,11 +450,13 @@ async def afetch_server_document(
 ) -> bytes | None:
     """Fetch the raw ``agent.json`` document for ``server_url``.
 
-    Fail-closed: returns ``None`` when the URL is unsafe, ``httpx`` is
-    unavailable, the request times out, the status is not 200, the
-    content type is not JSON, or the body exceeds ``max_bytes``.
-    Redirects are never followed — a server that redirects discovery is
-    treated as unverifiable rather than chased across origins.
+    Fail-closed: returns ``None`` when the URL is unsafe, DNS answers
+    are not all globally routable, ``httpx`` is unavailable, the request
+    times out, the status is not 200, the content type is not JSON, or
+    the body exceeds ``max_bytes`` (enforced incrementally while
+    streaming). Redirects are never followed — a server that redirects
+    discovery is treated as unverifiable rather than chased across
+    origins.
 
     ``transport`` accepts an ``httpx.AsyncBaseTransport`` for tests; it is
     typed as :data:`typing.Any` so importing this module never requires
@@ -344,6 +465,16 @@ async def afetch_server_document(
     cfg = config or DiscoveryConfig()
     target = discovery_url(server_url, cfg)
     if target is None:
+        return None
+    try:
+        parsed_target = urlparse(target)
+        host = (parsed_target.hostname or "").lower()
+        port = parsed_target.port or (80 if parsed_target.scheme == "http" else 443)
+        if not await aresolve_and_check_host(
+            host, port, cfg.max_dns_answers, deadline_seconds=cfg.timeout_seconds
+        ):
+            return None
+    except (ValueError, TypeError):
         return None
     try:
         import httpx
@@ -358,19 +489,15 @@ async def afetch_server_document(
             follow_redirects=False,
             max_redirects=0,
         ) as client:
-            response = await client.get(target, headers={"Accept": "application/json"})
+            async with client.stream(
+                "GET", target, headers={"Accept": "application/json"}
+            ) as response:
+                if response.status_code != 200 or not _json_content_type(response):
+                    return None
+                return await _read_capped_body(response, cfg.max_bytes)
     except Exception:  # noqa: BLE001 — any transport failure fails closed
         logger.warning("Server identity fetch failed for %s", urlparse(server_url).hostname)
         return None
-    if response.status_code != 200:
-        return None
-    content_type = response.headers.get("content-type", "").split(";")[0].strip()
-    if content_type not in ("application/json", "application/agent-json"):
-        return None
-    body = response.content
-    if len(body) > cfg.max_bytes:
-        return None
-    return body
 
 
 def verify_server_document(
@@ -543,6 +670,16 @@ def _challenge_endpoint_for(server_url: str, document: ServerIdentityDocument) -
     return document.challenge_endpoint
 
 
+# Shared default for direct :func:`verify_server` callers that pass no
+# cache. ``InMemoryReplayCache`` is thread-safe (lock-guarded) and
+# event-loop agnostic (monotonic clock, no loop-bound state), so one
+# module instance is sound here; entries expire after the challenge
+# window and the store is bounded (full cache fails closed). Prefer
+# passing an explicit cache — as ``TrustGatedMCPClient`` does — when a
+# caller needs isolation or its own bounds.
+_DEFAULT_REPLAY_CACHE = InMemoryReplayCache()
+
+
 async def verify_server(
     server_url: str,
     registry: IdentityRegistry,
@@ -558,6 +695,11 @@ async def verify_server(
     interactive challenge when the document advertises a same-origin
     HTTPS challenge endpoint. Any step failing yields
     ``verified=False``; nothing raises for adversary-controlled input.
+
+    Challenge nonces are single-use against ``replay_cache``, defaulting
+    to the shared module instance documented above — repeated direct
+    calls therefore share replay protection instead of silently getting
+    independent caches.
     """
     cfg = config or DiscoveryConfig()
     raw = await afetch_server_document(server_url, cfg, transport)
@@ -577,7 +719,7 @@ async def verify_server(
         # mint a fresh document, and the age window bounds replay.
         return result
 
-    cache = replay_cache or InMemoryReplayCache()
+    cache = replay_cache or _DEFAULT_REPLAY_CACHE
     challenge = mint_challenge(document.did, client_did, server_url)
     answered = await _post_challenge(endpoint, challenge, cfg, transport)
     if answered is None:
@@ -612,17 +754,21 @@ async def _post_challenge(
             follow_redirects=False,
             max_redirects=0,
         ) as client:
-            response = await client.post(
+            async with client.stream(
+                "POST",
                 endpoint,
                 content=body,
                 headers={"Content-Type": "application/json", "Accept": "application/json"},
-            )
+            ) as response:
+                if response.status_code != 200 or not _json_content_type(response):
+                    return None
+                raw = await _read_capped_body(response, config.max_bytes)
     except Exception:  # noqa: BLE001 — any transport failure fails closed
         return None
-    if response.status_code != 200 or len(response.content) > config.max_bytes:
+    if raw is None:
         return None
     try:
-        data = json.loads(response.content.decode("utf-8"))
+        data = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
         return None
     if not isinstance(data, dict):

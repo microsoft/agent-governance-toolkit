@@ -30,6 +30,7 @@ Example:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -42,6 +43,7 @@ from agentmesh.integrations.mcp.server_identity import (
     ServerVerificationResult,
     verify_server,
 )
+from agentmesh.integrations.request_auth import InMemoryReplayCache
 
 logger = logging.getLogger(__name__)
 
@@ -417,12 +419,16 @@ class TrustGatedMCPClient:
         registry: Any = None,  # IdentityRegistry
         discovery_config: Optional[DiscoveryConfig] = None,
         http_transport: Any = None,  # httpx.AsyncBaseTransport (tests/injection)
+        replay_cache: Any = None,  # InMemoryReplayCache (challenge nonces)
     ):
         self.identity = identity
         self.trust_bridge = trust_bridge
         self.registry = registry
         self.discovery_config = discovery_config or DiscoveryConfig()
         self.http_transport = http_transport
+        # One cache per client so challenge nonces stay single-use across
+        # every verification this client performs.
+        self.replay_cache = replay_cache or InMemoryReplayCache()
         self._connected_servers: set[str] = set()
 
     def _client_did(self) -> str:
@@ -438,18 +444,33 @@ class TrustGatedMCPClient:
         the document signature (plus the interactive challenge when the
         document advertises a same-origin HTTPS challenge endpoint).
         Requires a registry; without one there is no trust anchor to
-        verify against, which fails closed.
+        verify against, which fails closed. The whole pipeline runs under
+        ``discovery_config.total_deadline_seconds``; exceeding it fails
+        closed with ``deadline-exceeded``.
         """
         if self.registry is None:
             return ServerVerificationResult(False, None, "no-registry-configured")
-        return await verify_server(
-            server_url,
-            self.registry,
-            self._client_did(),
-            self.discovery_config,
-            None,
-            self.http_transport,
-        )
+        try:
+            return await asyncio.wait_for(
+                verify_server(
+                    server_url,
+                    self.registry,
+                    self._client_did(),
+                    self.discovery_config,
+                    self.replay_cache,
+                    self.http_transport,
+                ),
+                self.discovery_config.total_deadline_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Server %s verification exceeded its deadline", server_url)
+            return ServerVerificationResult(False, None, "deadline-exceeded")
+        except Exception as exc:  # noqa: BLE001 — unexpected errors fail closed
+            # Log only the error type: messages may echo URLs or bodies.
+            logger.warning(
+                "Server %s verification errored with %s", server_url, type(exc).__name__
+            )
+            return ServerVerificationResult(False, None, "verification-error")
 
     async def connect(self, server_url: str) -> bool:
         """Connect to MCP server with trust verification.

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import json
+import socket
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -32,6 +33,7 @@ from agentmesh.integrations.mcp.server_identity import (
     ServerChallenge,
     ServerIdentityDocument,
     afetch_server_document,
+    aresolve_and_check_host,
     build_challenge_payload,
     build_document_payload,
     discovery_url,
@@ -131,7 +133,13 @@ def open_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pretend every DNS answer is globally routable (HTTP is mocked anyway)."""
     import agentmesh.integrations.mcp.server_identity as si
 
-    monkeypatch.setattr(si, "resolve_and_check_host", lambda host, port, limit: True)
+    async def _always_global(
+        host: str, port: int, max_answers: int, *, deadline_seconds: float
+    ) -> bool:
+        del host, port, max_answers, deadline_seconds
+        return True
+
+    monkeypatch.setattr(si, "aresolve_and_check_host", _always_global)
 
 
 @pytest.fixture()
@@ -174,7 +182,8 @@ class TestParseServerDocument:
 
 
 class TestDiscoveryUrl:
-    def test_builds_well_known_url(self, open_resolver: None) -> None:
+    def test_builds_well_known_url(self) -> None:
+        # Pure URL-shape check: no resolver fixture needed, no I/O.
         url = discovery_url(SERVER_URL, DiscoveryConfig())
         assert url == "https://mcp.example.com:8443/.well-known/agent.json"
 
@@ -183,7 +192,6 @@ class TestDiscoveryUrl:
         [
             "http://mcp.example.com/",  # plain HTTP rejected by default
             "ftp://mcp.example.com/",
-            "ws://mcp.example.com/",
             "not a url",
             "https://localhost/",
             "https://127.0.0.1/",
@@ -192,20 +200,79 @@ class TestDiscoveryUrl:
             "https://192.168.1.10/",
             "https://169.254.169.254/",
             "https://metadata.google.internal/",
+            "https://2130706433/",  # decimal IPv4 literal for 127.0.0.1
+            "https://user:pw@mcp.example.com/",
+            "https://mcp.example.com:8443@evil.example/",
         ],
     )
     def test_unsafe_urls_rejected(self, server_url: str) -> None:
         assert discovery_url(server_url, DiscoveryConfig()) is None
 
-    def test_plain_http_allowed_when_not_required(self, open_resolver: None) -> None:
+    def test_wss_maps_to_https(self) -> None:
+        url = discovery_url("wss://mcp.example.com:8443/chat", DiscoveryConfig())
+        assert url == "https://mcp.example.com:8443/.well-known/agent.json"
+
+    def test_ws_rejected_when_https_required(self) -> None:
+        assert discovery_url("ws://mcp.example.com/chat", DiscoveryConfig()) is None
+
+    def test_ws_maps_to_http_when_permitted(self) -> None:
+        cfg = DiscoveryConfig(require_https=False)
+        url = discovery_url("ws://mcp.example.com/chat", cfg)
+        assert url == "http://mcp.example.com/.well-known/agent.json"
+
+    def test_plain_http_allowed_when_not_required(self) -> None:
         cfg = DiscoveryConfig(require_https=False)
         assert discovery_url("http://mcp.example.com/", cfg) == (
             "http://mcp.example.com/.well-known/agent.json"
         )
 
-    def test_unresolvable_host_rejected(self) -> None:
-        assert resolve_and_check_host("nonexistent.invalid", 443, 16) is False
-        assert resolve_and_check_host("", 443, 16) is False
+    def test_userinfo_never_forwarded(self) -> None:
+        # Even with HTTP explicitly permitted, credentials are rejected.
+        cfg = DiscoveryConfig(require_https=False)
+        assert discovery_url("http://user@mcp.example.com/", cfg) is None
+        assert discovery_url("http://user:pw@mcp.example.com/", cfg) is None
+
+
+def _sockaddr(ip: str) -> Any:
+    family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+    return (family, socket.SOCK_STREAM, 6, "", (ip, 443))
+
+
+class TestResolveAndCheckHost:
+    def test_private_answer_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        monkeypatch.setattr(si.socket, "getaddrinfo", lambda *a, **k: [_sockaddr("10.0.0.1")])
+        assert si.resolve_and_check_host("example.com", 443, 16) is False
+
+    def test_mixed_answers_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        answers = [_sockaddr("93.184.216.34"), _sockaddr("192.168.0.1")]
+        monkeypatch.setattr(si.socket, "getaddrinfo", lambda *a, **k: answers)
+        assert si.resolve_and_check_host("example.com", 443, 16) is False
+
+    def test_answer_cap_enforced(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        answers = [_sockaddr(f"93.184.216.{i}") for i in range(1, 20)]
+        monkeypatch.setattr(si.socket, "getaddrinfo", lambda *a, **k: answers)
+        assert si.resolve_and_check_host("example.com", 443, 4) is False
+
+    def test_lookup_failure_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        def boom(*a: Any, **k: Any) -> Any:
+            raise socket.gaierror("no such host")
+
+        monkeypatch.setattr(si.socket, "getaddrinfo", boom)
+        assert si.resolve_and_check_host("nonexistent.invalid", 443, 16) is False
+        assert si.resolve_and_check_host("", 443, 16) is False
+
+    def test_decimal_literal_resolves_loopback(self) -> None:
+        # No monkeypatching: numeric literals never touch the network.
+        # 2130706433 == 127.0.0.1, so the guard must reject it.
+        assert resolve_and_check_host("2130706433", 443, 16) is False
 
 
 class TestVerifyServerDocument:
@@ -699,3 +766,314 @@ class TestClientConnect:
     ) -> None:
         client = self._client(client_identity, None, _mock_transport({}))
         assert await client._discover_server_did(SERVER_URL) is None
+
+
+class _CountingTransport(httpx.AsyncBaseTransport):
+    """Serve fixed chunks while recording how many the client pulls.
+
+    Proves early termination: the client must stop consuming once the
+    running total passes ``max_bytes``, instead of buffering everything.
+    """
+
+    def __init__(self, chunks: list, status: int = 200) -> None:
+        self._chunks = chunks
+        self.pulled = 0
+        self._status = status
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        pulled = self
+
+        async def body() -> Any:
+            for chunk in pulled._chunks:
+                pulled.pulled += 1
+                yield chunk
+
+        return httpx.Response(
+            self._status,
+            content=body(),
+            headers={"Content-Type": "application/json"},
+        )
+
+
+class TestStreamingCaps:
+    async def test_get_stops_early(
+        self, open_resolver: None, doc_routes: Dict[str, Any]
+    ) -> None:
+        chunks = [b"x" * 8192 for _ in range(100)]
+        transport = _CountingTransport(chunks)
+        cfg = DiscoveryConfig(max_bytes=65_536)
+        body = await afetch_server_document(SERVER_URL, cfg, transport=transport)
+        assert body is None
+        # 8 full 8 KiB chunks fit; the 9th trips the cap. Anything near
+        # 100 would mean the whole body was buffered first.
+        assert transport.pulled <= 10
+        assert transport.pulled < len(chunks)
+
+    async def test_post_stops_early(
+        self,
+        open_resolver: None,
+        registry: IdentityRegistry,
+        registered: AgentIdentity,
+        client_identity: AgentIdentity,
+    ) -> None:
+        endpoint = "https://mcp.example.com:8443/.well-known/agent-challenge"
+        doc = _signed_doc(registered, challenge_endpoint=endpoint)
+        chunks = [b"y" * 8192 for _ in range(100)]
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    content=json.dumps(doc).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+            pulled = handler  # type: ignore[attr-defined]
+
+            async def body() -> Any:
+                for chunk in chunks:
+                    pulled.count += 1  # type: ignore[attr-defined]
+                    yield chunk
+
+            return httpx.Response(
+                200,
+                content=body(),
+                headers={"Content-Type": "application/json"},
+            )
+
+        handler.count = 0  # type: ignore[attr-defined]
+        result = await verify_server(
+            SERVER_URL,
+            registry,
+            str(client_identity.did),
+            transport=httpx.MockTransport(handler),
+        )
+        assert result.verified is False
+        assert result.reason == "challenge-transport-failed"
+        assert handler.count <= 10  # type: ignore[attr-defined]
+
+
+class TestSharedDefaultCache:
+    async def test_direct_calls_share_default_replay_protection(
+        self,
+        open_resolver: None,
+        registry: IdentityRegistry,
+        registered: AgentIdentity,
+        client_identity: AgentIdentity,
+    ) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        endpoint = "https://mcp.example.com:8443/.well-known/agent-challenge"
+        doc = _signed_doc(registered, challenge_endpoint=endpoint)
+        seen: Dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    content=json.dumps(doc).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+            asked = json.loads(request.content.decode())
+            seen.update(asked)
+            moment = _issued_at()
+            payload = build_challenge_payload(
+                server_did=asked["server_did"],
+                client_did=asked["client_did"],
+                client_nonce=asked["client_nonce"],
+                timestamp=moment,
+                audience=SERVER_URL,
+            )
+            return httpx.Response(
+                200,
+                content=json.dumps(
+                    {
+                        "server_did": str(registered.did),
+                        "client_nonce": asked["client_nonce"],
+                        "timestamp": moment,
+                        "signature": registered.sign(payload),
+                    }
+                ).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+
+        transport = httpx.MockTransport(handler)
+        first = await verify_server(
+            SERVER_URL, registry, str(client_identity.did), transport=transport
+        )
+        assert first.verified is True
+        # Replaying the captured answer against the shared default cache
+        # must be detected: the pipeline consumed that nonce already.
+        challenge = ServerChallenge(
+            server_did=seen["server_did"],
+            client_did=seen["client_did"],
+            client_nonce=seen["client_nonce"],
+            timestamp=seen["timestamp"],
+            audience=SERVER_URL,
+        )
+        moment = _issued_at()
+        payload = build_challenge_payload(
+            server_did=challenge.server_did,
+            client_did=challenge.client_did,
+            client_nonce=challenge.client_nonce,
+            timestamp=moment,
+            audience=challenge.audience,
+        )
+        replayed = ChallengeResponse(
+            server_did=challenge.server_did,
+            client_nonce=challenge.client_nonce,
+            timestamp=moment,
+            signature=registered.sign(payload),
+        )
+        assert (
+            verify_challenge_response(
+                challenge, replayed, registry, si._DEFAULT_REPLAY_CACHE
+            ).verified
+            is False
+        )
+
+
+class TestSharedReplayCache:
+    async def test_cache_reused_across_verifications(
+        self,
+        open_resolver: None,
+        registry: IdentityRegistry,
+        registered: AgentIdentity,
+        client_identity: AgentIdentity,
+        doc_routes: Dict[str, Any],
+    ) -> None:
+        client = TrustGatedMCPClient(
+            client_identity,
+            registry=registry,
+            http_transport=_mock_transport(doc_routes),
+        )
+        first = client.replay_cache
+        assert (await client.verify_server_identity(SERVER_URL)).verified is True
+        assert client.replay_cache is first
+        assert (await client.verify_server_identity(SERVER_URL)).verified is True
+        # The shared cache enforces single-use for direct callers too.
+        challenge = mint_challenge(str(registered.did), str(client_identity.did), SERVER_URL)
+        response = _challenge_response_for(challenge, registered)
+        assert verify_challenge_response(challenge, response, registry, first).verified is True
+        assert (
+            verify_challenge_response(challenge, response, registry, first).verified is False
+        )
+
+
+class TestOverallDeadline:
+    async def test_hanging_pipeline_fails_closed(
+        self, open_resolver: None, registry: IdentityRegistry, client_identity: AgentIdentity
+    ) -> None:
+        import asyncio
+
+        async def hang(request: httpx.Request) -> httpx.Response:
+            await asyncio.sleep(3600)
+            raise AssertionError("unreachable")
+
+        cfg = DiscoveryConfig(timeout_seconds=5.0, total_deadline_seconds=0.05)
+        client = TrustGatedMCPClient(
+            client_identity,
+            registry=registry,
+            discovery_config=cfg,
+            http_transport=httpx.MockTransport(hang),
+        )
+        result = await client.verify_server_identity(SERVER_URL)
+        assert result.verified is False
+        assert result.reason == "deadline-exceeded"
+
+
+class TestAsyncDns:
+    def test_dedicated_executor_configured(self) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+        from concurrent.futures import ThreadPoolExecutor
+
+        assert isinstance(si._DNS_EXECUTOR, ThreadPoolExecutor)
+        assert si._DNS_EXECUTOR._max_workers == si._MAX_CONCURRENT_DNS == 16
+
+    async def test_lookup_runs_on_dedicated_executor(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        calls: list = []
+        real_submit = si._DNS_EXECUTOR.submit
+
+        def counting_submit(*a: Any, **k: Any) -> Any:
+            calls.append(a)
+            return real_submit(*a, **k)
+
+        monkeypatch.setattr(si._DNS_EXECUTOR, "submit", counting_submit)
+        monkeypatch.setattr(
+            si.socket, "getaddrinfo", lambda *a, **k: [_sockaddr("93.184.216.34")]
+        )
+        assert (
+            await aresolve_and_check_host("example.com", 443, 16, deadline_seconds=5.0)
+            is True
+        )
+        assert len(calls) == 1
+
+    async def test_slow_resolver_times_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+        import time
+
+        def slow(*a: Any, **k: Any) -> Any:
+            time.sleep(30)
+            return [_sockaddr("93.184.216.34")]
+
+        monkeypatch.setattr(si.socket, "getaddrinfo", slow)
+        try:
+            assert (
+                await aresolve_and_check_host("example.com", 443, 16, deadline_seconds=0.05)
+                is False
+            )
+        finally:
+            # Release the wedged slot so later tests are unaffected.
+            for _ in range(32):
+                try:
+                    si._DNS_SEMAPHORE.release()
+                except ValueError:
+                    break
+
+    async def test_submission_failure_restores_permit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        def boom(*a: Any, **k: Any) -> Any:
+            raise RuntimeError("executor shut down")
+
+        monkeypatch.setattr(si._DNS_EXECUTOR, "submit", boom)
+        assert (
+            await aresolve_and_check_host("example.com", 443, 16, deadline_seconds=5.0)
+            is False
+        )
+        # Exactly one permit was released: a fresh acquire succeeds, and a
+        # full drain still yields the configured bound (no leak, no double).
+        assert si._DNS_SEMAPHORE.acquire(blocking=False) is True
+        si._DNS_SEMAPHORE.release()
+        drained = 0
+        try:
+            while si._DNS_SEMAPHORE.acquire(blocking=False):
+                drained += 1
+        finally:
+            for _ in range(drained):
+                si._DNS_SEMAPHORE.release()
+        assert drained == si._MAX_CONCURRENT_DNS
+
+    async def test_saturated_lookups_fail_closed(self) -> None:
+        import agentmesh.integrations.mcp.server_identity as si
+
+        acquired = 0
+        try:
+            for _ in range(64):
+                if si._DNS_SEMAPHORE.acquire(blocking=False):
+                    acquired += 1
+                else:
+                    break
+            assert acquired == si._MAX_CONCURRENT_DNS
+            assert (
+                await aresolve_and_check_host("example.com", 443, 16, deadline_seconds=1.0)
+                is False
+            )
+        finally:
+            for _ in range(acquired):
+                si._DNS_SEMAPHORE.release()
