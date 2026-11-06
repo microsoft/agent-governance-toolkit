@@ -30,6 +30,7 @@ Example:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -37,7 +38,30 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Awaitable
 from enum import Enum
 
+from agentmesh.integrations.mcp.server_identity import (
+    DiscoveryConfig,
+    ServerVerificationResult,
+    verify_server,
+)
+from agentmesh.integrations.request_auth import InMemoryReplayCache
+
 logger = logging.getLogger(__name__)
+
+
+def _safe_host_label(server_url: str) -> str:
+    """Return a log-safe identifier for ``server_url``.
+
+    Only the parsed hostname is ever returned — never userinfo,
+    credentials, ports, or paths — so connection warnings and errors
+    cannot leak secrets even when the configured URL embeds them.
+    """
+    from urllib.parse import urlparse
+
+    try:
+        host = urlparse(server_url).hostname or ""
+    except (ValueError, TypeError):
+        return "unparseable-server-url"
+    return host.lower() or "unparseable-server-url"
 
 
 class MCPMessageType(Enum):
@@ -408,45 +432,173 @@ class TrustGatedMCPClient:
         self,
         identity: Any,  # AgentIdentity
         trust_bridge: Any = None,  # TrustBridge
+        registry: Any = None,  # IdentityRegistry
+        discovery_config: Optional[DiscoveryConfig] = None,
+        http_transport: Any = None,  # httpx.AsyncBaseTransport (tests/injection)
+        replay_cache: Any = None,  # InMemoryReplayCache (challenge nonces)
     ):
         self.identity = identity
         self.trust_bridge = trust_bridge
+        self.registry = registry
+        self.discovery_config = discovery_config or DiscoveryConfig()
+        self.http_transport = http_transport
+        # One cache per client so challenge nonces stay single-use across
+        # every verification this client performs.
+        self.replay_cache = replay_cache or InMemoryReplayCache()
         self._connected_servers: set[str] = set()
 
+    def _client_did(self) -> str:
+        """Return this client's DID string for challenge audiences."""
+        did = getattr(self.identity, "did", "")
+        return str(did) if did else ""
+
+    async def verify_server_identity(self, server_url: str) -> ServerVerificationResult:
+        """Run Phase 1 server verification for ``server_url``.
+
+        Fetches ``/.well-known/agent.json``, binds the document to the
+        configured :class:`IdentityRegistry`, and verifies possession via
+        the document signature (plus the interactive challenge when the
+        document advertises a same-origin HTTPS challenge endpoint).
+        Requires a registry; without one there is no trust anchor to
+        verify against, which fails closed. The whole pipeline runs under
+        ``discovery_config.total_deadline_seconds``; exceeding it fails
+        closed with ``deadline-exceeded``.
+        """
+        if self.registry is None:
+            return ServerVerificationResult(False, None, "no-registry-configured")
+        try:
+            return await asyncio.wait_for(
+                verify_server(
+                    server_url,
+                    self.registry,
+                    self._client_did(),
+                    self.discovery_config,
+                    self.replay_cache,
+                    self.http_transport,
+                ),
+                self.discovery_config.total_deadline_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Server %s verification exceeded its deadline",
+                _safe_host_label(server_url),
+            )
+            return ServerVerificationResult(False, None, "deadline-exceeded")
+        except Exception as exc:  # noqa: BLE001 — unexpected errors fail closed
+            # Log only the error type: messages may echo URLs or bodies.
+            logger.warning(
+                "Server %s verification errored with %s",
+                _safe_host_label(server_url),
+                type(exc).__name__,
+            )
+            return ServerVerificationResult(False, None, "verification-error")
+
     async def connect(self, server_url: str) -> bool:
-        """Connect to MCP server with trust verification."""
-        # V18: Validate server URL scheme
+        """Connect to MCP server with trust verification.
+
+        Fail-closed when trust material is configured: with a registry,
+        the server must pass full identity verification; with only a
+        trust bridge, the discovered DID must verify through the bridge
+        (a missing DID fails closed). With neither configured there is no
+        trust anchor to enforce, so the connection is recorded as before.
+        """
+        # Reject embedded credentials before anything else — including
+        # before any logging — so usernames and passwords can never reach
+        # logs, errors, discovery, or the network.
         from urllib.parse import urlparse
-        parsed = urlparse(server_url)
-        if parsed.scheme not in ("http", "https", "ws", "wss"):
-            logger.warning("Rejected server URL with invalid scheme: %s", server_url)
+        try:
+            parsed = urlparse(server_url)
+            has_userinfo = bool(parsed.username or parsed.password)
+            host = (parsed.hostname or "").lower()
+        except (ValueError, TypeError):
+            logger.warning("Rejected malformed server URL")
             return False
-        if not parsed.hostname:
-            logger.warning("Rejected server URL with missing host: %s", server_url)
+        if has_userinfo:
+            logger.warning(
+                "Rejected server URL with embedded credentials: %s",
+                _safe_host_label(server_url),
+            )
+            return False
+        # V18: Validate server URL scheme
+        if parsed.scheme not in ("http", "https", "ws", "wss"):
+            logger.warning(
+                "Rejected server URL with invalid scheme: %s",
+                _safe_host_label(server_url),
+            )
+            return False
+        if not host:
+            logger.warning(
+                "Rejected server URL with missing host: %s",
+                _safe_host_label(server_url),
+            )
             return False
         # Block common internal/loopback targets
         _blocked_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "169.254.169.254"}  # noqa: S104 — intentional: server bind-all for container deployment
-        if parsed.hostname.lower() in _blocked_hosts:
-            logger.warning("Rejected internal/loopback server URL: %s", server_url)
+        if host in _blocked_hosts:
+            logger.warning(
+                "Rejected internal/loopback server URL: %s",
+                _safe_host_label(server_url),
+            )
             return False
 
-        # Verify server identity if TrustBridge available
+        # Registry path: full Phase 1 verification (fail closed).
+        if self.registry is not None:
+            result = await self.verify_server_identity(server_url)
+            if not result.verified:
+                logger.warning(
+                    "Server %s failed identity verification: %s",
+                    _safe_host_label(server_url),
+                    result.reason,
+                )
+                return False
+            self._connected_servers.add(server_url)
+            logger.info("Connected to MCP server: %s", _safe_host_label(server_url))
+            return True
+
+        # Bridge path: the discovered DID must verify through the bridge.
+        # A missing DID fails closed — an unverifiable server is not
+        # recorded as connected. ``verify_peer`` returns a
+        # ``HandshakeResult`` (check ``.verified``), while tests may
+        # substitute plain booleans.
         if self.trust_bridge:
-            # Extract server DID from URL or discovery
             server_did = await self._discover_server_did(server_url)
-            if server_did:
-                if not await self.trust_bridge.verify_peer(server_did):
-                    logger.warning(f"Server {server_url} failed trust verification")
-                    return False
+            if not server_did:
+                logger.warning(
+                    "Server %s has no verifiable DID", _safe_host_label(server_url)
+                )
+                return False
+            peer = await self.trust_bridge.verify_peer(server_did)
+            verified = peer.verified if hasattr(peer, "verified") else bool(peer)
+            if not verified:
+                logger.warning(
+                    "Server %s failed trust verification", _safe_host_label(server_url)
+                )
+                return False
 
         self._connected_servers.add(server_url)
-        logger.info(f"Connected to MCP server: {server_url}")
+        logger.info("Connected to MCP server: %s", _safe_host_label(server_url))
         return True
 
     async def _discover_server_did(self, server_url: str) -> Optional[str]:
-        """Discover server DID from /.well-known/agent.json"""
-        # In real implementation, fetch agent.json and extract DID
-        return None
+        """Discover the server DID from ``/.well-known/agent.json``.
+
+        Returns the DID only when the fetched document parses; otherwise
+        ``None``. Signature and registry checks happen in
+        :meth:`verify_server_identity` — discovery alone authenticates
+        nothing.
+        """
+        from agentmesh.integrations.mcp.server_identity import (
+            afetch_server_document,
+            parse_server_document,
+        )
+
+        raw = await afetch_server_document(
+            server_url, self.discovery_config, self.http_transport
+        )
+        if raw is None:
+            return None
+        document = parse_server_document(raw)
+        return document.did if document else None
 
     async def invoke(
         self,
@@ -466,6 +618,11 @@ class TrustGatedMCPClient:
             if not await self.connect(server_url):
                 return {"error": "Failed to connect to server"}
 
+        # NOTE: userinfo-bearing URLs can never reach this raise through
+        # the public flow — connect() rejects them before recording the
+        # server — so the full URL here preserves the pinned error
+        # contract (see test_invoke_mentions_server_and_tool) without a
+        # credential path.
         raise NotImplementedError(
             "MCP HTTP transport is not yet implemented. "
             f"Cannot send request to {server_url} for tool '{tool_name}'. "

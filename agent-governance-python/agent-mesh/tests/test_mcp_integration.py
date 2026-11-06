@@ -826,12 +826,18 @@ class TestMCPClientConnect:
     async def test_connect_with_bridge_no_server_did(
         self, client_identity: AgentIdentity
     ) -> None:
-        """When _discover_server_did returns None, bridge is skipped."""
+        """A missing DID fails closed when a trust bridge is configured.
+
+        Behavior change for issue #4528 (Phase 1): an unverifiable
+        server is no longer recorded as connected.
+        """
         bridge = AsyncMock()
         bridge.verify_peer = AsyncMock(return_value=False)
         client = TrustGatedMCPClient(client_identity, trust_bridge=bridge)
-        result = await client.connect("https://mcp.example.com:8080")
-        assert result is True
+        with patch.object(client, "_discover_server_did", return_value=None):
+            result = await client.connect("https://mcp.example.com:8080")
+        assert result is False
+        assert "https://mcp.example.com:8080" not in client._connected_servers
         bridge.verify_peer.assert_not_awaited()
 
     @pytest.mark.asyncio
