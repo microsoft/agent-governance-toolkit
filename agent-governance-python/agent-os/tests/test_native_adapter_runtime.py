@@ -178,3 +178,35 @@ def test_native_path_charges_attempts_and_records_tokens_once() -> None:
     assert first["tool_call_count"] == 0
     assert second["tool_call_count"] == 1
     assert second["token_count"] == 7
+
+
+def test_model_and_output_envelopes_use_the_snapshot_contract_keys() -> None:
+    """The runtime and ``HostSession``'s own methods must agree on the keys.
+
+    A manifest binds one path per point. If the two seams spell the point
+    body differently, a manifest tested behind one fails closed with
+    ``runtime_error:path_missing`` behind the other.
+    """
+    source = _Runtime(InterventionPointResult(verdict=Verdict(decision=Decision.ALLOW)))
+    runtime = NativeAdapterRuntime(source)
+    context = _Context()
+    messages = [{"role": "user", "content": "hi"}]
+
+    runtime.evaluate_pre_model_call(
+        context, model_name="m", messages=messages, tools=[{"name": "t"}]
+    )
+    runtime.evaluate_post_model_call(context, model_name="m", response={"content": "hello"})
+    runtime.evaluate_output(context, content="hello")
+
+    pre, post, output = source.snapshots
+    assert pre["model_request"] == {
+        "model": {"name": "m", "vendor": "test", "params": {}},
+        "messages": messages,
+        "tools": [{"name": "t"}],
+    }
+    assert post["model_response"] == {"content": "hello"}
+    assert output["output"] == "hello"
+    assert output["ifc"] == {"result_labels": []}
+    for snapshot in (pre, post, output):
+        assert "response" not in snapshot
+    assert "messages" not in pre and "tools" not in pre and "model" not in pre

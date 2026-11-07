@@ -123,6 +123,14 @@ class AgentInventory:
             default=str,
         )
 
+    def save(self) -> None:
+        """Persist the inventory, if it has a storage path.
+
+        ``ingest``, ``remove`` and ``clear`` save on their own. Call this
+        after changing agents in place, such as their status or tags.
+        """
+        self._save()
+
     def _save(self) -> None:
         """Persist inventory to disk."""
         if not self._storage_path:
