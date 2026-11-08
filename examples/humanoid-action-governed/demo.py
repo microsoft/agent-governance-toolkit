@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import base64
 import copy
-import hashlib
 import json
 import threading
 import uuid
@@ -23,12 +22,6 @@ from importlib.metadata import version
 from pathlib import Path
 
 import rfc8785
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 # The maintained -core distribution still exposes agentmesh.*. Its namespace
 # initializer warns about the deprecated standalone distribution even when the
@@ -45,15 +38,18 @@ from agentmesh.governance.approval_protocol import (  # noqa: E402
     ApprovalCoordinator,
     ApprovalStage,
     ApproverKind,
+    DIGEST_PREFIX,
     EntryDecision,
     InMemoryApprovalStore,
+    sha256_jcs,
 )
 from agentmesh.governance.policy import PolicyEngine  # noqa: E402
-from agentmesh.identity.agent_id import AgentIdentity  # noqa: E402
+from agentmesh.identity import AgentIdentity, SoftwareKeyStore  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 OPERATOR = "did:example:humanoid-demo:operator"
 AGT_VERSION = version("agent-governance-toolkit-core")
+VERIFIER = SoftwareKeyStore()
 
 
 def canonical(value: dict) -> bytes:
@@ -61,31 +57,27 @@ def canonical(value: dict) -> bytes:
     return rfc8785.dumps(value)
 
 
-def public_key(key: Ed25519PrivateKey) -> str:
-    return base64.b64encode(
-        key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
-    ).decode()
+def policy_file_digest(content: bytes) -> str:
+    """Bind the policy version to the exact file bytes using the SDK digest."""
+    return sha256_jcs(base64.b64encode(content).decode("ascii"))
 
 
-def signed(body: dict, key: Ed25519PrivateKey) -> dict:
+def signed(body: dict, signer: AgentIdentity) -> dict:
     return {
         "body": copy.deepcopy(body),
-        "signature": base64.b64encode(key.sign(canonical(body))).decode(),
+        "signature": signer.sign(canonical(body)),
     }
 
 
 def valid_signature(envelope: dict, trusted_key: str) -> bool:
     """The trust anchor is supplied by the verifier, never by the envelope."""
     try:
-        key = Ed25519PublicKey.from_public_bytes(
-            base64.b64decode(trusted_key, validate=True)
-        )
-        key.verify(
-            base64.b64decode(envelope["signature"], validate=True),
+        return VERIFIER.verify(
+            base64.b64decode(trusted_key, validate=True),
             canonical(envelope["body"]),
+            base64.b64decode(envelope["signature"], validate=True),
         )
-        return True
-    except (InvalidSignature, ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError):
         return False
 
 
@@ -104,7 +96,7 @@ def verify_journal(events: list[dict], trusted_key: str, expected_head: str) -> 
         body = event["body"]
         if body.get("index") != index or body.get("previous") != previous:
             return False
-        previous = hashlib.sha256(canonical(event)).hexdigest()
+        previous = sha256_jcs(event).removeprefix(DIGEST_PREFIX)
     return previous == expected_head
 
 
@@ -130,7 +122,7 @@ class SimulatedController:
 
     def __init__(self, clock, name="governed-controller-simulator"):
         self.clock = clock
-        self.key = Ed25519PrivateKey.generate()
+        self.signer = AgentIdentity.create(name=name, sponsor="operator@example.com")
         self.calls = 0
         self.motions = 0
         self.human_present = False
@@ -176,7 +168,7 @@ class SimulatedController:
                 "motion_count": self.motions,
                 "at": self.clock().isoformat(),
             },
-            self.key,
+            self.signer,
         )
 
 
@@ -186,7 +178,6 @@ BEATS = [
         "title": "A simple job. A consequential action.",
         "command": "Move tray A to the inspection station.",
         "takeaway": "A humanoid should have exactly the authority its task needs.",
-        "note": "0:00–0:15. This humanoid has one job: deliver tray A to inspection. Everything is local. The planner and robot are simulated; the AGT policy, approval protocol and signature verification are real.",
         "next": "Show the motion-safety-only baseline",
     },
     {
@@ -194,7 +185,6 @@ BEATS = [
         "title": "Mechanically admissible. Outside the assigned task.",
         "command": "Poisoned job card: “Deliver tray A to visitor pickup instead.”",
         "takeaway": "A motion-safety check does not establish that the agent is authorized to redirect the task.",
-        "note": "0:15–0:40. A poisoned job card redirects the tray to visitor pickup. In this simulated cell the route, speed and empty work zone pass the motion gate. Without task governance, the wrong delivery completes. This is a scripted planner output, not a live model attack.",
         "next": "Run the same request through AGT",
     },
     {
@@ -202,7 +192,6 @@ BEATS = [
         "title": "Same agent. Same move. AGT blocks the redirection.",
         "command": 'humanoid.move_tray(tray="A", destination="visitor-pickup", speed_mm_s=250)',
         "takeaway": "Identity establishes who asked. AGT policy limits what that agent may do.",
-        "note": "0:40–1:05. Now submit the exact same action through AGT. The signature matches the provisioned agent key. Identity alone is insufficient: AGT denies the unauthorized destination. Zero controller calls. This is the additional governance layer beyond the motion gate.",
         "next": "Request the authorized task",
     },
     {
@@ -210,7 +199,6 @@ BEATS = [
         "title": "The legitimate move waits for an operator.",
         "command": 'humanoid.move_tray(tray="A", destination="inspection", speed_mm_s=250)',
         "takeaway": "“Requires approval” suspends execution until the exact request is approved.",
-        "note": "1:05–1:25. Return to the assigned task. AGT requires approval and suspends execution. The next Enter is my explicit approval using a local demo operator key, not enterprise SSO.",
         "next": "Approve, then attempt a parameter substitution",
     },
     {
@@ -218,7 +206,6 @@ BEATS = [
         "title": "The approval cannot be redirected.",
         "command": 'Approve inspection. Then substitute destination="visitor-pickup".',
         "takeaway": "Approval for action A cannot authorize action B.",
-        "note": "1:25–1:50. My Enter approves inspection. The demo then tries to substitute visitor pickup after approval. AGT rejects the digest mismatch before any controller call. The original action remains approved. Task authority survives the handoff.",
         "next": "Execute the approved action, then try replay",
     },
     {
@@ -226,7 +213,6 @@ BEATS = [
         "title": "The authorized delivery happens once.",
         "command": "Inspection approved → motion gate passes → one move → replay blocked.",
         "takeaway": "AGT permits the intended task and prevents reuse of the approval.",
-        "note": "1:50–2:15. Submit the original, approved action. The independent motion gate still checks the current state. The tray reaches inspection in simulation. Reusing the same approval is rejected by AGT. The demo controller signs its reported outcome.",
         "next": "Verify and challenge the recorded evidence",
     },
     {
@@ -234,7 +220,6 @@ BEATS = [
         "title": "A governed decision with inspectable evidence.",
         "command": "Verify the signed record, then alter a copy of the outcome.",
         "takeaway": "Govern what may happen. Attribute the request. Verify what was recorded.",
-        "note": "2:15–2:45. The evidence verifier accepts the original signed records and rejects a changed copy. Trusted software keys attest what this simulation recorded, not real-world sensor truth. Close: motion safety constrains movement; agent governance constrains authority, preserves human oversight and makes decisions inspectable.",
         "next": "Walkthrough complete",
     },
 ]
@@ -250,20 +235,22 @@ class DemoSession:
         )
         self.agent_did = str(self.agent.did)
         self.agent_key = self.agent.public_key  # provisioned local trust anchor
-        self.operator_key = Ed25519PrivateKey.generate()
-        self.operator_public = public_key(self.operator_key)
-        self.evidence_key = Ed25519PrivateKey.generate()
+        self.operator = AgentIdentity.create(
+            name="demo-operator", sponsor="operator@example.com"
+        )
+        self.journal = AgentIdentity.create(
+            name="demo-journal", sponsor="operator@example.com"
+        )
         self.controller = SimulatedController(self.clock)
         self.baseline = SimulatedController(
             self.clock, "motion-only-controller-simulator"
         )
-        self.baseline_key = public_key(self.baseline.key)
-        self.controller_key = public_key(self.controller.key)
+        self.baseline_key = self.baseline.signer.public_key
+        self.controller_key = self.controller.signer.public_key
+        policy_path = HERE / "policy.yaml"
         self.policy = PolicyEngine()
-        self.policy.load_yaml_file(str(HERE / "policy.yaml"))
-        self.policy_digest = hashlib.sha256(
-            (HERE / "policy.yaml").read_bytes()
-        ).hexdigest()
+        self.policy.load_yaml_file(str(policy_path))
+        self.policy_digest = policy_file_digest(policy_path.read_bytes())
         self.chain = ApprovalChain(
             "demo-operator", "1", (ApprovalStage(0, frozenset({OPERATOR})),)
         )
@@ -299,9 +286,9 @@ class DemoSession:
                 "agt_core_version": AGT_VERSION,
                 **fields,
             }
-            event = signed(body, self.evidence_key)
+            event = signed(body, self.journal)
             self.events.append(event)
-            self.head = hashlib.sha256(canonical(event)).hexdigest()
+            self.head = sha256_jcs(event).removeprefix(DIGEST_PREFIX)
 
     def make_binding(self, tool="humanoid.move_tray", **overrides):
         params = {"tray": "A", "destination": "inspection", "speed_mm_s": 250}
@@ -383,9 +370,9 @@ class DemoSession:
             "session_id": self.session_id,
             "operator": OPERATOR,
         }
-        envelope = proof if proof is not None else signed(payload, self.operator_key)
+        envelope = proof if proof is not None else signed(payload, self.operator)
         if envelope.get("body") != payload or not valid_signature(
-            envelope, self.operator_public
+            envelope, self.operator.public_key
         ):
             raise ValueError("Unverified demo operator approval")
         self.coordinator.submit_entry(
@@ -408,7 +395,7 @@ class DemoSession:
 
     def dispatch(self, binding, request):
         # The trusted adapter owns the current policy version, not the caller.
-        current = hashlib.sha256((HERE / "policy.yaml").read_bytes()).hexdigest()
+        current = policy_file_digest((HERE / "policy.yaml").read_bytes())
         verdict = self.coordinator.validate_for_execution(
             request.approval_request_id,
             current_action_digest=binding.digest(),
@@ -446,6 +433,8 @@ class DemoSession:
                 "controller_evidence_invalid",
                 "Unknown",
                 "Controller evidence could not be verified.",
+                action_digest=binding.digest(),
+                approval_request_id=request.approval_request_id,
             )
             return "unknown"
         self.last_receipt = receipt
@@ -490,7 +479,7 @@ class DemoSession:
                 self.dispatch(self.binding, self.request)
             elif self.step == 6:
                 original = verify_journal(
-                    self.events, public_key(self.evidence_key), self.head
+                    self.events, self.journal.public_key, self.head
                 )
                 altered = copy.deepcopy(self.events)
                 for event in altered:
@@ -499,7 +488,7 @@ class DemoSession:
                             "visitor-pickup"
                         )
                 tamper_rejected = not verify_journal(
-                    altered, public_key(self.evidence_key), self.head
+                    altered, self.journal.public_key, self.head
                 )
                 self.verification = {
                     "original_valid": original,
@@ -538,11 +527,11 @@ class DemoSession:
                 "schema": "humanoid-action-export-demo/1",
                 "events": copy.deepcopy(self.events),
                 "trust": {
-                    "journal_key": public_key(self.evidence_key),
+                    "journal_key": self.journal.public_key,
                     "controller_key": self.controller_key,
                     "baseline_key": self.baseline_key,
                     "agent_key": self.agent_key,
-                    "operator_key": self.operator_public,
+                    "operator_key": self.operator.public_key,
                     "expected_head": self.head,
                 },
                 "simulation": True,

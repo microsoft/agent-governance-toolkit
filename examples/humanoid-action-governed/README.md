@@ -1,9 +1,3 @@
----
-title: Governed Humanoid Action Walkthrough
-last_reviewed: 2026-10-15
-owner: agt-maintainers
----
-
 # Governed humanoid action walkthrough
 
 **A mechanically admissible action can still exceed an agent's authority.**
@@ -34,12 +28,11 @@ python -m pip install -r examples/humanoid-action-governed/requirements.txt
 python -m pip install --no-deps -e agent-governance-python/agent-governance-toolkit-core
 ```
 
-Install the maintained `agent-governance-toolkit-core` distribution from this
-checkout, not the deprecated `agentmesh-platform` stub. AGT's maintained source
-still exposes the `agentmesh.*` Python imports used here. `requirements.txt` is a
-pinned minimal dependency profile for those imported surfaces. This example does
-not exercise the ACS SDK or the rest of the consolidated core package; it is not
-a replacement for the full repository development environment.
+The local `agent-governance-toolkit-core` distribution provides the
+`agentmesh.*` imports. The lockfile covers the policy, identity and approval
+modules used here, plus the canonical JSON library used to sign demo records.
+See [the development setup](../../CONTRIBUTING.md#development-environment-setup)
+to install the full core package with ACS.
 
 Dependency installation needs network access. After setup, the demo has no
 external-service calls, credentials, model costs, or physical side effects.
@@ -52,15 +45,10 @@ With the virtual environment active, run:
 python examples/humanoid-action-governed/demo.py --clear
 ```
 
-Press **Enter** to advance. Every beat waits indefinitely for the presenter.
-The Enter preceding the approval beat explicitly approves the displayed action
-using the local demo operator. The demo clock is controlled rather than tied to
-wall-clock waiting, so a pause during a talk cannot unexpectedly expire an
-approval. Automated tests separately exercise expiry and stale state.
-
-The [presenter script](TALK.md) fits a 2 minute 45 second walkthrough with six
-advances. The initial use case is the Humanoid Europe talk on runtime controls,
-identity, and verifiable trust, but the example is usable independently.
+Press **Enter** to advance through the walkthrough. The approval prompt uses
+the local demo operator to approve the displayed action. Waiting at a prompt
+does not advance the demo clock. The tests exercise approval expiry and stale
+controller state by advancing it explicitly.
 
 For a complete rehearsal without prompts, with evidence export:
 
@@ -103,7 +91,7 @@ PASS: signed software records verified
 | Exact-action approval | `ApprovalCoordinator` binds target, agent, parameters, policy version and approval chain; execution-time validation consumes the approval once |
 | Operator proof | Example adapter verifies a signed local operator approval before submitting the AGT approval entry |
 | Motion checks | Independent simulated controller checks current work-zone state, state freshness, destination envelope and speed |
-| Recorded evidence | Controller-signed result plus a signed, ordered journal; verification uses separately supplied keys and expected final digest |
+| Recorded evidence | Controller-signed result and signed journal using AgentMesh signing and verification APIs. The verifier uses separately supplied keys and the expected final digest |
 
 The small adapter explicitly connects existing AGT APIs. It does not imply that
 every AGT framework integration automatically provides these same end-to-end
@@ -141,9 +129,8 @@ altered/reordered/deleted/truncated evidence, and execution without network acce
 - Signatures establish what the trusted software keys recorded. They do not prove
   sensor truth, real robot completion, physical non-harm, or safety certification.
 - The evidence schema is local to this example, not TRACE conformance or a new AGT
-  protocol. Canonical signed evidence uses the `rfc8785` library. Action digests
-  use AGT's existing implementation and integer parameters, without cross-language
-  floating-point claims.
+  protocol. Signed records use the `rfc8785` library for canonical JSON. The
+  action and journal digests use AgentMesh's SHA-256 helper.
 - Retain the trust snapshot and expected head separately before handing evidence
   to another verifier. Keys copied from an untrusted evidence file are not trust
   anchors. There is no external transparency log or hardware-rooted key custody.
@@ -153,7 +140,6 @@ altered/reordered/deleted/truncated evidence, and execution without network acce
 - [demo.py](demo.py): interactive walkthrough, AGT adapter and simulated controller.
 - [verify.py](verify.py): offline verification against retained trust material.
 - [test_demo.py](test_demo.py): behavior and failure-path tests.
-- [TALK.md](TALK.md): three-minute presenter script.
 
 Stop with Ctrl+C; rerun to reset. Remove only the example's `.venv/` and
 `artifacts/` directories to clean up installed dependencies and generated records.

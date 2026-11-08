@@ -19,14 +19,23 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 from demo import (
     BEATS,
+    OPERATOR,
     DemoSession,
     canonical,
-    public_key,
-    signed,
     valid_signature,
     verify_journal,
 )
 from verify import verify_export
+
+
+def untrusted_proof(body: dict) -> dict:
+    key = Ed25519PrivateKey.generate()
+    return {"body": body, "signature": base64.b64encode(key.sign(canonical(body))).decode()}
+
+
+def untrusted_public_key() -> str:
+    key = Ed25519PrivateKey.generate().public_key()
+    return base64.b64encode(key.public_bytes_raw()).decode()
 
 
 class GovernanceBoundaryTests(unittest.TestCase):
@@ -93,8 +102,15 @@ class GovernanceBoundaryTests(unittest.TestCase):
     def test_approval_cannot_be_forged_by_an_untrusted_operator(self):
         binding = self.session.make_binding()
         _, request = self.session.request_action(binding)
-        rogue = Ed25519PrivateKey.generate()
-        proof = signed({"request_id": request.approval_request_id}, rogue)
+        proof = untrusted_proof(
+            {
+                "request_id": request.approval_request_id,
+                "action_digest": request.action_digest,
+                "policy_version": request.policy_version,
+                "session_id": self.session.session_id,
+                "operator": OPERATOR,
+            }
+        )
         with self.assertRaises(ValueError):
             self.session.approve(request, proof=proof)
         self.assertEqual(self.session.dispatch(binding, request), "no_resolution")
@@ -180,13 +196,16 @@ class GovernanceBoundaryTests(unittest.TestCase):
 
     def test_invalid_controller_signature_is_not_reported_as_completion(self):
         binding, request = self.approved()
-        fake = signed(
-            {"action_digest": binding.digest(), "outcome": "completed_in_simulation"},
-            Ed25519PrivateKey.generate(),
+        fake = untrusted_proof(
+            {"action_digest": binding.digest(), "outcome": "completed_in_simulation"}
         )
         with patch.object(self.session.controller, "execute", return_value=fake):
             self.assertEqual(self.session.dispatch(binding, request), "unknown")
         self.assertIsNone(self.session.last_receipt)
+        event = self.session.events[-1]["body"]
+        self.assertEqual(event["kind"], "controller_evidence_invalid")
+        self.assertEqual(event["action_digest"], binding.digest())
+        self.assertEqual(event["approval_request_id"], request.approval_request_id)
 
     def test_walkthrough_runs_with_external_network_disabled(self):
         with patch.object(
@@ -219,7 +238,7 @@ class GovernanceBoundaryTests(unittest.TestCase):
                 bundle,
                 {
                     **bundle["trust"],
-                    "journal_key": public_key(Ed25519PrivateKey.generate()),
+                    "journal_key": untrusted_public_key(),
                 },
             )
         )
@@ -249,7 +268,7 @@ class GovernanceBoundaryTests(unittest.TestCase):
 
     def test_untrusted_export_key_cannot_replace_pinned_key(self):
         bundle = self.completed()
-        bundle["trust"]["journal_key"] = public_key(Ed25519PrivateKey.generate())
+        bundle["trust"]["journal_key"] = untrusted_public_key()
         self.assertFalse(
             valid_signature(bundle["events"][0], bundle["trust"]["journal_key"])
         )
