@@ -140,9 +140,14 @@ jobs:
           echo "### Workflow Security Check (MSRC-111178)" >> "$GITHUB_STEP_SUMMARY"
           FAIL=0
 
-          # No workflow should checkout HEAD ref on pull_request_target
-          HEAD_REFS=$(grep -rn 'ref:.*head\.sha\|ref:.*head_sha' .github/workflows/*.yml \
-            | grep -v '#' | grep -v 'workflow_run' | grep -v 'weekly-security-audit' || true)
+          # No pull_request_target workflow should check out the PR head ref.
+          # A workflow that runs on plain pull_request gets a read-only token
+          # and may check out the head, so only inspect files that use
+          # pull_request_target.
+          HEAD_REFS=$(grep -rl 'pull_request_target' .github/workflows/*.yml \
+            | grep -v 'weekly-security-audit' \
+            | xargs -r grep -n 'ref:.*head\.sha\|ref:.*head_sha' \
+            | grep -v '#' | grep -v 'workflow_run' || true)
           if [ -n "$HEAD_REFS" ]; then
             {
               echo "🔴 CRITICAL: pull_request_target workflow checks out HEAD ref:"
