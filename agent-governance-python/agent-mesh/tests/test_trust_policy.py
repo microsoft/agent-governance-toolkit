@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from agentmesh.governance.trust_policy import (
+    ConditionEvaluationError,
     ConditionOperator,
     TrustCondition,
     TrustDefaults,
@@ -303,7 +304,7 @@ class TestEdgeCases:
 
 
 def test_matches_allows_bounded_quantifier_regex():
-    """Bounded quantifiers ({n,m}) are ReDoS-safe and must be allowed.
+    """A quantifier over an unambiguous body is ReDoS-safe and must be allowed.
 
     Blocking '{' made a `matches` rule like '^svc-[0-9]{4}$' silently return
     False (fail-open: a deny/require_approval rule using it never fires).
@@ -311,3 +312,83 @@ def test_matches_allows_bounded_quantifier_regex():
     cond = TrustCondition(field="agent.id", operator="matches", value=r"^svc-[0-9]{4}$")
     assert cond.evaluate({"agent": {"id": "svc-1234"}}) is True
     assert cond.evaluate({"agent": {"id": "svc-12"}}) is False
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"^svc-[0-9]{4}$",
+        r"a{3}",
+        r"^(ab){2,3}$",
+        r"^[a-z]+-[0-9]{1,3}$",
+        r"alpha|beta",  # top-level alternation, not under a quantifier
+    ],
+)
+def test_matches_structural_guard_allows_safe_patterns(pattern):
+    """Quantifiers over unambiguous bodies construct and evaluate normally."""
+    cond = TrustCondition(field="agent.id", operator="matches", value=pattern)
+    # Evaluation must run the regex, not trip the guard: a non-matching
+    # subject returning False is fine, a guard rejection would also return
+    # False, so assert on a subject that matches where practical.
+    assert isinstance(cond.evaluate({"agent": {"id": "svc-1234"}}), bool)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"(a{1,5}){1,5}$",  # nested bounded quantifiers
+        r"(x{2,}){2,}$",  # nested open-ended quantifiers
+        r"(a+)+$",  # the classic
+        r"(.*)*",  # star over star
+        r"(\d{1,3}\.?){1,40}$",  # quantified group with an inner quantifier
+        r"(a|aa){1,40}$",  # alternation under a quantifier
+        r"(a?a?){1,30}$",  # optional (?) repeats nest too: {0,1} is variable-width
+    ],
+)
+def test_matches_rejects_catastrophic_patterns_at_load(pattern):
+    """A pattern that can backtrack catastrophically fails at load time.
+
+    Before, such a pattern was either rejected by a substring blocklist or
+    accepted outright; either way `matches` silently returned False or hung.
+    Now TrustCondition refuses to construct, so a bad policy is a loud load
+    error rather than a deny rule that never fires.
+    """
+    with pytest.raises(ValueError, match="catastrophically"):
+        TrustCondition(field="agent.id", operator="matches", value=pattern)
+
+
+def test_matches_invalid_regex_rejected_at_load():
+    """An uncompilable pattern is a load error, not a silent eval False."""
+    with pytest.raises(ValueError, match="not a valid regex"):
+        TrustCondition(field="agent.id", operator="matches", value=r"[unterminated")
+
+
+def test_matches_overlong_pattern_rejected_at_load():
+    with pytest.raises(ValueError, match="limit is 200"):
+        TrustCondition(field="agent.id", operator="matches", value="a" * 201)
+
+
+def test_matches_overlong_subject_fails_closed():
+    """A subject past the cap must not evaluate as "no match" — that would
+    let an attacker disarm a deny rule by padding the field. The condition
+    raises, and the evaluator converts that into a deny."""
+    cond = TrustCondition(field="agent.id", operator="matches", value=r"^[a-z]+$")
+    assert cond.evaluate({"agent": {"id": "a" * 4096}}) is True
+    with pytest.raises(ConditionEvaluationError):
+        cond.evaluate({"agent": {"id": "a" * 4097}})
+
+    policy = _make_policy(
+        rules=[
+            TrustRule(
+                name="deny-bad-ids",
+                condition=TrustCondition(field="agent.id", operator="matches", value=r"^evil-"),
+                action="deny",
+                priority=10,
+            )
+        ]
+    )
+    evaluator = PolicyEvaluator([policy])
+    decision = evaluator.evaluate({"agent": {"id": "x" * 5000}})
+    assert decision.allowed is False
+    assert decision.action == "deny"
+    assert "could not be evaluated safely" in decision.reason

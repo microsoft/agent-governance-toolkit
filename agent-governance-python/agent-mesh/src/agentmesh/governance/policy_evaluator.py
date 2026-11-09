@@ -11,7 +11,7 @@ First matching rule wins. Falls back to defaults if no rule matches.
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from .trust_policy import TrustPolicy
+from .trust_policy import ConditionEvaluationError, TrustPolicy
 
 
 class TrustPolicyDecision(BaseModel):
@@ -72,7 +72,22 @@ class PolicyEvaluator:
 
         # Evaluate in priority order; first match wins
         for policy, rule in all_rules:
-            if rule.condition.evaluate(context):
+            try:
+                matched = rule.condition.evaluate(context)
+            except ConditionEvaluationError as exc:
+                # Fail closed: a condition that cannot be evaluated safely
+                # (oversized subject, unusable pattern) must not silently
+                # disarm the rule built on it.
+                return TrustPolicyDecision(
+                    allowed=False,
+                    rule_name=rule.name,
+                    action="deny",
+                    reason=(
+                        f"Rule '{rule.name}' in policy '{policy.name}' could not be "
+                        f"evaluated safely; denying. {exc}"
+                    ),
+                )
+            if matched:
                 allowed = rule.action == "allow"
                 return TrustPolicyDecision(
                     allowed=allowed,

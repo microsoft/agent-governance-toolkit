@@ -13,7 +13,117 @@ from pathlib import Path
 from typing import Any, Literal, Optional
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+try:  # Python 3.11+
+    from re import _parser as _sre_parse  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover - older Pythons
+    import sre_parse as _sre_parse  # type: ignore[no-redef]
+
+# V31: longest regex a `matches` condition may carry.
+_MAX_PATTERN_LENGTH = 200
+
+# Longest subject a `matches` condition will evaluate against. Bounds the
+# cost of polynomial backtracking the structural guard cannot rule out.
+_MAX_SUBJECT_LENGTH = 4096
+
+
+class ConditionEvaluationError(ValueError):
+    """A condition could not be evaluated safely.
+
+    Raised instead of returning a boolean so the caller can fail closed:
+    mapping an unevaluable condition to "no match" would let an oversized
+    or malformed input silently disarm a deny rule. ``PolicyEvaluator``
+    converts this into a deny decision.
+    """
+
+
+def _contains_ambiguity(subpattern) -> bool:
+    """Whether subpattern contains a variable-width repeat, an alternation,
+    or a conditional group reference.
+
+    Variable-width means ``min != max`` — this includes ``?`` ({0,1}), which a
+    ``max != 1`` test would miss even though ``(a?a?){1,30}`` backtracks
+    exponentially. A fixed-width repeat (``{3}``) of unambiguous content is
+    fine, so recursion decides for those.
+    """
+    for op, arg in subpattern:
+        name = str(op)
+        if name in ("MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT"):
+            min_count, max_count, body = arg
+            if min_count != max_count or _contains_ambiguity(body):
+                return True
+        elif name in ("BRANCH", "GROUPREF_EXISTS"):
+            return True
+        elif name == "SUBPATTERN":
+            if _contains_ambiguity(arg[3]):
+                return True
+        elif name in ("ASSERT", "ASSERT_NOT"):
+            if _contains_ambiguity(arg[1]):
+                return True
+        elif name == "ATOMIC_GROUP":
+            if _contains_ambiguity(arg):
+                return True
+    return False
+
+
+def _has_catastrophic_repeat(subpattern) -> bool:
+    """Whether any repeat with max > 1 has a body that can itself branch.
+
+    That is the structural shape behind catastrophic backtracking: an outer
+    quantifier whose body offers more than one way to consume the same text —
+    a nested variable-width quantifier (``(a+)+``, ``(a{1,5}){1,5}``,
+    ``(\\d{1,3}\\.?){1,40}``, ``(a?a?){1,30}``) or an alternation
+    (``(a|aa){1,40}``). A repeat whose body is unambiguous (``[0-9]{4}``,
+    ``(ab){2,3}``) is fine.
+    """
+    for op, arg in subpattern:
+        name = str(op)
+        if name in ("MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT"):
+            _, max_count, body = arg
+            if max_count != 1 and _contains_ambiguity(body):
+                return True
+            if _has_catastrophic_repeat(body):
+                return True
+        elif name == "BRANCH":
+            for branch in arg[1]:
+                if _has_catastrophic_repeat(branch):
+                    return True
+        elif name == "SUBPATTERN":
+            if _has_catastrophic_repeat(arg[3]):
+                return True
+        elif name in ("ASSERT", "ASSERT_NOT"):
+            if _has_catastrophic_repeat(arg[1]):
+                return True
+        elif name == "ATOMIC_GROUP":
+            if _has_catastrophic_repeat(arg):
+                return True
+    return False
+
+
+def validate_matches_pattern(pattern: str) -> None:
+    """Validate the regex of a ``matches`` condition, raising ``ValueError``.
+
+    Rejects patterns that cannot work at evaluation time, so a bad policy
+    fails when it is loaded instead of its rule silently never firing:
+    over-long patterns, invalid regexes, and patterns whose structure can
+    backtrack catastrophically (see ``_has_catastrophic_repeat``).
+    """
+    if len(pattern) > _MAX_PATTERN_LENGTH:
+        raise ValueError(
+            f"matches pattern is {len(pattern)} characters; the limit is {_MAX_PATTERN_LENGTH}"
+        )
+    try:
+        parsed = _sre_parse.parse(pattern)
+    except re.error as exc:
+        raise ValueError(f"matches pattern is not a valid regex: {exc}") from exc
+    if _has_catastrophic_repeat(parsed):
+        raise ValueError(
+            "matches pattern can backtrack catastrophically: a quantifier is"
+            " applied to a group that itself contains a quantifier or an"
+            " alternation (e.g. (a+)+, (a{1,5}){1,5}, (a|aa){1,40});"
+            " rewrite the pattern without the nesting"
+        )
 
 
 class ConditionOperator(str, Enum):
@@ -43,6 +153,14 @@ class TrustCondition(BaseModel):
     field: str = Field(..., description="Dot-notated field path (e.g. 'trust_score', 'agent.namespace')")
     operator: ConditionOperator = Field(..., description="Comparison operator")
     value: Any = Field(..., description="Value to compare against")
+
+    @model_validator(mode="after")
+    def _validate_matches_value(self) -> "TrustCondition":
+        # A rejected pattern used to surface only at evaluation time, as a
+        # silent False — a deny rule that never fires. Fail at load instead.
+        if self.operator == ConditionOperator.matches:
+            validate_matches_pattern(str(self.value))
+        return self
 
     def evaluate(self, context: dict) -> bool:
         """Evaluate this condition against a context dictionary.
@@ -93,16 +211,31 @@ class TrustCondition(BaseModel):
             return actual not in expected
         elif operator == ConditionOperator.matches:
             pattern = str(expected)
-            # V31: Reject overly complex regex patterns to prevent ReDoS.
-            # Note: bounded quantifiers like {n,m} are the ReDoS-*safe* form, so
-            # '{' must not be blocked — doing so made rules such as
-            # '^svc-[0-9]{4}$' silently fail to match (fail-open).
-            if len(pattern) > 200 or any(c in pattern for c in ['(+', '(.*)*', '(.+)+']):
-                return False
+            # V31: a condition built through the model is validated at load
+            # time (_validate_matches_value); re-check here as defense in
+            # depth for a value mutated after construction or a direct call.
+            # Raise rather than return False: "no match" would silently
+            # disarm a deny rule built on this condition (fail-open).
             try:
-                return bool(re.search(pattern, str(actual), flags=re.DOTALL))
-            except re.error:
-                return False
+                validate_matches_pattern(pattern)
+            except ValueError as exc:
+                raise ConditionEvaluationError(str(exc)) from exc
+            # Cap the subject as a backstop: the structural guard rules out
+            # exponential backtracking, but polynomial backtracking (e.g.
+            # adjacent overlapping quantifiers like a+a+b) grows with subject
+            # length, and the subject can be attacker-influenced context. A
+            # trust-policy field (agent id, namespace) is far shorter than
+            # this. Raising (not returning False) keeps an oversized subject
+            # from bypassing a deny rule; the evaluator fails closed.
+            subject = str(actual)
+            if len(subject) > _MAX_SUBJECT_LENGTH:
+                raise ConditionEvaluationError(
+                    f"matches subject is {len(subject)} characters; the limit is {_MAX_SUBJECT_LENGTH}"
+                )
+            try:
+                return bool(re.search(pattern, subject, flags=re.DOTALL))
+            except re.error as exc:  # pragma: no cover - caught by validation above
+                raise ConditionEvaluationError(str(exc)) from exc
         return False
 
 
