@@ -339,11 +339,17 @@ class NativeAdapterRuntime:
         request_id: str = "req-1",
         model_vendor: str = "test",
     ) -> NativeAdapterResult:
+        # The point-specific body rides under the snapshot contract's key
+        # (``model_request``, ``model_response``, ``output``), the same keys
+        # ``HostSession``'s own methods send, so one manifest binds through
+        # either seam.
         evaluation = self._session_for(ctx).evaluate(
             "pre_model_call",
-            model={"name": model_name, "vendor": model_vendor, "params": {}},
-            messages=messages,
-            tools=tools or [],
+            model_request={
+                "model": {"name": model_name, "vendor": model_vendor, "params": {}},
+                "messages": messages,
+                "tools": tools or [],
+            },
             request_id=request_id,
         )
         return NativeAdapterResult(evaluation)
@@ -362,7 +368,7 @@ class NativeAdapterRuntime:
             "post_model_call",
             model={"name": model_name, "vendor": model_vendor},
             request_id=request_id,
-            response=response,
+            model_response=response,
             usage=usage or {"prompt_tokens": 0, "completion_tokens": 0},
         )
         return NativeAdapterResult(evaluation)
@@ -376,10 +382,8 @@ class NativeAdapterRuntime:
     ) -> NativeAdapterResult:
         evaluation = self._session_for(ctx).evaluate(
             "output",
-            response={
-                "content": content if isinstance(content, str | dict) else str(content),
-                "ifc": {"result_labels": []},
-            },
+            output=content if isinstance(content, str | dict) else str(content),
+            ifc={"result_labels": []},
             message_chain=message_chain or [],
         )
         return NativeAdapterResult(evaluation)
