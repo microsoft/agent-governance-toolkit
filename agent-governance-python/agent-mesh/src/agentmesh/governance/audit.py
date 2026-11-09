@@ -565,6 +565,19 @@ class MerkleAuditChain:
 AuditChain = MerkleAuditChain
 
 
+def _tail(entries: "list[AuditEntry]", limit: int | None) -> "list[AuditEntry]":
+    """Return the last ``limit`` entries as a new list.
+
+    ``None`` means every entry and ``0`` means none; ``entries[-0:]`` is
+    the whole list, so zero needs its own case.
+    """
+    if limit is None:
+        return list(entries)
+    if limit == 0:
+        return []
+    return list(entries[-limit:])
+
+
 class AuditLog:
     """
     Append-only audit logging system.
@@ -712,12 +725,16 @@ class AuditLog:
     ) -> list[AuditEntry]:
         """Query audit entries with optional filters.
 
-        Pass ``limit=None`` to return all matching entries.
+        ``limit`` keeps the most recent matching entries. Pass
+        ``limit=None`` to return all of them, ``0`` to return none; a
+        negative ``limit`` raises ``ValueError``.
         """
+        if limit is not None and limit < 0:
+            raise ValueError(f"limit must be zero or positive; got {limit!r}")
         filtered = any((agent_did, event_type, start_time, end_time, outcome))
         with self._chain._lock:
             if not filtered:
-                return self._chain._entries[-limit:] if limit is not None else list(self._chain._entries)
+                return _tail(self._chain._entries, limit)
             results = list(self._chain._entries)
 
         if agent_did:
@@ -735,7 +752,7 @@ class AuditLog:
         if outcome:
             results = [e for e in results if e.outcome == outcome]
 
-        return results[-limit:] if limit is not None else list(results)
+        return _tail(results, limit)
 
     def verify_integrity(self) -> tuple[bool, Optional[str]]:
         """Verify audit hash/link integrity, returning validity and an optional error."""
