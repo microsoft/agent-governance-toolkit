@@ -284,6 +284,79 @@ value that matched it, so a denied read of a secret-bearing path does not write
 that path into the log. `policyVersion` covers the policy document, so it does
 not change when a package upgrade alters built-in defaults.
 
+### Secret patterns in tool output
+
+`tool.execute.after` scans output for credential shapes and redacts each match
+as `[AGT_REDACTED:<pattern-id>]` before the model sees it. The audit entry
+records the pattern ids that matched, never the matched value.
+
+Fourteen patterns ship by default:
+
+| Pattern id | Shape |
+|------------|-------|
+| `aws-access-key` | `AKIA` plus 16 upper-case alphanumerics |
+| `github-token` | `ghp_` plus 30 or more characters |
+| `github-fine-grained` | `github_pat_` plus 20 or more characters |
+| `github-app-token` | `gho_`, `ghr_`, `ghs_` or `ghu_` plus 36 or more characters |
+| `openai-key` | `sk-` plus 32 or more characters |
+| `slack-token` | `xoxa-`, `xoxb-`, `xoxe-`, `xoxp-`, `xoxr-` or `xoxs-` |
+| `slack-webhook` | a `hooks.slack.com/services/T.../B.../...` URL |
+| `npm-token` | `npm_` plus exactly 36 characters |
+| `google-api-key` | `AIza` plus exactly 35 characters |
+| `atlassian-token` | `ATATT3x` plus 64 or more characters |
+| `azure-account-key` | `AccountKey=` plus 40 or more base64 characters |
+| `jwt-token` | three dot-separated base64url segments starting `eyJ` |
+| `private-key-block` | a PEM `BEGIN/END ... PRIVATE KEY` block |
+| `db-connection-string` | a known scheme with an embedded user and password |
+
+`db-connection-string` requires both a non-empty password and a known scheme
+(`postgres`, `postgresql`, `mysql`, `mongodb`, `mongodb+srv`, `redis`, `rediss`,
+`amqp`, `amqps`, `mssql`), so a credential-free URI such as
+`postgres://localhost:5432/db` is left alone.
+
+**Adding your own.** `secretPatterns` takes pattern objects with a required
+`id`, a required regex `source`, and optional `flags`:
+
+```json
+{
+  "secretPatterns": [
+    { "id": "acme-internal-token", "source": "\\bacme_[0-9a-f]{32}\\b" },
+    { "id": "acme-legacy-key", "source": "acme-key-[0-9]{12}", "flags": "i" }
+  ]
+}
+```
+
+Configured patterns **merge with the built-ins** rather than replacing them.
+There is no key to disable a built-in, so a policy file cannot weaken the safe
+defaults. The `id` is what appears in the redaction placeholder and in the
+audit reason, so keep it stable.
+
+A `secretPatterns` block is refused outright if any pattern has a blank or
+unusable `id`, an `id` that collides with a built-in or with an earlier
+configured pattern, a blank or oversized `source`, an unparseable regex, an
+unknown flag, the sticky `y` flag, or a source that matches the empty string or
+any single arbitrary character. Those last cases, which include `.+` and
+`[\s\S]`, would redact the whole tool output rather than a credential inside
+it. A refused block is a policy load failure, so under the default
+`denyOnPolicyError` the plugin denies requests until it is fixed rather than
+running with redaction quietly disabled. Note that a policy file which fails to
+compile is discarded whole, so a `denyOnPolicyError: false` inside that same
+file is not read.
+
+`getPolicyStatus` reports `secretPatternIds`, the merged id list. Pattern
+sources are never reported, and neither is any matched value.
+
+**Limits.** Configured patterns run against every tool output, and AGT does not
+analyze their complexity, so a catastrophically backtracking regex is the
+operator's to avoid. The checks above reject the simplest runaway sources but
+not the class: `(x+x+)+y` passes them and still takes seconds on 28 characters.
+At most 64 patterns are accepted, each with a source of at most 1000
+characters. This matches the existing `pathPatterns`, `urlPatterns`,
+`commandPatterns` and `poisoningPatterns` keys, which already accept arbitrary
+operator regexes. Redaction also stays deliberately conservative: it catches
+known credential shapes, not every secret, so a high-entropy value with no
+recognizable prefix passes through.
+
 ### Positive command and URL allowlists
 
 Positive allowlist gates are opt-in. Set the relevant default effect to `deny`
@@ -403,9 +476,9 @@ if a latch needs to outlive it.
   `review`, this plugin marks the args with `__agt_review_reason` and lets
   OpenCode's normal permission flow run. Operators who want hard-deny behaviour
   on review should set `toolPolicies.defaultEffect: "deny"` in their policy.
-- Output redaction is conservative: only well-known credential patterns are
-  redacted. The audit entry records that a redaction occurred but never the
-  redacted value.
+- Output redaction is conservative: only well-known credential patterns and any
+  patterns you add via `secretPatterns` are redacted. The audit entry records
+  which pattern ids matched but never the redacted value.
 - AGT fails **closed** by default. If the policy file is corrupt or evaluation
   throws, requests are denied. Set `denyOnPolicyError: false` in policy to opt
   into advisory mode.

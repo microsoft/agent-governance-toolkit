@@ -84,7 +84,9 @@ class CostOptimizer:
                 continue
             estimates.append(self.estimate_cost(model, task))
 
-        estimates.sort(key=lambda e: e.estimated_cost)
+        # At equal cost, recommend the highest quality first, as
+        # pareto_frontier does.
+        estimates.sort(key=lambda e: (e.estimated_cost, -e.estimated_quality))
 
         if estimates:
             estimates[0].is_optimal = True

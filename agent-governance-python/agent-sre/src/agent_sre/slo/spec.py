@@ -121,9 +121,11 @@ def resolve_inheritance(specs: list[SLOSpec]) -> list[SLOSpec]:
 
         parent = _resolve(by_name[parent_name])
 
-        # Merge: child overrides parent; use parent for fields the child left default
+        # Merge: child overrides parent; use parent for fields the child left default.
+        # exclude_unset drops the child's defaults (target=99.0, window="30d", an
+        # empty error_budget_policy, ...) so they do not overwrite the parent's values.
         parent_data = parent.model_dump(exclude_none=True)
-        child_data = spec.model_dump(exclude_none=True)
+        child_data = spec.model_dump(exclude_none=True, exclude_unset=True)
 
         # Remove inheritance marker from merged result
         merged = {**parent_data, **child_data}

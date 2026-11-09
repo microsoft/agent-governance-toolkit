@@ -52,6 +52,10 @@ spec:
     - name: canary-5
       weight: 0.05
       durationSeconds: 3600
+      analysis:
+        - metric: task_success_rate
+          threshold: 0.99
+          comparator: gte
     - name: canary-50
       weight: 0.50
       durationSeconds: 7200

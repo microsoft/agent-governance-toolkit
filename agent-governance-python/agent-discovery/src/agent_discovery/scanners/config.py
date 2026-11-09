@@ -46,14 +46,16 @@ CONFIG_PATTERNS: list[dict[str, Any]] = [
     {"glob": "copilot-setup-steps.yml", "type": "copilot-agent", "confidence": 0.80},
 ]
 
-# Patterns in Docker/Compose files that suggest agent containers
-DOCKER_AGENT_PATTERNS = [
-    re.compile(r"langchain|langgraph", re.IGNORECASE),
-    re.compile(r"crewai", re.IGNORECASE),
-    re.compile(r"autogen", re.IGNORECASE),
-    re.compile(r"agentmesh|agent.governance", re.IGNORECASE),
-    re.compile(r"mcp[_-]server", re.IGNORECASE),
-    re.compile(r"semantic[_-]kernel", re.IGNORECASE),
+# Patterns in Docker/Compose files that suggest agent containers, with the
+# agent type each one reports. The types match the other scanners, so risk
+# scoring and reconciliation treat a container the same way as a process.
+DOCKER_AGENT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"langchain|langgraph", re.IGNORECASE), "langchain"),
+    (re.compile(r"crewai", re.IGNORECASE), "crewai"),
+    (re.compile(r"autogen", re.IGNORECASE), "autogen"),
+    (re.compile(r"agentmesh|agent.governance", re.IGNORECASE), "agt"),
+    (re.compile(r"mcp[_-]server", re.IGNORECASE), "mcp-server"),
+    (re.compile(r"semantic[_-]kernel", re.IGNORECASE), "semantic-kernel"),
 ]
 
 # Directories to skip (safe default excludes)
@@ -186,7 +188,7 @@ class ConfigScanner(BaseScanner):
                         content = full_path.read_text(encoding="utf-8", errors="replace")[
                             :MAX_FILE_READ_BYTES
                         ]
-                        for pattern in DOCKER_AGENT_PATTERNS:
+                        for pattern, agent_type in DOCKER_AGENT_PATTERNS:
                             match = pattern.search(content)
                             if match:
                                 merge_keys = {
@@ -198,7 +200,7 @@ class ConfigScanner(BaseScanner):
                                 agent = DiscoveredAgent(
                                     fingerprint=fingerprint,
                                     name=f"Containerized agent at {rel_dir / filename}",
-                                    agent_type=match.group(0).lower(),
+                                    agent_type=agent_type,
                                     description=(
                                         f"Agent reference in {filename}: '{match.group(0)}'"
                                     ),

@@ -62,16 +62,42 @@ _DEP_FILES = {"requirements.txt", "pyproject.toml", "package.json"}
 AGENT_DEPENDENCIES = [
     {"pattern": "langchain", "type": "langchain", "confidence": 0.70},
     {"pattern": "crewai", "type": "crewai", "confidence": 0.75},
-    {"pattern": "autogen", "type": "autogen", "confidence": 0.70},
+    {"pattern": "autogen", "type": "autogen", "confidence": 0.70, "aliases": ["pyautogen"]},
     {"pattern": "openai-agents", "type": "openai-agents", "confidence": 0.70},
     {"pattern": "semantic-kernel", "type": "semantic-kernel", "confidence": 0.70},
     {"pattern": "agent-os-kernel", "type": "agt", "confidence": 0.85},
     {"pattern": "agentmesh-platform", "type": "agt", "confidence": 0.85},
-    {"pattern": "llamaindex", "type": "llamaindex", "confidence": 0.70},
+    {
+        "pattern": "llamaindex",
+        "type": "llamaindex",
+        "confidence": 0.70,
+        "aliases": ["llama-index"],
+    },
     {"pattern": "pydantic-ai", "type": "pydantic-ai", "confidence": 0.70},
     {"pattern": "google-adk", "type": "google-adk", "confidence": 0.70},
     {"pattern": "mcp", "type": "mcp-server", "confidence": 0.60},
 ]
+
+
+def _dependency_regex(dep: dict[str, Any]) -> re.Pattern[str]:
+    """Build the regex that finds *dep* in a lowercased dependency file.
+
+    ``aliases`` lists other published names of the same framework (the
+    PyPI name of LlamaIndex is ``llama-index``; classic AutoGen ships as
+    ``pyautogen``). ``-``, ``_`` and ``.`` are treated as the same
+    separator, as PEP 503 does: inside a name, so ``semantic_kernel``
+    matches ``semantic-kernel``, and around it, so ``langchain_core``
+    matches like ``langchain-core``. The name must not touch another
+    letter or digit, so ``mcpython`` and ``autogenerate`` don't match.
+    """
+    alternatives = []
+    for name in [dep["pattern"], *dep.get("aliases", [])]:
+        parts = re.split(r"[-_.]", name)
+        alternatives.append("[-_.]".join(re.escape(part) for part in parts))
+    return re.compile(rf"(?<![a-z0-9])(?:{'|'.join(alternatives)})(?![a-z0-9])")
+
+
+_DEPENDENCY_REGEXES = [(dep, _dependency_regex(dep)) for dep in AGENT_DEPENDENCIES]
 
 # Rate limit safety margin: pause when remaining requests drop below this
 _RATE_LIMIT_FLOOR = 50
@@ -305,17 +331,16 @@ class GitHubScanner(BaseScanner):
                     "utf-8", errors="replace"
                 )
                 lowered = content.lower()
-                for dep in AGENT_DEPENDENCIES:
-                    pattern = dep["pattern"]
-                    # Use a word-boundary regex so `"mcp"` doesn't
+                for dep, dep_regex in _DEPENDENCY_REGEXES:
+                    # Anchor the name so `"mcp"` doesn't
                     # match `mcpython`, `"autogen"` doesn't match
                     # `cautogen-fork`, etc. Substring matching of
                     # short package names against arbitrary file
                     # content produces false positives at scale; the
-                    # \b anchors prevent name-fragment collisions
+                    # anchors prevent name-fragment collisions
                     # without committing to a full manifest parser
                     # (which would be the structurally-correct fix).
-                    if re.search(rf"\b{re.escape(pattern)}\b", lowered):
+                    if dep_regex.search(lowered):
                         merge_keys = {"repo": repo, "dep": dep["pattern"]}
                         fingerprint = DiscoveredAgent.compute_fingerprint(merge_keys)
 

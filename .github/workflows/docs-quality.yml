@@ -47,6 +47,17 @@ jobs:
       - name: Run frontmatter checker
         run: python scripts/docs/check_frontmatter.py --root . --strict
 
+  owasp-badge:
+    name: OWASP badge matches coverage mapping
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Run OWASP badge checker
+        run: python scripts/docs/check_owasp_badge.py --root .
+
   unit-tests:
     name: Unit tests for docs tooling
     runs-on: ubuntu-latest
@@ -61,4 +72,4 @@ jobs:
             -r agent-governance-python/requirements/ci-docs-test.txt
           pip install --no-cache-dir pytest==8.3.3  # Scorecard: version-pinned (transitive deps)
       - name: Run docs tooling tests
-        run: pytest scripts/tests/test_docs_check_links.py scripts/tests/test_docs_check_frontmatter.py -q
+        run: pytest scripts/tests/test_docs_check_links.py scripts/tests/test_docs_check_frontmatter.py scripts/tests/test_docs_check_owasp_badge.py -q

@@ -239,6 +239,40 @@ class TestDecayOverTime:
         deltas = engine.apply_temporal_decay(now=now)
         assert deltas.get("a", 0) == 0
 
+    def test_agent_without_positive_signal_decays_after_first_pass(self):
+        """An agent that never had a positive signal decays from the first pass on."""
+        engine = NetworkTrustEngine(decay_rate=10.0)
+        engine.set_score("a", 800.0)
+        t0 = time.time()
+        assert engine.apply_temporal_decay(now=t0).get("a", 0) == 0
+
+        deltas = engine.apply_temporal_decay(now=t0 + 3600)
+        assert deltas["a"] == pytest.approx(-10.0)
+        assert engine.get_score("a") == pytest.approx(790.0)
+
+        engine.apply_temporal_decay(now=t0 + 7200)
+        assert engine.get_score("a") == pytest.approx(780.0)
+
+    def test_agent_hit_by_trust_event_decays_without_positive_signal(self):
+        """Scores created by a trust event alone are not exempt from decay."""
+        engine = NetworkTrustEngine(decay_rate=10.0)
+        engine.process_trust_event(
+            TrustEvent(agent_did="a", event_type="policy_violation", severity_weight=0.1)
+        )
+        t0 = time.time()
+        engine.apply_temporal_decay(now=t0)
+        engine.apply_temporal_decay(now=t0 + 3 * 3600)
+        assert engine.get_score("a") == pytest.approx(460.0)
+
+    def test_positive_signal_after_first_pass_restarts_the_clock(self):
+        engine = NetworkTrustEngine(decay_rate=10.0)
+        engine.set_score("a", 800.0)
+        t0 = time.time()
+        engine.apply_temporal_decay(now=t0)
+        engine._last_positive["a"] = t0 + 1800
+        deltas = engine.apply_temporal_decay(now=t0 + 3600)
+        assert deltas["a"] == pytest.approx(-5.0)
+
     def test_successive_decay_applications(self):
         """Calling apply_temporal_decay multiple times accumulates decay."""
         engine = NetworkTrustEngine(decay_rate=10.0)

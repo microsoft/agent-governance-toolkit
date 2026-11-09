@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import ntpath
+import random
 import re
 import shutil
+import string
 import subprocess
 import threading
 from pathlib import Path
@@ -814,6 +816,92 @@ class TestSandboxStateManager:
         provider.restore_state('a1', h.session_id, 'cp1')
         last_call = provider._create_container.call_args
         assert last_call.kwargs.get('image') == 'agent-sandbox-a1:cp1'
+
+    # Repository name grammar from the distribution reference spec: lowercase
+    # path components joined by "/", each made of alphanumerics joined by
+    # ".", "_", "__" or runs of "-".
+    _REPO_RE = re.compile(r'^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*$')
+
+    @pytest.mark.parametrize('agent_id', ['Agent-1', 'agent-', 'agent_', 'a..b', 'a.-b', 'A'])
+    def test_checkpoint_repository_is_valid_for_any_agent_id(self, docker_provider, agent_id):
+        """agent_id accepts uppercase letters and leading, trailing or repeated
+        separators, which an image repository cannot hold, so the checkpoint
+        repository used to be agent-sandbox-<agent_id> and docker commit
+        rejected it."""
+        h = docker_provider.create_session(agent_id)
+        cp = docker_provider.save_state(agent_id, h.session_id, 'cp1')
+        repo = docker_provider._containers[agent_id, h.session_id].commit.call_args[1]['repository']
+        assert self._REPO_RE.match(repo), repo
+        assert len(repo) <= 255
+        assert cp.image_tag == f'{repo}:cp1'
+
+        docker_provider._client.images.get.return_value = MagicMock()
+        docker_provider.restore_state(agent_id, h.session_id, 'cp1')
+        assert docker_provider._create_container.call_args.kwargs.get('image') == f'{repo}:cp1'
+
+        docker_provider.list_checkpoints(agent_id)
+        assert docker_provider._client.images.list.call_args.kwargs == {'name': repo}
+        docker_provider.delete_checkpoint(agent_id, 'cp1')
+        docker_provider._client.images.remove.assert_called_with(image=f'{repo}:cp1', force=True)
+
+    def test_checkpoint_repositories_differ_for_ids_differing_in_case(self, docker_provider):
+        repos = set()
+        for agent_id in ('agent', 'Agent', 'AGENT'):
+            h = docker_provider.create_session(agent_id)
+            docker_provider.save_state(agent_id, h.session_id, 'cp1')
+            repos.add(docker_provider._containers[agent_id, h.session_id].commit.call_args[1]['repository'])
+        assert 'agent-sandbox-agent' in repos
+        assert len(repos) == 3
+
+    def test_checkpoint_repository_for_long_agent_id(self, docker_provider):
+        # 55 escaped characters is the most a 128-character id can carry
+        # within Docker's 255-character repository limit.
+        agent_id = 'A' * 55 + 'a' * 73
+        h = docker_provider.create_session(agent_id)
+        docker_provider.save_state(agent_id, h.session_id, 'cp1')
+        repo = docker_provider._containers[agent_id, h.session_id].commit.call_args[1]['repository']
+        assert self._REPO_RE.match(repo), repo
+        assert len(repo) <= 255
+
+    def test_checkpoint_repository_too_long_raises_before_commit(self, docker_provider):
+        agent_id = 'A' * 128
+        h = docker_provider.create_session(agent_id)
+        with pytest.raises(ValueError, match="limit of 255"):
+            docker_provider.save_state(agent_id, h.session_id, 'cp1')
+        docker_provider._containers[agent_id, h.session_id].commit.assert_not_called()
+
+    @staticmethod
+    def _decode_repo(repo):
+        """Read the agent id back from a checkpoint repository name."""
+        if not repo.startswith('agent-sandbox/id'):
+            return repo[len('agent-sandbox-'):]
+        encoded = repo[len('agent-sandbox/id'):]
+        chars, i = [], 0
+        while i < len(encoded):
+            if encoded[i] == '_':
+                chars.append(chr(int(encoded[i + 1:i + 3], 16)))
+                i += 3
+            else:
+                chars.append(encoded[i])
+                i += 1
+        return ''.join(chars)
+
+    def test_checkpoint_repository_encoding_is_reversible(self):
+        from agent_sandbox.docker_provider.state import SandboxStateManager
+
+        rng = random.Random(4370)
+        alphabet = string.ascii_letters + string.digits + '_.-'
+        ids = {'agent', 'Agent', 'AGENT', 'a-b', 'a_b', 'a.b', 'a--b', 'a-.b', 'a._b', 'agent-', 'id', 'Id', '_5f', 'a_41'}
+        for _ in range(5000):
+            length = rng.randint(1, 40)
+            ids.add(rng.choice(string.ascii_letters + string.digits) + ''.join(rng.choice(alphabet) for _ in range(length - 1)))
+        repos = {}
+        for agent_id in ids:
+            repo = SandboxStateManager._repo_name(agent_id)
+            assert self._REPO_RE.match(repo), (agent_id, repo)
+            assert self._decode_repo(repo) == agent_id, (agent_id, repo)
+            assert repo not in repos, (agent_id, repos.get(repo), repo)
+            repos[repo] = agent_id
 
 class TestMultiSessionIsolation:
 

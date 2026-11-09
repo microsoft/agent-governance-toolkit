@@ -265,9 +265,12 @@ class FlightRecorderEmitter:
             store: Agent-Lightning LightningStore instance
 
         Returns:
-            Number of spans emitted
+            Number of spans the store accepted. Spans whose emission
+            raised, and all spans when the store has no recognised span
+            emitter, are not counted.
         """
         spans = self.get_spans()
+        emitted = 0
 
         for span in spans:
             try:
@@ -280,9 +283,11 @@ class FlightRecorderEmitter:
                     break
             except Exception as e:
                 logger.error(f"Failed to emit span: {e}")
+            else:
+                emitted += 1
 
-        logger.info(f"Emitted {len(spans)} spans to LightningStore")
-        return len(spans)
+        logger.info(f"Emitted {emitted} of {len(spans)} spans to LightningStore")
+        return emitted
 
     def export_to_file(self, filepath: str) -> int:
         """
@@ -309,7 +314,13 @@ class FlightRecorderEmitter:
         Returns:
             Summary dictionary with violation statistics
         """
-        spans = self.get_spans()
+        # Convert directly instead of calling get_spans(): a summary does not
+        # emit anything, so it must not add to emitted_count.
+        spans = [
+            span
+            for entry in self._get_entries()
+            if (span := self._convert_entry(entry))
+        ]
 
         violations = [
             s for s in spans if s.attributes.get("agent_os.policy_violated", False)

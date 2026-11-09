@@ -10,6 +10,7 @@ import pytest
 
 from agent_learning_gov import (
     CostPolicyEvaluation,
+    ExcessivePrivilegeEvaluation,
     GovernanceEvaluationPack,
     GovernanceOutcome,
     GovernanceTelemetry,
@@ -88,6 +89,46 @@ def test_pack_reports_tools_privilege_restrictions_and_cost() -> None:
         "policy_regression",
     }
     assert len(report.findings) >= 5
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"privilege": None, "role": "admin"},
+        {"privilege": "user", "role": "admin"},
+        {"scopes": ["read"], "permissions": ["*"]},
+        {"scopes": [], "permissions": ["root"]},
+    ],
+)
+def test_excessive_privilege_checks_role_and_permissions(parameters) -> None:
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("grant", **parameters)), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert [finding.action_id for finding in result.findings] == ["grant"]
+
+
+def test_excessive_privilege_counts_scopes_and_permissions_together() -> None:
+    evaluation = ExcessivePrivilegeEvaluation(max_scopes=3)
+    result = evaluation.evaluate(
+        _policy(_action("grant", scopes=["a", "b"], permissions=["c", "d"])),
+        episodes=(),
+        baseline=None,
+    )
+
+    assert result.passed == False
+    assert result.findings[0].metadata == {"scope_count": 4}
+
+
+def test_excessive_privilege_passes_unprivileged_role_and_permissions() -> None:
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("search", privilege=None, role="user", permissions=["read"])),
+        episodes=(),
+        baseline=None,
+    )
+
+    assert result.passed == True
 
 
 def test_regression_check_uses_approved_baseline() -> None:

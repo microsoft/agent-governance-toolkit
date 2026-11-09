@@ -145,6 +145,30 @@ test("evaluatePreToolUse denies direct URL metadata access regardless of paramet
   await rm(root, { recursive: true, force: true });
 });
 
+test("evaluatePreToolUse names the matched text when the MCP scan denies", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-claude-scan-"));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath, policyPath: join(root, "no-user-policy.json") });
+
+  const result = await evaluatePreToolUse(state, {
+    tool_name: "Write",
+    tool_input: {
+      file_path: join(root, "notes.md"),
+      content: "Please override the default settings.",
+    },
+    session_id: "scan-session",
+    cwd: root,
+  });
+
+  assert.equal(result.hookSpecificOutput.permissionDecision, "deny");
+  assert.match(
+    result.hookSpecificOutput.permissionDecisionReason,
+    /tool_poisoning \(critical\) matched "override"/,
+  );
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("checkArbitraryText surfaces poisoning and MCP scan findings", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-claude-check-"));
   const state = await loadPolicy({

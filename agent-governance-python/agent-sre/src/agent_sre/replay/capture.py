@@ -121,8 +121,14 @@ class Span:
 
 # Patterns for PII/credential redaction (basic regex: passwords, emails, phones)
 _REDACT_PATTERNS = [
-    (re.compile(r'"(password|secret|token|api_key|apikey|authorization)":\s*"[^"]*"', re.I),
-     r'"\1": "[REDACTED]"'),
+    # The value is matched as a whole JSON string, escaped quotes included, so a
+    # secret containing '"' is replaced entirely and the JSON stays valid.
+    (
+        re.compile(
+            r'"(password|secret|token|api_key|apikey|authorization)":\s*"(?:[^"\\]|\\.)*"', re.I
+        ),
+        r'"\1": "[REDACTED]"',
+    ),
     (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
      "[EMAIL_REDACTED]"),
     (re.compile(r'\b(?:\+?1[-.\s])?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b'),

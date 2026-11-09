@@ -506,7 +506,10 @@ function createMcpInvocationBackend(policy, scanner) {
         backend: "agt-mcp-scan",
         decision: decisionFromSeverity(policy.mode, getHighestThreatSeverity(result.threats)),
         reason: `MCP/tool scan flagged ${result.threats.length} threat(s) for ${toolName}: ${result.threats
-          .map((threat) => `${threat.type} (${threat.severity})`)
+          .map((threat) => {
+            const label = `${threat.type} (${threat.severity})`;
+            return threat.evidence ? `${label} matched ${JSON.stringify(threat.evidence)}` : label;
+          })
           .join(", ")}.`,
       };
     },

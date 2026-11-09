@@ -275,6 +275,52 @@ public sealed class McpGovernanceExtensionsTests
     }
 
     [Fact]
+    public async Task WithGovernance_DeniesAuthenticatedPrincipal_WhoseIdentifierIsNotADid()
+    {
+        var policyPath = CreatePolicyFile(
+            """
+            apiVersion: governance.toolkit/v1
+            version: "1.0"
+            name: non-did-principal-policy
+            default_action: allow
+            rules:
+              - name: allow-echo
+                condition: "tool_name == 'echo'"
+                action: allow
+                priority: 10
+            """);
+
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddMcpServer()
+                .WithGovernance(options => options.PolicyPaths.Add(policyPath));
+            services.AddSingleton<McpServerTool>(new TestTool("echo", "Echoes the provided message", _ => "should not execute"));
+
+            using var serviceProvider = services.BuildServiceProvider();
+            var options = serviceProvider.GetRequiredService<IOptions<McpServerOptions>>().Value;
+            var tool = Assert.Single(options.ToolCollection!);
+            var context = CreateRequestContext(serviceProvider, "echo");
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "user@example.com")
+                ],
+                authenticationType: "test"));
+
+            var result = await tool.InvokeAsync(context);
+            var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
+            Assert.True(result.IsError);
+            Assert.Contains("not a DID", text.Text, StringComparison.Ordinal);
+            Assert.Contains("AgentIdResolver", text.Text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(policyPath);
+        }
+    }
+
+    [Fact]
     public async Task WithGovernance_AllowsAnonymousFallback_WhenExplicitlyEnabled()
     {
         var policyPath = CreatePolicyFile(

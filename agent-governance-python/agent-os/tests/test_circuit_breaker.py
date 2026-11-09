@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Tests for CircuitBreaker state transitions and call protection."""
 
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock
 
@@ -127,3 +129,30 @@ class TestCircuitBreakerCall:
 
         with pytest.raises(CircuitBreakerOpen):
             await cb.call(AsyncMock())
+
+
+@pytest.mark.parametrize("module", ["agent_os.circuit_breaker", "agent_os._circuit_breaker_impl"])
+@pytest.mark.asyncio
+async def test_cancelled_half_open_probe_frees_its_slot(module):
+    """A cancelled HALF_OPEN probe must not leave the breaker rejecting every call."""
+    impl = pytest.importorskip(module)
+    cb = impl.CircuitBreaker(
+        impl.CircuitBreakerConfig(
+            failure_threshold=1, reset_timeout_seconds=0, half_open_max_calls=1
+        )
+    )
+    cb.record_failure()
+    assert cb.get_state() is impl.CircuitState.HALF_OPEN
+
+    async def hang():
+        await asyncio.sleep(10)
+
+    probe = asyncio.ensure_future(cb.call(hang))
+    await asyncio.sleep(0)
+    probe.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await probe
+
+    assert cb.get_state() is impl.CircuitState.HALF_OPEN
+    assert await cb.call(AsyncMock(return_value="recovered")) == "recovered"
+    assert cb.get_state() is impl.CircuitState.CLOSED

@@ -41,6 +41,11 @@ const MAX_AUDIT_FAILURE_REASON_LENGTH = 256;
 const MIN_AUDIT_HMAC_KEY_BYTES = 32;
 /** Bounds on the principal subject and issuer recorded in an audit entry. */
 const MAX_PRINCIPAL_FIELD_LENGTH = 256;
+/** Bounds on operator-supplied secret patterns. These run on every tool output. */
+export const MAX_SECRET_PATTERNS = 64;
+const MAX_SECRET_PATTERN_SOURCE_LENGTH = 1000;
+/** Pattern ids appear in audit entries and in redaction placeholders. */
+const SECRET_PATTERN_ID_SHAPE = /^[A-Za-z0-9._-]{1,64}$/;
 const DEFAULT_MIN_PROMPT_DEFENSE_GRADE = "B";
 const SUPPORTED_POLICY_SCHEMA_VERSION = 1;
 const DEFAULT_TOOL_EFFECT = "allow";
@@ -404,6 +409,10 @@ export async function getPolicyStatus(state) {
     promptDefenseBlockingScope: "effective-context",
     promptDefenseMissing: state.promptDefenseReport.missing,
     schemaVersion: state.policy.schemaVersion,
+    // Identifiers only. Pattern sources and matched values are never reported.
+    secretPatternIds: resolveSecretPatterns(state)
+      .map((pattern) => pattern.id)
+      .sort(),
     sdkPath: state.sdkPath,
     sdkSource: state.sdkSource,
     source: state.source,
@@ -864,6 +873,7 @@ export function compilePolicy(raw) {
     policyDocument: raw?.policyDocument,
     raw,
     schemaVersion: normalizeSchemaVersion(raw?.schemaVersion),
+    secretPatterns: compileSecretPatterns(raw?.secretPatterns),
     toolPolicies: {
       allowedTools,
       blockedTools: toStringArray(raw?.toolPolicies?.blockedTools),
@@ -969,6 +979,102 @@ function compilePoisoningPattern(pattern, index) {
     pattern: pattern.source,
     severity: normalizeSeverity(pattern.severity),
   };
+}
+
+/**
+ * Compiles operator-supplied secret patterns. These merge with the built-ins
+ * rather than replacing them, so a policy file cannot weaken the safe defaults.
+ *
+ * Throwing here is deliberate. compilePolicy already throws for a bad
+ * pathPatterns regex, loadPolicy records that as configuredPolicyError, and
+ * enforce mode denies on a policy load failure. So a malformed block fails
+ * closed instead of quietly running with redaction disabled.
+ */
+function compileSecretPatterns(raw) {
+  if (raw === undefined || raw === null) {
+    return [];
+  }
+  if (!Array.isArray(raw)) {
+    throw new Error("Invalid secretPatterns: expected an array.");
+  }
+  if (raw.length > MAX_SECRET_PATTERNS) {
+    throw new Error(
+      `Invalid secretPatterns: ${raw.length} patterns exceeds the limit of ${MAX_SECRET_PATTERNS}.`,
+    );
+  }
+
+  const seenIds = new Set();
+  return raw.map((pattern, index) => {
+    const label = `secretPatterns[${index}]`;
+    const id = typeof pattern?.id === "string" ? pattern.id.trim() : "";
+    if (!SECRET_PATTERN_ID_SHAPE.test(id)) {
+      throw new Error(
+        `Invalid ${label}: id must match ${SECRET_PATTERN_ID_SHAPE.source}.`,
+      );
+    }
+    if (BUILTIN_SECRET_PATTERN_IDS.has(id)) {
+      throw new Error(`Invalid ${label}: id "${id}" is reserved by a built-in pattern.`);
+    }
+    if (seenIds.has(id)) {
+      throw new Error(`Invalid ${label}: duplicate id "${id}".`);
+    }
+    seenIds.add(id);
+
+    const source = typeof pattern?.source === "string" ? pattern.source : "";
+    if (!source.trim()) {
+      throw new Error(`Invalid ${label}: missing regex source.`);
+    }
+    if (source.length > MAX_SECRET_PATTERN_SOURCE_LENGTH) {
+      throw new Error(
+        `Invalid ${label}: regex source exceeds ${MAX_SECRET_PATTERN_SOURCE_LENGTH} characters.`,
+      );
+    }
+
+    const flags = typeof pattern?.flags === "string" ? pattern.flags : "";
+    if (flags.includes("y")) {
+      // Sticky anchors every attempt to lastIndex, which silently breaks the
+      // replace pass that performs the redaction.
+      throw new Error(`Invalid ${label}: the sticky "y" flag is not supported.`);
+    }
+
+    // An unparseable source or an unknown flag throws here. Relabel it so the
+    // operator learns which pattern is at fault, not just that a regex is bad.
+    let regex;
+    try {
+      regex = new RegExp(source, flags.includes("g") ? flags : `${flags}g`);
+    } catch (error) {
+      throw new Error(
+        `Invalid ${label}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    // A pattern that matches the empty string or any single arbitrary
+    // character matches almost everywhere, so it would redact the whole tool
+    // output rather than a credential inside it. Probing the empty string
+    // alone lets `.+` and `[\s\S]` through, so probe a character and a
+    // newline too.
+    for (const probe of ["", "a", "\n"]) {
+      regex.lastIndex = 0;
+      if (regex.test(probe)) {
+        throw new Error(
+          `Invalid ${label}: pattern matches ${
+            probe === "" ? "the empty string" : "a single arbitrary character"
+          }.`,
+        );
+      }
+    }
+    regex.lastIndex = 0;
+
+    // Deliberately no complexity guard. The probes above happen to reject the
+    // simplest catastrophic sources, but not the class: `(x+x+)+y` passes them
+    // and still takes seconds on 28 characters of hostile tool output, and
+    // these patterns run on every tool result. That risk is accepted rather
+    // than overlooked. The policy file already takes arbitrary operator regexes
+    // in pathPatterns, urlPatterns, commandPatterns and poisoningPatterns, so
+    // this key adds no new trust boundary, and the count and source-length caps
+    // above bound the blast radius. Revisit together with those keys, not alone.
+
+    return { id, regex };
+  });
 }
 
 function compileRegexPattern(pattern, label) {
@@ -1939,7 +2045,8 @@ export async function evaluateOpenCodeToolOutput(state, input = {}) {
     return { redact: false, reason: "" };
   }
 
-  const findings = scanForSecretLikeContent(text);
+  const patterns = resolveSecretPatterns(state);
+  const findings = scanForSecretLikeContent(text, patterns);
   await recordAudit(state, {
     action: `tool.${String(input.tool ?? "unknown")}.output`,
     decision: findings.length ? "review" : "allow",
@@ -1957,7 +2064,7 @@ export async function evaluateOpenCodeToolOutput(state, input = {}) {
 
   return {
     redact: true,
-    redactedOutput: redactSecretLikeContent(text, findings),
+    redactedOutput: redactSecretLikeContent(text, findings, patterns),
     reason: `AGT redacted tool output: ${describeSecretFindings(findings)}`,
   };
 }
@@ -1983,7 +2090,37 @@ const SECRET_PATTERNS = [
   { id: "azure-account-key", regex: /\bAccountKey=[A-Za-z0-9+/=]{40,}\b/g },
   { id: "private-key-block", ranges: privateKeyBlockRanges },
   { id: "jwt-token", regex: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
+  // Each pattern below is anchored on a vendor prefix with a length floor, so
+  // ordinary source, diffs and prose do not match.
+  { id: "slack-token", regex: /\bxox[abeprs]-[A-Za-z0-9-]{10,}\b/g },
+  {
+    id: "slack-webhook",
+    regex: /https:\/\/hooks\.slack\.com\/services\/T[A-Za-z0-9_]+\/B[A-Za-z0-9_]+\/[A-Za-z0-9_]{16,}/g,
+  },
+  // ghp_ is already covered by github-token above, so it is excluded here.
+  { id: "github-app-token", regex: /\bgh[orsu]_[A-Za-z0-9]{36,}\b/g },
+  { id: "npm-token", regex: /\bnpm_[A-Za-z0-9]{36}\b/g },
+  { id: "google-api-key", regex: /\bAIza[A-Za-z0-9_-]{35}\b/g },
+  { id: "atlassian-token", regex: /\bATATT3x[A-Za-z0-9_\-=]{64,}\b/g },
+  {
+    // Requires a non-empty password and a known scheme. A credential-free URI
+    // such as postgres://localhost:5432/db is left alone.
+    id: "db-connection-string",
+    regex:
+      /\b(?:postgres|postgresql|mysql|mongodb\+srv|mongodb|redis|rediss|amqp|amqps|mssql):\/\/[^\s:@/]+:[^\s:@/]+@[^\s/]+/g,
+  },
 ];
+
+const BUILTIN_SECRET_PATTERN_IDS = new Set(SECRET_PATTERNS.map((pattern) => pattern.id));
+
+/**
+ * The patterns in force for a load: built-ins first, then any configured ones.
+ * @param {object} state Loaded policy state from {@link loadPolicy}.
+ */
+function resolveSecretPatterns(state) {
+  const configured = state?.policy?.secretPatterns ?? [];
+  return configured.length ? [...SECRET_PATTERNS, ...configured] : SECRET_PATTERNS;
+}
 
 function privateKeyBlockRanges(text) {
   // Scan delimiters once. Retrying a whole-body regex at every unmatched BEGIN
@@ -2004,9 +2141,9 @@ function privateKeyBlockRanges(text) {
   return ranges;
 }
 
-function scanForSecretLikeContent(text) {
+function scanForSecretLikeContent(text, patterns = SECRET_PATTERNS) {
   const hits = [];
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of patterns) {
     if (pattern.ranges) {
       if (pattern.ranges(text).length) hits.push(pattern.id);
       continue;
@@ -2019,9 +2156,9 @@ function scanForSecretLikeContent(text) {
   return hits;
 }
 
-function redactSecretLikeContent(text, _findings) {
+function redactSecretLikeContent(text, _findings, patterns = SECRET_PATTERNS) {
   let redacted = text;
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of patterns) {
     if (pattern.ranges) {
       const chunks = [];
       let cursor = 0;

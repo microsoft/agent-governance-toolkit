@@ -4,7 +4,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import pytest
+import yaml
 
 from agent_sre.k8s import (
     CRD_GROUP,
@@ -18,6 +22,51 @@ from agent_sre.k8s import (
     ResourceStatus,
     generate_crd_manifest,
 )
+
+HELM_CRD = Path(__file__).resolve().parents[1] / "deployments/helm/agent-sre/templates/crd.yaml"
+
+
+def _prune(value: Any, schema: dict[str, Any]) -> Any:
+    """Drop the fields a structural CRD schema does not declare, as the API server does."""
+    if isinstance(value, dict) and "properties" in schema:
+        return {
+            k: _prune(v, schema["properties"][k])
+            for k, v in value.items()
+            if k in schema["properties"]
+        }
+    if isinstance(value, list) and "items" in schema:
+        return [_prune(v, schema["items"]) for v in value]
+    return value
+
+
+_JSON_TYPES = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "boolean": bool,
+    "integer": int,
+    "number": (int, float),
+}
+
+
+def _type_errors(value: Any, schema: dict[str, Any], path: str = "") -> list[str]:
+    """List the values whose JSON type does not match the schema, as the API server checks."""
+    expected = schema.get("type")
+    if expected and (
+        not isinstance(value, _JSON_TYPES[expected])
+        or (isinstance(value, bool) and expected != "boolean")
+    ):
+        return [f"{path or '.'}: {type(value).__name__} is not {expected}"]
+    errors: list[str] = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if k in schema.get("properties", {}):
+                errors += _type_errors(v, schema["properties"][k], f"{path}.{k}")
+    elif isinstance(value, list) and "items" in schema:
+        for i, v in enumerate(value):
+            errors += _type_errors(v, schema["items"], f"{path}[{i}]")
+    return errors
+
 
 # ---------------------------------------------------------------------------
 # CRD manifest
@@ -46,6 +95,26 @@ class TestCRDManifest:
         assert "strategy" in spec_props
         assert "candidate" in spec_props
         assert "steps" in spec_props
+
+    def test_crd_keeps_step_analysis_criteria(self):
+        crd = generate_crd_manifest()
+        schema = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+        step = schema["properties"]["spec"]["properties"]["steps"]["items"]
+        criterion = step["properties"]["analysis"]["items"]
+        assert set(criterion["properties"]) == {"metric", "threshold", "comparator"}
+        assert criterion["properties"]["comparator"]["enum"] == ["gte", "lte", "eq"]
+
+    def test_helm_chart_crd_schema_matches_generated_schema(self):
+        text = "\n".join(
+            line for line in HELM_CRD.read_text(encoding="utf-8").splitlines()
+            if not line.lstrip().startswith("{{")
+        )
+        chart = yaml.safe_load(text)
+        generated = generate_crd_manifest()
+        assert (
+            chart["spec"]["versions"][0]["schema"]
+            == generated["spec"]["versions"][0]["schema"]
+        )
 
     def test_crd_has_subresources(self):
         crd = generate_crd_manifest()
@@ -117,6 +186,28 @@ class TestResourceStatus:
         assert d["type"] == "Available"
         assert d["status"] == "True"
         assert d["reason"] == "Ready"
+
+    def test_condition_last_transition_time_is_rfc3339(self):
+        c = Condition(
+            ConditionType.AVAILABLE,
+            ConditionStatus.TRUE,
+            last_transition_time=1700000000.75,
+        )
+        assert c.to_dict()["lastTransitionTime"] == "2023-11-14T22:13:20Z"
+
+    def test_status_matches_crd_schema(self):
+        r = Reconciler()
+        result = r.reconcile("my-agent", "default", SAMPLE_SPEC, generation=3)
+        status = result.status.to_dict()
+        schema = generate_crd_manifest()["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+        status_schema = schema["properties"]["status"]
+
+        # Nothing the reconciler reports is pruned on a status update ...
+        assert _prune(status, status_schema) == status
+        assert status["observedGeneration"] == 3
+        assert status["message"].startswith("Rollout started")
+        # ... and every value has the type the schema declares.
+        assert _type_errors(status, status_schema) == []
 
 
 # ---------------------------------------------------------------------------
@@ -319,3 +410,97 @@ class TestSpecParsing:
         }
         result = r.reconcile("analysis", "default", spec)
         assert result.action == ReconcileAction.CREATED
+
+    @pytest.mark.parametrize(
+        ("operator", "metrics"),
+        [
+            ("gte", {"error_rate": 0.5}),
+            ("gt", {"error_rate": 0.5}),
+            ("lte", {"error_rate": 0.01}),
+            ("lt", {"error_rate": 0.01}),
+        ],
+    )
+    def test_every_crd_rollback_operator_triggers_rollback(self, operator, metrics):
+        crd = generate_crd_manifest()
+        schema = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+        conditions = schema["properties"]["spec"]["properties"]["rollbackConditions"]
+        operators = conditions["items"]["properties"]["operator"]["enum"]
+        assert operator in operators
+
+        r = Reconciler()
+        spec = dict(SAMPLE_SPEC)
+        spec["rollbackConditions"] = [
+            {"metric": "error_rate", "threshold": 0.05, "operator": operator},
+        ]
+        r.reconcile("ops", "default", spec)
+        rollout = r.get_rollout("ops", "default")
+        assert rollout is not None
+        assert rollout.check_rollback(metrics) is True
+        assert rollout.state.value == "rolled_back"
+
+    def test_gitops_rollout_spec_round_trips_through_reconciler(self):
+        from agent_sre.delivery.gitops import AgentRef, RolloutSpec
+        from agent_sre.delivery.rollout import (
+            AnalysisCriterion,
+            RollbackCondition,
+            RolloutStep,
+        )
+
+        spec = RolloutSpec(
+            name="gitops",
+            candidate=AgentRef(name="agent", version="v2"),
+            steps=[
+                RolloutStep(
+                    weight=0.1,
+                    duration_seconds=600,
+                    manual_gate=True,
+                    analysis=[AnalysisCriterion("latency_ms", 500.0, comparator="lte")],
+                ),
+                RolloutStep(weight=1.0, duration_seconds=0),
+            ],
+            rollback_conditions=[RollbackCondition("success_rate", 0.9, comparator="lt")],
+        )
+
+        r = Reconciler()
+        result = r.reconcile("gitops", "default", spec.to_dict()["spec"])
+        assert result.action == ReconcileAction.CREATED
+        rollout = r.get_rollout("gitops", "default")
+        assert rollout is not None
+
+        first, last = rollout.steps
+        assert (first.duration_seconds, first.manual_gate) == (600, True)
+        assert (last.duration_seconds, last.manual_gate) == (0, False)
+        assert first.analysis[0].comparator == "lte"
+        assert rollout.analyze_step({"latency_ms": 200.0}) is True
+
+        # A healthy success rate must not trip the "lt 0.9" condition.
+        assert rollout.check_rollback({"success_rate": 0.99}) is False
+        assert rollout.check_rollback({"success_rate": 0.5}) is True
+
+    def test_gitops_step_analysis_survives_crd_pruning(self):
+        from agent_sre.delivery.gitops import AgentRef, RolloutSpec
+        from agent_sre.delivery.rollout import AnalysisCriterion, RolloutStep
+
+        spec = RolloutSpec(
+            name="gitops",
+            candidate=AgentRef(name="agent", version="v2"),
+            steps=[
+                RolloutStep(
+                    weight=0.1,
+                    analysis=[AnalysisCriterion("latency_ms", 500.0, comparator="lte")],
+                ),
+                RolloutStep(weight=1.0),
+            ],
+        )
+        schema = generate_crd_manifest()["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+        stored = _prune(spec.to_dict(), schema)
+
+        r = Reconciler()
+        r.reconcile("gitops", "default", stored["spec"])
+        rollout = r.get_rollout("gitops", "default")
+        assert rollout is not None
+        criteria = rollout.steps[0].analysis
+        assert [(c.metric, c.threshold, c.comparator) for c in criteria] == [
+            ("latency_ms", 500.0, "lte"),
+        ]
+        assert rollout.analyze_step({"latency_ms": 900.0}) is False

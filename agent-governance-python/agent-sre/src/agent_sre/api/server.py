@@ -21,6 +21,19 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+# The request models are used in route signatures, which FastAPI resolves at
+# runtime to find each endpoint's body, so they must not move under
+# TYPE_CHECKING.
+from agent_sre.api.models import (  # noqa: TC001
+    ChaosCreateRequest,
+    CostRecordRequest,
+    FaultInjectRequest,
+    IncidentResolveRequest,
+    RolloutCreateRequest,
+    SignalIngestRequest,
+    SLOCreateRequest,
+    SLOEventRequest,
+)
 from agent_sre.chaos.engine import (
     AbortCondition,
     ChaosExperiment,
@@ -48,17 +61,6 @@ from agent_sre.slo.objectives import SLO, ErrorBudget
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
-
-    from agent_sre.api.models import (
-        ChaosCreateRequest,
-        CostRecordRequest,
-        FaultInjectRequest,
-        IncidentResolveRequest,
-        RolloutCreateRequest,
-        SignalIngestRequest,
-        SLOCreateRequest,
-        SLOEventRequest,
-    )
 
 logger = logging.getLogger(__name__)
 

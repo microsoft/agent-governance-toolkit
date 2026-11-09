@@ -105,10 +105,15 @@ class TraceContext:
         parts = value.split("-")
         if len(parts) != 4:
             raise ValueError(f"Invalid traceparent: {value}")
+        flags = parts[3]
+        if len(flags) != 2 or any(c not in "0123456789abcdefABCDEF" for c in flags):
+            raise ValueError(f"Invalid traceparent: {value}")
         return cls(
             trace_id=parts[1],
             span_id=parts[2],
-            sampled=parts[3] == "01",
+            # W3C Trace Context: "sampled" is bit 0 of the trace-flags byte;
+            # the other bits carry unrelated flags (e.g. random trace ID).
+            sampled=bool(int(flags, 16) & 0x01),
         )
 
     def child(self) -> TraceContext:
@@ -116,6 +121,7 @@ class TraceContext:
         return TraceContext(
             trace_id=self.trace_id,
             parent_span_id=self.span_id,
+            sampled=self.sampled,
             baggage=dict(self.baggage),
         )
 

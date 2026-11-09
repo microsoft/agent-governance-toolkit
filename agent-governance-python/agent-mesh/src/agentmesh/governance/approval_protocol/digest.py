@@ -15,21 +15,25 @@ This module vendors a focused subset of RFC 8785 (no third-party dependency):
   (CPython's ``json.dumps(..., ensure_ascii=False)`` matches JCS string
   escaping: short escapes for ``\\b \\t \\n \\f \\r`` and lowercase ``\\uXXXX``
   for the remaining control characters);
-* integers serialize with no decimal point; finite floats use CPython's
-  shortest round-trip ``repr`` with integer-valued floats normalized to
-  integers; ``NaN``/``Infinity`` are rejected.
+* integers serialize with no decimal point; finite floats serialize as
+  ECMAScript ``Number::toString`` does (RFC 8785 section 3.2.2.3): the
+  shortest round-trip digits, plain notation for decimal exponents from -6
+  through 21 and ``e+N`` / ``e-N`` notation outside it, so ``1e-06`` becomes
+  ``0.000001``, ``1e-07`` becomes ``1e-7`` and ``1e21`` becomes ``1e+21``;
+  ``-0.0`` serializes as ``0``; ``NaN``/``Infinity`` are rejected.
 
-Byte-for-byte parity with non-Python JCS implementations across all float
-magnitudes (full ECMAScript ``Number`` formatting) is tracked as cross-SDK
-parity work (ADR-0030 step 6). Within the Python governance surface the
-serialization is internally consistent, which is exactly what the action-digest
-binding requires: a digest computed here always reproduces here.
+Python ``int`` values serialize exactly. An integer outside the IEEE 754
+double's exact range (above 2**53 in magnitude) therefore has no counterpart
+in a JCS implementation that parses numbers as doubles, so callers that need
+cross-SDK digests should keep integers within that range.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
+from decimal import Decimal
 from typing import Any
 
 __all__ = ["canonicalize", "sha256_jcs", "DIGEST_PREFIX"]
@@ -43,11 +47,33 @@ def _format_number(value: int | float) -> str:
     # ``bool`` is a subclass of ``int``; callers screen it out before here.
     if isinstance(value, int):
         return str(value)
-    if value != value or value in (float("inf"), float("-inf")):
+    if not math.isfinite(value):
         raise ValueError("JCS cannot serialize NaN or Infinity")
-    if value.is_integer():
-        return str(int(value))
-    return repr(value)
+    return _format_double(value)
+
+
+def _format_double(value: float) -> str:
+    """Serialize a finite double as ECMAScript ``Number::toString`` does."""
+    if value == 0:
+        return "0"
+    if value < 0:
+        return "-" + _format_double(-value)
+    # ``repr`` yields the shortest digit string that round-trips, which is the
+    # digit string ECMAScript selects; only the layout differs.
+    sign, digit_tuple, exponent = Decimal(repr(value)).as_tuple()
+    digits = "".join(map(str, digit_tuple)).rstrip("0")
+    exponent += len(digit_tuple) - len(digits)
+    k = len(digits)
+    n = exponent + k  # value == 0.<digits> * 10**n
+    if k <= n <= 21:
+        return digits + "0" * (n - k)
+    if 0 < n <= 21:
+        return digits[:n] + "." + digits[n:]
+    if -6 < n <= 0:
+        return "0." + "0" * (-n) + digits
+    e = n - 1
+    mantissa = digits if k == 1 else digits[0] + "." + digits[1:]
+    return f"{mantissa}e{'+' if e >= 0 else '-'}{abs(e)}"
 
 
 def _utf16_units(key: str) -> bytes:

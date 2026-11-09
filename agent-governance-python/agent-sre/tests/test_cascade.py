@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 import pytest
@@ -144,6 +145,73 @@ class TestCircuitBreakerCall:
 
         # Circuit should now be CLOSED after success.
         assert cb.state == "CLOSED"
+
+    def test_cancelled_half_open_probe_frees_its_slot(self) -> None:
+        cfg = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_seconds=0.0)
+        cb = CircuitBreaker("agent-a", cfg)
+        cb.record_failure()
+        assert cb.state == "HALF_OPEN"
+
+        async def _hang() -> None:
+            await asyncio.sleep(10)
+
+        async def _ok() -> str:
+            return "ok"
+
+        async def scenario() -> str:
+            probe = asyncio.ensure_future(cb.call(_hang))
+            await asyncio.sleep(0)
+            probe.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await probe
+            # Cancellation is neither a success nor a failure.
+            assert cb.state == "HALF_OPEN"
+            return await cb.call(_ok)
+
+        assert asyncio.run(scenario()) == "ok"
+        assert cb.state == "CLOSED"
+
+    def test_interrupted_sync_half_open_probe_frees_its_slot(self) -> None:
+        cfg = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_seconds=0.0)
+        cb = CircuitBreaker("agent-a", cfg)
+        cb.record_failure()
+
+        def _interrupt() -> None:
+            raise KeyboardInterrupt
+
+        with pytest.raises(KeyboardInterrupt):
+            cb.call(_interrupt)
+        assert cb.state == "HALF_OPEN"
+        assert cb.call(_succeed) == "ok"
+        assert cb.state == "CLOSED"
+
+    def test_stale_probe_does_not_free_a_later_half_open_slot(self) -> None:
+        cfg = CircuitBreakerConfig(failure_threshold=1, recovery_timeout_seconds=0.0)
+        cb = CircuitBreaker("agent-a", cfg)
+        cb.record_failure()
+
+        async def _hang() -> None:
+            await asyncio.sleep(10)
+
+        async def scenario() -> None:
+            stale = asyncio.ensure_future(cb.call(_hang))
+            await asyncio.sleep(0)
+            # Another caller reports a failure, and the next HALF_OPEN period
+            # hands its only slot to a new probe.
+            cb.record_failure()
+            current = asyncio.ensure_future(cb.call(_hang))
+            await asyncio.sleep(0)
+            stale.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await stale
+            # The slot belongs to the in-flight probe, so a third call is rejected.
+            with pytest.raises(CircuitOpenError):
+                cb.call(_succeed)
+            current.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await current
+
+        asyncio.run(scenario())
 
 
 # ---------------------------------------------------------------------------

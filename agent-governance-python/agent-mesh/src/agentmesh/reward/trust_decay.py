@@ -241,10 +241,15 @@ class NetworkTrustEngine:
         now = now or time.time()
         deltas: Dict[str, float] = {}
         for agent_did, score in list(self._scores.items()):
+            if agent_did not in self._last_positive and agent_did not in self._last_decay:
+                # No positive signal yet: start the clock at the first decay
+                # pass that sees the agent, so it decays from then on.
+                self._last_decay[agent_did] = now
+                continue
             # Measure from the later of the last positive signal and the last
             # decay pass, so repeated calls don't charge the same hours again.
             last = max(
-                self._last_positive.get(agent_did, now),
+                self._last_positive.get(agent_did, float("-inf")),
                 self._last_decay.get(agent_did, float("-inf")),
             )
             hours_since = (now - last) / 3600

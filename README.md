@@ -1,4 +1,4 @@
-🌍 [English](/README.md) | [Español](./docs/i18n/README.es.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md) | [한국어](./docs/i18n/README.ko.md)
+🌍 [English](/README.md) | [Español](./docs/i18n/README.es.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md) | [한국어](./docs/i18n/README.ko.md) | [繁體中文](./docs/i18n/README.zh-TW.md)
 
 ![Agent Governance Toolkit](docs/assets/readme-banner.svg)
 

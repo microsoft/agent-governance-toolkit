@@ -218,9 +218,13 @@ class AgentSBOM:
         """Export as CycloneDX 1.5 JSON."""
         components: list[dict[str, Any]] = []
         dep_map: dict[str, list[str]] = {}
+        # Relationships are recorded with SPDX IDs; CycloneDX dependencies must
+        # reference the bom-ref of a component (or of the metadata component).
+        bom_refs: dict[str, str] = {self._root_spdx_id: self.agent_id}
 
         for pkg in self.packages:
             bom_ref = f"{pkg.name}@{pkg.version}"
+            bom_refs[pkg.spdx_id] = bom_ref
             components.append(
                 {
                     "type": "library",
@@ -233,7 +237,9 @@ class AgentSBOM:
             )
 
         for rel in self.relationships:
-            dep_map.setdefault(rel.parent_spdx_id, []).append(rel.child_spdx_id)
+            parent = bom_refs.get(rel.parent_spdx_id, rel.parent_spdx_id)
+            child = bom_refs.get(rel.child_spdx_id, rel.child_spdx_id)
+            dep_map.setdefault(parent, []).append(child)
 
         dependencies: list[dict[str, Any]] = []
         for parent, children in dep_map.items():

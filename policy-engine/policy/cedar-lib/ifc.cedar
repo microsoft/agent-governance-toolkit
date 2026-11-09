@@ -5,7 +5,7 @@
 // `policy/lib/agt_ifc.rego`. The Rego library implements the AGT no
 // write down rule against `input.snapshot.input.ifc.source_labels` at
 // the `input` intervention point and against
-// `input.snapshot.response.ifc.result_labels` at the `output`
+// `input.snapshot.ifc.result_labels` at the `output`
 // intervention point per AGT-SNAPSHOT-1.0.md sections 2.2 and 2.7.
 //
 // In the Cedar mirror the lattice closure is precomputed by the host
@@ -53,10 +53,9 @@ forbid (
   resource
 ) when {
   resource has clearance_dominated_labels &&
-  context has response &&
-  context.response has ifc &&
-  context.response.ifc has result_labels &&
-  !(resource.clearance_dominated_labels.containsAll(context.response.ifc.result_labels))
+  context has ifc &&
+  context.ifc has result_labels &&
+  !(resource.clearance_dominated_labels.containsAll(context.ifc.result_labels))
 };
 
 @id("ifc_clearance_violation_empty_input")
@@ -79,8 +78,7 @@ forbid (
   resource
 ) when {
   resource has clearance_dominated_labels &&
-  context has response &&
-  context.response has ifc &&
-  context.response.ifc has result_labels &&
-  context.response.ifc.result_labels.isEmpty()
+  context has ifc &&
+  context.ifc has result_labels &&
+  context.ifc.result_labels.isEmpty()
 };

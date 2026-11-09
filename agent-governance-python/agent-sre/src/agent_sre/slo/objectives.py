@@ -106,7 +106,7 @@ class ErrorBudget:
     def burn_rate(self, window_seconds: int | None = None) -> float:
         """Calculate current burn rate within a time window.
 
-        Burn rate = (actual errors in window / window size) / (budget / total window)
+        Burn rate = error ratio in window / allowed error ratio (``total``)
         A burn rate of 1.0 means consuming budget at exactly the expected rate.
         >1.0 means faster than expected.
         """
@@ -123,11 +123,7 @@ class ErrorBudget:
             return 0.0
 
         actual_error_rate = errors_in_window / total_in_window
-        allowed_error_rate = self.total / max(self.window_seconds, 1)
-        if allowed_error_rate <= 0:
-            return float("inf") if errors_in_window > 0 else 0.0
-
-        return actual_error_rate / allowed_error_rate
+        return actual_error_rate / self.total
 
     def alerts(self) -> list[BurnRateAlert]:
         """Get burn rate alerts (single 24h window)."""

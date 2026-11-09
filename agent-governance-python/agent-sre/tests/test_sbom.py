@@ -190,6 +190,37 @@ class TestCycloneDXFormat:
         names = {c["name"] for c in doc["components"]}
         assert names == {"dep-a", "dep-b"}
 
+    def test_dependencies_reference_bom_refs(self, tmp_path):
+        req = _write_text(tmp_path, "requirements.txt", SAMPLE_REQUIREMENTS)
+        sbom = AgentSBOM.from_requirements("agent-x", "1.0.0", req)
+        doc = sbom.to_cyclonedx()
+
+        known_refs = {doc["metadata"]["component"]["bom-ref"]}
+        known_refs.update(c["bom-ref"] for c in doc["components"])
+        assert doc["dependencies"] == [
+            {
+                "ref": "agent-x",
+                "dependsOn": [
+                    "pydantic@2.4.0",
+                    "pyyaml@>=6.0",
+                    "opentelemetry-api@>=1.20",
+                    "cryptography@42.0.0",
+                ],
+            }
+        ]
+        for dep in doc["dependencies"]:
+            assert dep["ref"] in known_refs
+            assert set(dep["dependsOn"]) <= known_refs
+
+    def test_dependency_between_packages_references_bom_refs(self):
+        sbom = AgentSBOM("agent-x", "1.0.0")
+        dep_a = sbom.add_package("dep-a", "0.1.0")
+        dep_b = sbom.add_package("dep-b", "2.0.0")
+        sbom.add_dependency(dep_a.spdx_id, dep_b.spdx_id)
+        doc = sbom.to_cyclonedx()
+
+        assert doc["dependencies"] == [{"ref": "dep-a@0.1.0", "dependsOn": ["dep-b@2.0.0"]}]
+
 
 # ---------------------------------------------------------------------------
 # SBOM save to disk

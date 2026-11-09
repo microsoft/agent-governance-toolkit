@@ -173,9 +173,10 @@ class BlueGreenManager:
         self._emit("validate_start", updated.name)
 
         is_healthy = False
-        elapsed = 0.0
         interval = self.config.health_check_interval_seconds
-        timeout = self.config.validation_timeout_seconds
+        # Measure the timeout on the clock, so the time each health check takes
+        # counts against it and a zero interval cannot keep the loop going.
+        deadline = time.monotonic() + self.config.validation_timeout_seconds
         while True:
             try:
                 if health_check_fn():
@@ -183,10 +184,10 @@ class BlueGreenManager:
                     break
             except Exception:
                 logger.debug("Health check failed for %s", inactive.name.value, exc_info=True)
-            elapsed += interval
-            if elapsed >= timeout:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 break
-            time.sleep(interval)
+            time.sleep(max(0.0, min(interval, remaining)))
 
         health = "healthy" if is_healthy else "unhealthy"
         updated = self._env(updated.name).model_copy(update={"health_status": health})

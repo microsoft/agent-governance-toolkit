@@ -273,6 +273,40 @@ class TestFleetHealth:
         status = fm.status()
         assert status.health == FleetHealth.CRITICAL
 
+    def test_fleet_status_critical_when_most_agents_degraded(self):
+        fm = FleetManager(success_rate_threshold=0.9)
+        for agent_id in ("a1", "a2", "a3"):
+            fm.register(agent_id)
+        for agent_id in ("a1", "a2"):
+            for _ in range(10):
+                fm.record_event(agent_id, success=False)
+        status = fm.status()
+        assert status.degraded_agents == 2
+        assert status.health == FleetHealth.CRITICAL
+
+    def test_fleet_status_critical_when_degraded_and_unresponsive(self):
+        fm = FleetManager(heartbeat_timeout=1.0, success_rate_threshold=0.9)
+        r1 = fm.register("a1", heartbeat_timeout=1.0)
+        fm.register("a2", heartbeat_timeout=1.0)
+        fm.register("a3", heartbeat_timeout=1.0)
+        r1.last_heartbeat = time.time() - 2.0
+        for _ in range(10):
+            fm.record_event("a2", success=False)
+        status = fm.status()
+        assert status.unresponsive_agents == 1
+        assert status.degraded_agents == 1
+        assert status.health == FleetHealth.CRITICAL
+
+    def test_fleet_status_degraded_when_minority_unhealthy(self):
+        fm = FleetManager(success_rate_threshold=0.9)
+        for agent_id in ("a1", "a2", "a3"):
+            fm.register(agent_id)
+        for _ in range(10):
+            fm.record_event("a1", success=False)
+        status = fm.status()
+        assert status.degraded_agents == 1
+        assert status.health == FleetHealth.DEGRADED
+
     def test_fleet_status_to_dict(self):
         fm = FleetManager()
         fm.register("a1")

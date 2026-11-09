@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +19,7 @@ import {
   evaluateOpenCodeToolOutput,
   getPolicyStatus,
   loadPolicy,
+  MAX_SECRET_PATTERNS,
   PRINCIPAL_ISS_ENV,
   PRINCIPAL_SUB_ENV,
   SURFACE_NAME,
@@ -1107,4 +1109,253 @@ test("with denyOnPolicyError off, a bad audit config still writes entries", asyn
   // The decision is still recorded, with an unkeyed digest and no principal.
   assert.equal(entry.argsDigestAlg, "sha256");
   assert.equal(Object.hasOwn(entry, "principal"), false);
+});
+
+async function writeSecretPatternPolicy(root, secretPatterns, overrides = {}) {
+  const policyPath = join(root, `secret-patterns-${randomUUID()}.json`);
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      version: 1,
+      mode: "enforce",
+      toolPolicies: { allowedTools: ["*"] },
+      secretPatterns,
+      ...overrides,
+    }),
+    "utf8",
+  );
+  return policyPath;
+}
+
+test("a configured secret pattern redacts without replacing the built-ins", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-secret-patterns-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    policyPath: await writeSecretPatternPolicy(root, [
+      { id: "acme-token", source: "\\bacme_[0-9a-f]{32}\\b" },
+    ]),
+  });
+  assert.equal(state.configuredPolicyError, undefined);
+
+  const configured = `acme_${"a".repeat(32)}`;
+  const builtin = `ghp_${"b".repeat(40)}`;
+  const result = await evaluateOpenCodeToolOutput(state, {
+    tool: "bash",
+    output: `custom ${configured} and builtin ${builtin}`,
+    sessionId: "configured-patterns",
+  });
+
+  assert.equal(result.redact, true);
+  assert.match(result.redactedOutput, /\[AGT_REDACTED:acme-token\]/);
+  // The built-in still fires, so configured patterns merge rather than replace.
+  assert.match(result.redactedOutput, /\[AGT_REDACTED:github-token\]/);
+  assert.ok(!result.redactedOutput.includes(configured));
+  assert.ok(!result.redactedOutput.includes(builtin));
+});
+
+test("a configured pattern still matches on a later call", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-secret-patterns-reuse-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    policyPath: await writeSecretPatternPolicy(root, [
+      { id: "acme-token", source: "\\bacme_[0-9a-f]{32}\\b" },
+    ]),
+  });
+
+  // Compiled patterns are reused across calls. A global regex left with a stale
+  // lastIndex would make the second scan miss the credential.
+  for (const fill of ["a", "b", "c"]) {
+    const result = await evaluateOpenCodeToolOutput(state, {
+      tool: "bash",
+      output: `token acme_${fill.repeat(32)}`,
+      sessionId: "reuse",
+    });
+    assert.equal(result.redact, true, `call with ${fill} should redact`);
+  }
+});
+
+test("a configured pattern reports its id to audit and never the matched value", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-secret-patterns-audit-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({
+    auditPath,
+    policyPath: await writeSecretPatternPolicy(root, [
+      { id: "acme-token", source: "\\bacme_[0-9a-f]{32}\\b" },
+    ]),
+  });
+
+  const secret = `acme_${"d".repeat(32)}`;
+  await evaluateOpenCodeToolOutput(state, {
+    tool: "bash",
+    output: `token ${secret}`,
+    sessionId: "audit-ids",
+  });
+
+  const [entry] = await loadAuditEntries(auditPath);
+  assert.equal(entry.decision, "review");
+  assert.match(entry.reason, /acme-token/);
+  const raw = await readFile(auditPath, "utf8");
+  assert.ok(!raw.includes(secret), "the audit log must not hold the matched value");
+});
+
+test("getPolicyStatus reports built-in and configured pattern ids only", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-secret-patterns-status-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const source = "\\bacme_[0-9a-f]{32}\\b";
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    policyPath: await writeSecretPatternPolicy(root, [{ id: "acme-token", source }]),
+  });
+
+  const status = await getPolicyStatus(state);
+  assert.ok(status.secretPatternIds.includes("acme-token"));
+  assert.ok(status.secretPatternIds.includes("github-token"));
+  assert.deepEqual(status.secretPatternIds, [...status.secretPatternIds].sort());
+  // Ids are reportable. Pattern sources are not.
+  assert.ok(!JSON.stringify(status).includes(source));
+});
+
+test("an invalid secretPatterns block fails closed", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-secret-patterns-invalid-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  // Valid on its own, so each case below fails for the reason it names rather
+  // than tripping an earlier check.
+  const okSource = "tok_[0-9]{8}";
+  const cases = [
+    ["duplicate id", [{ id: "dup", source: okSource }, { id: "dup", source: okSource }], /duplicate id/],
+    ["built-in id", [{ id: "github-token", source: okSource }], /reserved by a built-in/],
+    ["missing id", [{ source: okSource }], /id must match/],
+    ["unusable id", [{ id: "has spaces", source: okSource }], /id must match/],
+    ["missing source", [{ id: "x", source: "   " }], /missing regex source/],
+    ["unparseable regex", [{ id: "x", source: "tok_(" }], /secretPatterns\[0\]/],
+    ["unknown flag", [{ id: "x", source: okSource, flags: "Q" }], /secretPatterns\[0\]/],
+    ["sticky flag", [{ id: "x", source: okSource, flags: "y" }], /sticky/],
+    ["matches empty string", [{ id: "x", source: "a*" }], /matches the empty string/],
+    // An empty-string probe alone would let each of these through.
+    ["matches any character", [{ id: "x", source: ".+" }], /single arbitrary character/],
+    ["matches any character or newline", [{ id: "x", source: "[\\s\\S]" }], /single arbitrary character/],
+    ["matches whitespace", [{ id: "x", source: "\\s" }], /single arbitrary character/],
+    ["matches one character class", [{ id: "x", source: "[A-Za-z]" }], /single arbitrary character/],
+    ["not an array", { id: "x", source: okSource }, /expected an array/],
+    [
+      "too many patterns",
+      Array.from({ length: MAX_SECRET_PATTERNS + 1 }, (_, i) => ({
+        id: `p${i}`,
+        source: okSource,
+      })),
+      /exceeds the limit/,
+    ],
+  ];
+
+  for (const [label, secretPatterns, expected] of cases) {
+    const state = await loadPolicy({
+      auditPath: join(root, `audit-${randomUUID()}.json`),
+      policyPath: await writeSecretPatternPolicy(root, secretPatterns),
+    });
+
+    assert.ok(state.configuredPolicyError, `${label} should be rejected`);
+    assert.match(state.configuredPolicyError.message, expected, label);
+
+    // Enforce mode denies rather than running with redaction disabled.
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "read",
+      args: { filePath: join(root, "note.txt") },
+      cwd: root,
+      sessionId: "invalid-patterns",
+    });
+    assert.equal(result.effect, "deny", `${label} should fail closed`);
+  }
+});
+
+test("each built-in secret pattern redacts a representative credential", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-secret-defaults-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    homeDirectory: root,
+    policyPath: null,
+  });
+
+  const samples = [
+    ["aws-access-key", `AKIA${"A".repeat(16)}`],
+    ["github-token", `ghp_${"a".repeat(40)}`],
+    ["github-fine-grained", `github_pat_${"a".repeat(30)}`],
+    ["openai-key", `sk-${"a".repeat(40)}`],
+    ["azure-account-key", `AccountKey=${"a".repeat(44)}`],
+    ["jwt-token", `eyJ${"a".repeat(12)}.eyJ${"b".repeat(12)}.${"c".repeat(20)}`],
+    [
+      "private-key-block",
+      `-----BEGIN RSA PRIVATE KEY-----\n${"a".repeat(64)}\n-----END RSA PRIVATE KEY-----`,
+    ],
+    // Built from parts so the literal source text does not itself look like a
+    // Slack bot token to repository secret scanners.
+    [
+      "slack-token",
+      `xoxb-${"1".repeat(12)}-${"2".repeat(12)}-${"a".repeat(24)}`,
+    ],
+    ["slack-webhook", `https://hooks.slack.com/services/T00000000/B00000000/${"a".repeat(24)}`],
+    ["github-app-token", `ghs_${"a".repeat(36)}`],
+    ["npm-token", `npm_${"a".repeat(36)}`],
+    ["google-api-key", `AIza${"a".repeat(35)}`],
+    ["atlassian-token", `ATATT3x${"a".repeat(80)}`],
+    ["db-connection-string", "postgres://admin:hunter2@db.internal:5432/app"],
+  ];
+
+  for (const [id, credential] of samples) {
+    const result = await evaluateOpenCodeToolOutput(state, {
+      tool: "bash",
+      output: `value: ${credential}`,
+      sessionId: `default-${id}`,
+    });
+    assert.equal(result.redact, true, `${id} should redact`);
+    assert.match(result.redactedOutput, new RegExp(`\\[AGT_REDACTED:${id}\\]`), id);
+    assert.ok(!result.redactedOutput.includes(credential), `${id} must not leak the value`);
+  }
+});
+
+test("ordinary tool output is not redacted by the built-in patterns", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-secret-false-positive-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const state = await loadPolicy({
+    auditPath: join(root, "audit.json"),
+    homeDirectory: root,
+    policyPath: null,
+  });
+
+  const corpus = [
+    ["typescript source", "export function getUserData(id: string) {\n  return db.find({ id });\n}"],
+    ["go source", "func main() {\n\tfmt.Println(\"sk-is-not-a-key\")\n}"],
+    [
+      "unified diff",
+      "--- a/app.ts\n+++ b/app.ts\n@@ -1,3 +1,4 @@\n-const a = 1;\n+const b = 2;\n",
+    ],
+    ["markdown fence", "```bash\nnpm install --save-dev eslint\n```"],
+    ["slack domain without a webhook path", "See https://hooks.slack.com/ for setup."],
+    ["credential free connection uri", "postgres://localhost:5432/app_development"],
+    ["connection uri with a host only", "mongodb://cluster.internal:27017/app"],
+    ["short google prefix", "The constant AIzaShort is not a key."],
+    ["prose mentioning token prefixes", "Rotate any ghp_ or xoxb- token you find."],
+    ["international text", "Grüße aus München, 東京, and Ακρόπολη."],
+    ["jwt-like but too short", "eyJabc.eyJdef.sig"],
+  ];
+
+  for (const [label, output] of corpus) {
+    const result = await evaluateOpenCodeToolOutput(state, {
+      tool: "read",
+      output,
+      sessionId: "false-positive",
+    });
+    assert.equal(result.redact, false, `${label} should not be redacted: ${result.reason}`);
+  }
 });

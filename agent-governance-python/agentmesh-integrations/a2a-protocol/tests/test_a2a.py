@@ -235,6 +235,24 @@ class TestTaskEnvelope:
         with pytest.raises(ValueError):
             t.complete()
 
+    def test_rejected_fail_keeps_completed_task_clean(self):
+        t = TaskEnvelope.create(skill_id="x", source_did="did:mesh:a")
+        t.start()
+        t.complete("done")
+        with pytest.raises(ValueError, match="Invalid transition"):
+            t.fail("late error")
+        assert t.state == TaskState.COMPLETE
+        assert t.error == ""
+        assert "error" not in t.to_dict()["status"]
+
+    def test_rejected_fail_keeps_original_error(self):
+        t = TaskEnvelope.create(skill_id="x", source_did="did:mesh:a")
+        t.fail("timeout")
+        with pytest.raises(ValueError, match="Invalid transition"):
+            t.fail("second error")
+        assert t.error == "timeout"
+        assert t.to_dict()["status"] == {"state": "failed", "error": "timeout"}
+
     def test_add_message(self):
         t = TaskEnvelope.create(skill_id="x", source_did="did:mesh:a")
         t.add_message("agent", "thinking...")
@@ -278,6 +296,28 @@ class TestTaskEnvelope:
         assert restored.source_did == "did:mesh:a"
         assert restored.source_trust_score == 900
         assert len(restored.messages) == 1
+
+    def test_roundtrip_keeps_message_content_type(self):
+        original = TaskEnvelope.create(skill_id="x", source_did="did:mesh:a")
+        original.messages.append(
+            TaskMessage(role="agent", content='{"ok": true}', content_type="application/json")
+        )
+        restored = TaskEnvelope.from_dict(original.to_dict())
+        assert restored.messages[0].content_type == "application/json"
+        assert restored.messages[0].content == '{"ok": true}'
+
+    def test_from_dict_message_without_parts(self):
+        d = {
+            "id": "t1",
+            "status": {"state": "submitted"},
+            "messages": [
+                {"role": "user", "parts": []},
+                {"role": "agent"},
+            ],
+        }
+        restored = TaskEnvelope.from_dict(d)
+        assert [m.content for m in restored.messages] == ["", ""]
+        assert [m.content_type for m in restored.messages] == ["text/plain", "text/plain"]
 
     def test_is_terminal_for_non_terminal(self):
         t = TaskEnvelope.create(skill_id="x", source_did="did:mesh:a")

@@ -30,6 +30,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Burn alerts now evaluate errors over each alert's declared window instead of
   the default one-hour window, allowing errors from one to 24 hours ago to
   correctly raise SLO status to WARNING or CRITICAL.
+- The FastAPI server (`agent_sre.api.server`) now reads JSON request bodies.
+  The request models were imported only under `TYPE_CHECKING`, so FastAPI could
+  not resolve the route annotations and treated each `body` parameter as a
+  required query parameter: every POST that takes a body (register an SLO,
+  record a cost, create a chaos experiment or rollout, ingest a signal) returned
+  422, and `/openapi.json` failed with a 500, so `/docs` could not load.
+- `ErrorBudget.burn_rate()` now divides the window's error ratio by the allowed
+  error ratio (`total`). It used to divide by `total / window_seconds`, which
+  inflated the rate by the window length (about 2.6 million for the default
+  30 days), so a single error fired both burn rate alerts.
+- `AnomalyDetector` now reports a spike in a metric whose name contains "error"
+  (such as `error_rate`) as `ERROR_RATE_SURGE`. The "rate" check ran first, so
+  these metrics were reported as `THROUGHPUT_DROP`.
+- `Trace.to_dict()` (and so `TraceStore.save()`) no longer fails with a
+  `JSONDecodeError` when a redacted field such as `password` or `token` contains
+  a double quote. The redaction pattern stopped at the first escaped quote, which
+  left the rest of the secret in the output and produced invalid JSON.
+- `resolve_inheritance()` now lets a child SLO spec inherit the fields it does
+  not set. It merged the child's defaults (`target=99.0`, `window="30d"`, an
+  empty `description` and `error_budget_policy`) over the parent's values, so a
+  child that only set `service` lost the parent's target, window and burn rate
+  thresholds.
 - **Provider fallbacks on the default install.** Without an advanced provider,
   `get_slo_detector()` and `get_chaos_engine()` raise a `NotImplementedError` naming
   the missing class and the entry point group a provider package must register,
@@ -37,6 +59,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `list_providers()` reports `"unavailable"` instead of `"community"` for the
   `slo_detection` and `chaos_engine` slots when no advanced provider is installed,
   since they have no community implementation.
+- `TraceContext.child()` now keeps the parent's `sampled` flag. It always created
+  a sampled child, so an agent that received an unsampled `traceparent` (flags
+  `00`) propagated it to downstream calls as sampled (`01`).
+- `RollbackCondition` now handles the `gt` and `lt` comparators. The AgentRollout
+  CRD (`rollbackConditions[].operator`) accepts `gt` and `lt`, but
+  `should_rollback()` only handled `gte` and `lte` and returned `False` for
+  anything else, so those rollback conditions never fired.
+- `ToolCallFrequencyAnalyzer.score()` now scores only call counts above the
+  baseline. It used the absolute z-score, so a quiet window, or a window that had
+  just started, scored as high as a spike, and `RogueAgentDetector.assess()`
+  rated an agent with a steady baseline as `CRITICAL` and recommended quarantine
+  right after each window boundary.
+- `FleetManager.status()` now reports `CRITICAL` when most agents are unhealthy,
+  counting degraded agents as well as unresponsive ones. It only counted
+  unresponsive agents, so a fleet where every agent was degraded (or two of three
+  were degraded and the third unresponsive) was reported as `DEGRADED`.
+- `TraceContext.from_traceparent()` now reads the sampled flag from bit 0 of the
+  trace-flags byte, as W3C Trace Context defines it. Only the exact value `01`
+  counted as sampled, so a sampled `traceparent` with other flag bits set (such
+  as `03`) was parsed as not sampled and forwarded downstream as `00`. Trace
+  flags that are not two hex digits now raise `ValueError` like other malformed
+  headers (#4334).
+- `AgentSBOM.to_cyclonedx()` now writes component `bom-ref` values in
+  `dependencies[].ref` and `dependsOn`. It wrote the SPDX IDs used internally
+  for relationships (such as `SPDXRef-Package-pydantic-2.4.0`), which match no
+  component, so every dependency in a CycloneDX SBOM was a dangling reference.
 
 ## [0.3.0] - 2026-02-19
 

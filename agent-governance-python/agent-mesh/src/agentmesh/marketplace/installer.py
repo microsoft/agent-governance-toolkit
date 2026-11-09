@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import re
 import shutil
 from pathlib import Path
 from types import MappingProxyType
@@ -311,14 +312,27 @@ class PluginInstaller:
         return violations
 
 
+_SPECIFIER_OPERATOR_RE = re.compile(r"===|==|!=|~=|<=|>=|<|>")
+
+
 def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
     """Parse a dependency specifier like ``plugin-name>=1.0.0``.
 
-    Returns:
-        Tuple of (name, version_or_none).
+    Returns a ``(name, version_or_none)`` tuple, matching
+    ``agent_marketplace.installer._parse_dependency``. ``version`` is the
+    pinned string from an ``==X`` clause when one is present; otherwise
+    ``None`` so the registry resolves the latest version. Ranges
+    (``>=1.0``, ``>=1.0,<2.0``), inequality (``!=``) and compatible-release
+    (``~=``) clauses are not pins, and the name stops at the first operator,
+    extras bracket or environment marker.
     """
-    for op in (">=", "==", "<=", ">", "<"):
-        if op in dep_spec:
-            name, version = dep_spec.split(op, 1)
-            return name.strip(), version.strip()
-    return dep_spec.strip(), None
+    requirement = dep_spec.split(";", 1)[0]
+    match = _SPECIFIER_OPERATOR_RE.search(requirement)
+    if match is None:
+        return requirement.split("[", 1)[0].strip(), None
+    name = requirement[: match.start()].split("[", 1)[0].strip()
+    for clause in requirement[match.start():].split(","):
+        clause = clause.strip()
+        if clause.startswith("==") and not clause.startswith("==="):
+            return name, clause[2:].strip()
+    return name, None

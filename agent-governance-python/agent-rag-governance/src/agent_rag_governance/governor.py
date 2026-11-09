@@ -225,7 +225,7 @@ class RAGGovernor:
 
         # 1. Collection access control. _check_collection emits its
         # own "denied" audit before raising.
-        self._check_collection(collection)
+        self._check_collection(collection=collection, query=query)
 
         # 2. Rate limiting. _check_rate emits its own audit before
         # raising.
@@ -256,14 +256,16 @@ class RAGGovernor:
                 decision=decision,
             )
 
-    def _check_collection(self, collection: str) -> None:
+    def _check_collection(self, *, collection: str, query: str) -> None:
         allowed, reason = self.policy.is_collection_allowed(collection)
         if not allowed:
             if self._audit_logger:
+                # Hash the actual query, as the rate-limit audit does, so a
+                # denied attempt can be tied to what the agent searched for.
                 entry = make_entry(
                     agent_id=self.agent_id,
                     collection=collection,
-                    query="",
+                    query=query,
                     num_chunks_retrieved=0,
                     num_chunks_blocked=0,
                     decision="denied",

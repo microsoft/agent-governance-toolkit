@@ -48,12 +48,50 @@ class TestTraceContext:
         with pytest.raises(ValueError, match="Invalid traceparent"):
             TraceContext.from_traceparent("bad-value")
 
+    @pytest.mark.parametrize(
+        ("flags", "sampled"),
+        [("01", True), ("03", True), ("ff", True), ("FF", True), ("00", False), ("02", False)],
+    )
+    def test_from_traceparent_reads_sampled_bit(self, flags, sampled):
+        ctx = TraceContext.from_traceparent(f"00-abc123-def456-{flags}")
+        assert ctx.sampled is sampled
+
+    @pytest.mark.parametrize("flags", ["", "1", "001", "zz", "0x", " 1"])
+    def test_from_traceparent_rejects_malformed_flags(self, flags):
+        with pytest.raises(ValueError, match="Invalid traceparent"):
+            TraceContext.from_traceparent(f"00-abc123-def456-{flags}")
+
+    def test_sampled_incoming_trace_with_extra_flag_bits_stays_sampled(self):
+        incoming = {"traceparent": "00-abcdef1234567890abcdef1234567890-1234567890abcdef-03"}
+        tracer = ProtocolTracer(
+            agent_id="worker",
+            parent_context=TraceContext.from_headers(incoming),
+        )
+        with tracer.a2a_call("downstream-agent") as span:
+            outgoing = tracer.inject(span)
+        assert outgoing["traceparent"].endswith("-01")
+
     def test_child_preserves_trace_id(self):
         parent = TraceContext(trace_id="parent-trace", span_id="parent-span")
         child = parent.child()
         assert child.trace_id == "parent-trace"
         assert child.parent_span_id == "parent-span"
         assert child.span_id != "parent-span"  # new span ID
+
+    @pytest.mark.parametrize("sampled", [True, False])
+    def test_child_inherits_sampled_flag(self, sampled):
+        parent = TraceContext(sampled=sampled)
+        assert parent.child().sampled is sampled
+
+    def test_unsampled_incoming_trace_stays_unsampled_downstream(self):
+        incoming = {"traceparent": "00-abcdef1234567890abcdef1234567890-1234567890abcdef-00"}
+        tracer = ProtocolTracer(
+            agent_id="worker",
+            parent_context=TraceContext.from_headers(incoming),
+        )
+        with tracer.a2a_call("downstream-agent") as span:
+            outgoing = tracer.inject(span)
+        assert outgoing["traceparent"].endswith("-00")
 
     def test_child_inherits_baggage(self):
         parent = TraceContext(baggage={"user": "alice", "env": "prod"})

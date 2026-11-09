@@ -32,9 +32,12 @@ builder.Services
     .WithGovernance(options =>
     {
         options.PolicyPaths.Add("policies/mcp.yaml");
+        // Map the identity provider's subject to an agent DID.
         options.AgentIdResolver = static principal =>
-            principal.FindFirst("agent_id")?.Value
-            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        {
+            var subject = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return string.IsNullOrWhiteSpace(subject) ? null : $"did:mcp:{subject}";
+        };
     });
 ```
 
