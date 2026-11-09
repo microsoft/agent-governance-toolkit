@@ -30,7 +30,7 @@ class ExhaustionAction(Enum):
 class BurnRateAlert:
     """A burn rate alert threshold.
 
-    ``window_seconds`` is the lookback the burn rate is measured over and
+    ``window_seconds`` is the period the burn rate is measured over and
     must be positive; a non-positive window selects no events, so the
     alert would never fire however fast the budget is burning.
     """
