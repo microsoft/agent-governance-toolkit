@@ -102,7 +102,14 @@ class AuditLog:
         decision: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> List[AuditEntry]:
-        """Query audit entries with optional filters."""
+        """Query audit entries with optional filters.
+
+        ``limit`` keeps the most recent matching entries. ``None``
+        returns all of them and ``0`` returns none; a negative ``limit``
+        raises ``ValueError``.
+        """
+        if limit is not None and limit < 0:
+            raise ValueError(f"limit must be zero or positive; got {limit!r}")
         with self._lock:
             entries = list(self._entries)
 
@@ -110,8 +117,9 @@ class AuditLog:
             entries = [e for e in entries if e.agent_id == agent_id]
         if decision:
             entries = [e for e in entries if e.decision == decision]
-        if limit:
-            entries = entries[-limit:]
+        if limit is not None:
+            # entries[-0:] is the whole list, so 0 needs its own case.
+            entries = entries[-limit:] if limit else []
         return entries
 
     def __len__(self) -> int:
