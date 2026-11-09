@@ -193,10 +193,15 @@ class ConditionalPermission:
 class ResourceQuota:
     """Resource quota for an agent or tenant
 
-    Each limit is compared against current usage with ``>=``, so 0 means
-    "permit nothing" and any positive value is the cap. A negative limit
-    is never met, so it would deny every request while reading as a
-    quota; the limits are therefore required to be non-negative.
+    ``check_rate_limit`` compares current usage against
+    ``max_requests_per_minute``, ``max_requests_per_hour`` and
+    ``max_concurrent_executions`` with ``>=``, so 0 means "permit
+    nothing" and any positive value is the cap. A negative limit is
+    never met, so it would deny every request while reading as a quota.
+
+    ``max_execution_time_seconds`` is not read anywhere today. It is
+    validated with the others so a meaningless value cannot be stored
+    against the day it is enforced.
     """
 
     agent_id: str
