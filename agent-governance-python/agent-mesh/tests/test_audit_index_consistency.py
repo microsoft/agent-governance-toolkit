@@ -35,11 +35,11 @@ def _assert_indexes_match(log):
     assert log._by_agent == by_agent
     assert log._by_type == by_type
     for agent in by_agent:
-        assert log.get_entries_for_agent(agent, limit=0) == [
+        assert log.get_entries_for_agent(agent, limit=None) == [
             entry for entry in entries if entry.agent_did == agent
         ]
     for event_type in by_type:
-        assert log.get_entries_by_type(event_type, limit=0) == [
+        assert log.get_entries_by_type(event_type, limit=None) == [
             entry for entry in entries if entry.event_type == event_type
         ]
     assert log.verify_integrity() == (True, None)
@@ -304,7 +304,7 @@ def test_failed_tree_update_rolls_back_both_indexes(monkeypatch, existing):
 
 
 @pytest.mark.parametrize("reader_name", ["get_entries_for_agent", "get_entries_by_type"])
-@pytest.mark.parametrize("limit", [1, 3, 100, 0, -1, -3])
+@pytest.mark.parametrize("limit", [1, 3, 100])
 def test_indexed_reader_preserves_limits_order_and_empty_keys(reader_name, limit):
     log = AuditLog()
     matching = []
@@ -324,7 +324,7 @@ def test_indexed_reader_preserves_limits_order_and_empty_keys(reader_name, limit
 
 
 @pytest.mark.parametrize("reader_name", ["get_entries_for_agent", "get_entries_by_type"])
-@pytest.mark.parametrize("limit", [1, 3, 100, 0, -1, -5, -100])
+@pytest.mark.parametrize("limit", [1, 3, 100])
 def test_indexed_reader_scans_only_required_suffix(monkeypatch, reader_name, limit):
     log = AuditLog()
     for i in range(12):

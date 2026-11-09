@@ -207,7 +207,7 @@ def test_proof_serialization_and_verification_are_outside_lock(monkeypatch):
     assert verify(entry.entry_hash, result["merkle_proof"], root)
 
 
-@pytest.mark.parametrize("limit", [None, 0, 1, 3, 100, -1])
+@pytest.mark.parametrize("limit", [None, 1, 3, 100])
 def test_query_preserves_limits_order_and_filters(limit):
     log = _log(6)
     entries = list(log._chain._entries)

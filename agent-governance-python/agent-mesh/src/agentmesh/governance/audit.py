@@ -688,28 +688,39 @@ class AuditLog:
     def get_entries_for_agent(
         self,
         agent_did: str,
-        limit: int = 100,
+        limit: Optional[int] = 100,
     ) -> list[AuditEntry]:
-        """Get the most recent entries for a specific agent."""
+        """Get the most recent entries for a specific agent.
+
+        ``limit`` follows the same contract as :meth:`query`: ``None``
+        returns every matching entry, ``0`` returns none, and a negative
+        value raises ``ValueError``.
+        """
         return self._get_indexed_entries(self._by_agent, agent_did, limit)
 
     def get_entries_by_type(
         self,
         event_type: str,
-        limit: int = 100,
+        limit: Optional[int] = 100,
     ) -> list[AuditEntry]:
-        """Get the most recent entries of a given event type."""
+        """Get the most recent entries of a given event type.
+
+        ``limit`` follows the same contract as :meth:`query`: ``None``
+        returns every matching entry, ``0`` returns none, and a negative
+        value raises ``ValueError``.
+        """
         return self._get_indexed_entries(self._by_type, event_type, limit)
 
     def _get_indexed_entries(
-        self, index: dict[str, list[str]], key: str, limit: int,
+        self, index: dict[str, list[str]], key: str, limit: Optional[int],
     ) -> list[AuditEntry]:
         """Entry IDs are assumed unique; AuditLog.log() generates UUID4 IDs.
 
-        ``limit`` keeps the most recent matching entries; ``0`` returns
-        none and a negative ``limit`` raises ``ValueError``.
+        ``limit`` keeps the most recent matching entries; ``None`` returns
+        every one of them, ``0`` returns none, and a negative ``limit``
+        raises ``ValueError``.
         """
-        if limit < 0:
+        if limit is not None and limit < 0:
             raise ValueError(f"limit must be zero or positive; got {limit!r}")
         with self._chain._lock:
             wanted = set(_tail(index.get(key, []), limit))

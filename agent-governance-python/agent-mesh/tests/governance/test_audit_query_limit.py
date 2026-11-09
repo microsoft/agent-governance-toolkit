@@ -68,6 +68,11 @@ class TestIndexedReaderLimits:
     def test_for_agent_default_returns_every_entry(self):
         assert len(_log_with(5).get_entries_for_agent(AGENT)) == 5
 
+    def test_for_agent_none_returns_every_entry(self):
+        # The readers took ``limit: int`` and had no way to ask for every entry
+        # other than a number above the count; ``None`` now means all, as on query.
+        assert len(_log_with(150).get_entries_for_agent(AGENT, limit=None)) == 150
+
     def test_for_agent_zero_returns_no_entries(self):
         assert _log_with(5).get_entries_for_agent(AGENT, limit=0) == []
 
@@ -85,6 +90,9 @@ class TestIndexedReaderLimits:
 
     def test_by_type_default_returns_every_entry(self):
         assert len(_log_with(5).get_entries_by_type("tool.call")) == 5
+
+    def test_by_type_none_returns_every_entry(self):
+        assert len(_log_with(150).get_entries_by_type("tool.call", limit=None)) == 150
 
     def test_by_type_zero_returns_no_entries(self):
         assert _log_with(5).get_entries_by_type("tool.call", limit=0) == []
