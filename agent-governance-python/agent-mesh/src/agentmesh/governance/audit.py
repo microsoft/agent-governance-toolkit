@@ -13,7 +13,7 @@ import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional, Any, NamedTuple
+from typing import TYPE_CHECKING, Optional, Any, NamedTuple, TypeVar
 from pydantic import BaseModel, Field
 import hashlib
 import hmac
@@ -565,11 +565,16 @@ class MerkleAuditChain:
 AuditChain = MerkleAuditChain
 
 
-def _tail(entries: list[AuditEntry], limit: int | None) -> list[AuditEntry]:
-    """Return the last ``limit`` entries as a new list.
+_T = TypeVar("_T")
 
-    ``None`` means every entry and ``0`` means none; ``entries[-0:]`` is
-    the whole list, so zero needs its own case.
+
+def _tail(entries: list[_T], limit: int | None) -> list[_T]:
+    """Return the last ``limit`` items as a new list.
+
+    ``None`` means every item and ``0`` means none; ``entries[-0:]`` is
+    the whole list, so zero needs its own case. Used for both audit
+    entries and the entry-id lists the per-agent and per-type indexes
+    hold.
     """
     if limit is None:
         return list(entries)
@@ -699,9 +704,15 @@ class AuditLog:
     def _get_indexed_entries(
         self, index: dict[str, list[str]], key: str, limit: int,
     ) -> list[AuditEntry]:
-        """Entry IDs are assumed unique; AuditLog.log() generates UUID4 IDs."""
+        """Entry IDs are assumed unique; AuditLog.log() generates UUID4 IDs.
+
+        ``limit`` keeps the most recent matching entries; ``0`` returns
+        none and a negative ``limit`` raises ``ValueError``.
+        """
+        if limit < 0:
+            raise ValueError(f"limit must be zero or positive; got {limit!r}")
         with self._chain._lock:
-            wanted = set(index.get(key, [])[-limit:])
+            wanted = set(_tail(index.get(key, []), limit))
             if not wanted:
                 return []
             entries = []

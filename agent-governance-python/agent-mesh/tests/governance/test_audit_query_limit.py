@@ -59,3 +59,49 @@ class TestQueryLimit:
         returned = log.query(limit=None)
         returned.clear()
         assert len(log.query(limit=None)) == 3
+
+
+class TestIndexedReaderLimits:
+    """``get_entries_for_agent`` and ``get_entries_by_type`` share the
+    ``_tail`` helper, so the same limit contract holds for both."""
+
+    def test_for_agent_default_returns_every_entry(self):
+        assert len(_log_with(5).get_entries_for_agent(AGENT)) == 5
+
+    def test_for_agent_zero_returns_no_entries(self):
+        assert _log_with(5).get_entries_for_agent(AGENT, limit=0) == []
+
+    def test_for_agent_positive_limit_keeps_the_most_recent(self):
+        entries = _log_with(5).get_entries_for_agent(AGENT, limit=2)
+        assert [e.action for e in entries] == ["action-3", "action-4"]
+
+    def test_for_agent_limit_above_the_entry_count_returns_every_entry(self):
+        assert len(_log_with(3).get_entries_for_agent(AGENT, limit=99)) == 3
+
+    @pytest.mark.parametrize("limit", [-1, -5])
+    def test_for_agent_negative_limit_is_rejected(self, limit):
+        with pytest.raises(ValueError, match="zero or positive"):
+            _log_with(5).get_entries_for_agent(AGENT, limit=limit)
+
+    def test_by_type_default_returns_every_entry(self):
+        assert len(_log_with(5).get_entries_by_type("tool.call")) == 5
+
+    def test_by_type_zero_returns_no_entries(self):
+        assert _log_with(5).get_entries_by_type("tool.call", limit=0) == []
+
+    def test_by_type_positive_limit_keeps_the_most_recent(self):
+        entries = _log_with(5).get_entries_by_type("tool.call", limit=2)
+        assert [e.action for e in entries] == ["action-3", "action-4"]
+
+    def test_by_type_limit_above_the_entry_count_returns_every_entry(self):
+        assert len(_log_with(3).get_entries_by_type("tool.call", limit=99)) == 3
+
+    @pytest.mark.parametrize("limit", [-1, -5])
+    def test_by_type_negative_limit_is_rejected(self, limit):
+        with pytest.raises(ValueError, match="zero or positive"):
+            _log_with(5).get_entries_by_type("tool.call", limit=limit)
+
+    def test_unknown_key_returns_no_entries(self):
+        log = _log_with(5)
+        assert log.get_entries_for_agent("did:mesh:absent") == []
+        assert log.get_entries_by_type("absent.event") == []
