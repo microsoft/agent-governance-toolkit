@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 import warnings
 
+from ._limits import tail
 from .agent_kernel import (
     AgentKernel, AgentContext, ExecutionRequest, ExecutionResult,
     ActionType, PermissionLevel, PolicyRule, ExecutionStatus
@@ -437,13 +438,7 @@ class AgentControlPlane:
         ``limit`` keeps the most recent entries; 0 returns none and a
         negative value raises ValueError.
         """
-        if limit < 0:
-            raise ValueError("limit must be non-negative")
-        entries = self.kernel.get_audit_log()
-        if limit == 0:
-            # entries[-0:] would return the ENTIRE log (since -0 == 0).
-            return []
-        return entries[-limit:]
+        return tail(self.kernel.get_audit_log(), limit)
     
     def get_execution_history(
         self,

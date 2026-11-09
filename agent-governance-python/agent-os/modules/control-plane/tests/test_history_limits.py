@@ -3,13 +3,16 @@
 """
 Unit tests for limit handling on the control plane's history readers.
 
-GovernanceLayer.get_audit_log already guards the ``limit == 0`` case
-(``entries[-0:]`` is the whole list). These tests pin the same contract
-on its siblings.
+All four readers share ``agent_control_plane._limits.tail``, so one
+contract holds for each: ``None`` (where accepted) returns everything,
+``0`` returns none, a positive limit keeps the most recent, and a
+negative limit raises. ``entries[-0:]`` is the whole list, which is the
+case the helper exists to get right.
 """
 
 import unittest
 
+from agent_control_plane._limits import tail
 from agent_control_plane.control_plane import AgentControlPlane
 from agent_control_plane.execution_engine import ExecutionEngine
 from agent_control_plane.governance_layer import GovernanceLayer
@@ -111,8 +114,8 @@ class TestControlPlaneAuditLogLimit(LimitContractMixin, unittest.TestCase):
         return _control_plane(5).get_audit_log(**kwargs)
 
 
-class TestGovernanceLayerAuditLogUnchanged(unittest.TestCase):
-    """The already-guarded sibling keeps its contract."""
+class TestGovernanceLayerAuditLog(unittest.TestCase):
+    """The reader that already had the guard keeps its contract."""
 
     def _layer(self, count):
         layer = GovernanceLayer.__new__(GovernanceLayer)
@@ -128,6 +131,42 @@ class TestGovernanceLayerAuditLogUnchanged(unittest.TestCase):
     def test_negative_limit_is_rejected(self):
         with self.assertRaises(ValueError):
             self._layer(5).get_audit_log(limit=-1)
+
+
+
+class TestTailHelper(unittest.TestCase):
+    """The shared helper the four readers delegate to."""
+
+    def test_none_returns_every_entry(self):
+        self.assertEqual(tail([1, 2, 3], None), [1, 2, 3])
+
+    def test_zero_returns_no_entries(self):
+        # [-0:] is the whole list, so zero needs its own branch.
+        self.assertEqual(tail([1, 2, 3], 0), [])
+
+    def test_positive_limit_keeps_the_most_recent(self):
+        self.assertEqual(tail([1, 2, 3, 4], 2), [3, 4])
+
+    def test_limit_above_the_entry_count_returns_every_entry(self):
+        self.assertEqual(tail([1, 2], 99), [1, 2])
+
+    def test_empty_input(self):
+        self.assertEqual(tail([], None), [])
+        self.assertEqual(tail([], 0), [])
+        self.assertEqual(tail([], 5), [])
+
+    def test_negative_limit_is_rejected(self):
+        for limit in (-1, -5):
+            with self.subTest(limit=limit):
+                with self.assertRaises(ValueError) as caught:
+                    tail([1, 2, 3], limit)
+                self.assertIn("zero or positive", str(caught.exception))
+
+    def test_returns_a_new_list(self):
+        source = [1, 2, 3]
+        returned = tail(source, None)
+        returned.clear()
+        self.assertEqual(source, [1, 2, 3])
 
 
 if __name__ == "__main__":
