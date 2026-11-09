@@ -217,12 +217,21 @@ class ExecutionEngine:
         agent_id: Optional[str] = None,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """Get execution history, optionally filtered by agent"""
+        """Get execution history, optionally filtered by agent
+
+        ``limit`` keeps the most recent records; 0 returns none and a
+        negative value raises ValueError.
+        """
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
         history = self.execution_history
         
         if agent_id:
             history = [r for r in history if r["agent_id"] == agent_id]
         
+        if limit == 0:
+            # history[-0:] would return the ENTIRE history (since -0 == 0).
+            return []
         return history[-limit:]
     
     def get_active_executions(self) -> Dict[str, ExecutionContext]:

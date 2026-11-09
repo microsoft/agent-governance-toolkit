@@ -432,8 +432,18 @@ class AgentControlPlane:
         }
     
     def get_audit_log(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get audit log entries"""
-        return self.kernel.get_audit_log()[-limit:]
+        """Get audit log entries
+
+        ``limit`` keeps the most recent entries; 0 returns none and a
+        negative value raises ValueError.
+        """
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        entries = self.kernel.get_audit_log()
+        if limit == 0:
+            # entries[-0:] would return the ENTIRE log (since -0 == 0).
+            return []
+        return entries[-limit:]
     
     def get_execution_history(
         self,
