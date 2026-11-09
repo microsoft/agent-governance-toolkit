@@ -565,7 +565,7 @@ class MerkleAuditChain:
 AuditChain = MerkleAuditChain
 
 
-def _tail(entries: "list[AuditEntry]", limit: int | None) -> "list[AuditEntry]":
+def _tail(entries: list[AuditEntry], limit: int | None) -> list[AuditEntry]:
     """Return the last ``limit`` entries as a new list.
 
     ``None`` means every entry and ``0`` means none; ``entries[-0:]`` is
