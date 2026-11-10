@@ -688,7 +688,7 @@ class AuditLog:
     def get_entries_for_agent(
         self,
         agent_did: str,
-        limit: Optional[int] = 100,
+        limit: int | None = 100,
     ) -> list[AuditEntry]:
         """Get the most recent entries for a specific agent.
 
@@ -701,7 +701,7 @@ class AuditLog:
     def get_entries_by_type(
         self,
         event_type: str,
-        limit: Optional[int] = 100,
+        limit: int | None = 100,
     ) -> list[AuditEntry]:
         """Get the most recent entries of a given event type.
 
@@ -712,7 +712,7 @@ class AuditLog:
         return self._get_indexed_entries(self._by_type, event_type, limit)
 
     def _get_indexed_entries(
-        self, index: dict[str, list[str]], key: str, limit: Optional[int],
+        self, index: dict[str, list[str]], key: str, limit: int | None,
     ) -> list[AuditEntry]:
         """Entry IDs are assumed unique; AuditLog.log() generates UUID4 IDs.
 

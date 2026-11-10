@@ -303,8 +303,23 @@ def test_failed_tree_update_rolls_back_both_indexes(monkeypatch, existing):
     _assert_indexes_match(log)
 
 
+def _expected_tail(matching, limit):
+    """The limit contract the indexed readers share with query.
+
+    None is every matching entry, 0 is none, and a positive
+    limit is the last limit. Written out here because
+    matching[-0:] is the whole list, which is the defect the
+    readers were fixed for.
+    """
+    if limit is None:
+        return list(matching)
+    if limit == 0:
+        return []
+    return list(matching[-limit:])
+
+
 @pytest.mark.parametrize("reader_name", ["get_entries_for_agent", "get_entries_by_type"])
-@pytest.mark.parametrize("limit", [1, 3, 100])
+@pytest.mark.parametrize("limit", [None, 0, 1, 3, 100])
 def test_indexed_reader_preserves_limits_order_and_empty_keys(reader_name, limit):
     log = AuditLog()
     matching = []
@@ -313,18 +328,20 @@ def test_indexed_reader_preserves_limits_order_and_empty_keys(reader_name, limit
         log.log("other", "did:mesh:other", f"other-{i}")
     read = getattr(log, reader_name)
 
+    expected = _expected_tail(matching, limit)
+
     result = read("", limit=limit)
     assert isinstance(result, list)
-    assert result == matching[-limit:]
-    assert all(actual is expected for actual, expected in zip(result, matching[-limit:]))
+    assert result == expected
+    assert all(actual is wanted for actual, wanted in zip(result, expected))
     assert read("") == matching[-100:]
     assert read("missing", limit=limit) == []
     result.clear()
-    assert read("", limit=limit) == matching[-limit:]
+    assert read("", limit=limit) == expected
 
 
 @pytest.mark.parametrize("reader_name", ["get_entries_for_agent", "get_entries_by_type"])
-@pytest.mark.parametrize("limit", [1, 3, 100])
+@pytest.mark.parametrize("limit", [None, 0, 1, 3, 100])
 def test_indexed_reader_scans_only_required_suffix(monkeypatch, reader_name, limit):
     log = AuditLog()
     for i in range(12):
@@ -350,7 +367,7 @@ def test_indexed_reader_scans_only_required_suffix(monkeypatch, reader_name, lim
                 yield entry
 
     monkeypatch.setattr(log._chain, "_entries", ObservedEntries(log._chain._entries))
-    expected = matching[-limit:]
+    expected = _expected_tail(matching, limit)
     result = getattr(log, reader_name)("target", limit=limit)
 
     assert result == expected
