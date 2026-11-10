@@ -369,8 +369,9 @@ def _validate_rules(rules: list[dict[str, Any]]) -> None:
             if key in condition:
                 raise ResolutionError.invalid_governance(
                     f"{label} uses a compound {key!r} condition, which the "
-                    "generated Rego does not express; split it into separate "
-                    "rules before migrating"
+                    "generated Rego does not express; rewrite it by hand into "
+                    "rules with the same meaning before migrating (splitting an "
+                    "'and' into separate allow rules would widen access)"
                 )
         field = condition.get("field")
         if not isinstance(field, str) or not field or _rego_field_accessor(field) is None:
