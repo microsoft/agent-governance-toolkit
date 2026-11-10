@@ -592,6 +592,24 @@ class TestPolicyPenaltyHelper:
         r = policy_penalty([_FakeViolation("critical")], critical_penalty=-200.0)
         assert r == pytest.approx(-200.0)
 
+    def test_dict_violations_use_their_severity(self):
+        violations = [{"severity": "critical"}, {"severity": "low"}]
+        assert policy_penalty(violations) == pytest.approx(-101.0)
+
+    def test_dict_violation_unknown_or_missing_severity_is_medium(self):
+        violations = [{"severity": "unknown_level"}, {"policy": "p"}]
+        assert policy_penalty(violations) == pytest.approx(-20.0)
+
+    def test_policy_reward_charges_kernel_dict_violations_by_severity(self):
+        # A rollout without ``violations`` falls back to the kernel, which
+        # may return dicts; a critical one must cost the critical penalty.
+        kernel = _make_mock_kernel()
+        kernel.get_recent_violations = MagicMock(
+            return_value=[{"policy": "p", "severity": "critical"}]
+        )
+        reward = PolicyReward(kernel, base_reward_fn=lambda _r: 1.0)
+        assert reward(object(), emit=False) == pytest.approx(-99.0)
+
 
 class TestCreatePolicyReward:
     def test_factory_with_defaults(self):
@@ -836,6 +854,27 @@ class TestGovernedEnvironmentStep:
         # No hook fire => no violations recorded.
         assert info["violations"] == []
 
+    def test_total_reward_is_sum_of_step_rewards(self):
+        """The episode's total_reward includes each step's success bonus."""
+        kernel = _make_mock_kernel()
+
+        def execute(action):
+            if action == "bad":
+                env._handle_violation("P", "blocked", "high", True)
+            return "result"
+
+        kernel.execute = MagicMock(side_effect=execute)
+        env = GovernedEnvironment(kernel)
+        env.reset()
+        rewards = []
+        for action in ("good", "bad", "good"):
+            _, reward, _, _, info = env.step(action)
+            rewards.append(reward)
+            assert info["total_reward"] == pytest.approx(sum(rewards))
+        # 1.0 - 0.1 + 10.0 (clean), 1.0 - 0.1 - 50.0 (high), clean again
+        assert rewards == pytest.approx([10.9, -49.1, 10.9])
+        assert env._state.total_reward == pytest.approx(sum(rewards))
+
 
 class TestGovernedEnvironmentGymInterface:
     def test_terminated_property(self):
@@ -1020,6 +1059,22 @@ class TestFlightRecorderEmitterExport:
         count = emitter.emit_to_store(store)
         assert count == 1
         store.add_span.assert_called_once()
+
+    def test_emit_to_store_counts_only_accepted_spans(self):
+        entries = [_FakeEntry(), _FakeEntry(id="e2"), _FakeEntry(id="e3")]
+        emitter = FlightRecorderEmitter(_make_recorder(entries))
+        store = MagicMock(spec=["emit_span"])
+        store.emit_span.side_effect = [None, RuntimeError("store down"), None]
+        count = emitter.emit_to_store(store)
+        # The failing span is logged and skipped; the next one is still sent.
+        assert store.emit_span.call_count == 3
+        assert count == 2
+
+    def test_emit_to_store_without_span_emitter_emits_nothing(self):
+        entries = [_FakeEntry(), _FakeEntry(id="e2")]
+        emitter = FlightRecorderEmitter(_make_recorder(entries))
+        store = MagicMock(spec=[])
+        assert emitter.emit_to_store(store) == 0
 
     def test_export_to_file(self, tmp_path):
         entries = [_FakeEntry()]

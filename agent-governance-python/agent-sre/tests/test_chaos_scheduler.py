@@ -131,6 +131,47 @@ class TestBlackoutWindows:
         at_noon = datetime(2025, 1, 6, 12, 30, 0, tzinfo=timezone.utc)
         assert scheduler.is_in_blackout(sched, at_noon) is True
 
+    @pytest.mark.parametrize("second", [0, 30, 59])
+    def test_end_minute_is_blocked_to_its_last_second(self, second: int) -> None:
+        bw = BlackoutWindow(start="17:00", end="23:59", reason="after hours")
+        schedule = _make_schedule(cron="59 23 * * *", blackouts=[bw])
+        scheduler = ChaosScheduler([schedule])
+        at = datetime(2025, 1, 6, 23, 59, second, tzinfo=timezone.utc)
+        assert scheduler.is_in_blackout(schedule, at) is True
+        assert scheduler.should_run("s1", at) is False
+
+    def test_midnight_wrap_end_minute_is_blocked(self) -> None:
+        bw = BlackoutWindow(start="22:00", end="06:00", reason="overnight")
+        at = datetime(2025, 1, 6, 6, 0, 45, tzinfo=timezone.utc)
+        assert bw.contains(at) is True
+
+    def test_minute_after_end_is_not_blocked(self) -> None:
+        bw = BlackoutWindow(start="12:00", end="13:00", reason="lunch")
+        assert bw.contains(datetime(2025, 1, 6, 13, 0, 59, tzinfo=timezone.utc)) is True
+        assert bw.contains(datetime(2025, 1, 6, 13, 1, 0, tzinfo=timezone.utc)) is False
+        assert bw.contains(datetime(2025, 1, 6, 11, 59, 59, tzinfo=timezone.utc)) is False
+
+    @pytest.mark.parametrize(
+        ("start", "end"),
+        [
+            ("9pm", "11pm"),
+            ("21:00", "24:00"),
+            ("21:00:00", "23:00:00"),
+            ("21-00", "23-00"),
+            ("12:60", "13:00"),
+            ("", "13:00"),
+        ],
+    )
+    def test_unreadable_bound_is_rejected(self, start: str, end: str) -> None:
+        # Such a window used to be accepted and never matched, so chaos
+        # ran during the blackout it was meant to prevent.
+        with pytest.raises(ValueError):
+            BlackoutWindow(start=start, end=end, reason="after hours")
+
+    def test_padded_bound_is_accepted(self) -> None:
+        bw = BlackoutWindow(start=" 9:05", end="23:59 ")
+        assert bw.contains(datetime(2025, 1, 6, 9, 5, 0)) is True
+
 
 # ---------------------------------------------------------------------------
 # Progressive severity
@@ -266,6 +307,24 @@ schedules:
         schedules = load_schedules(p)
         assert len(schedules) == 1
         assert schedules[0].id == "custom-1"
+
+    def test_load_rejects_unreadable_blackout_bound(self, tmp_path: object) -> None:
+        from pathlib import Path
+
+        content = """
+schedules:
+  - id: custom-1
+    name: Custom
+    experiment_id: test-exp
+    cron_expression: "0 8 * * *"
+    blackout_windows:
+      - start: "17:00"
+        end: "24:00"
+"""
+        p = Path(str(tmp_path)) / "custom.yaml"
+        p.write_text(content)
+        with pytest.raises(ValueError, match="hour must be in 0..23"):
+            load_schedules(p)
 
 
 # ---------------------------------------------------------------------------
