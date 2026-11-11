@@ -878,6 +878,18 @@ func TestEvaluateIntegerEqualityCondition(t *testing.T) {
 		t.Errorf("int-vs-float equality: got %q, want %q", got, Allow)
 	}
 
+	// Integer pairs compare exactly: above 2^53 adjacent int64s collapse to
+	// the same float64, so a float-only path would spuriously match.
+	peBig := NewPolicyEngine([]PolicyRule{
+		{Action: "scale", Effect: Allow, Conditions: map[string]interface{}{"id": int64(9007199254740993)}},
+	})
+	if got := peBig.Evaluate("scale", map[string]interface{}{"id": int64(9007199254740992)}); got != Deny {
+		t.Errorf("int64 precision: adjacent >2^53 values must not match: got %q, want %q", got, Deny)
+	}
+	if got := peBig.Evaluate("scale", map[string]interface{}{"id": int64(9007199254740993)}); got != Allow {
+		t.Errorf("int64 precision: exact match must allow: got %q, want %q", got, Allow)
+	}
+
 	peIn := NewPolicyEngine([]PolicyRule{
 		{Action: "scale", Effect: Allow, Conditions: map[string]interface{}{
 			"tier": map[string]interface{}{"$in": []interface{}{1, 2, 3}},
