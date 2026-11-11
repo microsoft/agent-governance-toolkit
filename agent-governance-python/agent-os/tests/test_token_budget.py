@@ -126,6 +126,15 @@ class TestFormatStatus:
         assert out.count('█') == 10
         assert '░' not in out
 
+    def test_format_over_budget_clamps_bar(self, tracker):
+        # 120% of budget: the percentage exceeds 1.0, but the bar must stay
+        # exactly ten cells wide (regression: 12 filled blocks at 120%).
+        tracker.record_usage('a', 6000, 6000)
+        out = tracker.format_status('a')
+        assert '120%' in out
+        assert out.count('█') == 10
+        assert '░' not in out
+
 class TestValidation:
 
     def test_invalid_warning_threshold_high(self):
