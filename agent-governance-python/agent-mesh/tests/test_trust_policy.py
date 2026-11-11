@@ -315,22 +315,36 @@ def test_matches_allows_bounded_quantifier_regex():
 
 
 @pytest.mark.parametrize(
-    "pattern",
+    ("pattern", "matching_subject"),
     [
-        r"^svc-[0-9]{4}$",
-        r"a{3}",
-        r"^(ab){2,3}$",
-        r"^[a-z]+-[0-9]{1,3}$",
-        r"alpha|beta",  # top-level alternation, not under a quantifier
+        (r"^svc-[0-9]{4}$", "svc-1234"),
+        (r"a{3}", "aaa"),
+        (r"^(ab){2,3}$", "abab"),
+        (r"^[a-z]+-[0-9]{1,3}$", "svc-12"),
+        (r"alpha|beta", "alpha"),  # top-level alternation, not under a quantifier
+        # Four variable-width quantifiers (an IPv4 matcher) sit well under the
+        # variable-quantifier ceiling.
+        (r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", "10.0.0.1"),
     ],
 )
-def test_matches_structural_guard_allows_safe_patterns(pattern):
+def test_matches_structural_guard_allows_safe_patterns(pattern, matching_subject):
     """Quantifiers over unambiguous bodies construct and evaluate normally."""
     cond = TrustCondition(field="agent.id", operator="matches", value=pattern)
-    # Evaluation must run the regex, not trip the guard: a non-matching
-    # subject returning False is fine, a guard rejection would also return
-    # False, so assert on a subject that matches where practical.
-    assert isinstance(cond.evaluate({"agent": {"id": "svc-1234"}}), bool)
+    # Assert True on a matching subject: a guard rejection would raise, and a
+    # bool-typed assertion alone would pass even if the guard wrongly blocked
+    # the pattern from ever matching.
+    assert cond.evaluate({"agent": {"id": matching_subject}}) is True
+
+
+def test_matches_rejects_stacked_variable_quantifiers_at_load():
+    """Non-nested exponential shapes are rejected by the quantifier ceiling.
+
+    ^a?a?...a?aaa...a$ (25 of each) is 2^n against a short subject and
+    contains no nested quantifier, so the nesting guard alone cannot see it.
+    """
+    pattern = "^" + "a?" * 25 + "a" * 25 + "$"
+    with pytest.raises(ValueError, match="variable-width quantifiers"):
+        TrustCondition(field="agent.id", operator="matches", value=pattern)
 
 
 @pytest.mark.parametrize(
@@ -373,9 +387,9 @@ def test_matches_overlong_subject_fails_closed():
     let an attacker disarm a deny rule by padding the field. The condition
     raises, and the evaluator converts that into a deny."""
     cond = TrustCondition(field="agent.id", operator="matches", value=r"^[a-z]+$")
-    assert cond.evaluate({"agent": {"id": "a" * 4096}}) is True
+    assert cond.evaluate({"agent": {"id": "a" * 1024}}) is True
     with pytest.raises(ConditionEvaluationError):
-        cond.evaluate({"agent": {"id": "a" * 4097}})
+        cond.evaluate({"agent": {"id": "a" * 1025}})
 
     policy = _make_policy(
         rules=[

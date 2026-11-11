@@ -23,9 +23,18 @@ except ImportError:  # pragma: no cover - older Pythons
 # V31: longest regex a `matches` condition may carry.
 _MAX_PATTERN_LENGTH = 200
 
-# Longest subject a `matches` condition will evaluate against. Bounds the
-# cost of polynomial backtracking the structural guard cannot rule out.
-_MAX_SUBJECT_LENGTH = 4096
+# Longest subject a `matches` condition will evaluate against. This does NOT
+# bound residual polynomial backtracking (e.g. a*a*a*a*a*b is still slow well
+# below any practical cap); it only shrinks the attack surface. Trust-policy
+# subjects are agent ids / namespaces, so 1024 is already generous.
+_MAX_SUBJECT_LENGTH = 1024
+
+# Most variable-width quantifiers (min != max: *, +, ?, {m,n}) a pattern may
+# contain. Exponential blowup does not require nesting: ^a?a?...a?aaa...a$ is
+# 2^n against a short subject and passes the nesting guard, and long chains of
+# adjacent variable quantifiers (a{1,100}a{1,100}...) drive the polynomial
+# degree. 16 comfortably fits real patterns (an IPv4 matcher uses 4).
+_MAX_VARIABLE_QUANTIFIERS = 16
 
 
 class ConditionEvaluationError(ValueError):
@@ -101,13 +110,41 @@ def _has_catastrophic_repeat(subpattern) -> bool:
     return False
 
 
+def _count_variable_repeats(subpattern) -> int:
+    """Count quantifiers whose width is variable (min != max) in the tree."""
+    total = 0
+    for op, arg in subpattern:
+        name = str(op)
+        if name in ("MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT"):
+            min_count, max_count, body = arg
+            if min_count != max_count:
+                total += 1
+            total += _count_variable_repeats(body)
+        elif name == "BRANCH":
+            for branch in arg[1]:
+                total += _count_variable_repeats(branch)
+        elif name == "SUBPATTERN":
+            total += _count_variable_repeats(arg[3])
+        elif name in ("ASSERT", "ASSERT_NOT"):
+            total += _count_variable_repeats(arg[1])
+        elif name == "ATOMIC_GROUP":
+            total += _count_variable_repeats(arg)
+    return total
+
+
 def validate_matches_pattern(pattern: str) -> None:
     """Validate the regex of a ``matches`` condition, raising ``ValueError``.
 
     Rejects patterns that cannot work at evaluation time, so a bad policy
     fails when it is loaded instead of its rule silently never firing:
-    over-long patterns, invalid regexes, and patterns whose structure can
-    backtrack catastrophically (see ``_has_catastrophic_repeat``).
+    over-long patterns, invalid regexes, patterns whose structure can
+    backtrack catastrophically (see ``_has_catastrophic_repeat``), and
+    patterns stacking more variable-width quantifiers than
+    ``_MAX_VARIABLE_QUANTIFIERS`` (non-nested exponential/polynomial shapes).
+
+    This is best-effort hardening against the known catastrophic shapes, not
+    a proof of linear matching; the subject-length cap at evaluation time
+    shrinks, but does not eliminate, the residual polynomial surface.
     """
     if len(pattern) > _MAX_PATTERN_LENGTH:
         raise ValueError(
@@ -123,6 +160,13 @@ def validate_matches_pattern(pattern: str) -> None:
             " applied to a group that itself contains a quantifier or an"
             " alternation (e.g. (a+)+, (a{1,5}){1,5}, (a|aa){1,40});"
             " rewrite the pattern without the nesting"
+        )
+    if (count := _count_variable_repeats(parsed)) > _MAX_VARIABLE_QUANTIFIERS:
+        raise ValueError(
+            f"matches pattern stacks {count} variable-width quantifiers; the"
+            f" limit is {_MAX_VARIABLE_QUANTIFIERS}. Long chains of *, +, ?"
+            " or {m,n} backtrack exponentially/polynomially even without"
+            " nesting (e.g. a?a?...a?aaa...a)"
         )
 
 
@@ -220,13 +264,15 @@ class TrustCondition(BaseModel):
                 validate_matches_pattern(pattern)
             except ValueError as exc:
                 raise ConditionEvaluationError(str(exc)) from exc
-            # Cap the subject as a backstop: the structural guard rules out
-            # exponential backtracking, but polynomial backtracking (e.g.
-            # adjacent overlapping quantifiers like a+a+b) grows with subject
-            # length, and the subject can be attacker-influenced context. A
-            # trust-policy field (agent id, namespace) is far shorter than
-            # this. Raising (not returning False) keeps an oversized subject
-            # from bypassing a deny rule; the evaluator fails closed.
+            # Cap the subject as a mitigation, not a bound: a few adjacent
+            # overlapping quantifiers (a*a*a*b) can still be slow well below
+            # any practical cap, and exponential shapes are pattern-driven.
+            # The pattern-side guards (nesting rejection + the variable-
+            # quantifier ceiling) target those; this cap only shrinks the
+            # residual polynomial surface, and trust-policy subjects (agent
+            # ids, namespaces) are far shorter anyway. Raising (not returning
+            # False) keeps an oversized subject from bypassing a deny rule;
+            # the evaluator fails closed.
             subject = str(actual)
             if len(subject) > _MAX_SUBJECT_LENGTH:
                 raise ConditionEvaluationError(
