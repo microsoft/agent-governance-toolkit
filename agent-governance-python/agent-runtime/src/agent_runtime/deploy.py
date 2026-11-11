@@ -154,9 +154,16 @@ class DockerDeployer:
         if not shutil.which(self._docker):
             raise RuntimeError(f"{self._docker} not found in PATH")
 
-    def _run(self, args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
+    def _run(
+        self, args: list[str], check: bool = True, merge_stderr: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
         cmd = [self._docker] + args
         logger.debug("Running: %s", " ".join(cmd))
+        if merge_stderr:
+            return subprocess.run(  # noqa: S603 — trusted subprocess in deployment script
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, check=check, timeout=60,
+            )
         return subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=60)  # noqa: S603 — trusted subprocess in deployment script
 
     def deploy(self, agent_id: str, image: str, config: GovernanceConfig,
@@ -280,7 +287,13 @@ class DockerDeployer:
     def logs(self, agent_id: str, tail: int = 100) -> str:
         agent_id = _validate_agent_id(agent_id)
         try:
-            result = self._run(["logs", f"agt-{agent_id}", "--tail", str(tail)])
+            # The container runs without a TTY, so `docker logs` replays the
+            # agent's stderr on its own stderr. Agents commonly log there
+            # (Python's logging does by default), so read both streams, in the
+            # order Docker writes them.
+            result = self._run(
+                ["logs", f"agt-{agent_id}", "--tail", str(tail)], merge_stderr=True,
+            )
             return result.stdout
         except subprocess.CalledProcessError:
             return ""

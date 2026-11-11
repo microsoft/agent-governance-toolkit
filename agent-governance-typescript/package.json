@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/agent-governance-sdk",
   "version": "5.0.0",
-  "description": "Public Preview — TypeScript SDK for the Agent Governance Toolkit: agent identity, trust scoring, policy evaluation, and audit logging",
+  "description": "TypeScript SDK for the Agent Governance Toolkit: agent identity, trust scoring, policy evaluation, and audit logging",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -34,14 +34,14 @@
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
-    "@types/node": "26.6.5",
+    "@types/node": "26.6.6",
     "@swc/core": "1.16.2",
     "@swc/jest": "0.2.39",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@typescript-eslint/eslint-plugin": "8.72.0",
-    "@typescript-eslint/parser": "8.72.0",
-    "eslint": "10.13.0",
-    "jest": "30.4.2",
+    "@typescript-eslint/eslint-plugin": "8.72.1",
+    "@typescript-eslint/parser": "8.72.1",
+    "eslint": "10.14.0",
+    "jest": "30.5.2",
     "rimraf": "6.1.3",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
