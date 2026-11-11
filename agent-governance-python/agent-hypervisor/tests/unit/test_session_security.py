@@ -38,11 +38,11 @@ class TestVectorClock:
         assert merged.get("a1") == 3
         assert merged.get("a2") == 5
 
-    @pytest.mark.skip("Feature not available in Public Preview")
+    @pytest.mark.skip("Feature not implemented")
     def test_happens_before(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Public Preview")
+    @pytest.mark.skip("Feature not implemented")
     def test_concurrent(self):
         pass
 

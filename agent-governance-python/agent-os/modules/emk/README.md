@@ -1,4 +1,4 @@
-# emk - Episodic Memory Kernel — Public Preview
+# emk - Episodic Memory Kernel
 
 > **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 

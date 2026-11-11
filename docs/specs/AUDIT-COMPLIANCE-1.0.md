@@ -1146,7 +1146,7 @@ The delta hash MUST be computed as:
 
 ## 14. Commitment Engine
 
-> **Not implemented in this release.** The Commitment Engine was a Public Preview stub and
+> **Not implemented in this release.** The Commitment Engine was a stub and
 > has been removed from the implementation. This section is retained for historical spec
 > reference and does not describe shipped behavior.
 
@@ -1192,7 +1192,7 @@ enabling third-party verification without requiring access to the full delta his
 #### 14.3.4 flush_batch()
 
 - Attempts to anchor all queued commitments to the configured external store.
-- In the current implementation (Public Preview), this is a no-op that sets
+- In the current implementation, this is a no-op that sets
   `committed_to = "local"`.
 
 ### 14.4 External Anchoring [Pure Specification]
@@ -1202,7 +1202,7 @@ enabling third-party verification without requiring access to the full delta his
 - When external anchoring succeeds, `blockchain_tx_id` MUST be set to the transaction
   identifier and `committed_to` MUST identify the external system.
 - External anchoring failure MUST NOT invalidate the local commitment.
-- The current AGT implementation (Public Preview) does NOT perform external anchoring.
+- The current AGT implementation does NOT perform external anchoring.
 
 ---
 

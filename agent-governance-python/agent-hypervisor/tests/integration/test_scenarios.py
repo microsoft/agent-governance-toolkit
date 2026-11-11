@@ -332,7 +332,7 @@ class TestDriftDemotionCascade:
             on_drift_detected=lambda r: self.drift_events.append(r),
         )
 
-    @pytest.mark.skip("Feature not available in Public Preview")
+    @pytest.mark.skip("Feature not implemented")
     def test_repeated_medium_drift_escalates(self):
         """Multiple MEDIUM drifts accumulate; drift rate tracks correctly."""
         agent = "did:mesh:drifty-agent"
@@ -466,7 +466,7 @@ class TestAdapterFallbacks:
         assert result.drift_score == 0.0
         assert result.severity == DriftSeverity.NONE
 
-    @pytest.mark.skip("Feature not available in Public Preview")
+    @pytest.mark.skip("Feature not implemented")
     async def test_nexus_verify_agent_without_verifier(self):
         """verify_agent is permissive when no verifier configured."""
         nexus = NexusAdapter()
@@ -504,7 +504,7 @@ class TestAdapterFallbacks:
         assert analysis.trust_level == IATPTrustLevel.UNKNOWN
         assert analysis.ring_hint == ExecutionRing.RING_3_SANDBOX
 
-    @pytest.mark.skip("Feature not available in Public Preview")
+    @pytest.mark.skip("Feature not implemented")
     def test_nexus_cache_invalidation(self):
         """NexusAdapter cache can be invalidated."""
         engine = MockReputationEngine({"did:mesh:a": 800})
@@ -532,7 +532,7 @@ class TestAdapterFallbacks:
 class TestVerificationThresholdConfiguration:
     """Verify custom thresholds change drift severity classification."""
 
-    @pytest.mark.skip("Feature not available in Public Preview")
+    @pytest.mark.skip("Feature not implemented")
     def test_custom_strict_thresholds(self):
         """Strict thresholds: lower bars for flagging drift."""
         verifier = MockVerificationBackend()
@@ -561,7 +561,7 @@ class TestVerificationThresholdConfiguration:
         )
         assert result.severity == DriftSeverity.LOW
 
-    @pytest.mark.skip("Feature not available in Public Preview")
+    @pytest.mark.skip("Feature not implemented")
     def test_custom_relaxed_thresholds(self):
         """Relaxed thresholds: higher tolerance for drift."""
         verifier = MockVerificationBackend()
