@@ -30,6 +30,10 @@ Input -> Model -> Tool Call -> Tool Result -> Output
 
 ## Example manifest
 
+This manifest suits a host that calls `pre_tool_call` directly. `run_tool`,
+`protect_tool` and the adapters built on them also evaluate `post_tool_call`,
+so bind that point too before using them.
+
 ```yaml
 agent_control_specification_version: "0.4.0-alpha.1"
 metadata:
