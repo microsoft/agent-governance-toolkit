@@ -4,6 +4,8 @@
 
 from unittest.mock import patch
 
+import pytest
+
 from agent_sre.slo.indicators import (
     SLI,
     CostPerTask,
@@ -151,6 +153,26 @@ class TestResponseLatency:
 
         # 3 of 4 latencies are at or under the target
         assert sli.compliance() == 0.75
+
+    @pytest.mark.parametrize("percentile", [0.0, 0.5, 0.95, 0.99, 1.0])
+    def test_fractional_percentiles_are_accepted(self, percentile) -> None:
+        sli = ResponseLatency(percentile=percentile)
+        assert sli.percentile == percentile
+
+    def test_percentile_bounds_select_the_extremes(self) -> None:
+        for percentile, expected in ((0.0, 10.0), (1.0, 100.0)):
+            sli = ResponseLatency(percentile=percentile)
+            for ms in range(10, 110, 10):
+                sli.record_latency(float(ms))
+            assert sli.current_value() == expected
+
+    @pytest.mark.parametrize("percentile", [95, 99, 100, 1.5, -0.1, -1])
+    def test_percentile_outside_zero_to_one_is_rejected(self, percentile) -> None:
+        # A 0-100 scale is used in agent_sre.anomaly.detector, so passing
+        # 95 here is an easy mistake. Without the guard it clamped to the
+        # last sorted value and reported the maximum as the percentile.
+        with pytest.raises(ValueError, match="fraction between 0.0 and 1.0"):
+            ResponseLatency(percentile=percentile)
 
 
 class TestCostPerTask:
