@@ -79,8 +79,9 @@ def step4_check_audit_log(control_plane, agent):
     print("=" * 60)
     print()
     
-    # Get audit log for our agent
-    logs = control_plane.get_audit_log(agent.agent_id)
+    # Get the control plane's audit log. get_audit_log takes a limit,
+    # not an agent id, and the log is not filtered per agent.
+    logs = control_plane.get_audit_log()
     
     print(f"✓ Found {len(logs)} audit entries")
     print()
@@ -88,9 +89,12 @@ def step4_check_audit_log(control_plane, agent):
     if logs:
         print("  Most recent entry:")
         latest = logs[-1]
-        print(f"  - Action: {latest.get('action_type', 'N/A')}")
-        print(f"  - Status: {latest.get('status', 'N/A')}")
+        # Entries carry event_type, timestamp and an event-specific
+        # details dict; action_type appears inside details, and only for
+        # the events that have one.
+        print(f"  - Event: {latest.get('event_type', 'N/A')}")
         print(f"  - Timestamp: {latest.get('timestamp', 'N/A')}")
+        print(f"  - Details: {latest.get('details', {})}")
     
     print()
 
