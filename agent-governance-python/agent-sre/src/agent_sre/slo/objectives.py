@@ -27,12 +27,25 @@ class ExhaustionAction(Enum):
 
 @dataclass
 class BurnRateAlert:
-    """A burn rate alert threshold."""
+    """A burn rate alert threshold.
+
+    ``window_seconds`` is the period the burn rate is measured over and
+    must be positive; a non-positive window selects no events, so the
+    alert would never fire however fast the budget is burning.
+    """
 
     name: str
     rate: float
     severity: str = "warning"  # warning, critical, page
     window_seconds: int = 3600  # 1h fast burn by default
+
+    def __post_init__(self) -> None:
+        """Reject a window that would stop the alert ever firing."""
+        if self.window_seconds <= 0:
+            raise ValueError(
+                "window_seconds must be positive; got "
+                f"{self.window_seconds!r}"
+            )
 
     def is_firing(self, current_burn_rate: float) -> bool:
         """Check if this alert should fire."""
@@ -108,8 +121,20 @@ class ErrorBudget:
         Burn rate = error ratio in window / allowed error ratio (``total``)
         A burn rate of 1.0 means consuming budget at exactly the expected rate.
         >1.0 means faster than expected.
+
+        ``window_seconds`` defaults to 3600 when ``None`` and must
+        otherwise be positive: a non-positive window selects no events,
+        so it would report no burn rather than measuring a shorter one.
         """
-        window = window_seconds or 3600  # Default 1h window
+        if window_seconds is None:
+            window = 3600  # Default 1h window
+        elif window_seconds <= 0:
+            raise ValueError(
+                "window_seconds must be positive; got "
+                f"{window_seconds!r}"
+            )
+        else:
+            window = window_seconds
         cutoff = time.monotonic() - window
         recent_events = [e for e in self._events if e["timestamp"] >= cutoff]
         if not recent_events:

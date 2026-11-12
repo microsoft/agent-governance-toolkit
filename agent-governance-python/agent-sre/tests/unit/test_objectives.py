@@ -7,7 +7,13 @@ from unittest.mock import patch
 import pytest
 
 from agent_sre.slo.indicators import CostPerTask, PolicyCompliance, TaskSuccessRate
-from agent_sre.slo.objectives import SLO, ErrorBudget, ExhaustionAction, SLOStatus
+from agent_sre.slo.objectives import (
+    SLO,
+    BurnRateAlert,
+    ErrorBudget,
+    ExhaustionAction,
+    SLOStatus,
+)
 
 
 class TestErrorBudget:
@@ -71,6 +77,48 @@ class TestErrorBudget:
     def test_burn_rate_zero_with_no_events(self) -> None:
         budget = ErrorBudget(total=0.01)
         assert budget.burn_rate() == 0.0
+
+    def test_burn_rate_none_window_uses_the_one_hour_default(self) -> None:
+        budget = ErrorBudget(total=0.01)
+        for i in range(100):
+            budget.record_event(good=i >= 50)
+        assert budget.burn_rate(None) == budget.burn_rate(3600)
+
+    @pytest.mark.parametrize("window", [0, -1, -3600])
+    def test_burn_rate_rejects_a_non_positive_window(self, window: int) -> None:
+        # A non-positive window selects no events, so it would report no
+        # burn instead of measuring a shorter one. 0 was also falsy and
+        # silently fell back to the 3600 default.
+        budget = ErrorBudget(total=0.01)
+        with pytest.raises(ValueError, match="window_seconds must be positive"):
+            budget.burn_rate(window)
+
+    def test_burn_rate_accepts_a_short_positive_window(self) -> None:
+        budget = ErrorBudget(total=0.01)
+        with patch("agent_sre.slo.objectives.time.monotonic", return_value=1000):
+            for i in range(100):
+                budget.record_event(good=i >= 50)
+            assert budget.burn_rate(1) == pytest.approx(50.0)
+
+
+class TestBurnRateAlert:
+    def test_default_window_is_one_hour(self) -> None:
+        assert BurnRateAlert("warn", 2.0).window_seconds == 3600
+
+    def test_positive_window_is_accepted(self) -> None:
+        assert BurnRateAlert("warn", 2.0, "warning", 60).window_seconds == 60
+
+    @pytest.mark.parametrize("window", [0, -1, -3600])
+    def test_non_positive_window_is_rejected(self, window: int) -> None:
+        # Such an alert could never fire: its window selects no events,
+        # so its burn rate is always 0.0 regardless of real consumption.
+        with pytest.raises(ValueError, match="window_seconds must be positive"):
+            BurnRateAlert("warn", 2.0, "warning", window)
+
+    def test_is_firing_compares_against_the_rate(self) -> None:
+        alert = BurnRateAlert("warn", 2.0)
+        assert alert.is_firing(2.0) is True
+        assert alert.is_firing(1.9) is False
 
     def test_to_dict(self) -> None:
         budget = ErrorBudget(total=0.01)
