@@ -34,17 +34,32 @@ def _rule_action(rule: dict[str, Any]) -> str:
 
 
 def _condition_key(condition: Any) -> str:
-    try:
-        return json.dumps(condition, sort_keys=True, separators=(",", ":"), default=str)
-    except TypeError:
-        # sort_keys compares mapping keys, so a mapping that mixes integer and
-        # string keys (``value: {1: a, x: b}``) raised a bare TypeError here,
-        # before _validate_rules could refuse the value as one JSON cannot
-        # write. Fall back to an order-sensitive key: the merge completes and
-        # the validation report names the rule instead of a traceback.
-        return json.dumps(
-            condition, sort_keys=False, separators=(",", ":"), default=str
-        )
+    # Mapping keys that are not strings are refused by merge_documents before
+    # any condition reaches this comparison, so sort_keys cannot raise here.
+    return json.dumps(condition, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _non_string_mapping_key(value: Any) -> Any:
+    """Return the first mapping key in *value* that is not a string, else None.
+
+    YAML loads ``{1: a}`` with an integer key and ``{2026-06-23: a}`` with a
+    ``date`` key. ``json.dumps`` writes the first as ``"1"`` (a coercion) and
+    raises ``TypeError`` for the second whether or not keys are sorted, so the
+    overlap check below would crash before validation could name the rule.
+    """
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                return key
+            found = _non_string_mapping_key(item)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _non_string_mapping_key(item)
+            if found is not None:
+                return found
+    return None
 
 
 def _condition_parts(condition: dict[str, Any]) -> tuple[str, str, Any] | None:
@@ -434,6 +449,17 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 raise ResolutionError.invalid_governance(
                     f"rule {rule['name']!r} has a non-numeric priority "
                     f"({type(priority).__name__}); priority must be a finite number"
+                )
+            bad_key = _non_string_mapping_key(rule.get("condition"))
+            if bad_key is not None:
+                # Checked before the overlap comparison: json.dumps on a
+                # mapping with a date or mixed-type key raised a bare
+                # TypeError from _condition_key under a parent deny, so the
+                # migration ended in a traceback instead of this refusal.
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a condition mapping key of type "
+                    f"{type(bad_key).__name__} that cannot be written to Rego "
+                    "exactly; JSON object keys must be strings"
                 )
             if _condition_unsatisfiable(
                 rule.get("condition"), is_deny=_rule_action(rule) == "deny"

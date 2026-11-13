@@ -11,6 +11,7 @@ The render-level regressions below complement the OPA-backed scenarios under
 
 from __future__ import annotations
 
+import datetime
 import random
 import re
 import sys
@@ -1798,13 +1799,62 @@ def test_resolve_refuses_mixed_key_mapping_under_parent_deny(tmp_path: Path) -> 
     assert not bundle.exists()
 
 
-def test_merge_documents_survives_mixed_key_mapping_condition() -> None:
-    condition = {"field": "tool", "operator": "eq", "value": {1: "a", "x": "b"}}
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param({1: "a", "x": "b"}, id="mixed-int-str"),
+        pytest.param({datetime.date(2026, 6, 23): "a"}, id="date-key"),
+        pytest.param([{"ok": 1}, {"nested": {2: "b"}}], id="nested-in-list"),
+    ],
+)
+def test_merge_documents_refuses_non_string_mapping_keys(value: Any) -> None:
+    condition = {"field": "tool", "operator": "eq", "value": value}
     parent = {"rules": [{"name": "d", "action": "deny", "priority": 10, "condition": dict(condition)}]}
     child = {"rules": [{"name": "a", "action": "allow", "priority": 1, "condition": dict(condition)}]}
-    # Never a bare TypeError; the child allow is dropped as overlapping the parent deny.
-    merged = merge_documents([parent, child])
-    assert [r["name"] for r in merged] == ["d"]
+    # Never a bare TypeError from the overlap check's json.dumps: the parent
+    # rule is refused by name before any condition is compared.
+    with pytest.raises(ResolutionError, match="rule 'd'") as exc:
+        merge_documents([parent, child])
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert "JSON object keys must be strings" in str(exc.value)
+
+
+def test_resolve_refuses_date_key_mapping_under_parent_deny(tmp_path: Path) -> None:
+    # PyYAML loads ``{2026-06-23: a}`` with a datetime.date key. json.dumps
+    # rejects a date key with TypeError whether or not sort_keys is set, so
+    # the parent-deny/child-allow overlap check crashed before validation.
+    intervention = (
+        "intervention_points:\n"
+        "  pre_tool_call:\n"
+        "    policy_target: $.tool_call.args\n"
+        "    policy_target_kind: tool_args\n"
+        "    tool_name_from: $.tool_call.name\n"
+        "    policy: {id: agt_legacy_rules}\n"
+    )
+    (tmp_path / "governance.yaml").write_text(
+        "rules:\n"
+        "  - name: deny_dated\n"
+        "    action: deny\n"
+        "    priority: 10\n"
+        "    condition: {field: tool, operator: eq, value: {2026-06-23: a}}\n" + intervention,
+        encoding="utf-8",
+    )
+    child = tmp_path / "child"
+    child.mkdir()
+    (child / "governance.yaml").write_text(
+        "rules:\n"
+        "  - name: allow_dated\n"
+        "    action: allow\n"
+        "    priority: 1\n"
+        "    condition: {field: tool, operator: eq, value: {2026-06-23: a}}\n" + intervention,
+        encoding="utf-8",
+    )
+    bundle = tmp_path / "bundle"
+    with pytest.raises(ResolutionError, match="rule 'deny_dated'") as exc:
+        resolve_manifest(tmp_path, child, bundle_dir=bundle)
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert "cannot be written to Rego exactly" in str(exc.value)
+    assert not bundle.exists()
 
 
 def test_rego_op_clause_returns_none_for_untranslatable_literal() -> None:
