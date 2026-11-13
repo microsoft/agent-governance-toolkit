@@ -1410,6 +1410,12 @@ When `sre_request_budget` is invoked:
 2. If `cost_spent + requested_amount <= budget`, approve the request.
 3. Otherwise, deny with remaining budget information.
 
+Amounts passed to `sre_report_cost` and `sre_request_budget` MUST be
+finite and non-negative; any other value fails the tool call
+(`success=false`) and leaves the recorded spend unchanged. A budget of
+`0` is a limit like any other: `sre_report_cost` reports the remaining
+budget against it rather than treating it as unset.
+
 **[Pure Specification]**
 
 ### 15.7 Call History
