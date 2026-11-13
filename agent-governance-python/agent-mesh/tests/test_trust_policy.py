@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from agentmesh.governance.trust_policy import (
+    ConditionEvaluationError,
     ConditionOperator,
     TrustCondition,
     TrustDefaults,
@@ -300,3 +301,108 @@ class TestEdgeCases:
         # p2-allow has priority 10 (higher priority) so it wins
         assert decision.allowed is True
         assert decision.rule_name == "p2-allow"
+
+
+def test_matches_allows_bounded_quantifier_regex():
+    """A quantifier over an unambiguous body is ReDoS-safe and must be allowed.
+
+    Blocking '{' made a `matches` rule like '^svc-[0-9]{4}$' silently return
+    False (fail-open: a deny/require_approval rule using it never fires).
+    """
+    cond = TrustCondition(field="agent.id", operator="matches", value=r"^svc-[0-9]{4}$")
+    assert cond.evaluate({"agent": {"id": "svc-1234"}}) is True
+    assert cond.evaluate({"agent": {"id": "svc-12"}}) is False
+
+
+@pytest.mark.parametrize(
+    ("pattern", "matching_subject"),
+    [
+        (r"^svc-[0-9]{4}$", "svc-1234"),
+        (r"a{3}", "aaa"),
+        (r"^(ab){2,3}$", "abab"),
+        (r"^[a-z]+-[0-9]{1,3}$", "svc-12"),
+        (r"alpha|beta", "alpha"),  # top-level alternation, not under a quantifier
+        # Four variable-width quantifiers (an IPv4 matcher) sit well under the
+        # variable-quantifier ceiling.
+        (r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", "10.0.0.1"),
+    ],
+)
+def test_matches_structural_guard_allows_safe_patterns(pattern, matching_subject):
+    """Quantifiers over unambiguous bodies construct and evaluate normally."""
+    cond = TrustCondition(field="agent.id", operator="matches", value=pattern)
+    # Assert True on a matching subject: a guard rejection would raise, and a
+    # bool-typed assertion alone would pass even if the guard wrongly blocked
+    # the pattern from ever matching.
+    assert cond.evaluate({"agent": {"id": matching_subject}}) is True
+
+
+def test_matches_rejects_stacked_variable_quantifiers_at_load():
+    """Non-nested exponential shapes are rejected by the quantifier ceiling.
+
+    ^a?a?...a?aaa...a$ (25 of each) is 2^n against a short subject and
+    contains no nested quantifier, so the nesting guard alone cannot see it.
+    """
+    pattern = "^" + "a?" * 25 + "a" * 25 + "$"
+    with pytest.raises(ValueError, match="variable-width quantifiers"):
+        TrustCondition(field="agent.id", operator="matches", value=pattern)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"(a{1,5}){1,5}$",  # nested bounded quantifiers
+        r"(x{2,}){2,}$",  # nested open-ended quantifiers
+        r"(a+)+$",  # the classic
+        r"(.*)*",  # star over star
+        r"(\d{1,3}\.?){1,40}$",  # quantified group with an inner quantifier
+        r"(a|aa){1,40}$",  # alternation under a quantifier
+        r"(a?a?){1,30}$",  # optional (?) repeats nest too: {0,1} is variable-width
+    ],
+)
+def test_matches_rejects_catastrophic_patterns_at_load(pattern):
+    """A pattern that can backtrack catastrophically fails at load time.
+
+    Before, such a pattern was either rejected by a substring blocklist or
+    accepted outright; either way `matches` silently returned False or hung.
+    Now TrustCondition refuses to construct, so a bad policy is a loud load
+    error rather than a deny rule that never fires.
+    """
+    with pytest.raises(ValueError, match="catastrophically"):
+        TrustCondition(field="agent.id", operator="matches", value=pattern)
+
+
+def test_matches_invalid_regex_rejected_at_load():
+    """An uncompilable pattern is a load error, not a silent eval False."""
+    with pytest.raises(ValueError, match="not a valid regex"):
+        TrustCondition(field="agent.id", operator="matches", value=r"[unterminated")
+
+
+def test_matches_overlong_pattern_rejected_at_load():
+    with pytest.raises(ValueError, match="limit is 200"):
+        TrustCondition(field="agent.id", operator="matches", value="a" * 201)
+
+
+def test_matches_overlong_subject_fails_closed():
+    """A subject past the cap must not evaluate as "no match" — that would
+    let an attacker disarm a deny rule by padding the field. The condition
+    raises, and the evaluator converts that into a deny."""
+    cond = TrustCondition(field="agent.id", operator="matches", value=r"^[a-z]+$")
+    assert cond.evaluate({"agent": {"id": "a" * 1024}}) is True
+    with pytest.raises(ConditionEvaluationError):
+        cond.evaluate({"agent": {"id": "a" * 1025}})
+
+    policy = _make_policy(
+        rules=[
+            TrustRule(
+                name="deny-bad-ids",
+                condition=TrustCondition(field="agent.id", operator="matches", value=r"^evil-"),
+                action="deny",
+                priority=10,
+            )
+        ]
+    )
+    evaluator = PolicyEvaluator([policy])
+    decision = evaluator.evaluate({"agent": {"id": "x" * 5000}})
+    assert decision.allowed is False
+    assert decision.action == "deny"
+    assert "could not be evaluated safely" in decision.reason
