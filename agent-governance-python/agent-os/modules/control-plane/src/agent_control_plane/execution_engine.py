@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 import time
+from ._limits import tail
 from .agent_kernel import ExecutionRequest, ActionType
 
 
@@ -217,13 +218,17 @@ class ExecutionEngine:
         agent_id: Optional[str] = None,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """Get execution history, optionally filtered by agent"""
+        """Get execution history, optionally filtered by agent
+
+        ``limit`` keeps the most recent records; 0 returns none and a
+        negative value raises ValueError.
+        """
         history = self.execution_history
         
         if agent_id:
             history = [r for r in history if r["agent_id"] == agent_id]
         
-        return history[-limit:]
+        return tail(history, limit)
     
     def get_active_executions(self) -> Dict[str, ExecutionContext]:
         """Get currently active executions"""

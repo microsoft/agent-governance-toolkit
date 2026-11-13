@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 import warnings
 
+from ._limits import tail
 from .agent_kernel import (
     AgentKernel, AgentContext, ExecutionRequest, ExecutionResult,
     ActionType, PermissionLevel, PolicyRule, ExecutionStatus
@@ -432,8 +433,12 @@ class AgentControlPlane:
         }
     
     def get_audit_log(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get audit log entries"""
-        return self.kernel.get_audit_log()[-limit:]
+        """Get audit log entries
+
+        ``limit`` keeps the most recent entries; 0 returns none and a
+        negative value raises ValueError.
+        """
+        return tail(self.kernel.get_audit_log(), limit)
     
     def get_execution_history(
         self,
