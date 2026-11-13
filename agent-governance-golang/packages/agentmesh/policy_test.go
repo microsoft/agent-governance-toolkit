@@ -858,3 +858,44 @@ func TestMergeFromYAML_MisspelledScopeIsCorrectedToAgent(t *testing.T) {
 		t.Errorf("MergeFromYAML stored scope = %q, want \"agent\"", pe.rules[1].Scope)
 	}
 }
+
+func TestEvaluateIntegerEqualityCondition(t *testing.T) {
+	// Integer-valued equality / $in / $ne conditions must match. Rules loaded
+	// from YAML/JSON carry bare numbers as int/int64, so an int condition that
+	// never matched would fail closed to Deny. Regression for valuesEqual.
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "scale", Effect: Allow, Conditions: map[string]interface{}{"replicas": 3}},
+	})
+	if got := pe.Evaluate("scale", map[string]interface{}{"replicas": 3}); got != Allow {
+		t.Errorf("int equality: got %q, want %q", got, Allow)
+	}
+	if got := pe.Evaluate("scale", map[string]interface{}{"replicas": 4}); got != Deny {
+		t.Errorf("int equality mismatch should deny: got %q, want %q", got, Deny)
+	}
+
+	// Cross-type numeric (YAML int rule vs JSON float64 context) must also match.
+	if got := pe.Evaluate("scale", map[string]interface{}{"replicas": float64(3)}); got != Allow {
+		t.Errorf("int-vs-float equality: got %q, want %q", got, Allow)
+	}
+
+	// Integer pairs compare exactly: above 2^53 adjacent int64s collapse to
+	// the same float64, so a float-only path would spuriously match.
+	peBig := NewPolicyEngine([]PolicyRule{
+		{Action: "scale", Effect: Allow, Conditions: map[string]interface{}{"id": int64(9007199254740993)}},
+	})
+	if got := peBig.Evaluate("scale", map[string]interface{}{"id": int64(9007199254740992)}); got != Deny {
+		t.Errorf("int64 precision: adjacent >2^53 values must not match: got %q, want %q", got, Deny)
+	}
+	if got := peBig.Evaluate("scale", map[string]interface{}{"id": int64(9007199254740993)}); got != Allow {
+		t.Errorf("int64 precision: exact match must allow: got %q, want %q", got, Allow)
+	}
+
+	peIn := NewPolicyEngine([]PolicyRule{
+		{Action: "scale", Effect: Allow, Conditions: map[string]interface{}{
+			"tier": map[string]interface{}{"$in": []interface{}{1, 2, 3}},
+		}},
+	})
+	if got := peIn.Evaluate("scale", map[string]interface{}{"tier": 2}); got != Allow {
+		t.Errorf("$in int: got %q, want %q", got, Allow)
+	}
+}
