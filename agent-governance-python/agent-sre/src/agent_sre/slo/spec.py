@@ -76,9 +76,9 @@ class SLOSpec(BaseModel):
         return cls.model_validate(data)
 
     def to_yaml(self, path: str | Path) -> None:
-        """Save this SLO spec to a YAML file."""
+        """Save this SLO spec to YAML, preserving unset fields for inheritance."""
         path = Path(path)
-        data = self.model_dump(mode="json", exclude_none=True)
+        data = self.model_dump(mode="json", exclude_none=True, exclude_unset=True)
         with open(path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
