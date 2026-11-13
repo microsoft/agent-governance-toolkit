@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 # per-exec id and carries no host information.
 _EXEC_MARKER_ENV = "AGT_SANDBOX_EXEC_ID"
 
+# cspell:ignore getpid listdir
 # Run inside the container as ``python3 -c <script> <NAME=value>``:
 # SIGKILLs every process whose environment carries the marker (the timed
 # exec and any children that inherited it) and exits 0 if at least one
