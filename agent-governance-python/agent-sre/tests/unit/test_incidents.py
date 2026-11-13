@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Tests for incident detection and response."""
 
+import time
+
 from agent_sre.incidents.detector import (
     Incident,
     IncidentDetector,
@@ -125,3 +127,81 @@ class TestIncidentDetector:
         assert s["total_incidents"] == 1
         assert s["open_incidents"] == 1
         assert s["by_severity"]["p1"] == 1
+
+
+class TestIncidentCorrelation:
+    """Signals from one source within the correlation window form one incident."""
+
+    def test_correlated_signals_join_one_incident(self) -> None:
+        detector = IncidentDetector(correlation_window_seconds=300)
+        first = detector.ingest_signal(Signal(signal_type=SignalType.SLO_BREACH, source="bot-1"))
+        second = detector.ingest_signal(Signal(signal_type=SignalType.COST_ANOMALY, source="bot-1"))
+        third = detector.ingest_signal(Signal(signal_type=SignalType.LATENCY_SPIKE, source="bot-1"))
+
+        assert first is not None
+        assert second is None  # joined the open incident, no new one
+        assert third is None
+        assert detector.all_incidents == [first]
+        assert [s.signal_type for s in first.signals] == [
+            SignalType.SLO_BREACH,
+            SignalType.COST_ANOMALY,
+            SignalType.LATENCY_SPIKE,
+        ]
+        assert first.title == "Correlated: cost_anomaly, latency_spike, slo_breach from bot-1"
+
+    def test_correlated_signal_runs_each_action_once(self) -> None:
+        detector = IncidentDetector()
+        detector.register_response("slo_breach", ["manual_rollback", "notify_oncall"])
+        detector.register_response("cost_anomaly", ["throttle_agent", "notify_oncall"])
+        incident = detector.ingest_signal(Signal(signal_type=SignalType.SLO_BREACH, source="bot-1"))
+        detector.ingest_signal(Signal(signal_type=SignalType.COST_ANOMALY, source="bot-1"))
+
+        assert incident is not None
+        assert [a.action_type for a in incident.actions] == [
+            "manual_rollback",
+            "notify_oncall",
+            "throttle_agent",
+        ]
+
+    def test_correlated_signal_raises_incident_severity(self) -> None:
+        detector = IncidentDetector()
+        incident = detector.ingest_signal(Signal(signal_type=SignalType.SLO_BREACH, source="bot-1"))
+        assert incident is not None
+        assert incident.severity == IncidentSeverity.P2
+
+        detector.ingest_signal(Signal(signal_type=SignalType.TRUST_REVOCATION, source="bot-1"))
+
+        assert incident.severity == IncidentSeverity.P1
+
+    def test_signal_after_resolution_opens_incident_without_handled_signals(self) -> None:
+        detector = IncidentDetector()
+        detector.register_response("slo_breach", ["manual_rollback"])
+        first = detector.ingest_signal(Signal(signal_type=SignalType.SLO_BREACH, source="bot-1"))
+        assert first is not None
+        first.resolve()
+
+        second = detector.ingest_signal(Signal(signal_type=SignalType.COST_ANOMALY, source="bot-1"))
+
+        assert second is not None
+        assert [s.signal_type for s in second.signals] == [SignalType.COST_ANOMALY]
+        assert "manual_rollback" not in [a.action_type for a in second.actions]
+
+    def test_signal_outside_correlation_window_opens_new_incident(self) -> None:
+        detector = IncidentDetector(correlation_window_seconds=300)
+        old = Signal(signal_type=SignalType.SLO_BREACH, source="bot-1", timestamp=time.time() - 400)
+        first = detector.ingest_signal(old)
+
+        second = detector.ingest_signal(Signal(signal_type=SignalType.COST_ANOMALY, source="bot-1"))
+
+        assert first is not None
+        assert second is not None
+        assert [s.signal_type for s in second.signals] == [SignalType.COST_ANOMALY]
+
+    def test_signals_from_different_sources_stay_separate(self) -> None:
+        detector = IncidentDetector()
+        a = detector.ingest_signal(Signal(signal_type=SignalType.SLO_BREACH, source="bot-1"))
+        b = detector.ingest_signal(Signal(signal_type=SignalType.COST_ANOMALY, source="bot-2"))
+
+        assert a is not None
+        assert b is not None
+        assert len(detector.open_incidents) == 2
