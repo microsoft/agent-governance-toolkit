@@ -174,14 +174,31 @@ def adapt_to_canonical(data: dict, format: str) -> PluginManifest:
 
     capabilities = extract_capabilities(data, format)
 
-    return PluginManifest(
-        name=parsed.name,
-        version=parsed.version,
-        description=parsed.description,
-        author=data.get("author", "unknown"),
-        plugin_type=PluginType.AGENT,
-        capabilities=capabilities,
-    )
+    try:
+        return PluginManifest(
+            name=parsed.name,
+            version=parsed.version,
+            description=parsed.description,
+            author=_author_name(data.get("author")),
+            plugin_type=PluginType.AGENT,
+            capabilities=capabilities,
+        )
+    except MarketplaceError:
+        raise
+    except Exception as exc:
+        raise MarketplaceError(f"Invalid {format} manifest: {exc}") from exc
+
+
+def _author_name(author: object) -> object:
+    """Return the author string for the canonical manifest.
+
+    Plugin manifests may give ``author`` as a string or as an object such as
+    ``{"name": "...", "email": "..."}``. An object yields its ``name``, or its
+    ``email`` when it has no name; a missing author yields ``"unknown"``.
+    """
+    if isinstance(author, dict):
+        author = author.get("name") or author.get("email")
+    return "unknown" if author is None else author
 
 
 def extract_capabilities(data: dict, format: str) -> list[str]:

@@ -195,6 +195,32 @@ class TestAdaptToCanonical:
         manifest = adapt_to_canonical(data, "copilot")
         assert manifest.author == "unknown"
 
+    @pytest.mark.parametrize("fmt", ["copilot", "claude"])
+    def test_author_object_uses_name(self, fmt: str):
+        data = {
+            "name": "obj-author",
+            "author": {"name": "Alice", "email": "alice@example.com"},
+            "skills": [],
+            "permissions": [],
+        }
+        manifest = adapt_to_canonical(data, fmt)
+        assert manifest.author == "Alice"
+
+    def test_author_object_without_name_uses_email(self):
+        data = {"name": "obj-author", "author": {"email": "alice@example.com"}}
+        manifest = adapt_to_canonical(data, "copilot")
+        assert manifest.author == "alice@example.com"
+
+    def test_null_author_defaults_to_unknown(self):
+        data = {"name": "null-author", "author": None, "skills": []}
+        manifest = adapt_to_canonical(data, "copilot")
+        assert manifest.author == "unknown"
+
+    def test_unusable_author_raises_marketplace_error(self):
+        data = {"name": "bad-author", "author": ["Alice"], "skills": []}
+        with pytest.raises(MarketplaceError, match="Invalid copilot manifest"):
+            adapt_to_canonical(data, "copilot")
+
 
 # ── extract_capabilities ────────────────────────────────────────────────────
 
@@ -334,3 +360,19 @@ class TestVerifyCLIIntegration:
         result = runner.invoke(plugin, ["verify", str(tmp_path)])
         assert result.exit_code == 0
         assert "my-copilot-plugin" in result.output
+
+    def test_verify_claude_plugin_json_with_author_object(
+        self, tmp_path: Path, claude_data: dict
+    ):
+        claude_data["author"] = {"name": "Bob", "email": "bob@example.com"}
+        manifest_file = tmp_path / "plugin.json"
+        manifest_file.write_text(json.dumps(claude_data))
+
+        from click.testing import CliRunner
+
+        from agent_marketplace.cli_commands import plugin
+
+        runner = CliRunner()
+        result = runner.invoke(plugin, ["verify", str(manifest_file)])
+        assert result.exit_code == 0, result.output
+        assert "my-claude-plugin" in result.output
