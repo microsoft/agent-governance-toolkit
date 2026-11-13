@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Trust-gated MCP client verifies server identity (Phase 1 of #4528).**
+  `TrustGatedMCPClient` now discovers the server DID from
+  `/.well-known/agent.json` instead of returning `None`, and `connect()`
+  fails closed when trust material is configured: with a registry, the
+  document must parse, bind to a registered/active/trusted identity with
+  a matching Ed25519 key, and carry a fresh registry-signed signature
+  (plus an interactive single-use-nonce challenge when the document
+  advertises a same-origin HTTPS challenge endpoint); with only a trust
+  bridge, a missing or unverified DID no longer connects. Behavior
+  change: `connect()` with a bridge now returns `False` instead of
+  `True` when no server DID can be discovered. `invoke()` is unchanged
+  and still raises `NotImplementedError` pending Phase 2.
+
 - **RFC 8785 number serialization in the approval action digest**: `approval_protocol.canonicalize` now writes floats the way ECMAScript `Number::toString` does, as RFC 8785 section 3.2.2.3 requires (`1e-06` becomes `0.000001`, `1e-07` becomes `1e-7`, `1e21` becomes `1e+21`). Digests over action parameters holding such floats change; they now match other JCS implementations, and an approval computed by an earlier version over such a parameter no longer binds and must be requested again. The RFC 8785 Appendix B number table is pinned in the tests.
 - **HTTP trust middleware request authentication.** `TrustMiddleware` no longer
   accepts a caller-supplied `X-Agent-DID` header as proof of identity. It
