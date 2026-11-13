@@ -1,6 +1,6 @@
 # Microsoft.AgentGovernance.Extensions.Microsoft.Agents
 
-Public Preview companion package for `Microsoft.AgentGovernance` that makes it easy to hook the real [microsoft/agent-framework](https://github.com/microsoft/agent-framework) .NET pipeline exposed through `Microsoft.Agents.AI` into AGT governance.
+Companion package for `Microsoft.AgentGovernance` that makes it easy to hook the real [microsoft/agent-framework](https://github.com/microsoft/agent-framework) .NET pipeline exposed through `Microsoft.Agents.AI` into AGT governance.
 
 ## Install
 

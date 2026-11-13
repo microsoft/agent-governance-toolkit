@@ -11,7 +11,7 @@ hide:
 
 <div class="agt-hero-inner" markdown>
 
-<div class="agt-hero-kicker"><span>Public Preview</span><span>Runtime governance for autonomous agents</span></div>
+<div class="agt-hero-kicker"><span>Open source</span><span>Runtime governance for autonomous agents</span></div>
 
 # Ship autonomous agents with enforceable guardrails
 

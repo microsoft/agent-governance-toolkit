@@ -6,7 +6,7 @@ Screens MCP tool definitions for adversarial manipulation where attackers
 embed hidden instructions in tool descriptions/metadata that are invisible
 to users but executed by LLMs.
 
-Public Preview protections:
+Protections:
     - **Tool poisoning detection**: Catches hidden instructions, invisible
       unicode, markdown/HTML comments, and encoded payloads in tool
       descriptions.

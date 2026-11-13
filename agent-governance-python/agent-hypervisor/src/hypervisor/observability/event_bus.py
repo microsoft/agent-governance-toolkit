@@ -210,7 +210,13 @@ class HypervisorEventBus:
         agent_did: str | None = None,
         limit: int | None = None,
     ) -> list[HypervisorEvent]:
-        """Flexible query with multiple filters."""
+        """Flexible query with multiple filters.
+
+        ``limit`` keeps the most recent matching events; ``0`` returns
+        none, and a negative ``limit`` raises ``ValueError``.
+        """
+        if limit is not None and limit < 0:
+            raise ValueError(f"limit must be zero or positive; got {limit!r}")
         with self._lock:
             results: list[HypervisorEvent] = list(self._events)
 
@@ -222,7 +228,8 @@ class HypervisorEventBus:
             results = [e for e in results if e.agent_did == agent_did]
 
         if limit is not None:
-            results = results[-limit:]
+            # results[-0:] is the whole list, so 0 needs its own case.
+            results = results[-limit:] if limit else []
 
         return results
 

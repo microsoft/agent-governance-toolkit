@@ -259,3 +259,48 @@ class TestAsyncRetry:
 
         assert async_documented.__name__ == "async_documented"
         assert async_documented.__doc__ == "Async docstring."
+
+
+# ============================================================================
+# Argument validation
+# ============================================================================
+
+
+class TestRetryArguments:
+    """``retry`` rejects arguments that would break the wrapper."""
+
+    @pytest.mark.parametrize("max_attempts", [0, -1])
+    def test_rejects_fewer_than_one_attempt(self, max_attempts):
+        with pytest.raises(ValueError, match="max_attempts"):
+            retry(max_attempts=max_attempts)
+
+    def test_rejects_negative_backoff(self):
+        with pytest.raises(ValueError, match="backoff_base"):
+            retry(backoff_base=-1.0)
+
+    def test_single_attempt_calls_function_once(self):
+        calls = 0
+
+        @retry(max_attempts=1, exceptions=(ValueError,))
+        def fails():
+            nonlocal calls
+            calls += 1
+            raise ValueError("boom")
+
+        with pytest.raises(ValueError, match="boom"):
+            fails()
+        assert calls == 1
+
+    def test_zero_backoff_retries_without_waiting(self):
+        calls = 0
+
+        @retry(max_attempts=2, backoff_base=0.0, exceptions=(ValueError,))
+        def flaky():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise ValueError("transient")
+            return "ok"
+
+        assert flaky() == "ok"
+        assert calls == 2

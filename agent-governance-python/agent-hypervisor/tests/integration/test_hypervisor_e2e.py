@@ -334,7 +334,7 @@ class TestAuditTrailIntegration:
         assert len(session.delta_engine.deltas) == 5
 
     async def test_hash_chain_integrity(self):
-        """Public Preview: no chain verification, always returns True."""
+        """verify_chain accepts an intact chain and rejects a tampered one."""
         session = self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         for i in range(10):
             session.delta_engine.capture(
