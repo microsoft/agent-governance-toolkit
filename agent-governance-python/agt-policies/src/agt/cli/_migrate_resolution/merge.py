@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any
 
 from .errors import ResolutionError
@@ -33,7 +34,32 @@ def _rule_action(rule: dict[str, Any]) -> str:
 
 
 def _condition_key(condition: Any) -> str:
+    # Mapping keys that are not strings are refused by merge_documents before
+    # any condition reaches this comparison, so sort_keys cannot raise here.
     return json.dumps(condition, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _non_string_mapping_key(value: Any) -> Any:
+    """Return the first mapping key in *value* that is not a string, else None.
+
+    YAML loads ``{1: a}`` with an integer key and ``{2026-06-23: a}`` with a
+    ``date`` key. ``json.dumps`` writes the first as ``"1"`` (a coercion) and
+    raises ``TypeError`` for the second whether or not keys are sorted, so the
+    overlap check below would crash before validation could name the rule.
+    """
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                return key
+            found = _non_string_mapping_key(item)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _non_string_mapping_key(item)
+            if found is not None:
+                return found
+    return None
 
 
 def _condition_parts(condition: dict[str, Any]) -> tuple[str, str, Any] | None:
@@ -363,6 +389,22 @@ def _conditions_overlap(parent_condition: Any, child_condition: Any) -> bool:
     )
 
 
+def _document_rules(doc: dict[str, Any], level: int) -> list[Any]:
+    """Return the ``rules`` list of a document, refusing any other shape.
+
+    A missing key means no rules. ``rules: null`` (a bare ``rules:`` line)
+    and any non-list value are refused: iterating ``None`` raised a bare
+    ``TypeError`` that escaped the CLI, and a mapping or string would be
+    walked element by element and misreported as a nameless rule.
+    """
+    rules = doc.get("rules", [])
+    if not isinstance(rules, list):
+        raise ResolutionError.invalid_governance(
+            f"rules at level {level} must be a list, got {type(rules).__name__}"
+        )
+    return rules
+
+
 def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merge governance documents into a flat priority-sorted rule list.
 
@@ -389,10 +431,35 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
             raise ResolutionError.invalid_governance(
                 f"document at level {level} is not a mapping"
             )
-        for rule in doc.get("rules", []):
+        for rule in _document_rules(doc, level):
             if not isinstance(rule, dict) or "name" not in rule:
                 raise ResolutionError.invalid_governance(
                     f"rule at level {level} is missing name"
+                )
+            priority = rule.get("priority", 0)
+            if (
+                isinstance(priority, bool)
+                or not isinstance(priority, (int, float))
+                or (isinstance(priority, float) and not math.isfinite(priority))
+            ):
+                # The sort below would raise a bare TypeError on a null or
+                # string priority and skip the migration report entirely.
+                # Only a float can be non-finite; math.isfinite() on an int
+                # too large for a float raises OverflowError instead.
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a non-numeric priority "
+                    f"({type(priority).__name__}); priority must be a finite number"
+                )
+            bad_key = _non_string_mapping_key(rule.get("condition"))
+            if bad_key is not None:
+                # Checked before the overlap comparison: json.dumps on a
+                # mapping with a date or mixed-type key raised a bare
+                # TypeError from _condition_key under a parent deny, so the
+                # migration ended in a traceback instead of this refusal.
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a condition mapping key of type "
+                    f"{type(bad_key).__name__} that cannot be written to Rego "
+                    "exactly; JSON object keys must be strings"
                 )
             if _condition_unsatisfiable(
                 rule.get("condition"), is_deny=_rule_action(rule) == "deny"
@@ -404,7 +471,7 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 )
 
     if len(documents) == 1:
-        rules = list(documents[0].get("rules", []))
+        rules = list(_document_rules(documents[0], 0))
         rules.sort(key=lambda r: r.get("priority", 0), reverse=True)
         return rules
 
@@ -413,7 +480,7 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
 
     for level, doc in enumerate(documents):
-        for rule in doc.get("rules", []):
+        for rule in _document_rules(doc, level):
             name = str(rule["name"])
             existing = rules_by_name.get(name)
             override = bool(rule.get("override", False))
