@@ -79,6 +79,10 @@ REGISTERED_PACKAGES = {
     "sentence-transformers", "prometheus-client", "opentelemetry-api",
     "opentelemetry-sdk", "fhir.resources", "hl7apy", "zenpy", "freshdesk",
     "google-adk", "safety", "jupyter", "vitest", "tsup", "typescript",
+    # Verified PyPI releases in the humanoid action walkthrough lockfile.
+    "annotated-types", "certifi", "cffi", "dnspython", "email-validator",
+    "h11", "httpcore", "idna", "pycparser", "pydantic-core", "rfc8785",
+    "six", "typing-extensions", "typing-inspection",
     "requests",
     "twine",
     # PyJWT — required by agent-mesh/identity/entra_verifier.py for
