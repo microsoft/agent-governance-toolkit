@@ -433,14 +433,10 @@ class ACASandboxProvider(SandboxProvider):
                     {"pattern": h, "action": "Allow"} for h in hosts
                 ],
             }
-        try:
-            sb_client.set_egress_policy(policy)
-        except Exception as exc:
-            sandbox_id = getattr(sb_client, "sandbox_id", "<unknown>")
-            logger.warning(
-                "Failed to apply egress policy on sandbox '%s': %s",
-                sandbox_id, exc,
-            )
+        # No try/except here on purpose: a sandbox whose deny policy was not
+        # applied keeps Azure's default-allow egress, so the caller
+        # (``create_session``) must see the failure and refuse the session.
+        sb_client.set_egress_policy(policy)
 
     # ------------------------------------------------------------------
     # SandboxProvider interface
@@ -574,7 +570,30 @@ class ACASandboxProvider(SandboxProvider):
             )
 
         # Apply an explicit egress policy for every session. Defaults deny.
-        self._apply_egress_policy(sb_client, allow_hosts, net_default)
+        # Fail closed: if the policy cannot be applied the sandbox still has
+        # Azure's default-allow egress, so it must not be handed out. Delete
+        # it and refuse the session instead of returning it as READY.
+        try:
+            self._apply_egress_policy(sb_client, allow_hosts, net_default)
+        except Exception as exc:
+            with self._state_lock:
+                self._ring_enforcers.pop((agent_id, 'pending'), None)
+                self._ring_breach_detectors.pop((agent_id, 'pending'), None)
+            try:
+                sb_client.delete()
+            except Exception as delete_exc:
+                logger.error(
+                    "Failed to delete Azure sandbox '%s' for agent '%s' after "
+                    "its egress policy could not be applied; it may still be "
+                    "running with unrestricted egress and must be removed "
+                    "manually: %s",
+                    sandbox_id, agent_id, delete_exc,
+                )
+            raise RuntimeError(
+                f"Failed to apply egress policy on Azure sandbox "
+                f"'{sandbox_id}' for agent '{agent_id}'; the sandbox was not "
+                f"made available: {exc}"
+            ) from exc
 
         session_id = sandbox_id
         key = (agent_id, session_id)

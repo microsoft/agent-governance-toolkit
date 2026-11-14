@@ -536,13 +536,69 @@ class TestCreateSession:
         provider.create_session("agent-1", config=config)
         fake_sdk.default_sandbox.set_egress_policy.assert_not_called()
 
-    def test_egress_policy_failure_is_logged_not_raised(self, provider, fake_sdk):
-        fake_sdk.default_sandbox.set_egress_policy.side_effect = RuntimeError(
-            "egress 5xx"
-        )
+    def test_egress_policy_failure_refuses_session(self, provider, fake_sdk):
+        # A sandbox whose deny policy was not applied keeps Azure's
+        # default-allow egress, so it must never be returned as READY.
+        sb = fake_sdk.default_sandbox
+        sb.set_egress_policy.side_effect = RuntimeError("egress 5xx")
         config = _make_config(network_allowlist=["pypi.org"])
-        handle = provider.create_session("agent-1", config=config)
+
+        with pytest.raises(RuntimeError, match="egress policy") as excinfo:
+            provider.create_session("agent-1", config=config)
+
+        assert "egress 5xx" in str(excinfo.value)
+        # The unrestricted sandbox is torn down and never registered.
+        sb.delete.assert_called_once()
+        assert provider._sandboxes == {}
+        assert (
+            provider.get_session_status("agent-1", "sb-abc123")
+            == SessionStatus.DESTROYED
+        )
+        with pytest.raises(RuntimeError, match="No active session"):
+            provider.execute_code("agent-1", "sb-abc123", "print(1)")
+        sb.exec.assert_not_called()
+
+    def test_default_deny_all_egress_failure_refuses_session(
+        self, provider, fake_sdk
+    ):
+        # Same guarantee with no config at all: the default is deny-all.
+        sb = fake_sdk.default_sandbox
+        sb.set_egress_policy.side_effect = RuntimeError("egress 5xx")
+
+        with pytest.raises(RuntimeError, match="egress policy"):
+            provider.create_session("agent-1")
+
+        sb.delete.assert_called_once()
+        assert provider._sandboxes == {}
+
+    def test_egress_failure_still_raises_when_cleanup_fails(
+        self, provider, fake_sdk, caplog
+    ):
+        sb = fake_sdk.default_sandbox
+        sb.set_egress_policy.side_effect = RuntimeError("egress 5xx")
+        sb.delete.side_effect = RuntimeError("delete 5xx")
+
+        with caplog.at_level("ERROR"):
+            with pytest.raises(RuntimeError, match="egress policy"):
+                provider.create_session("agent-1")
+
+        assert provider._sandboxes == {}
+        # The operator is told which sandbox was left behind.
+        assert "sb-abc123" in caplog.text
+        assert "removed manually" in caplog.text
+
+    def test_network_default_allow_is_unaffected_by_egress_api(
+        self, provider, fake_sdk
+    ):
+        # Explicit opt-in to unrestricted egress makes no policy call, so a
+        # broken egress API cannot block it.
+        sb = fake_sdk.default_sandbox
+        sb.set_egress_policy.side_effect = RuntimeError("egress 5xx")
+        handle = provider.create_session(
+            "agent-1", config=_make_config(network_default="allow")
+        )
         assert handle.status == SessionStatus.READY
+        sb.delete.assert_not_called()
 
     def test_egress_falls_back_to_dict_when_typed_models_missing(
         self, provider, fake_sdk, monkeypatch
