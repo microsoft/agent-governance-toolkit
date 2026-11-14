@@ -25,7 +25,7 @@ const registrationsByClient = new WeakMap();
  * Loads the AGT policy once per effective plugin registration and wires it into
  * the OpenCode plugin contract:
  *
- *  - session.created           — log AGT governance status at session start
+ *  - event (session.created)   — log AGT governance status at session start
  *  - event (chat.params/start) — scan submitted prompts; throw to block
  *  - tool.execute.before       — enforce policy; throw to deny, mark args
  *                                for OpenCode's permission prompt on review
@@ -77,30 +77,30 @@ export const AgtGovernance = async (ctx) => {
   }
 
   return {
-    "session.created": async () => {
-      try {
-        const state = await getState();
-        const status = await getPolicyStatus(state);
-        if (typeof ctx?.client?.app?.log === "function") {
-          await ctx.client.app.log({
-            body: {
-              service: "agt-governance",
-              level: "info",
-              message:
-                `[AGT] OpenCode governance active — mode=${status.mode} source=${status.source} ` +
-                `promptDefenseEffective=${status.promptDefenseGrade} ` +
-                `promptDefenseConfigured=${status.configuredPromptDefenseGrade} ` +
-                `sessionStateEnabled=${status.sessionState.enabled} ` +
-                `audit=${status.auditEntries}`,
-            },
-          });
-        }
-      } catch {
-        // best-effort — do not block session creation
-      }
-    },
-
     event: async ({ event } = {}) => {
+      if (event?.type === "session.created") {
+        try {
+          const state = await getState();
+          const status = await getPolicyStatus(state);
+          if (typeof ctx?.client?.app?.log === "function") {
+            await ctx.client.app.log({
+              body: {
+                service: "agt-governance",
+                level: "info",
+                message:
+                  `[AGT] OpenCode governance active — mode=${status.mode} source=${status.source} ` +
+                  `promptDefenseEffective=${status.promptDefenseGrade} ` +
+                  `promptDefenseConfigured=${status.configuredPromptDefenseGrade} ` +
+                  `sessionStateEnabled=${status.sessionState.enabled} ` +
+                  `audit=${status.auditEntries}`,
+              },
+            });
+          }
+        } catch {
+          // best-effort — do not block session creation
+        }
+      }
+
       const lifecycleSessionId = extractLifecycleSessionId(event);
       if (event?.type === "session.deleted" && lifecycleSessionId) {
         const state = await getState();
