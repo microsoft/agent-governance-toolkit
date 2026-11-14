@@ -6,6 +6,7 @@ runnable script exercises input mediation without an LLM credential.
 ## Run
 
 ```bash
+pip install -e "policy-engine/sdk/python"
 pip install -e "agent-governance-python/agt-policies"
 pip install -e "agent-governance-python/agent-os"
 python examples/smolagents-governed/getting_started.py

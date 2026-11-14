@@ -6,6 +6,7 @@ runnable script exercises the adapter without making a network request.
 ## Run
 
 ```bash
+pip install -e "policy-engine/sdk/python"
 pip install -e "agent-governance-python/agt-policies"
 pip install -e "agent-governance-python/agent-os"
 python examples/openai-agents-governed/getting_started.py

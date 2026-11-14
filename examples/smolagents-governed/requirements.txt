@@ -1,3 +1,8 @@
 agent-os-kernel
 agentmesh-platform
 agent-sre
+
+# The ACS runtime that provides `agent_control_specification`. From a checkout
+# of this repo, install the SDK in-tree instead (it builds the native core):
+#   pip install -e policy-engine/sdk/python
+agent-control-specification>=0.3.1b1
