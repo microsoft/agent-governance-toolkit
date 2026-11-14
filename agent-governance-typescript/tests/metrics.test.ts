@@ -67,7 +67,15 @@ describe('ErrorBudgetTracker and SLOTracker', () => {
 });
 
 describe('CircuitBreaker', () => {
-  it('opens after repeated failures and closes on success', async () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ now: 1_000 });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('opens after repeated failures and closes on success', () => {
     const breaker = new CircuitBreaker(2, 5);
 
     breaker.onFailure();
@@ -76,10 +84,16 @@ describe('CircuitBreaker', () => {
     expect(breaker.state).toBe('open');
     expect(breaker.canExecute()).toBe(false);
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    jest.advanceTimersByTime(4);
+    expect(breaker.state).toBe('open');
+    expect(breaker.canExecute()).toBe(false);
+
+    jest.advanceTimersByTime(1);
     expect(breaker.state).toBe('half_open');
+    expect(breaker.canExecute()).toBe(true);
     breaker.onSuccess();
     expect(breaker.state).toBe('closed');
+    expect(breaker.canExecute()).toBe(true);
   });
 });
 
