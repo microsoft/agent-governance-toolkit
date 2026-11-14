@@ -26,70 +26,70 @@ Cross-references every rule in the ASI starter policy packs
 
 | Rule Name | Pack(s) | ASI Risk(s) | AGT Component |
 |-----------|---------|-------------|---------------|
-| `asi01-prompt-injection-override` | All | ASI-01 | Agent OS — Policy Engine |
-| `asi01-prompt-injection-role-hijack` | All | ASI-01 | Agent OS — Policy Engine |
-| `asi01-prompt-injection-delimiter` | All | ASI-01 | Agent OS — MCP Proxy Sanitizer |
-| `healthcare-asi01-cbrn-guardrail` | healthcare | ASI-01 | Agent OS — Policy Engine |
-| `asi01-prompt-injection-jailbreak` | general-saas | ASI-01 | Agent OS — Policy Engine |
-| `asi01-integrity-shipping-guardrail` | All | ASI-01, ASI-02 | Business Continuity — Logistics Guard |
-| `asi01-integrity-fraud-guardrail` | All | ASI-01, ASI-02 | Business Continuity — Fraud Guard |
-| `asi01-nested-swarm-guardrail` | general-saas | ASI-01 | AgentMesh — Delegation Guard |
-| `asi02-block-shell-execution` | All | ASI-02 | Agent OS — Capability Sandboxing |
-| `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
-| `asi02-block-file-deletion` | healthcare | ASI-02 | Agent OS — Capability Sandboxing |
-| `asi02-block-destructive-operations` | financial-services, general-saas | ASI-02 | Agent OS — Capability Sandboxing |
-| `financial-asi02-obfuscation-guardrail` | financial-services | ASI-02 | Agent OS — Binary Inspector |
-| `asi02-block-database-mutation` | general-saas | ASI-02 | Agent SRE — Audit Trail |
-| `asi03-block-privilege-escalation` | All | ASI-03 | AgentMesh — DID Identity & Trust |
-| `asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
-| `financial-asi03-identity-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary |
-| `asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
-| `asi03-account-mfa-bypass` | All | ASI-03 | AgentMesh — Identity Governance |
-| `asi03-account-admin-promotion` | All | ASI-03 | AgentMesh — Identity Governance |
-| `asi03-account-password-reset` | All | ASI-03 | AgentMesh — Identity Governance |
-| `asi03-account-audit-tampering` | All | ASI-03 | AgentMesh — Identity Governance |
-| `asi04-supply-chain-tool-enumeration` | All | ASI-04 | Agent OS — Recon Guard |
-| `asi04-supply-chain-dependency-poisoning` | All | ASI-04 | Agent OS — Payload Guard |
-| `asi04-supply-chain-plugin-hijack` | All | ASI-04 | Agent OS — Registry Proxy |
-| `asi04-supply-chain-config-mutation` | All | ASI-04 | Agent OS — State Guard |
-| `asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
-| `asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |
-| `asi05-sandbox-anti-pattern-detection` | All | ASI-05 | Agent Runtime — Context Guard |
-| `asi05-block-ssh` | general-saas | ASI-05 | Agent Runtime — Execution Rings |
-| `asi06-context-budget-limit` | All | ASI-06 | Agent OS — VFS / ContextScheduler |
-| `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — Context Integrity Firewall |
-| `asi07-hidden-channel-guardrail` | All | ASI-07 | AgentMesh — Signal Monitor |
-| `asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
-| `asi08-swarm-heat-guardrail` | All | ASI-08 | Agent SRE — Swarm Monitor |
-| `asi09-trust-payment-redirection` | All | ASI-09 | Business Continuity — Trust Firewall |
-| `asi09-trust-vip-impersonation` | All | ASI-09 | Business Continuity — Trust Firewall |
-| `asi09-trust-urgency-pretext` | All | ASI-09 | Business Continuity — Trust Firewall |
-| `asi09-trust-phishing-link` | All | ASI-09 | Business Continuity — Trust Firewall |
-| `asi10-charter-roleplay-block` | All | ASI-10 | Agent OS — Charter Enforcement |
-| `asi10-charter-purpose-override` | All | ASI-10 | Agent OS — Charter Enforcement |
-| `asi10-charter-autonomous-loop` | All | ASI-10 | Agent OS — Charter Enforcement |
-| `asi03-block-credentials-in-output` | All | ASI-02, ASI-03 | Agent OS — Policy Engine |
-| `asi06-block-pii-ssn` | All | ASI-01, ASI-06 | Agent OS — PII Protection |
-| `healthcare-block-phi-mrn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
-| `healthcare-block-phi-dea` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
-| `healthcare-enforce-deidentification` | healthcare | ASI-02, ASI-06 | Agent OS — Data Pipeline Security |
-| `financial-block-pii-credit-card` | financial-services | ASI-01, ASI-06 | Agent OS — PII Protection |
-| `saas-block-pii-email-bulk` | general-saas | ASI-02, ASI-06 | Agent OS — PII Protection |
-| `edu-asi01-homework-bypass` | edu-k12 | ASI-01 | Agent OS — Policy Engine |
-| `edu-asi01-content-filter-bypass` | edu-k12 | ASI-01 | Agent OS — Policy Engine |
-| `edu-asi02-block-grade-mutation` | edu-k12 | ASI-02 | Agent OS — Capability Sandboxing |
-| `edu-asi02-block-record-write` | edu-k12 | ASI-02 | Agent OS — Capability Sandboxing |
-| `edu-asi03-block-student-impersonation` | edu-k12 | ASI-03 | AgentMesh — DID Identity & Trust |
-| `edu-asi06-block-curriculum-poisoning` | edu-k12 | ASI-06 | Agent OS — Context Integrity Firewall |
-| `edu-asi09-parental-impersonation` | edu-k12 | ASI-09 | Business Continuity — Trust Firewall |
-| `edu-asi09-block-minor-contact-info` | edu-k12 | ASI-09 | Agent OS — PII Protection |
-| `edu-block-student-id` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
-| `edu-block-phi-iep` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
-| `edu-block-disciplinary-record` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
-| `edu-cipa-block-adult-content` | edu-k12 | ASI-01, ASI-06 | Agent OS — Policy Engine |
-| `edu-cipa-block-violence-content` | edu-k12 | ASI-01, ASI-06 | Agent OS — Policy Engine |
-| `edu-block-credentials-in-output` | edu-k12 | ASI-02, ASI-03 | Agent OS — Policy Engine |
-| `edu-ferpa-audit-record-access` | edu-k12 | ASI-01, ASI-06 | Agent OS — Audit Trail |
+| <a id="asi01-prompt-injection-override"></a>`asi01-prompt-injection-override` | All | ASI-01 | Agent OS — Policy Engine |
+| <a id="asi01-prompt-injection-role-hijack"></a>`asi01-prompt-injection-role-hijack` | All | ASI-01 | Agent OS — Policy Engine |
+| <a id="asi01-prompt-injection-delimiter"></a>`asi01-prompt-injection-delimiter` | All | ASI-01 | Agent OS — MCP Proxy Sanitizer |
+| <a id="healthcare-asi01-cbrn-guardrail"></a>`healthcare-asi01-cbrn-guardrail` | healthcare | ASI-01 | Agent OS — Policy Engine |
+| <a id="asi01-prompt-injection-jailbreak"></a>`asi01-prompt-injection-jailbreak` | general-saas | ASI-01 | Agent OS — Policy Engine |
+| <a id="asi01-integrity-shipping-guardrail"></a>`asi01-integrity-shipping-guardrail` | All | ASI-01, ASI-02 | Business Continuity — Logistics Guard |
+| <a id="asi01-integrity-fraud-guardrail"></a>`asi01-integrity-fraud-guardrail` | All | ASI-01, ASI-02 | Business Continuity — Fraud Guard |
+| <a id="asi01-nested-swarm-guardrail"></a>`asi01-nested-swarm-guardrail` | general-saas | ASI-01 | AgentMesh — Delegation Guard |
+| <a id="asi02-block-shell-execution"></a>`asi02-block-shell-execution` | All | ASI-02 | Agent OS — Capability Sandboxing |
+| <a id="asi02-block-network-exfiltration"></a>`asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
+| <a id="asi02-block-file-deletion"></a>`asi02-block-file-deletion` | healthcare | ASI-02 | Agent OS — Capability Sandboxing |
+| <a id="asi02-block-destructive-operations"></a>`asi02-block-destructive-operations` | financial-services, general-saas | ASI-02 | Agent OS — Capability Sandboxing |
+| <a id="financial-asi02-obfuscation-guardrail"></a>`financial-asi02-obfuscation-guardrail` | financial-services | ASI-02 | Agent OS — Binary Inspector |
+| <a id="asi02-block-database-mutation"></a>`asi02-block-database-mutation` | general-saas | ASI-02 | Agent SRE — Audit Trail |
+| <a id="asi03-block-privilege-escalation"></a>`asi03-block-privilege-escalation` | All | ASI-03 | AgentMesh — DID Identity & Trust |
+| <a id="asi03-block-credential-access"></a>`asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
+| <a id="financial-asi03-identity-guardrail"></a>`financial-asi03-identity-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary |
+| <a id="asi03-block-user-impersonation"></a>`asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
+| <a id="asi03-account-mfa-bypass"></a>`asi03-account-mfa-bypass` | All | ASI-03 | AgentMesh — Identity Governance |
+| <a id="asi03-account-admin-promotion"></a>`asi03-account-admin-promotion` | All | ASI-03 | AgentMesh — Identity Governance |
+| <a id="asi03-account-password-reset"></a>`asi03-account-password-reset` | All | ASI-03 | AgentMesh — Identity Governance |
+| <a id="asi03-account-audit-tampering"></a>`asi03-account-audit-tampering` | All | ASI-03 | AgentMesh — Identity Governance |
+| <a id="asi04-supply-chain-tool-enumeration"></a>`asi04-supply-chain-tool-enumeration` | All | ASI-04 | Agent OS — Recon Guard |
+| <a id="asi04-supply-chain-dependency-poisoning"></a>`asi04-supply-chain-dependency-poisoning` | All | ASI-04 | Agent OS — Payload Guard |
+| <a id="asi04-supply-chain-plugin-hijack"></a>`asi04-supply-chain-plugin-hijack` | All | ASI-04 | Agent OS — Registry Proxy |
+| <a id="asi04-supply-chain-config-mutation"></a>`asi04-supply-chain-config-mutation` | All | ASI-04 | Agent OS — State Guard |
+| <a id="asi05-block-code-execution"></a>`asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
+| <a id="asi05-block-dynamic-eval"></a>`asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |
+| <a id="asi05-sandbox-anti-pattern-detection"></a>`asi05-sandbox-anti-pattern-detection` | All | ASI-05 | Agent Runtime — Context Guard |
+| <a id="asi05-block-ssh"></a>`asi05-block-ssh` | general-saas | ASI-05 | Agent Runtime — Execution Rings |
+| <a id="asi06-context-budget-limit"></a>`asi06-context-budget-limit` | All | ASI-06 | Agent OS — VFS / ContextScheduler |
+| <a id="asi06-block-context-manipulation"></a>`asi06-block-context-manipulation` | All | ASI-06 | Agent OS — Context Integrity Firewall |
+| <a id="asi07-hidden-channel-guardrail"></a>`asi07-hidden-channel-guardrail` | All | ASI-07 | AgentMesh — Signal Monitor |
+| <a id="asi08-session-tool-call-limit"></a>`asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
+| <a id="asi08-swarm-heat-guardrail"></a>`asi08-swarm-heat-guardrail` | All | ASI-08 | Agent SRE — Swarm Monitor |
+| <a id="asi09-trust-payment-redirection"></a>`asi09-trust-payment-redirection` | All | ASI-09 | Business Continuity — Trust Firewall |
+| <a id="asi09-trust-vip-impersonation"></a>`asi09-trust-vip-impersonation` | All | ASI-09 | Business Continuity — Trust Firewall |
+| <a id="asi09-trust-urgency-pretext"></a>`asi09-trust-urgency-pretext` | All | ASI-09 | Business Continuity — Trust Firewall |
+| <a id="asi09-trust-phishing-link"></a>`asi09-trust-phishing-link` | All | ASI-09 | Business Continuity — Trust Firewall |
+| <a id="asi10-charter-roleplay-block"></a>`asi10-charter-roleplay-block` | All | ASI-10 | Agent OS — Charter Enforcement |
+| <a id="asi10-charter-purpose-override"></a>`asi10-charter-purpose-override` | All | ASI-10 | Agent OS — Charter Enforcement |
+| <a id="asi10-charter-autonomous-loop"></a>`asi10-charter-autonomous-loop` | All | ASI-10 | Agent OS — Charter Enforcement |
+| <a id="asi03-block-credentials-in-output"></a>`asi03-block-credentials-in-output` | All | ASI-02, ASI-03 | Agent OS — Policy Engine |
+| <a id="asi06-block-pii-ssn"></a>`asi06-block-pii-ssn` | All | ASI-01, ASI-06 | Agent OS — PII Protection |
+| <a id="healthcare-block-phi-mrn"></a>`healthcare-block-phi-mrn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
+| <a id="healthcare-block-phi-dea"></a>`healthcare-block-phi-dea` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
+| <a id="healthcare-enforce-deidentification"></a>`healthcare-enforce-deidentification` | healthcare | ASI-02, ASI-06 | Agent OS — Data Pipeline Security |
+| <a id="financial-block-pii-credit-card"></a>`financial-block-pii-credit-card` | financial-services | ASI-01, ASI-06 | Agent OS — PII Protection |
+| <a id="saas-block-pii-email-bulk"></a>`saas-block-pii-email-bulk` | general-saas | ASI-02, ASI-06 | Agent OS — PII Protection |
+| <a id="edu-asi01-homework-bypass"></a>`edu-asi01-homework-bypass` | edu-k12 | ASI-01 | Agent OS — Policy Engine |
+| <a id="edu-asi01-content-filter-bypass"></a>`edu-asi01-content-filter-bypass` | edu-k12 | ASI-01 | Agent OS — Policy Engine |
+| <a id="edu-asi02-block-grade-mutation"></a>`edu-asi02-block-grade-mutation` | edu-k12 | ASI-02 | Agent OS — Capability Sandboxing |
+| <a id="edu-asi02-block-record-write"></a>`edu-asi02-block-record-write` | edu-k12 | ASI-02 | Agent OS — Capability Sandboxing |
+| <a id="edu-asi03-block-student-impersonation"></a>`edu-asi03-block-student-impersonation` | edu-k12 | ASI-03 | AgentMesh — DID Identity & Trust |
+| <a id="edu-asi06-block-curriculum-poisoning"></a>`edu-asi06-block-curriculum-poisoning` | edu-k12 | ASI-06 | Agent OS — Context Integrity Firewall |
+| <a id="edu-asi09-parental-impersonation"></a>`edu-asi09-parental-impersonation` | edu-k12 | ASI-09 | Business Continuity — Trust Firewall |
+| <a id="edu-asi09-block-minor-contact-info"></a>`edu-asi09-block-minor-contact-info` | edu-k12 | ASI-09 | Agent OS — PII Protection |
+| <a id="edu-block-student-id"></a>`edu-block-student-id` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
+| <a id="edu-block-phi-iep"></a>`edu-block-phi-iep` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
+| <a id="edu-block-disciplinary-record"></a>`edu-block-disciplinary-record` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
+| <a id="edu-cipa-block-adult-content"></a>`edu-cipa-block-adult-content` | edu-k12 | ASI-01, ASI-06 | Agent OS — Policy Engine |
+| <a id="edu-cipa-block-violence-content"></a>`edu-cipa-block-violence-content` | edu-k12 | ASI-01, ASI-06 | Agent OS — Policy Engine |
+| <a id="edu-block-credentials-in-output"></a>`edu-block-credentials-in-output` | edu-k12 | ASI-02, ASI-03 | Agent OS — Policy Engine |
+| <a id="edu-ferpa-audit-record-access"></a>`edu-ferpa-audit-record-access` | edu-k12 | ASI-01, ASI-06 | Agent OS — Audit Trail |
 
 ---
 
@@ -128,10 +128,10 @@ Cross-references every rule in the ASI starter policy packs
 
 | Pack | Default Action | Max Tokens | Max Tool Calls | Confidence |
 |------|:--------------:|:----------:|:--------------:|:----------:|
-| `healthcare` | `deny` | 8,192 | 15 | 0.95 |
-| `financial-services` | `deny` | 6,000 | 20 | 0.95 |
-| `general-saas` | `deny` | 12,000 | 30 | 0.85 |
-| `edu-k12` | `deny` | 4,096 | 10 | 0.90 |
+| <a id="healthcare"></a>`healthcare` | `deny` | 8,192 | 15 | 0.95 |
+| <a id="financial-services"></a>`financial-services` | `deny` | 6,000 | 20 | 0.95 |
+| <a id="general-saas"></a>`general-saas` | `deny` | 12,000 | 30 | 0.85 |
+| <a id="edu-k12"></a>`edu-k12` | `deny` | 4,096 | 10 | 0.90 |
 
 All packs implement **deny-all by default**, enforcing the
 [Least Agency principle](owasp-agentic-top10-architecture.md).
