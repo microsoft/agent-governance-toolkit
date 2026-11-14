@@ -7,7 +7,10 @@ When an escalation chain exceeded ``max_escalation_depth`` the cap branch built 
 without the required ``authority`` field, so the guard raised ``TypeError``
 instead of returning a deny decision (issue #3539).
 """
+
 from __future__ import annotations
+
+import pytest
 
 from agent_os.supervisor import SupervisorHierarchy
 from agent_os.trust_root import TrustDecision
@@ -21,31 +24,30 @@ class _StubTrustRoot:
 
     def validate_action(self, action: dict) -> TrustDecision:
         # Reached only when the depth cap is NOT hit.
-        return TrustDecision(
-            allowed=True, reason="stub allow", authority="native-runtime"
-        )
+        return TrustDecision(allowed=True, reason="stub allow", authority="native-runtime")
 
 
-def _hierarchy_exceeding_depth() -> SupervisorHierarchy:
-    """A chain whose distinct levels below ``from_level`` exceed the cap."""
-    hierarchy = SupervisorHierarchy(trust_root=_StubTrustRoot(max_escalation_depth=2))
+def _hierarchy_exceeding_depth(max_escalation_depth: int) -> SupervisorHierarchy:
+    """Create a chain that exceeds each tested depth cap."""
+    hierarchy = SupervisorHierarchy(
+        trust_root=_StubTrustRoot(max_escalation_depth=max_escalation_depth)
+    )
     # Levels 0, 1, 2, 3 -> four distinct levels above from_level=4.
     for level in range(4):
-        hierarchy.register_supervisor(
-            f"sup-{level}", level=level, is_agent=level != 0
-        )
+        hierarchy.register_supervisor(f"sup-{level}", level=level, is_agent=level != 0)
     return hierarchy
 
 
-def test_escalation_depth_cap_returns_well_formed_decision() -> None:
+@pytest.mark.parametrize("max_depth", [0, 1, 2])
+def test_escalation_depth_cap_returns_well_formed_decision(max_depth: int) -> None:
     """Past the cap the guard must deny, not raise ``TypeError``."""
-    decision = _hierarchy_exceeding_depth().escalate(
+    decision = _hierarchy_exceeding_depth(max_depth).escalate(
         {"tool": "x", "arguments": {}}, from_level=4
     )
     assert isinstance(decision, TrustDecision)
     assert not decision.allowed
     assert "Max escalation depth" in decision.reason
-    assert decision.authority == "supervisor"
+    assert decision.authority == "trust_root"
     assert decision.deterministic
 
 
@@ -56,3 +58,4 @@ def test_escalation_below_the_cap_still_reaches_the_trust_root() -> None:
     hierarchy.register_supervisor("worker", level=1, is_agent=True)
     decision = hierarchy.escalate({"tool": "x", "arguments": {}}, from_level=1)
     assert decision.allowed
+    assert decision.authority == "native-runtime"
