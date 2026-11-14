@@ -34,9 +34,8 @@ This document assesses AGT's coverage of ISO 42001 clauses 4 through 10. For eac
 | Sub-clause | AGT Coverage | Status |
 |------------|-------------|--------|
 | 5.1 Leadership and commitment | Policy approval workflows require explicit human sign-off | Covered |
-| 5.2 Policy | AGT policies serve as the formal AI governance policy document | Covered |
+| 5.2 AI policy | AGT policies serve as the formal AI governance policy document; YAML policy format supports formal AI policy definition | Covered |
 | 5.3 Organizational roles, responsibilities, and authorities | Role-based policy rules define who can do what | Covered |
-| 5.4 AI policy | YAML policy format supports formal AI policy definition | Covered |
 
 **Gap:** None significant. AGT's approval and policy model aligns well with leadership requirements.
 
@@ -47,9 +46,9 @@ This document assesses AGT's coverage of ISO 42001 clauses 4 through 10. For eac
 | Sub-clause | AGT Coverage | Status |
 |------------|-------------|--------|
 | 6.1 Actions to address risks and opportunities | Risk-based policy rules with severity ratings | Covered |
+| 6.1.2 AI risk assessment | Policy evaluation includes risk scoring for agent actions | Covered |
+| 6.1.3 AI risk treatment | Deny-by-default with explicit allow rules; approval workflows for high-risk actions | Covered |
 | 6.2 AI objectives and planning to achieve them | Policy testing framework supports measurable objectives | Partial |
-| 6.3 AI risk assessment | Policy evaluation includes risk scoring for agent actions | Covered |
-| 6.4 AI risk treatment | Deny-by-default with explicit allow rules; approval workflows for high-risk actions | Covered |
 
 **Gap:** AGT does not include a formal risk register. Organizations should maintain one externally.
 
@@ -76,7 +75,6 @@ This document assesses AGT's coverage of ISO 42001 clauses 4 through 10. For eac
 | 8.1 Operational planning and control | Policy deployment via CI/CD pipelines | Covered |
 | 8.2 AI risk assessment | Real-time policy evaluation at agent runtime | Covered |
 | 8.3 AI risk treatment | Automated enforcement (allow/deny/escalate) | Covered |
-| 8.4 AI system development and deployment | Policy testing framework validates changes before deployment | Covered |
 
 **Gap:** None. This is AGT's strongest area.
 
