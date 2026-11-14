@@ -32,9 +32,9 @@ import json
 import logging
 from typing import Any, Callable, Optional
 
-from .advisory import _validate_webhook_url
 from .approval import ApprovalDecision
 from .approval_protocol import ApprovalRequest
+from .webhook_guard import DEFAULT_GUARD, WebhookEndpointGuard
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,13 @@ class VersionedWebhookApproval:
         response_verifier: Verifies the approver identity in the response and
             returns the trusted principal, or None to deny the approve.
         transport: Optional injected ``(url, data, headers, timeout) -> dict``
-            for testing; defaults to a urllib POST.
+            for testing; defaults to a guarded urllib POST.
+        endpoint_guard: SSRF policy for the endpoint. The default denies
+            loopback, private, link-local, metadata and other internal
+            destinations, resolves the host itself at connect time, pins the
+            connection to the validated address and follows no redirects.
+            Pass ``WebhookEndpointGuard.allowing([...])`` to permit an
+            internal approver.
     """
 
     def __init__(
@@ -141,8 +147,10 @@ class VersionedWebhookApproval:
         headers: Optional[dict[str, str]] = None,
         response_verifier: Optional[ResponseVerifier] = None,
         transport: Optional[Transport] = None,
+        endpoint_guard: Optional[WebhookEndpointGuard] = None,
     ) -> None:
-        _validate_webhook_url(url)
+        self._guard = endpoint_guard or DEFAULT_GUARD
+        self._guard.validate_url(url)
         self._url = url
         self._timeout = timeout_seconds
         self._headers = dict(headers or {})
@@ -163,10 +171,9 @@ class VersionedWebhookApproval:
             body, request=request, response_verifier=self._response_verifier
         )
 
-    @staticmethod
-    def _http_post(url: str, data: bytes, headers: dict, timeout: float) -> dict:
+    def _http_post(self, url: str, data: bytes, headers: dict, timeout: float) -> dict:
         import urllib.request
 
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        with self._guard.open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
