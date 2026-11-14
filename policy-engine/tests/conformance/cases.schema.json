@@ -47,7 +47,8 @@
         "rust",
         "python",
         "node",
-        "dotnet"
+        "dotnet",
+        "java"
       ],
       "additionalProperties": false,
       "properties": {
@@ -73,6 +74,13 @@
           ]
         },
         "dotnet": {
+          "enum": [
+            "required",
+            "optional",
+            "skip"
+          ]
+        },
+        "java": {
           "enum": [
             "required",
             "optional",
