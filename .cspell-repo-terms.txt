@@ -1358,3 +1358,6 @@ ndjson
 dataschema
 disp
 gitops
+polynomially
+subpattern
+unevaluable
