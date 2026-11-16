@@ -189,7 +189,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 **Gaps**:
 
 - [ ] **No retention enforcement**: Art. 19(1) requires providers, and Art. 26(6) deployers, to preserve logs for at least 6 months. The toolkit provides append-only logs but no retention enforcement, expiration management, or archival lifecycle.
-- [ ] **DeltaEngine chain verification is a stub**: `verify_chain()` at `delta.py:99` always returns `True` with comment "Public Preview: no chain verification." The hypervisor's audit trail has zero tamper evidence.
+- [x] **DeltaEngine chain verification**: `verify_chain()` in `delta.py` checks each entry's hash and parent linkage. Earlier releases returned `True` without checking.
 - [ ] **FlightRecorder hash covers INSERT, not final state**: Hash is computed at insert time with `policy_verdict='pending'`, but the verdict is later updated to `'allowed'`/`'blocked'`. Tampering of the verdict field is not detectable by integrity verification.
 - [ ] **Anomaly detections not in tamper-evident chain**: `RogueAgentDetector` stores assessments in an in-memory list, not in the integrity-protected audit chain.
 

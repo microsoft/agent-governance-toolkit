@@ -3,7 +3,7 @@
 
 # agent-mcp-governance
 
-> **Public Preview** — Standalone Python package that exposes the
+> Standalone Python package that exposes the
 > Agent Governance Toolkit's MCP (Model Context Protocol) governance
 > primitives for use outside the full AGT monorepo.
 

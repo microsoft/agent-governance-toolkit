@@ -34,13 +34,13 @@ classifiers = [
 
 dependencies = [
     "agent-governance-toolkit-core>=5.0.0,<6.0",
-    "pydantic>=2.14.1,<3.0",
+    "pydantic>=2.14.2,<3.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.1.1,<10.0",
-    "mypy>=2.4.0,<3.0",
+    "pytest>=9.2.0,<10.0",
+    "mypy>=2.4.1,<3.0",
     "ruff>=0.17.3,<1.0",
 ]
 

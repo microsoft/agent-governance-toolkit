@@ -51,7 +51,7 @@ class TestRingEnforcer:
             eff_score=0.96,
             has_consensus=False,
         )
-        # Public preview: no consensus requirement, access granted if ring is sufficient
+        # No consensus requirement: access granted if ring is sufficient
         assert result.allowed
 
     def test_ring1_with_consensus_allowed(self):

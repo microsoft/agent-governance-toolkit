@@ -2,7 +2,7 @@
 name = "agentmesh-mcp"
 version.workspace = true
 edition.workspace = true
-description = "Public Preview — MCP governance and security primitives for the Agent Governance Toolkit"
+description = "MCP governance and security primitives for the Agent Governance Toolkit"
 license.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/agentmesh-mcp"

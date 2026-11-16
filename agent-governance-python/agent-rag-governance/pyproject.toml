@@ -39,13 +39,13 @@ dependencies = [
 langchain = ["langchain-core>=0.2.0"]
 llamaindex = ["llama-index-core>=0.10.0"]
 dev = [
-    "pytest==9.1.1",
-    "pytest-asyncio==1.4.1",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.4.1.post1",
     "ruff>=0.4.0",
 ]
 test = [
-    "pytest==9.1.1",
-    "pytest-asyncio==1.4.1",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.4.1.post1",
 ]
 
 [project.urls]

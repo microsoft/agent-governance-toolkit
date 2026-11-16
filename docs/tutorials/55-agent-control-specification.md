@@ -27,12 +27,11 @@ You will create:
 - a Python host that calls `AgentControl.run_tool()`
 - three outcomes: `allow`, `transform`, and `deny`
 
-!!! important "Public Preview"
+!!! note "Engine dependency"
     AGT uses the published
     [agent-control-spec](https://github.com/responsibleai/agent-control-spec)
     engine. This tutorial uses AGT's compatibility host SDK in `policy-engine/`,
-    not the standalone upstream Python API. The APIs and manifest shape may
-    change before GA.
+    not the standalone upstream Python API.
 
 ## How ACS fits in AGT
 
@@ -207,7 +206,10 @@ asyncio.run(main())
 ```
 
 `run_tool()` evaluates `pre_tool_call` before execution and `post_tool_call`
-after the tool returns.
+after the tool returns. The manifest must bind both points. An unbound point
+denies with `runtime_error:intervention_point_unknown`, and if `post_tool_call`
+is missing, `run_tool()` raises that block before it calls the tool, so no
+side effect happens for a call it would report as blocked.
 
 ## Step 6: Run it
 

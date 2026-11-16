@@ -649,7 +649,7 @@ substitute MUST be unregistered from the kill switch.
 
 ## 13. Quarantine
 
-> **Not implemented in this release.** Agent quarantine was a Public Preview stub and has
+> **Not implemented in this release.** Agent quarantine was a stub and has
 > been removed from the implementation. This section is retained for historical spec
 > reference and does not describe shipped behavior.
 
