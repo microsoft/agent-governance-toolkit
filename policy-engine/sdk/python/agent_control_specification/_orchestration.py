@@ -68,6 +68,29 @@ class AgentControl:
         self._bound_points = _bound_points_from_client(runtime_client)
         self._approval_config = _approval_config_from_client(runtime_client)
 
+    def close(self) -> None:
+        """Release the runtime's resources.
+
+        The examples close the runtime in a ``finally`` block, so this method
+        has to exist and to be safe to call twice: a ``finally`` runs after a
+        normal return and after an exception, and the caller may close again
+        on the way out.
+
+        The runtime is stateless today, so closing releases whatever the
+        client exposes (a native handle, a pooled connection) and nothing
+        else; the runtime stays usable afterwards, which keeps a close in a
+        ``finally`` from changing the behaviour of the code around it.
+        """
+        close = getattr(self._runtime_client, "close", None)
+        if callable(close):
+            close()
+
+    def __enter__(self) -> "AgentControl":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
     @classmethod
     def from_native(
         cls,
