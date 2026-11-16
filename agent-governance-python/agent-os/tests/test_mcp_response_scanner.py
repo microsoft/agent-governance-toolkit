@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import json
+
 from agent_os.mcp_response_scanner import MCPResponseScanner
 
 # Fake Google API key built by concatenation so the contiguous literal never
@@ -181,3 +183,55 @@ def test_sanitize_response_redacts_glued_credential():
     assert "[REDACTED]" in sanitized
     credential_threats = [t for t in threats if t.category == "credential_leak"]
     assert len(credential_threats) >= 1
+
+
+# ---------------------------------------------------------------
+# Keyword secrets whose key is quoted. Structured tool results reach
+# the scanner as json.dumps() text, so {"api_key": "..."} is the
+# shape a leaked secret actually takes on this path.
+# ---------------------------------------------------------------
+
+_FAKE_QUOTED_SECRET = "fake-quoted-secret-0042"
+
+
+def test_scan_response_detects_secret_under_json_quoted_key():
+    scanner = MCPResponseScanner()
+
+    result = scanner.scan_response(json.dumps({"api_key": _FAKE_QUOTED_SECRET}), "lookup")
+
+    assert result.is_safe is False
+    credential_threats = [t for t in result.threats if t.category == "credential_leak"]
+    assert [t.matched_pattern for t in credential_threats] == ["Generic API secret"]
+    assert all(_FAKE_QUOTED_SECRET not in t.description for t in credential_threats)
+
+
+def test_scan_response_detects_secret_under_python_dict_repr_key():
+    scanner = MCPResponseScanner()
+
+    result = scanner.scan_response(str({"client_secret": _FAKE_QUOTED_SECRET}), "lookup")
+
+    assert result.is_safe is False
+    assert any(t.category == "credential_leak" for t in result.threats)
+
+
+def test_sanitize_response_redacts_quoted_key_secret_and_keeps_json():
+    scanner = MCPResponseScanner()
+    text = json.dumps({"token": _FAKE_QUOTED_SECRET, "status": "ok"})
+
+    sanitized, removed = scanner.sanitize_response(text, "lookup")
+
+    assert _FAKE_QUOTED_SECRET not in sanitized
+    assert json.loads(sanitized) == {"token": "[REDACTED]", "status": "ok"}
+    assert any(t.category == "credential_leak" for t in removed)
+
+
+def test_scan_response_emits_one_credential_threat_for_quoted_key_secret():
+    scanner = MCPResponseScanner()
+
+    # {"api_key": "AIza..."} matches the Google pattern and the generic
+    # keyword pattern on the same value span; report it once, by the
+    # specific type.
+    result = scanner.scan_response(json.dumps({"api_key": _FAKE_GOOGLE_KEY}), "tool")
+
+    credential_threats = [t for t in result.threats if t.category == "credential_leak"]
+    assert [t.matched_pattern for t in credential_threats] == ["Google API key"]

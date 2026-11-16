@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -915,4 +916,217 @@ def test_pii_scan_handles_separator_dense_input_quickly(text: str):
     matches = CredentialRedactor.find_pii_matches(text)
     elapsed = time.perf_counter() - start
     assert not any(match.name == "Email address" for match in matches)
+    assert elapsed < 1.0
+
+
+# ---------------------------------------------------------------
+# Keyword secrets whose key is quoted (JSON, Python dict repr).
+# The "Generic API secret" keyword ran straight into the separator,
+# so the closing quote of a quoted key ("api_key": ...) stopped the
+# match and the value passed through unredacted.
+# ---------------------------------------------------------------
+
+_FAKE_QUOTED_SECRET = "fake-quoted-secret-0042"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            '{"api_key": "' + _FAKE_QUOTED_SECRET + '"}',
+            '{"api_key": "' + REDACTED_PLACEHOLDER + '"}',
+        ),
+        (
+            '{"api_key":"' + _FAKE_QUOTED_SECRET + '"}',
+            '{"api_key":"' + REDACTED_PLACEHOLDER + '"}',
+        ),
+        (
+            '{"client_secret": "' + _FAKE_QUOTED_SECRET + '", "region": "eu-west-1"}',
+            '{"client_secret": "' + REDACTED_PLACEHOLDER + '", "region": "eu-west-1"}',
+        ),
+        (
+            '{"token": "' + _FAKE_QUOTED_SECRET + '"}',
+            '{"token": "' + REDACTED_PLACEHOLDER + '"}',
+        ),
+        (
+            '{"Secret": "' + _FAKE_QUOTED_SECRET + '"}',
+            '{"Secret": "' + REDACTED_PLACEHOLDER + '"}',
+        ),
+        (
+            "{'client_secret': '" + _FAKE_QUOTED_SECRET + "'}",
+            "{'client_secret': '" + REDACTED_PLACEHOLDER + "'}",
+        ),
+        (
+            "{'api-key': '" + _FAKE_QUOTED_SECRET + "'}",
+            "{'api-key': '" + REDACTED_PLACEHOLDER + "'}",
+        ),
+    ],
+    ids=[
+        "json-double-quotes",
+        "json-no-space",
+        "json-other-field-kept",
+        "json-token",
+        "json-case-insensitive",
+        "python-single-quotes",
+        "python-hyphenated-key",
+    ],
+)
+def test_quoted_key_secret_value_is_redacted(text: str, expected: str):
+    assert CredentialRedactor.redact(text) == expected
+    assert "Generic API secret" in CredentialRedactor.detect_credential_types(text)
+    assert CredentialRedactor.contains_credentials(text) is True
+
+
+def test_quoted_key_match_reports_only_the_value():
+    # find_matches is public API: for a quoted key the match text and offsets
+    # are the value alone, not the key, quotes or separator.
+    for text in (
+        '{"api_key": "' + _FAKE_QUOTED_SECRET + '"}',
+        "{'client_secret': '" + _FAKE_QUOTED_SECRET + "'}",
+    ):
+        matches = CredentialRedactor.find_matches(text)
+
+        assert [m.name for m in matches] == ["Generic API secret"]
+        assert matches[0].matched_text == _FAKE_QUOTED_SECRET
+        assert text[matches[0].start : matches[0].end] == _FAKE_QUOTED_SECRET
+
+
+def test_quoted_key_redaction_keeps_json_parseable():
+    payload = {
+        "user": "alice",
+        "api_key": _FAKE_QUOTED_SECRET,
+        "nested": {"client_secret": _FAKE_QUOTED_SECRET, "token": _FAKE_QUOTED_SECRET},
+        "region": "eu-west-1",
+    }
+
+    redacted = CredentialRedactor.redact(json.dumps(payload))
+
+    assert _FAKE_QUOTED_SECRET not in redacted
+    assert json.loads(redacted) == {
+        "user": "alice",
+        "api_key": REDACTED_PLACEHOLDER,
+        "nested": {"client_secret": REDACTED_PLACEHOLDER, "token": REDACTED_PLACEHOLDER},
+        "region": "eu-west-1",
+    }
+
+
+def test_quoted_key_in_json_encoded_string_is_redacted():
+    # A structured tool result whose text field carries JSON is serialized
+    # once more, so the inner quotes arrive escaped: {\"api_key\": \"...\"}.
+    inner = json.dumps({"api_key": _FAKE_QUOTED_SECRET})
+    text = json.dumps({"type": "text", "text": inner})
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_QUOTED_SECRET not in redacted
+    outer = json.loads(redacted)
+    assert json.loads(outer["text"]) == {"api_key": REDACTED_PLACEHOLDER}
+
+
+def test_quoted_key_redaction_leaves_no_residual_credential():
+    # A gateway in SANITIZE mode re-checks the sanitized text and fails
+    # closed on any residual credential, so the placeholder left behind by
+    # value-only redaction must not itself read as a secret.
+    for text in (
+        '{"api_key": "' + _FAKE_QUOTED_SECRET + '"}',
+        "{'client_secret': '" + _FAKE_QUOTED_SECRET + "'}",
+        json.dumps({"text": json.dumps({"token": _FAKE_QUOTED_SECRET})}),
+    ):
+        redacted = CredentialRedactor.redact(text)
+        assert CredentialRedactor.contains_credentials(redacted) is False
+        assert CredentialRedactor.redact(redacted) == redacted
+
+
+def test_only_the_exact_placeholder_is_left_alone_after_a_quoted_key():
+    # Anything beyond the bare placeholder is still a value and is redacted.
+    text = '{"api_key": "' + REDACTED_PLACEHOLDER + _FAKE_QUOTED_SECRET + '"}'
+
+    redacted = CredentialRedactor.redact(text)
+
+    assert _FAKE_QUOTED_SECRET not in redacted
+    assert redacted == '{"api_key": "' + REDACTED_PLACEHOLDER + '"}'
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # Unquoted value: ",", "}" and "]" close it, so they survive.
+        (
+            '{"token": 12345678, "next": 1}',
+            '{"token": ' + REDACTED_PLACEHOLDER + ', "next": 1}',
+        ),
+        ("{'secret': 12345678}", "{'secret': " + REDACTED_PLACEHOLDER + "}"),
+        ('["token": abcdefgh]', '["token": ' + REDACTED_PLACEHOLDER + "]"),
+        # Quoted value: the same characters are part of the secret.
+        ('{"api_key": "ab,cd}ef]gh"}', '{"api_key": "' + REDACTED_PLACEHOLDER + '"}'),
+        # Unterminated quote: the value is still redacted.
+        ('{"api_key": "' + _FAKE_QUOTED_SECRET, '{"api_key": "' + REDACTED_PLACEHOLDER),
+    ],
+)
+def test_quoted_key_value_ends_where_its_syntax_ends(text: str, expected: str):
+    redacted = CredentialRedactor.redact(text)
+
+    assert redacted == expected
+    assert CredentialRedactor.contains_credentials(redacted) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"token": false}',
+        '{"secret": null}',
+        '{"api_key": "abc"}',
+        '{"token": ""}',
+        '{"max_tokens": 4096}',
+        '{"secret_name": "prod-database"}',
+        '{"tokenizer": "default"}',
+        '{"apikeys": "abcdefghij"}',
+        "the token is rotated weekly",
+    ],
+)
+def test_quoted_key_matching_does_not_widen_to_non_secrets(text: str):
+    assert CredentialRedactor.redact(text) == text
+    assert CredentialRedactor.contains_credentials(text) is False
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("api_key=super-secret-value", REDACTED_PLACEHOLDER),
+        ("client_secret: super-secret-value", REDACTED_PLACEHOLDER),
+        ("token=super-secret-value;next", REDACTED_PLACEHOLDER + ";next"),
+        ('token: "super-secret-value"', REDACTED_PLACEHOLDER + '"'),
+    ],
+)
+def test_unquoted_key_redaction_is_unchanged(text: str, expected: str):
+    # The unquoted-key spelling keeps redacting the whole assignment.
+    assert CredentialRedactor.redact(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (f"aws_secret_access_key={_FAKE_AWS_SECRET}", REDACTED_PLACEHOLDER),
+        (f'"AWS Secret Access Key":"{_FAKE_AWS_SECRET}"', f'"{REDACTED_PLACEHOLDER}"'),
+        (f'{{"aws_secret_access_key": "{_FAKE_AWS_SECRET}"}}', f'{{"{REDACTED_PLACEHOLDER}"}}'),
+    ],
+)
+def test_aws_secret_pattern_behaviour_is_unchanged(text: str, expected: str):
+    assert CredentialRedactor.redact(text) == expected
+    assert CredentialRedactor.detect_credential_types(text) == ["AWS secret access key"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '"token"' * 20_000,
+        '{"token": "' + "a\\" * 20_000,
+        '{"token": ' + "\\" * 40_000,
+    ],
+    ids=["repeated-quoted-key", "escaped-value-run", "backslash-run"],
+)
+def test_quoted_key_pattern_handles_adversarial_input_quickly(text: str):
+    start = time.perf_counter()
+    CredentialRedactor.redact(text)
+    elapsed = time.perf_counter() - start
     assert elapsed < 1.0
