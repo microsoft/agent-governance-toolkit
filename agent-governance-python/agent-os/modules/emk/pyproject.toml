@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agent-governance-toolkit-memory"
 version = "5.0.0"
-description = "Public Preview — Episodic Memory Kernel for AI agent experience storage"
+description = "Episodic Memory Kernel for AI agent experience storage"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]

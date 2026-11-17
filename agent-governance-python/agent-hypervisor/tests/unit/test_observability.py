@@ -144,6 +144,41 @@ class TestHypervisorEventBus:
         results = bus.query(limit=3)
         assert len(results) == 3
 
+    def test_query_with_limit_zero_returns_no_events(self):
+        bus = HypervisorEventBus()
+        for i in range(5):
+            bus.emit(HypervisorEvent(event_type=EventType.VFS_WRITE, session_id=f"s{i}"))
+
+        assert bus.query(limit=0) == []
+        assert bus.query(event_type=EventType.VFS_WRITE, limit=0) == []
+
+    def test_query_with_negative_limit_rejected(self):
+        bus = HypervisorEventBus()
+        for i in range(5):
+            bus.emit(HypervisorEvent(event_type=EventType.VFS_WRITE, session_id=f"s{i}"))
+
+        # results[-(-2):] would silently drop the two oldest events instead.
+        with pytest.raises(ValueError, match="limit"):
+            bus.query(limit=-2)
+
+    def test_events_endpoint_limit(self):
+        pytest.importorskip("fastapi")
+        pytest.importorskip("httpx")
+        from fastapi.testclient import TestClient
+
+        from hypervisor.api.server import app
+
+        with TestClient(app) as client:
+            from hypervisor.api import server
+
+            for i in range(3):
+                server._bus().emit(
+                    HypervisorEvent(event_type=EventType.VFS_WRITE, session_id=f"s{i}")
+                )
+            assert len(client.get("/api/v1/events", params={"limit": 2}).json()) == 2
+            assert client.get("/api/v1/events", params={"limit": 0}).json() == []
+            assert client.get("/api/v1/events", params={"limit": -1}).status_code == 422
+
     def test_query_by_time_range(self):
         bus = HypervisorEventBus()
         now = datetime.now(UTC)

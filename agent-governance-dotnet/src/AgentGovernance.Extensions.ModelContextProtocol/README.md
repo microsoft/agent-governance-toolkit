@@ -1,6 +1,6 @@
 # Microsoft.AgentGovernance.Extensions.ModelContextProtocol
 
-Public Preview companion package for the official Model Context Protocol C# SDK.
+Companion package for the official Model Context Protocol C# SDK.
 
 ## Install
 

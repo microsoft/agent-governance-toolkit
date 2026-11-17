@@ -17,7 +17,7 @@
 // Source paths. The Rego library is parameterised over the text to scan.
 // The Cedar mirror scans the host-visible snapshot fields:
 // `context.input.body` at the `input` intervention point and
-// `context.response.content` at the `output` intervention point. Authors
+// `context.output` at the `output` intervention point. Authors
 // who need to scan other fields write their own `forbid` policy following
 // the shape below.
 
@@ -38,9 +38,8 @@ forbid (
   action,
   resource
 ) when {
-  context has response &&
-  context.response has content &&
-  context.response.content like "*@*.*"
+  context has output &&
+  context.output like "*@*.*"
 };
 
 @id("pii_ssn_pattern_in_input")
@@ -60,9 +59,8 @@ forbid (
   action,
   resource
 ) when {
-  context has response &&
-  context.response has content &&
-  context.response.content like "*-*-*"
+  context has output &&
+  context.output like "*-*-*"
 };
 
 @id("pii_credit_card_pattern_in_input")
@@ -82,7 +80,6 @@ forbid (
   action,
   resource
 ) when {
-  context has response &&
-  context.response has content &&
-  context.response.content like "*-*-*-*"
+  context has output &&
+  context.output like "*-*-*-*"
 };

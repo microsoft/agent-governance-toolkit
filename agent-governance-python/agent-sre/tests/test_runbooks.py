@@ -215,6 +215,48 @@ class TestRunbookExecutor:
         # Should have step results including rolled-back ones
         assert len(execution.step_results) >= 2
 
+    def test_rollback_marks_rolled_back_steps(self) -> None:
+        rb = Runbook(
+            id="rb-rollback-steps",
+            name="Rollback Steps",
+            steps=[
+                RunbookStep(name="ok", action=_ok_action, rollback_action=_rollback_action),
+                RunbookStep(name="no-undo", action=_ok_action),
+                RunbookStep(name="boom", action=_fail_action),
+            ],
+        )
+        execution = RunbookExecutor().execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.ROLLED_BACK
+        statuses = {r.step_name: r.status for r in execution.step_results}
+        assert statuses == {
+            "ok": StepStatus.ROLLED_BACK,
+            "no-undo": StepStatus.SUCCESS,
+            "boom": StepStatus.FAILED,
+        }
+
+    def test_failed_rollback_leaves_execution_failed(self) -> None:
+        def _broken_rollback(incident: Incident) -> str:
+            raise RuntimeError("undo failed")
+
+        rb = Runbook(
+            id="rb-rollback-broken",
+            name="Broken Rollback",
+            steps=[
+                RunbookStep(name="first", action=_ok_action, rollback_action=_rollback_action),
+                RunbookStep(name="second", action=_ok_action, rollback_action=_broken_rollback),
+                RunbookStep(name="boom", action=_fail_action),
+            ],
+        )
+        executor = RunbookExecutor()
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.FAILED
+        results = {r.step_name: r for r in execution.step_results}
+        assert results["first"].status == StepStatus.ROLLED_BACK
+        assert results["second"].status == StepStatus.SUCCESS
+        assert "undo failed" in results["second"].error
+        events = [e["event"] for e in executor.event_log]
+        assert "rollback_failed" in events
+
     def test_approval_callback_approved(self) -> None:
         rb = Runbook(
             id="rb-approve",

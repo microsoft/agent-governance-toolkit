@@ -8,7 +8,7 @@ owner: docs-team
 
 > **Audience:** Technical decision-makers evaluating governance for enterprise AI agent deployments
 >
-> **Repo:** [microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) — MIT Licensed, Public Preview
+> **Repo:** [microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) — MIT Licensed
 
 ---
 
@@ -324,4 +324,4 @@ Works with **20+ agent frameworks** — no vendor lock-in:
 
 ---
 
-*Agent Governance Toolkit is a Microsoft open-source project (MIT License). Public Preview -- production-quality with 13,000+ tests.*
+*Agent Governance Toolkit is a Microsoft open-source project (MIT License) with 13,000+ tests.*

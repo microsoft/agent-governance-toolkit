@@ -21,6 +21,15 @@ jobs:
           chmod +x scripts/ci/no-stubs.sh
           scripts/ci/no-stubs.sh "origin/$BASE_REF"
 
+  release-stage-label:
+    name: No Release-Stage Label
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          chmod +x scripts/ci/check_no_public_preview.sh
+          scripts/ci/check_no_public_preview.sh
+
   no-custom-crypto:
     name: No Unauthorized Crypto
     runs-on: ubuntu-latest

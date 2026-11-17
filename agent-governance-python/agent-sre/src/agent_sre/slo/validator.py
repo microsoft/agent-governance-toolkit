@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """SLO spec validation and diff detection."""
 
 from __future__ import annotations

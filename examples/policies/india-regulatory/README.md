@@ -28,6 +28,23 @@ output; they do not observe the underlying system action, so they are detection 
 examples pack, not compliance controls. Treat them as a starting point, pair them with real
 action-level enforcement, and run your own compliance assessment.
 
+## Parameter-based rules need the host to supply the parameters
+
+Several rules decide on a declared parameter rather than on the action name or the output
+text: `log_storage_region` and `ntp_synced` (CERT-In), `storage_region`, `data_class` and
+`kyc_completed` (RBI), `consent_logged` and `encrypted` (DPDP), `aadhaar_masked` (Aadhaar),
+and `human_accountable`, `log_storage_region` and `vapt_completed` (SEBI). Those keys reach
+a policy only if the host puts them into the tool call arguments at `pre_tool_call`, or into
+`input.body.params` at the input interception. Nothing in this repository sets any of them,
+so in a default deployment those rules are inert and the pack decides on action names and
+output text alone.
+
+One name collides and is worth knowing about. `agent-mesh` carries a `data_class` field on
+its TRACE trust records, documented as the highest-sensitivity data class processed in a
+session and defaulting to `internal`. That is a different field from the RBI rule's
+`input.params.data_class`, which expects one of `payment_data`, `transaction_data` or
+`card_data`. Feeding the first into the second would be accepted and would never match.
+
 ## Not covered (known gaps)
 Material obligations the pack does not represent yet, listed so the example is honest about its scope:
 - DPDP: s.5 notice; s.9 children's data (verifiable parental consent, no behavioural monitoring of minors); ss.11-14 Data Principal rights.

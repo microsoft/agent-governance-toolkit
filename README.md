@@ -33,9 +33,6 @@
 [![AARM Extended](https://img.shields.io/badge/AARM-Extended_(R1–R9)-brightgreen)](https://aarm.dev/builders/agent-governance-toolkit-microsoft)
 [![ATF](https://img.shields.io/badge/ATF-All_5_Elements-brightgreen)](https://agentictrustframework.ai/ecosystem)
 
-> [!IMPORTANT]
-> **Public Preview** -- production-quality public preview releases. May have breaking changes before GA.
-
 Policy enforcement, identity, sandboxing, and SRE for autonomous AI agents. One `pip install`, any framework.
 
 ---

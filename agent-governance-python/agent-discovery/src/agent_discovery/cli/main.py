@@ -148,6 +148,7 @@ def scan(
             risk = scorer.score(agent)
             agent.tags["risk_level"] = risk.level.value
             agent.tags["risk_score"] = str(risk.score)
+    inventory.save()
 
     console.print(
         f"\n[bold]Total: {total_found} agents discovered, {inventory.count} in inventory[/bold]\n"

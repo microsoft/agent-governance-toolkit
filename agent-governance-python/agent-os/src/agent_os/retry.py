@@ -53,11 +53,23 @@ def retry(
             shared upstream. Disable only for deterministic tests; production
             callers should leave this on.
 
+    Raises:
+        ValueError: If ``max_attempts`` is less than 1 or ``backoff_base``
+            is negative.
+
     Example:
         @retry(max_attempts=3, exceptions=(ConnectionError, TimeoutError))
         async def fetch_data(url: str) -> dict:
             ...
     """
+    # With no attempts the wrapper would never call the function and would
+    # raise ``None``; a negative delay makes the sleep before the first retry
+    # raise and hide the exception being retried.
+    if max_attempts < 1:
+        raise ValueError(f"max_attempts must be at least 1; got {max_attempts!r}")
+    if backoff_base < 0:
+        raise ValueError(f"backoff_base must be zero or positive; got {backoff_base!r}")
+
     def decorator(func: Callable) -> Callable:
         if asyncio.iscoroutinefunction(func):
             @functools.wraps(func)

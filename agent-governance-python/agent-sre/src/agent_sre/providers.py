@@ -3,8 +3,8 @@
 """
 Provider Discovery System for Agent SRE
 
-Enables plug-and-play upgrades from Public Preview to Advanced implementations.
-get_slo_detector() and get_chaos_engine() have no Public Preview implementation,
+Enables plug-and-play upgrades from the built-in to advanced implementations.
+get_slo_detector() and get_chaos_engine() have no built-in implementation,
 so each raises NotImplementedError unless an advanced provider is installed.
 """
 

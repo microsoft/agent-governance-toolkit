@@ -554,7 +554,7 @@ async def query_events(
     event_type: str | None = Query(None, description="Filter by event type"),
     session_id: str | None = Query(None, description="Filter by session ID"),
     agent_did: str | None = Query(None, description="Filter by agent DID"),
-    limit: int | None = Query(None, description="Max events to return"),
+    limit: int | None = Query(None, ge=0, description="Max events to return"),
 ) -> list[EventResponse]:
     """Query events with optional filters."""
     bus = _bus()

@@ -68,6 +68,34 @@ class TestTrustGate:
         gate.apply_decay("a")
         assert gate.get_score("a") < 0.5
 
+    def test_repeated_decay_charges_elapsed_time_once(self, monkeypatch):
+        gate = TrustGate(decay_rate=0.01)
+        now = 1_000_000.0
+        monkeypatch.setattr(time, "time", lambda: now)
+        gate.record_success("a")  # 0.55, updated at `now`
+        monkeypatch.setattr(time, "time", lambda: now + 10 * 3600)
+        scores = [gate.apply_decay("a") for _ in range(3)]
+        assert scores == pytest.approx([0.45, 0.45, 0.45])
+
+    def test_repeated_run_charges_elapsed_time_once(self, monkeypatch):
+        gate = TrustGate(decay_rate=0.01)
+        now = 1_000_000.0
+        monkeypatch.setattr(time, "time", lambda: now)
+        gate.record_success("a")
+        monkeypatch.setattr(time, "time", lambda: now + 10 * 3600)
+        scores = [gate.run(agent_id="a")["score"] for _ in range(3)]
+        assert scores == pytest.approx([0.45, 0.45, 0.45])
+
+    def test_decay_accumulates_across_intervals(self, monkeypatch):
+        gate = TrustGate(decay_rate=0.01)
+        now = 1_000_000.0
+        monkeypatch.setattr(time, "time", lambda: now)
+        gate.record_success("a")
+        monkeypatch.setattr(time, "time", lambda: now + 4 * 3600)
+        gate.run(agent_id="a")
+        monkeypatch.setattr(time, "time", lambda: now + 10 * 3600)
+        assert gate.run(agent_id="a")["score"] == pytest.approx(0.45)
+
     def test_custom_min_score_override(self):
         gate = TrustGate()
         # Default score 0.5 should pass if min_score is set to 0.3
