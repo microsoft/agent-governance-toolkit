@@ -19,7 +19,6 @@ order) into a single flat rule list, with two security invariants:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import math
@@ -34,44 +33,52 @@ def _rule_action(rule: dict[str, Any]) -> str:
     return str(rule.get("action", "")).lower()
 
 
-def _condition_key(condition: Any) -> str:
-    """Return a digest that is equal for structurally equal conditions.
+def _condition_key(condition: Any, table: dict[Any, int] | None = None) -> int:
+    """Return an id that is equal for structurally equal conditions.
 
-    Built bottom-up with one digest per list or dict object, so a value that
-    YAML aliases make reachable through many paths is digested once. A
-    ``json.dumps`` of the condition expands every alias path instead, and for
-    eight levels of ten aliases that is a hundred million leaves before the
-    comparison even starts. Mapping keys that are not strings are refused by
-    merge_documents before any condition reaches here.
+    Built bottom-up with one id per list or dict object, interned in
+    *table*: a container's id is looked up by its kind and its children's
+    ids, so two structures get the same id exactly when they are equal, and
+    comparing two conditions is a comparison of two ints. A value that YAML
+    aliases make reachable through many paths is visited once. A
+    ``json.dumps`` of the condition expands every alias path instead, and
+    for eight levels of ten aliases that is a hundred million leaves before
+    the comparison even starts. Callers comparing two conditions must pass
+    the same *table* for both. Mapping keys that are not strings are refused
+    by merge_documents before any condition reaches here.
     """
-    return _structural_digest(condition, {})
+    if table is None:
+        table = {}
+    return _structural_id(condition, table, {})
 
 
-def _structural_digest(value: Any, memo: dict[int, str]) -> str:
+def _structural_id(value: Any, table: dict[Any, int], memo: dict[int, int]) -> int:
     if isinstance(value, dict):
         known = memo.get(id(value))
         if known is not None:
             return known
-        parts = ",".join(
-            json.dumps(str(key)) + ":" + _structural_digest(item, memo)
-            for key, item in sorted(value.items(), key=lambda kv: str(kv[0]))
+        shape: Any = (
+            "d",
+            tuple(
+                (str(key), _structural_id(item, table, memo))
+                for key, item in sorted(value.items(), key=lambda kv: str(kv[0]))
+            ),
         )
-        digest = hashlib.sha256(("{" + parts + "}").encode()).hexdigest()
-        memo[id(value)] = digest
-        return digest
-    if isinstance(value, list):
+    elif isinstance(value, list):
         known = memo.get(id(value))
         if known is not None:
             return known
-        parts = ",".join(_structural_digest(item, memo) for item in value)
-        digest = hashlib.sha256(("[" + parts + "]").encode()).hexdigest()
-        memo[id(value)] = digest
-        return digest
-    # Scalars: the JSON spelling keeps 1 and "1", and True and 1, distinct
-    # for the equality test that _rego_values_equal also makes.
-    if isinstance(value, bool) or value is None or isinstance(value, (int, float, str)):
-        return json.dumps(value)
-    return "!" + repr(value)
+        shape = ("l", tuple(_structural_id(item, table, memo) for item in value))
+    elif isinstance(value, bool) or value is None or isinstance(value, (int, float, str)):
+        # The JSON spelling keeps 1 and "1", and True and 1, distinct, as
+        # _rego_values_equal does.
+        shape = ("s", json.dumps(value))
+    else:
+        shape = ("o", repr(value))
+    node = table.setdefault(shape, len(table))
+    if isinstance(value, (dict, list)):
+        memo[id(value)] = node
+    return node
 
 
 def _non_string_mapping_key(value: Any, _seen: set[int] | None = None) -> Any:
@@ -447,7 +454,8 @@ def _conditions_disjoint(
 
 
 def _conditions_overlap(parent_condition: Any, child_condition: Any) -> bool:
-    if _condition_key(parent_condition) == _condition_key(child_condition):
+    table: dict[Any, int] = {}
+    if _condition_key(parent_condition, table) == _condition_key(child_condition, table):
         return True
     # Parent is the deny rule, child the allow rule being tested for preemption.
     return not _conditions_disjoint(
