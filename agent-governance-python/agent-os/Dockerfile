@@ -3,7 +3,7 @@
 # Run:   docker run -it agent-os
 # MCP:   docker run -i agent-os --stdio
 
-FROM python:3.14-slim@sha256:5b3879b6f3cb77e712644d50262d05a7c146b7312d784a18eff7ff5462e77033
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 LABEL maintainer="Microsoft Corporation"
 LABEL description="Agent OS - A kernel architecture for governing autonomous AI agents"
