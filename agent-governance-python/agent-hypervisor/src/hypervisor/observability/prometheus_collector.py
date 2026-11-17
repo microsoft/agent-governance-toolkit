@@ -196,6 +196,10 @@ class RingMetricsCollector:
 
         Counters are sent as increments: calling this again with the same
         exporter adds only the events recorded since the previous call.
+        Progress is tracked per exporter object, so reuse one exporter
+        instance across calls. An exporter that cannot be tracked
+        (unhashable, or not weak-referenceable) receives full totals on
+        every call, as before.
 
         Args:
             exporter: Any object implementing :class:`PrometheusExporterProtocol`
