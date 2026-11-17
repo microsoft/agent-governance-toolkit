@@ -1819,6 +1819,76 @@ def test_merge_documents_refuses_non_string_mapping_keys(value: Any) -> None:
     assert "JSON object keys must be strings" in str(exc.value)
 
 
+def test_merge_documents_walks_shared_aliases_once() -> None:
+    # YAML aliases make one object reachable through many paths. The
+    # mapping-key walk used to revisit it on every path, so eight levels of
+    # ten aliases each meant 10**8 leaf visits before the child rule was
+    # dropped. Each container is now visited once.
+    import time as _time
+
+    leaf: Any = {"ok": "leaf"}
+    for _ in range(8):
+        leaf = [leaf] * 10
+    condition = {"field": "tool", "operator": "eq", "value": leaf}
+    parent = {"rules": [{"name": "d", "action": "deny", "priority": 10, "condition": condition}]}
+    child = {"rules": [{"name": "a", "action": "allow", "priority": 1, "condition": condition}]}
+
+    start = _time.perf_counter()
+    merged = merge_documents([parent, child])
+    elapsed = _time.perf_counter() - start
+
+    assert [r["name"] for r in merged] == ["d"]
+    assert elapsed < 2.0
+
+
+def test_resolve_refuses_shared_alias_mapping_under_parent_deny(tmp_path: Path) -> None:
+    # The same aliased structure, loaded from YAML, with a non-string key at
+    # the leaf: the refusal names the rule and arrives without walking every
+    # alias path first.
+    import time as _time
+
+    intervention = (
+        "intervention_points:\n"
+        "  pre_tool_call:\n"
+        "    policy_target: $.tool_call.args\n"
+        "    policy_target_kind: tool_args\n"
+        "    tool_name_from: $.tool_call.name\n"
+        "    policy: {id: agt_legacy_rules}\n"
+    )
+    levels = ["l0: &l0 {1: a}"]
+    for depth in range(1, 9):
+        prev = f"*l{depth - 1}"
+        levels.append(f"l{depth}: &l{depth} [{', '.join([prev] * 10)}]")
+    anchors = "_anchors:\n" + "".join(f"  {line}\n" for line in levels)
+    rules = (
+        "rules:\n"
+        "  - name: deny_alias\n"
+        "    action: deny\n"
+        "    priority: 10\n"
+        "    condition: {field: tool, operator: eq, value: *l8}\n"
+    )
+    (tmp_path / "governance.yaml").write_text(anchors + rules + intervention, encoding="utf-8")
+    child = tmp_path / "child"
+    child.mkdir()
+    (child / "governance.yaml").write_text(
+        anchors
+        + "rules:\n"
+        "  - name: allow_alias\n"
+        "    action: allow\n"
+        "    priority: 1\n"
+        "    condition: {field: tool, operator: eq, value: *l8}\n" + intervention,
+        encoding="utf-8",
+    )
+    bundle = tmp_path / "bundle"
+    start = _time.perf_counter()
+    with pytest.raises(ResolutionError, match="rule 'deny_alias'") as exc:
+        resolve_manifest(tmp_path, child, bundle_dir=bundle)
+    elapsed = _time.perf_counter() - start
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
+    assert elapsed < 2.0
+    assert not bundle.exists()
+
+
 def test_resolve_refuses_date_key_mapping_under_parent_deny(tmp_path: Path) -> None:
     # PyYAML loads ``{2026-06-23: a}`` with a datetime.date key. json.dumps
     # rejects a date key with TypeError whether or not sort_keys is set, so

@@ -19,6 +19,7 @@ order) into a single flat rule list, with two security invariants:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -34,29 +35,74 @@ def _rule_action(rule: dict[str, Any]) -> str:
 
 
 def _condition_key(condition: Any) -> str:
-    # Mapping keys that are not strings are refused by merge_documents before
-    # any condition reaches this comparison, so sort_keys cannot raise here.
-    return json.dumps(condition, sort_keys=True, separators=(",", ":"), default=str)
+    """Return a digest that is equal for structurally equal conditions.
+
+    Built bottom-up with one digest per list or dict object, so a value that
+    YAML aliases make reachable through many paths is digested once. A
+    ``json.dumps`` of the condition expands every alias path instead, and for
+    eight levels of ten aliases that is a hundred million leaves before the
+    comparison even starts. Mapping keys that are not strings are refused by
+    merge_documents before any condition reaches here.
+    """
+    return _structural_digest(condition, {})
 
 
-def _non_string_mapping_key(value: Any) -> Any:
+def _structural_digest(value: Any, memo: dict[int, str]) -> str:
+    if isinstance(value, dict):
+        known = memo.get(id(value))
+        if known is not None:
+            return known
+        parts = ",".join(
+            json.dumps(str(key)) + ":" + _structural_digest(item, memo)
+            for key, item in sorted(value.items(), key=lambda kv: str(kv[0]))
+        )
+        digest = hashlib.sha256(("{" + parts + "}").encode()).hexdigest()
+        memo[id(value)] = digest
+        return digest
+    if isinstance(value, list):
+        known = memo.get(id(value))
+        if known is not None:
+            return known
+        parts = ",".join(_structural_digest(item, memo) for item in value)
+        digest = hashlib.sha256(("[" + parts + "]").encode()).hexdigest()
+        memo[id(value)] = digest
+        return digest
+    # Scalars: the JSON spelling keeps 1 and "1", and True and 1, distinct
+    # for the equality test that _rego_values_equal also makes.
+    if isinstance(value, bool) or value is None or isinstance(value, (int, float, str)):
+        return json.dumps(value)
+    return "!" + repr(value)
+
+
+def _non_string_mapping_key(value: Any, _seen: set[int] | None = None) -> Any:
     """Return the first mapping key in *value* that is not a string, else None.
 
     YAML loads ``{1: a}`` with an integer key and ``{2026-06-23: a}`` with a
     ``date`` key. ``json.dumps`` writes the first as ``"1"`` (a coercion) and
     raises ``TypeError`` for the second whether or not keys are sorted, so the
     overlap check below would crash before validation could name the rule.
+
+    Each list or dict object is walked once. YAML aliases make one object
+    reachable through many paths, and walking every path is exponential in
+    the alias depth: eight levels of ten aliases each would mean a hundred
+    million leaf visits before the migration refused a rule.
     """
+    if _seen is None:
+        _seen = set()
+    if isinstance(value, (dict, list)):
+        if id(value) in _seen:
+            return None
+        _seen.add(id(value))
     if isinstance(value, dict):
         for key, item in value.items():
             if not isinstance(key, str):
                 return key
-            found = _non_string_mapping_key(item)
+            found = _non_string_mapping_key(item, _seen)
             if found is not None:
                 return found
     elif isinstance(value, list):
         for item in value:
-            found = _non_string_mapping_key(item)
+            found = _non_string_mapping_key(item, _seen)
             if found is not None:
                 return found
     return None
@@ -77,19 +123,39 @@ def _compound_items(condition: dict[str, Any], key: str) -> list[Any] | None:
     return None
 
 
-def _rego_values_equal(left: Any, right: Any) -> bool:
-    """Compare JSON values without Python's bool-is-an-int equality."""
+def _rego_values_equal(
+    left: Any, right: Any, _memo: dict[tuple[int, int], bool] | None = None
+) -> bool:
+    """Compare JSON values without Python's bool-is-an-int equality.
+
+    Each pair of list or dict objects is compared once per top-level call.
+    Two documents that both alias one sub-value many times would otherwise
+    be compared once per path, which is exponential in the alias depth.
+    """
     if isinstance(left, bool) or isinstance(right, bool):
         return isinstance(left, bool) and isinstance(right, bool) and left is right
-    if isinstance(left, list) and isinstance(right, list):
-        return len(left) == len(right) and all(
-            _rego_values_equal(left_value, right_value)
-            for left_value, right_value in zip(left, right)
-        )
-    if isinstance(left, dict) and isinstance(right, dict):
-        return left.keys() == right.keys() and all(
-            _rego_values_equal(left[key], right[key]) for key in left
-        )
+    if isinstance(left, (list, dict)) and isinstance(right, (list, dict)):
+        if left is right:
+            return True
+        if _memo is None:
+            _memo = {}
+        pair = (id(left), id(right))
+        known = _memo.get(pair)
+        if known is not None:
+            return known
+        if isinstance(left, list) and isinstance(right, list):
+            result = len(left) == len(right) and all(
+                _rego_values_equal(left_value, right_value, _memo)
+                for left_value, right_value in zip(left, right)
+            )
+        elif isinstance(left, dict) and isinstance(right, dict):
+            result = left.keys() == right.keys() and all(
+                _rego_values_equal(left[key], right[key], _memo) for key in left
+            )
+        else:
+            result = False
+        _memo[pair] = result
+        return result
     return left == right
 
 
