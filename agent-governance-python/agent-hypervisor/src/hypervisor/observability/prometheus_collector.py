@@ -137,7 +137,9 @@ class RingMetricsCollector:
             self._transition_counts[key] += 1
 
             # Track current ring from payload
-            to_ring = event.payload.get("to_ring") or event.payload.get("ring")
+            to_ring = event.payload.get("to_ring")
+            if to_ring is None:
+                to_ring = event.payload.get("ring")
             if to_ring is not None:
                 self._current_rings[agent_did] = (
                     to_ring if isinstance(to_ring, int) else int(to_ring)

@@ -222,6 +222,27 @@ class TestRingMetricsCollector:
         )
         assert collector.collect()[METRIC_RING_CURRENT]["a1"] == 1
 
+    def test_current_ring_updates_to_ring_zero(self):
+        """A transition to ring 0 sets the current ring gauge to 0."""
+        bus = HypervisorEventBus()
+        collector = RingMetricsCollector(bus)
+
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                agent_did="a1",
+                payload={"to_ring": 2},
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                agent_did="a1",
+                payload={"to_ring": 0},
+            )
+        )
+        assert collector.collect()[METRIC_RING_CURRENT]["a1"] == 0
+
     def test_reset(self):
         """Reset clears all metrics."""
         bus = HypervisorEventBus()
