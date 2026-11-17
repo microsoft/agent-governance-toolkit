@@ -39,7 +39,7 @@ def _condition_key(condition: Any, table: dict[Any, int] | None = None) -> int:
     Built bottom-up with one id per list or dict object, interned in
     *table*: a container's id is looked up by its kind and its children's
     ids, so two structures get the same id exactly when they are equal, and
-    comparing two conditions is a comparison of two ints. A value that YAML
+    comparing two conditions is a comparison of two integers. A value that YAML
     aliases make reachable through many paths is visited once. A
     ``json.dumps`` of the condition expands every alias path instead, and
     for eight levels of ten aliases that is a hundred million leaves before
