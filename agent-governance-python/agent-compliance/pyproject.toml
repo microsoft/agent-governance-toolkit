@@ -31,7 +31,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "pydantic>=2.4.0,<3.0",
+    "pydantic>=2.14.3,<3.0",
     "pyyaml>=6.0.3,<7.0",
     "click>=8.0,<9.0",
 ]
