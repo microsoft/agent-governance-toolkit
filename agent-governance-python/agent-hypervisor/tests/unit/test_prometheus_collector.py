@@ -169,6 +169,68 @@ class TestRingMetricsCollector:
         bc = next(c for c in exporter.counters if c[0] == METRIC_RING_BREACHES_TOTAL)
         assert bc[1] == 2.0
 
+    def test_repeated_export_does_not_double_count(self):
+        """Exporting again to the same exporter adds only new events."""
+        bus = HypervisorEventBus()
+        collector = RingMetricsCollector(bus)
+        exporter = _FakePrometheusExporter()
+
+        def emit(event_type: EventType) -> None:
+            bus.emit(HypervisorEvent(event_type=event_type, agent_did="a1", session_id="s1"))
+
+        emit(EventType.RING_ASSIGNED)
+        emit(EventType.RING_BREACH_DETECTED)
+        collector.export_to_prometheus(exporter)
+        emit(EventType.RING_ASSIGNED)
+        collector.export_to_prometheus(exporter)
+        collector.export_to_prometheus(exporter)
+
+        def exported(name: str) -> float:
+            return sum(c[1] for c in exporter.counters if c[0] == name)
+
+        assert exported(METRIC_RING_TRANSITIONS_TOTAL) == 2.0
+        assert exported(METRIC_RING_BREACHES_TOTAL) == 1.0
+
+    def test_export_after_reset_adds_new_events(self):
+        """After reset, the next export adds only events recorded since then."""
+        bus = HypervisorEventBus()
+        collector = RingMetricsCollector(bus)
+        exporter = _FakePrometheusExporter()
+
+        def emit() -> None:
+            bus.emit(
+                HypervisorEvent(event_type=EventType.RING_ASSIGNED, agent_did="a1", session_id="s1")
+            )
+
+        emit()
+        emit()
+        collector.export_to_prometheus(exporter)
+        collector.reset()
+        emit()
+        collector.export_to_prometheus(exporter)
+
+        assert sum(c[1] for c in exporter.counters) == 3.0
+
+    def test_export_to_a_new_exporter_sends_full_totals(self):
+        """Each exporter receives the full counts on its first export."""
+        bus = HypervisorEventBus()
+        collector = RingMetricsCollector(bus)
+        bus.emit(
+            HypervisorEvent(event_type=EventType.RING_ASSIGNED, agent_did="a1", session_id="s1")
+        )
+        bus.emit(
+            HypervisorEvent(event_type=EventType.RING_ASSIGNED, agent_did="a1", session_id="s1")
+        )
+
+        first = _FakePrometheusExporter()
+        second = _FakePrometheusExporter()
+        collector.export_to_prometheus(first)
+        collector.export_to_prometheus(second)
+
+        for exporter in (first, second):
+            tc = next(c for c in exporter.counters if c[0] == METRIC_RING_TRANSITIONS_TOTAL)
+            assert tc[1] == 2.0
+
     def test_elevation_duration_tracking(self):
         """Verify elevation duration is tracked between elevated/demoted events."""
         bus = HypervisorEventBus()

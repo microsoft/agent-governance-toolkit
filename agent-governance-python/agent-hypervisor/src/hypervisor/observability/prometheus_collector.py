@@ -31,6 +31,7 @@ Usage::
 from __future__ import annotations
 
 import time
+import weakref
 from collections import defaultdict
 from typing import Any, Protocol
 
@@ -122,6 +123,12 @@ class RingMetricsCollector:
         # Total events processed
         self._events_processed: int = 0
 
+        # Counter values already sent to each exporter, so a repeated
+        # export adds only the events seen since the last one.
+        self._exported: weakref.WeakKeyDictionary[Any, dict[tuple[str, ...], int]] = (
+            weakref.WeakKeyDictionary()
+        )
+
         # Subscribe to all ring events
         for event_type in _ALL_RING_EVENTS:
             bus.subscribe(event_type=event_type, handler=self._handle_event)
@@ -187,15 +194,34 @@ class RingMetricsCollector:
     def export_to_prometheus(self, exporter: PrometheusExporterProtocol) -> None:
         """Write all current metrics into a Prometheus-compatible exporter.
 
+        Counters are sent as increments: calling this again with the same
+        exporter adds only the events recorded since the previous call.
+
         Args:
             exporter: Any object implementing :class:`PrometheusExporterProtocol`
                 (e.g. ``agent_sre.integrations.prometheus.PrometheusExporter``).
         """
+        try:
+            sent = self._exported.setdefault(exporter, {})
+        except TypeError:
+            # Exporter cannot be tracked (unhashable or no weakref): send totals.
+            sent = {}
+
+        def _new_count(key: tuple[str, ...], count: int) -> int:
+            delta = count - sent.get(key, 0)
+            sent[key] = count
+            return delta
+
         # Transition counters
         for (event_type, agent_did, session_id), count in self._transition_counts.items():
+            delta = _new_count(
+                (METRIC_RING_TRANSITIONS_TOTAL, event_type, agent_did, session_id), count
+            )
+            if delta <= 0:
+                continue
             exporter.inc_counter(
                 METRIC_RING_TRANSITIONS_TOTAL,
-                float(count),
+                float(delta),
                 labels={
                     "event_type": event_type,
                     "agent_did": agent_did,
@@ -206,9 +232,12 @@ class RingMetricsCollector:
 
         # Breach counters
         for (agent_did, session_id), count in self._breach_counts.items():
+            delta = _new_count((METRIC_RING_BREACHES_TOTAL, agent_did, session_id), count)
+            if delta <= 0:
+                continue
             exporter.inc_counter(
                 METRIC_RING_BREACHES_TOTAL,
-                float(count),
+                float(delta),
                 labels={
                     "agent_did": agent_did,
                     "session_id": session_id,
@@ -252,3 +281,4 @@ class RingMetricsCollector:
         self._elevation_start.clear()
         self._elevation_durations.clear()
         self._events_processed = 0
+        self._exported.clear()
