@@ -6,10 +6,14 @@ The configuration mirrors the design doc's ``HyperlightConfig`` surface:
 
 * ``backend`` and ``module`` select which upstream backend / guest the
   session runs on.
-* ``heap_size_bytes`` / ``stack_size_bytes`` / ``max_execution_time_ms``
-  map to upstream's ``SandboxConfiguration`` knobs.
+* ``heap_size_bytes`` / ``stack_size_bytes`` are passed to upstream's
+  ``Sandbox`` as its ``heap_size`` / ``stack_size`` strings (``"128Mi"``).
+* ``max_execution_time_ms`` is enforced host-side by the provider; the
+  pinned SDK (hyperlight-sandbox 0.4.x) has no execution-time knob.
 * ``input_dir`` / ``output_dir`` are mounted in the guest as read-only
   ``/input`` and writable ``/output``.
+* ``env_vars`` cannot be forwarded: the pinned SDK has no environment
+  model, so a non-empty value is rejected at session creation.
 
 """
 
@@ -23,11 +27,31 @@ from agent_sandbox.sandbox_provider import SandboxConfig
 # pass ``backend="wasm"``.
 _VALID_BACKENDS: frozenset[str] = frozenset({"wasm", "hyperlightjs", "nanvix"})
 
-# Default heap / stack sizes follow upstream's ``SandboxConfiguration``
-# defaults at hyperlight-sandbox v0.4.0.
+# Default heap size is the provider's own cap. The default stack size
+# matches upstream's Linux default (``"35Mi"`` at hyperlight-sandbox
+# v0.4.0); the packaged Python guest needs that much to start.
 _DEFAULT_HEAP_BYTES = 64 * 1024 * 1024
-_DEFAULT_STACK_BYTES = 2 * 1024 * 1024
+_DEFAULT_STACK_BYTES = 35 * 1024 * 1024
 _DEFAULT_MAX_EXEC_MS = 60_000
+
+_KIB = 1024
+_MIB = 1024 * 1024
+
+
+def format_size(num_bytes: int) -> str:
+    """Render a byte count in the ``"<n>Mi"`` / ``"<n>Ki"`` form the
+    upstream ``Sandbox`` constructor takes for ``heap_size`` and
+    ``stack_size``.
+
+    Values that are not a whole number of KiB round up to the next KiB
+    so a configured limit is never undercut.
+    """
+    if num_bytes <= 0:
+        raise ValueError("size must be positive")
+    if num_bytes % _MIB == 0:
+        return f"{num_bytes // _MIB}Mi"
+    kib = -(-num_bytes // _KIB)
+    return f"{kib}Ki"
 
 
 @dataclass
@@ -46,14 +70,19 @@ class HyperlightConfig:
         "wasm"``. ``"python_guest"`` runs real Python source via
         ``Sandbox.run("…")``; ``"javascript_guest"`` runs JS source.
         Ignored for ``hyperlightjs`` and ``nanvix``.
-    heap_size_bytes / stack_size_bytes / max_execution_time_ms:
-        Upstream ``SandboxConfiguration`` knobs.
+    heap_size_bytes / stack_size_bytes:
+        Guest heap and stack limits. Passed to upstream as the
+        ``heap_size`` / ``stack_size`` strings (see :attr:`heap_size`).
+    max_execution_time_ms:
+        Host-side execution budget checked by the provider. The pinned
+        SDK has no execution-time knob of its own.
     input_dir / output_dir:
         Optional host paths mounted in the guest as ``/input``
         (read-only) and ``/output`` (writable, per-session).
     env_vars:
-        Optional host-side environment exposed to the guest where the
-        backend supports it. Ignored on backends that have no env model.
+        Host-side environment for the guest. The pinned SDK cannot
+        forward it, so the provider rejects a non-empty value instead
+        of starting a guest without it.
     """
 
     backend: str = "wasm"
@@ -81,6 +110,16 @@ class HyperlightConfig:
         # don't enforce a hardcoded list here so future packaged guests
         # work without an SDK release.
 
+    @property
+    def heap_size(self) -> str:
+        """``heap_size_bytes`` in the SDK's string form (``"128Mi"``)."""
+        return format_size(self.heap_size_bytes)
+
+    @property
+    def stack_size(self) -> str:
+        """``stack_size_bytes`` in the SDK's string form (``"35Mi"``)."""
+        return format_size(self.stack_size_bytes)
+
     @classmethod
     def from_sandbox_config(
         cls,
@@ -92,9 +131,9 @@ class HyperlightConfig:
         """Translate the generic :class:`SandboxConfig` into a
         :class:`HyperlightConfig`.
 
-        Resource limits (``memory_mb``, ``timeout_seconds``) become
-        upstream heap / max-execution-time. ``cpu_limit`` is dropped
-        because Hyperlight pins one vCPU per micro-VM.
+        ``memory_mb`` becomes the upstream heap size and
+        ``timeout_seconds`` the host-side execution budget. ``cpu_limit``
+        is dropped because Hyperlight pins one vCPU per micro-VM.
         """
         return cls(
             backend=backend,
