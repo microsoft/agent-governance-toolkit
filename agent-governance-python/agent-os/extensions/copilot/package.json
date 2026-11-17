@@ -55,7 +55,7 @@
     "@swc/core": "1.16.2",
     "@swc/jest": "0.2.39",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@typescript-eslint/eslint-plugin": "8.72.1",
+    "@typescript-eslint/eslint-plugin": "8.72.2",
     "@typescript-eslint/parser": "8.72.1",
     "eslint": "10.14.0",
     "jest": "30.5.2",
