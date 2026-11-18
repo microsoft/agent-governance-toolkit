@@ -128,7 +128,36 @@ class TestHibernationManager:
         
         assert "agent-1" in idle
         assert "agent-2" in idle
-    
+
+    def test_idle_detection_with_zero_threshold(self):
+        """min_idle_seconds=0 is a real threshold, not the config default"""
+        config = HibernationConfig(storage_path=tempfile.mkdtemp())
+        manager = HibernationManager(config)
+
+        manager.record_agent_activity("agent-1")
+
+        assert manager.get_idle_agents(min_idle_seconds=0) == ["agent-1"]
+
+    def test_cleanup_with_zero_max_age(self):
+        """max_age_days=0 removes every hibernated agent, not only those older than the default"""
+        config = HibernationConfig(storage_path=tempfile.mkdtemp())
+        manager = HibernationManager(config)
+
+        from agent_control_plane.agent_kernel import AgentContext, PermissionLevel
+
+        agent_context = AgentContext(
+            agent_id="test-agent",
+            session_id="test-session",
+            created_at=datetime.now(),
+            permissions={ActionType.FILE_READ: PermissionLevel.READ_ONLY}
+        )
+        metadata = manager.hibernate_agent("test-agent", agent_context)
+
+        manager.cleanup_old_hibernated_agents(max_age_days=0)
+
+        assert not manager.is_agent_hibernated("test-agent")
+        assert not os.path.exists(metadata.state_file_path)
+
     def test_statistics(self):
         """Test hibernation statistics"""
         config = HibernationConfig(storage_path=tempfile.mkdtemp())
