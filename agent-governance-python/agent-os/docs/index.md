@@ -135,10 +135,10 @@ policies:
 
 | IDE | Status | Link |
 |-----|--------|------|
-| VS Code | ✅ Available | [Marketplace](../../agent-governance-typescript/agent-os-vscode/) |
-| JetBrains | ✅ Available | [Plugin](extensions/jetbrains/) |
-| Cursor | ✅ Available | [Extension](extensions/cursor/) |
-| GitHub Copilot | ✅ Available | [Extension](extensions/copilot/) |
+| VS Code | ✅ Available | [Marketplace](../../../agent-governance-typescript/agent-os-vscode/) |
+| JetBrains | ✅ Available | [Plugin](../extensions/jetbrains/) |
+| Cursor | ✅ Available | [Extension](../extensions/cursor/) |
+| GitHub Copilot | ✅ Available | [Extension](../extensions/copilot/) |
 
 ## Policy Templates
 
@@ -159,7 +159,7 @@ agentos init my-project --template secure-coding
 
 - [GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
 - [Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
-- [Contributing Guide](../CONTRIBUTING.md)
+- [Contributing Guide](../../../CONTRIBUTING.md)
 
 ---
 
