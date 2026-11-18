@@ -4,6 +4,8 @@
 
 import json
 import re
+import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -56,6 +58,22 @@ def _policy_hash(policy_yaml: str) -> str:
     return "sha256:" + hashlib.sha256(policy_yaml.encode()).hexdigest()
 
 
+def test_trace_dependency_requirements_are_aligned():
+    mesh_dir = Path(__file__).resolve().parents[2]
+    mesh = tomllib.loads((mesh_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    core = tomllib.loads(
+        (mesh_dir.parent / "agent-governance-toolkit-core" / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    mesh_requirements = mesh["project"]["optional-dependencies"]["dev"]
+    core_requirements = core["project"]["dependencies"]
+    expected = ["agentrust-trace>=0.11.0,<0.12.0"]
+    assert [req for req in mesh_requirements if req.startswith("agentrust-trace")] == expected
+    assert [req for req in core_requirements if req.startswith("agentrust-trace")] == expected
+    assert not any(req.startswith("agentrust-trace") for req in mesh["project"]["dependencies"])
+
+
 class TestSessionToTrustRecord:
     def test_required_fields_present(self):
         log = _make_audit_log()
@@ -64,8 +82,9 @@ class TestSessionToTrustRecord:
         )
         for field in ("eat_profile", "iat", "subject", "model", "runtime",
                       "policy", "data_class", "tool_transcript",
-                      "build_provenance", "appraisal", "transparency"):
+                      "build_provenance", "appraisal"):
             assert field in record, f"missing field: {field}"
+        assert "transparency" not in record
 
     def test_eat_profile_sentinel(self):
         log = _make_audit_log()
@@ -173,6 +192,45 @@ class TestTRACEAuditSinkEmit:
         data = json.loads(Path(path).read_text())
         assert data["eat_profile"] == "tag:agentrust-io.com,2026:trace-v0.2"
         assert data["subject"] == _AGENT_DID
+
+    def test_emit_signature_verifies_with_trusted_key(self, tmp_path, monkeypatch):
+        from agentrust_trace import generate_key, verify_record
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives import serialization
+
+        key = generate_key()
+        pem = key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ).decode("utf-8")
+        monkeypatch.setenv("TRACE_PRIVATE_KEY_PEM", pem)
+        sink = TRACEAuditSink(
+            TraceConfig(str(tmp_path) + "/"), _AGENT_DID, _policy_hash(_POLICY_YAML)
+        )
+        path = sink.emit(_make_audit_log())
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+
+        result = verify_record(data, key.public_key())
+        assert result.profile == data["eat_profile"]
+        assert data["policy"]["enforcement_mode"] == "enforce"
+        assert "transparency" not in data
+        assert re.fullmatch(r"[A-Za-z0-9_-]+", data["signature"])
+        assert "d" not in data["cnf"]["jwk"]
+
+        with pytest.raises(ValueError, match="no padding"):
+            verify_record({**data, "signature": data["signature"] + "="}, key.public_key())
+        data["model"]["model_id"] = "tampered"
+        with pytest.raises(InvalidSignature):
+            verify_record(data, key.public_key())
+
+    def test_missing_trace_dependency_reports_supported_requirement(self, tmp_path, monkeypatch):
+        monkeypatch.setitem(sys.modules, "agentrust_trace", None)
+        sink = TRACEAuditSink(
+            TraceConfig(str(tmp_path) + "/"), _AGENT_DID, _policy_hash(_POLICY_YAML)
+        )
+        with pytest.raises(RuntimeError, match=re.escape("agentrust-trace>=0.11.0,<0.12.0")):
+            sink.emit(_make_audit_log())
 
     def test_emit_returns_none_for_empty_log(self, tmp_path):
         log = AuditLog()
