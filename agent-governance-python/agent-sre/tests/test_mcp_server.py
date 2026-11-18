@@ -59,6 +59,42 @@ class TestAgentSREServer:
         })
         assert result2.data["total_spent"] == pytest.approx(0.15)
 
+    def test_report_cost_against_zero_budget(self):
+        server = AgentSREServer()
+        server.set_cost_budget("a1", 0.0)
+        result = server.handle_tool_call("sre_report_cost", {
+            "agent_id": "a1", "cost_usd": 0.05,
+        })
+        assert result.success
+        assert result.data["budget_remaining"] == pytest.approx(-0.05)
+
+    @pytest.mark.parametrize("cost", [-0.5, float("nan"), float("inf"), "nan"])
+    def test_report_cost_rejects_negative_or_non_finite(self, cost):
+        server = AgentSREServer()
+        server.set_cost_budget("a1", 0.10)
+        server.handle_tool_call("sre_report_cost", {"agent_id": "a1", "cost_usd": 0.08})
+        result = server.handle_tool_call("sre_report_cost", {
+            "agent_id": "a1", "cost_usd": cost,
+        })
+        assert not result.success
+        assert "cost_usd" in result.error
+        # The rejected report leaves the running total alone.
+        denied = server.handle_tool_call("sre_request_budget", {
+            "agent_id": "a1", "requested_usd": 0.05,
+        })
+        assert denied.data["approved"] is False
+        assert denied.data["remaining_usd"] == pytest.approx(0.02)
+
+    @pytest.mark.parametrize("requested", [-1.0, float("nan"), float("inf")])
+    def test_request_budget_rejects_negative_or_non_finite(self, requested):
+        server = AgentSREServer()
+        server.set_cost_budget("a1", 1.0)
+        result = server.handle_tool_call("sre_request_budget", {
+            "agent_id": "a1", "requested_usd": requested,
+        })
+        assert not result.success
+        assert "requested_usd" in result.error
+
     def test_request_budget_approved(self):
         server = AgentSREServer()
         server.set_cost_budget("a1", 1.0)
