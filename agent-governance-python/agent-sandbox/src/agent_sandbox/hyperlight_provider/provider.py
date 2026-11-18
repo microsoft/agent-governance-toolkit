@@ -375,6 +375,17 @@ class HyperLightSandboxProvider(SandboxProvider):
         hl_cfg = HyperlightConfig.from_sandbox_config(
             base_cfg, backend=self._backend, module=self._module
         )
+        # The pinned SDK has no environment model, so env_vars cannot
+        # reach the guest. Fail closed rather than drop them, and do it
+        # before any runtime or ring state is registered for the session,
+        # so a rejected create leaves nothing behind.
+        if hl_cfg.env_vars:
+            raise ValueError(
+                "SandboxConfig.env_vars is not supported by the Hyperlight "
+                "backend: hyperlight-sandbox 0.4.x cannot pass environment "
+                f"variables to the guest ({sorted(hl_cfg.env_vars)}). "
+                "Remove env_vars or use another sandbox provider."
+            )
 
         tool_allow = list(base_cfg.tool_allowlist)
         net_allow = (
@@ -434,16 +445,6 @@ class HyperLightSandboxProvider(SandboxProvider):
                     'agent-hypervisor not installed — ring enforcement skipped '
                     'for agent=%s', agent_id
                 )
-
-        # The pinned SDK has no environment model, so env_vars cannot
-        # reach the guest. Fail closed rather than drop them.
-        if hl_cfg.env_vars:
-            raise ValueError(
-                "SandboxConfig.env_vars is not supported by the Hyperlight "
-                "backend: hyperlight-sandbox 0.4.x cannot pass environment "
-                f"variables to the guest ({sorted(hl_cfg.env_vars)}). "
-                "Remove env_vars or use another sandbox provider."
-            )
 
         # Apply nanvix capability check before spinning up a worker.
         if hl_cfg.backend == "nanvix" and (tools_to_register or net_allow):

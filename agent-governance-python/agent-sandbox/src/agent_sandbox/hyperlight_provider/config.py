@@ -8,8 +8,10 @@ The configuration mirrors the design doc's ``HyperlightConfig`` surface:
   session runs on.
 * ``heap_size_bytes`` / ``stack_size_bytes`` are passed to upstream's
   ``Sandbox`` as its ``heap_size`` / ``stack_size`` strings (``"128Mi"``).
-* ``max_execution_time_ms`` is enforced host-side by the provider; the
-  pinned SDK (hyperlight-sandbox 0.4.x) has no execution-time knob.
+* ``max_execution_time_ms`` is checked by the provider after the guest
+  returns: a run that took longer is reported as killed with a timeout
+  reason, but nothing stops the guest at the deadline, because the pinned
+  SDK (hyperlight-sandbox 0.4.x) has no execution-time knob.
 * ``input_dir`` / ``output_dir`` are mounted in the guest as read-only
   ``/input`` and writable ``/output``.
 * ``env_vars`` cannot be forwarded: the pinned SDK has no environment
@@ -132,8 +134,10 @@ class HyperlightConfig:
         :class:`HyperlightConfig`.
 
         ``memory_mb`` becomes the upstream heap size and
-        ``timeout_seconds`` the host-side execution budget. ``cpu_limit``
-        is dropped because Hyperlight pins one vCPU per micro-VM.
+        ``timeout_seconds`` the duration the provider compares against
+        after the run returns (it is not enforced during the run).
+        ``cpu_limit`` is dropped because Hyperlight pins one vCPU per
+        micro-VM.
         """
         return cls(
             backend=backend,
