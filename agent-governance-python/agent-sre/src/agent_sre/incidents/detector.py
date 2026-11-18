@@ -186,6 +186,10 @@ class IncidentDetector:
         """Ingest a signal and potentially create an incident.
 
         Creates incidents for P1/P2 signals. P3/P4 signals are logged only.
+        A P1/P2 signal from a source that already has an open incident with
+        a signal inside the correlation window joins that incident instead
+        of opening another one, and ``None`` is returned because no new
+        incident was created.
         """
         self._pending_signals.append(signal)
         self._prune_old_signals()
@@ -196,6 +200,13 @@ class IncidentDetector:
 
         # Create incident for critical/warning signals
         if signal.severity_hint in (IncidentSeverity.P1, IncidentSeverity.P2):
+            # Signals from one source within the correlation window form a
+            # single incident, so join an open one rather than opening a
+            # second incident that repeats its signals and auto-responses.
+            open_incident = self._find_open_correlated_incident(signal)
+            if open_incident is not None:
+                self._join_incident(open_incident, signal)
+                return None
             # Try correlation-based grouping first
             correlated = self._find_correlated(signal)
             if correlated:
@@ -265,6 +276,39 @@ class IncidentDetector:
         self._incidents.append(incident)
         return incident
 
+    def _find_open_correlated_incident(self, signal: Signal) -> Incident | None:
+        """Return the open incident *signal* should join, if any.
+
+        That is the most recent unresolved incident from the same source
+        holding a signal inside the correlation window.
+        """
+        cutoff = time.time() - self.correlation_window
+        for incident in reversed(self._incidents):
+            if incident.state == IncidentState.RESOLVED or incident.agent_id != signal.source:
+                continue
+            if any(s.timestamp >= cutoff for s in incident.signals):
+                return incident
+        return None
+
+    def _join_incident(self, incident: Incident, signal: Signal) -> None:
+        """Add *signal* to *incident* as part of its correlated group.
+
+        The incident takes the higher of the two severities and the
+        correlated title, and gains only the auto-response actions it has
+        not already run, so no action executes twice for one incident.
+        """
+        incident.add_signal(signal)
+        severity_order = [IncidentSeverity.P1, IncidentSeverity.P2, IncidentSeverity.P3, IncidentSeverity.P4]
+        if severity_order.index(signal.severity_hint) < severity_order.index(incident.severity):
+            incident.severity = signal.severity_hint
+        signal_types = {s.signal_type.value for s in incident.signals}
+        incident.title = f"Correlated: {', '.join(sorted(signal_types))} from {incident.agent_id}"
+        applied = {action.action_type for action in incident.actions}
+        for action_type in self._response_actions.get(signal.signal_type.value, []):
+            if action_type not in applied:
+                incident.add_action(action_type, executed=True, result="auto-triggered")
+                applied.add(action_type)
+
     def _is_duplicate(self, signal: Signal) -> bool:
         """Check if a similar incident was recently created."""
         cutoff = time.time() - self.dedup_window
@@ -293,9 +337,13 @@ class IncidentDetector:
         cutoff = time.time() - self.correlation_window
         seen_types = {signal.signal_type}
         correlated: list[Signal] = []
+        # A signal that already belongs to an incident has been handled
+        # there; copying it into a new incident would repeat its
+        # auto-responses.
+        incident_signal_ids = {id(s) for inc in self._incidents for s in inc.signals}
 
         for pending in self._pending_signals:
-            if pending is signal:
+            if pending is signal or id(pending) in incident_signal_ids:
                 continue
             if pending.timestamp < cutoff:
                 continue
