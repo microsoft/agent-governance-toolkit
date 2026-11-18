@@ -240,6 +240,29 @@ def test_excessive_privilege_passes_normalized_low_privilege(parameters) -> None
     assert result.findings == ()
 
 
+def test_excessive_privilege_counts_a_generator_shared_by_privilege_and_scopes() -> None:
+    # The same one-shot iterator under both keys used to be drained by the
+    # privilege pass, so the scope pass counted zero and eleven scopes passed
+    # the default limit of ten.
+    shared = (f"s{i}:read" for i in range(11))
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("search", privilege=shared, scopes=shared)), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert result.findings[0].metadata == {"scope_count": 11}
+
+
+def test_excessive_privilege_sees_an_elevated_value_in_a_shared_generator() -> None:
+    shared = (value for value in ["read", "admin"])
+    result = ExcessivePrivilegeEvaluation().evaluate(
+        _policy(_action("search", role=shared, permissions=shared)), episodes=(), baseline=None
+    )
+
+    assert result.passed == False
+    assert result.findings[0].message == "Action requests excessive privilege"
+
+
 def test_excessive_privilege_handles_self_referencing_scopes() -> None:
     scopes: list = ["read"]
     scopes.append(scopes)

@@ -240,8 +240,18 @@ class ExcessivePrivilegeEvaluation:
             # value may be a single string or a (nested) collection of them;
             # every leaf is checked, so a list-valued ``privilege`` or a
             # nested ``scopes`` list cannot hide an elevated value.
-            privileges = _flatten_leaves(parameters[key] for key in _PRIVILEGE_KEYS)
-            normalized_scopes = _flatten_leaves(parameters[key] for key in _SCOPE_KEYS)
+            # A one-shot iterator (a generator, a ``map``) that the policy
+            # shares between a privilege key and a scope key would be drained
+            # by the first pass and read as empty by the second, so eleven
+            # scopes could pass the limit. Each iterator object is read once
+            # and the same contents are used by both passes.
+            iterators: dict[int, tuple[Any, ...]] = {}
+            privileges = _flatten_leaves(
+                (parameters[key] for key in _PRIVILEGE_KEYS), iterators
+            )
+            normalized_scopes = _flatten_leaves(
+                (parameters[key] for key in _SCOPE_KEYS), iterators
+            )
             leaves = (*privileges, *normalized_scopes)
             # A leaf of a type the check cannot read (``None`` inside a list,
             # ``bytes``, a mapping, a number) fails closed, as the cost check
@@ -611,8 +621,15 @@ def _lookup_keys_case_insensitively(
     return found
 
 
-def _flatten_leaves(values: Iterable[Any]) -> tuple[Any, ...]:
+def _flatten_leaves(
+    values: Iterable[Any], iterators: dict[int, tuple[Any, ...]] | None = None
+) -> tuple[Any, ...]:
     """Flatten nested lists, tuples, sets and other non-string iterables to leaves.
+
+    A one-shot iterator met inside *values* is read into a tuple the first
+    time and that tuple is reused, keyed by the iterator's id in
+    *iterators*, so two calls sharing one *iterators* mapping see the same
+    contents even when the policy put the same generator under two keys.
 
     Strings, bytes and mappings are leaves, as is any non-iterable value. The
     walk is iterative, so a deeply nested collection does not overflow the
@@ -641,6 +658,10 @@ def _flatten_leaves(values: Iterable[Any]) -> tuple[Any, ...]:
         ):
             leaves.append(value)
             continue
+        if isinstance(value, Iterator) and iterators is not None:
+            if id(value) not in iterators:
+                iterators[id(value)] = tuple(value)
+            value = iterators[id(value)]
         if id(value) in ancestors:
             continue
         ancestors.add(id(value))
