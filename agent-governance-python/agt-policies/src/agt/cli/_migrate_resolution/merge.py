@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any
 
 from .errors import ResolutionError
@@ -32,8 +33,86 @@ def _rule_action(rule: dict[str, Any]) -> str:
     return str(rule.get("action", "")).lower()
 
 
-def _condition_key(condition: Any) -> str:
-    return json.dumps(condition, sort_keys=True, separators=(",", ":"), default=str)
+def _condition_key(condition: Any, table: dict[Any, int] | None = None) -> int:
+    """Return an id that is equal for structurally equal conditions.
+
+    Built bottom-up with one id per list or dict object, interned in
+    *table*: a container's id is looked up by its kind and its children's
+    ids, so two structures get the same id exactly when they are equal, and
+    comparing two conditions is a comparison of two integers. A value that YAML
+    aliases make reachable through many paths is visited once. A
+    ``json.dumps`` of the condition expands every alias path instead, and
+    for eight levels of ten aliases that is a hundred million leaves before
+    the comparison even starts. Callers comparing two conditions must pass
+    the same *table* for both. Mapping keys that are not strings are refused
+    by merge_documents before any condition reaches here.
+    """
+    if table is None:
+        table = {}
+    return _structural_id(condition, table, {})
+
+
+def _structural_id(value: Any, table: dict[Any, int], memo: dict[int, int]) -> int:
+    if isinstance(value, dict):
+        known = memo.get(id(value))
+        if known is not None:
+            return known
+        shape: Any = (
+            "d",
+            tuple(
+                (str(key), _structural_id(item, table, memo))
+                for key, item in sorted(value.items(), key=lambda kv: str(kv[0]))
+            ),
+        )
+    elif isinstance(value, list):
+        known = memo.get(id(value))
+        if known is not None:
+            return known
+        shape = ("l", tuple(_structural_id(item, table, memo) for item in value))
+    elif isinstance(value, bool) or value is None or isinstance(value, (int, float, str)):
+        # The JSON spelling keeps 1 and "1", and True and 1, distinct, as
+        # _rego_values_equal does.
+        shape = ("s", json.dumps(value))
+    else:
+        shape = ("o", repr(value))
+    node = table.setdefault(shape, len(table))
+    if isinstance(value, (dict, list)):
+        memo[id(value)] = node
+    return node
+
+
+def _non_string_mapping_key(value: Any, _seen: set[int] | None = None) -> Any:
+    """Return the first mapping key in *value* that is not a string, else None.
+
+    YAML loads ``{1: a}`` with an integer key and ``{2026-06-23: a}`` with a
+    ``date`` key. ``json.dumps`` writes the first as ``"1"`` (a coercion) and
+    raises ``TypeError`` for the second whether or not keys are sorted, so the
+    overlap check below would crash before validation could name the rule.
+
+    Each list or dict object is walked once. YAML aliases make one object
+    reachable through many paths, and walking every path is exponential in
+    the alias depth: eight levels of ten aliases each would mean a hundred
+    million leaf visits before the migration refused a rule.
+    """
+    if _seen is None:
+        _seen = set()
+    if isinstance(value, (dict, list)):
+        if id(value) in _seen:
+            return None
+        _seen.add(id(value))
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                return key
+            found = _non_string_mapping_key(item, _seen)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _non_string_mapping_key(item, _seen)
+            if found is not None:
+                return found
+    return None
 
 
 def _condition_parts(condition: dict[str, Any]) -> tuple[str, str, Any] | None:
@@ -51,19 +130,39 @@ def _compound_items(condition: dict[str, Any], key: str) -> list[Any] | None:
     return None
 
 
-def _rego_values_equal(left: Any, right: Any) -> bool:
-    """Compare JSON values without Python's bool-is-an-int equality."""
+def _rego_values_equal(
+    left: Any, right: Any, _memo: dict[tuple[int, int], bool] | None = None
+) -> bool:
+    """Compare JSON values without Python's bool-is-an-int equality.
+
+    Each pair of list or dict objects is compared once per top-level call.
+    Two documents that both alias one sub-value many times would otherwise
+    be compared once per path, which is exponential in the alias depth.
+    """
     if isinstance(left, bool) or isinstance(right, bool):
         return isinstance(left, bool) and isinstance(right, bool) and left is right
-    if isinstance(left, list) and isinstance(right, list):
-        return len(left) == len(right) and all(
-            _rego_values_equal(left_value, right_value)
-            for left_value, right_value in zip(left, right)
-        )
-    if isinstance(left, dict) and isinstance(right, dict):
-        return left.keys() == right.keys() and all(
-            _rego_values_equal(left[key], right[key]) for key in left
-        )
+    if isinstance(left, (list, dict)) and isinstance(right, (list, dict)):
+        if left is right:
+            return True
+        if _memo is None:
+            _memo = {}
+        pair = (id(left), id(right))
+        known = _memo.get(pair)
+        if known is not None:
+            return known
+        if isinstance(left, list) and isinstance(right, list):
+            result = len(left) == len(right) and all(
+                _rego_values_equal(left_value, right_value, _memo)
+                for left_value, right_value in zip(left, right)
+            )
+        elif isinstance(left, dict) and isinstance(right, dict):
+            result = left.keys() == right.keys() and all(
+                _rego_values_equal(left[key], right[key], _memo) for key in left
+            )
+        else:
+            result = False
+        _memo[pair] = result
+        return result
     return left == right
 
 
@@ -355,12 +454,29 @@ def _conditions_disjoint(
 
 
 def _conditions_overlap(parent_condition: Any, child_condition: Any) -> bool:
-    if _condition_key(parent_condition) == _condition_key(child_condition):
+    table: dict[Any, int] = {}
+    if _condition_key(parent_condition, table) == _condition_key(child_condition, table):
         return True
     # Parent is the deny rule, child the allow rule being tested for preemption.
     return not _conditions_disjoint(
         parent_condition, child_condition, left_deny=True, right_deny=False
     )
+
+
+def _document_rules(doc: dict[str, Any], level: int) -> list[Any]:
+    """Return the ``rules`` list of a document, refusing any other shape.
+
+    A missing key means no rules. ``rules: null`` (a bare ``rules:`` line)
+    and any non-list value are refused: iterating ``None`` raised a bare
+    ``TypeError`` that escaped the CLI, and a mapping or string would be
+    walked element by element and misreported as a nameless rule.
+    """
+    rules = doc.get("rules", [])
+    if not isinstance(rules, list):
+        raise ResolutionError.invalid_governance(
+            f"rules at level {level} must be a list, got {type(rules).__name__}"
+        )
+    return rules
 
 
 def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -389,10 +505,35 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
             raise ResolutionError.invalid_governance(
                 f"document at level {level} is not a mapping"
             )
-        for rule in doc.get("rules", []):
+        for rule in _document_rules(doc, level):
             if not isinstance(rule, dict) or "name" not in rule:
                 raise ResolutionError.invalid_governance(
                     f"rule at level {level} is missing name"
+                )
+            priority = rule.get("priority", 0)
+            if (
+                isinstance(priority, bool)
+                or not isinstance(priority, (int, float))
+                or (isinstance(priority, float) and not math.isfinite(priority))
+            ):
+                # The sort below would raise a bare TypeError on a null or
+                # string priority and skip the migration report entirely.
+                # Only a float can be non-finite; math.isfinite() on an int
+                # too large for a float raises OverflowError instead.
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a non-numeric priority "
+                    f"({type(priority).__name__}); priority must be a finite number"
+                )
+            bad_key = _non_string_mapping_key(rule.get("condition"))
+            if bad_key is not None:
+                # Checked before the overlap comparison: json.dumps on a
+                # mapping with a date or mixed-type key raised a bare
+                # TypeError from _condition_key under a parent deny, so the
+                # migration ended in a traceback instead of this refusal.
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule['name']!r} has a condition mapping key of type "
+                    f"{type(bad_key).__name__} that cannot be written to Rego "
+                    "exactly; JSON object keys must be strings"
                 )
             if _condition_unsatisfiable(
                 rule.get("condition"), is_deny=_rule_action(rule) == "deny"
@@ -404,7 +545,7 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 )
 
     if len(documents) == 1:
-        rules = list(documents[0].get("rules", []))
+        rules = list(_document_rules(documents[0], 0))
         rules.sort(key=lambda r: r.get("priority", 0), reverse=True)
         return rules
 
@@ -413,7 +554,7 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
 
     for level, doc in enumerate(documents):
-        for rule in doc.get("rules", []):
+        for rule in _document_rules(doc, level):
             name = str(rule["name"])
             existing = rules_by_name.get(name)
             override = bool(rule.get("override", False))
