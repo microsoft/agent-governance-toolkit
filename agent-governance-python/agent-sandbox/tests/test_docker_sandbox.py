@@ -18,6 +18,7 @@ import re
 import shutil
 import string
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -30,7 +31,12 @@ from agent_sandbox._hardening import is_protected_path as _is_protected_path
 from agent_sandbox._hardening import sanitize_env_vars as _sanitize_env_vars
 from agent_sandbox._hardening import validate_mount_path as _validate_mount_path
 from agent_sandbox.code_scanner import SandboxCodeViolation
-from agent_sandbox.docker_provider.provider import DockerSandboxProvider, _validate_resource_name
+from agent_sandbox.docker_provider.provider import (
+    _EXEC_MARKER_ENV,
+    _KILL_MARKED_PROCESSES_SCRIPT,
+    DockerSandboxProvider,
+    _validate_resource_name,
+)
 from agent_sandbox.docker_provider.state import SandboxCheckpoint
 from agent_sandbox.isolation_runtime import IsolationRuntime
 from agent_sandbox.sandbox_provider import (
@@ -1335,34 +1341,175 @@ class TestSymlinkResolution:
 class TestTimeoutWatchdog:
     """Verify timeout_seconds is enforced via a watchdog thread."""
 
+    @staticmethod
+    def _blocking_exec(api, release, exit_code=137):
+        """Make the low-level exec block until *release* is set."""
+        api.exec_create.return_value = {'Id': 'exec-abc'}
+
+        def exec_start(exec_id, stream=False, demux=True):
+
+            def _gen():
+                release.wait(5)
+                yield (b'partial', None)
+            return _gen()
+        api.exec_start.side_effect = exec_start
+        api.exec_inspect.return_value = {'Pid': 4242, 'ExitCode': exit_code}
+
+    @staticmethod
+    def _is_exec_kill(call):
+        argv = call.args[0] if call.args else call.kwargs.get('cmd')
+        return list(argv[:3]) == ['python3', '-c', _KILL_MARKED_PROCESSES_SCRIPT]
+
     def test_timeout_kills_exec_process_not_container(self, docker_provider):
         """When an exec exceeds its timeout, only the offending exec
         process is killed — NOT the entire container. This preserves
         guest state from prior execute_code calls in the same session.
         """
+        h = docker_provider.create_session('a1')
+        c = docker_provider._containers[h.agent_id, h.session_id]
+        api = docker_provider._client.api
+        release = threading.Event()
+        self._blocking_exec(api, release)
+
+        def exec_run(argv, *args, **kwargs):
+            release.set()
+            return MagicMock(exit_code=0, output=b'')
+        c.exec_run.side_effect = exec_run
+        cfg = SandboxConfig(timeout_seconds=0.1, env_vars={'KEEP': '1'})
+        r = docker_provider.run('a1', ['python', '-c', 'pass'], config=cfg, session_id=h.session_id)
+        assert r.killed is True
+        assert r.success is False
+        assert r.exit_code == 137
+        assert r.stdout == 'partial'
+        assert not c.kill.called
+        kill_calls = [call for call in c.exec_run.call_args_list if self._is_exec_kill(call)]
+        assert len(kill_calls) == 1, c.exec_run.call_args_list
+        # The kill targets the marker the exec was started with, not the
+        # daemon-namespace Pid from exec_inspect.
+        exec_env = api.exec_create.call_args.kwargs['environment']
+        assert exec_env['KEEP'] == '1'
+        marker = exec_env[_EXEC_MARKER_ENV]
+        assert kill_calls[0].args[0][3] == f'{_EXEC_MARKER_ENV}={marker}'
+        assert '4242' not in kill_calls[0].args[0]
+
+    def test_exec_marker_is_unique_per_run(self, docker_provider):
+        h = docker_provider.create_session('a1')
+        api = docker_provider._client.api
+        api.exec_create.return_value = {'Id': 'exec-abc'}
+        api.exec_start.side_effect = lambda *a, **k: iter([(b'ok', None)])
+        api.exec_inspect.return_value = {'ExitCode': 0}
+        for _ in range(2):
+            r = docker_provider.run('a1', ['python', '-c', 'pass'], config=SandboxConfig(timeout_seconds=5), session_id=h.session_id)
+            assert r.success is True
+        first, second = (call.kwargs['environment'][_EXEC_MARKER_ENV] for call in api.exec_create.call_args_list)
+        assert first and second and first != second
+
+    @pytest.mark.parametrize('kill_outcome', ['missing-binary', 'nothing-signalled', 'raises'])
+    def test_timeout_never_reruns_command_when_exec_kill_fails(self, docker_provider, kill_outcome):
+        """Regression: a failed in-container kill used to be mistaken for
+        an unavailable exec API, and the command was started a second
+        time through ``container.exec_run``. It must run once, and the
+        container is killed so the timeout still holds.
+        """
         import time as _time
         h = docker_provider.create_session('a1')
         c = docker_provider._containers[h.agent_id, h.session_id]
         api = docker_provider._client.api
-        api.exec_create.return_value = {'Id': 'exec-abc'}
+        release = threading.Event()
+        self._blocking_exec(api, release)
+        command = ['python', '-c', 'side_effect()']
+        started = []
 
-        def slow_exec_start(exec_id, stream=False, demux=True):
-            if stream:
-
-                def _gen():
-                    _time.sleep(0.5)
-                    yield (None, b'killed')
-                return _gen()
-            _time.sleep(0.5)
-            return (None, b'killed')
-        api.exec_start.side_effect = slow_exec_start
-        api.exec_inspect.return_value = {'Pid': 4242, 'ExitCode': 137}
-        cfg = SandboxConfig(timeout_seconds=0.1)
-        r = docker_provider.run('a1', ['python', '-c', 'pass'], config=cfg, session_id=h.session_id)
+        def exec_run(argv=None, *args, **kwargs):
+            argv = argv if argv is not None else kwargs.get('cmd')
+            if list(argv) == command:
+                started.append(argv)
+                release.wait(5)
+                return MagicMock(exit_code=137, output=(None, None))
+            if kill_outcome == 'raises':
+                raise RuntimeError('exec API error')
+            # exec_run reports a missing or failing command through the
+            # exit code; it does not raise.
+            return MagicMock(exit_code=127 if kill_outcome == 'missing-binary' else 3, output=b'')
+        c.exec_run.side_effect = exec_run
+        c.kill.side_effect = release.set
+        start = _time.monotonic()
+        r = docker_provider.run('a1', command, config=SandboxConfig(timeout_seconds=0.2), session_id=h.session_id)
+        elapsed = _time.monotonic() - start
+        assert started == [], 'timed-out command was executed again'
+        assert api.exec_create.call_count == 1
+        assert api.exec_start.call_count == 1
+        c.kill.assert_called_once_with()
         assert r.killed is True
-        assert not c.kill.called
-        kill_calls = [call for call in c.exec_run.call_args_list if call.args and call.args[0] == ['kill', '-9', '4242']]
-        assert kill_calls, f"Expected ``container.exec_run(['kill', '-9', '4242'])`` call; got exec_run calls: {c.exec_run.call_args_list}"
+        assert r.success is False
+        # One timeout, not two (the re-run used to wait a second one).
+        assert elapsed < 2.0
+
+    def test_timeout_kills_container_when_exec_survives_kill(self, docker_provider, monkeypatch):
+        """The kill reports success but the stream stays open (e.g. a
+        child that dropped the marker holds the pipe): fall back to
+        killing the container.
+        """
+        h = docker_provider.create_session('a1')
+        c = docker_provider._containers[h.agent_id, h.session_id]
+        api = docker_provider._client.api
+        release = threading.Event()
+        self._blocking_exec(api, release)
+        c.exec_run.return_value = MagicMock(exit_code=0, output=b'')
+        c.kill.side_effect = release.set
+        monkeypatch.setattr('agent_sandbox.docker_provider.provider._POST_KILL_JOIN_SECONDS', 0.2)
+        r = docker_provider.run('a1', ['python', '-c', 'pass'], config=SandboxConfig(timeout_seconds=0.1), session_id=h.session_id)
+        c.kill.assert_called_once_with()
+        assert r.killed is True
+
+    def test_stream_error_after_start_is_reported_not_rerun(self, docker_provider):
+        """An error from the exec stream after the exec was created must
+        surface as a failed result; the command is not run again.
+        """
+        h = docker_provider.create_session('a1')
+        c = docker_provider._containers[h.agent_id, h.session_id]
+        api = docker_provider._client.api
+        api.exec_create.return_value = {'Id': 'exec-abc'}
+        api.exec_start.side_effect = RuntimeError('stream reset')
+        r = docker_provider.run('a1', ['python', '-c', 'side_effect()'], config=SandboxConfig(timeout_seconds=5), session_id=h.session_id)
+        assert r.success is False
+        assert r.exit_code == -1
+        assert 'stream reset' in r.stderr
+        assert r.killed is False
+        c.exec_run.assert_not_called()
+
+    def test_falls_back_to_exec_run_only_when_no_exec_was_created(self, docker_provider):
+        """Without an exec id nothing has started, so the high-level
+        path may run the command (once).
+        """
+        h = docker_provider.create_session('a1')
+        c = docker_provider._containers[h.agent_id, h.session_id]
+        api = docker_provider._client.api
+        api.exec_create.return_value = {}
+        c.exec_run.return_value = MagicMock(exit_code=0, output=(b'ok', b''))
+        r = docker_provider.run('a1', ['echo', 'ok'], config=SandboxConfig(timeout_seconds=5), session_id=h.session_id)
+        assert r.success is True
+        assert r.stdout == 'ok'
+        assert c.exec_run.call_count == 1
+        api.exec_start.assert_not_called()
+
+    @pytest.mark.skipif(not sys.platform.startswith('linux'), reason='reads /proc/<pid>/environ')
+    def test_kill_script_signals_only_marked_processes(self):
+        sleeper = [sys.executable, '-c', 'import time; time.sleep(60)']
+        marked = subprocess.Popen(sleeper, env={_EXEC_MARKER_ENV: 'wanted'})
+        other = subprocess.Popen(sleeper, env={_EXEC_MARKER_ENV: 'wanted-not'})
+        try:
+            killer = [sys.executable, '-c', _KILL_MARKED_PROCESSES_SCRIPT]
+            assert subprocess.run([*killer, f'{_EXEC_MARKER_ENV}=wanted'], env={}).returncode == 0
+            assert marked.wait(timeout=5) == -9
+            assert other.poll() is None
+            # Nothing left to signal: report it so the caller falls back.
+            assert subprocess.run([*killer, f'{_EXEC_MARKER_ENV}=wanted'], env={}).returncode == 3
+        finally:
+            for proc in (marked, other):
+                if proc.poll() is None:
+                    proc.kill()
+                proc.wait()
 
     def test_concurrent_runs_serialise_per_container(self, docker_provider):
         """Concurrent run() calls against the same session must
