@@ -341,6 +341,7 @@ achat
 addinfourl
 addinivalue
 addoption
+addrolemember
 adtech
 aenter
 aexit

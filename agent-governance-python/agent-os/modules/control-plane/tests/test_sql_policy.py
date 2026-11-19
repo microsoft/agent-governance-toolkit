@@ -160,6 +160,56 @@ class TestSQLPolicy:
         request = self.make_sql_request("EXECUTE xp_cmdshell 'net user'")
         assert sql_policy.validator(request) is False
 
+    # ---------------------------------------------------------------
+    # Newline-separated EXEC procedures - regression coverage
+    #
+    # Under the pinned sqlglot (>=23,<24) these EXEC statements do not
+    # parse: sqlglot.parse raises ParseError and the validator's
+    # fail-closed handler denies the query. The ``\s+`` pattern over
+    # ``statement.sql().upper()`` is the backstop layer that applies
+    # only when a statement parses (e.g. under a future sqlglot that
+    # learns this syntax). These tests lock in the denial outcome
+    # itself, whichever layer produces it, so neither a parser upgrade
+    # nor a pattern refactor can silently regress it. They characterize
+    # the current, correct denial — they are not a bug report and
+    # assert no bypass exists.
+    # ---------------------------------------------------------------
+
+    def test_exec_newline_xp_cmdshell_blocked(self, sql_policy):
+        """EXEC + newline + xp_cmdshell is denied (ParseError fail-close today)."""
+        request = self.make_sql_request("EXEC\nxp_cmdshell 'whoami'")
+        assert sql_policy.validator(request) is False
+
+    def test_execute_newline_xp_cmdshell_blocked(self, sql_policy):
+        """EXECUTE + newline + xp_cmdshell is denied (ParseError fail-close today)."""
+        request = self.make_sql_request("EXECUTE\nxp_cmdshell 'net user'")
+        assert sql_policy.validator(request) is False
+
+    def test_exec_newline_sp_configure_blocked(self, sql_policy):
+        """EXEC + newline + sp_configure is denied (ParseError fail-close today)."""
+        request = self.make_sql_request(
+            "EXEC\nsp_configure 'show advanced options', 1"
+        )
+        assert sql_policy.validator(request) is False
+
+    def test_exec_newline_sp_addrolemember_blocked(self, sql_policy):
+        """EXEC + newline + sp_addrolemember is denied (ParseError fail-close today)."""
+        request = self.make_sql_request(
+            "EXEC\nsp_addrolemember 'db_owner', 'attacker'"
+        )
+        assert sql_policy.validator(request) is False
+
+    def test_multiline_select_still_allowed(self, sql_policy):
+        """A benign SELECT spanning newlines should remain allowed.
+
+        Confirms the deny layers (parse fail-close + proc pattern) do not
+        over-block ordinary multi-line queries.
+        """
+        request = self.make_sql_request(
+            "SELECT id,\n       name\nFROM users\nWHERE active = 1"
+        )
+        assert sql_policy.validator(request) is True
+
     def test_merge_into_blocked(self, sql_policy):
         """MERGE INTO should be blocked."""
         request = self.make_sql_request(
