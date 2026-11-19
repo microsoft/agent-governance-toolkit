@@ -15,7 +15,7 @@ Coverage targets:
 * Snapshots: capture, restore, error paths, nanvix unsupported.
 * Async surface: ``execute_code_async``.
 * Edge cases: bad agent_ids, tool not in registry, upstream SDK
-  signatures that reject unknown kwargs, run-time exceptions.
+  signatures that reject the configured limits, run-time exceptions.
 """
 
 from __future__ import annotations
@@ -187,8 +187,32 @@ class TestHyperlightConfig:
         assert cfg.backend == "wasm"
         assert cfg.module == "python_guest"
         assert cfg.heap_size_bytes == 64 * 1024 * 1024
-        assert cfg.stack_size_bytes == 2 * 1024 * 1024
+        # Matches upstream's Linux default stack ("35Mi").
+        assert cfg.stack_size_bytes == 35 * 1024 * 1024
         assert cfg.max_execution_time_ms == 60_000
+        assert cfg.heap_size == "64Mi"
+        assert cfg.stack_size == "35Mi"
+
+    @pytest.mark.parametrize(
+        "num_bytes,expected",
+        [
+            (128 * 1024 * 1024, "128Mi"),
+            (1024 * 1024, "1Mi"),
+            (512 * 1024, "512Ki"),
+            (1024 * 1024 + 1, "1025Ki"),
+            (1, "1Ki"),
+        ],
+    )
+    def test_format_size_matches_sdk_string_form(self, num_bytes, expected):
+        from agent_sandbox.hyperlight_provider.config import format_size
+
+        assert format_size(num_bytes) == expected
+
+    def test_format_size_rejects_non_positive(self):
+        from agent_sandbox.hyperlight_provider.config import format_size
+
+        with pytest.raises(ValueError):
+            format_size(0)
 
     @pytest.mark.parametrize(
         "backend", ["wasm", "hyperlightjs", "nanvix"]
@@ -681,15 +705,61 @@ class TestAsync:
 
 
 class TestUpstreamSignatureCompat:
-    def test_falls_back_to_minimal_kwargs_on_typeerror(self, provider):
-        # First create should still succeed even when upstream rejects
-        # the full kwarg form.
-        _FakeSandbox.accept_full_kwargs = False
-        h = provider.create_session("agent-1")
+    """``_build_sandbox`` must speak the pinned SDK's constructor
+    (hyperlight-sandbox 0.4.x): ``heap_size`` / ``stack_size`` strings,
+    ``input_dir`` / ``output_dir`` mounts, keyword-only. Regression tests
+    for #4584, where the limits were silently dropped.
+    """
+
+    # Keyword names accepted by hyperlight_sandbox.Sandbox.__init__ at 0.4.0.
+    SDK_KWARGS = {
+        "input_dir", "output_dir", "temp_output", "backend",
+        "module", "module_path", "heap_size", "stack_size",
+    }
+
+    def test_policy_limits_reach_sdk_in_accepted_form(self, provider):
+        cfg = SandboxConfig(
+            memory_mb=128,
+            input_dir="/host/in",
+            output_dir="/host/out",
+        )
+        h = provider.create_session("agent-1", config=cfg)
         assert h.status == SessionStatus.READY
         sb = _FakeSandbox.instances[-1]
-        # Minimal form: only backend (+ module for wasm) survives.
-        assert set(sb.kwargs.keys()) <= {"backend", "module"}
+        assert set(sb.kwargs) <= self.SDK_KWARGS, sb.kwargs
+        assert sb.kwargs["backend"] == "wasm"
+        assert sb.kwargs["module"] == "python_guest"
+        assert sb.kwargs["heap_size"] == "128Mi"
+        assert sb.kwargs["stack_size"] == "35Mi"
+        assert sb.kwargs["input_dir"] == "/host/in"
+        assert sb.kwargs["output_dir"] == "/host/out"
+        # Names the SDK does not know must not be sent.
+        for name in ("heap_size_bytes", "stack_size_bytes",
+                     "max_execution_time_ms", "env"):
+            assert name not in sb.kwargs
+
+    def test_mounts_omitted_when_not_configured(self, provider):
+        provider.create_session("agent-1")
+        sb = _FakeSandbox.instances[-1]
+        assert "input_dir" not in sb.kwargs
+        assert "output_dir" not in sb.kwargs
+        assert set(sb.kwargs) == {"backend", "module", "heap_size", "stack_size"}
+
+    def test_sdk_rejecting_limits_fails_closed(self, provider):
+        # An SDK that takes only backend/module must not get a session
+        # with the limits quietly dropped.
+        _FakeSandbox.accept_full_kwargs = False
+        with pytest.raises(RuntimeError, match="rejected the configured sandbox limits"):
+            provider.create_session("agent-1", config=SandboxConfig(memory_mb=128))
+        assert _FakeSandbox.instances == []
+        assert provider._sandboxes == {}
+        assert provider._workers == {}
+
+    def test_env_vars_rejected_instead_of_dropped(self, provider):
+        cfg = SandboxConfig(env_vars={"TOKEN": "secret"})
+        with pytest.raises(ValueError, match="env_vars is not supported"):
+            provider.create_session("agent-1", config=cfg)
+        assert _FakeSandbox.instances == []
 
     def test_missing_sandbox_class_raises(self, fake_sdk):
         delattr(fake_sdk, "Sandbox")
