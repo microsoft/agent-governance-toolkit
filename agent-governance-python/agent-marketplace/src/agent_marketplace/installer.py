@@ -112,7 +112,9 @@ class PluginInstaller:
                covers all manifest fields including ``artifact_sha256``, so
                it cryptographically binds the manifest to the artifact).
             3. Resolve and install dependencies (recursively).
-            4. Download the plugin artifact archive from ``manifest.artifact_url``
+            4. Prepare the plugin artifact in a staging directory, then replace
+               the installed directory after all validation succeeds.
+               Download the plugin artifact archive from ``manifest.artifact_url``
                (if set), verify its SHA-256 digest against
                ``manifest.artifact_sha256``, and unpack it under
                ``plugins_dir/<name>/``.  The archive is also kept as
@@ -157,14 +159,20 @@ class PluginInstaller:
             _seen = set()
         self._resolve_dependencies(manifest, verify=verify, _seen=_seen)
 
-        # Install to plugins directory
         dest = self._plugins_dir / name
-        dest.mkdir(parents=True, exist_ok=True)
-
-        # Artifact download + verification (when manifest declares an artifact)
         if manifest.artifact_url:
-            self._fetch_artifact(manifest, dest, verify=verify)
+            self._install_artifact(manifest, dest, verify=verify)
+        else:
+            # Manifest-registration mode keeps existing source files and its
+            # established install-time scan behavior.
+            dest.mkdir(parents=True, exist_ok=True)
+            self._write_manifest_and_scan(manifest, dest)
 
+        logger.info("Installed plugin %s@%s to %s", name, manifest.version, dest)
+        return dest
+
+    def _write_manifest_and_scan(self, manifest: PluginManifest, dest: Path) -> None:
+        """Write the candidate manifest and enforce the existing source scan."""
         manifest_file = dest / MANIFEST_FILENAME
 
         data = manifest.model_dump(mode="json")
@@ -178,12 +186,48 @@ class PluginInstaller:
             except OSError:
                 pass
             raise MarketplaceError(
-                f"Plugin {name}@{manifest.version} imports restricted modules: "
+                f"Plugin {manifest.name}@{manifest.version} imports restricted modules: "
                 + "; ".join(violations)
             )
 
-        logger.info("Installed plugin %s@%s to %s", name, manifest.version, dest)
-        return dest
+    def _install_artifact(
+        self, manifest: PluginManifest, dest: Path, *, verify: bool
+    ) -> None:
+        """Prepare an artifact separately and restore the old install on swap failure."""
+        staging = Path(tempfile.mkdtemp(prefix=".plugin-install-", dir=self._plugins_dir))
+        candidate = staging / "candidate"
+        previous = staging / "previous"
+        preserve_backup = False
+        try:
+            candidate.mkdir()
+            self._fetch_artifact(manifest, candidate, verify=verify)
+            self._write_manifest_and_scan(manifest, candidate)
+
+            if dest.exists():
+                os.replace(dest, previous)
+            try:
+                os.replace(candidate, dest)
+            except BaseException:
+                if previous.exists():
+                    preserve_backup = True
+                    try:
+                        os.replace(previous, dest)
+                    except OSError as exc:
+                        # Do not remove the only remaining copy if the
+                        # filesystem also prevents automatic restoration.
+                        preserve_backup = True
+                        raise MarketplaceError(
+                            f"Could not restore {manifest.name}; previous installation "
+                            f"preserved at {previous}"
+                        ) from exc
+                    preserve_backup = False
+                raise
+        finally:
+            if not preserve_backup:
+                try:
+                    shutil.rmtree(staging)
+                except OSError as exc:
+                    logger.warning("Could not remove plugin staging directory %s: %s", staging, exc)
 
     def uninstall(self, name: str) -> None:
         """Remove an installed plugin.

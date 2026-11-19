@@ -500,3 +500,138 @@ class TestArtifactHashInSignableBytes:
             )
         finally:
             server.shutdown()
+
+
+class TestUpgradePreservesInstalledVersion:
+    """An incomplete replacement must not alter an existing installation."""
+
+    @staticmethod
+    def _register_version(registry, signer, version, url, payload):
+        manifest = PluginManifest(
+            name="test-plugin", version=version, author="author@example.com",
+            description="Upgrade test", plugin_type=PluginType.INTEGRATION,
+            artifact_url=url, artifact_sha256=_sha256_hex(payload),
+        )
+        registry.register(signer.sign(manifest))
+
+    @staticmethod
+    def _snapshot(directory):
+        return {
+            str(path.relative_to(directory)): path.read_bytes()
+            for path in directory.rglob("*") if path.is_file()
+        }
+
+    def test_failed_unpack_keeps_old_manifest_code_and_artifact(self, tmp_path):
+        installer, registry, signer = _setup(tmp_path)
+        old = _make_zip({"plugin.py": b"VERSION = '1.0.0'\n", "old.txt": b"old"})
+        # A late member conflicts with a directory created by an earlier member.
+        new = _make_zip({
+            "plugin.py": b"VERSION = '2.0.0'\n",
+            "assets/data.txt": b"new data", "assets": b"file conflicts with directory",
+        })
+        servers = []
+        try:
+            for version, payload in [("1.0.0", old), ("2.0.0", new)]:
+                server, url = _serve_bytes(payload)
+                servers.append(server)
+                self._register_version(registry, signer, version, url, payload)
+            dest = installer.install("test-plugin", "1.0.0")
+            before = self._snapshot(dest)
+
+            with pytest.raises(OSError):
+                installer.install("test-plugin", "2.0.0")
+
+            assert self._snapshot(dest) == before
+            assert installer.list_installed()[0].version == "1.0.0"
+            assert sorted(path.name for path in dest.parent.iterdir()) == ["test-plugin"]
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+
+    def test_successful_upgrade_replaces_old_layout(self, tmp_path):
+        installer, registry, signer = _setup(tmp_path)
+        old = _make_zip({"plugin.py": b"VERSION = '1.0.0'\n", "assets/data.txt": b"old"})
+        new = _make_zip({"plugin.py": b"VERSION = '2.0.0'\n", "assets": b"new file"})
+        servers = []
+        try:
+            for version, payload in [("1.0.0", old), ("2.0.0", new)]:
+                server, url = _serve_bytes(payload)
+                servers.append(server)
+                self._register_version(registry, signer, version, url, payload)
+            installer.install("test-plugin", "1.0.0")
+            dest = installer.install("test-plugin", "2.0.0")
+
+            assert (dest / "plugin.py").read_bytes() == b"VERSION = '2.0.0'\n"
+            assert (dest / "assets").read_bytes() == b"new file"
+            assert (dest / ARTIFACT_FILENAME).read_bytes() == new
+            assert installer.list_installed()[0].version == "2.0.0"
+            assert sorted(path.name for path in dest.parent.iterdir()) == ["test-plugin"]
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+
+    def test_failed_final_replace_restores_old_install(self, tmp_path, monkeypatch):
+        import os
+
+        installer, registry, signer = _setup(tmp_path)
+        servers = []
+        try:
+            for version in ["1.0.0", "2.0.0"]:
+                payload = _make_zip({"plugin.py": f"VERSION = {version!r}\n".encode()})
+                server, url = _serve_bytes(payload)
+                servers.append(server)
+                self._register_version(registry, signer, version, url, payload)
+            dest = installer.install("test-plugin", "1.0.0")
+            before = self._snapshot(dest)
+            replace = os.replace
+
+            def fail_candidate_replace(source, target):
+                if Path(source).name == "candidate" and Path(target) == dest:
+                    raise OSError("simulated directory replacement failure")
+                return replace(source, target)
+
+            monkeypatch.setattr(os, "replace", fail_candidate_replace)
+            with pytest.raises(OSError, match="simulated directory replacement"):
+                installer.install("test-plugin", "2.0.0")
+
+            assert self._snapshot(dest) == before
+            assert installer.list_installed()[0].version == "1.0.0"
+            assert sorted(path.name for path in dest.parent.iterdir()) == ["test-plugin"]
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+
+    def test_failed_restore_preserves_backup_for_recovery(self, tmp_path, monkeypatch):
+        import os
+
+        installer, registry, signer = _setup(tmp_path)
+        servers = []
+        try:
+            for version in ["1.0.0", "2.0.0"]:
+                payload = _make_zip({"plugin.py": f"VERSION = {version!r}\n".encode()})
+                server, url = _serve_bytes(payload)
+                servers.append(server)
+                self._register_version(registry, signer, version, url, payload)
+            dest = installer.install("test-plugin", "1.0.0")
+            before = self._snapshot(dest)
+            replace = os.replace
+
+            def fail_new_install_and_restore(source, target):
+                if Path(source).name in {"candidate", "previous"} and Path(target) == dest:
+                    raise OSError("simulated replacement and restore failure")
+                return replace(source, target)
+
+            monkeypatch.setattr(os, "replace", fail_new_install_and_restore)
+            with pytest.raises(MarketplaceError, match="previous installation preserved at"):
+                installer.install("test-plugin", "2.0.0")
+
+            backups = list(dest.parent.glob(".plugin-install-*/previous"))
+            assert len(backups) == 1
+            assert self._snapshot(backups[0]) == before
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
