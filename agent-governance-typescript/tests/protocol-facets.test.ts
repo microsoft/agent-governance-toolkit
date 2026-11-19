@@ -115,6 +115,14 @@ describe('extractSqlFacets', () => {
     expect(f.verb).toBe('UNKNOWN');
   });
 
+  it('leaves target/tables/functions empty for an unrecognized verb', () => {
+    // Documented contract: "Unrecognized verb -> verb: 'UNKNOWN', other
+    // fields empty." An unknown leading verb must not let the generic clause
+    // regexes attach identifiers (regression: a bare FROM leaked the table).
+    const f = extractSqlFacets({ query: 'FROBNICATE FROM secrets' });
+    expect(f).toEqual({ verb: 'UNKNOWN', target: '', tables: '', functions: '' });
+  });
+
   it('extracts multiple tables and joins them comma-separated', () => {
     const f = extractSqlFacets({
       query: 'SELECT * FROM orders JOIN users ON orders.user_id = users.id',
