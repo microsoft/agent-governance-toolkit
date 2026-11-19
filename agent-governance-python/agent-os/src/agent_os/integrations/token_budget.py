@@ -102,7 +102,9 @@ class TokenBudgetTracker:
     def format_status(self, agent_id: str) -> str:
         """Return a CLI-friendly progress bar, e.g. ``[████████░░] 82% (8,200/10,000 tokens)``."""
         status = self.get_usage(agent_id)
-        filled = round(status.percentage / 10)
+        # Clamp so an over-budget agent (percentage > 1.0) still renders a
+        # ten-cell bar rather than one that grows past it.
+        filled = min(round(status.percentage * 10), 10)
         bar = "█" * filled + "░" * (10 - filled)
         pct = round(status.percentage * 100)
         return f"[{bar}] {pct}% ({status.used:,}/{status.limit:,} tokens)"
