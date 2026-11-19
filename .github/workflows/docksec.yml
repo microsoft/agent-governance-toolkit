@@ -1,0 +1,86 @@
+name: DockSec
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'agent-governance-python/agent-mesh/docker/Dockerfile'
+      - 'agent-governance-python/agent-os/Dockerfile.sidecar'
+      - 'agent-governance-python/agent-sandbox/docker/Dockerfile.sandbox'
+      - 'agent-governance-python/agent-hypervisor/docker/Dockerfile.sandbox'
+      - '.github/workflows/docksec.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'agent-governance-python/agent-mesh/docker/Dockerfile'
+      - 'agent-governance-python/agent-os/Dockerfile.sidecar'
+      - 'agent-governance-python/agent-sandbox/docker/Dockerfile.sandbox'
+      - 'agent-governance-python/agent-hypervisor/docker/Dockerfile.sandbox'
+      - '.github/workflows/docksec.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Scan ${{ matrix.dockerfile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - Dockerfile
+          - agent-governance-python/agent-mesh/docker/Dockerfile
+          - agent-governance-python/agent-os/Dockerfile.sidecar
+          - agent-governance-python/agent-sandbox/docker/Dockerfile.sandbox
+          - agent-governance-python/agent-hypervisor/docker/Dockerfile.sandbox
+    env:
+      DOCKERFILE: ${{ matrix.dockerfile }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Stage Dockerfile
+        # DockSec's Trivy pass scans the target's whole directory and matches by file name, so
+        # the many other files named Dockerfile in this repo would be reported under this one.
+        # Scan an isolated copy instead.
+        run: |
+          mkdir docksec-target
+          cp -- "$DOCKERFILE" docksec-target/Dockerfile
+
+      - name: Run DockSec
+        uses: OWASP/DockSec@d52c8e928552dc39003abda21ac6bc4662b06c39 # v2026.9.21
+        with:
+          dockerfile: docksec-target/Dockerfile
+          scan_only: 'true'
+          sarif: 'true'
+          output_dir: ${{ github.workspace }}/docksec-results
+
+      - name: Point SARIF at the real file path
+        # DockSec records the scanned file by name only ("Dockerfile"), which Code Scanning
+        # would look up at the repo root. Rewrite it to the actual path so alerts land on
+        # the right file.
+        run: |
+          mkdir sarif-out
+          for f in docksec-results/*.sarif; do
+            jq --arg p "$DOCKERFILE" \
+              '(.runs[].results[].locations[].physicalLocation.artifactLocation.uri) = $p' \
+              "$f" > "sarif-out/$(basename "$f")"
+          done
+
+      - name: Upload SARIF to Code Scanning
+        # Not `if: always()`: on a fork pull_request, GITHUB_TOKEN is read-only and this
+        # upload would fail every time, turning a routine fork contribution into a red
+        # required check. Skip it there instead of forcing a failure.
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          sarif_file: sarif-out
+          category: docksec-${{ matrix.dockerfile }}
