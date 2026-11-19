@@ -442,6 +442,7 @@ cedarling
 cedarpy
 cedarschema
 centralised
+certifi
 certin
 cffi
 cfgs
@@ -536,6 +537,7 @@ displaydoc
 dists
 dkwargs
 dlopen
+dnspython
 dnssec
 doesnotexist
 domaintenantid
@@ -642,6 +644,7 @@ hitl
 hkdf
 hostnames
 htek
+httpcore
 httponly
 httpx
 hypercall
@@ -923,6 +926,7 @@ pyatr
 pyautogen
 pycache
 pyclass
+pycparser
 pyjwt
 pymethods
 pymodule
