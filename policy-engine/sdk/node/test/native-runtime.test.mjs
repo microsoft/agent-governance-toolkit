@@ -329,12 +329,72 @@ test("zero-config fromPath bad explicit OPA path fails closed on evaluation", as
   }
 });
 
-test("zero-config default policy dispatcher rejects non-rego", async () => {
+function cedarManifest(policySet) {
+  const body = policySet
+    .split("\n")
+    .map((line) => `      ${line}`)
+    .join("\n");
+  return `agent_control_specification_version: 0.4.0-alpha.1
+metadata:
+  name: zero-config-cedar
+policies:
+  guard:
+    type: cedar
+    policy_set: |
+${body}
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: guard
+    policy_target: $.input`;
+}
+
+const cedarSnapshot = {
+  envelope: { agent: { id: "agent-1" } },
+  input: { text: "hello" },
+};
+
+test("zero-config default policy dispatcher evaluates a Cedar permit", async () => {
+  const control = AgentControl.fromNative(cedarManifest("permit(principal, action, resource);"));
+
+  const result = await control.evaluateInterventionPoint(InterventionPoint.Input, cedarSnapshot);
+
+  assert.equal(result.verdict.decision, Decision.Allow);
+});
+
+test("zero-config default policy dispatcher reports the Cedar deny reason", async () => {
+  const control = AgentControl.fromNative(
+    cedarManifest('@id("blocked")\nforbid(principal, action, resource);'),
+  );
+
+  const result = await control.evaluateInterventionPoint(InterventionPoint.Input, cedarSnapshot);
+
+  assert.equal(result.verdict.decision, Decision.Deny);
+  assert.equal(result.verdict.reason, "blocked");
+});
+
+test("zero-config default policy dispatcher fails closed on invalid Cedar advice", async () => {
+  const control = AgentControl.fromNative(
+    cedarManifest(
+      '@advice("{\\"verdict\\":\\"bogus\\"}")\npermit(principal, action, resource);',
+    ),
+  );
+
+  const result = await control.evaluateInterventionPoint(InterventionPoint.Input, cedarSnapshot);
+
+  assert.equal(result.verdict.decision, Decision.Deny);
+  // Section 12.3 folds every dispatcher error into this reason. The Cedar
+  // dispatcher reports the advice mismatch as policy_output_invalid first.
+  assert.equal(result.verdict.reason, "runtime_error:policy_invocation_failed");
+});
+
+test("zero-config default policy dispatcher rejects unsupported policy types", async () => {
   const dir = mkdtempSync(join(tmpdir(), "acs-zc-"));
   const path = join(dir, "manifest.yaml");
   writeFileSync(path, nonRegoManifest);
   try {
-    assert.throws(() => AgentControl.fromPath(path), /only Rego/);
+    assert.throws(() => AgentControl.fromPath(path), /only Rego and Cedar/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

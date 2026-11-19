@@ -8,7 +8,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env::set_current_dir(&example_dir)?;
 
     // Zero-config construction. The manifest declares a Rego policy bundle and no
-    // annotators, so from_path wires the bundled OPA policy dispatcher against the
+    // annotators, so from_path wires the bundled default policy dispatcher, which
+    // uses OPA for the Rego policy in this manifest and resolves the
     // manifest-relative bundle with no host dispatcher code.
     let control = AgentControl::from_path("manifest.yaml")?;
 
