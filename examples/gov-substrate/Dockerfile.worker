@@ -1,0 +1,4 @@
+FROM python:3.12.10-slim-bookworm
+COPY worker.py /worker.py
+USER 65534:65534
+ENTRYPOINT ["python", "-u", "/worker.py"]
