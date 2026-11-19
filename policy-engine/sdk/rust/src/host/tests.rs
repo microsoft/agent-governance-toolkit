@@ -229,6 +229,49 @@ fn from_path_zero_config_evaluates_rego_manifest() {
 }
 
 #[test]
+fn zero_config_evaluates_a_cedar_manifest_in_process() {
+    let yaml = "agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  p:
+    type: cedar
+    policy_set: |
+      forbid (principal, action, resource == Tool::\"drop\");
+      permit (principal, action, resource);
+intervention_points:
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: p
+tools:
+  drop:
+    type: Tool
+    id: drop
+  read:
+    type: Tool
+    id: read
+";
+    let control = AgentControl::from_manifest_chain(&[yaml]).unwrap();
+    let evaluate = |tool: &str| {
+        control
+            .evaluate_intervention_point(
+                InterceptionPoint::PreToolCall,
+                json!({
+                    "envelope": { "agent": { "id": "agent-1" } },
+                    "tool_call": { "name": tool, "args": {} }
+                }),
+                EnforcementMode::Enforce,
+            )
+            .verdict
+            .decision
+    };
+
+    assert_eq!(evaluate("read"), Decision::Allow);
+    assert_eq!(evaluate("drop"), Decision::Deny);
+}
+
+#[test]
 fn from_manifest_with_dispatchers_and_limits_builds_and_evaluates() {
     // The limits-threading constructor is reachable with a non-default value and
     // builds a working runtime; a host policy still overrides the default

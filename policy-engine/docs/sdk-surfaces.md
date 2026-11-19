@@ -38,7 +38,7 @@ It does not apply a transform to the host's snapshot.
 
 Manifest and native library load failures can occur before a runtime exists. SDK constructors surface those failures by refusing construction, which is a fail closed outcome for the host. Once construction succeeds, evaluation-time runtime errors are returned as deny verdicts.
 
-For zero-config Rego policies, `$ACS_OPA_PATH` is authoritative when set and must point to the OPA binary or its containing directory. A bad explicit path fails closed instead of falling back to another `opa` on `PATH`.
+The default policy dispatcher runs Cedar policies in process and sends Rego to OPA. For zero-config Rego policies, `$ACS_OPA_PATH` is authoritative when set and must point to the OPA binary or its containing directory. A bad explicit path fails closed instead of falling back to another `opa` on `PATH`.
 
 SDK enforcement boundaries that synthesize a fail closed verdict use the same content safe telemetry schema when a host enables telemetry. Approval resolver failures report `host_error:approval_resolver_failed`. Streaming helpers that cannot assemble a complete snapshot report `host_error:streaming_unsupported`. Adapters that detect unsupported framework methods report `host_error:adapter_unsupported`. JSON wire bindings that receive malformed intervention request envelopes report `runtime_error:request_invalid`. These events may carry the action identity only when it already exists from the evaluated policy input.
 
