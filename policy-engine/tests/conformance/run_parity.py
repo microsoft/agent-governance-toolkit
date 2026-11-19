@@ -10,7 +10,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CONF = REPO / "tests" / "conformance"
-SDKS = ("rust", "python", "node", "dotnet")
+SDKS = ("rust", "python", "node", "dotnet", "java")
 
 
 def load_cases() -> list[dict]:
@@ -26,6 +26,8 @@ def command_for(sdk: str, output: Path) -> list[str] | None:
         return ["node", str(CONF / "run_node.mjs"), "--output", str(output)] if shutil.which("node") else None
     if sdk == "dotnet":
         return [str(CONF / "run_dotnet.sh")] if shutil.which("dotnet") else None
+    if sdk == "java":
+        return [str(CONF / "run_java.sh")]
     raise ValueError(sdk)
 
 
@@ -37,7 +39,7 @@ def run_sdk(sdk: str, output: Path) -> None:
         print(f"{sdk} skip runtime unavailable")
         return
     env = None
-    if sdk in {"rust", "dotnet"}:
+    if sdk in {"rust", "dotnet", "java"}:
         env = {**dict(), **__import__("os").environ, "ACS_CONFORMANCE_RESULTS": str(output)}
     subprocess.run(command, cwd=REPO, check=True, env=env)
 
