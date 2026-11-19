@@ -188,6 +188,64 @@ class TestReplayEngine:
         diffs = engine.diff(trace_a, trace_b)
         assert any(d.diff_type == DiffType.OUTPUT_MISMATCH for d in diffs)
 
+    def test_diff_repeated_name_compares_each_output(self) -> None:
+        def trace_with_outputs(values: list[int]) -> Trace:
+            trace = Trace(agent_id="test")
+            for value in values:
+                span = Span(name="lookup", kind=SpanKind.TOOL_CALL)
+                span.finish(output={"value": value})
+                trace.add_span(span)
+            return trace
+
+        diffs = ReplayEngine().diff(trace_with_outputs([1, 2]), trace_with_outputs([9, 2]))
+
+        assert len(diffs) == 1
+        assert diffs[0].diff_type == DiffType.OUTPUT_MISMATCH
+        assert diffs[0].span_name == "lookup"
+        assert diffs[0].original == {"value": 1}
+        assert diffs[0].replayed == {"value": 9}
+
+    def test_diff_repeated_name_reports_missing_and_extra_occurrences(self) -> None:
+        longer = Trace(agent_id="test")
+        shorter = Trace(agent_id="test")
+        for _ in range(3):
+            longer.add_span(Span(name="lookup"))
+        shorter.add_span(Span(name="lookup"))
+
+        missing = ReplayEngine().diff(longer, shorter)
+        extra = ReplayEngine().diff(shorter, longer)
+
+        assert [d.diff_type for d in missing] == [DiffType.MISSING_SPAN] * 2
+        assert [d.diff_type for d in extra] == [DiffType.EXTRA_SPAN] * 2
+        assert all(d.span_name == "lookup" for d in missing + extra)
+
+    def test_diff_repeated_name_compares_each_status(self) -> None:
+        trace_a = Trace(agent_id="test")
+        trace_b = Trace(agent_id="test")
+        for trace, failed in [(trace_a, False), (trace_b, True)]:
+            first = Span(name="lookup")
+            first.finish(error="timeout" if failed else None)
+            trace.add_span(first)
+            last = Span(name="lookup")
+            last.finish()
+            trace.add_span(last)
+
+        diffs = ReplayEngine().diff(trace_a, trace_b)
+
+        assert len(diffs) == 1
+        assert diffs[0].diff_type == DiffType.STATUS_CHANGE
+
+    def test_diff_equal_repeated_name_traces(self) -> None:
+        trace_a = Trace(agent_id="test")
+        trace_b = Trace(agent_id="test")
+        for trace in [trace_a, trace_b]:
+            for value in [1, 2]:
+                span = Span(name="lookup")
+                span.finish(output={"value": value})
+                trace.add_span(span)
+
+        assert ReplayEngine().diff(trace_a, trace_b) == []
+
     def test_diff_cost_change(self) -> None:
         """Cost change detection is not implemented — diff only checks output."""
         engine = ReplayEngine()
