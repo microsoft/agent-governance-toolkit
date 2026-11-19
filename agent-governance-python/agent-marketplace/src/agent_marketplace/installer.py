@@ -429,11 +429,21 @@ class PluginInstaller:
         _seen.add(manifest.name)
 
         for dep_spec in manifest.dependencies:
-            dep_name, dep_version = _parse_dependency(dep_spec)
+            requirement = _parse_requirement(dep_spec)
+            dep_name = requirement.name
             dest = self._plugins_dir / dep_name
             if dest.exists():
-                continue  # already installed
-            self.install(dep_name, dep_version, verify=verify, _seen=_seen)
+                installed = load_manifest(dest / MANIFEST_FILENAME)
+                if installed.version not in requirement.specifier:
+                    raise MarketplaceError(
+                        f"Installed dependency {dep_name}@{installed.version} does not "
+                        f"satisfy {requirement.specifier}"
+                    )
+                continue
+            dependency = self._registry.get_plugin(
+                dep_name, version_specifier=requirement.specifier
+            )
+            self.install(dep_name, dependency.version, verify=verify, _seen=_seen)
 
     # ------------------------------------------------------------------
     # Sandboxing
@@ -562,6 +572,16 @@ def _atomic_write_yaml(path: Path, data: Any) -> None:
         raise
 
 
+def _parse_requirement(dep_spec: str) -> Requirement:
+    """Parse a dependency while retaining all its version constraints."""
+    try:
+        return Requirement(dep_spec)
+    except InvalidRequirement as exc:
+        raise MarketplaceError(
+            f"Invalid dependency specifier {dep_spec!r}: {exc}"
+        ) from exc
+
+
 def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
     """Parse a PEP 508 dependency specifier like ``plugin-name>=1.0.0``.
 
@@ -575,12 +595,7 @@ def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
     Raises:
         MarketplaceError: If ``dep_spec`` is not a valid PEP 508 requirement.
     """
-    try:
-        req = Requirement(dep_spec)
-    except InvalidRequirement as exc:
-        raise MarketplaceError(
-            f"Invalid dependency specifier {dep_spec!r}: {exc}"
-        ) from exc
+    req = _parse_requirement(dep_spec)
     for spec in req.specifier:
         if spec.operator == "==":
             return req.name, spec.version
