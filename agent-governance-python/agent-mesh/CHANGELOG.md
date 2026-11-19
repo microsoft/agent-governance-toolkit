@@ -116,6 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `PolicyRule` and `OrgPolicyRule` conditions no longer split ` and ` / ` or ` inside quoted literals, so a deny rule such as `tool.name == 'search and replace'` matches only that value instead of every request, and an allow rule with such a literal matches its own value (#4291).
+
 - `MemoryStorageProvider` now expires keys set with `ttl_seconds`. It recorded
   the expiry time but never checked it, so `get`, `exists`, `mget`, `keys`,
   `scan` and the counters kept returning the key forever, unlike
