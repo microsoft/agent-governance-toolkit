@@ -41,6 +41,8 @@ The toolkit targets Senior maturity level, meeting all MUST requirements for tha
 
 ### Element 1: Identity ("Who are you?")
 
+<a id="i-1-unique-identifier"></a>
+
 #### I-1: Unique Identifier — ✅ FULLY MET
 
 Every agent receives a globally unique `did:mesh:<fingerprint>` identifier derived from an Ed25519 keypair.
@@ -52,6 +54,8 @@ Every agent receives a globally unique `did:mesh:<fingerprint>` identifier deriv
 | Enterprise AAD binding | `agent-governance-python/agent-mesh/identity/entra.py` — `EntraAgentIdentity` |
 | .NET package | `AgentGovernance/Trust/AgentIdentity.cs` — `Create()` |
 | Rust crate | `agentmesh/src/identity.rs` — `AgentIdentity::generate()` |
+
+<a id="i-2-credential-binding"></a>
 
 #### I-2: Credential Binding — ✅ FULLY MET
 
@@ -65,6 +69,8 @@ Agent identity is bound to Ed25519 cryptographic credentials. Every handshake, d
 | mTLS cert binding | `agent-governance-python/agent-mesh/identity/mtls.py` |
 | Plugin signing | `agent-governance-python/agent-marketplace/signing.py` — `PluginSigner` |
 
+<a id="i-3-ownership-chain"></a>
+
 #### I-3: Ownership Chain — ✅ FULLY MET
 
 Full delegation chain with parent DID tracking, depth limiting, and capability narrowing.
@@ -75,6 +81,8 @@ Full delegation chain with parent DID tracking, depth limiting, and capability n
 | Chain verification | `agent-governance-python/agent-mesh/identity/agent_id.py` — `verify_delegation_chain()` |
 | Scope chains | `agent-governance-python/agent-mesh/identity/delegation.py` — `ScopeChain` |
 | Capability narrowing | Child capabilities must be subset of parent capabilities |
+
+<a id="i-4-purpose-declaration"></a>
 
 #### I-4: Purpose Declaration — ⚠️ PARTIALLY MET
 
@@ -87,6 +95,8 @@ Purpose is captured across multiple subsystems but lacks a unified machine-reada
 | Credential purpose | `agent-governance-python/agent-mesh/identity/credentials.py` — `Credential.issued_for` |
 
 **Gap:** No universal `PurposeDeclaration` model enforced at identity creation time. Purpose is fragmented across model cards, policy rules, and credential fields.
+
+<a id="i-5-capability-manifest"></a>
 
 #### I-5: Capability Manifest — ✅ FULLY MET
 
@@ -103,6 +113,8 @@ Machine-readable capability declarations for both agents and plugins.
 
 ### Element 2: Behavioral Monitoring ("What are you doing?")
 
+<a id="b-1-structured-logging"></a>
+
 #### B-1: Structured Logging — ✅ FULLY MET
 
 Tamper-evident audit chains with Merkle tree integrity verification.
@@ -114,6 +126,8 @@ Tamper-evident audit chains with Merkle tree integrity verification.
 | Audit trail | `agent-governance-python/agent-hypervisor/audit/delta.py` — `DeltaEngine` |
 | OTel integration | `agent-governance-python/agent-mesh/observability/otel_sdk.py` |
 
+<a id="b-2-action-attribution"></a>
+
 #### B-2: Action Attribution — ⚠️ PARTIALLY MET
 
 Actions are attributed to agent identities, but naming conventions vary across packages.
@@ -124,6 +138,8 @@ Actions are attributed to agent identities, but naming conventions vary across p
 | Hypervisor tracking | `agent-governance-python/agent-hypervisor/audit/delta.py` — `agent_did` per entry |
 
 **Gap:** Inconsistent field naming (`agent_id` vs `agent_did` vs `AgentId`) across packages. No shared `Attribution` model.
+
+<a id="b-3-behavioral-baseline"></a>
 
 #### B-3: Behavioral Baseline — ⚠️ PARTIALLY MET
 
@@ -137,6 +153,8 @@ Behavioral baselines with drift detection, but limited cross-session persistence
 
 **Gap:** Baselines are in-memory only — no durable cross-session persistence.
 
+<a id="b-4-anomaly-detection"></a>
+
 #### B-4: Anomaly Detection — ✅ FULLY MET
 
 Multi-signal anomaly detection with automated response.
@@ -147,6 +165,8 @@ Multi-signal anomaly detection with automated response.
 | Ring breach detector | `agent-governance-python/agent-hypervisor/rings/breach_detector.py` — sliding-window anomaly |
 | Drift scoring | `agent-governance-python/agent-os/integrations/drift_detector.py` — `DriftType` enum |
 | Fleet anomaly | `agent-governance-python/agent-sre/fleet/__init__.py` — fleet-wide health monitoring |
+
+<a id="b-5-explainability"></a>
 
 #### B-5: Explainability — ✅ FULLY MET
 
@@ -163,6 +183,8 @@ Every policy decision includes a machine-readable reason.
 
 ### Element 3: Data Governance ("What are you eating? What are you serving?")
 
+<a id="d-1-schema-validation"></a>
+
 #### D-1: Schema Validation — ✅ FULLY MET
 
 Input validation via Pydantic models, JSON Schema, and YAML policy schemas.
@@ -174,6 +196,8 @@ Input validation via Pydantic models, JSON Schema, and YAML policy schemas.
 | CLI validation | `agent-governance-python/agent-os/cli/cmd_validate.py` — JSON Schema + structural |
 | OWASP compliance | `agent-governance-python/agent-compliance/verify.py` |
 
+<a id="d-2-injection-prevention"></a>
+
 #### D-2: Injection Prevention — ✅ FULLY MET
 
 Multi-layer prompt injection defense with 12+ detection patterns.
@@ -184,6 +208,8 @@ Multi-layer prompt injection defense with 12+ detection patterns.
 | MCP tool poisoning scanner | `agent-governance-python/agent-os/mcp_security.py` — `MCPSecurityScanner` |
 | Memory guard | `agent-governance-python/agent-os/memory_guard.py` — memory poisoning defense |
 | Allowlist/blocklist validation | `agent-governance-python/agent-os/prompt_injection.py` — validated + frozen in `__post_init__` |
+
+<a id="d-3-pii-phi-protection"></a>
 
 #### D-3: PII/PHI Protection — ⚠️ PARTIALLY MET
 
@@ -197,6 +223,8 @@ Regex-based PII detection with redaction, but no ML-based classification.
 
 **Gap:** Regex-only PII detection. No ML-based NER (e.g., Presidio) integration for complex PII/PHI patterns.
 
+<a id="d-4-output-validation"></a>
+
 #### D-4: Output Validation — ✅ FULLY MET
 
 Content quality evaluation with multi-dimensional scoring.
@@ -207,6 +235,8 @@ Content quality evaluation with multi-dimensional scoring.
 | Quality assessment | `agent-governance-python/agent-marketplace/quality_assessment.py` — `QualityAssessor` |
 | Output policies | `agent-governance-python/agent-os/templates/policies/content-safety.yaml` |
 | Drift detection | `agent-governance-python/agent-os/integrations/drift_detector.py` |
+
+<a id="d-5-data-lineage"></a>
 
 #### D-5: Data Lineage — ⚠️ PARTIALLY MET
 
@@ -224,6 +254,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 
 ### Element 4: Segmentation ("Where can you go?")
 
+<a id="s-1-resource-allowlist"></a>
+
 #### S-1: Resource Allowlist — ✅ FULLY MET
 
 | Component | Location |
@@ -232,6 +264,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | Per-org MCP policies | `agent-governance-python/agent-marketplace/marketplace_policy.py` — `get_effective_mcp_policy()` |
 | Egress policy | `agent-governance-python/agent-os/egress_policy.py` — domain-level allow/deny |
 | Tool allowlists | `agent-governance-python/agent-os/mcp_gateway.py` — `MCPGateway` |
+
+<a id="s-2-action-boundaries"></a>
 
 #### S-2: Action Boundaries — ✅ FULLY MET
 
@@ -242,6 +276,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | Capability gating | `agent-governance-python/agent-mesh/trust/capability.py` — `CapabilityScope` |
 | Context-aware enforcement | `agent-governance-python/agent-os/execution_context_policy.py` — `ContextualPolicyEngine` |
 
+<a id="s-3-rate-limiting"></a>
+
 #### S-3: Rate Limiting — ✅ FULLY MET
 
 | Component | Location |
@@ -251,6 +287,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | MCP gateway limits | `agent-governance-python/agent-os/mcp_gateway.py` |
 | .NET rate limiter | `AgentGovernance/Hypervisor/RateLimiter.cs` |
 
+<a id="s-4-transaction-limits"></a>
+
 #### S-4: Transaction Limits — ✅ FULLY MET
 
 | Component | Location |
@@ -259,6 +297,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | Max tool calls | `agent-governance-python/agent-os/integrations/base.py` — `AgentControl.max_tool_calls` |
 | Budget enforcement | `agent-governance-python/agent-os/context_budget.py` — `ContextScheduler` |
 | Execution context limits | `agent-governance-python/agent-os/execution_context_policy.py` |
+
+<a id="s-5-blast-radius-containment"></a>
 
 #### S-5: Blast Radius Containment — ✅ FULLY MET
 
@@ -273,6 +313,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 
 ### Element 5: Incident Response ("What if you go rogue?")
 
+<a id="r-1-circuit-breaker"></a>
+
 #### R-1: Circuit Breaker — ✅ FULLY MET
 
 | Component | Location |
@@ -280,6 +322,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | Python circuit breaker | `agent-governance-python/agent-sre/cascade/circuit_breaker.py` — trip/open/half-open state machine |
 | .NET circuit breaker | `AgentGovernance/Sre/CircuitBreaker.cs` |
 | Cascade detector | `agent-governance-python/agent-sre/cascade/circuit_breaker.py` — `CascadeDetector` |
+
+<a id="r-2-kill-switch"></a>
 
 #### R-2: Kill Switch — ✅ FULLY MET
 
@@ -290,6 +334,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | CLI kill | `agent-governance-python/agent-hypervisor/cli/session_commands.py` — `cmd_kill` |
 | Saga compensation | Handoff to substitutes, in-flight step compensation |
 
+<a id="r-3-session-revocation"></a>
+
 #### R-3: Session Revocation — ✅ FULLY MET
 
 | Component | Location |
@@ -299,6 +345,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | Identity suspension | `agent-governance-python/agent-mesh/identity/agent_id.py` — `suspend()`, `reactivate()` |
 | Capability stripping | `agent-governance-python/agent-mesh/trust/capability.py` — `revoke_all_from()` |
 
+<a id="r-4-state-rollback"></a>
+
 #### R-4: State Rollback — ✅ FULLY MET
 
 | Component | Location |
@@ -307,6 +355,8 @@ Execution-trace-level lineage via flight recorder and audit chains, but no datas
 | Reversibility registry | `agent-governance-python/agent-hypervisor/reversibility/registry.py` |
 | VFS snapshots | `agent-governance-python/agent-hypervisor/session/__init__.py` — `create_vfs_snapshot()` |
 | .NET sagas | `AgentGovernance/Hypervisor/SagaOrchestrator.cs` |
+
+<a id="r-5-graceful-degradation"></a>
 
 #### R-5: Graceful Degradation — ⚠️ PARTIALLY MET
 
