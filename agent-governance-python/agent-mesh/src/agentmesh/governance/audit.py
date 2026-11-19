@@ -13,7 +13,7 @@ import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional, Any, NamedTuple
+from typing import TYPE_CHECKING, Optional, Any, NamedTuple, TypeVar
 from pydantic import BaseModel, Field
 import hashlib
 import hmac
@@ -565,6 +565,24 @@ class MerkleAuditChain:
 AuditChain = MerkleAuditChain
 
 
+_T = TypeVar("_T")
+
+
+def _tail(entries: list[_T], limit: int | None) -> list[_T]:
+    """Return the last ``limit`` items as a new list.
+
+    ``None`` means every item and ``0`` means none; ``entries[-0:]`` is
+    the whole list, so zero needs its own case. Used for both audit
+    entries and the entry-id lists the per-agent and per-type indexes
+    hold.
+    """
+    if limit is None:
+        return list(entries)
+    if limit == 0:
+        return []
+    return list(entries[-limit:])
+
+
 class AuditLog:
     """
     Append-only audit logging system.
@@ -670,25 +688,42 @@ class AuditLog:
     def get_entries_for_agent(
         self,
         agent_did: str,
-        limit: int = 100,
+        limit: int | None = 100,
     ) -> list[AuditEntry]:
-        """Get the most recent entries for a specific agent."""
+        """Get the most recent entries for a specific agent.
+
+        ``limit`` follows the same contract as :meth:`query`: ``None``
+        returns every matching entry, ``0`` returns none, and a negative
+        value raises ``ValueError``.
+        """
         return self._get_indexed_entries(self._by_agent, agent_did, limit)
 
     def get_entries_by_type(
         self,
         event_type: str,
-        limit: int = 100,
+        limit: int | None = 100,
     ) -> list[AuditEntry]:
-        """Get the most recent entries of a given event type."""
+        """Get the most recent entries of a given event type.
+
+        ``limit`` follows the same contract as :meth:`query`: ``None``
+        returns every matching entry, ``0`` returns none, and a negative
+        value raises ``ValueError``.
+        """
         return self._get_indexed_entries(self._by_type, event_type, limit)
 
     def _get_indexed_entries(
-        self, index: dict[str, list[str]], key: str, limit: int,
+        self, index: dict[str, list[str]], key: str, limit: int | None,
     ) -> list[AuditEntry]:
-        """Entry IDs are assumed unique; AuditLog.log() generates UUID4 IDs."""
+        """Entry IDs are assumed unique; AuditLog.log() generates UUID4 IDs.
+
+        ``limit`` keeps the most recent matching entries; ``None`` returns
+        every one of them, ``0`` returns none, and a negative ``limit``
+        raises ``ValueError``.
+        """
+        if limit is not None and limit < 0:
+            raise ValueError(f"limit must be zero or positive; got {limit!r}")
         with self._chain._lock:
-            wanted = set(index.get(key, [])[-limit:])
+            wanted = set(_tail(index.get(key, []), limit))
             if not wanted:
                 return []
             entries = []
@@ -712,12 +747,16 @@ class AuditLog:
     ) -> list[AuditEntry]:
         """Query audit entries with optional filters.
 
-        Pass ``limit=None`` to return all matching entries.
+        ``limit`` keeps the most recent matching entries. Pass
+        ``limit=None`` to return all of them, ``0`` to return none; a
+        negative ``limit`` raises ``ValueError``.
         """
+        if limit is not None and limit < 0:
+            raise ValueError(f"limit must be zero or positive; got {limit!r}")
         filtered = any((agent_did, event_type, start_time, end_time, outcome))
         with self._chain._lock:
             if not filtered:
-                return self._chain._entries[-limit:] if limit is not None else list(self._chain._entries)
+                return _tail(self._chain._entries, limit)
             results = list(self._chain._entries)
 
         if agent_did:
@@ -735,7 +774,7 @@ class AuditLog:
         if outcome:
             results = [e for e in results if e.outcome == outcome]
 
-        return results[-limit:] if limit is not None else list(results)
+        return _tail(results, limit)
 
     def verify_integrity(self) -> tuple[bool, Optional[str]]:
         """Verify audit hash/link integrity, returning validity and an optional error."""
