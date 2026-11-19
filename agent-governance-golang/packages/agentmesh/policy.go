@@ -434,6 +434,17 @@ func matchComparison(ops map[string]interface{}, actual interface{}) bool {
 	return true
 }
 
+func toInt64(v interface{}) (int64, bool) {
+	switch n := v.(type) {
+	case int:
+		return int64(n), true
+	case int64:
+		return n, true
+	default:
+		return 0, false
+	}
+}
+
 func toFloat64(v interface{}) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
@@ -448,12 +459,26 @@ func toFloat64(v interface{}) (float64, bool) {
 }
 
 func valuesEqual(a, b interface{}) bool {
+	// Two integer-typed values compare exactly as int64: collapsing both to
+	// float64 would make distinct values above 2^53 (e.g. 9007199254740993 and
+	// 9007199254740992) spuriously equal.
+	if ai, aok := toInt64(a); aok {
+		if bi, bok := toInt64(b); bok {
+			return ai == bi
+		}
+	}
+	// Mixed int/float numerics are compared via toFloat64 so that values
+	// decoded from YAML/JSON (bare numbers become int/int64/float64) match
+	// regardless of their concrete Go numeric type. This mirrors the
+	// comparison operators ($gt/$gte/$lt/$lte), which normalize through
+	// toFloat64.
+	if af, aok := toFloat64(a); aok {
+		bf, bok := toFloat64(b)
+		return bok && af == bf
+	}
 	switch av := a.(type) {
 	case string:
 		bv, ok := b.(string)
-		return ok && av == bv
-	case float64:
-		bv, ok := b.(float64)
 		return ok && av == bv
 	case bool:
 		bv, ok := b.(bool)
