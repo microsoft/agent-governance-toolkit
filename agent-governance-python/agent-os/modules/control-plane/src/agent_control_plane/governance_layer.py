@@ -25,6 +25,8 @@ from enum import Enum
 from datetime import datetime
 import re
 
+from ._limits import tail
+
 
 class AlignmentPrinciple(Enum):
     """Core ethical principles for agent alignment"""
@@ -361,15 +363,7 @@ class GovernanceLayer:
         limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """Get governance audit log"""
-        if limit is None:
-            return self._audit_log.copy()
-        if limit < 0:
-            raise ValueError("limit must be non-negative")
-        if limit == 0:
-            # Explicit: 0 means zero entries. Note self._audit_log[-0:] would
-            # return the ENTIRE log (since -0 == 0), so guard it directly.
-            return []
-        return self._audit_log[-limit:]
+        return tail(self._audit_log, limit)
     
     def _log_audit_event(self, event: Dict[str, Any]):
         """Internal audit logging"""

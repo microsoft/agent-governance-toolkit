@@ -42,6 +42,8 @@ import uuid
 import logging
 import threading
 import weakref
+
+from ._limits import tail
 import traceback
 import hashlib
 import importlib
@@ -2269,7 +2271,11 @@ class AgentObservabilityProvider:
         level: Optional[str] = None,
         limit: int = 100
     ) -> List[AgentLogEntry]:
-        """Get log entries"""
+        """Get log entries
+
+        ``limit`` keeps the most recent entries; 0 returns none and a
+        negative value raises ValueError.
+        """
         logs = list(self._logs)
         
         if agent_id:
@@ -2277,7 +2283,7 @@ class AgentObservabilityProvider:
         if level:
             logs = [l for l in logs if l.level == level]
         
-        return logs[-limit:]
+        return tail(logs, limit)
     
     def export_prometheus(self) -> str:
         """Export metrics in Prometheus text format"""
