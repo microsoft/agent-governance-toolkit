@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -256,6 +257,68 @@ class TestRunbookExecutor:
         assert "undo failed" in results["second"].error
         events = [e["event"] for e in executor.event_log]
         assert "rollback_failed" in events
+
+    def test_string_rollback_action_is_not_reported_as_rolled_back(self) -> None:
+        # The shape load_runbooks_from_yaml() produces: a command string
+        # that the executor does not run.
+        rb = Runbook(
+            id="rb-rollback-string",
+            name="String Rollback",
+            steps=[
+                RunbookStep(name="deploy", action=_ok_action, rollback_action="echo undo"),
+                RunbookStep(name="boom", action=_fail_action),
+            ],
+        )
+        executor = RunbookExecutor()
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.FAILED
+        results = {r.step_name: r for r in execution.step_results}
+        assert results["deploy"].status == StepStatus.SUCCESS
+        assert "not executed" in results["deploy"].error
+        assert results["boom"].status == StepStatus.FAILED
+        events = [e["event"] for e in executor.event_log]
+        assert "rollback_skipped" in events
+        assert "rollback_completed" not in events
+
+    def test_string_rollback_action_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        rb = Runbook(
+            id="rb-rollback-string-log",
+            name="String Rollback Log",
+            steps=[
+                RunbookStep(name="deploy", action=_ok_action, rollback_action="echo undo"),
+                RunbookStep(name="boom", action=_fail_action),
+            ],
+        )
+        with caplog.at_level(logging.WARNING, logger="agent_sre.incidents.runbook_executor"):
+            RunbookExecutor().execute(rb, _make_incident())
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("deploy" in r.getMessage() and "echo undo" in r.getMessage() for r in warnings)
+
+    def test_mixed_string_and_callable_rollback_leaves_execution_failed(self) -> None:
+        rb = Runbook(
+            id="rb-rollback-mixed",
+            name="Mixed Rollback",
+            steps=[
+                RunbookStep(name="callable", action=_ok_action, rollback_action=_rollback_action),
+                RunbookStep(name="string", action=_ok_action, rollback_action="echo undo"),
+                RunbookStep(name="none", action=_ok_action),
+                RunbookStep(name="boom", action=_fail_action),
+            ],
+        )
+        execution = RunbookExecutor().execute(rb, _make_incident())
+        # The callable rollback ran, but the string one did not, so the
+        # execution must not claim a full rollback.
+        assert execution.status == ExecutionStatus.FAILED
+        statuses = {r.step_name: r.status for r in execution.step_results}
+        assert statuses == {
+            "callable": StepStatus.ROLLED_BACK,
+            "string": StepStatus.SUCCESS,
+            "none": StepStatus.SUCCESS,
+            "boom": StepStatus.FAILED,
+        }
+        results = {r.step_name: r for r in execution.step_results}
+        assert results["none"].error == ""
+        assert "not executed" in results["string"].error
 
     def test_approval_callback_approved(self) -> None:
         rb = Runbook(
