@@ -1359,3 +1359,6 @@ ndjson
 dataschema
 disp
 gitops
+
+# --- agent-os control-plane AgentResourceQuota bandwidth field (PR #4537) ---
+mbps
