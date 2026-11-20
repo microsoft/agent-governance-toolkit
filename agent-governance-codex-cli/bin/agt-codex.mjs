@@ -92,7 +92,14 @@ function codex(args, codexHome) {
     return { ok: true, stdout, stderr: "" };
   } catch (error) {
     if (error?.code === "ENOENT") {
-      throw new Error("`codex` CLI not found on PATH. Install the Codex CLI, then re-run.");
+      // On Windows the spawned executable is ComSpec, not `codex`, so name the
+      // path that failed and keep the original error (code, errno, syscall,
+      // path, stack) as the cause instead of dropping it.
+      throw new Error(
+        "`codex` CLI not found on PATH. Install the Codex CLI, then re-run. " +
+          `(tried ${error.path ?? CODEX_COMMAND})`,
+        { cause: error },
+      );
     }
     return {
       ok: false,
