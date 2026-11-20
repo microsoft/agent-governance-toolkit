@@ -17,6 +17,33 @@ logger = logging.getLogger(__name__)
 REDACTED_PLACEHOLDER = "[REDACTED]"
 
 
+def _passes_luhn(digits: str) -> bool:
+    """Return True if *digits* passes the Luhn checksum (ISO/IEC 7812-1).
+
+    Used to filter credit card regex matches so that arbitrary 16-digit
+    sequences (order IDs, tracking numbers) are not flagged as PII.
+    """
+    if not digits.isdigit() or len(digits) < 13:
+        return False
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = int(ch)
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
+def _luhn_validator(match: re.Match[str]) -> bool:
+    """Validator for the credit-card ``CredentialPattern``.
+
+    Strips separators and runs Luhn so arbitrary digit runs are rejected.
+    """
+    return _passes_luhn(re.sub(r"[- ]", "", match.group(0)))
+
+
 def _compile_named_patterns(
     raw_patterns: tuple[
         tuple[str, str] | tuple[str, str, Callable[[re.Match[str]], bool]],
@@ -268,7 +295,18 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="US phone number",
-            pattern=re.compile(r"(?<!\d)(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?!\d)"),
+            # Require at least one real separator (dash, dot, space, or parens)
+            # so bare 10-digit runs like build numbers don't match.
+            pattern=re.compile(
+                r"(?<!\d)"
+                r"(?:\+?1[-.\s])?"               # optional country code with separator
+                r"(?:"
+                r"\(\d{3}\)[-.\s]?\d{3}[-.\s]\d{4}"   # (555) 123-4567
+                r"|"
+                r"\d{3}[-.\s]\d{3}[-.\s]\d{4}"        # 555-123-4567 / 555.123.4567
+                r")"
+                r"(?!\d)"
+            ),
         ),
         CredentialPattern(
             name="US SSN",
@@ -301,11 +339,18 @@ class CredentialRedactor:
         CredentialPattern(
             name="Credit card number",
             pattern=re.compile(r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b"),
+            validator=_luhn_validator,
         ),
         CredentialPattern(
             name="IPv4 address",
+            # Reject matches that are part of a longer dotted sequence (e.g.
+            # version strings like 1.2.3.4.5). A negative lookbehind rejects
+            # a leading digit-dot and a negative lookahead rejects a trailing
+            # dot-digit, so only standalone four-octet tokens match.
             pattern=re.compile(
+                r"(?<![\d.])"
                 r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
+                r"(?!\.\d)"
             ),
         ),
     )
