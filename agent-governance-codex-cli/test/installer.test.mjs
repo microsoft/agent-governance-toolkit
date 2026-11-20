@@ -13,7 +13,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, sep } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const binScript = join(here, "..", "bin", "agt-codex.mjs");
@@ -192,3 +192,84 @@ test(
     });
   },
 );
+
+// A `--import` preload for the spawned installer. It swaps `execFileSync` for
+// a stub that fails with ENOENT for $FAKE_SPAWN_PATH, the way Node reports a
+// missing executable, and records the `cause` of the Error the installer
+// builds from it so the test can check the original error survived.
+const ENOENT_PRELOAD_SOURCE = `
+import childProcess from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+
+const triedPath = process.env.FAKE_SPAWN_PATH;
+childProcess.execFileSync = () => {
+  const error = new Error(\`spawnSync \${triedPath} ENOENT\`);
+  Object.assign(error, { code: "ENOENT", errno: -2, syscall: \`spawnSync \${triedPath}\`, path: triedPath });
+  throw error;
+};
+syncBuiltinESMExports();
+
+const OriginalError = globalThis.Error;
+globalThis.Error = class extends OriginalError {
+  constructor(message, options) {
+    super(message, options);
+    if (options?.cause) {
+      writeFileSync(
+        process.env.FAKE_CAUSE_CAPTURE,
+        JSON.stringify({ code: options.cause.code, path: options.cause.path, syscall: options.cause.syscall }),
+      );
+    }
+  }
+};
+`;
+
+test("install reports the executable it tried when the codex CLI is missing", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-codex-missing-"));
+  try {
+    const emptyDir = join(root, "empty");
+    await mkdir(emptyDir);
+    // POSIX resolves `codex` on PATH; Windows spawns ComSpec. Point each at
+    // nothing so execFileSync fails with ENOENT.
+    const missingComSpec = join(root, "missing", "cmd.exe");
+    const env =
+      process.platform === "win32"
+        ? { ComSpec: missingComSpec }
+        : { PATH: emptyDir };
+    const tried = process.platform === "win32" ? missingComSpec : "codex";
+
+    const { code, stderr } = await runInstaller("install", join(root, "home"), emptyDir, env);
+
+    assert.equal(code, 1);
+    assert.match(stderr, /`codex` CLI not found on PATH\. Install the Codex CLI, then re-run\./);
+    assert.ok(stderr.includes(`(tried ${tried})`), stderr);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a missing-executable error keeps the spawn failure as its cause", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-codex-cause-"));
+  try {
+    const preload = join(root, "preload.mjs");
+    const capture = join(root, "cause.json");
+    const triedPath = join(root, "definitely-missing", "cmd.exe");
+    await writeFile(preload, ENOENT_PRELOAD_SOURCE);
+
+    const { code, stderr } = await runInstaller("install", join(root, "home"), root, {
+      NODE_OPTIONS: `--import=${pathToFileURL(preload).href}`,
+      FAKE_SPAWN_PATH: triedPath,
+      FAKE_CAUSE_CAPTURE: capture,
+    });
+
+    assert.equal(code, 1);
+    assert.ok(stderr.includes(`(tried ${triedPath})`), stderr);
+    assert.ok(existsSync(capture), "the thrown error carried no cause");
+    const cause = JSON.parse(await readFile(capture, "utf8"));
+    assert.equal(cause.code, "ENOENT");
+    assert.equal(cause.path, triedPath);
+    assert.equal(cause.syscall, `spawnSync ${triedPath}`);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
