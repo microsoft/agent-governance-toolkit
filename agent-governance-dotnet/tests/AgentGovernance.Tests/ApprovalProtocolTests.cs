@@ -717,6 +717,57 @@ public sealed class WebhookApproverTests
             new Uri("http://[fd00:ec2::254]/latest/meta-data")));
         Assert.Throws<ArgumentException>(() => new WebhookApprover(
             new Uri("http://[::ffff:127.0.0.1]/approval")));
+        Assert.Throws<ArgumentException>(() => new WebhookApprover(
+            new Uri("http://[64:ff9b::a9fe:a9fe]/latest/meta-data")));
+        Assert.Throws<ArgumentException>(() => new WebhookApprover(
+            new Uri("http://[64:ff9b::a00:1]/approval")));
+        Assert.Throws<ArgumentException>(() => new WebhookApprover(
+            new Uri("http://[64:ff9b::7f00:1]/approval")));
+        Assert.Throws<ArgumentException>(() => new WebhookApprover(
+            new Uri("http://[64:ff9b:1::a9fe:a9fe]/latest/meta-data")));
+        Assert.Throws<ArgumentException>(() => new WebhookApprover(
+            new Uri("http://[64:ff9b:1::808:808]/approval")));
+    }
+
+    [Fact]
+    public void Constructor_AllowsPublicNat64TranslatedEndpoints()
+    {
+        // The NAT64 well-known prefix 64:ff9b::/96 embedding a PUBLIC IPv4
+        // (93.184.216.34, 8.8.8.8) must stay reachable: the guard screens the
+        // embedded IPv4 rather than blocking the whole 64:ff9b::/32 prefix.
+        using var a = new WebhookApprover(new Uri("http://[64:ff9b::5db8:d822]/approval"));
+        using var b = new WebhookApprover(new Uri("http://[64:ff9b::808:808]/approval"));
+        // Inside 64:ff9b::/32 but outside the well-known /96 and local-use /48:
+        // only the defined NAT64 prefixes are special-cased, so this follows the
+        // ordinary rules and is not blocked as NAT64.
+        using var c = new WebhookApprover(new Uri("http://[64:ff9b:2::1]/approval"));
+        Assert.NotNull(a);
+        Assert.NotNull(b);
+        Assert.NotNull(c);
+    }
+
+    [Fact]
+    public async Task RequestApprovalAsync_BlocksDnsResolvedNat64MetadataAddress()
+    {
+        var request = OpenRequest();
+        using var client = new HttpClient(new StubHandler((_, _) =>
+            JsonResponse(new
+            {
+                approval_request_id = request.ApprovalRequestId,
+                action_digest = request.ActionDigest,
+                approved = true
+            })));
+        // Host resolves to a NAT64 well-known translation of 169.254.169.254.
+        using var approver = new WebhookApprover(
+            new Uri("https://approvals.example/v1"),
+            client,
+            addressResolver: (_, _) => Task.FromResult(
+                new[] { IPAddress.Parse("64:ff9b::a9fe:a9fe") }));
+
+        var error = await Assert.ThrowsAsync<ApprovalTransportProtocolException>(
+            () => approver.RequestApprovalAsync(request));
+
+        Assert.Equal("blocked_webhook_endpoint", error.ReasonCode);
     }
 
     private static ApprovalRequest OpenRequest()
