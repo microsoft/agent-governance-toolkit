@@ -315,6 +315,29 @@ public sealed class WebhookApprover : IApprovalTransport, IDisposable
         }
 
         var ipv6 = address.GetAddressBytes();
+
+        // NAT64 well-known prefix 64:ff9b::/96 (RFC 6052) carries an embedded
+        // IPv4 address in its final 32 bits. Screen that IPv4 through the IPv4
+        // rules so private, loopback and link-local (e.g. cloud metadata)
+        // translations are blocked while genuinely public destinations under the
+        // prefix stay reachable.
+        if (ipv6[0] == 0x00 && ipv6[1] == 0x64 && ipv6[2] == 0xff && ipv6[3] == 0x9b &&
+            ipv6[4] == 0 && ipv6[5] == 0 && ipv6[6] == 0 && ipv6[7] == 0 &&
+            ipv6[8] == 0 && ipv6[9] == 0 && ipv6[10] == 0 && ipv6[11] == 0)
+        {
+            return IsBlockedAddress(new IPAddress(ipv6[12..16]));
+        }
+
+        // NAT64 local-use prefix 64:ff9b:1::/48 (RFC 8215) is reserved for local
+        // translator deployments and does not use the well-known /96 embedded-
+        // address layout, so block the whole prefix rather than parsing an IPv4
+        // out of it.
+        if (ipv6[0] == 0x00 && ipv6[1] == 0x64 && ipv6[2] == 0xff && ipv6[3] == 0x9b &&
+            ipv6[4] == 0x00 && ipv6[5] == 0x01)
+        {
+            return true;
+        }
+
         return IPAddress.IsLoopback(address) ||
             address.Equals(IPAddress.IPv6Any) ||
             address.IsIPv6LinkLocal ||
