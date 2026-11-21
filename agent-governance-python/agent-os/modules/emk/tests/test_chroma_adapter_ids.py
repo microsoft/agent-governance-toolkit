@@ -114,7 +114,8 @@ def test_get_by_id_returns_requested_id_for_z_timestamp():
     assert returned is not None
     assert returned.episode_id == requested
     assert returned.metadata == {"tag": "x"}
-    assert adapter.delete(returned.episode_id) is True
+    deleted = adapter.delete(returned.episode_id)
+    assert deleted is True
     assert adapter.get_by_id(requested) is None
 
 
