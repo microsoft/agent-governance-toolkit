@@ -68,7 +68,10 @@ written for `bash` apply to it. Name the shell tool `bash` in policies for both
 versions: on 2.x, `setup` refuses a policy that names `shell`, because that
 entry would never match. The `session.created` status log, the prompt scan and
 the session-state lifecycle handling, which depend on 1.x hook entries, run on
-OpenCode 1.x only for now.
+OpenCode 1.x only for now. Output of a shell command that runs in the
+background on 2.x (started with `background: true`, or moved to the background
+by OpenCode) reaches the session later as a message rather than through
+`execute.after`, so it is not scanned for secrets yet.
 
 It also exposes two custom tools (in-process **and** via the stdio MCP server):
 
