@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-10-02
+last_reviewed: 2026-11-20
 owner: agt-maintainers
 title: OpenCode CLI governance package
 description: AGT in-process plugin for the OpenCode CLI — enforce policy on prompts, tools, and tool output.
@@ -14,7 +14,7 @@ session, prompt, tool call, and tool output.
 
 ## Why OpenCode gets in-process governance
 
-OpenCode plugins are async TypeScript/JavaScript functions loaded directly into
+OpenCode plugins are TypeScript/JavaScript modules loaded directly into
 the CLI process, unlike the subprocess hooks used by Claude Code and Antigravity.
 That model lets this package:
 
@@ -35,6 +35,17 @@ That model lets this package:
 
 A failed call that does not reach `tool.execute.after` has no output audit
 entry. The plugin does not register a failed-tool hook.
+
+The table describes OpenCode 1.x. OpenCode 2.x loads the package's `./server`
+export and calls its `setup` entry instead. It registers the tool
+`execute.before` and `execute.after` hooks, which run the same
+`evaluateOpenCodeTool` check and output redaction, and adds the two AGT tools
+as direct tools. OpenCode 2.x calls the 1.x `bash` tool `shell`; a `shell` call
+is evaluated, audited and reported under the name `bash`, so policy rules
+written for `bash` apply to it. Name the shell tool `bash` in policies for both
+versions: on 2.x, `setup` refuses a policy that names `shell`, because that
+entry would never match. The `session.created` status log, the prompt scan and
+the session-state lifecycle handling run on OpenCode 1.x only for now.
 
 It also publishes a stdio MCP server (`server/agt-mcp.mjs`) for operators who
 want to invoke `agt_policy_status` or `agt_policy_check_text` from external
@@ -58,6 +69,14 @@ Alternatively, install the package with
 
 ```js
 export { default } from "@microsoft/agent-governance-opencode";
+```
+
+On OpenCode 2.x, which loads a workspace plugin file directly and refuses a
+function default, re-export the `./server` entry instead (this form also works
+on OpenCode 1.x from 1.3.4):
+
+```js
+export { default } from "@microsoft/agent-governance-opencode/server";
 ```
 
 OpenCode discovers `.js` and `.ts` files in either `.opencode/plugin/` or

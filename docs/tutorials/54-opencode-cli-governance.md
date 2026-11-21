@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-05-29
+last_reviewed: 2026-11-20
 owner: agt-maintainers
 title: Govern an OpenCode CLI session with AGT
 description: Step-by-step walkthrough for installing and configuring the AGT OpenCode plugin to enforce developer-protection policy on prompts, tools, and tool output.
@@ -27,7 +27,7 @@ npm install @microsoft/agent-governance-opencode
 
 The package ships:
 
-- the plugin entry (`src/index.mjs`)
+- the plugin entries (`src/index.mjs`, and `src/server.mjs` for OpenCode 2.x)
 - shared policy / audit / poisoning libraries (`lib/`)
 - a default policy (`config/default-policy.json`)
 - an MCP stdio server (`server/agt-mcp.mjs`)
@@ -41,12 +41,15 @@ The package ships:
 }
 ```
 
-Start OpenCode in this directory. On session start you should see a log line
-like:
+Start OpenCode in this directory. On OpenCode 1.x, on session start you should
+see a log line like:
 
 ```
 [AGT] OpenCode governance active — mode=enforce source=bundled-default ...
 ```
+
+OpenCode 2.x does not log this line or scan prompts yet; ask the agent to call
+the `agt_policy_status` tool to confirm the plugin loaded.
 
 ## 3. Verify enforcement
 
