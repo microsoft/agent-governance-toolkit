@@ -331,10 +331,9 @@ def collect_registry_updates(
                     f"refusing to adopt unsafe version comment for "
                     f"'{ref.split('@', 1)[0]}' from {rel}: {comment!r}"
                 )
-            # A pin still equal to the registry is not a bump, so it cannot
-            # conflict with one. Dependabot only scans .github/workflows and
-            # leaves composite actions on the registry pin; --write syncs them.
-            if (ref, comment) == _split_registry_pin(actions[key]):
+            # Unbumped pin (Dependabot skips .github/actions): not a conflict.
+            current_uses, _, current_comment = actions[key].partition(" #")
+            if (ref, comment) == (current_uses, current_comment.strip() or None):
                 continue
             prior = observed.get(key)
             if prior is not None and (prior[0], prior[1]) != (ref, comment):
@@ -345,12 +344,6 @@ def collect_registry_updates(
             observed[key] = (ref, comment, rel)
 
     return {key: (ref, comment) for key, (ref, comment, _rel) in observed.items()}
-
-
-def _split_registry_pin(entry: str) -> tuple[str, str | None]:
-    """Split a registry value 'owner/action@sha # comment' into (uses, comment)."""
-    uses, _, comment = entry.partition(" #")
-    return uses, (comment.strip() if comment else None)
 
 
 def _rewrite_actions_toml(updates: dict[str, tuple[str, str | None]]) -> None:
