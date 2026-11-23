@@ -78,6 +78,16 @@ def _sanitize_log_field(value: Any) -> str:
     return text.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
 
 
+def _record_audit(entry_type: str, tool: str, **fields: Any) -> None:
+    """Append one entry to the shared in-memory audit log.
+
+    Called by every tool that makes a decision (allow/block, verified or not)
+    or changes server state (reputation slash). Entries carry identifiers,
+    verdicts, and sizes only -- never the submitted code, claim, or content.
+    """
+    GetAuditLogTool.log_entry({"type": entry_type, "tool": tool, **fields})
+
+
 @dataclass
 class ToolResult:
     """Standard result from MCP tool execution."""
@@ -305,7 +315,16 @@ class VerifyCodeSafetyTool:
             if "alternative" in primary_violation:
                 result["alternative"] = primary_violation["alternative"]
             result["blocked_reason"] = primary_violation["message"]
-        
+
+        _record_audit(
+            "allowed" if is_safe else "blocked",
+            self.name,
+            agent_id=context.get("agent_id") if isinstance(context, dict) else None,
+            language=language,
+            code_length=len(code),
+            violations=[v["rule"] for v in violations],
+        )
+
         return ToolResult(
             success=True,
             data=result,
@@ -366,7 +385,15 @@ class CMVKVerifyTool:
         # Simulate CMVK verification (in production, calls actual models)
         # This is a stateless operation - no session state maintained
         verification_result = await self._verify_claim(claim, context, threshold)
-        
+
+        _record_audit(
+            "cmvk_verify",
+            self.name,
+            claim_sha256=hashlib.sha256(claim.encode()).hexdigest()[:16],
+            verified=verification_result["verified"],
+            confidence=verification_result["confidence"],
+        )
+
         return ToolResult(
             success=True,
             data=verification_result,
@@ -550,6 +577,15 @@ class KernelExecuteTool:
         # Policy check (stateless - all info in request)
         policy_result = self._check_policies(action, params, policies)
         
+        _record_audit(
+            "allowed" if policy_result["allowed"] else "blocked",
+            self.name,
+            agent_id=agent_id,
+            action=action,
+            policies=list(policies) if isinstance(policies, list) else policies,
+            reason=policy_result["reason"],
+        )
+
         if not policy_result["allowed"]:
             return ToolResult(
                 success=False,
@@ -804,6 +840,19 @@ class IATPVerifyTool:
         self.agent_registry = self.config.get("agent_registry", {})
     
     async def execute(self, arguments: dict) -> ToolResult:
+        """Verify trust with remote agent and record the verdict."""
+        result = await self._evaluate(arguments)
+        _record_audit(
+            "allowed" if result.success else "blocked",
+            self.name,
+            agent_id=arguments.get("remote_agent_id", ""),
+            required_trust_level=arguments.get("required_trust_level", "standard"),
+            data_classification=arguments.get("data_classification", "internal"),
+            reason=result.error,
+        )
+        return result
+
+    async def _evaluate(self, arguments: dict) -> ToolResult:
         """Verify trust with remote agent."""
         remote_agent_id = arguments.get("remote_agent_id", "")
         required_level = arguments.get("required_trust_level", "standard")
@@ -1040,7 +1089,17 @@ class IATPReputationTool:
         new_score = max(0.0, current - penalty)
         
         self._reputation[agent_id] = new_score
-        
+
+        _record_audit(
+            "reputation_slash",
+            self.name,
+            agent_id=agent_id,
+            severity=severity,
+            reason=reason,
+            previous_score=round(current, 2),
+            new_score=round(new_score, 2),
+        )
+
         return ToolResult(
             success=True,
             data={
@@ -1139,7 +1198,16 @@ class CMVKReviewCodeTool:
             recommendation = "Based on multi-model review:\n"
             for i, issue in enumerate(all_issues[:5], 1):  # Top 5 issues
                 recommendation += f"{i}. {issue['issue']}: {issue.get('fix', 'Review needed')}\n"
-        
+
+        _record_audit(
+            "cmvk_review",
+            self.name,
+            language=language,
+            code_length=len(code),
+            consensus=round(consensus, 2),
+            issue_count=len(all_issues),
+        )
+
         return ToolResult(
             success=True,
             data={
@@ -1238,7 +1306,12 @@ class GetAuditLogTool:
     """
     
     name = "get_audit_log"
-    description = "Retrieve Agent OS audit trail"
+    description = (
+        "Retrieve the in-memory Agent OS audit trail, newest first. Tools "
+        "that decide or change state record one entry per call; entries hold "
+        "identifiers, verdicts, and sizes, not submitted code or claim text. "
+        "The log is lost when the server stops."
+    )
     
     input_schema = {
         "type": "object",
@@ -1254,7 +1327,10 @@ class GetAuditLogTool:
                     "agent_id": {"type": "string"},
                     "type": {
                         "type": "string",
-                        "enum": ["blocked", "allowed", "cmvk_review", "all"]
+                        "enum": [
+                            "blocked", "allowed", "cmvk_verify",
+                            "cmvk_review", "reputation_slash", "all",
+                        ]
                     },
                     "since": {"type": "string", "description": "ISO timestamp"}
                 }
@@ -1271,6 +1347,7 @@ class GetAuditLogTool:
     @classmethod
     def log_entry(cls, entry: dict):
         """Add entry to audit log."""
+        entry = dict(entry)
         entry["timestamp"] = datetime.now(timezone.utc).isoformat()
         cls._audit_log.insert(0, entry)
         # Keep last 1000 entries
@@ -1300,6 +1377,7 @@ class GetAuditLogTool:
         
         # Calculate stats
         blocked_count = sum(1 for e in self._audit_log if e.get("type") == "blocked")
+        allowed_count = sum(1 for e in self._audit_log if e.get("type") == "allowed")
         total_count = len(self._audit_log)
         
         return ToolResult(
@@ -1310,7 +1388,7 @@ class GetAuditLogTool:
                 "total": total_count,
                 "stats": {
                     "blocked_total": blocked_count,
-                    "allowed_total": total_count - blocked_count
+                    "allowed_total": allowed_count
                 }
             },
             metadata={

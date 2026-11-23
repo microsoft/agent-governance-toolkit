@@ -69,20 +69,17 @@ class TestEndToEnd:
         )
         assert exec_result["isError"] is True
 
-        # Log the blocked action to audit
-        GetAuditLogTool.log_entry({
-            "type": "blocked",
-            "agent_id": "test-agent",
-            "action": "file_write",
-        })
-
-        # Retrieve audit log
+        # The server itself must have recorded the block; nothing logs by hand.
         audit_result = await self.server.handle_call_tool(
             "get_audit_log",
             {"limit": 10, "filter": {"type": "blocked"}},
         )
         audit_data = json.loads(audit_result["content"][0]["text"])
-        assert audit_data["returned"] >= 1
+        assert audit_data["returned"] == 1
+        entry = audit_data["logs"][0]
+        assert entry["agent_id"] == "test-agent"
+        assert entry["action"] == "file_write"
+        assert entry["tool"] == "kernel_execute"
 
     @pytest.mark.asyncio
     async def test_cmvk_verify_and_review(self):

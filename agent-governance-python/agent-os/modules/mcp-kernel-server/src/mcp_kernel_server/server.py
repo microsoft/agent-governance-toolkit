@@ -354,14 +354,18 @@ class KernelMCPServer:
         parts = uri.replace("audit://", "").split("/")
         agent_id = parts[0] if parts else "unknown"
         
-        # Return audit entries (in production, from external store)
+        # Same in-memory log that get_audit_log reads; lost on restart.
+        entries = [
+            dict(e) for e in GetAuditLogTool._audit_log
+            if e.get("agent_id") == agent_id
+        ]
         return ResourceContent(
             uri=uri,
             mime_type="application/json",
             content={
                 "agent_id": agent_id,
-                "entries": [],  # Would be populated from audit backend
-                "note": "Audit log is append-only and immutable"
+                "entries": entries,
+                "note": "In-memory audit log, newest first; lost when the server stops"
             }
         )
     
