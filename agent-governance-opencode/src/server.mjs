@@ -42,16 +42,21 @@ async function setupOpenCodeV2(ctx) {
   );
 
   await ctx.tool.hook("execute.after", async (event) => {
+    const call = { tool: policyToolName(event.tool), sessionID: event.sessionID, callID: event.id };
     if (event.status !== "completed") {
+      // A failed call has no output to scan, but `execute.before` may have
+      // staged session state for it. 2.x has no `session.idle` wiring here to
+      // commit that state, so complete the call now or its pending slot stays
+      // held for the rest of the session. If that commit cannot be audited,
+      // the 1.x hook quarantines the session and throws, and the rejection
+      // fails closed the same way as on a completed call.
+      await hooks["tool.execute.after"](call, { output: "" });
       return;
     }
     const text = toolResultText(event.result);
     const output = { output: text, metadata: event.result.metadata };
     try {
-      await hooks["tool.execute.after"](
-        { tool: policyToolName(event.tool), sessionID: event.sessionID, callID: event.id },
-        output,
-      );
+      await hooks["tool.execute.after"](call, output);
     } finally {
       // The 1.x hook redacts `output` before it throws on a session-state
       // audit failure, so apply the redaction before that error propagates.

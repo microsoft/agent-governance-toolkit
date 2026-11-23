@@ -187,6 +187,13 @@ test("OpenCode 2.x setup applies the policy's bash rules to the 2.x shell tool",
     await assert.rejects(before(v2ToolEvent("shell", { input: { command } })), /blocked by AGT policy/);
   }
   await before(v2ToolEvent("shell", { input: { command: "ls" } }));
+  await hooks.get("execute.after")(
+    v2ToolEvent("shell", { status: "completed", result: { content: [{ type: "text", text: "README.md" }] } }),
+  );
+
+  // The calls are audited under the 1.x name as well.
+  const actions = JSON.parse(await readFile(join(root, "audit.json"), "utf8")).map((entry) => entry.action);
+  assert.deepEqual([...new Set(actions)].sort(), ["tool.bash", "tool.bash.output"]);
 });
 
 test("OpenCode 2.x setup keeps session-state rules to the session that triggered them", async (t) => {
@@ -447,6 +454,153 @@ test("OpenCode 2.x setup redacts a result that has no metadata", async (t) => {
   assert.deepEqual(event.result, {
     content: [{ type: "text", text: "the token is [AGT_REDACTED:github-token]" }],
   });
+});
+
+test("OpenCode 2.x setup completes the session state of a failed call", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-v2-failed-call-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "session-policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: { allowedTools: ["read", "webfetch"], defaultEffect: "deny" },
+      sessionState: {
+        maxPendingCallsPerSession: 1,
+        attributes: ["sensitive_data_read"],
+        transitions: [
+          {
+            id: "sensitive-path-read",
+            tool: "read",
+            attribute: "sensitive_data_read",
+            pathPatterns: [{ source: "(^|/)personal(/|$)", flags: "i" }],
+          },
+        ],
+        rules: [
+          {
+            id: "deny-outbound-after-sensitive-read",
+            tools: ["webfetch"],
+            requires: ["sensitive_data_read"],
+            effect: "deny",
+            reason: "Outbound tools are blocked after a sensitive file read.",
+          },
+        ],
+      },
+    }),
+    "utf8",
+  );
+  const { hooks } = await setupV2(root, { policyPath });
+  const before = hooks.get("execute.before");
+  const read = (id, path) => v2ToolEvent("read", { id, input: { path } });
+
+  // The first sensitive read takes the session's one pending slot and then
+  // fails. 2.x reports that through execute.after with status "error".
+  await before(read("v2-read-missing", "/data/personal/missing.txt"));
+  await hooks.get("execute.after")(
+    v2ToolEvent("read", { id: "v2-read-missing", status: "error", error: new Error("file not found") }),
+  );
+
+  // The failed call was completed: its attribute is committed, so outbound
+  // tools are blocked, and the slot is free for the next sensitive read.
+  const fetch = (id) => v2ToolEvent("webfetch", { id, input: { url: "https://example.com/upload" } });
+  await assert.rejects(before(fetch("v2-fetch-1")), /sensitive file read/i);
+  await before(read("v2-read-notes", "/data/personal/notes.txt"));
+  await assert.rejects(before(fetch("v2-fetch-2")), /sensitive file read/i);
+});
+
+test("OpenCode 2.x setup quarantines the session when a failed call cannot be audited", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-v2-failed-audit-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "session-policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: { allowedTools: ["read", "webfetch"], defaultEffect: "deny" },
+      sessionState: {
+        attributes: ["sensitive_data_read"],
+        transitions: [{ id: "sensitive-read", tool: "read", attribute: "sensitive_data_read" }],
+        rules: [
+          {
+            id: "deny-outbound-after-sensitive-read",
+            tools: ["webfetch"],
+            requires: ["sensitive_data_read"],
+            effect: "deny",
+            reason: "Outbound tools are blocked after a sensitive file read.",
+          },
+        ],
+      },
+    }),
+    "utf8",
+  );
+  const { hooks } = await setupV2(root, { policyPath });
+  const before = hooks.get("execute.before");
+  await before(v2ToolEvent("read", { id: "v2-read-missing", input: { path: join(root, "missing.txt") } }));
+
+  // A failed call has no output to scan, so its only audit entry is the
+  // session-state commit. Fail that one write.
+  const toISOString = Date.prototype.toISOString;
+  let stamps = 0;
+  const clock = t.mock.method(Date.prototype, "toISOString", function () {
+    stamps += 1;
+    if (stamps === 1) {
+      throw new Error("session-state audit write failed");
+    }
+    return toISOString.call(this);
+  });
+  try {
+    await assert.rejects(
+      hooks.get("execute.after")(
+        v2ToolEvent("read", { id: "v2-read-missing", status: "error", error: new Error("file not found") }),
+      ),
+      /session-state audit write failed/,
+    );
+  } finally {
+    clock.mock.restore();
+  }
+
+  assert.equal(stamps, 1);
+  await assert.rejects(
+    before(v2ToolEvent("read", { id: "v2-read-next", input: { path: join(root, "notes.txt") } })),
+    /quarantined/i,
+  );
+});
+
+test("OpenCode 2.x setup resolves relative tool paths against the workspace directory", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-v2-workspace-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const workspace = root.replace(/\\/g, "/").toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const policyPath = join(root, "workspace-policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: { allowedTools: ["read"], defaultEffect: "deny" },
+      directResourcePolicies: {
+        pathRules: [
+          {
+            id: "workspace-secrets",
+            operation: "read",
+            effect: "deny",
+            reason: "Workspace secrets are not readable.",
+            pathPatterns: [{ source: `^${workspace}/secrets/` }],
+          },
+        ],
+      },
+    }),
+    "utf8",
+  );
+  const { hooks } = await setupV2(root, { policyPath });
+  const before = hooks.get("execute.before");
+
+  await assert.rejects(
+    before(v2ToolEvent("read", { input: { path: "secrets/a.txt" } })),
+    /Workspace secrets are not readable/,
+  );
+  await before(v2ToolEvent("read", { input: { path: "notes/a.txt" } }));
 });
 
 test("OpenCode 2.x setup registers the AGT tools with JSON Schema inputs", async (t) => {
