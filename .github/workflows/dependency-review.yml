@@ -48,7 +48,5 @@ jobs:
           # MIT OR Apache-2.0 (both allowed above), so allow it by package
           # rather than encoding the malformed identifier in allow-licenses.
           # borrow-or-share uses MIT-0, which is MIT without the attribution clause.
-          # typing-extensions is PSF-2.0 (allowed above), but the scanner reports
-          # 4.16.0 as "Python-2.0 AND GPL-1.0-or-later AND ...", picking up the
-          # CPython license history text; there is no GPL code in the package.
+          # typing-extensions is PSF-2.0; the scanner misreads 4.16.0 as GPL-1.0-or-later.
           allow-dependencies-licenses: pkg:cargo/futures-timer, pkg:cargo/borrow-or-share, pkg:pypi/typing-extensions
