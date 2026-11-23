@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -81,7 +81,12 @@ async function setupV2(directory, { policyPath } = {}) {
   const tools = [];
   const registration = { dispose: async () => {} };
   const context = {
-    location: { directory, project: { id: "test-project", directory, canonical: directory } },
+    // OpenCode can start in a subfolder of the project; tool paths resolve
+    // against `location.directory`, not the project root.
+    location: {
+      directory,
+      project: { id: "test-project", directory: dirname(directory), canonical: dirname(directory) },
+    },
     tool: {
       hook: async (name, callback) => {
         hooks.set(name, callback);
