@@ -1585,6 +1585,47 @@ class TestHardeningAdditions:
         p.ensure_image()
         client.images.pull.assert_called_once_with('python@sha256:abc123')
 
+    @staticmethod
+    def _provider_with_absent_image(image):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+        with patch('agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__', return_value=None):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = image
+            client = MagicMock()
+            client.images.get.side_effect = Exception('not present')
+            client.images.pull.return_value = MagicMock()
+            p._client = client
+        return p, client
+
+    def test_ensure_image_untagged_registry_with_port_pulls_latest(self, caplog):
+        p, client = self._provider_with_absent_image('localhost:5000/agent-sandbox')
+        with caplog.at_level('WARNING', logger='agent_sandbox.docker_provider.provider'):
+            p.ensure_image()
+        client.images.pull.assert_called_once_with('localhost:5000/agent-sandbox', tag='latest')
+        assert any(('no tag or digest' in r.getMessage() for r in caplog.records if r.levelname == 'WARNING'))
+
+    def test_ensure_image_untagged_registry_host_with_port_and_path(self):
+        p, client = self._provider_with_absent_image('registry.example.com:8443/team/agent')
+        p.ensure_image()
+        client.images.pull.assert_called_once_with('registry.example.com:8443/team/agent', tag='latest')
+
+    def test_ensure_image_tagged_registry_with_port_splits_tag(self, caplog):
+        p, client = self._provider_with_absent_image('localhost:5000/agent-sandbox:1.0')
+        with caplog.at_level('WARNING', logger='agent_sandbox.docker_provider.provider'):
+            p.ensure_image()
+        client.images.pull.assert_called_once_with('localhost:5000/agent-sandbox', tag='1.0')
+        assert not any(('no tag or digest' in r.getMessage() for r in caplog.records if r.levelname == 'WARNING'))
+
+    def test_ensure_image_digest_on_registry_with_port_uses_no_tag(self):
+        p, client = self._provider_with_absent_image('localhost:5000/agent-sandbox@sha256:abc123')
+        p.ensure_image()
+        client.images.pull.assert_called_once_with('localhost:5000/agent-sandbox@sha256:abc123')
+
+    def test_ensure_image_plain_repo_tag_still_splits(self):
+        p, client = self._provider_with_absent_image('python:3.11-slim')
+        p.ensure_image()
+        client.images.pull.assert_called_once_with('python', tag='3.11-slim')
+
 class TestDefaultImageSelection:
     """The DockerSandboxProvider prefers the hardened minimal-PATH image
     when it is locally available, and falls back to python:3.11-slim
