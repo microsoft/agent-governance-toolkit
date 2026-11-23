@@ -310,6 +310,39 @@ def test_sync_registry_adopts_bump_when_composite_still_has_registry_pin(
     assert 'comment = "v7.1.0"' in updated
 
 
+def test_sync_registry_still_fails_closed_when_stale_pin_sits_between_two_bumps(
+    tmp_path, monkeypatch
+):
+    # Ignoring registry-equal pins must not hide two different bumps.
+    registry = tmp_path / "actions.toml"
+    registry.write_text(
+        f'[checkout]\nuses = "actions/checkout@{"b" * 40}"\ncomment = "v7.0.1"\n',
+        encoding="utf-8",
+    )
+    generated = tmp_path / "policy-engine-ci.yml"
+    generated.write_text(
+        f"      - uses: actions/checkout@{'a' * 40} # v7.1.0\n"
+        f"      - uses: actions/checkout@{'b' * 40} # v7.0.1\n",
+        encoding="utf-8",
+    )
+    composite = tmp_path / "composite"
+    action_dir = composite / "x"
+    action_dir.mkdir(parents=True)
+    (action_dir / "action.yml").write_text(
+        "runs:\n  using: composite\n  steps:\n"
+        f"    - uses: actions/checkout@{'d' * 40} # v7.2.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gen, "ACTIONS_PATH", registry)
+    monkeypatch.setattr(gen, "COMPOSITE_ACTIONS_DIR", composite)
+    monkeypatch.setattr(
+        gen, "build_outputs", lambda *_a: {generated: generated.read_text("utf-8")}
+    )
+
+    with pytest.raises(gen.GenerationError, match="conflicting pins"):
+        gen.sync_registry_from_tree(verify=False)
+
+
 def test_sync_registry_refuses_unsafe_comment(tmp_path, monkeypatch):
     # A version comment that could break out of the TOML string is refused,
     # not embedded, so a crafted managed file cannot corrupt actions.toml.

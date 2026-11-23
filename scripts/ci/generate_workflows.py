@@ -331,7 +331,7 @@ def collect_registry_updates(
                     f"refusing to adopt unsafe version comment for "
                     f"'{ref.split('@', 1)[0]}' from {rel}: {comment!r}"
                 )
-            # Unbumped pin (Dependabot skips .github/actions): not a conflict.
+            # Pin not yet bumped (Dependabot skips .github/actions): not a conflict.
             current_uses, _, current_comment = actions[key].partition(" #")
             if (ref, comment) == (current_uses, current_comment.strip() or None):
                 continue
