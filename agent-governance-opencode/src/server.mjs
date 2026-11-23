@@ -47,21 +47,15 @@ async function setupOpenCodeV2(ctx) {
     }
     const text = toolResultText(event.result);
     const output = { output: text, metadata: event.result.metadata };
-    await hooks["tool.execute.after"](
-      { tool: policyToolName(event.tool), sessionID: event.sessionID, callID: event.id },
-      output,
-    );
-    if (output.output !== text) {
-      // The scan covered every text part (or the structured output the host
-      // would show instead), so replace them all and drop the structured
-      // output so no unredacted copy reaches the model.
-      const files = Array.isArray(event.result.content)
-        ? event.result.content.filter((part) => part.type !== "text")
-        : [];
-      event.result = {
-        content: [{ type: "text", text: output.output }, ...files],
-        ...(event.result.metadata === undefined ? {} : { metadata: event.result.metadata }),
-      };
+    try {
+      await hooks["tool.execute.after"](
+        { tool: policyToolName(event.tool), sessionID: event.sessionID, callID: event.id },
+        output,
+      );
+    } finally {
+      // The 1.x hook redacts `output` before it throws on a session-state
+      // audit failure, so apply the redaction before that error propagates.
+      replaceResultText(event, text, output.output);
     }
   });
 
@@ -107,6 +101,22 @@ function rejectShellToolName(state) {
         "evaluated under its OpenCode 1.x name 'bash', so name it 'bash' in the policy.",
     );
   }
+}
+
+// The scan covered every text part (or the structured output the host would
+// show instead), so replace them all with the redacted text and drop the
+// structured output so no unredacted copy reaches the model.
+function replaceResultText(event, text, redacted) {
+  if (redacted === text) {
+    return;
+  }
+  const files = Array.isArray(event.result.content)
+    ? event.result.content.filter((part) => part.type !== "text")
+    : [];
+  event.result = {
+    content: [{ type: "text", text: redacted }, ...files],
+    ...(event.result.metadata === undefined ? {} : { metadata: event.result.metadata }),
+  };
 }
 
 // Mirrors how OpenCode 2.x builds the text the model reads from a tool result:

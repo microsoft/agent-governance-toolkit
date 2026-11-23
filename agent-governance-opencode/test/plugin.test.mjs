@@ -362,6 +362,93 @@ test("OpenCode 2.x setup redacts secrets in every result shape the model reads",
   assert.equal(failed.result, undefined);
 });
 
+test("OpenCode 2.x setup redacts the result even when the after hook throws", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-v2-after-throw-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const policyPath = join(root, "session-policy.json");
+  await writeFile(
+    policyPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      mode: "enforce",
+      toolPolicies: { allowedTools: ["read", "webfetch"], defaultEffect: "deny" },
+      sessionState: {
+        attributes: ["sensitive_data_read"],
+        transitions: [{ id: "sensitive-read", tool: "read", attribute: "sensitive_data_read" }],
+        rules: [
+          {
+            id: "deny-outbound-after-sensitive-read",
+            tools: ["webfetch"],
+            requires: ["sensitive_data_read"],
+            effect: "deny",
+            reason: "Outbound tools are blocked after a sensitive file read.",
+          },
+        ],
+      },
+    }),
+    "utf8",
+  );
+  const { hooks } = await setupV2(root, { policyPath });
+  await hooks.get("execute.before")(v2ToolEvent("read", { input: { path: join(root, "notes.txt") } }));
+
+  // The after hook writes two audit entries, each stamped once: the output
+  // scan, then the session-state commit. Failing the second stamp makes the
+  // 1.x hook redact its output and then throw.
+  const toISOString = Date.prototype.toISOString;
+  let stamps = 0;
+  const clock = t.mock.method(Date.prototype, "toISOString", function () {
+    stamps += 1;
+    if (stamps === 2) {
+      throw new Error("session-state audit write failed");
+    }
+    return toISOString.call(this);
+  });
+  const token = "ghp_" + "b".repeat(40);
+  const image = { type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png" };
+  const event = v2ToolEvent("read", {
+    status: "completed",
+    result: {
+      output: { stdout: `the token is ${token}` },
+      content: [
+        { type: "text", text: "clean first part" },
+        { type: "text", text: `the token is ${token}` },
+        image,
+      ],
+      metadata: {},
+    },
+  });
+  try {
+    await assert.rejects(hooks.get("execute.after")(event), /session-state audit write failed/);
+  } finally {
+    clock.mock.restore();
+  }
+
+  assert.equal(stamps, 2);
+  assert.doesNotMatch(JSON.stringify(event.result), new RegExp(token));
+  assert.deepEqual(event.result.content, [
+    { type: "text", text: "clean first part\nthe token is [AGT_REDACTED:github-token]" },
+    image,
+  ]);
+  assert.equal(event.result.output, undefined);
+  assert.equal(event.result.metadata.agtRedacted, true);
+});
+
+test("OpenCode 2.x setup redacts a result that has no metadata", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-v2-no-metadata-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { hooks } = await setupV2(root);
+  const token = "ghp_" + "b".repeat(40);
+  const event = v2ToolEvent("bash", {
+    status: "completed",
+    result: { content: [{ type: "text", text: `the token is ${token}` }] },
+  });
+  await hooks.get("execute.after")(event);
+
+  assert.deepEqual(event.result, {
+    content: [{ type: "text", text: "the token is [AGT_REDACTED:github-token]" }],
+  });
+});
+
 test("OpenCode 2.x setup registers the AGT tools with JSON Schema inputs", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-plugin-v2-tools-"));
   t.after(() => rm(root, { recursive: true, force: true }));
