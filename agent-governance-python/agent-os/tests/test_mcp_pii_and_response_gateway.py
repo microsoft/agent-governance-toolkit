@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 """Tests for PII/CRI detection and MCP response gateway integration."""
 from __future__ import annotations
+import json
 from agent_os.credential_redactor import CredentialRedactor
 from agent_control_specification import Decision, InterventionPointResult, Verdict
 from agent_os.mcp_gateway import MCPGateway, MCPResponseDecision, ResponsePolicy
@@ -359,3 +360,30 @@ class TestGatewayBoundaryCredentials:
         assert decision.allowed is True
         assert aws not in decision.content
         assert github not in decision.content
+
+class TestGatewayQuotedKeySecrets:
+    """Structured responses are json.dumps()ed before scanning, so a secret
+    under a quoted key must be caught on that path."""
+    _SECRET = 'fake-quoted-secret-0042'
+
+    def test_structured_secret_blocked(self):
+        gw = _make_gateway()
+        decision = gw.intercept_tool_response('a1', 'tool', {'api_key': self._SECRET, 'status': 'ok'})
+        assert decision.allowed is False
+        assert 'credential_leak' in decision.reason
+        assert decision.content is None
+
+    def test_structured_secret_redacted_in_sanitize_mode(self):
+        gw = _make_gateway(response_policy=ResponsePolicy.SANITIZE)
+        decision = gw.intercept_tool_response('a1', 'tool', {'client_secret': self._SECRET, 'status': 'ok'})
+        assert decision.allowed is True
+        assert decision.action == 'sanitized'
+        assert self._SECRET not in (decision.content or '')
+        assert json.loads(decision.content) == {'client_secret': '[REDACTED]', 'status': 'ok'}
+
+    def test_structured_google_key_still_sanitized(self):
+        gw = _make_gateway(response_policy=ResponsePolicy.SANITIZE)
+        decision = gw.intercept_tool_response('a1', 'tool', {'api_key': _FAKE_GOOGLE_KEY})
+        assert decision.allowed is True
+        assert decision.action == 'sanitized'
+        assert json.loads(decision.content) == {'api_key': '[REDACTED]'}

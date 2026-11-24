@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Credential redaction and PII/CRI detection for MCP audit and response safety."""
 
+# cspell:ignore groupindex
+
 from __future__ import annotations
 
 import logging
@@ -15,6 +17,35 @@ from .hipaa_patterns import HIPAA_PHI_RAW_PATTERNS
 logger = logging.getLogger(__name__)
 
 REDACTED_PLACEHOLDER = "[REDACTED]"
+
+# A pattern may capture the secret itself in a group with this name. When the
+# group takes part in a match, only its span is reported and redacted, so the
+# surrounding structure (a quoted JSON key, its quotes) survives redaction.
+_SECRET_GROUP = "secret"
+
+# One character of a value that follows a quoted key. A backslash directly
+# before a quote is the escape of a closing quote (JSON nested inside a JSON
+# string), not part of the value, so it is left in place. An unquoted value
+# after a quoted key sits in JSON, a dict repr or a YAML flow mapping, where
+# ",", "}" and "]" close the value rather than belong to it; inside quotes
+# they are ordinary value characters.
+_QUOTED_KEY_VALUE_CHAR = r"""(?:[^\s'";\\]|\\(?!["']))"""
+_UNQUOTED_VALUE_CHAR = rf"(?:(?![,}}\]]){_QUOTED_KEY_VALUE_CHAR})"
+
+
+def _quoted_key_value(placeholder: str) -> str:
+    """Build the value part of the quoted-key branch of "Generic API secret".
+
+    The optional opening quote is captured as ``vq`` so the value class can
+    depend on it. A value that is exactly ``placeholder`` (judged by the same
+    value class) does not match.
+    """
+    ph = re.escape(placeholder)
+    return (
+        r"(?P<vq>\\?[\"'])?"
+        rf"(?(vq)(?!{ph}(?!{_QUOTED_KEY_VALUE_CHAR}))|(?!{ph}(?!{_UNQUOTED_VALUE_CHAR})))"
+        rf"(?P<{_SECRET_GROUP}>(?(vq){_QUOTED_KEY_VALUE_CHAR}|{_UNQUOTED_VALUE_CHAR}){{6,}})"
+    )
 
 
 def _compile_named_patterns(
@@ -39,6 +70,17 @@ def _select_named_patterns(
 ) -> tuple[CredentialPattern, ...]:
     """Return the subset of compiled patterns whose names are in ``names``."""
     return tuple(pattern for pattern in patterns if pattern.name in names)
+
+
+def _reported_group(match: re.Match[str]) -> int | str:
+    """Return the group whose span a credential match reports.
+
+    This is ``_SECRET_GROUP`` when the pattern defines it and it took part in
+    the match, otherwise the whole match (group ``0``).
+    """
+    if _SECRET_GROUP in match.re.groupindex and match.start(_SECRET_GROUP) >= 0:
+        return _SECRET_GROUP
+    return 0
 
 
 @dataclass(frozen=True)
@@ -218,9 +260,25 @@ class CredentialRedactor:
             ),
         ),
         CredentialPattern(
+            # The keyword is followed either directly by the separator
+            # (``api_key=...``, unchanged) or by the closing quote of a quoted
+            # key, as in JSON ``{"api_key": "..."}`` or a Python dict repr
+            # ``{'client_secret': '...'}``. Without the second branch that
+            # quote sat between the keyword and the separator, so structured
+            # tool output carrying a secret was reported clean. For a quoted
+            # key only the value is captured (``_SECRET_GROUP``), so the key
+            # and both quotes stay in place and redacted JSON still parses.
+            # The quotes may arrive escaped (``\"``) when the JSON is itself
+            # inside a JSON string. A value that is exactly the redaction
+            # placeholder is not matched: it carries no secret, and matching
+            # it would make already-redacted output read as a residual
+            # credential. Any value longer than the placeholder still matches.
             name="Generic API secret",
             pattern=re.compile(
-                r"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|client[_-]?secret|secret|token)\b\s*[:=]\s*['\"]?[^\s'\";]{6,}"
+                r"(?i)(?<![A-Za-z0-9])(?:api[_-]?key|client[_-]?secret|secret|token)\b"
+                r"(?:\s*[:=]\s*['\"]?[^\s'\";]{6,}"
+                r"|\\?[\"']\s*[:=]\s*"
+                rf"{_quoted_key_value(REDACTED_PLACEHOLDER)})"
             ),
         ),
     )
@@ -557,12 +615,13 @@ class CredentialRedactor:
         matches: list[CredentialMatch] = []
         for credential_pattern in cls.PATTERNS:
             for match in credential_pattern.pattern.finditer(value):
+                group = _reported_group(match)
                 matches.append(
                     CredentialMatch(
                         name=credential_pattern.name,
-                        matched_text=match.group(0),
-                        start=match.start(),
-                        end=match.end(),
+                        matched_text=match.group(group),
+                        start=match.start(group),
+                        end=match.end(group),
                     )
                 )
         return matches
