@@ -285,6 +285,7 @@ nav:
     - Data Provenance Model: compliance/data-provenance-model.md
   - Conformance: conformance.md
   - Studio:
+    - Loopback Sidecar (Draft): studio/sidecar.md
     - Engine API Contract: studio/engine-api-contract.md
     - Engine API Conformance: studio/engine-api-conformance.md
     - Sidecar Security Posture: studio/sidecar-security-posture.md
