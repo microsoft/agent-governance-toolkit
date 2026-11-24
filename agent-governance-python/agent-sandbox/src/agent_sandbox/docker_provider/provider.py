@@ -407,10 +407,17 @@ class DockerSandboxProvider(SandboxProvider):
         # warn loudly: ``image:latest`` resolves differently on every
         # pull and undermines reproducibility, which is precisely the
         # property a sandbox image needs.
+        #
+        # A tag colon can only appear in the last path segment. A colon
+        # before the last "/" belongs to a registry host with a port
+        # (``localhost:5000/repo``), so an untagged reference of that
+        # shape is unpinned too.
+        last_slash = target.rfind("/")
+        last_colon = target.rfind(":")
         if "@sha256:" in target:
             repo, tag = target, None
-        elif ":" in target and not target.startswith("sha256:"):
-            repo, tag = target.rsplit(":", 1)
+        elif last_colon > last_slash and not target.startswith("sha256:"):
+            repo, tag = target[:last_colon], target[last_colon + 1:]
         else:
             repo, tag = target, "latest"
             logger.warning(
