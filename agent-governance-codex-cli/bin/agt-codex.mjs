@@ -92,7 +92,15 @@ function codex(args, codexHome) {
     return { ok: true, stdout, stderr: "" };
   } catch (error) {
     if (error?.code === "ENOENT") {
-      throw new Error("`codex` CLI not found on PATH. Install the Codex CLI, then re-run.");
+      const failingPath = error.path ? ` (${error.path})` : "";
+      const detail = error.message ? `: ${error.message}` : "";
+      // Keep the original error: its path and errno are the only way to tell
+      // a missing `codex` from a broken shim interpreter or, on Windows, a
+      // missing ComSpec. The old fixed message hid all of that.
+      throw new Error(
+        `\`codex\` CLI could not be started${failingPath}${detail}. Install the Codex CLI and its interpreter, then re-run.`,
+        { cause: error },
+      );
     }
     return {
       ok: false,
@@ -250,5 +258,9 @@ try {
   }
 } catch (error) {
   process.stderr.write(`agt-codex ${command ?? ""} failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  const cause = error instanceof Error ? error.cause : undefined;
+  if (cause instanceof Error && cause.message !== error.message) {
+    process.stderr.write(`  caused by (${cause.code ?? cause.name}): ${cause.message}\n`);
+  }
   process.exit(1);
 }
