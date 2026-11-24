@@ -2,3 +2,7 @@ agent-framework==1.5.0
 agent-os-kernel==3.2.2
 agentmesh-platform==3.2.2
 agent-sre==3.2.2
+
+# The ACS runtime that provides `agent_control_specification` is installed from
+# this repo (it builds the native core), like the other ACS examples:
+#   pip install -e policy-engine/sdk/python
