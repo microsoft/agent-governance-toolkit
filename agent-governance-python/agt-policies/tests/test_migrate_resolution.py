@@ -1210,7 +1210,8 @@ def test_resolve_maps_v4_tool_fields_to_snapshot_paths(tmp_path: Path) -> None:
             "envelope.budgets.tool_call_count",
             id="shared-envelope",
         ),
-        pytest.param("output", "response.content", id="agt-output-response"),
+        pytest.param("output", "output", id="agt-output"),
+        pytest.param("output", "ifc.result_labels", id="agt-output-ifc"),
     ],
 )
 def test_resolve_accepts_agt_host_snapshot_roots(
@@ -1220,7 +1221,7 @@ def test_resolve_accepts_agt_host_snapshot_roots(
         intervention_point: {
             "policy_target": "$.tool_call.args"
             if intervention_point == "pre_tool_call"
-            else "$.response.content",
+            else "$.output",
             "policy_target_kind": "tool_args"
             if intervention_point == "pre_tool_call"
             else "output",
@@ -1308,6 +1309,50 @@ def test_resolve_refuses_field_outside_bound_snapshot_roots(
     )
 
     with pytest.raises(ResolutionError, match="bad-field.*field.*pre_tool_call"):
+        resolve_manifest(tmp_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("intervention_point", "policy_target", "field"),
+    [
+        pytest.param("output", "$.output", "response.content", id="output-response"),
+        pytest.param(
+            "post_model_call", "$.model_response", "response.text", id="post-model-response"
+        ),
+        pytest.param("pre_model_call", "$.model_request", "tools", id="pre-model-tools"),
+        pytest.param("pre_model_call", "$.model_request", "model.name", id="pre-model-model"),
+    ],
+)
+def test_resolve_refuses_pre_contract_host_snapshot_roots(
+    tmp_path: Path, intervention_point: str, policy_target: str, field: str
+) -> None:
+    # HostSession sent these keys before #4059; it now sends the snapshot
+    # contract's keys, so a rule on the old key would silently never match.
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "stale-root",
+                    "deny",
+                    {"field": field, "operator": "exists", "value": None},
+                )
+            ],
+            "intervention_points": {
+                intervention_point: {
+                    "policy_target": policy_target,
+                    "policy_target_kind": "output"
+                    if intervention_point == "output"
+                    else "model_request",
+                    "policy": {"id": "agt_legacy_rules"},
+                }
+            },
+        },
+    )
+
+    with pytest.raises(
+        ResolutionError, match=f"stale-root.*unavailable at intervention point '{intervention_point}'"
+    ):
         resolve_manifest(tmp_path, tmp_path)
 
 

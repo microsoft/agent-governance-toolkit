@@ -157,13 +157,13 @@ def test_generated_bundle_reads_host_envelope_root(tmp_path: Path) -> None:
     assert verdict["reason"] == "tool-budget-exhausted"
 
 
-def test_generated_bundle_reads_host_output_response_root(tmp_path: Path) -> None:
+def test_generated_bundle_reads_host_output_root(tmp_path: Path) -> None:
     governance = {
         "rules": [
             {
                 "name": "block-secret-output",
                 "condition": {
-                    "field": "response.content",
+                    "field": "output",
                     "operator": "contains",
                     "value": "secret",
                 },
@@ -173,7 +173,7 @@ def test_generated_bundle_reads_host_output_response_root(tmp_path: Path) -> Non
         ],
         "intervention_points": {
             "output": {
-                "policy_target": "$.response.content",
+                "policy_target": "$.output",
                 "policy_target_kind": "output",
                 "policy": {"id": "agt_legacy_rules"},
             }
@@ -184,9 +184,12 @@ def test_generated_bundle_reads_host_output_response_root(tmp_path: Path) -> Non
     )
     manifest = resolve_manifest(tmp_path, tmp_path, bundle_dir=tmp_path / "generated")
     bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    # The snapshot contract's output shape (AGT-SNAPSHOT-1.0 section 2.7),
+    # which HostSession.output sends since #4059.
     snapshot = SnapshotBuilder(agent_id="test-agent").snapshot(
         "output",
-        response={"content": "contains secret material", "ifc": {}},
+        output="contains secret material",
+        ifc={"result_labels": []},
         message_chain=[],
     )
 

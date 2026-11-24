@@ -62,16 +62,20 @@ _AMBIENT_SNAPSHOT_ROOTS = {
 
 _COMMON_SNAPSHOT_ROOTS = _AMBIENT_SNAPSHOT_ROOTS | {"envelope"}
 
+# Per-hook roots follow the snapshot contract (AGT-SNAPSHOT-1.0 1.0.0-alpha.2
+# and the wire snapshot schema). The keys HostSession sent before #4059
+# (top-level ``model``/``tools`` at pre_model_call, ``response`` at
+# post_model_call and output) are no longer sent, so a rule on them would never
+# match at runtime and is refused here.
 _SNAPSHOT_ROOTS_BY_INTERVENTION_POINT = {
     "agent_startup": _COMMON_SNAPSHOT_ROOTS | {"agent", "agent_init"},
     "input": _COMMON_SNAPSHOT_ROOTS | {"input"},
-    "pre_model_call": _COMMON_SNAPSHOT_ROOTS
-    | {"model", "model_request", "messages", "tools", "request_id"},
+    "pre_model_call": _COMMON_SNAPSHOT_ROOTS | {"model_request", "request_id"},
     "post_model_call": _COMMON_SNAPSHOT_ROOTS
-    | {"model", "model_response", "request_id", "response", "usage"},
+    | {"model", "model_response", "request_id", "usage"},
     "pre_tool_call": _COMMON_SNAPSHOT_ROOTS | {"tool_call"},
     "post_tool_call": _COMMON_SNAPSHOT_ROOTS | {"tool_call", "tool_result"},
-    "output": _COMMON_SNAPSHOT_ROOTS | {"output", "response", "message_chain"},
+    "output": _COMMON_SNAPSHOT_ROOTS | {"output", "ifc", "message_chain"},
     "agent_shutdown": _COMMON_SNAPSHOT_ROOTS | {"agent", "reason", "summary"},
 }
 
