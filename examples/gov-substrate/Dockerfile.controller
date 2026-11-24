@@ -1,0 +1,18 @@
+FROM rust:1.90-bookworm AS native
+RUN apt-get update && apt-get install -y --no-install-recommends python3-dev python3-venv && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /build-env
+ENV PATH=/build-env/bin:$PATH CARGO_BUILD_JOBS=2
+RUN pip install --no-cache-dir maturin==1.8.7
+COPY policy-engine /build/policy-engine
+WORKDIR /build/policy-engine/sdk/python
+RUN maturin build --release --locked --out /wheels
+
+FROM python:3.12.10-slim-bookworm
+COPY --from=native /wheels /wheels
+RUN pip install --no-cache-dir /wheels/*.whl fastapi==0.115.12 uvicorn==0.34.2 httpx==0.28.1 cryptography==46.0.2 pydantic==2.11.4 python-dateutil==2.9.0.post0 email-validator==2.2.0
+COPY agent-governance-python/agent-hypervisor/src/hypervisor /agt/hypervisor
+COPY agent-governance-python/agent-mesh/src/agentmesh /agt/agentmesh
+COPY examples/gov-substrate/bridge.py examples/gov-substrate/controller.py examples/gov-substrate/transport.py examples/gov-substrate/shutdown_probe.py /integration/
+ENV PYTHONPATH=/agt:/integration PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /integration
+CMD ["python", "controller.py"]
