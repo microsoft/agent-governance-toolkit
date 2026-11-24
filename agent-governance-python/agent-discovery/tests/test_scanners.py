@@ -3,6 +3,7 @@
 
 from agent_discovery.models import ScanResult
 from agent_discovery.scanners.base import BaseScanner, ScannerRegistry
+from agent_discovery.scanners.config import ConfigScanner
 
 
 class MockScanner(BaseScanner):
@@ -51,3 +52,29 @@ class TestGlobalRegistry:
         assert "process" in names
         assert "config" in names
         assert "github" in names
+
+
+class TestConfigScanner:
+    async def test_finds_config_files_in_subdirectories(self, tmp_path):
+        (tmp_path / ".agentmesh").mkdir()
+        (tmp_path / ".agentmesh" / "config.yaml").write_text("", encoding="utf-8")
+        (tmp_path / ".mcp").mkdir()
+        (tmp_path / ".mcp" / "config.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "crewai.yaml").write_text("", encoding="utf-8")
+
+        result = await ConfigScanner().scan(paths=[str(tmp_path)])
+
+        found = sorted(agent.tags["config_file"] for agent in result.agents)
+        assert found == [".agentmesh/config.yaml", ".mcp/config.json", "crewai.yaml"]
+
+    async def test_docker_file_in_subdirectory_uses_forward_slashes(self, tmp_path):
+        (tmp_path / "services" / "api").mkdir(parents=True)
+        (tmp_path / "services" / "api" / "Dockerfile").write_text(
+            "RUN pip install crewai\n", encoding="utf-8"
+        )
+
+        result = await ConfigScanner().scan(paths=[str(tmp_path)])
+
+        docker_agents = [agent for agent in result.agents if "docker_file" in agent.tags]
+        assert [agent.tags["docker_file"] for agent in docker_agents] == ["services/api/Dockerfile"]
+        assert docker_agents[0].name == "Containerized agent at services/api/Dockerfile"
