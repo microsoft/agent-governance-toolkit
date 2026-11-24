@@ -319,7 +319,9 @@ class HibernationManager:
         Returns:
             List of agent IDs that are idle
         """
-        idle_threshold = min_idle_seconds or self.config.idle_timeout_seconds
+        idle_threshold = (
+            self.config.idle_timeout_seconds if min_idle_seconds is None else min_idle_seconds
+        )
         now = datetime.now()
         idle_agents = []
         
@@ -341,7 +343,7 @@ class HibernationManager:
         Args:
             max_age_days: Maximum age in days (uses config default if None)
         """
-        max_age = max_age_days or self.config.auto_cleanup_days
+        max_age = self.config.auto_cleanup_days if max_age_days is None else max_age_days
         now = datetime.now()
         cleanup_threshold = timedelta(days=max_age)
         
