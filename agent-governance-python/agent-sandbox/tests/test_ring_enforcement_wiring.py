@@ -448,6 +448,22 @@ class TestDockerRingEnforcement:
 # ---------------------------------------------------------------------------
 
 
+def _ring_modules(enforcer, detector):
+    """Fake ``hypervisor`` modules for ``patch.dict("sys.modules", ...)``."""
+    return {
+        "hypervisor.rings.enforcer": SimpleNamespace(
+            RingEnforcer=lambda: enforcer,
+            ResourceType=SimpleNamespace(SUBPROCESS="subprocess"),
+        ),
+        "hypervisor.rings.breach_detector": SimpleNamespace(
+            RingBreachDetector=lambda: detector,
+        ),
+        "hypervisor.models": SimpleNamespace(
+            ExecutionRing=SimpleNamespace(RING_3_SANDBOX=RING_3_SANDBOX),
+        ),
+    }
+
+
 def _make_hyperlight_provider():
     """Return a HyperLightSandboxProvider with SDK and ring internals mocked."""
     try:
@@ -538,3 +554,116 @@ class TestHyperlightRingEnforcement:
         # sandbox.allow_domain should NOT have been called since net was cleared
         fake_sandbox.allow_domain.assert_not_called()
         assert h.status == SessionStatus.READY
+
+    # -- execute_code gate (the session config must keep the ring) ----------
+
+    @staticmethod
+    def _create_session(provider, cfg, enforcer, detector):
+        """Create a Hyperlight session through the public API.
+
+        Returns ``(handle, fake_sandbox)``. Nothing is injected into the
+        provider afterwards, so these tests fail if ``create_session``
+        does not leave the ring where ``execute_code`` looks for it.
+        """
+        fake_sandbox = MagicMock()
+        fake_sandbox.run.return_value = SimpleNamespace(
+            stdout="ran", stderr="", exit_code=0
+        )
+        provider._build_sandbox = lambda hl_cfg: fake_sandbox
+        provider._safe_drop = MagicMock()
+
+        class _SyncWorker:
+            def __init__(self, name=""):
+                self.name = name
+
+            def start(self):
+                pass
+
+            def submit_and_wait(self, fn, *args, **kwargs):
+                return fn(*args, **kwargs)
+
+            def stop(self, join_timeout=None):
+                pass
+
+        with patch(
+            "agent_sandbox.hyperlight_provider.provider._SandboxWorker",
+            _SyncWorker,
+        ), patch.dict("sys.modules", _ring_modules(enforcer, detector)):
+            handle = provider.create_session("agent1", config=cfg)
+        return handle, fake_sandbox
+
+    def test_session_config_keeps_ring(self):
+        """HyperlightConfig must carry SandboxConfig.ring over."""
+        from agent_sandbox.hyperlight_provider.config import HyperlightConfig
+
+        hl_cfg = HyperlightConfig.from_sandbox_config(
+            SandboxConfig(ring=RING_3_SANDBOX)
+        )
+        assert hl_cfg.ring is RING_3_SANDBOX
+        assert HyperlightConfig.from_sandbox_config(SandboxConfig()).ring is None
+
+    def test_execute_code_ring3_subprocess_denied(self):
+        """execute_code must raise PermissionError for a Ring 3 session."""
+        provider = _make_hyperlight_provider()
+        enforcer = _FakeRingEnforcer()
+        detector = _FakeBreachDetector()
+        h, fake_sandbox = self._create_session(
+            provider, SandboxConfig(ring=RING_3_SANDBOX), enforcer, detector
+        )
+
+        with patch.dict("sys.modules", _ring_modules(enforcer, detector)):
+            with pytest.raises(PermissionError, match="[Rr]ing"):
+                provider.execute_code("agent1", h.session_id, "print('x')")
+
+        # The guest never ran and the breach detector saw the attempt.
+        fake_sandbox.run.assert_not_called()
+        assert detector.calls == [
+            ("agent1", h.session_id, RING_3_SANDBOX, RING_3_SANDBOX)
+        ]
+
+    def test_circuit_breaker_tripped_blocks_execute(self):
+        """A tripped breaker must block execute_code even when the ring allows it."""
+        provider = _make_hyperlight_provider()
+        enforcer = _FakeRingEnforcer()
+        detector = _FakeBreachDetector()
+        h, fake_sandbox = self._create_session(
+            provider, SandboxConfig(ring=RING_2_STANDARD), enforcer, detector
+        )
+        detector.trip(h.agent_id, h.session_id)
+
+        with patch.dict("sys.modules", _ring_modules(enforcer, detector)):
+            with pytest.raises(PermissionError, match="[Cc]ircuit"):
+                provider.execute_code("agent1", h.session_id, "print('x')")
+
+        fake_sandbox.run.assert_not_called()
+
+    def test_execute_code_ring2_permitted(self):
+        """A Ring 2 session passes the gate, runs, and is recorded."""
+        provider = _make_hyperlight_provider()
+        enforcer = _FakeRingEnforcer()
+        detector = _FakeBreachDetector()
+        h, fake_sandbox = self._create_session(
+            provider, SandboxConfig(ring=RING_2_STANDARD), enforcer, detector
+        )
+
+        with patch.dict("sys.modules", _ring_modules(enforcer, detector)):
+            out = provider.execute_code("agent1", h.session_id, "print('x')")
+
+        assert out.result.success
+        fake_sandbox.run.assert_called_once()
+        assert len(detector.calls) == 1
+
+    def test_execute_code_ring_none_is_noop(self):
+        """Without a ring there is no gate and no ring state."""
+        provider = _make_hyperlight_provider()
+        enforcer = _FakeRingEnforcer()
+        detector = _FakeBreachDetector()
+        h, fake_sandbox = self._create_session(
+            provider, SandboxConfig(), enforcer, detector
+        )
+
+        out = provider.execute_code("agent1", h.session_id, "print('x')")
+
+        assert out.result.success
+        assert provider._ring_enforcers == {}
+        assert detector.calls == []

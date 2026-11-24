@@ -16,6 +16,8 @@ The configuration mirrors the design doc's ``HyperlightConfig`` surface:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
+
 from agent_sandbox.sandbox_provider import SandboxConfig
 
 # Upstream backend identifiers. Kept as plain strings (not an Enum) to
@@ -54,6 +56,11 @@ class HyperlightConfig:
     env_vars:
         Optional host-side environment exposed to the guest where the
         backend supports it. Ignored on backends that have no env model.
+    ring:
+        Hypervisor execution ring the session is pinned to, carried over
+        from ``SandboxConfig.ring``. ``execute_code`` reads it from the
+        stored session config to run the ring subprocess gate and the
+        breach detector; ``None`` means no ring gate applies.
     """
 
     backend: str = "wasm"
@@ -64,6 +71,7 @@ class HyperlightConfig:
     input_dir: str | None = None
     output_dir: str | None = None
     env_vars: dict[str, str] = field(default_factory=dict)
+    ring: Any = None  # ExecutionRing | None; typed as Any to avoid hard dep
 
     def __post_init__(self) -> None:
         if self.backend not in _VALID_BACKENDS:
@@ -94,7 +102,8 @@ class HyperlightConfig:
 
         Resource limits (``memory_mb``, ``timeout_seconds``) become
         upstream heap / max-execution-time. ``cpu_limit`` is dropped
-        because Hyperlight pins one vCPU per micro-VM.
+        because Hyperlight pins one vCPU per micro-VM. ``ring`` is
+        carried over unchanged so the session keeps its ring gate.
         """
         return cls(
             backend=backend,
@@ -105,4 +114,5 @@ class HyperlightConfig:
             input_dir=cfg.input_dir,
             output_dir=cfg.output_dir,
             env_vars=dict(cfg.env_vars),
+            ring=cfg.ring,
         )
