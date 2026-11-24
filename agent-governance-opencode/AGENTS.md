@@ -5,8 +5,13 @@ governance plugin for [OpenCode](https://github.com/anomalyco/opencode).
 
 ## Architecture
 
-OpenCode loads plugins **in-process** as async JS/TS functions. The plugin
-entry point is `src/index.mjs`, which:
+OpenCode loads plugins **in-process**. The package root, `src/index.mjs`,
+default-exports the `AgtGovernance` plugin function, which OpenCode 1.x calls;
+keep every root export a plugin function, because 1.x before 1.3.4 calls each
+one. The `./server` export, `src/server.mjs`, is `{ id, server, setup }`:
+OpenCode 2.x, and 1.x from 1.3.4, load it before the root; 1.x calls `server`
+and 2.x calls `setup` (which registers the same tool hooks through its
+context). The root entry point:
 
 - caches a single `loadPolicy()` state per OpenCode process
 - maps AGT decisions (`allow` / `review` / `deny`) onto OpenCode's contract:
@@ -55,8 +60,9 @@ npm test         # tests only
 - New secret family to redact → add a pattern to `SECRET_PATTERNS` in
   `lib/policy.mjs` (bottom section) and add a test in
   `test/policy.test.mjs`
-- New plugin hook surface from OpenCode → wire it in `src/index.mjs` and add a
-  shape assertion in `test/plugin.test.mjs`
+- New plugin hook surface from OpenCode → wire it in `src/index.mjs` (1.x hook
+  object) or `src/server.mjs` (2.x `setup`) and add a shape assertion in
+  `test/plugin.test.mjs`
 
 ## Out of scope
 

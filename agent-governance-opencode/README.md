@@ -29,7 +29,7 @@ It ships an OpenCode plugin that uses:
 ## Why OpenCode benefits from in-process governance
 
 Unlike Claude Code (subprocess hooks) and Antigravity (subprocess hooks),
-OpenCode loads plugins **in-process** as async TypeScript/JavaScript functions.
+OpenCode loads plugins **in-process** as TypeScript/JavaScript modules.
 That means this package can:
 
 - enforce policy on `tool.execute.before` without an extra subprocess round trip
@@ -54,6 +54,28 @@ This initial package enforces:
 
 There is no failed-tool hook in this plugin. A failed call that never reaches
 `tool.execute.after` does not receive an output audit entry.
+
+OpenCode 2.x loads plugins through a different contract (a default
+`{ id, setup }` definition). The package's `./server` export (`src/server.mjs`)
+is `{ id, server, setup }`. OpenCode 2.x, and OpenCode 1.x from 1.3.4, load a
+package's `./server` export before its root, so the same `opencode.json` entry
+works on every version; earlier 1.x releases load the root, whose default
+export is still the plugin function. On 2.x, `setup` wires the tool
+`execute.before` and `execute.after` hooks and registers the two custom tools
+as direct tools. OpenCode 2.x calls the 1.x `bash` tool `shell`; a `shell` call
+is evaluated, audited and reported under the name `bash`, so policy rules
+written for `bash` apply to it. Name the shell tool `bash` in policies for both
+versions: on 2.x, `setup` refuses a policy that names `shell`, because that
+entry would never match. OpenCode 2.x also renames the 1.x `task` tool to
+`subagent` and `apply_patch` to `patch`, and those calls are evaluated under
+their 2.x names, so a policy that should cover them on both versions names
+both. In enforce mode the AGT tool scan flags a `patch` call as typosquatting
+and denies it, whatever the policy allows. The `session.created` status log,
+the prompt scan and the session-state lifecycle handling, which depend on 1.x
+hook entries, run on OpenCode 1.x only for now. Output of a shell command that
+runs in the background on 2.x (started with `background: true`, or moved to the
+background by OpenCode) reaches the session later as a message rather than
+through `execute.after`, so it is not scanned for secrets yet.
 
 It also exposes two custom tools (in-process **and** via the stdio MCP server):
 
@@ -118,6 +140,14 @@ also works):
 
 ```js
 export { default } from "@microsoft/agent-governance-opencode";
+```
+
+OpenCode 2.x loads a workspace plugin file directly and refuses a function
+default, so on 2.x re-export the `./server` entry instead (this form also
+works on OpenCode 1.x from 1.3.4):
+
+```js
+export { default } from "@microsoft/agent-governance-opencode/server";
 ```
 
 This imports the installed package from `.opencode/node_modules`; it does not

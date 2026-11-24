@@ -15,10 +15,14 @@ for (const path of ["../README.md", "../../docs/packages/opencode-governance.md"
     assert.ok(["js", "ts"].includes(shim[1]), "OpenCode discovers JS/TS shims");
     assert.doesNotMatch(doc, /\*\.\{[^}]*mjs[^}]*\}/);
 
-    const reexport = doc.match(/export \{ default \} from "([^"]+)";/);
-    assert.ok(reexport, "document the workspace shim's import");
-    assert.equal(reexport[1], "@microsoft/agent-governance-opencode");
-    assert.equal((await import(reexport[1])).default, AgtGovernance);
+    // The 1.x shim re-exports the package root, the 2.x shim its `./server` entry.
+    const reexports = [...doc.matchAll(/export \{ default \} from "([^"]+)";/g)].map((m) => m[1]);
+    assert.deepEqual(reexports, [
+      "@microsoft/agent-governance-opencode",
+      "@microsoft/agent-governance-opencode/server",
+    ]);
+    assert.equal((await import(reexports[0])).default, AgtGovernance);
+    assert.equal((await import(reexports[1])).default.server, AgtGovernance);
     assert.match(doc, /opencode debug config/);
     assert.doesNotMatch(doc, /`session\.start`|`tool\.execute\.error`/);
   });
