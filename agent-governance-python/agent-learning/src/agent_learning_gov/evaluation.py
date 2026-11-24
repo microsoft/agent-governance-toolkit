@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -221,7 +221,7 @@ class ExcessivePrivilegeEvaluation:
         ),
         max_scopes: int = 10,
     ) -> None:
-        self.privileged_values = {value.lower() for value in privileged_values}
+        self.privileged_values = {_normalize_text(value) for value in privileged_values}
         self.max_scopes = max_scopes
 
     def evaluate(
@@ -233,21 +233,43 @@ class ExcessivePrivilegeEvaluation:
         del episodes, baseline
         findings = []
         for action in policy.actions:
-            parameters = dict(action.parameters)
-            # An action can carry both keys of each pair, so check both.
-            privileges = (parameters.get("privilege"), parameters.get("role"))
-            normalized_scopes = _as_sequence(parameters.get("scopes")) + _as_sequence(
-                parameters.get("permissions")
+            parameters = _lookup_keys_case_insensitively(
+                action.parameters, _PRIVILEGE_KEYS | _SCOPE_KEYS
             )
+            # An action can carry both keys of each pair, so check both. A
+            # value may be a single string or a (nested) collection of them;
+            # every leaf is checked, so a list-valued ``privilege`` or a
+            # nested ``scopes`` list cannot hide an elevated value.
+            # A one-shot iterator (a generator, a ``map``) that the policy
+            # shares between a privilege key and a scope key would be drained
+            # by the first pass and read as empty by the second, so eleven
+            # scopes could pass the limit. Each iterator object is read once
+            # and the same contents are used by both passes.
+            iterators: dict[int, tuple[Any, ...]] = {}
+            privileges = _flatten_leaves(
+                (parameters[key] for key in _PRIVILEGE_KEYS), iterators
+            )
+            normalized_scopes = _flatten_leaves(
+                (parameters[key] for key in _SCOPE_KEYS), iterators
+            )
+            leaves = (*privileges, *normalized_scopes)
+            # A leaf of a type the check cannot read (``None`` inside a list,
+            # ``bytes``, a mapping, a number) fails closed, as the cost check
+            # does for a non-numeric cost, and is reported with its own message.
+            unreadable = any(not isinstance(value, str) for value in leaves)
             privileged = any(
-                isinstance(value, str) and value.lower() in self.privileged_values
-                for value in (*privileges, *normalized_scopes)
+                isinstance(value, str) and self._is_elevated(value) for value in leaves
             )
-            if privileged or len(normalized_scopes) > self.max_scopes:
+            if privileged or unreadable or len(normalized_scopes) > self.max_scopes:
+                message = (
+                    "Action privilege, role, scope and permission values must be strings"
+                    if unreadable and not privileged
+                    else "Action requests excessive privilege"
+                )
                 findings.append(
                     EvaluationFinding(
                         check_id=self.check_id,
-                        message="Action requests excessive privilege",
+                        message=message,
                         severity=RiskLevel.HIGH,
                         artifact_type="policy",
                         artifact_id=policy.id,
@@ -261,6 +283,16 @@ class ExcessivePrivilegeEvaluation:
             findings=tuple(findings),
             metrics={"actions_checked": len(policy.actions)},
         )
+
+    def _is_elevated(self, value: str) -> bool:
+        """Return True when one privilege, role, scope or permission string is elevated.
+
+        The string is stripped and case-folded before the comparison, so
+        ``" Admin "`` matches ``admin``. Any string carrying a ``*`` is a
+        wildcard (``*``, ``admin:*``, ``repo.*``) and is elevated.
+        """
+        normalized = _normalize_text(value)
+        return "*" in normalized or normalized in self.privileged_values
 
 
 class RestrictedActionEvaluation:
@@ -560,14 +592,84 @@ class GovernanceEvaluationPack:
         )
 
 
-def _as_sequence(value: Any) -> tuple[Any, ...]:
-    if value is None:
-        return ()
-    if isinstance(value, str):
-        return (value,)
-    if isinstance(value, Iterable):
-        return tuple(value)
-    return (value,)
+_PRIVILEGE_KEYS = frozenset({"privilege", "role"})
+_SCOPE_KEYS = frozenset({"scopes", "permissions"})
+
+
+def _normalize_text(value: str) -> str:
+    """Strip surrounding whitespace (ASCII and Unicode) and case-fold."""
+    return value.strip().casefold()
+
+
+def _lookup_keys_case_insensitively(
+    parameters: Mapping[str, Any], keys: frozenset[str]
+) -> dict[str, list[Any]]:
+    """Collect the values stored under ``keys``, matching keys case-insensitively.
+
+    ``{"Privilege": "admin"}`` and ``{"ROLE": "admin"}`` are read like their
+    lower-case forms. Every matching spelling contributes its value, so a
+    parameter set carrying both ``privilege`` and ``PRIVILEGE`` has both
+    checked. A top-level ``None`` means the key is absent.
+    """
+    found: dict[str, list[Any]] = {key: [] for key in keys}
+    for raw_key, value in parameters.items():
+        if not isinstance(raw_key, str):
+            continue
+        key = _normalize_text(raw_key)
+        if key in found and value is not None:
+            found[key].append(value)
+    return found
+
+
+def _flatten_leaves(
+    values: Iterable[Any], iterators: dict[int, tuple[Any, ...]] | None = None
+) -> tuple[Any, ...]:
+    """Flatten nested lists, tuples, sets and other non-string iterables to leaves.
+
+    A one-shot iterator met inside *values* is read into a tuple the first
+    time and that tuple is reused, keyed by the iterator's id in
+    *iterators*, so two calls sharing one *iterators* mapping see the same
+    contents even when the policy put the same generator under two keys.
+
+    Strings, bytes and mappings are leaves, as is any non-iterable value. The
+    walk is iterative, so a deeply nested collection does not overflow the
+    stack. Only the containers on the current path from the root are tracked,
+    so a self-referencing collection does not loop forever, while a container
+    reached twice by different paths (the same list under ``scopes`` and
+    ``permissions``) is read each time. Each frame keeps a reference to its
+    container, so its id cannot be reused by another object while it is on
+    the path.
+    """
+    leaves: list[Any] = []
+    # Each frame is (container, iterator over its items). The root frame has
+    # no container of its own.
+    frames: list[tuple[Any, Iterator[Any]]] = [(None, iter(values))]
+    ancestors: set[int] = set()
+    while frames:
+        container, items = frames[-1]
+        value = next(items, _EXHAUSTED)
+        if value is _EXHAUSTED:
+            frames.pop()
+            if container is not None:
+                ancestors.discard(id(container))
+            continue
+        if isinstance(value, (str, bytes, bytearray, Mapping)) or not isinstance(
+            value, Iterable
+        ):
+            leaves.append(value)
+            continue
+        if isinstance(value, Iterator) and iterators is not None:
+            if id(value) not in iterators:
+                iterators[id(value)] = tuple(value)
+            value = iterators[id(value)]
+        if id(value) in ancestors:
+            continue
+        ancestors.add(id(value))
+        frames.append((value, iter(value)))
+    return tuple(leaves)
+
+
+_EXHAUSTED = object()
 
 
 __all__ = [
