@@ -802,7 +802,7 @@ class MCPSecurityScanner:
     ) -> list[MCPThreat]:
         """Detect privilege escalation and code-execution wording in descriptions."""
         threats: list[MCPThreat] = []
-        for pattern in _PRIVILEGE_ESCALATION_PATTERNS:
+        for pattern in self._privilege_escalation_patterns:
             if pattern.search(description):
                 threats.append(
                     MCPThreat(
