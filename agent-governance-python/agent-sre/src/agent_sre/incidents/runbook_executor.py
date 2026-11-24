@@ -152,6 +152,12 @@ class RunbookExecutor:
         execution is marked ``ROLLED_BACK`` only when every rollback
         succeeded; if any rollback fails it stays ``FAILED`` and the
         step keeps ``SUCCESS`` with the rollback error recorded.
+
+        A string rollback action (the shape the YAML loader produces) is
+        not executed. It is treated like a failed rollback: the step
+        keeps ``SUCCESS``, the reason is recorded in ``error``, a
+        ``rollback_skipped`` event is emitted and the execution stays
+        ``FAILED``, because no compensating action ran.
         """
         rolled_back = False
         rollback_failed = False
@@ -160,12 +166,25 @@ class RunbookExecutor:
                 continue
 
             self._emit_event("rollback_started", step=step, incident=incident)
+            if not callable(step.rollback_action):
+                reason = (
+                    "rollback not executed: string rollback actions are not run"
+                )
+                logger.warning(
+                    "Rollback action for step '%s' was not executed "
+                    "(string rollback actions are not run): %s",
+                    step.name,
+                    step.rollback_action,
+                )
+                self._emit_event(
+                    "rollback_skipped", step=step, incident=incident, error=reason
+                )
+                result.error = reason
+                rollback_failed = True
+                continue
+
             try:
-                if callable(step.rollback_action):
-                    self._invoke_with_timeout(
-                        step, incident, action=step.rollback_action
-                    )
-                # String rollback actions are logged but not executed
+                self._invoke_with_timeout(step, incident, action=step.rollback_action)
                 self._emit_event("rollback_completed", step=step, incident=incident)
                 result.status = StepStatus.ROLLED_BACK
                 rolled_back = True
