@@ -6,12 +6,14 @@ on:
       - '.github/workflows/redteam-benchmark.yml'
       - 'tests/redteam/benchmark/**'
       - 'tests/redteam/test_benchmark_contract.py'
+      - 'tests/redteam/test_measurement_contract.py'
   push:
     branches: [main]
     paths:
       - '.github/workflows/redteam-benchmark.yml'
       - 'tests/redteam/benchmark/**'
       - 'tests/redteam/test_benchmark_contract.py'
+      - 'tests/redteam/test_measurement_contract.py'
   workflow_dispatch:
 
 permissions:
@@ -34,3 +36,9 @@ jobs:
 
       - name: Run benchmark contract tests
         run: python -m unittest discover -s tests/redteam -p 'test_benchmark_contract.py' -v
+
+      - name: Run 240-scenario measurement benchmark
+        run: bash tests/redteam/benchmark/run-measurement.sh
+
+      - name: Run measurement contract tests
+        run: python -m unittest discover -s tests/redteam -p 'test_measurement_contract.py' -v
