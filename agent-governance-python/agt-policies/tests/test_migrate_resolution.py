@@ -1326,13 +1326,17 @@ def test_resolve_refuses_field_outside_bound_snapshot_roots(
             id="post-model-response",
         ),
         pytest.param(
-            "pre_model_call", "$.model_request", "tools", "model_request", id="pre-model-tools"
+            "pre_model_call",
+            "$.model_request",
+            "tools",
+            "model_request.tools",
+            id="pre-model-tools",
         ),
         pytest.param(
             "pre_model_call",
             "$.model_request",
             "model.name",
-            "model_request",
+            "model_request.model",
             id="pre-model-model",
         ),
         pytest.param(

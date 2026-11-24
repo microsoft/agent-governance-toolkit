@@ -85,8 +85,8 @@ _SNAPSHOT_ROOTS_BY_INTERVENTION_POINT = {
 # Replacement for each pre-#4059 HostSession key, named in the refusal so a
 # user can fix the rule without looking it up in BREAKING_CHANGES.md.
 _PRE_CONTRACT_ROOT_REPLACEMENTS = {
-    ("pre_model_call", "model"): "model_request",
-    ("pre_model_call", "tools"): "model_request",
+    ("pre_model_call", "model"): "model_request.model",
+    ("pre_model_call", "tools"): "model_request.tools",
     ("pre_model_call", "messages"): "model_request.messages",
     ("post_model_call", "response"): "model_response",
     ("output", "response"): "output",

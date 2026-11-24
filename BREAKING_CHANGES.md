@@ -22,9 +22,9 @@ rejects four policy shapes that earlier versions accepted:
   intervention point bound to the generated legacy-rule policy. Legacy
   `tool_name` and `tool_args` fields are still supported and map to
   `tool_call.name` and `tool_call.args`. Roots follow the snapshot contract,
-  so the keys `HostSession` sent before #4059 are refused: top-level `model`
-  and `tools` at `pre_model_call` (use `model_request`), top-level `messages`
-  at `pre_model_call` (use `model_request.messages`), `response` at
+  so the keys `HostSession` sent before #4059 are refused: top-level `model`,
+  `tools` and `messages` at `pre_model_call` (use `model_request.model`,
+  `model_request.tools` and `model_request.messages`), `response` at
   `post_model_call` (use `model_response`) and `response.content` at `output`
   (use `output`). The refusal names the replacement key. Top-level `messages`
   stays accepted at the other intervention points, where the wire schema lists
