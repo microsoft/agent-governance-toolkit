@@ -182,7 +182,13 @@ class ToolCallAccuracy(SLI):
 
 
 class ResponseLatency(SLI):
-    """Measures response latency at a given percentile."""
+    """Measures response latency at a given percentile.
+
+    ``percentile`` is a fraction in ``[0.0, 1.0]`` — ``0.95`` is p95.
+    Note that ``agent_sre.anomaly.detector`` states percentiles on a
+    0-100 scale, so ``95`` is an easy thing to pass here by mistake;
+    it is rejected rather than silently read as a fraction.
+    """
 
     def __init__(
         self,
@@ -191,6 +197,11 @@ class ResponseLatency(SLI):
         window: TimeWindow | str = "1h",
         store: MeasurementStore | None = None,
     ) -> None:
+        if not 0.0 <= percentile <= 1.0:
+            raise ValueError(
+                "percentile must be a fraction between 0.0 and 1.0 "
+                f"(0.95 is p95); got {percentile!r}"
+            )
         super().__init__(f"response_latency_p{int(percentile * 100)}", target_ms, window, store=store)
         self.percentile = percentile
 
