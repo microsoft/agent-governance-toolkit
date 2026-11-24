@@ -1,0 +1,22 @@
+apiVersion: governance.toolkit/v1
+name: humanoid-tray-transfer
+version: '1.0'
+agents: ['*']
+default_action: deny
+rules:
+  - name: forbid-task-redirection
+    description: Motion can be mechanically safe and still violate the assigned task.
+    condition: "action.destination != 'inspection'"
+    action: deny
+    priority: 100
+  - name: forbid-cage-unlock
+    description: A tray-transfer agent has no authority to open the equipment cage.
+    condition: "action.tool == 'cage.unlock'"
+    action: deny
+    priority: 100
+  - name: approve-tray-transfer
+    description: A named operator must approve the exact tray-transfer request.
+    condition: "action.tool == 'humanoid.move_tray'"
+    action: require_approval
+    approvers: ['demo-operator']
+    priority: 50

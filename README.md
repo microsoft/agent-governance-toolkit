@@ -344,6 +344,7 @@ Full list: [Framework Integrations](agent-governance-python/agentmesh-integratio
 | [smolagents-governed](examples/smolagents-governed) | HuggingFace smolagents | Lightweight agent governance |
 | [maf-integration](examples/maf-integration) | MAF | Microsoft Agent Framework integration |
 | [mcp-trust-verified-server](examples/mcp-trust-verified-server) | MCP | Trust-verified MCP server implementation |
+| [humanoid-action-governed](examples/humanoid-action-governed) | Simulated humanoid | Task authorization, action-bound approval, replay prevention, and signed evidence |
 | [governance-dashboard](examples/demos/governance-dashboard) | Streamlit | Real-time fleet visibility dashboard |
 | [k8s-agent-sandbox-governed](examples/k8s-agent-sandbox-governed) | kubernetes-sigs/agent-sandbox | Pre-dispatch command policy on top of Kubernetes-native execution isolation |
 

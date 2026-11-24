@@ -1,0 +1,12 @@
+# Runtime dependencies for the AgentMesh policy and identity imports.
+pydantic[email]>=2.5,<3
+PyYAML>=6,<7
+cryptography>=46.0.7,<51
+httpx>=0.27,<1
+python-dateutil>=2.8,<3
+
+# Canonical JSON for signed demo records.
+rfc8785>=0.1.4,<0.2
+
+# Cryptography's CPython dependency. The 2.1 series uses MIT-0.
+cffi<2.1; platform_python_implementation != "PyPy"
