@@ -478,6 +478,38 @@ def _make_hyperlight_provider():
 
 
 class TestHyperlightRingEnforcement:
+    def test_rejected_env_vars_leave_no_ring_state(self):
+        """A create_session rejected for env_vars must not register ring state.
+
+        The env_vars check runs before runtime and ring setup, so a rejected
+        create, repeated, leaves both ring registries exactly as they were.
+        """
+        provider = _make_hyperlight_provider()
+        fake_enforcer_module = SimpleNamespace(
+            RingEnforcer=lambda: _FakeRingEnforcer(),
+            ResourceType=SimpleNamespace(SUBPROCESS="subprocess"),
+        )
+        fake_breach_module = SimpleNamespace(RingBreachDetector=_FakeBreachDetector)
+        provider._build_sandbox = MagicMock(side_effect=AssertionError("must not build"))
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "hypervisor.rings.enforcer": fake_enforcer_module,
+                "hypervisor.rings.breach_detector": fake_breach_module,
+            },
+        ):
+            cfg = SandboxConfig(ring=RING_3_SANDBOX, env_vars={"X": "y"})
+            for _ in range(2):
+                with pytest.raises(ValueError, match="env_vars"):
+                    provider.create_session("agent1", config=cfg)
+
+        assert provider._ring_enforcers == {}
+        assert provider._ring_breach_detectors == {}
+        assert provider._workers == {}
+        assert provider._session_configs == {}
+        provider._build_sandbox.assert_not_called()
+
     def test_ring3_clears_network_allowlist(self):
         """Ring 3 must strip net_allow before the sandbox worker starts."""
         provider = _make_hyperlight_provider()

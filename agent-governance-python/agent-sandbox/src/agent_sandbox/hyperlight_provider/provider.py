@@ -375,6 +375,17 @@ class HyperLightSandboxProvider(SandboxProvider):
         hl_cfg = HyperlightConfig.from_sandbox_config(
             base_cfg, backend=self._backend, module=self._module
         )
+        # The pinned SDK has no environment model, so env_vars cannot
+        # reach the guest. Fail closed rather than drop them, and do it
+        # before any runtime or ring state is registered for the session,
+        # so a rejected create leaves nothing behind.
+        if hl_cfg.env_vars:
+            raise ValueError(
+                "SandboxConfig.env_vars is not supported by the Hyperlight "
+                "backend: hyperlight-sandbox 0.4.x cannot pass environment "
+                f"variables to the guest ({sorted(hl_cfg.env_vars)}). "
+                "Remove env_vars or use another sandbox provider."
+            )
 
         tool_allow = list(base_cfg.tool_allowlist)
         net_allow = (
@@ -809,10 +820,13 @@ class HyperLightSandboxProvider(SandboxProvider):
     # ------------------------------------------------------------------
 
     def _build_sandbox(self, cfg: HyperlightConfig) -> Any:
-        """Construct the upstream Sandbox.
+        """Construct the upstream Sandbox with the configured limits.
 
-        We try the full kwarg form first; if upstream rejects an
-        unknown keyword, fall back to the minimal positional form.
+        The keyword names follow ``hyperlight_sandbox.Sandbox`` at
+        0.4.x: ``heap_size`` / ``stack_size`` take ``"<n>Mi"`` strings,
+        and ``input_dir`` / ``output_dir`` are the host mounts. There is
+        no fallback: if the installed SDK rejects the arguments we fail
+        closed rather than start a guest with the SDK's own defaults.
         """
         assert self._sdk is not None
         Sandbox = getattr(self._sdk, "Sandbox", None)
@@ -822,32 +836,27 @@ class HyperLightSandboxProvider(SandboxProvider):
                 "is hyperlight-sandbox installed correctly?"
             )
 
-        full_kwargs: dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "backend": cfg.backend,
-            "max_execution_time_ms": cfg.max_execution_time_ms,
-            "heap_size_bytes": cfg.heap_size_bytes,
-            "stack_size_bytes": cfg.stack_size_bytes,
+            "heap_size": cfg.heap_size,
+            "stack_size": cfg.stack_size,
         }
         if cfg.backend == "wasm" and cfg.module is not None:
-            full_kwargs["module"] = cfg.module
+            kwargs["module"] = cfg.module
         if cfg.input_dir is not None:
-            full_kwargs["input_dir"] = cfg.input_dir
+            kwargs["input_dir"] = cfg.input_dir
         if cfg.output_dir is not None:
-            full_kwargs["output_dir"] = cfg.output_dir
-        if cfg.env_vars:
-            full_kwargs["env"] = dict(cfg.env_vars)
+            kwargs["output_dir"] = cfg.output_dir
 
         try:
-            return Sandbox(**full_kwargs)
+            return Sandbox(**kwargs)
         except TypeError as exc:
-            logger.debug(
-                "Sandbox(**full_kwargs) rejected (%s); retrying minimal",
-                exc,
-            )
-            minimal: dict[str, Any] = {"backend": cfg.backend}
-            if cfg.backend == "wasm" and cfg.module is not None:
-                minimal["module"] = cfg.module
-            return Sandbox(**minimal)
+            raise RuntimeError(
+                "The installed hyperlight-sandbox SDK rejected the "
+                f"configured sandbox limits ({sorted(kwargs)}): {exc}. "
+                "Refusing to start a sandbox without them; install "
+                "hyperlight-sandbox>=0.4.0,<0.5."
+            ) from exc
 
     def _build_runtime_session(
         self, runtime: Any, agent_id: str, session_id: str
