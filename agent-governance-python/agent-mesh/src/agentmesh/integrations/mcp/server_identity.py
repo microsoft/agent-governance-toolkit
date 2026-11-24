@@ -421,7 +421,12 @@ def discovery_url(server_url: str, config: DiscoveryConfig) -> str | None:
         return None
     # Rebuild authority without userinfo so credentials can never leak
     # into a fetch, even if a caller bypasses this guard in future.
-    authority = host if port is None else f"{host}:{port}"
+    # IPv6 literals must be bracketed (RFC 3986); urlparse returns them
+    # without brackets, so re-wrap before appending the port.
+    if ":" in host:
+        authority = f"[{host}]" if port is None else f"[{host}]:{port}"
+    else:
+        authority = host if port is None else f"{host}:{port}"
     return f"{scheme}://{authority}{SERVER_IDENTITY_PATH}"
 
 
@@ -723,10 +728,12 @@ async def verify_server(
 
     endpoint = _challenge_endpoint_for(server_url, document)
     if endpoint is None:
-        # No challenge endpoint advertised: the freshness-bounded document
-        # signature is the possession evidence. Only the key holder can
-        # mint a fresh document, and the age window bounds replay.
-        return result
+        # Document-only verification proves the document's issuer, not the
+        # connected server. Require a same-origin challenge endpoint
+        # (endpoint proof) before admitting the connection; otherwise a
+        # copied document from another server would be accepted here. Fail
+        # closed.
+        return ServerVerificationResult(False, document.did, "no-endpoint-proof")
 
     cache = replay_cache or _DEFAULT_REPLAY_CACHE
     challenge = mint_challenge(document.did, client_did, server_url)

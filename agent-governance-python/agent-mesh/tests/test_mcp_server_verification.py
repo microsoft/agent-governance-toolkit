@@ -232,6 +232,14 @@ class TestDiscoveryUrl:
         assert discovery_url("http://user@mcp.example.com/", cfg) is None
         assert discovery_url("http://user:pw@mcp.example.com/", cfg) is None
 
+    def test_ipv6_with_port(self) -> None:
+        url = discovery_url("https://[2606:4700:4700::1111]:8443/mcp", DiscoveryConfig())
+        assert url == "https://[2606:4700:4700::1111]:8443/.well-known/agent.json"
+
+    def test_ipv6_without_port(self) -> None:
+        url = discovery_url("https://[2606:4700:4700::1111]/mcp", DiscoveryConfig())
+        assert url == "https://[2606:4700:4700::1111]/.well-known/agent.json"
+
 
 def _sockaddr(ip: str) -> Any:
     family = socket.AF_INET6 if ":" in ip else socket.AF_INET
@@ -612,6 +620,26 @@ class TestFetchServerDocument:
 
 
 class TestVerifyServerPipeline:
+    async def test_document_only_without_endpoint_fails_closed(
+        self,
+        open_resolver: None,
+        registry: IdentityRegistry,
+        registered: AgentIdentity,
+        client_identity: AgentIdentity,
+        doc_routes: Dict[str, Any],
+    ) -> None:
+        # No same-origin challenge endpoint: document-only verification proves
+        # the issuer, not the connected server, so the connection is refused.
+        result = await verify_server(
+            SERVER_URL,
+            registry,
+            str(client_identity.did),
+            transport=_mock_transport(doc_routes),
+        )
+        assert result.verified is False
+        assert result.reason == "no-endpoint-proof"
+        assert result.did == str(registered.did)
+
     async def test_full_pipeline_verified(
         self,
         open_resolver: None,
@@ -619,12 +647,43 @@ class TestVerifyServerPipeline:
         registered: AgentIdentity,
         client_identity: AgentIdentity,
     ) -> None:
-        routes = {"GET /.well-known/agent.json": (200, _signed_doc(registered), "application/json")}
+        endpoint = "https://mcp.example.com:8443/.well-known/agent-challenge"
+        doc = _signed_doc(registered, challenge_endpoint=endpoint)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    content=json.dumps(doc).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+            assert request.method == "POST"
+            asked = json.loads(request.content.decode())
+            moment = _issued_at()
+            payload = build_challenge_payload(
+                server_did=str(registered.did),
+                client_did=str(client_identity.did),
+                client_nonce=asked["client_nonce"],
+                timestamp=moment,
+                audience=SERVER_URL,
+            )
+            answer = {
+                "server_did": str(registered.did),
+                "client_nonce": asked["client_nonce"],
+                "timestamp": moment,
+                "signature": registered.sign(payload),
+            }
+            return httpx.Response(
+                200,
+                content=json.dumps(answer).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+
         result = await verify_server(
             SERVER_URL,
             registry,
             str(client_identity.did),
-            transport=_mock_transport(routes),
+            transport=httpx.MockTransport(handler),
         )
         assert result.verified is True
         assert result.did == str(registered.did)
@@ -686,15 +745,16 @@ class TestVerifyServerPipeline:
         assert result.verified is True
         assert state["nonce"]
 
-    async def test_cross_origin_challenge_endpoint_ignored(
+    async def test_cross_origin_challenge_endpoint_fails_closed(
         self,
         open_resolver: None,
         registry: IdentityRegistry,
         registered: AgentIdentity,
         client_identity: AgentIdentity,
     ) -> None:
-        # A document advertising an off-origin endpoint must not cause an
-        # outbound challenge there; document verification still passes.
+        # A document advertising an off-origin challenge endpoint cannot be
+        # used to prove the connected server holds the key; endpoint proof is
+        # required, so the connection fails closed.
         doc = _signed_doc(registered, challenge_endpoint="https://evil.example/steal")
         routes = {"GET /.well-known/agent.json": (200, doc, "application/json")}
         result = await verify_server(
@@ -703,7 +763,8 @@ class TestVerifyServerPipeline:
             str(client_identity.did),
             transport=_mock_transport(routes),
         )
-        assert result.verified is True
+        assert result.verified is False
+        assert result.reason == "no-endpoint-proof"
 
     async def test_pipeline_bad_signature(
         self,
@@ -751,8 +812,40 @@ class TestClientConnect:
         client_identity: AgentIdentity,
         doc_routes: Dict[str, Any],
     ) -> None:
+        endpoint = "https://mcp.example.com:8443/.well-known/agent-challenge"
+        doc = _signed_doc(registered, challenge_endpoint=endpoint)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    content=json.dumps(doc).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+            assert request.method == "POST"
+            asked = json.loads(request.content.decode())
+            moment = _issued_at()
+            payload = build_challenge_payload(
+                server_did=str(registered.did),
+                client_did=str(client_identity.did),
+                client_nonce=asked["client_nonce"],
+                timestamp=moment,
+                audience=SERVER_URL,
+            )
+            answer = {
+                "server_did": str(registered.did),
+                "client_nonce": asked["client_nonce"],
+                "timestamp": moment,
+                "signature": registered.sign(payload),
+            }
+            return httpx.Response(
+                200,
+                content=json.dumps(answer).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+
         client = self._client(
-            client_identity, registry, _mock_transport(doc_routes)
+            client_identity, registry, httpx.MockTransport(handler)
         )
         assert await client.connect(SERVER_URL) is True
         assert SERVER_URL in client._connected_servers
@@ -1030,12 +1123,43 @@ class TestSharedReplayCache:
         registry: IdentityRegistry,
         registered: AgentIdentity,
         client_identity: AgentIdentity,
-        doc_routes: Dict[str, Any],
     ) -> None:
+        endpoint = "https://mcp.example.com:8443/.well-known/agent-challenge"
+        doc = _signed_doc(registered, challenge_endpoint=endpoint)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    content=json.dumps(doc).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+            assert request.method == "POST"
+            asked = json.loads(request.content.decode())
+            moment = _issued_at()
+            payload = build_challenge_payload(
+                server_did=str(registered.did),
+                client_did=str(client_identity.did),
+                client_nonce=asked["client_nonce"],
+                timestamp=moment,
+                audience=SERVER_URL,
+            )
+            answer = {
+                "server_did": str(registered.did),
+                "client_nonce": asked["client_nonce"],
+                "timestamp": moment,
+                "signature": registered.sign(payload),
+            }
+            return httpx.Response(
+                200,
+                content=json.dumps(answer).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+
         client = TrustGatedMCPClient(
             client_identity,
             registry=registry,
-            http_transport=_mock_transport(doc_routes),
+            http_transport=httpx.MockTransport(handler),
         )
         first = client.replay_cache
         assert (await client.verify_server_identity(SERVER_URL)).verified is True
