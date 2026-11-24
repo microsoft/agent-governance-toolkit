@@ -56,12 +56,45 @@ test("plugin exports the expected OpenCode contract surface", async () => {
   try {
     const plugin = await loadPlugin(root);
 
-    assert.equal(typeof plugin["session.created"], "function");
+    assert.equal(plugin["session.created"], undefined);
     assert.equal(typeof plugin.event, "function");
     assert.equal(typeof plugin["tool.execute.before"], "function");
     assert.equal(typeof plugin["tool.execute.after"], "function");
     assert.equal(typeof plugin.tool.agt_policy_status.execute, "function");
     assert.equal(typeof plugin.tool.agt_policy_check_text.execute, "function");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("session.created status is logged through the supported event hook", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-session-created-"));
+  const logs = [];
+
+  try {
+    const plugin = await loadPlugin(root, {
+      client: {
+        app: {
+          log: async (entry) => logs.push(entry),
+        },
+      },
+    });
+
+    await plugin.event({
+      event: {
+        type: "session.created",
+        properties: {
+          info: { id: "neutral-session" },
+        },
+      },
+    });
+
+    assert.ok(
+      logs.some((entry) =>
+        entry.body?.message?.includes("OpenCode governance active")
+      ),
+      "session creation should produce the governance status log",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
