@@ -13,9 +13,6 @@
 
 </div>
 
-> [!IMPORTANT]
-> **Public Preview** — The `agentmesh-runtime` package on PyPI is a public preview release. APIs may change before GA.
-
 ---
 
 > **Note:** This package was renamed from `agent-runtime` to `agentmesh-runtime` to avoid a PyPI

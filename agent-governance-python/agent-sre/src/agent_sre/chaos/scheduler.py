@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Chaos schedule models — data models for schedule configuration."""
 
 from __future__ import annotations

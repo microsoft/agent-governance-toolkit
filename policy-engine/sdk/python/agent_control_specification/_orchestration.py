@@ -61,6 +61,11 @@ class AgentControl:
         # which case policy_id is None and annotators fall back to the executed
         # annotation keys on the result.
         self._policy_id_index, self._annotator_index = _labels_from_client(runtime_client)
+        # The set of intervention points the merged manifest binds, read from
+        # the same ``policy_labels`` map, or None when the client does not say.
+        # ``run_tool`` consults it so a tool whose ``post_tool_call`` result
+        # could never be checked is refused before it runs (#4424).
+        self._bound_points = _bound_points_from_client(runtime_client)
         self._approval_config = _approval_config_from_client(runtime_client)
 
     @classmethod
@@ -277,6 +282,12 @@ class AgentControl:
         snapshot: Mapping[str, JsonValue] | SnapshotSource | None = None,
         approval_resolver: ApprovalResolver | None = None,
     ) -> Callable[..., Awaitable[ToolRunResult]]:
+        """Wrap ``execute`` so each call goes through :meth:`run_tool`.
+
+        The manifest must bind both ``pre_tool_call`` and ``post_tool_call``;
+        see :meth:`run_tool` for what happens when one of them is missing.
+        """
+
         default_snapshot = snapshot if isinstance(snapshot, SnapshotSource) else dict(snapshot or {})
 
         async def guarded_tool(
@@ -309,6 +320,24 @@ class AgentControl:
         mode: EnforcementMode | str = EnforcementMode.ENFORCE,
         approval_resolver: ApprovalResolver | None = None,
     ) -> ToolRunResult:
+        """Run ``execute`` between ``pre_tool_call`` and ``post_tool_call``.
+
+        The manifest must bind both points. An unbound point denies with
+        ``runtime_error:intervention_point_unknown`` (see #3528), so with only
+        ``pre_tool_call`` bound the tool could run and its result would still
+        be withheld. In enforce mode ``run_tool`` therefore checks, once the
+        pre-check permits the call, that ``post_tool_call`` is bound, and
+        raises that same :class:`AgentControlBlocked` for ``post_tool_call``
+        before calling ``execute`` (#4424). The verdict and reason match what
+        the engine returns after the tool ran; only the side effect is
+        avoided. A point bound in a parent of an ``extends`` chain counts as
+        bound. The check needs the runtime client to expose ``policy_labels``
+        (every native-backed constructor does); a custom client without it
+        falls back to the engine's answer at ``post_tool_call``, after the
+        tool has run. :meth:`protect_tool` and the adapters built on
+        ``run_tool`` behave the same way.
+        """
+
         enforcement_mode = EnforcementMode(mode)
         source = snapshot if isinstance(snapshot, SnapshotSource) else None
         ambient = {} if source is not None else dict(snapshot or {})
@@ -335,6 +364,15 @@ class AgentControl:
             await self.enforce(
                 InterventionPoint.PRE_TOOL_CALL, pre_result, enforcement_mode, approval_resolver=approval_resolver
             )
+            if enforcement_mode == EnforcementMode.ENFORCE and not self._binds(InterventionPoint.POST_TOOL_CALL):
+                # The engine would deny the post-check of this call whatever
+                # the tool returns, and the result would be withheld. Raise
+                # that same block now, so the caller is not told the call was
+                # blocked after its side effect already happened (#4424).
+                started_at = time.perf_counter() if self._telemetry_sink is not None else 0.0
+                unbound_result = _point_not_bound_result()
+                self._emit_telemetry(InterventionPoint.POST_TOOL_CALL, enforcement_mode, unbound_result, started_at)
+                raise AgentControlBlocked(InterventionPoint.POST_TOOL_CALL, unbound_result)
         except BaseException:
             # The call does not go ahead, so it does not count.
             if source is not None:
@@ -362,6 +400,16 @@ class AgentControl:
             pre_tool_call_result=pre_result,
             post_tool_call_result=post_result,
         )
+
+    def _binds(self, intervention_point: InterventionPoint) -> bool:
+        """Whether the manifest binds ``intervention_point``.
+
+        True when the runtime client does not report its bound points, so a
+        custom client keeps the engine as the sole authority on the question.
+        """
+
+        bound = self._bound_points
+        return bound is None or intervention_point.value in bound
 
     async def enforce(
         self,
@@ -569,6 +617,23 @@ def _approval_unresolved_result() -> InterventionPointResult:
     )
 
 
+def _point_not_bound_result() -> InterventionPointResult:
+    """The result the engine returns for a point the manifest does not bind.
+
+    Mirrors the core's ``runtime_error_verdict`` for
+    ``InterventionPointUnknown``: a deny with the reserved reason, the generic
+    message, and no policy input, since no policy was consulted.
+    """
+
+    return InterventionPointResult(
+        Verdict(
+            Decision.DENY,
+            reason="runtime_error:intervention_point_unknown",
+            message="Request blocked by Agent Control Specification.",
+        ),
+    )
+
+
 def _request_invalid_result() -> InterventionPointResult:
     return InterventionPointResult(
         Verdict(
@@ -743,6 +808,31 @@ def _approval_config_from_client(runtime_client: RuntimeClient) -> Mapping[str, 
     if not isinstance(approval, Mapping):
         return MappingProxyType({})
     return MappingProxyType(dict(approval))
+
+
+def _bound_points_from_client(runtime_client: RuntimeClient) -> frozenset[str] | None:
+    """The intervention points the client's merged manifest binds.
+
+    Reads the same ``policy_labels`` map as :func:`_labels_from_client`, whose
+    keys are exactly the points the manifest configures, parents of an
+    ``extends`` chain included. Returns ``None`` when the client does not
+    expose the map, when reading it fails, or when it is empty, which is also
+    what a pure-Python stub client reports, so a host that cannot see the
+    manifest leaves the question to the engine. Never raises.
+    """
+
+    try:
+        getter = getattr(runtime_client, "policy_labels", None)
+        if not callable(getter):
+            return None
+        labels = getter()
+    except Exception:  # noqa: BLE001 - must not break construction
+        return None
+    if not isinstance(labels, Mapping) or not labels:
+        return None
+    return frozenset(
+        point.value if isinstance(point, InterventionPoint) else str(point) for point in labels
+    )
 
 
 def _labels_from_client(

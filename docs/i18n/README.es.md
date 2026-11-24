@@ -40,9 +40,6 @@ owner: agt-maintainers
 [![AARM Extended](https://img.shields.io/badge/AARM-Extended_(R1–R9)-brightgreen)](https://aarm.dev/builders/agent-governance-toolkit-microsoft)
 [![ATF](https://img.shields.io/badge/ATF-All_5_Elements-brightgreen)](https://agentictrustframework.ai/ecosystem)
 
-> [!IMPORTANT]
-> **Vista previa pública (Public Preview)**: versiones de vista previa pública con calidad de producción. Puede haber cambios incompatibles antes de la disponibilidad general (GA).
-
 Aplicación de políticas, identidad, sandboxing y SRE para agentes de IA autónomos. Un solo `pip install`, con cualquier framework.
 
 ---
