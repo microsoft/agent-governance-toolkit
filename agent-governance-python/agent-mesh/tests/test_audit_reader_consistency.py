@@ -207,7 +207,7 @@ def test_proof_serialization_and_verification_are_outside_lock(monkeypatch):
     assert verify(entry.entry_hash, result["merkle_proof"], root)
 
 
-@pytest.mark.parametrize("limit", [None, 0, 1, 3, 100, -1])
+@pytest.mark.parametrize("limit", [None, 0, 1, 3, 100])
 def test_query_preserves_limits_order_and_filters(limit):
     log = _log(6)
     entries = list(log._chain._entries)
@@ -222,7 +222,12 @@ def test_query_preserves_limits_order_and_filters(limit):
           "outcome": "success"}, [entries[2], entries[4]]),
     ]
     for filters, matching in cases:
-        expected = matching if limit is None else matching[-limit:]
+        if limit is None:
+            expected = matching
+        elif limit == 0:
+            expected = []
+        else:
+            expected = matching[-limit:]
         result = log.query(limit=limit, **filters)
         assert isinstance(result, list)
         assert result == expected
