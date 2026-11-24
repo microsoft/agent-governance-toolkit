@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use agent_control_specification::{
     AgentControl, AnnotatorDispatcher, AnnotatorInvocation, ApprovalResolution, ApprovalResolver,
     HostEvaluation, InterceptionPoint, JsonValue, Manifest, PolicyDispatcher,
-    PreparedPolicyInvocation, Runtime, RuntimeError,
+    PreparedPolicyInvocation, RuntimeError,
 };
 use agent_control_specification_rig::AgentControlRigExt;
 use rig::completion::ToolDefinition;
@@ -220,13 +220,12 @@ tools:
 }
 
 fn control<I: IntoIterator<Item = JsonValue>>(verdicts: I) -> AgentControl {
-    let runtime = Runtime::new(
+    AgentControl::from_manifest_with_dispatchers(
         manifest(),
-        Arc::new(NoopAnnotator),
-        QueuePolicy::new(verdicts),
+        Some(Arc::new(NoopAnnotator)),
+        Some(QueuePolicy::new(verdicts)),
     )
-    .expect("runtime");
-    AgentControl::new(runtime)
+    .expect("control")
 }
 
 fn ifc_ambient_control() -> AgentControl {
@@ -250,13 +249,12 @@ intervention_points:
 tools:
   trusted_archive:
     clearance: confidential"#;
-    let runtime = Runtime::new(
+    AgentControl::from_manifest_with_dispatchers(
         Manifest::from_yaml_str(yaml).unwrap(),
-        Arc::new(NoopAnnotator),
-        Arc::new(AmbientSnapshotPolicy),
+        Some(Arc::new(NoopAnnotator)),
+        Some(Arc::new(AmbientSnapshotPolicy)),
     )
-    .expect("runtime");
-    AgentControl::new(runtime)
+    .expect("control")
 }
 
 fn smoke_control() -> AgentControl {
