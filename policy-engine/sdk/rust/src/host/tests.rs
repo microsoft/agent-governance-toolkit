@@ -1,7 +1,8 @@
 use super::*;
 use crate::{
-    AnnotatorDispatcher, AnnotatorInvocation, Decision, Manifest, PolicyDispatcher,
-    PreparedPolicyInvocation, RuntimeError,
+    AnnotatorDispatcher, AnnotatorInvocation, CedarPolicyInvocation, Decision, Manifest,
+    PolicyDispatcher, PreparedPolicyInvocation, RegoPolicyInvocation, RuntimeError,
+    TestPolicyInvocation,
 };
 use serde_json::json;
 use std::{
@@ -226,6 +227,224 @@ fn from_path_zero_config_evaluates_rego_manifest() {
 
     assert_eq!(result.verdict.decision, Decision::Allow);
     assert!(result.policy_input.is_some());
+}
+
+fn cedar_manifest(policy_set: &str) -> Manifest {
+    let policy_set = policy_set
+        .lines()
+        .map(|line| format!("      {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    Manifest::from_yaml_str(&format!(
+        r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  guard:
+    type: cedar
+    policy_set: |
+{policy_set}
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: guard
+    policy_target: $.input
+"#
+    ))
+    .unwrap()
+}
+
+fn cedar_snapshot() -> JsonValue {
+    json!({
+        "envelope": {"agent": {"id": "agent-1"}},
+        "input": {"text": "hello"},
+    })
+}
+
+fn cedar_control(policy_set: &str) -> AgentControl {
+    AgentControl::from_manifest(cedar_manifest(policy_set)).unwrap()
+}
+
+#[test]
+fn zero_config_default_dispatcher_allows_cedar_manifest() {
+    let control = cedar_control("permit(principal, action, resource);");
+
+    let result = control.evaluate_intervention_point(
+        InterceptionPoint::Input,
+        cedar_snapshot(),
+        EnforcementMode::Enforce,
+    );
+
+    assert_eq!(result.verdict.decision, Decision::Allow);
+    assert!(result.policy_input.is_some());
+}
+
+#[test]
+fn zero_config_default_dispatcher_reports_cedar_deny_reason() {
+    let control = cedar_control(
+        r#"@id("blocked")
+forbid(principal, action, resource);"#,
+    );
+
+    let result = control.evaluate_intervention_point(
+        InterceptionPoint::Input,
+        cedar_snapshot(),
+        EnforcementMode::Enforce,
+    );
+
+    assert_eq!(result.verdict.decision, Decision::Deny);
+    assert_eq!(result.verdict.reason.as_deref(), Some("blocked"));
+}
+
+#[test]
+fn zero_config_default_dispatcher_fails_closed_on_invalid_cedar_advice() {
+    let control = cedar_control(
+        r#"@advice("{\"verdict\":\"bogus\"}")
+permit(principal, action, resource);"#,
+    );
+
+    let result = control.evaluate_intervention_point(
+        InterceptionPoint::Input,
+        cedar_snapshot(),
+        EnforcementMode::Enforce,
+    );
+
+    assert_eq!(result.verdict.decision, Decision::Deny);
+    // 12.3 folds every dispatcher error into the invocation failure reason.
+    assert_eq!(
+        result.verdict.reason.as_deref(),
+        Some("runtime_error:policy_invocation_failed")
+    );
+}
+
+#[test]
+fn builtin_cedar_dispatcher_reports_invalid_advice_as_policy_output_invalid() {
+    use agent_control_spec::{canonical_json, CedarBuiltinDispatcher, CedarPolicyDispatcher};
+
+    let policy_input = cedar_control("permit(principal, action, resource);")
+        .evaluate_intervention_point(
+            InterceptionPoint::Input,
+            cedar_snapshot(),
+            EnforcementMode::Enforce,
+        )
+        .policy_input
+        .expect("policy input");
+    let invocation = CedarPolicyInvocation {
+        policy_set: Some(
+            r#"@advice("{\"verdict\":\"bogus\"}")
+permit(principal, action, resource);"#
+                .to_string(),
+        ),
+        policy_path: None,
+        entities_path: None,
+        schema_path: None,
+        canonical_input: canonical_json(&policy_input).unwrap(),
+        input: policy_input,
+    };
+
+    let error = CedarBuiltinDispatcher::new()
+        .evaluate_cedar(&invocation)
+        .unwrap_err();
+
+    assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+}
+
+#[test]
+fn zero_config_default_dispatcher_routes_cedar_in_mixed_manifest() {
+    let manifest = Manifest::from_yaml_str(
+        r#"agent_control_specification_version: 0.4.0-alpha.1
+policies:
+  cedar_guard:
+    type: cedar
+    policy_set: |
+      permit(principal, action, resource);
+  rego_guard:
+    type: rego
+    query: data.acs.verdict
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: cedar_guard
+    policy_target: $.input
+  output:
+    policy_target_kind: assistant_output
+    policy:
+      id: rego_guard
+    policy_target: $.output
+"#,
+    )
+    .unwrap();
+    let control = AgentControl::from_manifest(manifest).unwrap();
+
+    let result = control.evaluate_intervention_point(
+        InterceptionPoint::Input,
+        cedar_snapshot(),
+        EnforcementMode::Enforce,
+    );
+
+    assert_eq!(result.verdict.decision, Decision::Allow);
+}
+
+#[test]
+fn routing_policy_dispatcher_routes_each_invocation_to_its_engine() {
+    let rego = Arc::new(QueuePolicy::with_responses([json!({
+        "decision": "deny",
+        "reason": "rego"
+    })]));
+    let cedar = Arc::new(QueuePolicy::with_responses([json!({
+        "decision": "deny",
+        "reason": "cedar"
+    })]));
+    let router = RoutingPolicyDispatcher {
+        rego: rego.clone(),
+        cedar: cedar.clone(),
+    };
+
+    let rego_output = router.evaluate(&rego_invocation()).unwrap();
+    let cedar_output = router.evaluate(&cedar_invocation()).unwrap();
+
+    assert_eq!(rego_output, json!({"decision": "deny", "reason": "rego"}));
+    assert_eq!(cedar_output, json!({"decision": "deny", "reason": "cedar"}));
+}
+
+#[test]
+fn routing_policy_dispatcher_rejects_engines_without_a_builtin() {
+    let router = RoutingPolicyDispatcher {
+        rego: Arc::new(QueuePolicy::default()),
+        cedar: Arc::new(QueuePolicy::default()),
+    };
+    let invocation = PreparedPolicyInvocation::Test(TestPolicyInvocation {
+        adapter_config: Default::default(),
+        input: json!({}),
+        canonical_input: "{}".to_string(),
+    });
+
+    let error = router.evaluate(&invocation).unwrap_err();
+
+    assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    assert!(error.detail().contains("only Rego and Cedar"));
+}
+
+fn rego_invocation() -> PreparedPolicyInvocation {
+    PreparedPolicyInvocation::Rego(RegoPolicyInvocation {
+        query: "data.acs.verdict".to_string(),
+        bundle: None,
+        inline_bundle: None,
+        adapter_config: Default::default(),
+        input: json!({}),
+        canonical_input: "{}".to_string(),
+    })
+}
+
+fn cedar_invocation() -> PreparedPolicyInvocation {
+    PreparedPolicyInvocation::Cedar(CedarPolicyInvocation {
+        policy_set: Some("permit(principal, action, resource);".to_string()),
+        policy_path: None,
+        entities_path: None,
+        schema_path: None,
+        input: json!({}),
+        canonical_input: "{}".to_string(),
+    })
 }
 
 #[test]

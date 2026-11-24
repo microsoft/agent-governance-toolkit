@@ -15,12 +15,12 @@ npm run build
 
 The normal build and published native packages leave bundled annotators
 disabled. A manifest with annotators must supply an annotator dispatcher.
-Manifests without annotators can use the default OPA policy dispatcher.
+Manifests without annotators can use the default Rego and Cedar policy dispatcher.
 
 ```js
 const { AgentControl, InterventionPoint } = require("agent-control-specification");
 
-// This Rego manifest declares no annotators. OPA is the default policy backend.
+// This Rego manifest declares no annotators. OPA backs the Rego policy by default.
 const agentControl = AgentControl.fromPath("manifest.yaml");
 
 const result = await agentControl.evaluateInterventionPoint(
