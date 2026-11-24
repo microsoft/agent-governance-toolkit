@@ -462,12 +462,15 @@ class VectorStoreIntegration:
         
         Args:
             query_embedding: Query vector
-            top_k: Number of results to return
+            top_k: Number of results to return. 0 returns none; a
+                negative value raises ValueError.
             filter_metadata: Optional metadata filters
             
         Returns:
             List of similar documents with scores
         """
+        if top_k < 0:
+            raise ValueError("top_k must be non-negative")
         if not self._documents:
             return []
         
@@ -536,14 +539,18 @@ class VectorStoreIntegration:
         List documents in the collection.
         
         Args:
-            limit: Optional limit on number of documents
+            limit: Optional limit on number of documents. None returns
+                every document and 0 returns none; a negative value
+                raises ValueError.
             
         Returns:
             List of document metadata
         """
+        if limit is not None and limit < 0:
+            raise ValueError("limit must be non-negative")
         docs = list(self._documents.values())
         
-        if limit:
+        if limit is not None:
             docs = docs[:limit]
         
         return [

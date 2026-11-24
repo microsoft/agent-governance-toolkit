@@ -1359,3 +1359,6 @@ ndjson
 dataschema
 disp
 gitops
+
+# --- agent-os control-plane multimodal module (PR #4535) ---
+multimodal
