@@ -35,9 +35,13 @@ Unrestricted egress requires `network_enabled=True` and
 ## Failure behavior
 
 Invalid agent IDs, unavailable SDKs, provisioning failures, missing sandbox
-IDs, runtime denials, and static code-scan denials fail before execution. Azure
-egress API failures are logged because the sandbox may already exist, while
-the default requested state remains deny.
+IDs, runtime denials, and static code-scan denials fail before execution. An
+Azure egress API failure also fails session creation: the sandbox already
+exists at that point with Azure's default-allow egress, so the provider deletes
+it and raises instead of returning a session whose requested deny policy was
+never applied. If that delete fails too, the sandbox ID is logged at error
+level so it can be removed manually. Sessions that opt in to unrestricted
+egress (`network_default="allow"`) make no egress API call and are unaffected.
 
 ## Related implementation
 
