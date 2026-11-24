@@ -51,10 +51,10 @@ class RateLimiter:
         if limit == 0:
             return True
 
-        now = time.monotonic()
-        cutoff = now - self._window
-
         with self._lock:
+            now = time.monotonic()
+            cutoff = now - self._window
+
             if agent_id not in self._timestamps:
                 self._timestamps[agent_id] = deque()
 
