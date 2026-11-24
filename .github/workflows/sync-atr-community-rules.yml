@@ -123,7 +123,7 @@ jobs:
             --output examples/atr-community-rules/atr_community_manifest.yaml \
             2>&1 | tee /tmp/sync_output.txt
           RULE_COUNT=$(grep -c '^matches contains' examples/atr-community-rules/atr-community-rules-bundle/policy.rego)
-          SKIPPED=$(grep -c "^WARNING: skipping" /tmp/sync_output.txt || true)
+          SKIPPED=$(grep -c "^WARNING:" /tmp/sync_output.txt || true)
           echo "rule_count=$RULE_COUNT" >> "$GITHUB_OUTPUT"
           echo "skipped_count=$SKIPPED" >> "$GITHUB_OUTPUT"
 
@@ -133,9 +133,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if git diff --quiet --exit-code -- \
+          # git status, not git diff: the generated files are not committed
+          # yet, and git diff does not report untracked files.
+          if [ -z "$(git status --porcelain -- \
             examples/atr-community-rules/atr_community_manifest.yaml \
-            examples/atr-community-rules/atr-community-rules-bundle/policy.rego; then
+            examples/atr-community-rules/atr-community-rules-bundle/policy.rego)" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
             echo "No changes — skipping PR."
           else
@@ -162,7 +164,7 @@ jobs:
 
           - Source: agent-threat-rules@${{ steps.atr.outputs.version }} on npm
           - Patterns in refreshed native ACS bundle: ${{ steps.regen.outputs.rule_count }}
-          - Patterns skipped (invalid Python regex): ${{ steps.regen.outputs.skipped_count }}
+          - Patterns skipped (unreadable rule, backtick, oversized or invalid regex): ${{ steps.regen.outputs.skipped_count }}
 
           This PR is opened for human review."
 
