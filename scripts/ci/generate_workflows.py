@@ -331,6 +331,10 @@ def collect_registry_updates(
                     f"refusing to adopt unsafe version comment for "
                     f"'{ref.split('@', 1)[0]}' from {rel}: {comment!r}"
                 )
+            # Pin not yet bumped (Dependabot skips .github/actions): not a conflict.
+            current_uses, _, current_comment = actions[key].partition(" #")
+            if (ref, comment) == (current_uses, current_comment.strip() or None):
+                continue
             prior = observed.get(key)
             if prior is not None and (prior[0], prior[1]) != (ref, comment):
                 raise GenerationError(
@@ -339,16 +343,7 @@ def collect_registry_updates(
                 )
             observed[key] = (ref, comment, rel)
 
-    updates: dict[str, tuple[str, str | None]] = {}
-    for key, (ref, comment, _rel) in observed.items():
-        current = actions[key]
-        current_uses = current.split(" #", 1)[0]
-        current_comment = (
-            current.split(" #", 1)[1].strip() if " #" in current else None
-        )
-        if (ref, comment) != (current_uses, current_comment):
-            updates[key] = (ref, comment)
-    return updates
+    return {key: (ref, comment) for key, (ref, comment, _rel) in observed.items()}
 
 
 def _rewrite_actions_toml(updates: dict[str, tuple[str, str | None]]) -> None:
