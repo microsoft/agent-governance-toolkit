@@ -1095,7 +1095,7 @@ class IATPReputationTool:
             self.name,
             agent_id=agent_id,
             severity=severity,
-            reason=reason,
+            reason_length=len(reason),
             previous_score=round(current, 2),
             new_score=round(new_score, 2),
         )

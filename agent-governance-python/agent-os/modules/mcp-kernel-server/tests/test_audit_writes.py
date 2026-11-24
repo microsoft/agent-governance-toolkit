@@ -101,6 +101,22 @@ async def test_reputation_slash_is_audited_but_query_is_not(server):
 
 
 @pytest.mark.asyncio
+async def test_reputation_slash_audit_records_reason_length_not_text(server):
+    reason = "caller supplied free text " * 400
+    await server.handle_call_tool(
+        "iatp_reputation",
+        {"action": "slash", "agent_id": "a4", "slash_reason": reason,
+         "slash_severity": "low"},
+    )
+    data = await _audit(server, type="reputation_slash")
+    assert data["returned"] == 1
+    entry = data["logs"][0]
+    assert "reason" not in entry
+    assert entry["reason_length"] == len(reason)
+    assert "caller supplied free text" not in json.dumps(entry)
+
+
+@pytest.mark.asyncio
 async def test_cmvk_calls_are_audited_without_claim_text(server):
     await server.handle_call_tool("cmvk_verify", {"claim": "secret claim text"})
     await server.handle_call_tool(
