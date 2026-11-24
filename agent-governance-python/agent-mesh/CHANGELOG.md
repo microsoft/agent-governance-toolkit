@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Durable SQLite approval store** (#4655): `approval_protocol.SQLiteApprovalStore` implements the ADR-0030 `ApprovalStore` protocol on a local SQLite file, using only the standard library.
+  - Pending requests, chain entries and resolutions survive a process restart (ADR-0030 section 5).
+  - `consume()` is a single conditional `UPDATE`, so an approval is consumed exactly once across threads and across processes that share the file (section 6).
+  - Datetimes and enums round-trip losslessly, so chain digests still verify after a reload.
+  - Chain entries are append-only, and a forked chain (two entries with the same predecessor) is rejected.
+  - A second resolution for the same request is rejected instead of overwriting the first.
+  - `save_resolution` sets the terminal status in the same transaction, so a crash cannot leave a resolved request `PENDING`.
+  - Intended for a single host. It is not for multi-host deployments or network filesystems.
+
 ### Security
 
 - **RFC 8785 number serialization in the approval action digest**: `approval_protocol.canonicalize` now writes floats the way ECMAScript `Number::toString` does, as RFC 8785 section 3.2.2.3 requires (`1e-06` becomes `0.000001`, `1e-07` becomes `1e-7`, `1e21` becomes `1e+21`). Digests over action parameters holding such floats change; they now match other JCS implementations, and an approval computed by an earlier version over such a parameter no longer binds and must be requested again. The RFC 8785 Appendix B number table is pinned in the tests.
