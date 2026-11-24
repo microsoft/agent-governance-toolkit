@@ -48,17 +48,6 @@ class VerdictMappingTests(unittest.TestCase):
         ]:
             self.assertEqual(decision.applies_transform, should_transform, decision.value)
 
-    def test_applies_effects_is_deprecated_alias_of_applies_transform(self):
-        import warnings as _warnings
-
-        for decision in Decision:
-            with _warnings.catch_warnings(record=True) as captured:
-                _warnings.simplefilter("always")
-                value = decision.applies_effects
-                self.assertEqual(value, decision.applies_transform)
-                self.assertEqual(len(captured), 1)
-                self.assertTrue(issubclass(captured[0].category, DeprecationWarning))
-
     def test_from_mapping_parses_transform_payload(self):
         verdict = Verdict.from_mapping(
             {
