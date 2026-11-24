@@ -457,10 +457,12 @@ class TrustGatedMCPClient:
 
         Fetches ``/.well-known/agent.json``, binds the document to the
         configured :class:`IdentityRegistry`, and verifies possession via
-        the document signature (plus the interactive challenge when the
-        document advertises a same-origin HTTPS challenge endpoint).
-        Requires a registry; without one there is no trust anchor to
-        verify against, which fails closed. The whole pipeline runs under
+        the document signature plus the interactive challenge against the
+        document's advertised same-origin HTTPS challenge endpoint. A
+        challenge endpoint is mandatory: without endpoint proof the
+        pipeline fails closed with ``no-endpoint-proof``. Requires a
+        registry; without one there is no trust anchor to verify against,
+        which fails closed. The whole pipeline runs under
         ``discovery_config.total_deadline_seconds``; exceeding it fails
         closed with ``deadline-exceeded``.
         """
@@ -559,15 +561,28 @@ class TrustGatedMCPClient:
         # A missing DID fails closed — an unverifiable server is not
         # recorded as connected. ``verify_peer`` returns a
         # ``HandshakeResult`` (check ``.verified``), while tests may
-        # substitute plain booleans.
+        # substitute plain booleans. The whole bridge path runs under
+        # ``discovery_config.total_deadline_seconds``, matching the
+        # registry path, so a slow discovery read cannot extend the
+        # trust decision past the total deadline.
         if self.trust_bridge:
-            server_did = await self._discover_server_did(server_url)
-            if not server_did:
+            try:
+                server_did = await asyncio.wait_for(
+                    self._discover_server_did(server_url),
+                    self.discovery_config.total_deadline_seconds,
+                )
+                if not server_did:
+                    logger.warning(
+                        "Server %s has no verifiable DID", _safe_host_label(server_url)
+                    )
+                    return False
+                peer = await self.trust_bridge.verify_peer(server_did)
+            except asyncio.TimeoutError:
                 logger.warning(
-                    "Server %s has no verifiable DID", _safe_host_label(server_url)
+                    "Server %s bridge verification exceeded its deadline",
+                    _safe_host_label(server_url),
                 )
                 return False
-            peer = await self.trust_bridge.verify_peer(server_did)
             verified = peer.verified if hasattr(peer, "verified") else bool(peer)
             if not verified:
                 logger.warning(

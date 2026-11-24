@@ -850,6 +850,54 @@ class TestClientConnect:
         assert await client.connect(SERVER_URL) is True
         assert SERVER_URL in client._connected_servers
 
+    async def test_wss_server_connects(
+        self,
+        open_resolver: None,
+        registry: IdentityRegistry,
+        registered: AgentIdentity,
+        client_identity: AgentIdentity,
+    ) -> None:
+        # A wss server maps to https for discovery and can complete the
+        # same-origin challenge over HTTPS.
+        wss_url = "wss://mcp.example.com:8443/chat"
+        endpoint = "https://mcp.example.com:8443/.well-known/agent-challenge"
+        doc = _signed_doc(registered, challenge_endpoint=endpoint)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    content=json.dumps(doc).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+            assert request.method == "POST"
+            asked = json.loads(request.content.decode())
+            moment = _issued_at()
+            payload = build_challenge_payload(
+                server_did=str(registered.did),
+                client_did=str(client_identity.did),
+                client_nonce=asked["client_nonce"],
+                timestamp=moment,
+                audience=wss_url,
+            )
+            answer = {
+                "server_did": str(registered.did),
+                "client_nonce": asked["client_nonce"],
+                "timestamp": moment,
+                "signature": registered.sign(payload),
+            }
+            return httpx.Response(
+                200,
+                content=json.dumps(answer).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+
+        client = self._client(
+            client_identity, registry, httpx.MockTransport(handler)
+        )
+        assert await client.connect(wss_url) is True
+        assert wss_url in client._connected_servers
+
     async def test_connect_unverified_fails_closed(
         self,
         open_resolver: None,
@@ -860,6 +908,31 @@ class TestClientConnect:
         stranger = _make_identity(name="stranger")
         routes = {"GET /.well-known/agent.json": (200, _signed_doc(stranger), "application/json")}
         client = self._client(client_identity, registry, _mock_transport(routes))
+        assert await client.connect(SERVER_URL) is False
+        assert SERVER_URL not in client._connected_servers
+
+    async def test_bridge_path_respects_total_deadline(
+        self,
+        open_resolver: None,
+        client_identity: AgentIdentity,
+    ) -> None:
+        import asyncio
+
+        async def hang(request: httpx.Request) -> httpx.Response:
+            await asyncio.sleep(3600)
+            raise AssertionError("unreachable")
+
+        class _Bridge:
+            async def verify_peer(self, server_did: str) -> bool:
+                return True
+
+        cfg = DiscoveryConfig(total_deadline_seconds=0.05)
+        client = TrustGatedMCPClient(
+            client_identity,
+            trust_bridge=_Bridge(),
+            discovery_config=cfg,
+            http_transport=httpx.MockTransport(hang),
+        )
         assert await client.connect(SERVER_URL) is False
         assert SERVER_URL not in client._connected_servers
 

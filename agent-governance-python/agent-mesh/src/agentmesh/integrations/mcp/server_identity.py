@@ -31,12 +31,14 @@ second one. The document schema is intentionally minimal:
 Only ``did`` and ``public_key`` are required. ``signature`` covers the
 canonical JSON encoding (sorted keys, no insignificant whitespace,
 version-prefixed) of ``did``, ``public_key``, ``key_id``, ``issued_at``,
-and ``challenge_endpoint``. ``challenge_endpoint`` is optional; when
-present it must be same-origin HTTPS and enables the interactive
-challenge-response path. The challenge never runs for servers
-discovered over plain HTTP (even with ``require_https=False``): without
-transport confidentiality a challenge response is replayable on the
-wire, so those servers verify by document signature alone.
+and ``challenge_endpoint``. ``challenge_endpoint`` is mandatory: it must
+be same-origin HTTPS and enables the interactive challenge-response path
+that proves the connected server holds the private key. A document
+without a reachable same-origin challenge endpoint fails closed with
+``no-endpoint-proof``. The challenge never runs for servers discovered
+over plain HTTP (even with ``require_https=False``): without transport
+confidentiality a challenge response is replayable on the wire, so such
+servers cannot complete endpoint proof and do not connect.
 
 Trust model
 -----------
@@ -675,7 +677,12 @@ def _challenge_endpoint_for(server_url: str, document: ServerIdentityDocument) -
         # Malformed endpoint in an adversary-supplied document: no
         # challenge, and the failure stays fail-closed upstream.
         return None
-    if endpoint.scheme != "https" or server.scheme != "https":
+    # Mirror discovery_url's scheme mapping (ws->http, wss->https) so a
+    # wss server can complete the same-origin challenge over HTTPS. Plain
+    # HTTP (mapped scheme http) cannot run a challenge by design, so it
+    # cannot complete endpoint proof and does not connect.
+    server_scheme = {"ws": "http", "wss": "https"}.get(server.scheme, server.scheme)
+    if endpoint.scheme != "https" or server_scheme != "https":
         return None
     if endpoint_host != server_host:
         return None
@@ -706,8 +713,11 @@ async def verify_server(
     """Run the full Phase 1 verification pipeline for ``server_url``.
 
     Fetch → parse → registry-bind → signature → freshness, then the
-    interactive challenge when the document advertises a same-origin
-    HTTPS challenge endpoint. Any step failing yields
+    interactive challenge against the document's advertised same-origin
+    HTTPS challenge endpoint. A same-origin challenge endpoint is
+    mandatory: without endpoint proof the pipeline fails closed with
+    ``no-endpoint-proof``, so a copied document from another server is
+    never admitted as the connected server. Any step failing yields
     ``verified=False``; nothing raises for adversary-controlled input.
 
     Challenge nonces are single-use against ``replay_cache``, defaulting
