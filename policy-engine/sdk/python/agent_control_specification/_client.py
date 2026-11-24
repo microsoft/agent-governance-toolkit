@@ -214,6 +214,17 @@ class NativeRuntimeClient:
             )
         )
 
+    def close(self) -> None:
+        """Release the native runtime, if it holds one.
+
+        The Rust core is stateless today, so there is usually nothing to
+        release; a native handle that does expose one is closed here. Calling
+        it twice is not an error.
+        """
+        close = getattr(self._native, "close", None)
+        if callable(close):
+            close()
+
     async def evaluate_intervention_point(self, request: InterventionPointRequest) -> InterventionPointResult:
         if self._native is None:
             raise NotImplementedError(
