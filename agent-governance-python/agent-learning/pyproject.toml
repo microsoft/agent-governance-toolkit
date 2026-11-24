@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools==83.0.0", "wheel==0.47.0"]
+requires = ["setuptools==84.1.0", "wheel==0.47.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent_learning_gov"
 version = "5.0.0"
-description = "Public Preview - Governance controls, audit, reward shaping, and policy promotion for Microsoft Agent Learning"
+description = "Governance controls, audit, reward shaping, and policy promotion for Microsoft Agent Learning"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"

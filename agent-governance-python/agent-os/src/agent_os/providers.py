@@ -3,10 +3,10 @@
 """
 Provider Discovery System
 
-Enables plug-and-play upgrades from Public Preview to Advanced implementations.
+Enables plug-and-play upgrades from the built-in to advanced implementations.
 When an advanced provider package is installed (e.g., agent-governance-providers),
 factory functions automatically return the advanced implementation. Otherwise,
-they return the built-in Public Preview.
+they return the built-in implementation.
 
 Usage:
     from agent_os.providers import get_verification_engine, get_self_correction_kernel

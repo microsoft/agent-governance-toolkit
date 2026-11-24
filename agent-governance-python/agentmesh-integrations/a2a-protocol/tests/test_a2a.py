@@ -235,6 +235,24 @@ class TestTaskEnvelope:
         with pytest.raises(ValueError):
             t.complete()
 
+    def test_rejected_fail_keeps_completed_task_clean(self):
+        t = TaskEnvelope.create(skill_id="x", source_did="did:mesh:a")
+        t.start()
+        t.complete("done")
+        with pytest.raises(ValueError, match="Invalid transition"):
+            t.fail("late error")
+        assert t.state == TaskState.COMPLETE
+        assert t.error == ""
+        assert "error" not in t.to_dict()["status"]
+
+    def test_rejected_fail_keeps_original_error(self):
+        t = TaskEnvelope.create(skill_id="x", source_did="did:mesh:a")
+        t.fail("timeout")
+        with pytest.raises(ValueError, match="Invalid transition"):
+            t.fail("second error")
+        assert t.error == "timeout"
+        assert t.to_dict()["status"] == {"state": "failed", "error": "timeout"}
+
     def test_add_message(self):
         t = TaskEnvelope.create(skill_id="x", source_did="did:mesh:a")
         t.add_message("agent", "thinking...")

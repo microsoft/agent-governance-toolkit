@@ -6,9 +6,9 @@ owner: agt-maintainers
 
 # Agent Learning Governance
 
-!!! important "Public Preview"
+!!! note "Compatibility"
     `agent_learning_gov` is a source package targeting Microsoft Agent Learning
-    `0.8.x`. The integration API may change before general availability.
+    `0.8.x`.
 
 `agent_learning_gov` applies Agent Governance Toolkit controls across the
 Agent Learning lifecycle while preserving Agent Learning's discrete-action

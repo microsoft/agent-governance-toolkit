@@ -147,6 +147,16 @@ class TestRecommendation:
         assert result.recommendations[0].is_optimal is True
         assert all(r.is_optimal is False for r in result.recommendations[1:])
 
+    @pytest.mark.parametrize("better_first", [False, True])
+    def test_equal_cost_recommends_higher_quality(
+        self, summarization_task: TaskProfile, better_first: bool
+    ) -> None:
+        better = CHEAP_MODEL.model_copy(update={"name": "better", "quality_score": 0.9})
+        models = [better, CHEAP_MODEL] if better_first else [CHEAP_MODEL, better]
+        result = CostOptimizer(models).recommend(summarization_task)
+        assert [r.model_name for r in result.recommendations] == ["better", "gpt-4o-mini"]
+        assert [r.is_optimal for r in result.recommendations] == [True, False]
+
     def test_savings_calculation(
         self, optimizer: CostOptimizer, summarization_task: TaskProfile
     ) -> None:
@@ -234,6 +244,11 @@ class TestRouting:
         assert routing["classification"] == "gpt-4o-mini"
         # Code gen (high quality + latency constraint) should get mid-tier
         assert routing["code_gen"] == "gpt-4o"
+
+    def test_equal_cost_routes_to_higher_quality(self, classification_task: TaskProfile) -> None:
+        better = CHEAP_MODEL.model_copy(update={"name": "better", "quality_score": 0.9})
+        routing = CostOptimizer([CHEAP_MODEL, better]).suggest_routing([classification_task])
+        assert routing["classification"] == "better"
 
 
 # ---------------------------------------------------------------------------

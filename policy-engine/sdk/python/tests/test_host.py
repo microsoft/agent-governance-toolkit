@@ -115,24 +115,33 @@ def test_session_sends_the_tool_call_and_the_current_counters() -> None:
 def test_session_matches_the_adapter_envelopes() -> None:
     """One manifest has to bind paths that work through either seam.
 
-    The framework adapters send ``tool_result`` as a mapping and spread the
-    model request over top-level keys. If HostSession nested those differently,
-    a policy target that resolved for one caller would fail closed with a
-    missing-path error for the other.
+    The framework adapters and the snapshot contract carry the model request
+    under ``model_request``, the response under ``model_response`` and the
+    final response under ``output``, with ``tool_result`` as a mapping. If
+    HostSession named those differently, a policy target that resolved for
+    one caller would fail closed with a missing-path error for the other.
     """
     control = _RecordingControl()
     session = HostSession(control, agent_id="bot")
 
     session.post_tool_call(tool_name="t", args={}, result="ok")
     session.pre_model_call({"messages": [{"role": "user"}], "model": {"name": "m"}})
+    session.post_model_call({"content": "hi"})
+    session.output("done")
 
     _point, post_tool_snapshot, _mode = control.calls[0]
     assert post_tool_snapshot["tool_result"]["value"] == "ok"
 
     _point, pre_model_snapshot, _mode = control.calls[1]
-    assert pre_model_snapshot["messages"] == [{"role": "user"}]
-    assert pre_model_snapshot["model"] == {"name": "m"}
-    assert "request" not in pre_model_snapshot
+    assert pre_model_snapshot["model_request"] == {"messages": [{"role": "user"}], "model": {"name": "m"}}
+    assert "messages" not in pre_model_snapshot and "model" not in pre_model_snapshot
+
+    _point, post_model_snapshot, _mode = control.calls[2]
+    assert post_model_snapshot["model_response"] == {"content": "hi"}
+
+    _point, output_snapshot, _mode = control.calls[3]
+    assert output_snapshot["output"] == "done"
+    assert "response" not in output_snapshot
 
 
 def test_a_hook_body_cannot_replace_the_envelope() -> None:

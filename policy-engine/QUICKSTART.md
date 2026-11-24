@@ -218,7 +218,7 @@ Driving each point by hand with `evaluate_intervention_point` works, but every S
 | --- | --- |
 | `run` | `input` and `output` around a run callable |
 | `run_model` | `pre_model_call` and `post_model_call` around a model call |
-| `run_tool` and `protect_tool` | `pre_tool_call` and `post_tool_call` around a tool execution |
+| `run_tool` and `protect_tool` | `pre_tool_call` and `post_tool_call` around a tool execution. Both points must be bound; an unbound point denies, and in enforce mode the Python SDK refuses the call before the tool runs when `post_tool_call` is missing. |
 
 In enforce mode these helpers raise a blocked error on `deny` and consult an approval resolver on `escalate`. The resolver is a host callback that returns allow, deny, or suspend. Wiring details and the per language method names are in the SDK READMEs under repository checkout path `sdk/` and in copied artifact docs such as `PYTHON_README.md`, `NODE_README.md`, and `DOTNET_README.md`.
 

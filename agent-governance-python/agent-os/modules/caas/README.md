@@ -1,4 +1,4 @@
-# Context-as-a-Service (CaaS) — Public Preview
+# Context-as-a-Service (CaaS)
 
 > **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 

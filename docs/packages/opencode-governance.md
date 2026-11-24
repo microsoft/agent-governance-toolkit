@@ -12,8 +12,6 @@ description: AGT in-process plugin for the OpenCode CLI — enforce policy on pr
 the OpenCode runtime and enforces AGT developer-protection policy on every
 session, prompt, tool call, and tool output.
 
-> **Public Preview.** The plugin API and policy schema may evolve.
-
 ## Why OpenCode gets in-process governance
 
 OpenCode plugins are async TypeScript/JavaScript functions loaded directly into

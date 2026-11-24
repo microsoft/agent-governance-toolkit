@@ -1001,6 +1001,7 @@ rrdatas
 rsplit
 rstrip
 run_results
+runbook
 runbooks
 runsc
 rustc
@@ -1166,6 +1167,7 @@ usize
 utcfromtimestamp
 utcnow
 uvicorn
+vapt
 venv
 venvs
 vite
@@ -1356,3 +1358,4 @@ NDJSON
 ndjson
 dataschema
 disp
+gitops

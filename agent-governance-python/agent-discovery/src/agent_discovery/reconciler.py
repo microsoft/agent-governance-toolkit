@@ -83,6 +83,8 @@ class Reconciler:
         For each agent in the inventory:
         - If registered → mark as REGISTERED
         - If not registered → mark as SHADOW and return as ShadowAgent
+
+        The updated statuses are saved to the inventory's storage.
         """
         shadow_agents: list[ShadowAgent] = []
 
@@ -99,6 +101,7 @@ class Reconciler:
                 )
                 shadow_agents.append(shadow)
 
+        self._inventory.save()
         return shadow_agents
 
     def _recommend_actions(self, agent: DiscoveredAgent) -> list[str]:

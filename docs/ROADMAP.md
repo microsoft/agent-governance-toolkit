@@ -10,7 +10,7 @@ Public roadmap for the Agent Governance Toolkit. Items are not commitments -- th
 reflect current direction and priorities. Community input is welcome via
 [GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions).
 
-## Current Release: v3.7.0 (Public Preview)
+## Current Release: v5.0.0 (2026-06-25)
 
 ### Shipped
 - 14 Python core packages + 20+ framework integrations

@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """Service Level Indicators for AI agent systems."""
 
 from __future__ import annotations

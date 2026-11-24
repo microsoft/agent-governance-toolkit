@@ -34,6 +34,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -140,6 +141,22 @@ def _openapi_schema() -> dict[str, Any]:
                                 "name": {"type": "string"},
                                 "weight": {"type": "number", "minimum": 0, "maximum": 1},
                                 "durationSeconds": {"type": "integer", "minimum": 0},
+                                "analysis": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "required": ["metric", "threshold"],
+                                        "properties": {
+                                            "metric": {"type": "string"},
+                                            "threshold": {"type": "number"},
+                                            "comparator": {
+                                                "type": "string",
+                                                "enum": ["gte", "lte", "eq"],
+                                                "default": "gte",
+                                            },
+                                        },
+                                    },
+                                },
                                 "manualGate": {"type": "boolean", "default": False},
                             },
                         },
@@ -174,6 +191,8 @@ def _openapi_schema() -> dict[str, Any]:
                     "phase": {"type": "string"},
                     "currentStep": {"type": "integer"},
                     "currentWeight": {"type": "number"},
+                    "observedGeneration": {"type": "integer"},
+                    "message": {"type": "string"},
                     "conditions": {
                         "type": "array",
                         "items": {
@@ -228,7 +247,11 @@ class Condition:
             "status": self.status.value,
             "reason": self.reason,
             "message": self.message,
-            "lastTransitionTime": self.last_transition_time,
+            # Kubernetes conditions carry an RFC 3339 timestamp, and the
+            # CRD schema declares this field as a string.
+            "lastTransitionTime": datetime.fromtimestamp(
+                self.last_transition_time, tz=UTC
+            ).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
 
 
@@ -325,7 +348,9 @@ def _parse_spec(spec_dict: dict[str, Any]) -> RolloutSpec:
     for s in spec_dict.get("steps", []):
         analysis = []
         for a in s.get("analysis", []):
-            analysis.append(AnalysisCriterion(a["metric"], a["threshold"]))
+            analysis.append(
+                AnalysisCriterion(a["metric"], a["threshold"], a.get("comparator", "gte"))
+            )
         steps.append(RolloutStep(
             name=s.get("name", ""),
             weight=s.get("weight", 0.0),

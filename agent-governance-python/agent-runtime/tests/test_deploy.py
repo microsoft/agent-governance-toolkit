@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -167,6 +169,55 @@ class TestDockerDeployer:
         cmd_str = " ".join(cmd)
         assert "MY_VAR=my_val" in cmd_str
 
+    @pytest.mark.parametrize("name", [
+        "AGT_POLICY_PATH",
+        "AGT_TRUST_LEVEL",
+        "AGT_AUDIT_ENABLED",
+        "AGT_MAX_TOOL_CALLS",
+        "AGT_RATE_LIMIT_RPM",
+        "AGT_KILL_SWITCH",
+        "AGT_RETENTION_DAYS",
+    ])
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_deploy_rejects_env_overriding_governance_config(
+        self, mock_which: MagicMock, mock_run: MagicMock, name: str,
+    ) -> None:
+        deployer = DockerDeployer()
+        with pytest.raises(ValueError, match=name):
+            deployer.deploy("a1", "img:latest", GovernanceConfig(), env={name: "x"})
+        mock_run.assert_not_called()
+
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_deploy_rejects_env_name_with_equals(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        deployer = DockerDeployer()
+        with pytest.raises(ValueError, match="must not contain '='"):
+            deployer.deploy(
+                "a1", "img:latest", GovernanceConfig(),
+                env={"AGT_KILL_SWITCH=false": ""},
+            )
+        mock_run.assert_not_called()
+
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_deploy_keeps_other_agt_env(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = MagicMock(stdout="cid123\n", stderr="", returncode=0)
+        deployer = DockerDeployer()
+        result = deployer.deploy(
+            "a1", "img:latest", GovernanceConfig(kill_switch_enabled=True),
+            env={"AGT_LOG_LEVEL": "debug"},
+        )
+        assert result.status == DeploymentStatus.RUNNING
+        cmd = mock_run.call_args_list[-1][0][0]
+        env_args = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"]
+        assert "AGT_KILL_SWITCH=true" in env_args
+        assert "AGT_LOG_LEVEL=debug" in env_args
+
     @patch("agent_runtime.deploy.subprocess.run")
     @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
     def test_deploy_failure(
@@ -256,6 +307,39 @@ class TestDockerDeployer:
         mock_run.side_effect = subprocess.CalledProcessError(1, "docker")
         deployer = DockerDeployer()
         assert deployer.logs("nonexistent") == ""
+
+    def test_logs_include_the_container_stderr(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # The container runs without a TTY, so `docker logs` replays its
+        # stdout on stdout and its stderr on stderr. A stand-in Docker CLI
+        # (`python logs ...`, with the script `logs` in the working directory)
+        # does the same.
+        (tmp_path / "logs").write_text(
+            "import sys\n"
+            "print('stdout line 1', flush=True)\n"
+            "print('stderr line', file=sys.stderr, flush=True)\n"
+            "print('stdout line 2', flush=True)\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        deployer = DockerDeployer(docker_cmd=sys.executable)
+
+        output = deployer.logs("agent-1", tail=50)
+
+        assert output.splitlines() == ["stdout line 1", "stderr line", "stdout line 2"]
+
+    @patch("agent_runtime.deploy.subprocess.run")
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_logs_merge_stderr_into_stdout(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = MagicMock(stdout="line\n", stderr=None, returncode=0)
+        DockerDeployer().logs("agent-1", tail=50)
+
+        assert mock_run.call_args.args[0] == ["docker", "logs", "agt-agent-1", "--tail", "50"]
+        assert mock_run.call_args.kwargs["stdout"] == subprocess.PIPE
+        assert mock_run.call_args.kwargs["stderr"] == subprocess.STDOUT
 
 
 # ---------------------------------------------------------------------------

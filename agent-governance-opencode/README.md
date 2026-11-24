@@ -12,8 +12,6 @@ It ships an OpenCode plugin that uses:
 - the AGT TypeScript SDK for policy evaluation, prompt defense, and MCP threat
   scanning
 
-> Public Preview — APIs and policy schema may change.
-
 ## What this package is
 
 - a first-party OpenCode plugin package
