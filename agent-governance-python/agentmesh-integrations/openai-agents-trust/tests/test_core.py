@@ -148,6 +148,50 @@ class TestAuditLog:
         entries = log.get_entries(limit=5)
         assert len(entries) == 5
 
+    def test_limit_keeps_the_most_recent(self):
+        log = AuditLog()
+        for i in range(5):
+            log.record('a1', f'action-{i}', 'allow')
+        entries = log.get_entries(limit=2)
+        assert [e.action for e in entries] == ['action-3', 'action-4']
+
+    def test_limit_none_returns_every_entry(self):
+        log = AuditLog()
+        for i in range(5):
+            log.record('a1', f'action-{i}', 'allow')
+        assert len(log.get_entries(limit=None)) == 5
+
+    def test_limit_zero_returns_no_entries(self):
+        log = AuditLog()
+        for i in range(5):
+            log.record('a1', f'action-{i}', 'allow')
+        assert log.get_entries(limit=0) == []
+
+    def test_limit_zero_returns_no_entries_when_filtered(self):
+        log = AuditLog()
+        for i in range(5):
+            log.record('a1', f'action-{i}', 'allow')
+        assert log.get_entries(agent_id='a1', limit=0) == []
+        assert log.get_entries(decision='allow', limit=0) == []
+
+    def test_limit_above_the_entry_count_returns_every_entry(self):
+        log = AuditLog()
+        for i in range(3):
+            log.record('a1', f'action-{i}', 'allow')
+        assert len(log.get_entries(limit=99)) == 3
+
+    def test_negative_limit_is_rejected(self):
+        log = AuditLog()
+        for i in range(5):
+            log.record('a1', f'action-{i}', 'allow')
+        for limit in (-1, -5):
+            try:
+                log.get_entries(limit=limit)
+            except ValueError as exc:
+                assert 'zero or positive' in str(exc)
+            else:
+                raise AssertionError(f'limit={limit} was accepted')
+
     def test_thread_safety(self):
         log = AuditLog()
 
