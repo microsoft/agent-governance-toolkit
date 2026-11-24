@@ -1923,13 +1923,35 @@ class GracefulShutdownManager:
 
 @dataclass
 class AgentResourceQuota:
-    """Resource quota limits for an agent"""
+    """Resource quota limits for an agent
+
+    can_execute compares usage against each limit, so a negative limit is
+    met by any usage and would deny every operation while reading as a
+    quota. The limits are therefore required to be non-negative.
+    """
     memory_mb: int = 512
     cpu_percent: float = 25.0
     max_concurrent_operations: int = 10
     max_operations_per_minute: int = 100
     network_bandwidth_mbps: Optional[float] = None
     storage_mb: Optional[int] = None
+
+    def __post_init__(self):
+        """Reject negative limits, which would deny every operation."""
+        for name in (
+            "memory_mb",
+            "cpu_percent",
+            "max_concurrent_operations",
+            "max_operations_per_minute",
+            "network_bandwidth_mbps",
+            "storage_mb",
+        ):
+            value = getattr(self, name)
+            if value is not None and value < 0:
+                raise ValueError(
+                    f"{name} must be zero (permit nothing) or positive; "
+                    f"got {value!r}"
+                )
 
 
 @dataclass
