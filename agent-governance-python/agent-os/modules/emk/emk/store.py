@@ -189,6 +189,63 @@ try:
                 metadata={"description": "Episodic memory storage"},
             )
 
+        # Metadata keys written by the adapter itself. They are stripped from the
+        # metadata handed back as ``Episode.metadata``.
+        _RESERVED_KEYS = ('episode_id', 'goal', 'action', 'result', 'reflection', 'timestamp')
+
+        @staticmethod
+        def _to_metadata(episode: Episode, episode_id: str) -> Dict[str, Any]:
+            """Flatten an episode into a Chroma metadata dict.
+
+            ``episode_id`` is persisted so a read rebuilds the episode with the
+            id it was stored under instead of letting the model regenerate one
+            from the normalized fields.
+            """
+            return {
+                **episode.metadata,
+                "episode_id": episode_id,
+                "goal": episode.goal,
+                "action": episode.action,
+                "result": episode.result,
+                "reflection": episode.reflection,
+                "timestamp": episode.timestamp.isoformat(),
+            }
+
+        @classmethod
+        def _from_metadata(cls, record_id: str, metadata: Dict[str, Any]) -> Episode:
+            """Rebuild an episode from a Chroma record.
+
+            Records written before ``episode_id`` was persisted carry no stored
+            id, so the Chroma record id is used for them.
+            """
+            episode_metadata = {
+                k: v for k, v in metadata.items() if k not in cls._RESERVED_KEYS
+            }
+            return Episode(
+                episode_id=metadata.get("episode_id") or record_id,
+                goal=metadata.get("goal", ""),
+                action=metadata.get("action", ""),
+                result=metadata.get("result", ""),
+                reflection=metadata.get("reflection", ""),
+                timestamp=metadata.get("timestamp", None),
+                metadata=episode_metadata,
+            )
+
+        @staticmethod
+        def _records(results: Dict[str, Any]) -> List[tuple]:
+            """Return ``(record_id, metadata)`` pairs from a get or query result.
+
+            ``collection.query`` nests ids and metadatas one level deeper than
+            ``collection.get`` (one list per query embedding).
+            """
+            ids = results.get('ids') or []
+            metadatas = results.get('metadatas') or []
+            if ids and isinstance(ids[0], list):
+                ids = ids[0]
+            if metadatas and isinstance(metadatas[0], list):
+                metadatas = metadatas[0]
+            return list(zip(ids, metadatas))
+
         def store(self, episode: Episode, embedding: Optional[np.ndarray] = None) -> str:
             if embedding is None:
                 text = f"{episode.goal} {episode.action} {episode.result} {episode.reflection}"
@@ -199,14 +256,7 @@ try:
                 ids=[episode.episode_id],
                 documents=[text] if text else None,
                 embeddings=[embedding.tolist()] if embedding is not None else None,
-                metadatas=[{
-                    "goal": episode.goal,
-                    "action": episode.action,
-                    "result": episode.result,
-                    "reflection": episode.reflection,
-                    "timestamp": episode.timestamp.isoformat(),
-                    **episode.metadata,
-                }],
+                metadatas=[self._to_metadata(episode, episode.episode_id)],
             )
             return episode.episode_id
 
@@ -226,53 +276,27 @@ try:
                 results = self.collection.get(limit=limit, where=filters)
 
             episodes = []
-            if 'metadatas' in results and results['metadatas']:
-                if isinstance(results['metadatas'][0], list) if results['metadatas'] else False:
-                    metadatas = results['metadatas'][0]
-                else:
-                    metadatas = results['metadatas']
-            else:
-                metadatas = []
-
-            for metadata in metadatas:
-                episode_metadata = {
-                    k: v for k, v in metadata.items()
-                    if k not in ('goal', 'action', 'result', 'reflection', 'timestamp')
-                }
+            for record_id, metadata in self._records(results):
                 try:
-                    episode = Episode(
-                        goal=metadata.get("goal", ""),
-                        action=metadata.get("action", ""),
-                        result=metadata.get("result", ""),
-                        reflection=metadata.get("reflection", ""),
-                        timestamp=metadata.get("timestamp", None),
-                        metadata=episode_metadata,
-                    )
-                    episodes.append(episode)
+                    episodes.append(self._from_metadata(record_id, metadata or {}))
                 except Exception:
+                    # Skip a record whose stored fields do not form a valid
+                    # episode; backend errors raised above are not caught here.
                     continue
             return episodes
 
         def get_by_id(self, episode_id: str) -> Optional[Episode]:
-            try:
-                results = self.collection.get(ids=[episode_id])
-                if not results['ids']:
-                    return None
-                metadata = results['metadatas'][0]
-                episode_metadata = {
-                    k: v for k, v in metadata.items()
-                    if k not in ('goal', 'action', 'result', 'reflection', 'timestamp')
-                }
-                return Episode(
-                    goal=metadata.get("goal", ""),
-                    action=metadata.get("action", ""),
-                    result=metadata.get("result", ""),
-                    reflection=metadata.get("reflection", ""),
-                    timestamp=metadata.get("timestamp", None),
-                    metadata=episode_metadata,
-                )
-            except Exception:
+            """Return the episode stored under ``episode_id``.
+
+            Returns ``None`` only when no record has that id. A backend error
+            propagates to the caller instead of being reported as absence.
+            """
+            results = self.collection.get(ids=[episode_id])
+            records = self._records(results)
+            if not records:
                 return None
+            record_id, metadata = records[0]
+            return self._from_metadata(record_id, metadata or {})
 
         def update(self, episode_id: str, episode: Episode) -> bool:
             """Replace the stored episode with the given ID. Returns True if found."""
@@ -281,14 +305,7 @@ try:
                 return False
             self.collection.update(
                 ids=[episode_id],
-                metadatas=[{
-                    "goal": episode.goal,
-                    "action": episode.action,
-                    "result": episode.result,
-                    "reflection": episode.reflection,
-                    "timestamp": episode.timestamp.isoformat(),
-                    **episode.metadata,
-                }],
+                metadatas=[self._to_metadata(episode, episode_id)],
             )
             return True
 
