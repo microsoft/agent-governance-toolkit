@@ -669,7 +669,9 @@ class OTelPrometheusExporter:
         elif "breaches" in name:
             ring_breaches.add(value, labels or {})
 
-collector.export_to_prometheus(OTelPrometheusExporter())
+# Reuse one exporter instance: each call then adds only new events.
+otel_exporter = OTelPrometheusExporter()
+collector.export_to_prometheus(otel_exporter)
 ```
 
 ---
