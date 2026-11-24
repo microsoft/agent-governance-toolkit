@@ -44,6 +44,12 @@ Example::
         current_chain_version=chain.version,
     )
     assert verdict.allowed
+
+``InMemoryApprovalStore`` loses every pending request when the process exits.
+For restart-safe approvals (ADR-0030 section 5), pass a
+``SQLiteApprovalStore("approvals.db")`` instead. It persists requests, chain
+entries and resolutions, and its ``consume()`` is atomic across processes
+sharing the database file.
 """
 
 from .binding import SCHEMA_VERSION, ActionBinding, ActionTarget
@@ -68,6 +74,7 @@ from .models import (
     Verdict,
     utcnow,
 )
+from .sqlite_store import SQLiteApprovalStore
 from .store import ApprovalStore, InMemoryApprovalStore
 
 __all__ = [
@@ -93,6 +100,7 @@ __all__ = [
     # store
     "ApprovalStore",
     "InMemoryApprovalStore",
+    "SQLiteApprovalStore",
     # coordinator
     "ApprovalCoordinator",
     "ApprovalChain",
