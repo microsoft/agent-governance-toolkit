@@ -191,7 +191,18 @@ class ConditionalPermission:
 
 @dataclass
 class ResourceQuota:
-    """Resource quota for an agent or tenant"""
+    """Resource quota for an agent or tenant
+
+    ``check_rate_limit`` compares current usage against
+    ``max_requests_per_minute``, ``max_requests_per_hour`` and
+    ``max_concurrent_executions`` with ``>=``, so 0 means "permit
+    nothing" and any positive value is the cap. A negative limit is
+    never met, so it would deny every request while reading as a quota.
+
+    ``max_execution_time_seconds`` is not read anywhere today. It is
+    validated with the others so a meaningless value cannot be stored
+    against the day it is enforced.
+    """
 
     agent_id: str
     max_requests_per_minute: int = 60
@@ -206,6 +217,21 @@ class ResourceQuota:
     current_executions: int = 0
     last_reset_minute: datetime = field(default_factory=datetime.now)
     last_reset_hour: datetime = field(default_factory=datetime.now)
+
+    def __post_init__(self):
+        """Reject negative limits, which would deny every request."""
+        for name in (
+            "max_requests_per_minute",
+            "max_requests_per_hour",
+            "max_execution_time_seconds",
+            "max_concurrent_executions",
+        ):
+            value = getattr(self, name)
+            if value < 0:
+                raise ValueError(
+                    f"{name} must be zero (permit nothing) or positive; "
+                    f"got {value!r}"
+                )
 
 
 @dataclass
