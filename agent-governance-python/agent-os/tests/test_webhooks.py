@@ -83,7 +83,7 @@ class TestWebhookNotifier:
         notifier = WebhookNotifier([c1, c2])
         event = WebhookEvent(event_type="test", agent_id="a1", action="run")
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)):
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)):
             records = notifier.notify(event)
 
         assert len(records) == 2
@@ -97,7 +97,7 @@ class TestWebhookNotifier:
         notifier = WebhookNotifier([c1, c2])
         event = WebhookEvent(event_type="policy_violation", agent_id="a1", action="run")
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)):
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)):
             records = notifier.notify(event)
 
         assert len(records) == 1
@@ -108,7 +108,7 @@ class TestWebhookNotifier:
         notifier = WebhookNotifier([cfg])
         event = WebhookEvent(event_type="anything", agent_id="a1", action="run")
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)):
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)):
             records = notifier.notify(event)
 
         assert len(records) == 1
@@ -120,7 +120,7 @@ class TestWebhookNotifier:
         event = WebhookEvent(event_type="test", agent_id="a1", action="run")
 
         with patch(
-            "urllib.request.urlopen",
+            "agent_os.integrations.webhooks.WebhookEndpointGuard.open",
             side_effect=urllib.error.URLError("connection refused"),
         ):
             records = notifier.notify(event)
@@ -135,7 +135,7 @@ class TestWebhookNotifier:
         event = WebhookEvent(event_type="test", agent_id="a1", action="run")
 
         with patch(
-            "urllib.request.urlopen",
+            "agent_os.integrations.webhooks.WebhookEndpointGuard.open",
             side_effect=[
                 urllib.error.URLError("fail"),
                 _mock_response(200),
@@ -153,7 +153,7 @@ class TestWebhookNotifier:
         event = WebhookEvent(event_type="test", agent_id="a1", action="run")
 
         with patch(
-            "urllib.request.urlopen",
+            "agent_os.integrations.webhooks.WebhookEndpointGuard.open",
             side_effect=urllib.error.HTTPError(
                 "https://a.com/hook", 500, "Server Error", {}, BytesIO(b"")
             ),
@@ -175,7 +175,7 @@ class TestWebhookNotifier:
             details={"key": "value"}, severity="warning",
         )
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)) as mock_open:
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)) as mock_open:
             notifier.notify(event)
 
         req = mock_open.call_args[0][0]
@@ -192,7 +192,7 @@ class TestWebhookNotifier:
         notifier = WebhookNotifier([cfg])
         event = WebhookEvent(event_type="test", agent_id="a1", action="run")
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)):
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)):
             thread = notifier.notify_async(event)
             thread.join(timeout=5.0)
 
@@ -204,7 +204,7 @@ class TestWebhookNotifier:
         cfg = WebhookConfig(url="https://a.com/hook")
         notifier = WebhookNotifier([cfg])
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)) as mock_open:
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)) as mock_open:
             records = notifier.notify_violation(
                 agent_id="agent-1",
                 action="delete_file",
@@ -225,7 +225,7 @@ class TestWebhookNotifier:
         cfg = WebhookConfig(url="https://a.com/hook")
         notifier = WebhookNotifier([cfg])
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)) as mock_open:
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)) as mock_open:
             records = notifier.notify_budget_warning(agent_id="agent-1", usage_pct=85.0)
 
         body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
@@ -237,7 +237,7 @@ class TestWebhookNotifier:
         cfg = WebhookConfig(url="https://a.com/hook")
         notifier = WebhookNotifier([cfg])
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)) as mock_open:
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)) as mock_open:
             notifier.notify_budget_warning(agent_id="agent-1", usage_pct=100.0)
 
         body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
@@ -249,7 +249,7 @@ class TestWebhookNotifier:
 
         assert notifier.get_history() == []
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)):
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)):
             notifier.notify(WebhookEvent(event_type="e1", agent_id="a1", action="x"))
             notifier.notify(WebhookEvent(event_type="e2", agent_id="a1", action="y"))
 
@@ -262,7 +262,7 @@ class TestWebhookNotifier:
         cfg = WebhookConfig(url="https://a.com/hook")
         notifier = WebhookNotifier([cfg])
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)):
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)):
             notifier.notify(WebhookEvent(event_type="e1", agent_id="a1", action="x"))
 
         h1 = notifier.get_history()
@@ -273,7 +273,7 @@ class TestWebhookNotifier:
         cfg = WebhookConfig(url="https://a.com/hook")
         notifier = WebhookNotifier([cfg])
 
-        with patch("urllib.request.urlopen", return_value=_mock_response(200)):
+        with patch("agent_os.integrations.webhooks.WebhookEndpointGuard.open", return_value=_mock_response(200)):
             threads = []
             for i in range(10):
                 t = threading.Thread(

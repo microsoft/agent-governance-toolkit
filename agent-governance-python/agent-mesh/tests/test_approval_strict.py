@@ -3,7 +3,6 @@
 """Deprecation + strict mode for unsafe legacy approval behaviors (ADR-0030 step 5)."""
 
 import json
-import urllib.request
 import warnings
 from types import SimpleNamespace
 
@@ -15,6 +14,7 @@ from agentmesh.governance.approval import (
     CallbackApproval,
     WebhookApproval,
 )
+from agentmesh.governance.webhook_guard import WebhookEndpointGuard
 
 
 def _req():
@@ -98,7 +98,7 @@ class _FakeResp:
 def mock_urlopen(monkeypatch):
     def _set(body):
         monkeypatch.setattr(
-            urllib.request, "urlopen", lambda req, timeout=None: _FakeResp(body)
+            WebhookEndpointGuard, "open", lambda self, req, timeout=None: _FakeResp(body)
         )
 
     return _set
