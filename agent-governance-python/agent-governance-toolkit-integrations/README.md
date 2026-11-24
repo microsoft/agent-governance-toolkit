@@ -8,7 +8,11 @@ Install the base package and add extras for the frameworks you use:
 ```bash
 pip install agent-governance-toolkit-integrations[langchain]
 pip install agent-governance-toolkit-integrations[crewai,openai-agents]
+pip install agent-governance-toolkit-integrations[openshell]
 ```
+
+The OpenShell extra provides fail-closed ACS governance for process creation
+inside OpenShell-hosted Python agents.
 
 See the
 [migration guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md)
