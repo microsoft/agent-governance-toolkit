@@ -11,7 +11,7 @@ and the event bus — no external web framework dependency required.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, TypeVar
 
 from ..events import AnalyticsPlane, Event, EventBus
 from .models import (
@@ -22,6 +22,21 @@ from .models import (
     TrafficEntry,
     TrustTrend,
 )
+
+_T = TypeVar("_T")
+
+
+def _most_recent_first(entries: list[_T], limit: int) -> list[_T]:
+    """Return the last ``limit`` entries, most recent first.
+
+    ``0`` returns none; ``entries[-0:]`` is the whole list, so zero
+    needs its own case. A negative ``limit`` is a caller error.
+    """
+    if limit < 0:
+        raise ValueError(f"limit must be zero or positive; got {limit!r}")
+    if limit == 0:
+        return []
+    return list(reversed(entries[-limit:]))
 
 
 class DashboardAPI:
@@ -116,9 +131,10 @@ class DashboardAPI:
         """Returns the most recent agent communications.
 
         Args:
-            limit: Maximum number of traffic entries to return.
+            limit: Maximum number of traffic entries to return. ``0``
+                returns none; a negative value raises ``ValueError``.
         """
-        return list(reversed(self._traffic[-limit:]))
+        return _most_recent_first(self._traffic, limit)
 
     def get_leaderboard(self, limit: int = 20) -> list[LeaderboardEntry]:
         """Returns agents ranked by trust score (descending).
@@ -168,7 +184,8 @@ class DashboardAPI:
         Args:
             filters: Optional dict with keys ``agent``, ``action``,
                 ``date_from``, ``date_to`` for filtering.
-            limit: Maximum number of entries to return.
+            limit: Maximum number of entries to return. ``0`` returns
+                none; a negative value raises ``ValueError``.
         """
         entries = list(self._audit_entries)
 
@@ -188,7 +205,7 @@ class DashboardAPI:
                     date_to = datetime.fromisoformat(date_to)
                 entries = [e for e in entries if e.timestamp <= date_to]
 
-        return list(reversed(entries[-limit:]))
+        return _most_recent_first(entries, limit)
 
     def get_compliance_report(self, framework: str) -> ComplianceReportData:
         """Generates a compliance report summary for the given framework.
