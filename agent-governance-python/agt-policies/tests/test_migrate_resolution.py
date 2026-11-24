@@ -1313,18 +1313,43 @@ def test_resolve_refuses_field_outside_bound_snapshot_roots(
 
 
 @pytest.mark.parametrize(
-    ("intervention_point", "policy_target", "field"),
+    ("intervention_point", "policy_target", "field", "replacement"),
     [
-        pytest.param("output", "$.output", "response.content", id="output-response"),
         pytest.param(
-            "post_model_call", "$.model_response", "response.text", id="post-model-response"
+            "output", "$.output", "response.content", "output", id="output-response"
         ),
-        pytest.param("pre_model_call", "$.model_request", "tools", id="pre-model-tools"),
-        pytest.param("pre_model_call", "$.model_request", "model.name", id="pre-model-model"),
+        pytest.param(
+            "post_model_call",
+            "$.model_response",
+            "response.text",
+            "model_response",
+            id="post-model-response",
+        ),
+        pytest.param(
+            "pre_model_call", "$.model_request", "tools", "model_request", id="pre-model-tools"
+        ),
+        pytest.param(
+            "pre_model_call",
+            "$.model_request",
+            "model.name",
+            "model_request",
+            id="pre-model-model",
+        ),
+        pytest.param(
+            "pre_model_call",
+            "$.model_request",
+            "messages",
+            "model_request.messages",
+            id="pre-model-messages",
+        ),
     ],
 )
 def test_resolve_refuses_pre_contract_host_snapshot_roots(
-    tmp_path: Path, intervention_point: str, policy_target: str, field: str
+    tmp_path: Path,
+    intervention_point: str,
+    policy_target: str,
+    field: str,
+    replacement: str,
 ) -> None:
     # HostSession sent these keys before #4059; it now sends the snapshot
     # contract's keys, so a rule on the old key would silently never match.
@@ -1351,9 +1376,63 @@ def test_resolve_refuses_pre_contract_host_snapshot_roots(
     )
 
     with pytest.raises(
-        ResolutionError, match=f"stale-root.*unavailable at intervention point '{intervention_point}'"
+        ResolutionError,
+        match=(
+            f"stale-root.*unavailable at intervention point '{intervention_point}'"
+            f"; use '{re.escape(replacement)}' instead"
+        ),
     ):
         resolve_manifest(tmp_path, tmp_path)
+
+
+def test_resolve_accepts_ambient_messages_outside_pre_model_call(tmp_path: Path) -> None:
+    # ``messages`` is an ambient wire-schema root; only pre_model_call moves the
+    # prompt under ``model_request.messages``.
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "ambient-messages",
+                    "deny",
+                    {"field": "messages", "operator": "exists", "value": None},
+                )
+            ],
+            "intervention_points": {
+                "input": {
+                    "policy_target": "$.input",
+                    "policy_target_kind": "input",
+                    "policy": {"id": "agt_legacy_rules"},
+                }
+            },
+        },
+    )
+
+    manifest = resolve_manifest(tmp_path, tmp_path)
+
+    assert manifest["policies"]["agt_legacy_rules"]["bundle"]
+
+
+def test_resolve_refusal_without_known_replacement_has_no_hint(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "unknown-root",
+                    "deny",
+                    {"field": "nonexistent.key", "operator": "exists", "value": None},
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    with pytest.raises(ResolutionError) as excinfo:
+        resolve_manifest(tmp_path, tmp_path)
+
+    assert "unavailable at intervention point 'pre_tool_call'" in str(excinfo.value)
+    assert "instead" not in str(excinfo.value)
 
 
 def test_resolve_refuses_tool_field_at_non_tool_binding(tmp_path: Path) -> None:

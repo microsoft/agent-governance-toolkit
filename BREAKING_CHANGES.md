@@ -23,9 +23,12 @@ rejects four policy shapes that earlier versions accepted:
   `tool_name` and `tool_args` fields are still supported and map to
   `tool_call.name` and `tool_call.args`. Roots follow the snapshot contract,
   so the keys `HostSession` sent before #4059 are refused: top-level `model`
-  and `tools` at `pre_model_call` (use `model_request`), `response` at
+  and `tools` at `pre_model_call` (use `model_request`), top-level `messages`
+  at `pre_model_call` (use `model_request.messages`), `response` at
   `post_model_call` (use `model_response`) and `response.content` at `output`
-  (use `output`).
+  (use `output`). The refusal names the replacement key. Top-level `messages`
+  stays accepted at the other intervention points, where the wire schema lists
+  it as an ambient root.
 - A lower-priority rule that is provably covered by a higher-priority rule with
   the opposite action. First-match-wins evaluation makes the lower rule
   unreachable, which can conceal an allow/deny conflict.
