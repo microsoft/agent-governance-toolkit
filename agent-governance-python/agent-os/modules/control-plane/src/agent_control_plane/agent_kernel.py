@@ -146,7 +146,7 @@ class AgentKernel:
             agent_id=agent_id,
             session_id=session_id,
             created_at=datetime.now(),
-            permissions=permissions or self._default_permissions(),
+            permissions=self._default_permissions() if permissions is None else permissions,
         )
         self.active_sessions[session_id] = context
         self._audit("session_created", {"agent_id": agent_id, "session_id": session_id})
