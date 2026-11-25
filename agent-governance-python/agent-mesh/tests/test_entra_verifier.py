@@ -406,3 +406,70 @@ class TestJwksFetchExceptionBreadth:
 
         with pytest.raises(EntraTokenError):
             await verifier._ensure_jwk_client()
+
+
+# ── Entra Agent ID claims ──────────────────────────────────────────
+
+BLUEPRINT = "30cf4c22-9985-4ef7-8756-91cc888176bd"
+
+
+class TestAgentIdClaims:
+    """Facet values follow learn.microsoft.com/entra/agent-id/agent-token-claims."""
+
+    def test_autonomous_agent_identity_v2(self):
+        caller = entra_verifier.describe_caller({
+            "azp": VALID_APPID, "idtyp": "app", "xms_act_fct": "3 9 11", "xms_sub_fct": "9 3 11",
+            "xms_par_app_azp": BLUEPRINT, "roles": ["Tools.ListInvoke.All"], "scp": "/",
+        })
+        assert caller.client_id == VALID_APPID
+        assert caller.kind == "agent_identity"
+        assert caller.is_agent is True
+        assert caller.parent_app_id == BLUEPRINT
+        assert caller.roles == ("Tools.ListInvoke.All",)
+        assert caller.scopes == ()
+
+    def test_agent_on_behalf_of_user_and_agent_user_account(self):
+        obo = entra_verifier.describe_caller({"appid": VALID_APPID, "idtyp": "user", "xms_act_fct": "11", "scp": "Mail.Read User.Read"})
+        assert obo.kind == "agent_on_behalf_of_user"
+        assert obo.scopes == ("Mail.Read", "User.Read")
+        agent_user = entra_verifier.describe_caller({"azp": VALID_APPID, "idtyp": "user", "xms_act_fct": "11", "xms_sub_fct": "13"})
+        assert agent_user.kind == "agent_user"
+        assert agent_user.is_agent is True
+
+    def test_non_agent_callers_and_unknown_facets(self):
+        assert entra_verifier.describe_caller({"appid": VALID_APPID, "idtyp": "app"}).kind == "application"
+        human = entra_verifier.describe_caller({"azp": VALID_APPID, "idtyp": "user", "scp": "User.Read", "xms_act_fct": "3 9"})
+        assert human.kind == "user"
+        assert human.is_agent is False
+
+    def test_require_agent_identity_env_parsing(self, monkeypatch):
+        monkeypatch.setenv("AGENTMESH_ENTRA_AUDIENCE", VALID_AUDIENCE)
+        monkeypatch.setenv("AGENTMESH_ENTRA_TENANT_ID", VALID_TENANT)
+        monkeypatch.setenv("AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY", "true")
+        cfg = EntraVerifierConfig.from_env()
+        assert cfg is not None and cfg.require_agent_identity is True
+        monkeypatch.setenv("AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY", "maybe")
+        strict = EntraVerifierConfig.from_env()
+        # An invalid value keeps verification on with the strictest setting.
+        assert strict is not None and strict.require_agent_identity is True
+        monkeypatch.setenv("AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY", "0")
+        assert EntraVerifierConfig.from_env().require_agent_identity is False
+
+    @pytest.mark.asyncio
+    async def test_require_agent_identity_rejects_plain_apps(self, rsa_keypair):
+        v = _build_verifier(rsa_keypair)
+        v._cfg.require_agent_identity = True
+        with pytest.raises(EntraTokenError, match="not an Entra agent identity"):
+            await v.verify(_sign_token(rsa_keypair, _good_claims()))
+        claims = {**_good_claims(), "xms_act_fct": "11", "xms_sub_fct": "11", "idtyp": "app"}
+        assert (await v.verify(_sign_token(rsa_keypair, claims)))["appid"] == VALID_APPID
+
+    @pytest.mark.asyncio
+    async def test_token_without_client_claim_rejected(self, rsa_keypair):
+        v = _build_verifier(rsa_keypair)
+        claims = _good_claims()
+        del claims["appid"]
+        with pytest.raises(EntraTokenError, match="azp/appid"):
+            await v.verify(_sign_token(rsa_keypair, claims))
+        claims["azp"] = VALID_APPID
+        assert (await v.verify(_sign_token(rsa_keypair, claims)))["azp"] == VALID_APPID

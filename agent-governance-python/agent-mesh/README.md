@@ -728,6 +728,16 @@ are set, Entra-signed JWTs are required:
 | `AGENTMESH_ENTRA_AUTHORITY` | `https://login.microsoftonline.com` | Authority host for resolving the JWKS URL. |
 | `AGENTMESH_ENTRA_JWKS_TTL_SECS` | `3600` | How long a freshly-fetched JWKS cache is considered fresh. Min `60`. |
 | `AGENTMESH_ENTRA_JWKS_MAX_STALE_SECS` | `86400` | Hard upper bound on serving from a stale cache when refetch fails. Beyond this, the verifier fails closed to bound how long a key rotated OUT of the live JWKS can still verify. Floors at `AGENTMESH_ENTRA_JWKS_TTL_SECS`. |
+| `AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY` | `false` | When `true`, accept only Entra Agent ID callers (an agent identity acting alone or on behalf of a user, or an agent user); reject plain users and applications. Accepts `true`/`false`/`1`/`0`; any other value is logged as an error and treated as `true`, so a typo never weakens verification. |
+
+**Caller classification**: the verifier reads the Entra Agent ID facet
+claims (`xms_act_fct`, `xms_sub_fct`) to classify the caller as
+`agent_identity`, `agent_on_behalf_of_user`, `agent_user`, `user` or
+`application`. The relay logs the kind and the agent blueprint
+(`xms_par_app_azp`); the registry returns them as
+`verified_caller_kind` and `verified_parent_app_id`. The blueprint is
+recorded for attribution only and is never used for authorization.
+Tokens without a client ID (`azp` in v2, `appid` in v1) are rejected.
 
 **Fail-closed contract**: invalid/expired/wrong-aud/wrong-tid tokens
 return 401 (registry) or close the WebSocket with code 4003 (relay).
