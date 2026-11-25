@@ -4,8 +4,11 @@
     Place this inside the <inbound> section of the API or operation policy
     that fronts Foundry model and MCP tool traffic.
 
-    Fail-closed by default. Set the named value `pdp-fail-open` to "true" to
-    opt a route in to fail-open; scope this to non-sensitive operations only.
+    Fail-closed by default. Setting the named value `pdp-fail-open` to "true"
+    adds an `x-agt-pdp-failmode: fail-open` annotation on PDP transport
+    failures, but step 4 still denies a request without a PDP decision. Real
+    fail-open requires an explicit change to step 4; scope it to
+    non-sensitive operations only.
 -->
 <fragment>
     <!-- 1. Build the minimal decision request envelope (v1.0). -->
@@ -80,14 +83,22 @@
         if (resp == null) { return "deny"; }
         try {
             var body = resp.Body.As<JObject>(preserveContent: true);
-            return (string)body["decision"] ?? "deny";
+            var decision = (string)body["decision"] ?? "deny";
+            if (decision != "allow_with_conditions") { return decision; }
+            // This fragment enforces no PDP conditions. An allow that carries
+            // conditions the gateway cannot enforce is downgraded to deny so a
+            // condition such as require_human_review is never silently
+            // dropped. Extend this block when you add condition enforcement.
+            var conditions = body["conditions"] as JArray;
+            return (conditions == null || conditions.Count == 0) ? "allow" : "deny_unenforced_conditions";
         } catch { return "deny"; }
     }" />
 
-    <!-- Whitelist allow/allow_with_conditions; everything else (deny,
-         require_approval, unknown values, malformed responses) is rejected. -->
+    <!-- Whitelist allow; everything else (deny, require_approval,
+         allow_with_conditions carrying conditions, unknown values, malformed
+         responses) is rejected. -->
     <choose>
-        <when condition="@((string)context.Variables["pdpDecision"] == "allow" || (string)context.Variables["pdpDecision"] == "allow_with_conditions")">
+        <when condition="@((string)context.Variables["pdpDecision"] == "allow")">
             <!-- Fall through to backend. -->
         </when>
         <when condition="@((string)context.Variables["pdpDecision"] == "require_approval")">

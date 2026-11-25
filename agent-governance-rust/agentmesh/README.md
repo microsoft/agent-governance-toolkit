@@ -122,13 +122,14 @@ use std::sync::Arc;
 let client = AgentMeshClient::with_options(
     "my-agent",
     ClientOptions {
+        policy_yaml: Some(std::fs::read_to_string("policy.yaml")?),
         telemetry_sink: Some(Arc::new(OtelTelemetrySink::new())),
         ..Default::default()
     },
 )?;
 
 let result = client.execute_with_governance("data.read", None);
-assert!(result.allowed);
+assert!(result.allowed); // when policy.yaml allows data.read
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 

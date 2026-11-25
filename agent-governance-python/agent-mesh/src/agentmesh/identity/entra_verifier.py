@@ -26,8 +26,11 @@ Implementation notes
 * Standard PyJWT verification covers signature + ``exp`` + ``iat``,
   plus we explicitly pin ``tid`` and ``aud`` and validate against
   ``allowed_signing_algorithms`` (RS256 / RS384 / RS512 only).
-* Returns the raw ``appid`` claim — caller decides whether to use it
-  as the verified DID or just as a label.
+* Returns the verified claims. Use :func:`describe_caller` to read the
+  client ID (v2 ``azp`` or v1 ``appid``) and the Microsoft Entra Agent ID
+  facets (``xms_act_fct``, ``xms_sub_fct``, ``xms_par_app_azp``) that
+  distinguish agent identities and agents' user accounts from humans and
+  ordinary applications.
 
 Env vars
 ~~~~~~~~
@@ -36,6 +39,9 @@ Env vars
 ``AGENTMESH_ENTRA_AUTHORITY``    optional — default
                                  ``https://login.microsoftonline.com``.
 ``AGENTMESH_ENTRA_JWKS_TTL_SECS`` optional — int, default 3600.
+``AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY`` optional — ``true`` rejects
+                                 tokens whose actor is not an Entra agent
+                                 identity (``xms_act_fct`` lacks ``11``).
 """
 
 from __future__ import annotations
@@ -57,9 +63,71 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_SIGNING_ALGORITHMS = ("RS256", "RS384", "RS512")
 
+# Facet values from the Entra Agent ID token claims reference.
+AGENT_IDENTITY_FACET = "11"
+AGENT_USER_FACET = "13"
+
 
 class EntraTokenError(Exception):
     """Raised when an inbound token fails Entra verification."""
+
+
+def _facets(value: Any) -> frozenset[str]:
+    if isinstance(value, (list, tuple)):
+        return frozenset(str(item).strip() for item in value if str(item).strip())
+    if isinstance(value, (str, int)):
+        return frozenset(part for part in str(value).split() if part)
+    return frozenset()
+
+
+@dataclass(frozen=True)
+class EntraCaller:
+    """Caller description derived from already-verified Entra claims.
+
+    ``kind`` is one of ``agent_identity`` (autonomous agent),
+    ``agent_on_behalf_of_user``, ``agent_user`` (an agent's own user
+    account), ``user`` or ``application``. ``parent_app_id`` is the agent
+    identity blueprint; Microsoft recommends logging it, not authorizing on it.
+    """
+
+    client_id: str
+    kind: str
+    is_agent: bool
+    parent_app_id: str | None
+    subject_object_id: str | None
+    scopes: tuple[str, ...]
+    roles: tuple[str, ...]
+
+
+def describe_caller(claims: dict[str, Any]) -> EntraCaller:
+    """Classify a verified token. Never call this on unverified claims."""
+    actor = _facets(claims.get("xms_act_fct"))
+    subject = _facets(claims.get("xms_sub_fct"))
+    is_agent = AGENT_IDENTITY_FACET in actor
+    user_subject = str(claims.get("idtyp", "")).lower() == "user" or bool(claims.get("scp"))
+    if AGENT_USER_FACET in subject:
+        kind = "agent_user"
+    elif is_agent and AGENT_IDENTITY_FACET in subject:
+        kind = "agent_identity"
+    elif is_agent:
+        kind = "agent_on_behalf_of_user" if user_subject else "agent_identity"
+    else:
+        kind = "user" if user_subject else "application"
+    raw_scopes = claims.get("scp")
+    scopes = tuple(s for s in str(raw_scopes).split() if s and s != "/") if raw_scopes else ()
+    raw_roles = claims.get("roles")
+    roles = tuple(str(r) for r in raw_roles) if isinstance(raw_roles, list) else ()
+    parent = claims.get("xms_par_app_azp")
+    oid = claims.get("oid")
+    return EntraCaller(
+        client_id=str(claims.get("azp") or claims.get("appid") or "").strip(),
+        kind=kind,
+        is_agent=is_agent or kind == "agent_user",
+        parent_app_id=str(parent) if parent else None,
+        subject_object_id=str(oid) if oid else None,
+        scopes=scopes,
+        roles=roles,
+    )
 
 
 @dataclass
@@ -77,6 +145,7 @@ class EntraVerifierConfig:
     # even when the refetch path is broken (e.g. egress outage).
     # Default 24h matches the typical Entra signing-key rotation cadence.
     jwks_max_stale_secs: int
+    require_agent_identity: bool = False
 
     @classmethod
     def from_env(cls) -> "EntraVerifierConfig | None":
@@ -123,12 +192,22 @@ class EntraVerifierConfig:
                 max_stale_raw,
             )
             max_stale = 86400
+        require_raw = os.environ.get("AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY", "false").strip().lower()
+        if require_raw not in {"true", "false", "1", "0", ""}:
+            # A typo in a hardening flag must not weaken verification:
+            # keep verification on and apply the strictest setting.
+            logger.error(
+                "AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY=%r is not a boolean; requiring agent identities",
+                require_raw,
+            )
+            require_raw = "true"
         return cls(
             audience=aud,
             tenant_id=tid,
             authority=authority,
             jwks_ttl_secs=ttl,
             jwks_max_stale_secs=max_stale,
+            require_agent_identity=require_raw in {"true", "1"},
         )
 
     @property
@@ -296,6 +375,11 @@ class EntraTokenVerifier:
             raise EntraTokenError(
                 f"tid claim {actual_tid!r} does not match expected {self._cfg.tenant_id!r}"
             )
+        caller = describe_caller(claims)
+        if not caller.client_id:
+            raise EntraTokenError("token has no azp/appid client claim")
+        if self._cfg.require_agent_identity and not caller.is_agent:
+            raise EntraTokenError(f"caller kind {caller.kind!r} is not an Entra agent identity")
         return claims
 
 

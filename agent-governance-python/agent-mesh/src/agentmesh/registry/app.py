@@ -593,6 +593,7 @@ class RegistryServer:
             """
             from agentmesh.identity.entra_verifier import (
                 EntraTokenError,
+                describe_caller,
                 get_verifier,
             )
 
@@ -652,7 +653,8 @@ class RegistryServer:
                 )
                 raise HTTPException(status_code=401, detail="Token verification failed")
 
-            app_id = str(claims.get("appid") or claims.get("azp") or "").strip()
+            caller = describe_caller(claims)
+            app_id = caller.client_id
             tenant_id = str(claims.get("tid", "")).strip()
             if not app_id:
                 raise HTTPException(
@@ -666,14 +668,16 @@ class RegistryServer:
             agent.tier = "verified"
             store.put_agent(agent)
             logger.info(
-                "verify_identity: %s upgraded to verified tier (appid=%s tenant=%s)",
-                req.amid, app_id, tenant_id,
+                "verify_identity: %s upgraded to verified tier (appid=%s tenant=%s kind=%s blueprint=%s)",
+                req.amid, app_id, tenant_id, caller.kind, caller.parent_app_id,
             )
             return {
                 "did": req.amid,
                 "tier": agent.tier,
                 "verified_app_id": app_id,
                 "verified_tenant_id": tenant_id,
+                "verified_caller_kind": caller.kind,
+                "verified_parent_app_id": caller.parent_app_id,
                 "verified_at": agent.verified_at.isoformat(),
             }
 

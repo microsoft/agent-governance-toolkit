@@ -78,6 +78,13 @@ the data-handling obligations.
 `ttlSeconds` is a hint that the gateway may use to cache identical decisions
 keyed by `(agentId, operation, target, inputDigest)`.
 
+The shipped policy fragment enforces **no** conditions. It forwards
+`allow_with_conditions` only when `conditions` is empty; any listed condition
+is treated as unenforceable and the request is denied (`403`, decision
+`deny_unenforced_conditions`). Use `require_approval` for human review, or
+extend step 4 of [`pdp-callout.xml`](policy/pdp-callout.xml) before returning
+conditions from your PDP.
+
 ## Failure semantics
 
 The gateway **fails closed** on:
@@ -85,11 +92,13 @@ The gateway **fails closed** on:
 - transport error or timeout to the Function,
 - non-2xx response,
 - response schema mismatch (missing/unknown `decision`),
-- any non-`allow*` decision.
+- any decision other than `allow` (including `allow_with_conditions` with
+  conditions the gateway does not enforce).
 
-Fail-open is supported only as an explicit per-route opt-in
-(`pdp-fail-open="true"` named-value) and must be scoped to non-sensitive
-operations. The default policy in this sample fails closed.
+The `pdp-fail-open="true"` named value only annotates PDP transport failures
+with `x-agt-pdp-failmode: fail-open`; the shipped fragment still denies the
+request because no decision was received. Enabling real fail-open requires an
+explicit edit to step 4 of the fragment, scoped to non-sensitive operations.
 
 ## Layout
 
@@ -140,6 +149,27 @@ with a warm instance; `deny` and `require_approval` decisions surfaced as
 > already own that API definition, and we don't want this sample to fight
 > with it. The fragment is drop-in: paste it into the `<inbound>` section
 > of the API or operation policy that fronts Foundry traffic.
+
+## Coexistence with Agent 365 and AI Gateway protections
+
+The Ignite 2026 wave added platform controls at the same gateway. They are
+complementary to this PDP, not replacements:
+
+| Control | Where it runs | Relationship to this PDP |
+|---|---|---|
+| AI Gateway **tool threat protection** (Defender + Purview; modes Disabled / Audit / Block) | APIM, on MCP tool traffic | Detects prompt injection and sensitive-data movement. Keep it on; this PDP adds deterministic, organisation-specific allow/deny decisions. |
+| Foundry **guardrails** (user input, tool call, tool response, output) | Foundry agent service | Model-level content safety. Map them to ACS `input`, `pre_tool_call`, `post_tool_call` and `output` when you also run AGT inside the agent. |
+| Agent 365 **Tools Gateway** (bring-your-own MCP servers registered with the A365 CLI, preview) | Agent 365 | Registers MCP servers for governed discovery. Register the **APIM URL** that carries this PDP fragment, not the raw backend, so tool calls still traverse the PEP. |
+| Copilot Studio **external threat detection** | Copilot Studio orchestrator | For Copilot Studio agents, use [`agentmesh-agent365`](../../agent-governance-python/agentmesh-integrations/agent365-agentmesh/) to answer `/analyze-tool-execution` with AGT policy. |
+
+Order the APIM policies so platform threat protection runs first and this PDP
+call runs before the backend call; a request blocked by either is not
+forwarded.
+
+The PDP decision logic in `function/decide/__init__.py` is a placeholder
+(hard-coded tool lists). For real policy, evaluate an ACS manifest with the
+AGT policy runtime inside the Function, or call an AGT `MCPGateway` the way
+`agentmesh-agent365` does.
 
 ## Security posture
 

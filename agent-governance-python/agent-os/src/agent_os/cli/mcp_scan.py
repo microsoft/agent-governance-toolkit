@@ -34,6 +34,14 @@ from pathlib import Path
 from typing import Any
 
 from agent_os.mcp_security import MCPSecurityScanner, MCPSeverity, MCPThreat, ScanResult
+from agent_os.mcp_stateless import (
+    HEADER_METHOD,
+    HEADER_NAME,
+    META_SERVER_INFO,
+    NAME_SOURCE_BY_METHOD,
+    build_request_meta,
+    mirrored_headers,
+)
 
 try:  # rich is a package dependency, but keep a plain fallback for embedders.
     from rich.console import Console
@@ -52,11 +60,12 @@ _SUPPORTED_PROTOCOL_VERSIONS = {
     MCP_PROTOCOL_VERSION_STATELESS,
 }
 
-# Streamable HTTP header names from the MCP dual-stack migration spec
-# (RFC #2597, issue #3130).
-MCP_METHOD_HEADER = "Mcp-Method"
-MCP_NAME_HEADER = "Mcp-Name"
-_METHODS_REQUIRING_NAME: frozenset[str] = frozenset({"server/discover"})
+# Streamable HTTP header names from MCP 2026-07-28 (issue #3130). ``Mcp-Name``
+# mirrors ``params.name``/``params.uri`` and is only defined for
+# ``tools/call``, ``prompts/get`` and ``resources/read``.
+MCP_METHOD_HEADER = HEADER_METHOD
+MCP_NAME_HEADER = HEADER_NAME
+_METHODS_REQUIRING_NAME: frozenset[str] = frozenset(NAME_SOURCE_BY_METHOD)
 
 # Module-level SSL context; set via _configure_tls(verify=False).
 _SSL_CONTEXT: ssl.SSLContext | None = None
@@ -1011,6 +1020,28 @@ def _client_info() -> dict[str, str]:
     return {"name": "agent-os-mcp-scan", "version": str(__version__)}
 
 
+def _normalize_discover_result(result: Any) -> Any:
+    """Map a ``server/discover`` result onto the InitializeResult shape.
+
+    MCP 2026-07-28 returns ``supportedVersions`` and carries ``serverInfo``
+    in ``_meta["io.modelcontextprotocol/serverInfo"]``. Results that already
+    use ``protocolVersion`` (pre-release drafts) are returned unchanged.
+    """
+    if not isinstance(result, Mapping) or "protocolVersion" in result:
+        return result
+    supported = result.get("supportedVersions")
+    if not isinstance(supported, list):
+        return result
+    normalized = dict(result)
+    if MCP_PROTOCOL_VERSION_STATELESS in supported:
+        normalized["protocolVersion"] = MCP_PROTOCOL_VERSION_STATELESS
+    meta = result.get("_meta")
+    server_info = meta.get(META_SERVER_INFO) if isinstance(meta, Mapping) else None
+    # serverInfo is a SHOULD in 2026-07-28 and is display-only.
+    normalized.setdefault("serverInfo", server_info if isinstance(server_info, Mapping) else {})
+    return normalized
+
+
 def _validate_initialize_result(result: Any) -> dict[str, Any]:
     """Validate InitializeResult before entering normal operation."""
     if not isinstance(result, dict):
@@ -1166,10 +1197,11 @@ def _jsonrpc_request(
         "jsonrpc": "2.0",
         "id": _next_request_id(),
         "method": method,
-        "params": params or {},
+        "params": dict(params or {}),
     }
     if meta is not None:
-        payload["_meta"] = dict(meta)
+        # MCP 2026-07-28 carries request metadata in ``params._meta``.
+        payload["params"]["_meta"] = dict(meta)
     return payload
 
 
@@ -1349,9 +1381,9 @@ def _streamable_http_call(
         MCP_METHOD_HEADER: str(method),
     }
     if method in _METHODS_REQUIRING_NAME:
-        headers[MCP_NAME_HEADER] = _client_info()[
-            "name"
-        ]  # Single source of truth with ``_meta.clientInfo.name``.
+        mirrored = mirrored_headers(payload)
+        if MCP_NAME_HEADER in mirrored:
+            headers[MCP_NAME_HEADER] = mirrored[MCP_NAME_HEADER]
     is_stateless = protocol_version == MCP_PROTOCOL_VERSION_STATELESS
     if session_id and not is_stateless:
         # Issue #3130: the stateless flow MUST NOT set Mcp-Session-Id.
@@ -1425,7 +1457,7 @@ def _inspect_streamable_http_server(
             _jsonrpc_request(
                 "server/discover",
                 {},
-                meta={"clientInfo": _client_info(), "capabilities": {}},
+                meta=build_request_meta(_client_info()),
             ),
             timeout=timeout,
             protocol_version=MCP_PROTOCOL_VERSION_STATELESS,
@@ -1439,7 +1471,7 @@ def _inspect_streamable_http_server(
         pass
 
     if stateless_discover and "error" not in stateless_discover:
-        discover_result = stateless_discover.get("result", {})
+        discover_result = _normalize_discover_result(stateless_discover.get("result", {}))
         if isinstance(discover_result, Mapping):
             try:
                 _validate_initialize_result(discover_result)
@@ -1448,12 +1480,12 @@ def _inspect_streamable_http_server(
             if discover_result is not None:
                 discover_protocol = str(discover_result.get("protocolVersion", "")) or None
                 if discover_protocol == MCP_PROTOCOL_VERSION_STATELESS:
-                    stateless_meta = {"clientInfo": _client_info(), "capabilities": {}}
+                    stateless_meta = build_request_meta(_client_info())
 
                     def call(payload: dict[str, Any]) -> dict[str, Any] | None:
-                        payload_with_meta = (
-                            payload if "_meta" in payload else {**payload, "_meta": stateless_meta}
-                        )
+                        params = dict(payload.get("params") or {})
+                        params.setdefault("_meta", stateless_meta)
+                        payload_with_meta = {**payload, "params": params}
                         response, _ = _streamable_http_call(
                             server,
                             payload_with_meta,

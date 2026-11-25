@@ -1286,15 +1286,25 @@ class PolicyEngine:
             action_name = context.get("action", {}).get("type", context.get("tool_name", "unknown"))
             cedar_action = f'Action::"{action_name}"' if "::" not in action_name else action_name
             cedar_result = cedar_eval.evaluate(cedar_action, context)
-            if cedar_result.error is None:
-                elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            if cedar_result.error is not None:
+                # Mirror the Rego path: a runtime Cedar fault must not fall
+                # through to default_action, which can be an allow.
+                logger.error("Cedar policy errored during evaluation, denying: %s", cedar_result.error)
                 return PolicyDecision(
-                    allowed=cedar_result.allowed,
-                    action="allow" if cedar_result.allowed else "deny",
-                    reason=f"Cedar policy: {'allowed' if cedar_result.allowed else 'denied'}",
+                    allowed=False,
+                    action="deny",
+                    reason=f"Cedar policy errored: {cedar_result.error}",
                     evaluated_at=start,
                     evaluation_ms=elapsed,
                 )
+            return PolicyDecision(
+                allowed=cedar_result.allowed,
+                action="allow" if cedar_result.allowed else "deny",
+                reason=f"Cedar policy: {'allowed' if cedar_result.allowed else 'denied'}",
+                evaluated_at=start,
+                evaluation_ms=elapsed,
+            )
 
         # 5. No rules matched - use default
         if applicable:

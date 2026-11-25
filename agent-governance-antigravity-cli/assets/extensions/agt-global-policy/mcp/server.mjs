@@ -11,6 +11,11 @@ const SERVER_INFO = {
 };
 const PROTOCOL_VERSION = "2024-11-05";
 const STATELESS_PROTOCOL_VERSION = "2026-07-28";
+// MCP 2026-07-28 request/response metadata keys (params._meta / result._meta).
+const META_PROTOCOL_VERSION = "io.modelcontextprotocol/protocolVersion";
+const META_CLIENT_INFO = "io.modelcontextprotocol/clientInfo";
+const META_CLIENT_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
+const META_SERVER_INFO = "io.modelcontextprotocol/serverInfo";
 const JSONRPC_VERSION = "2.0";
 const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
 // Other header-like lines must not stall later JSON messages waiting for a header separator.
@@ -146,10 +151,15 @@ async function handleMessage(message) {
   try {
     if (message.method === "server/discover") {
       writeResult(message.id, {
-        protocolVersion: STATELESS_PROTOCOL_VERSION,
+        // MCP 2026-07-28 DiscoverResult fields.
+        resultType: "complete",
+        supportedVersions: [STATELESS_PROTOCOL_VERSION],
         capabilities: {
           tools: {},
         },
+        _meta: { [META_SERVER_INFO]: SERVER_INFO },
+        // Pre-release draft fields kept for clients built against the RC.
+        protocolVersion: STATELESS_PROTOCOL_VERSION,
         serverInfo: SERVER_INFO,
         tools,
       });
@@ -180,7 +190,7 @@ async function handleMessage(message) {
       writeError(
         message.id ?? null,
         -32001,
-        "Invalid stateless request metadata: _meta.clientInfo requires non-empty name and version, and _meta.capabilities must be an object.",
+        "Invalid stateless request metadata: _meta requires protocolVersion 2026-07-28, clientInfo with non-empty name and version, and an object of client capabilities.",
       );
       return;
     }
@@ -262,6 +272,22 @@ async function callTool(params) {
 }
 
 function validateStatelessRequestMeta(request) {
+  // MCP 2026-07-28: metadata rides in params._meta under namespaced keys. A
+  // valid modern request needs no echo, so it returns undefined like a legacy
+  // request without metadata.
+  const paramsMeta = isObject(request.params) ? request.params._meta : undefined;
+  if (isObject(paramsMeta) && Object.prototype.hasOwnProperty.call(paramsMeta, META_PROTOCOL_VERSION)) {
+    const clientInfo = paramsMeta[META_CLIENT_INFO];
+    const valid =
+      paramsMeta[META_PROTOCOL_VERSION] === STATELESS_PROTOCOL_VERSION &&
+      isObject(clientInfo) &&
+      isNonEmptyString(clientInfo.name) &&
+      isNonEmptyString(clientInfo.version) &&
+      isObject(paramsMeta[META_CLIENT_CAPABILITIES]);
+    return valid ? undefined : null;
+  }
+
+  // Pre-release draft shape: top-level _meta with clientInfo/capabilities.
   if (!Object.prototype.hasOwnProperty.call(request, "_meta")) {
     return undefined;
   }

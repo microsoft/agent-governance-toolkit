@@ -9,13 +9,28 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use agentmesh::AgentMeshClient;
+//! use agentmesh::{AgentMeshClient, ClientOptions};
 //!
-//! let client = AgentMeshClient::new("my-agent")
-//!     .expect("failed to create client");
+//! let policy = r#"
+//! version: "1.0"
+//! agent: my-agent
+//! policies:
+//!   - name: gate
+//!     type: capability
+//!     allowed_actions: ["data.read"]
+//! "#;
+//! let client = AgentMeshClient::with_options(
+//!     "my-agent",
+//!     ClientOptions { policy_yaml: Some(policy.to_string()), ..Default::default() },
+//! )
+//! .expect("failed to create client");
 //!
 //! let result = client.execute_with_governance("data.read", None);
 //! assert!(result.allowed);
+//!
+//! // Without a loaded policy the client is fail-closed.
+//! let unconfigured = AgentMeshClient::new("other-agent").expect("client");
+//! assert!(!unconfigured.execute_with_governance("data.read", None).allowed);
 //! ```
 
 #![cfg_attr(test, allow(deprecated))]
@@ -253,11 +268,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_client_default_allows_everything() {
+    fn test_client_without_policy_denies_everything() {
         let client = AgentMeshClient::new("test-agent").unwrap();
         let result = client.execute_with_governance("anything", None);
-        assert!(result.allowed);
-        assert_eq!(result.decision, PolicyDecision::Allow);
+        assert!(!result.allowed);
+        assert!(matches!(result.decision, PolicyDecision::Deny(_)));
     }
 
     #[test]
@@ -289,7 +304,20 @@ policies:
 
     #[test]
     fn test_governance_updates_trust() {
-        let client = AgentMeshClient::new("trust-test").unwrap();
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: gate
+    type: capability
+    allowed_actions:
+      - "action*"
+"#;
+        let opts = ClientOptions {
+            policy_yaml: Some(yaml.to_string()),
+            ..Default::default()
+        };
+        let client = AgentMeshClient::with_options("trust-test", opts).unwrap();
         let did = client.identity.did.clone();
 
         client.execute_with_governance("action1", None); // allow → +trust

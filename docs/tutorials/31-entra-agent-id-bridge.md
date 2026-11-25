@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 31 — Bridging AGT Identity with Microsoft Entra Agent ID"
-last_reviewed: 2026-05-09
+last_reviewed: 2026-11-25
 owner: agt-maintainers
 ---
 
@@ -356,17 +356,49 @@ else:
     print("Bridge configuration OK — ready for enterprise deployment")
 ```
 
+## Step 8 — Verify Entra Agent ID tokens and sync lifecycle state
+
+The AgentMesh relay and registry verify Entra-signed tokens when
+`AGENTMESH_ENTRA_AUDIENCE` and `AGENTMESH_ENTRA_TENANT_ID` are set. The
+verifier reads the Entra Agent ID facet claims (`xms_act_fct`,
+`xms_sub_fct`) and classifies the caller:
+
+```python
+from agentmesh.identity.entra_verifier import describe_caller
+
+caller = describe_caller(claims)  # claims returned by EntraTokenVerifier.verify()
+caller.kind            # "agent_identity", "agent_on_behalf_of_user", "agent_user", "user" or "application"
+caller.parent_app_id   # the agent identity blueprint (xms_par_app_azp) — attribution only
+```
+
+Set `AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY=true` to accept only agent
+callers. Never authorize on the blueprint ID; use the agent's own client ID
+(`azp`/`appid`).
+
+To keep AGT in step with Entra, pull agent identities from Microsoft Graph
+and suspend bindings whose identity was disabled, using the
+[`agentmesh-agent365`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agentmesh-integrations/agent365-agentmesh/README.md)
+package:
+
+```python
+from agentmesh_agent365 import EntraRegistrySync, iter_agent_identities
+
+syncer = EntraRegistrySync(registry, did_for=lambda identity: did_by_object_id.get(identity["id"]))
+report = syncer.sync(iter_agent_identities(http_client, get_graph_token))
+print(report.suspended, report.unmapped, report.missing_in_entra)
+```
+
 ## Known Gaps and Limitations
 
 | Gap | Status | Workaround |
 |-----|--------|------------|
 | **Graph API group membership sync** | ✅ Built | `EntraGraphClient.get_group_memberships()` + `EntraAgentRegistry.sync_group_memberships()` — maps Entra groups to AGT capabilities |
-| **Agent365 native integration** | Configuration validated | `EntraAgentRegistry.validate_bridge_configuration()` checks bridge mapping completeness; end-to-end Agent365 testing pending |
-| **Bidirectional lifecycle sync** | One-way (manual) | Use Azure Event Grid or Logic Apps to sync Entra state changes → AGT kill switch |
+| **Agent365 native integration** | Partial | `agentmesh-agent365` adds Agent 365 observability spans, Copilot Studio threat detection, Purview checks and registry sync; end-to-end testing against a licensed Agent 365 tenant is pending |
+| **Bidirectional lifecycle sync** | One-way (Entra → AGT) | `EntraRegistrySync` suspends AGT bindings when Entra disables an agent identity; run it on a schedule or from an Event Grid / Logic Apps trigger |
 | **Graph API service principal disable** | Not in AGT | Use Graph API directly: `PATCH /servicePrincipals/{id}` with `accountEnabled: false` |
 | **Entra bridge in non-Python language packages** | Python-only | TS, .NET, Rust, and Go packages need `EntraAgentRegistry` and `EntraAgentID` ported |
 | **DID format inconsistency** | `did:agentmesh:*` (Python, .NET) vs `did:agentmesh:*` (TS, Rust, Go) | Both formats work; standardization planned for v4.0 |
-| **Cryptographic token verification** | Claim-level only | Add `azure-identity` for JWKS-based signature verification |
+| **Cryptographic token verification** | ✅ Built (relay, registry) | `EntraTokenVerifier` validates signature (JWKS), issuer, audience, tenant and expiry; see the AgentMesh README |
 
 ## Platform Independence Note
 

@@ -5,6 +5,39 @@ entries appear first.
 
 ---
 
+## Rust `PolicyEngine` denies without a policy; Cedar errors deny; Entra tokens need a client ID
+
+**Date:** TBD (Unreleased)
+
+Three fail-open paths now fail closed:
+
+- **Rust (`agentmesh` crate).** `PolicyEngine::new()` and an
+  `AgentMeshClient` created without `policy_yaml` used to allow every action
+  when no policy profile was loaded. They now return
+  `PolicyDecision::Deny("No policy loaded (deny by default)")`, matching the
+  Python, .NET, TypeScript and Go SDKs.
+- **Python Cedar evaluation (`agentmesh.governance.policy`).** An exception
+  while evaluating a Cedar policy used to fall through to the engine's default
+  action, which could be `allow`. It now denies with
+  `Cedar policy errored: ...`.
+- **Entra token verification (`agentmesh.identity.entra_verifier`).**
+  `EntraTokenVerifier.verify` rejects a token that carries neither `azp` (v2)
+  nor `appid` (v1). An unparseable `AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY`
+  value is now treated as `true` instead of being ignored.
+
+**How to update:**
+
+- Rust: load a policy (`PolicyEngine::load_from_yaml`, or `policy_yaml` in
+  `ClientOptions`) before evaluating. If you really need the old behaviour for
+  a test harness, construct the engine with `PolicyEngine::allow_all()`.
+- Cedar: fix policies that raise at evaluation time; they no longer resolve to
+  the default action.
+- Entra: request tokens through a client application so that `azp`/`appid` is
+  present, and set `AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY` only to `true`,
+  `false`, `1` or `0`.
+
+---
+
 ## `acs_builder_set_url_fetch_limits` returns 0 on success; `bundle_url` and `system_prompt_url` are accepted again
 
 **Date:** 2026-10-08 (agent-control-spec 0.4.0-alpha.4, #4224)

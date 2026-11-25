@@ -1,6 +1,6 @@
 ---
 title: "Known Limitations & Design Boundaries"
-last_reviewed: 2026-08-16
+last_reviewed: 2026-11-25
 owner: agt-maintainers
 ---
 
@@ -240,16 +240,20 @@ without effective policy enforcement.
 
 - ✅ When properly initialized with policies loaded, AGT enforces all rules
   before execution
-- ⚠️ If the policy evaluator has **no policies loaded**, the default action is
-  `allow` — all actions pass through ungoverned
+- ✅ If the policy evaluator has **no policies loaded**, the Python, .NET,
+  TypeScript, Go and Rust SDK engines deny by default; a forgotten policy load
+  blocks actions rather than letting them pass ungoverned. Rust keeps an
+  explicit `PolicyEngine::allow_all()` opt-in for local experiments.
 - ⚠️ If `permissive` mode is used without realizing it allows all actions, agents
   run effectively ungoverned
 - ✅ On **runtime errors** during policy evaluation, AGT fails closed (denies
-  access) — this is correct behavior
+  access) — this is correct behavior, including Rego and Cedar backend errors in
+  the AgentMesh Python engine
 
 **Example gap:** A developer imports `agent_os` and adds it to their agent
-framework integration, but forgets to load policy files. The governance
-dashboard shows "governed" status, but no rules are enforced.
+framework integration, but forgets to load policy files and enables
+`permissive` mode to unblock testing. The governance dashboard shows "governed"
+status, but no rules are enforced.
 
 **Mitigations available today:**
 - Use `strict` mode (deny-by-default) in production — this requires explicit

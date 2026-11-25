@@ -9,6 +9,11 @@ import { checkArbitraryText, getPolicyStatus, loadPolicy } from "../lib/policy.m
 const VERSION = "3.6.0";
 const PROTOCOL_VERSION = "2024-11-05";
 const STATELESS_PROTOCOL_VERSION = "2026-07-28";
+// MCP 2026-07-28 request/response metadata keys (params._meta / result._meta).
+const META_PROTOCOL_VERSION = "io.modelcontextprotocol/protocolVersion";
+const META_CLIENT_INFO = "io.modelcontextprotocol/clientInfo";
+const META_CLIENT_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
+const META_SERVER_INFO = "io.modelcontextprotocol/serverInfo";
 const HEADER_SEPARATOR = Buffer.from("\r\n\r\n", "utf8");
 const MAX_HEADER_BYTES = 8 * 1024;
 const MAX_FRAME_BYTES = 5 * 1024 * 1024;
@@ -51,15 +56,18 @@ export async function handleJsonRpcRequest(state, request) {
   }
 
   if (method === "server/discover") {
+    const serverInfo = { name: "agt-governance", version: VERSION };
     return jsonRpcResult(id, {
-      protocolVersion: STATELESS_PROTOCOL_VERSION,
+      // MCP 2026-07-28 DiscoverResult fields.
+      resultType: "complete",
+      supportedVersions: [STATELESS_PROTOCOL_VERSION],
       capabilities: {
         tools: {},
       },
-      serverInfo: {
-        name: "agt-governance",
-        version: VERSION,
-      },
+      _meta: { [META_SERVER_INFO]: serverInfo },
+      // Pre-release draft fields kept for clients built against the RC.
+      protocolVersion: STATELESS_PROTOCOL_VERSION,
+      serverInfo,
       tools: TOOL_DEFINITIONS,
     });
   }
@@ -96,7 +104,7 @@ export async function handleJsonRpcRequest(state, request) {
     return jsonRpcError(
       id,
       -32001,
-      "Invalid stateless request metadata: _meta.clientInfo requires non-empty name and version, and _meta.capabilities must be an object.",
+      "Invalid stateless request metadata: _meta requires protocolVersion 2026-07-28, clientInfo with non-empty name and version, and an object of client capabilities.",
     );
   }
 
@@ -136,6 +144,22 @@ async function callTool(state, params) {
 }
 
 function validateStatelessRequestMeta(request) {
+  // MCP 2026-07-28: metadata rides in params._meta under namespaced keys. A
+  // valid modern request needs no echo, so it returns undefined like a legacy
+  // request without metadata.
+  const paramsMeta = isObject(request.params) ? request.params._meta : undefined;
+  if (isObject(paramsMeta) && Object.prototype.hasOwnProperty.call(paramsMeta, META_PROTOCOL_VERSION)) {
+    const clientInfo = paramsMeta[META_CLIENT_INFO];
+    const valid =
+      paramsMeta[META_PROTOCOL_VERSION] === STATELESS_PROTOCOL_VERSION &&
+      isObject(clientInfo) &&
+      isNonEmptyString(clientInfo.name) &&
+      isNonEmptyString(clientInfo.version) &&
+      isObject(paramsMeta[META_CLIENT_CAPABILITIES]);
+    return valid ? undefined : null;
+  }
+
+  // Pre-release draft shape: top-level _meta with clientInfo/capabilities.
   if (!Object.prototype.hasOwnProperty.call(request, "_meta")) {
     return undefined;
   }

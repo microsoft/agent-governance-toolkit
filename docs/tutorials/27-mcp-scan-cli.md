@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 27 — MCP Scan CLI"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-25
 owner: agt-maintainers
 ---
 
@@ -102,24 +102,34 @@ separate CLI-only detection engine.
 
 ## MCP dual-stack lifecycle and transports
 
-For **Streamable HTTP**, the current main-branch `mcp-scan` implementation first attempts a stateless
-`2026-07-28` path and keeps `2025-11-25` as a compatibility fallback. The steps below describe what the scanner currently sends and expects; they are not a statement of the released MCP specification's wire requirements.
+For **Streamable HTTP**, `mcp-scan` first attempts the stateless `2026-07-28`
+path defined by the released MCP `2026-07-28` specification and keeps
+`2025-11-25` as a compatibility fallback.
 
 The scanner's preferred Streamable HTTP flow is:
 
-1. The scanner sends `server/discover` with client metadata in `_meta` and sends `Mcp-Name` on that request.
-2. The scanner validates the discovery result and expects
-   `protocolVersion: "2026-07-28"` before entering stateless operation. The validator also requires at least one inspectable primitive capability (`tools`, `resources`, or `prompts`), and treats returned server metadata as scan evidence rather than scanner instructions.
+1. The scanner sends `server/discover` with request metadata in
+   `params._meta` (`io.modelcontextprotocol/protocolVersion`,
+   `io.modelcontextprotocol/clientInfo` and
+   `io.modelcontextprotocol/clientCapabilities`). `Mcp-Name` is not sent,
+   because the specification defines it only for `tools/call`,
+   `prompts/get` and `resources/read`.
+2. The scanner validates the `DiscoverResult` and enters stateless operation
+   only when `supportedVersions` contains `"2026-07-28"`. Server identity is
+   read from `_meta["io.modelcontextprotocol/serverInfo"]`; results from
+   pre-release peers that still return `protocolVersion: "2026-07-28"` are also
+   accepted. The validator also requires at least one inspectable primitive capability (`tools`, `resources`, or `prompts`), and treats returned server metadata as scan evidence rather than scanner instructions.
 3. The scanner enumerates advertised primitive definitions with `tools/list`,
    `resources/list`, `resources/templates/list`, and `prompts/list`,
    following `nextCursor` pagination when present.
-4. The scanner sends each stateless request with client metadata in `_meta` and
+4. The scanner sends each stateless request with the same `params._meta` and
    `Mcp-Protocol-Version: 2026-07-28`. Streamable HTTP requests also carry
    `Mcp-Method`.
 5. The scanner does **not** send or retain `Mcp-Session-Id` in this stateless flow.
 
-If the peer rejects stateless discovery at the HTTP layer, returns an error, or
-returns a discovery result that does not validate, the scanner falls back to
+If the peer rejects stateless discovery at the HTTP layer, returns an error,
+returns a discovery result that does not validate, or does not list
+`2026-07-28` in `supportedVersions`, the scanner falls back to
 the legacy flow on the same Streamable HTTP endpoint:
 
 1. Send `initialize` with `protocolVersion: "2025-11-25"`, client
@@ -207,7 +217,7 @@ What happens:
    environment.
 4. For Streamable HTTP, the CLI first probes `server/discover` using MCP
    `2026-07-28`. A valid stateless peer is inspected with self-contained
-   listing requests carrying client metadata in `_meta`; no
+   listing requests carrying request metadata in `params._meta`; no
    `Mcp-Session-Id` is used.
 5. If Streamable HTTP stateless discovery is rejected or invalid, the CLI falls
    back on the same endpoint to the legacy `2025-11-25` `initialize` flow.

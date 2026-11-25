@@ -292,6 +292,7 @@ class RelayServer:
                     # can reuse it without a cross-module dependency.
                     from agentmesh.identity.entra_verifier import (
                         EntraTokenError,
+                        describe_caller,
                         get_verifier,
                     )
 
@@ -339,13 +340,14 @@ class RelayServer:
 
                     try:
                         claims = await verifier.verify(client_token)
-                        verified_app_id = str(
-                            claims.get("appid") or claims.get("azp") or ""
-                        ) or None
+                        caller = describe_caller(claims)
+                        verified_app_id = caller.client_id or None
                         logger.info(
-                            "Entra token verified for %s (appid=%s)",
+                            "Entra token verified for %s (appid=%s kind=%s blueprint=%s)",
                             agent_did,
                             verified_app_id,
+                            caller.kind,
+                            caller.parent_app_id,
                         )
                     except EntraTokenError as exc:
                         # Differentiated path: only the Entra branch
