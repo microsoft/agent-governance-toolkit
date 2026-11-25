@@ -13,6 +13,9 @@ Addresses OWASP ASI02 (Tool Misuse & Exploitation) by providing:
 - Structured audit logging of every tool invocation
 - Human-in-the-loop approval for sensitive tools
 - Response scanning for prompt injection, credential/PII leaks, and exfiltration
+- MCP ``2026-07-28`` envelope validation (``_meta``, ``Mcp-Method``/``Mcp-Name``/
+  ``Mcp-Param-*`` header-body agreement) and governance of multi round-trip
+  ``input_required`` results
 """
 
 from __future__ import annotations
@@ -37,6 +40,11 @@ from agent_os.mcp_protocols import (
     MCPRateLimitStore,
 )
 from agent_os.mcp_response_scanner import MCPResponseScanner
+from agent_os.mcp_stateless import (
+    is_input_required,
+    iter_input_requests,
+    validate_request_envelope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +105,10 @@ class AuditEntry:
     allowed: bool
     reason: str
     approval_status: ApprovalStatus | None = None
+    trace_context: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        record = {
             "timestamp": self.timestamp,
             "agent_id": self.agent_id,
             "tool_name": self.tool_name,
@@ -108,6 +117,9 @@ class AuditEntry:
             "reason": self.reason,
             "approval_status": self.approval_status.value if self.approval_status else None,
         }
+        if self.trace_context:
+            record["trace_context"] = dict(self.trace_context)
+        return record
 
 
 @dataclass
@@ -146,6 +158,8 @@ class MCPGateway:
         response_scanner: MCPResponseScanner | None = None,
         response_policy: ResponsePolicy = ResponsePolicy.BLOCK,
         rate_limit: int = 100,
+        allow_sampling_requests: bool = False,
+        allow_roots_requests: bool = False,
     ) -> None:
         """
         Args:
@@ -167,6 +181,12 @@ class MCPGateway:
             response_policy: How to handle threats found in tool responses.
                 ``BLOCK`` denies the response, ``SANITIZE`` strips injection
                 tags but blocks credential/PII leaks, ``LOG`` allows but logs.
+            allow_sampling_requests: Forward ``sampling/createMessage`` input
+                requests from ``input_required`` results (after scanning).
+                Sampling is deprecated in MCP ``2026-07-28``; denied by default.
+            allow_roots_requests: Forward ``roots/list`` input requests, which
+                disclose client filesystem layout. Roots is deprecated in MCP
+                ``2026-07-28``; denied by default.
         """
         self._runtime = NativeAdapterRuntime(runtime)
         self._rate_limit = rate_limit
@@ -194,6 +214,257 @@ class MCPGateway:
         # Response scanning
         self._response_scanner = response_scanner if response_scanner is not None else MCPResponseScanner()
         self._response_policy = response_policy
+        self.allow_sampling_requests = allow_sampling_requests
+        self.allow_roots_requests = allow_roots_requests
+
+    # ── MCP 2026-07-28 request envelopes ─────────────────────────────────
+
+    def intercept_request(
+        self,
+        agent_id: str,
+        message: dict[str, Any],
+        headers: dict[str, str] | None = None,
+        *,
+        tool_input_schema: dict[str, Any] | None = None,
+    ) -> tuple[bool, str]:
+        """Validate a raw MCP JSON-RPC request, then govern ``tools/call``.
+
+        Applies :func:`agent_os.mcp_stateless.validate_request_envelope`
+        (protocol version, ``_meta`` and, when *headers* are supplied, the
+        Streamable HTTP header/body agreement rules). A rejected envelope is
+        audited and denied before any policy evaluation. For ``tools/call``
+        the call is then evaluated by :meth:`intercept_tool_call` with the
+        W3C trace context from ``_meta`` attached to the audit entry. Other
+        methods return ``(True, "Envelope valid")`` and are not
+        policy-evaluated by this gateway.
+
+        Args:
+            agent_id: Authenticated agent identity sending the request.
+            message: The JSON-RPC request object.
+            headers: HTTP request headers, or ``None`` for stdio.
+            tool_input_schema: The called tool's ``inputSchema`` so that
+                ``Mcp-Param-*`` headers can be validated.
+
+        Returns:
+            ``(allowed, reason)``.
+        """
+        method = message.get("method") if isinstance(message, dict) else None
+        params = message.get("params") if isinstance(message, dict) else None
+        params = params if isinstance(params, dict) else {}
+        tool_name = str(params.get("name") or method or "<unknown>")
+        try:
+            check = validate_request_envelope(
+                message, headers, tool_input_schema=tool_input_schema
+            )
+        except Exception:
+            logger.error(
+                "MCP envelope validation error — failing closed | agent=%s",
+                agent_id,
+                exc_info=True,
+            )
+            check = None
+        if check is None or not check.allowed:
+            reason = (
+                f"Envelope rejected: {check.reason}"
+                if check is not None
+                else "Envelope validation error — access denied (fail closed)"
+            )
+            entry = AuditEntry(
+                timestamp=self._clock(),
+                agent_id=agent_id,
+                tool_name=tool_name,
+                parameters={
+                    "direction": "request",
+                    "method": method,
+                    "error_code": check.error_code if check is not None else None,
+                },
+                allowed=False,
+                reason=reason,
+                trace_context=(check.trace_context or None) if check is not None else None,
+            )
+            self._audit_log.append(entry)
+            self._audit_sink.record(entry.to_dict())
+            self._metrics.record_decision(
+                allowed=False, agent_id=agent_id, tool_name=tool_name, stage="envelope"
+            )
+            return False, reason
+
+        if method != "tools/call":
+            return True, "Envelope valid"
+        arguments = params.get("arguments")
+        return self.intercept_tool_call(
+            agent_id,
+            tool_name,
+            arguments if isinstance(arguments, dict) else {},
+            trace_context=check.trace_context or None,
+        )
+
+    def intercept_input_required(
+        self,
+        agent_id: str,
+        tool_name: str,
+        result: dict[str, Any],
+    ) -> MCPResponseDecision:
+        """Govern an MCP ``input_required`` (multi round-trip) result.
+
+        In MCP ``2026-07-28`` servers ask the client for elicitation,
+        sampling or roots by returning ``resultType: "input_required"`` with
+        ``inputRequests``. The gateway checks each request before the client
+        acts on it:
+
+        - malformed results or unknown methods are blocked;
+        - ``sampling/createMessage`` and ``roots/list`` are blocked unless
+          explicitly enabled (both are deprecated in ``2026-07-28``);
+        - form-mode elicitation must not request secrets (password, token,
+          API key fields) and its text is scanned like a tool response;
+        - URL-mode elicitation needs the approval callback to approve the
+          URL; without a callback it is denied.
+
+        ``requestState`` is opaque and is never inspected or modified. A
+        result that is not ``input_required`` is returned as allowed so the
+        caller can pass it to :meth:`intercept_tool_response`.
+        """
+        if not is_input_required(result):
+            return MCPResponseDecision(
+                allowed=True, reason="Not an input_required result", content=None
+            )
+        summary: list[dict[str, Any]] = []
+        threats: list[dict[str, Any]] = []
+        try:
+            requests = list(iter_input_requests(result))
+            denial: str | None = None
+            for request in requests:
+                mode = request.params.get("mode", "form") if request.method == "elicitation/create" else None
+                summary.append({"key": request.key, "method": request.method, "mode": mode})
+                if denial is not None:
+                    continue
+                denial = self._check_input_request(agent_id, tool_name, request, mode, threats)
+        except ValueError as exc:
+            decision = MCPResponseDecision(
+                allowed=False,
+                reason=f"input_required result blocked — {exc}",
+                content=None,
+                action="blocked",
+            )
+            self._record_input_required_audit(agent_id, tool_name, decision, summary)
+            return decision
+        except Exception:
+            logger.error(
+                "input_required evaluation error — failing closed | agent=%s tool=%s",
+                agent_id, tool_name, exc_info=True,
+            )
+            decision = MCPResponseDecision(
+                allowed=False,
+                reason="input_required evaluation error — blocked (fail closed)",
+                content=None,
+                action="error",
+            )
+            self._record_input_required_audit(agent_id, tool_name, decision, summary)
+            return decision
+
+        if denial is not None:
+            decision = MCPResponseDecision(
+                allowed=False, reason=denial, content=None, threats=threats, action="blocked"
+            )
+        elif threats:
+            decision = MCPResponseDecision(
+                allowed=True,
+                reason=f"input_required result has {len(threats)} threat(s) — logged",
+                content=json.dumps(result, default=str),
+                threats=threats,
+                action="logged",
+            )
+        else:
+            decision = MCPResponseDecision(
+                allowed=True,
+                reason=f"{len(requests)} input request(s) allowed",
+                content=json.dumps(result, default=str),
+                action="allowed",
+            )
+        self._record_input_required_audit(agent_id, tool_name, decision, summary)
+        return decision
+
+    _SECRET_FIELD = re.compile(
+        r"pass(word|phrase)|secret|token|api[_-]?key|credential|private[_-]?key",
+        re.IGNORECASE,
+    )
+
+    def _check_input_request(
+        self,
+        agent_id: str,
+        tool_name: str,
+        request: Any,
+        mode: str | None,
+        threats: list[dict[str, Any]],
+    ) -> str | None:
+        """Return a denial reason for one input request, or ``None``."""
+        if request.method == "roots/list" and not self.allow_roots_requests:
+            return "input_required blocked — roots/list is not permitted by this gateway"
+        if request.method == "sampling/createMessage" and not self.allow_sampling_requests:
+            return "input_required blocked — sampling/createMessage is not permitted by this gateway"
+        if request.method == "elicitation/create":
+            if mode == "url":
+                if self.approval_callback is None:
+                    return "input_required blocked — URL elicitation needs human approval"
+                status = self.approval_callback(
+                    agent_id,
+                    f"{tool_name}#elicitation:url",
+                    {"url": request.params.get("url"), "message": request.params.get("message")},
+                )
+                if status != ApprovalStatus.APPROVED:
+                    return "input_required blocked — URL elicitation was not approved"
+            elif mode == "form":
+                schema = request.params.get("requestedSchema")
+                properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+                for name in properties if isinstance(properties, dict) else {}:
+                    if self._SECRET_FIELD.search(str(name)):
+                        return (
+                            "input_required blocked — form elicitation requests a "
+                            f"sensitive field '{name}'"
+                        )
+            else:
+                return f"input_required blocked — unknown elicitation mode {mode!r}"
+        if request.method == "roots/list":
+            return None
+        scan = self._response_scanner.scan_response(
+            json.dumps(request.params, default=str), tool_name
+        )
+        found = [
+            {"category": t.category, "description": t.description, "input_request": request.key}
+            for t in scan.threats
+        ]
+        threats.extend(found)
+        if found and self._response_policy != ResponsePolicy.LOG:
+            categories = sorted({t["category"] for t in found})
+            return f"input_required blocked — {', '.join(categories)} detected in {request.method}"
+        return None
+
+    def _record_input_required_audit(
+        self,
+        agent_id: str,
+        tool_name: str,
+        decision: MCPResponseDecision,
+        summary: list[dict[str, Any]],
+    ) -> None:
+        entry = AuditEntry(
+            timestamp=self._clock(),
+            agent_id=agent_id,
+            tool_name=tool_name,
+            parameters={
+                "direction": "input_required",
+                "action": decision.action,
+                "input_requests": summary,
+                "threats": [t["category"] for t in decision.threats],
+            },
+            allowed=decision.allowed,
+            reason=decision.reason,
+        )
+        self._audit_log.append(entry)
+        self._audit_sink.record(entry.to_dict())
+        logger.info(
+            "MCP Gateway input_required audit | agent=%s tool=%s allowed=%s reason=%s",
+            agent_id, tool_name, decision.allowed, decision.reason,
+        )
 
     # ── Core interception ────────────────────────────────────────────────
 
@@ -202,6 +473,8 @@ class MCPGateway:
         agent_id: str,
         tool_name: str,
         params: dict[str, Any],
+        *,
+        trace_context: dict[str, str] | None = None,
     ) -> tuple[bool, str]:
         """Evaluate a tool call against the gateway's policy stack.
 
@@ -209,6 +482,8 @@ class MCPGateway:
             agent_id: Agent identity attempting the tool invocation.
             tool_name: Tool being requested.
             params: Structured tool parameters to evaluate.
+            trace_context: Optional validated W3C trace context recorded on
+                the audit entry (see ``mcp_stateless.extract_trace_context``).
 
         Returns:
             ``(allowed, reason)`` — *allowed* is True when the call may
@@ -241,6 +516,7 @@ class MCPGateway:
             allowed=allowed,
             reason=reason,
             approval_status=approval,
+            trace_context=trace_context,
         )
         self._audit_log.append(entry)
         self._audit_sink.record(entry.to_dict())

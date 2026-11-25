@@ -398,6 +398,56 @@ test("stateless tools/call preserves caller context", async () => {
   assert.equal(response.result.isError, undefined);
 });
 
+const MODERN_META = {
+  "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+  "io.modelcontextprotocol/clientInfo": { name: "agt-parity-test", version: "1.0.0" },
+  "io.modelcontextprotocol/clientCapabilities": {},
+};
+
+test("server/discover returns the MCP 2026-07-28 DiscoverResult shape", async () => {
+  const discover = await handleJsonRpcRequest(state, {
+    jsonrpc: "2.0",
+    id: 18,
+    method: "server/discover",
+    params: { _meta: MODERN_META },
+  });
+
+  assert.equal(discover.result.resultType, "complete");
+  assert.deepEqual(discover.result.supportedVersions, ["2026-07-28"]);
+  assert.equal(discover.result._meta["io.modelcontextprotocol/serverInfo"].name, "agt-governance");
+});
+
+test("modern params._meta is validated and not echoed", async () => {
+  const accepted = await handleJsonRpcRequest(state, {
+    jsonrpc: "2.0",
+    id: 19,
+    method: "tools/call",
+    params: { name: "agt_policy_status", arguments: {}, _meta: MODERN_META },
+  });
+  const wrongVersion = await handleJsonRpcRequest(state, {
+    jsonrpc: "2.0",
+    id: 20,
+    method: "tools/list",
+    params: { _meta: { ...MODERN_META, "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
+  });
+  const missingCapabilities = await handleJsonRpcRequest(state, {
+    jsonrpc: "2.0",
+    id: 21,
+    method: "tools/list",
+    params: {
+      _meta: {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": { name: "x", version: "1" },
+      },
+    },
+  });
+
+  assert.equal(accepted.result.isError, undefined);
+  assert.equal("_meta" in accepted.result, false);
+  assert.equal(wrongVersion.error.code, -32001);
+  assert.equal(missingCapabilities.error.code, -32001);
+});
+
 test("legacy lifecycle remains compatible and terminal outcomes stay distinct", async () => {
   const initialize = await handleJsonRpcRequest(state, {
     jsonrpc: "2.0",

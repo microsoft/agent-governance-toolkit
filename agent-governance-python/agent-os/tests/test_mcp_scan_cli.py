@@ -724,13 +724,17 @@ class _StreamableHTTPMCPHandler(BaseHTTPRequestHandler):
                 # ``capabilities``) for the scanner to detect.
                 response = {**type(self).discover_response_body, "id": payload["id"]}
             elif type(self).discover_protocol_response is not None:
+                # MCP 2026-07-28 DiscoverResult shape.
                 response = {
                     "jsonrpc": "2.0",
                     "id": payload["id"],
                     "result": {
-                        "protocolVersion": type(self).discover_protocol_response,
+                        "resultType": "complete",
+                        "supportedVersions": [type(self).discover_protocol_response],
                         "capabilities": type(self).capabilities_response,
-                        "serverInfo": {"name": "http-test", "version": "1.0"},
+                        "_meta": {
+                            "io.modelcontextprotocol/serverInfo": {"name": "http-test", "version": "1.0"}
+                        },
                     },
                 }
             else:
@@ -1120,10 +1124,14 @@ def test_inspect_streamable_http_server_prefers_server_discover_when_supported(r
     discover = _StreamableHTTPMCPHandler.requests[0]
     assert discover["headers"]["Mcp-Protocol-Version"] == "2026-07-28"
     assert discover["headers"]["Mcp-Method"] == "server/discover"
-    assert discover["headers"]["Mcp-Name"] == "agent-os-mcp-scan"
+    # Mcp-Name is only defined for tools/call, prompts/get and resources/read.
+    assert "Mcp-Name" not in discover["headers"]
     assert "Mcp-Session-Id" not in discover["headers"]
-    assert discover["payload"]["_meta"]["clientInfo"]["name"] == "agent-os-mcp-scan"
-    assert discover["payload"]["_meta"]["capabilities"] == {}
+    assert "_meta" not in discover["payload"]
+    discover_meta = discover["payload"]["params"]["_meta"]
+    assert discover_meta["io.modelcontextprotocol/protocolVersion"] == "2026-07-28"
+    assert discover_meta["io.modelcontextprotocol/clientInfo"]["name"] == "agent-os-mcp-scan"
+    assert discover_meta["io.modelcontextprotocol/clientCapabilities"] == {}
 
     tools_request = next(
         r for r in _StreamableHTTPMCPHandler.requests if r["payload"].get("method") == "tools/list"
@@ -1134,7 +1142,10 @@ def test_inspect_streamable_http_server_prefers_server_discover_when_supported(r
         "Mcp-Name" not in tools_request["headers"]
     )  # tools/list is not in _METHODS_REQUIRING_NAME
     assert "Mcp-Session-Id" not in tools_request["headers"]
-    assert "_meta" in tools_request["payload"]
+    assert (
+        tools_request["payload"]["params"]["_meta"]["io.modelcontextprotocol/protocolVersion"]
+        == "2026-07-28"
+    )
 
 
 def test_inspect_streamable_http_server_falls_back_to_legacy_when_discover_unsupported():
@@ -1277,6 +1288,41 @@ def test_inspect_streamable_http_server_discover_malformed_falls_back_to_legacy_
     assert methods_seen[0] == "server/discover"
     assert "initialize" in methods_seen
     assert "notifications/initialized" in methods_seen
+
+
+def test_inspect_streamable_http_server_discover_without_modern_version_uses_legacy():
+    # A DiscoverResult whose ``supportedVersions`` omits 2026-07-28 must not
+    # be treated as a stateless peer; the scanner uses ``initialize`` instead.
+    _StreamableHTTPMCPHandler.requests = []
+    _StreamableHTTPMCPHandler.response_mode = "json"
+    _StreamableHTTPMCPHandler.discover_protocol_response = None
+    _StreamableHTTPMCPHandler.discover_response_status = None
+    _StreamableHTTPMCPHandler.discover_response_body = {
+        "jsonrpc": "2.0",
+        "result": {
+            "resultType": "complete",
+            "supportedVersions": ["2025-11-25"],
+            "capabilities": {"tools": {}},
+        },
+    }
+    _StreamableHTTPMCPHandler.protocol_response = MCP_PROTOCOL_VERSION
+    _StreamableHTTPMCPHandler.capabilities_response = {"tools": {}, "resources": {}, "prompts": {}}
+    server = _serve(_StreamableHTTPMCPHandler)
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/mcp"
+        inspection = inspect_remote_server(
+            RemoteMCPServerConfig("http", "streamable-http", url), timeout=2
+        )
+    finally:
+        _StreamableHTTPMCPHandler.discover_response_body = None
+        setattr(server, "_shutdown_sse", True)
+        server.shutdown()
+        server.server_close()
+
+    assert inspection.ok is True
+    assert inspection.protocol_version == MCP_PROTOCOL_VERSION
+    methods_seen = [r["payload"].get("method") for r in _StreamableHTTPMCPHandler.requests]
+    assert methods_seen[:2] == ["server/discover", "initialize"]
 
 
 def test_inspect_streamable_http_server_accepts_sse_post_response():

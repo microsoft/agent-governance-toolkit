@@ -1,6 +1,6 @@
 ---
 title: "ADR 0027: Adopt a dual-stack migration for MCP 2026-07-28"
-last_reviewed: 2026-05-25
+last_reviewed: 2026-11-25
 owner: agt-maintainers
 ---
 
@@ -119,3 +119,31 @@ without relying on `initialize` or `Mcp-Session-Id`, bundled MCP servers
 interoperate with stateless clients, existing `2025-11-25` integrations still
 work during the transition window, and repo docs no longer describe the legacy
 session-based lifecycle as the default.
+
+## Implementation notes (2026-11-25)
+
+This section records implementation progress. It does not change the status
+of this ADR, which remains for maintainers to decide.
+
+MCP `2026-07-28` has since been released as the current specification. Its
+final wire format differs from the release candidate this ADR was written
+against, and the implementation has been realigned:
+
+- request metadata lives in `params._meta` under namespaced keys
+  (`io.modelcontextprotocol/protocolVersion`, `.../clientInfo`,
+  `.../clientCapabilities`), not in a top-level `_meta` with `clientInfo` and
+  `capabilities`;
+- `server/discover` returns `supportedVersions` and carries server identity in
+  `_meta["io.modelcontextprotocol/serverInfo"]`;
+- `Mcp-Name` is defined only for `tools/call`, `prompts/get` and
+  `resources/read`, and tools may mirror parameters into `Mcp-Param-*` headers
+  via `x-mcp-header`; servers reject header/body disagreement with
+  `HeaderMismatch` (`-32020`);
+- servers request sampling, elicitation and roots through multi round-trip
+  `input_required` results instead of server-initiated requests.
+
+`mcp_scan.py` and the bundled Claude Code, OpenCode and Antigravity MCP servers
+now use the final shape and still accept the release-candidate shape for
+compatibility. `agent_os.mcp_stateless` and `MCPGateway.intercept_request` /
+`intercept_input_required` implement header/body validation and governance of
+`input_required` results for gateways.
