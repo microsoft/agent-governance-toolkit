@@ -28,7 +28,21 @@ class TestAgentKernel(unittest.TestCase):
         self.assertEqual(agent_context.agent_id, "test-agent")
         self.assertIsNotNone(agent_context.session_id)
         self.assertIsInstance(agent_context.permissions, dict)
-    
+
+    def test_empty_permissions_grant_nothing(self):
+        """An explicit {} means no permissions; only None falls back to the defaults"""
+        agent_context = self.control_plane.create_agent("empty-agent", {})
+        self.assertEqual(agent_context.permissions, {})
+        result = self.control_plane.execute_action(
+            agent_context, ActionType.FILE_READ, {"path": "/data/test.txt"}
+        )
+        self.assertFalse(result["success"])
+
+        default_context = self.control_plane.create_agent("default-agent")
+        self.assertEqual(
+            default_context.permissions.get(ActionType.FILE_READ), PermissionLevel.READ_ONLY
+        )
+
     def test_permission_check_success(self):
         """Test permission check allows valid actions"""
         agent_context = create_standard_agent(self.control_plane, "test-agent")
