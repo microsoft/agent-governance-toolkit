@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-last_reviewed: 2026-05-19
+last_reviewed: 2026-11-25
 owner: agt-maintainers
 ---
 
@@ -38,9 +38,17 @@ reflect current direction and priorities. Community input is welcome via
 - [ ] Multi-tenant policy isolation
 
 ### Identity & Trust
-- [ ] Entra ID agent identity bridge
+- [x] Entra ID agent identity bridge (Python): JWKS-verified Entra tokens, Entra Agent ID caller classification, Entra → AGT registry sync
+- [ ] Entra Agent ID bridge in TypeScript, .NET, Rust and Go
 - [ ] SPIFFE/SVID production deployment guide
 - [ ] ML-DSA-65 (post-quantum) signing production support
+
+### Microsoft Agent 365 and MCP
+- [x] MCP `2026-07-28` final wire format in `mcp-scan` and bundled MCP servers (dual-stack with `2025-11-25`)
+- [x] MCP gateway envelope validation (header/body agreement) and `input_required` governance
+- [x] `agentmesh-agent365` (alpha): Agent 365 observability spans, Copilot Studio external threat detection, Purview checks
+- [ ] End-to-end validation against a licensed Agent 365 tenant
+- [ ] Audit the TypeScript, .NET, Rust and Go MCP surfaces against the final `2026-07-28` wire format
 
 ### Deployment & Operations
 - [ ] Helm chart v1.0 with production defaults

@@ -1,6 +1,6 @@
 ---
 title: "A365 + AGT Reference Architecture"
-last_reviewed: 2026-06-22
+last_reviewed: 2026-11-25
 owner: agt-maintainers
 ---
 
@@ -10,11 +10,24 @@ owner: agt-maintainers
 
 ## Overview
 
-Microsoft Agent 365 (A365) provides foundational agent lifecycle management: Entra-based identity, Purview DLP integration, and Defender threat signals. However, industry analysts consistently identify gaps in fine-grained runtime authorization, agent security testing, and advanced observability for mission-critical deployments.
+Microsoft Agent 365 (A365) is the control plane for an organisation's agents: Entra Agent ID identities and blueprints, the agent registry, Purview data security, Defender threat protection, observability and the Tools Gateway for MCP servers. The Agent Governance Toolkit (AGT) is a runtime policy decision point: deterministic, per-action policy evaluation inside or in front of the agent, with audit evidence.
 
-The Agent Governance Toolkit (AGT) provides the runtime governance layer that complements A365. Together they cover the full agent security stack: A365 manages identity and lifecycle, AGT enforces per-action policies and behavioral governance.
+They are complementary. A365 decides *which agents exist, who owns them and what they may reach*; AGT decides *whether this specific action, with these arguments, in this context, may proceed*. The [`agentmesh-agent365`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/agent365-agentmesh) package connects the two.
 
-This document describes how they work together across three deployment patterns.
+This document describes the integration patterns. Capability descriptions follow Microsoft's public documentation as of the Ignite 2026 wave; several A365 features are in preview, so confirm their status before relying on them.
+
+### What changed at Ignite 2026
+
+| A365 / Microsoft capability | Status | How AGT relates |
+|---|---|---|
+| Entra Agent ID tokens with agent facets (`xms_act_fct`, `xms_sub_fct`) and blueprint attribution (`xms_par_app_azp`) | Available | AgentMesh relay and registry classify callers as agent, agent-on-behalf-of-user, agent user, user or application, and can require an agent identity (`AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY`) |
+| Agent 365 observability (direct OTLP ingestion) | Available, licence-gated | `GovernanceSpanRecorder` emits `invoke_agent` / `execute_tool` spans with `agt.policy.*` decision attributes |
+| Copilot Studio external threat detection | Preview | `ThreatDetectionHandler` answers `/analyze-tool-execution` with AGT policy, fail-closed within the 1,000 ms window |
+| Defender real-time protection for agent tooling | GA | Complementary detection; keep it on alongside AGT policy |
+| AI Gateway tool threat protection (Defender + Purview; Disabled / Audit / Block) | Preview | Complementary; AGT adds deterministic organisation policy at the same gateway ([Foundry PDP sample](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/foundry-ai-gateway-pdp/README.md)) |
+| Tools Gateway (bring-your-own MCP servers via the A365 CLI) | Preview | Register the AGT-governed endpoint, not the raw MCP backend |
+| Purview `processContent` for agents (`aiAgentInfo`) | Available | `PurviewClient` checks prompts and tool payloads with scope caching |
+| MCP `2026-07-28` (stateless, header mirroring, multi round-trip) | Released spec | `MCPGateway.intercept_request` validates envelopes; `intercept_input_required` governs MRTR results |
 
 ---
 
@@ -30,15 +43,15 @@ This document describes how they work together across three deployment patterns.
 |  |  - Entra Agent IDs        |  |  - Per-action policy eval    |  |
 |  |  - Conditional Access     |  |  - Intent-based authz        |  |
 |  |  - Purview DLP            |  |  - Trust scoring (0-1000)    |  |
-|  |  - Defender signals       |  |  - Behavioral anomaly det.   |  |
-|  |  - MCP server registry    |  |  - MCP governance proxy      |  |
-|  |  - Agent lifecycle mgmt   |  |  - Red-team / chaos testing  |  |
-|  |  - JIT authorization      |  |  - Kill switch / rings       |  |
+|  |  - Defender protection    |  |  - Behavioral anomaly det.   |  |
+|  |  - Tools Gateway (MCP)    |  |  - MCP governance gateway    |  |
+|  |  - Agent registry         |  |  - Red-team / chaos testing  |  |
+|  |  - Observability (OTLP)   |  |  - Kill switch / rings       |  |
 |  +---------------------------+  +------------------------------+  |
 |                                                                    |
 |  +-------------------------------------------------------------+  |
 |  |              Shared Observability (OpenTelemetry)            |  |
-|  |    A365 Defender signals + AGT governance telemetry          |  |
+|  |   A365 observability + Defender + AGT governance telemetry   |  |
 |  +-------------------------------------------------------------+  |
 +------------------------------------------------------------------+
 ```
@@ -47,28 +60,28 @@ This document describes how they work together across three deployment patterns.
 
 | Concern | A365 | AGT | Together |
 |---------|------|-----|----------|
-| **Identity** | Entra Agent IDs, conditional access | Agent DIDs, SPIFFE identity, Ed25519 | A365 manages identity source, AGT maps to fine-grained DIDs |
-| **Authorization** | JIT on-behalf-of authorization | Per-action policy eval, intent-based authorization | A365 gates access, AGT gates individual actions within that access |
-| **Data Protection** | Purview DLP, sensitivity labels | PII detection in tool call params | Layered protection at data and action level |
-| **Threat Detection** | Defender for Cloud signals | 7 prompt injection strategies, ring breach detection, behavioral anomaly scoring | A365 catches infra threats, AGT catches agent-level threats |
-| **Security Testing** | N/A | `agt red-team` CLI (scan, attack, report), chaos engineering | AGT fills the gap |
-| **Observability** | Defender dashboards | OpenTelemetry traces/metrics/logs, 11 platform integrations | Unified observability via shared OTel backends |
-| **MCP Governance** | MCP server registry | MCP Governance Proxy (runtime policy on every tool call) | A365 registers servers, AGT enforces what they can do |
-| **Lifecycle** | Agent deployment, updates, retirement | CI/CD shift-left scanning (GitHub Action) | A365 manages runtime lifecycle, AGT catches issues pre-deployment |
+| **Identity** | Entra Agent IDs and blueprints, conditional access | Agent DIDs, SPIFFE identity, Ed25519; Entra token verification with agent facet classification | A365 is the identity source; AGT verifies Entra tokens and maps them to fine-grained DIDs |
+| **Authorization** | On-behalf-of and app-only access to resources | Per-action policy eval, intent-based authorization | A365 gates access, AGT gates individual actions within that access |
+| **Data Protection** | Purview DLP, sensitivity labels, `processContent` for agents | PII detection in tool call params | AGT can call Purview inline and enforce its block decision |
+| **Threat Detection** | Defender real-time protection, AI Gateway tool threat protection, Copilot Studio built-in UPIA/XPIA protection | Prompt injection strategies, ring breach detection, behavioral anomaly scoring; Copilot Studio external threat detection provider | Layered: platform detection plus deterministic organisation policy |
+| **Security Testing** | Microsoft AI Red Teaming Agent (Foundry) | `agt red-team` CLI (scan, attack, report), chaos engineering | Use both: Foundry for model-level probing, AGT for policy and tool-path testing |
+| **Observability** | Agent 365 observability, Defender dashboards | OpenTelemetry traces/metrics/logs | AGT decisions appear as spans in Agent 365 and in your own OTel backend |
+| **MCP Governance** | Tools Gateway, MCP server registration | MCP security gateway (runtime policy on every tool call, MCP `2026-07-28` envelope validation) | A365 registers servers, AGT enforces what they can do |
+| **Lifecycle** | Agent registry, sponsors, deployment, retirement | CI/CD shift-left scanning (GitHub Action), registry sync | A365 owns lifecycle; AGT suspends bindings when Entra disables an agent |
 
 ---
 
 ## For CISOs: Why Augmentation Matters
 
-Industry analysis consistently recommends augmenting A365 with third-party or open-source agent security platforms for mission-critical deployments. The rationale:
+Use AGT on top of A365 where agents take consequential actions:
 
 1. **Intent-based runtime authorization** - A365's conditional access operates at the identity level. AGT adds action-level authorization where agents declare intent before acting, with drift detection when behavior deviates from the plan.
 
-2. **Agent security testing** - No built-in red-team tooling in A365. AGT's `agt red-team` CLI provides automated security scanning, adversarial attack simulation, and compliance reporting.
+2. **Agent security testing** - Microsoft's AI Red Teaming Agent probes model behaviour. AGT's `agt red-team` CLI adds policy and tool-path testing, adversarial attack simulation and compliance reporting.
 
-3. **Fine-grained policy enforcement** - A365 provides broad allow/deny via conditional access. AGT evaluates policies per action, per parameter, per context, at sub-millisecond latency (<0.1ms, 47K ops/sec).
+3. **Fine-grained, deterministic policy** - Platform protections detect threats probabilistically. AGT evaluates organisation-specific policy per action, per parameter and per context, fails closed, and produces audit evidence.
 
-4. **Cost**: AGT is MIT-licensed and free. No per-user fees on top of existing A365 licensing. No vendor lock-in, no acquisition risk.
+4. **Cost**: AGT is MIT-licensed and free. No per-user fees on top of existing A365 licensing.
 
 ### Risk-Based Adoption
 
@@ -77,7 +90,7 @@ Industry analysis consistently recommends augmenting A365 with third-party or op
 | Low (internal tools, simple automation) | A365 alone is sufficient |
 | Medium (customer-facing, handles PII) | A365 + AGT policy enforcement + trust scoring |
 | High (financial transactions, healthcare, regulated) | A365 + AGT full stack (intent auth, red-team, rings, kill switch) |
-| Multi-agent orchestration | A365 + AGT (only AGT provides multi-agent policy evaluation today) |
+| Multi-agent orchestration | A365 + AGT multi-agent policy evaluation |
 
 ---
 
@@ -111,46 +124,67 @@ var governedAgent = agent.WithGovernance(options =>
 
 **Tutorial**: See Tutorial 34 for end-to-end walkthrough.
 
-### Pattern 2: MCP Governance Proxy
+### Pattern 2: MCP Governance Gateway behind the Tools Gateway
 
-A365 GA introduced an MCP server management pane for registering and managing MCP servers. AGT's MCP Governance Proxy sits between the agent and MCP servers, enforcing runtime policies on every tool call.
+The A365 Tools Gateway registers MCP servers (including bring-your-own servers added with the A365 CLI, in preview) and can connect through Azure AI Gateway. Register the URL of an AGT-governed MCP gateway, not the raw backend, so every tool call passes AGT policy.
 
 ```
-Agent -> A365 MCP Registry -> AGT MCP Proxy -> MCP Server
-                                    |
-                              Policy Engine
-                              (per-call eval)
+Agent -> A365 Tools Gateway -> AGT MCP gateway -> MCP Server
+                                     |
+                               Policy Engine
+                               (per-call eval)
 ```
 
 **What this gives you:**
 - A365 manages which MCP servers are available
 - AGT governs what those servers can do per call
-- Tool poisoning detection (7 strategies)
-- Parameter-level policy enforcement
-- Credential redaction in MCP responses
+- MCP `2026-07-28` envelope validation: `Mcp-Method` / `Mcp-Name` / `Mcp-Param-*` headers must match the body (`MCPGateway.intercept_request`)
+- Governance of multi round-trip `input_required` results: sampling and roots denied by default, URL elicitation needs approval (`MCPGateway.intercept_input_required`)
+- Tool poisoning detection, parameter-level policy, credential redaction in responses
 
-### Pattern 3: OpenTelemetry Unified Observability
+See [MCP Security Gateway](tutorials/07-mcp-security-gateway.md).
 
-Route AGT governance telemetry into the same backends as A365 Defender signals. Single pane of glass for security operations.
+### Pattern 3: Agent 365 Observability
+
+Emit AGT decisions as spans that Agent 365 ingests next to the agent's own telemetry.
 
 ```python
-from agent_os import StatelessKernel
+from agentmesh_agent365 import GovernanceSpanRecorder, otlp_exporter_settings
 
-kernel = StatelessKernel(
-    enable_tracing=True,  # Emits OTel spans
+settings = otlp_exporter_settings(TENANT_ID, AGENT_ID, token)  # OTLP/HTTP endpoint + auth header
+recorder = GovernanceSpanRecorder(tracer, tenant_id=TENANT_ID, agent_id=AGENT_ID)
+with recorder.invoke_agent(agent_name="claims-agent"):
+    allowed, reason = gateway.intercept_tool_call(AGENT_ID, "send_mail", args)
+    recorder.record_tool_decision("send_mail", allowed=allowed, reason=reason)
+```
+
+Agent 365 requires one root `invoke_agent` span per run, `gen_ai.operation.name` from `invoke_agent` / `execute_tool` / `chat` / `output_messages`, and a `microsoft.tenant.id` matching the endpoint tenant; ingestion needs an Agent 365 or Microsoft 365 E7 licence. AGT also emits OpenTelemetry to any other backend (Azure Monitor, Datadog, Splunk, Grafana and others).
+
+### Pattern 4: Copilot Studio External Threat Detection
+
+Copilot Studio calls an external threat detection service before each tool call of a generative agent. Answer it with AGT policy:
+
+```python
+from agentmesh_agent365 import ThreatDetectionHandler, create_app, gateway_decider
+
+app = create_app(
+    ThreatDetectionHandler(gateway_decider(gateway)),
+    verify_token=EntraTokenVerifier(EntraVerifierConfig.from_env()).verify,
+    allowed_client_ids={COPILOT_STUDIO_CALLER_APP_ID},
 )
 ```
 
-AGT emits OpenTelemetry traces for:
-- Every policy evaluation (action, result, latency)
-- Trust score changes (agent_id, old_score, new_score, reason)
-- Intent lifecycle events (declare, approve, drift, verify)
-- Kill switch activations
-- Ring breach detections
+Copilot Studio **allows** the tool call when no answer arrives within 1,000 ms. The handler decides within a 700 ms budget and answers `blockAction: true` on timeout, error or malformed input; an unreachable service remains fail-open by platform design, so monitor its availability.
 
-**Supported backends**: Azure Monitor, Datadog, Splunk, Grafana, New Relic, Elastic, Jaeger, Zipkin, Prometheus, AWS CloudWatch, GCP Cloud Trace.
+### Pattern 5: Entra Agent ID verification and registry sync
 
-### Pattern 4: Shift-Left CI/CD + A365 Lifecycle
+Set `AGENTMESH_ENTRA_AUDIENCE` and `AGENTMESH_ENTRA_TENANT_ID` to verify Entra-signed tokens at the AgentMesh relay and registry. The verifier classifies the caller from the agent facet claims and logs the blueprint; set `AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY=true` to reject users and plain applications. Use `EntraRegistrySync` to suspend AGT bindings whose Entra agent identity was disabled. See [Entra Agent ID bridge](tutorials/31-entra-agent-id-bridge.md).
+
+### Pattern 6: Purview inline checks
+
+`PurviewClient.check_text()` calls Purview `processContent` with the agent attributed (`aiAgentInfo`) and blocks when policy returns a `restrictAccess` block action. Scopes are cached per user and refreshed when Purview reports a policy change; Graph errors block by default.
+
+### Pattern 7: Shift-Left CI/CD + A365 Lifecycle
 
 AGT's GitHub Action scans agent code pre-deployment. A365 manages the agent post-deployment. Full SDLC coverage.
 
@@ -194,9 +228,9 @@ AGT's GitHub Action scans agent code pre-deployment. A365 manages the agent post
 
 | Overlap Area | Resolution |
 |-------------|-----------|
-| Threat detection | A365 Defender catches infrastructure threats, AGT catches agent-behavioral threats. Use both. |
+| Threat detection | Defender and AI Gateway tool threat protection detect threats; AGT enforces deterministic policy and can be the Copilot Studio external threat detection provider. Use both. |
 | Authorization | A365 conditional access gates identity-level access. AGT gates action-level authorization within that access. Layered, not redundant. |
-| Audit logging | Route both to the same backend via OpenTelemetry for unified audit. |
+| Audit logging | Send AGT decisions to Agent 365 observability and to your own backend via OpenTelemetry. |
 
 ---
 
@@ -208,6 +242,10 @@ For teams adding AGT to an A365-managed environment:
 - [ ] Define policies in `policies/` directory (YAML format)
 - [ ] For .NET agents: add `Microsoft.AgentGovernance.Extensions.Microsoft.Agents` NuGet package
 - [ ] Configure OpenTelemetry export to your observability backend
+- [ ] For Agent 365 observability: confirm tenant eligibility and export AGT spans with `agentmesh-agent365`
+- [ ] For Copilot Studio agents: register the AGT threat detection endpoint and monitor its availability
+- [ ] Enable Entra token verification on the AgentMesh relay/registry; consider `AGENTMESH_ENTRA_REQUIRE_AGENT_IDENTITY=true`
+- [ ] Register AGT-governed MCP endpoints (not raw backends) in the A365 Tools Gateway
 - [ ] Add `agt scan` to CI/CD pipeline (GitHub Action or CLI)
 - [ ] Run `agt red-team scan` against each agent before production deployment
 - [ ] Set up trust score thresholds and alert webhooks
@@ -232,6 +270,9 @@ Adding AGT to an A365-governed agent adds minimal overhead:
 ## Further Reading
 
 - [AGT Architecture](ARCHITECTURE.md)
+- [`agentmesh-agent365` integration package](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agentmesh-integrations/agent365-agentmesh/README.md)
+- [Foundry AI Gateway PDP sample](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/foundry-ai-gateway-pdp/README.md)
+- [Tutorial 31: Entra Agent ID Bridge](tutorials/31-entra-agent-id-bridge.md)
 - [Tutorial 34: Microsoft Agent Framework Integration](tutorials/34-maf-integration.md)
 - [Tutorial 45: CI/CD Shift-Left Scanning](tutorials/45-shift-left-governance.md)
 - [Tutorial 47: Red-Team Testing](tutorials/47-red-team-testing.md)
