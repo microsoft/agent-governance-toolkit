@@ -112,6 +112,7 @@ runs:
         AGT_POLICY_PATH: ${{ inputs.policy-path }}
         AGT_INTERVENTION_POINT: ${{ inputs.intervention-point }}
         AGT_CONTEXT_JSON: ${{ inputs.context-json }}
+        AGT_ACTION_PATH: ${{ github.action_path }}
       run: |
         set +e
         COMMAND="$AGT_COMMAND"
@@ -160,25 +161,7 @@ runs:
               exit 1
             fi
             echo "📋 Evaluating native manifest: $POLICY"
-            OUTPUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$CONTEXT" AGT_IP="$AGT_INTERVENTION_POINT" python -c "
-        import json, sys, os
-
-        from agt.policies import AgtRuntime
-
-        ctx_raw = os.environ.get('AGT_CONTEXT', '')
-        snapshot = json.loads(ctx_raw) if ctx_raw else {}
-        runtime = AgtRuntime(os.environ['AGT_POLICY'])
-        decision = runtime.evaluate(os.environ['AGT_IP'], snapshot)
-
-        result = {
-            'allowed': decision.is_allowed(),
-            'verdict': decision.verdict,
-            'reason_code': decision.reason_code,
-            'message': decision.message,
-        }
-        print(json.dumps(result, indent=2))
-        sys.exit(0 if decision.is_allowed() else 1)
-        " 2>&1)
+            OUTPUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$CONTEXT" AGT_IP="$AGT_INTERVENTION_POINT" python "$AGT_ACTION_PATH/evaluate_policy.py" 2>&1)
             EXIT_CODE=$?
             if [ $EXIT_CODE -ne 0 ]; then
               echo "violations=1" >> "$GITHUB_OUTPUT"
@@ -213,16 +196,7 @@ runs:
             POLICY="$AGT_POLICY_PATH"
             if [ -n "$POLICY" ]; then
               echo "--- Policy Evaluation ---"
-              PE_OUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$AGT_CONTEXT_JSON" AGT_IP="$AGT_INTERVENTION_POINT" python -c "
-        import json, sys, os
-        from agt.policies import AgtRuntime
-        ctx_raw = os.environ.get('AGT_CONTEXT', '')
-        snapshot = json.loads(ctx_raw) if ctx_raw else {}
-        runtime = AgtRuntime(os.environ['AGT_POLICY'])
-        decision = runtime.evaluate(os.environ['AGT_IP'], snapshot)
-        print(json.dumps({'allowed': decision.is_allowed(), 'verdict': decision.verdict, 'reason_code': decision.reason_code, 'message': decision.message}, indent=2))
-        sys.exit(0 if decision.is_allowed() else 1)
-        " 2>&1)
+              PE_OUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$AGT_CONTEXT_JSON" AGT_IP="$AGT_INTERVENTION_POINT" python "$AGT_ACTION_PATH/evaluate_policy.py" 2>&1)
               PE_EXIT=$?
               echo "$PE_OUT"
               [ $PE_EXIT -ne 0 ] && FAIL=1
