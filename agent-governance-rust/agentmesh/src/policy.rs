@@ -52,22 +52,31 @@ pub struct PolicyProfile {
 /// Policy evaluation engine.
 ///
 /// Rules are evaluated in order; first match wins.
-/// When no profile is loaded, all actions are allowed.
+/// When no profile is loaded, every action is denied unless the engine was
+/// built with [`PolicyEngine::allow_all`].
 pub struct PolicyEngine {
     profile: RwLock<Option<PolicyProfile>>,
     rate_counters: Mutex<HashMap<String, (u64, Instant)>>,
     conflict_strategy: ConflictResolutionStrategy,
+    allow_without_profile: bool,
 }
 
 impl PolicyEngine {
-    /// Create an empty policy engine (allows everything) with default
-    /// [`ConflictResolutionStrategy::PriorityFirstMatch`].
+    /// Create an empty, fail-closed policy engine with default
+    /// [`ConflictResolutionStrategy::PriorityFirstMatch`]. Until a profile is
+    /// loaded, [`PolicyEngine::evaluate`] denies every action.
     pub fn new() -> Self {
-        Self {
-            profile: RwLock::new(None),
-            rate_counters: Mutex::new(HashMap::new()),
-            conflict_strategy: ConflictResolutionStrategy::PriorityFirstMatch,
-        }
+        Self::with_strategy(ConflictResolutionStrategy::PriorityFirstMatch)
+    }
+
+    /// Create an engine that allows every action while no profile is loaded.
+    ///
+    /// This restores the pre-5.1 default for local experiments; do not use it
+    /// where the absence of a policy should block execution.
+    pub fn allow_all() -> Self {
+        let mut engine = Self::new();
+        engine.allow_without_profile = true;
+        engine
     }
 
     /// Create a policy engine with a specific conflict resolution strategy.
@@ -76,6 +85,7 @@ impl PolicyEngine {
             profile: RwLock::new(None),
             rate_counters: Mutex::new(HashMap::new()),
             conflict_strategy: strategy,
+            allow_without_profile: false,
         }
     }
 
@@ -212,7 +222,8 @@ impl PolicyEngine {
 
     /// Evaluate an action against the loaded policy.
     ///
-    /// If no profile is loaded, returns [`PolicyDecision::Allow`].
+    /// If no profile is loaded, returns [`PolicyDecision::Deny`] unless the
+    /// engine was created with [`PolicyEngine::allow_all`].
     /// An optional `context` map is matched against rule conditions.
     pub fn evaluate(
         &self,
@@ -232,7 +243,10 @@ impl PolicyEngine {
         let guard = self.profile.read().unwrap_or_else(|e| e.into_inner());
         let profile = match guard.as_ref() {
             Some(p) => p,
-            None => return PolicyDecision::Allow,
+            None if self.allow_without_profile => return PolicyDecision::Allow,
+            None => {
+                return PolicyDecision::Deny("No policy loaded (deny by default)".to_string())
+            }
         };
 
         for rule in &profile.policies {
@@ -528,9 +542,18 @@ policies:
     }
 
     #[test]
-    fn test_no_profile_allows_all() {
+    fn test_no_profile_denies_all() {
         let engine = PolicyEngine::new();
+        assert!(matches!(engine.evaluate("anything", None), PolicyDecision::Deny(_)));
+        assert!(matches!(PolicyEngine::default().evaluate("anything", None), PolicyDecision::Deny(_)));
+    }
+
+    #[test]
+    fn test_allow_all_is_explicit_opt_in() {
+        let engine = PolicyEngine::allow_all();
         assert_eq!(engine.evaluate("anything", None), PolicyDecision::Allow);
+        engine.load_from_yaml(POLICY_YAML).unwrap();
+        assert!(matches!(engine.evaluate("shell:rm", None), PolicyDecision::Deny(_)));
     }
 
     #[test]

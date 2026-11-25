@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 21 — Rust SDK (agent-governance-rust/ workspace)"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-25
 owner: agt-maintainers
 ---
 
@@ -86,13 +86,15 @@ fn main() {
         .expect("failed to create client");
 
     let result = client.execute_with_governance("data.read", None);
-    println!("Allowed: {}", result.allowed);     // true
-    println!("Decision: {:?}", result.decision);  // Allow
+    println!("Allowed: {}", result.allowed);     // false
+    println!("Decision: {:?}", result.decision);  // Deny("No policy loaded (deny by default)")
 }
 ```
 
-When no policy is loaded, the engine defaults to **allow** — load a YAML policy
-to enforce governance rules.
+When no policy is loaded, the engine is **fail-closed** and denies every
+action, matching the Python and .NET SDKs. Load a YAML policy to allow actions.
+`PolicyEngine::allow_all()` restores the old allow-when-empty behavior as an
+explicit opt-in for local experiments.
 
 ---
 
@@ -106,7 +108,7 @@ trust, policy, and audit into a single governance-aware pipeline.
 ```rust
 use agentmesh::{AgentMeshClient, ClientOptions};
 
-// Default client — generates identity, empty policy (allow-all)
+// Default client — generates identity, no policy (denies every action)
 let client = AgentMeshClient::new("analyst-001")?;
 
 // Client with options
@@ -252,7 +254,7 @@ four decision types: **allow**, **deny**, **requires-approval**, and
 ```rust
 use agentmesh::PolicyEngine;
 
-// Empty engine — allows everything
+// Empty engine — fail-closed until a policy is loaded
 let engine = PolicyEngine::new();
 assert!(!engine.is_loaded());
 

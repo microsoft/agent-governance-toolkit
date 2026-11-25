@@ -227,3 +227,23 @@ permit(principal, action == Action::"analyze", resource);
         engine = PolicyEngine()
         evaluator = load_cedar_into_engine(engine, "nonexistent.cedar")
         assert isinstance(evaluator, CedarEvaluator)
+
+    def test_cedar_runtime_error_fails_closed_despite_allow_default(self):
+        """A Cedar fault must deny, not fall through to an allow default."""
+        engine = PolicyEngine()
+        engine.load_yaml("""
+apiVersion: governance.toolkit/v1
+name: allow-by-default
+agents: ["*"]
+default_action: allow
+rules:
+  - name: deny-export
+    condition: "action.type == 'export'"
+    action: deny
+    priority: 100
+""")
+        assert engine.evaluate("did:example:1", {"tool_name": "read"}).allowed is True
+        engine._cedar_evaluators.append(CedarEvaluator(mode="builtin", policy_content=None))
+        decision = engine.evaluate("did:example:1", {"tool_name": "read"})
+        assert decision.allowed is False
+        assert "Cedar policy errored" in decision.reason
