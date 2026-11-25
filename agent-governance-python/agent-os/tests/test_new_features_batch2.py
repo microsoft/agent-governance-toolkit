@@ -48,6 +48,17 @@ class TestEventBus:
         assert len(bus.get_history()) == 3
         assert len(bus.get_history("a")) == 2
 
+    def test_history_limit(self):
+        bus = GovernanceEventBus()
+        for i in range(5):
+            bus.publish("a", i=i)
+        assert [e.data["i"] for e in bus.get_history(limit=2)] == [3, 4]
+        assert bus.get_history(limit=0) == []
+        assert bus.get_history("a", limit=0) == []
+        # events[-(-2):] would silently drop the two oldest events instead.
+        with pytest.raises(ValueError, match="limit"):
+            bus.get_history(limit=-2)
+
     def test_handler_error_doesnt_crash(self):
         bus = GovernanceEventBus()
         bus.subscribe("test", lambda e: 1 / 0)

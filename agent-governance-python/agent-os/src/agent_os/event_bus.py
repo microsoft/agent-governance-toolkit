@@ -113,11 +113,17 @@ class GovernanceEventBus:
         return event
 
     def get_history(self, event_type: str | None = None, limit: int = 100) -> list[GovernanceEvent]:
-        """Get recent events, optionally filtered by type."""
+        """Get the ``limit`` most recent events, optionally filtered by type.
+
+        ``limit=0`` returns none; a negative ``limit`` raises ``ValueError``.
+        """
+        if limit < 0:
+            raise ValueError(f"limit must be zero or positive; got {limit!r}")
         events = self._history
         if event_type:
             events = [e for e in events if e.event_type == event_type]
-        return events[-limit:]
+        # events[-0:] is the whole list, so 0 needs its own case.
+        return events[-limit:] if limit else []
 
     def clear_history(self) -> None:
         """Clear event history."""
