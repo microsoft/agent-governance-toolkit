@@ -306,11 +306,11 @@ class AnomalyDetector:
                 return alert
 
         seq.append(tool_name)
-        # Trim to max length
-        if self._sequential is not None:
-            max_len = self._get_sequential().max_sequence_length
-            if len(seq) > max_len:
-                self._sequence_buffer[agent_id] = seq[-max_len:]
+        # Trim to max length (even when the sequential strategy is disabled,
+        # so the buffer cannot grow without bound)
+        max_len = self._get_sequential().max_sequence_length
+        if len(seq) > max_len:
+            self._sequence_buffer[agent_id] = seq[-max_len:]
 
         return None
 
