@@ -254,6 +254,14 @@ class TestAnomalyDetector:
         assert buf is not None
         assert "delete" in buf
 
+    def test_tool_call_buffer_trimmed_with_sequential_disabled(self) -> None:
+        det = AnomalyDetector(DetectorConfig(enabled_strategies=["statistical"]))
+        for i in range(200):
+            det.record_tool_call("agent-1", f"tool-{i}")
+        buf = det._sequence_buffer["agent-1"]
+        assert len(buf) == SequentialStrategy().max_sequence_length
+        assert buf[-1] == "tool-199"
+
     def test_alert_history(self) -> None:
         det = AnomalyDetector(DetectorConfig(min_samples=10, z_threshold=2.0))
         for v in [5.0] * 20:
