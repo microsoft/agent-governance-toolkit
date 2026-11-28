@@ -834,17 +834,21 @@ class PolicyEngine:
         if not rule.limit:
             return False
 
-        limit_data = self._rate_limits.get(limit_key)
-        if not limit_data:
-            return False
-
-        # Reset the window if it has elapsed.
-        if datetime.now(timezone.utc) > limit_data["reset_at"]:
-            self._rate_limits[limit_key] = None
-            return False
-
         count, _period = self._parse_limit(rule.limit)
-        return limit_data["count"] >= count
+
+        # Calls already counted in the current window. With no window yet, or
+        # an elapsed one, nothing has been counted, but the limit still
+        # applies: a zero limit (e.g. "0/hour") blocks every call.
+        used = 0
+        limit_data = self._rate_limits.get(limit_key)
+        if limit_data:
+            if datetime.now(timezone.utc) > limit_data["reset_at"]:
+                # Reset the window if it has elapsed.
+                self._rate_limits[limit_key] = None
+            else:
+                used = limit_data["count"]
+
+        return used >= count
 
     def _increment_rate_limit(self, rule: PolicyRule, limit_key: tuple[str, str, str]) -> None:
         """Advance the rate-limit counter for ``limit_key``."""

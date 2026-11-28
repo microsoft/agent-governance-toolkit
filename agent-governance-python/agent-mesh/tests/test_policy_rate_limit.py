@@ -7,7 +7,7 @@ but never called ``_increment_rate_limit``, so the per-rule counter stayed at
 0 and the limit never fired.
 """
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -101,6 +101,39 @@ def test_window_rollover_resets_counter() -> None:
     assert rolled_over.rate_limited is False
     # Fresh window started counting from this call.
     assert engine._rate_limits[key]["count"] == 1
+
+
+def test_zero_limit_blocks_every_call() -> None:
+    """limit='0/hour' allows no matching calls, including the first one.
+
+    Regression: with no counter yet for the key, ``_is_rate_limited`` returned
+    False without comparing against the count, so a zero limit let the first
+    matching call of every window through.
+    """
+    engine, key = _engine_with_limit("0/hour")
+
+    decisions = [engine.evaluate(AGENT, dict(CONTEXT)) for _ in range(3)]
+
+    for d in decisions:
+        assert d.allowed is False
+        assert d.rate_limited is True
+        assert d.action == "deny"
+    # Blocked calls do not start a window.
+    assert engine._rate_limits.get(key) is None
+
+
+def test_zero_limit_blocks_first_call_after_window_rollover() -> None:
+    """An elapsed window does not hand a zero limit a free call."""
+    engine, key = _engine_with_limit("0/hour")
+    engine._rate_limits[key] = {
+        "count": 0,
+        "reset_at": datetime.now(UTC) - timedelta(minutes=1),
+    }
+
+    decision = engine.evaluate(AGENT, dict(CONTEXT))
+
+    assert decision.allowed is False
+    assert decision.rate_limited is True
 
 
 def test_limit_is_per_agent() -> None:
